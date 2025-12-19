@@ -1,36 +1,28 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# Dependencies
 /node_modules
-/.pnp
-.pnp.js
-.yarn/install-state.gz
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
+/dist
 /build
 
-# misc
+# Environment files
+.env
+.env*.local
+.env.development.local
+.env.production.local
+
+# IDE/Editor files
+.vscode/
+.idea/
+*.suo
+*.user
+*.config.user
+*.cpc
+
+# OS-specific files
 .DS_Store
-*.pem
+Thumbs.db
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# TanStack Start/Router specific (note: routeTree.gen.ts should NOT be ignored)
+# The routeTree.gen.ts file is essential to your application and should be committed.
 
-# env files (can opt-in for commiting if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# You might see other generated files based on your specific setup (e.g., if you use a specific build tool or ORM),
+# but the above covers the general boilerplate.
