@@ -11,6 +11,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { NavMain } from './nav-main'
+import { ModeToggle } from './mode-toggle'
 
 import type { ReactNode } from 'react'
 
@@ -124,8 +125,9 @@ export function AppSidebar({ children }: { children: ReactNode }) {
       </Sidebar>
 
       <SidebarInset>
-        <header className="flex h-16 items-center gap-2 border-b px-4">
+        <header className="flex h-16 items-center justify-between gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
+          <ModeToggle />
         </header>
 
         <main className="flex-1 p-4">{children}</main>
