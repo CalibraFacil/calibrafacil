@@ -2,6 +2,7 @@
 /node_modules
 /dist
 /build
+.output/
 
 # Environment files
 .env
