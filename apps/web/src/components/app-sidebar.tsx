@@ -1,8 +1,13 @@
 import {
+  Book02Icon,
+  Building02Icon,
   ChartIcon,
-  ChartRingIcon,
+  CropIcon,
+  CustomerSupportIcon,
   File01Icon,
   Home01Icon,
+  MapsIcon,
+  PieChartIcon,
   Settings05Icon,
   ShoppingBag01Icon,
   ShoppingCart01Icon,
@@ -10,16 +15,21 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { NavMain } from './nav-main'
 import { ModeToggle } from './mode-toggle'
+import { OrganizationSwitcher } from './organization-switcher'
+import { NavMain } from './nav-main'
+import { NavProjects } from './nav-projects'
+import { NavUser } from './nav-user'
 
 import type { ReactNode } from 'react'
 
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
@@ -31,16 +41,36 @@ import {
 
 export function AppSidebar({ children }: { children: ReactNode }) {
   const data = {
+    user: [
+      {
+        name: 'Usuário Exemplo',
+        email: 'maintainer@example.com',
+        avatar: '/avatars/pedro.jpg',
+      },
+    ],
+    organizations: [
+      {
+        name: 'Acme Inc',
+        logo: Building02Icon,
+        plan: 'Enterprise',
+      },
+      {
+        name: 'Acme Corp.',
+        logo: Building02Icon,
+        plan: 'Startup',
+      },
+      {
+        name: 'Evil Corp.',
+        logo: Building02Icon,
+        plan: 'Free',
+      },
+    ],
     navMain: [
       {
-        title: 'Dashboard',
-        url: '#',
+        title: 'Painel de Controle',
+        url: '/dashboard',
         icon: <HugeiconsIcon icon={Home01Icon} />,
         isActive: true,
-        items: [
-          { title: 'Overview', url: '#' },
-          { title: 'Analytics', url: '#' },
-        ],
       },
       {
         title: 'Analytics',
@@ -81,21 +111,38 @@ export function AppSidebar({ children }: { children: ReactNode }) {
         icon: <HugeiconsIcon icon={UserIcon} />,
       },
       {
-        title: 'Settings',
-        url: '#',
+        title: 'Configurações',
+        url: '/dashboard/settings',
         icon: <HugeiconsIcon icon={Settings05Icon} />,
       },
     ],
     navSecondary: [
       {
-        title: 'Support',
-        url: '#',
-        icon: <HugeiconsIcon icon={ChartRingIcon} />,
+        title: 'Suporte',
+        url: '/support',
+        icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
       },
       {
-        title: 'Feedback',
+        title: 'Documentação',
+        url: '/documentation',
+        icon: <HugeiconsIcon icon={Book02Icon} />,
+      },
+    ],
+    projects: [
+      {
+        name: 'Design Engineering',
         url: '#',
-        icon: <HugeiconsIcon icon={ChartRingIcon} />,
+        icon: CropIcon,
+      },
+      {
+        name: 'Sales & Marketing',
+        url: '#',
+        icon: PieChartIcon,
+      },
+      {
+        name: 'Travel',
+        url: '#',
+        icon: MapsIcon,
       },
     ],
   }
@@ -103,8 +150,12 @@ export function AppSidebar({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
       <Sidebar variant="inset" collapsible="icon">
+        <SidebarHeader>
+          <OrganizationSwitcher organizations={data.organizations} />
+        </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
+          <NavProjects projects={data.projects} />
           <SidebarGroup className="mt-auto">
             <SidebarGroupContent>
               <SidebarMenu>
@@ -119,6 +170,9 @@ export function AppSidebar({ children }: { children: ReactNode }) {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+          <SidebarFooter>
+            <NavUser user={data.user[0]} />
+          </SidebarFooter>
         </SidebarContent>
 
         <SidebarRail />
