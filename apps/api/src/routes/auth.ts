@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { auth } from "@calibra-facil/auth/auth";
+import { auth } from "@calibra-facil/auth";
 
 export const authRouter = new Hono();
 

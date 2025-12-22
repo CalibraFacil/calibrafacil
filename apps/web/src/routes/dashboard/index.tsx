@@ -1,6 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/dashboard/')({
+  head: () => ({
+    meta: [
+      {
+        title: 'Dashboard | CalibraFácil',
+        name: 'description',
+        content: 'Painel de Controle',
+      },
+    ],
+  }),
   component: DashboardIndex,
 })
 

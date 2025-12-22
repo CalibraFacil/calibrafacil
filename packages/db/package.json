@@ -3,14 +3,13 @@
   "type": "module",
   "version": "1.0.0",
   "exports": {
-    "./auth-db": {
-      "types": "./dist/auth-db/index.d.ts",
-      "default": "./dist/auth-db/index.js"
-    }
+    ".": "./src/db.ts",
+    "./schema": "./src/schema.ts"
   },
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio --port 4000"

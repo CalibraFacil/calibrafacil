@@ -1,11 +1,13 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { authDb } from "../../db/dist";
+import { db } from "@calibra-facil/db";
+import * as schema from "@calibra-facil/db/schema";
 import { organization } from "better-auth/plugins";
 
 export const auth = betterAuth({
-  database: drizzleAdapter(authDb, {
+  database: drizzleAdapter(db, {
     provider: "pg",
+    schema,
   }),
   emailAndPassword: {
     enabled: true,
