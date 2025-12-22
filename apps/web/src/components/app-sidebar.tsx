@@ -1,6 +1,5 @@
 import {
   Book02Icon,
-  Building02Icon,
   ChartIcon,
   CropIcon,
   CustomerSupportIcon,
@@ -35,28 +34,6 @@ import {
 } from '@/components/ui/sidebar'
 
 const data = {
-  user: {
-    name: 'Usuário Exemplo',
-    email: 'maintainer@example.com',
-    avatar: '/avatars/pedro.jpg',
-  },
-  organizations: [
-    {
-      name: 'Acme Inc',
-      logo: Building02Icon,
-      plan: 'Enterprise',
-    },
-    {
-      name: 'Acme Corp.',
-      logo: Building02Icon,
-      plan: 'Startup',
-    },
-    {
-      name: 'Evil Corp.',
-      logo: Building02Icon,
-      plan: 'Free',
-    },
-  ],
   navMain: [
     {
       title: 'Painel de Controle',
@@ -143,7 +120,7 @@ export function AppSidebar() {
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
-        <OrganizationSwitcher organizations={data.organizations} />
+        <OrganizationSwitcher />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
@@ -172,7 +149,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarFooter>
-          <NavUser user={data.user} />
+          <NavUser />
         </SidebarFooter>
       </SidebarContent>
 
