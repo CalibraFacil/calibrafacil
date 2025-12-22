@@ -5,13 +5,11 @@ import { authClient } from '@calibra-facil/auth/client'
 import { AppSidebar } from '@/components/app-sidebar'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { authMiddleware } from '@/middleware/auth'
 
 export const Route = createFileRoute('/dashboard')({
-  beforeLoad: async () => {
-    const session = await authClient.getSession()
-    if (!session.data) {
-      throw redirect({ to: '/sign-in' })
-    }
+  server: {
+    middleware: [authMiddleware],
   },
   component: DashboardLayout,
 })

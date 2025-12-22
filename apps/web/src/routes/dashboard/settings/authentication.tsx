@@ -34,9 +34,9 @@ function AuthenticationSettingsPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Metodos de Autenticacao</CardTitle>
+          <CardTitle>Métodos de Autenticação</CardTitle>
           <CardDescription>
-            Gerencie como voce faz login na sua conta.
+            Gerencie como você faz login na sua conta.
           </CardDescription>
         </CardHeader>
         <CardContent>

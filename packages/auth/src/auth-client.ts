@@ -3,7 +3,10 @@ import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ac, roles } from "./access";
 
 export const authClient = createBetterAuthClient({
-  baseURL: "http://localhost:3000",
+  baseURL: "https://localhost:3000",
+  fetchOptions: {
+    credentials: "include",
+  },
   plugins: [
     organizationClient({
       ac,
@@ -44,7 +47,7 @@ export const {
 export async function hasPermission(
   permissions: Parameters<
     typeof authClient.organization.hasPermission
-  >[0]["permission"]
+  >[0]["permission"],
 ): Promise<boolean> {
   const result = await authClient.organization.hasPermission({
     permission: permissions,
@@ -60,10 +63,14 @@ export async function hasPermission(
  * const canApprove = checkRolePermission("admin", { calibration: ["approve"] });
  */
 export function checkRolePermission(
-  role: Parameters<typeof authClient.organization.checkRolePermission>[0]["role"],
+  role: Parameters<
+    typeof authClient.organization.checkRolePermission
+  >[0]["role"],
   permissions: NonNullable<
-    Parameters<typeof authClient.organization.checkRolePermission>[0]["permissions"]
-  >
+    Parameters<
+      typeof authClient.organization.checkRolePermission
+    >[0]["permissions"]
+  >,
 ): boolean {
   return authClient.organization.checkRolePermission({
     role,

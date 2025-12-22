@@ -9,6 +9,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { signOut, useSession } from '@calibra-facil/auth/client'
+import { Link } from '@tanstack/react-router'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -133,7 +134,7 @@ export function NavUser() {
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <HugeiconsIcon icon={Notification02Icon} />
-                Notificações
+                <Link to="/dashboard/settings/notifications">Notificações</Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
