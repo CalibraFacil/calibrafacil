@@ -20,6 +20,14 @@ export const {
   useListOrganizations,
   useActiveOrganization,
   organization,
+  // Settings page methods
+  updateUser,
+  changePassword,
+  listSessions,
+  revokeSession,
+  revokeOtherSessions,
+  revokeSessions,
+  deleteUser,
 } = authClient;
 
 // =============================================================================

@@ -1,0 +1,125 @@
+import {
+  AlertDiamondIcon,
+  CreditCardIcon,
+  Key01Icon,
+  Notification01Icon,
+  ShieldKeyIcon,
+  UserIcon,
+} from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Link, useLocation, useNavigate } from '@tanstack/react-router'
+
+import { useIsMobile } from '@/hooks/use-mobile'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { cn } from '@/lib/utils'
+
+interface SettingsNavItem {
+  value: string
+  label: string
+  href: string
+  icon: React.ReactNode
+}
+
+const settingsNavItems: Array<SettingsNavItem> = [
+  {
+    value: 'Perfil',
+    label: 'Perfil',
+    href: '/dashboard/settings/profile',
+    icon: <HugeiconsIcon icon={UserIcon} className="size-4" />,
+  },
+  {
+    value: 'Perfil',
+    label: 'Segurança',
+    href: '/dashboard/settings/security',
+    icon: <HugeiconsIcon icon={ShieldKeyIcon} className="size-4" />,
+  },
+  {
+    value: 'Autenticação',
+    label: 'Autenticação',
+    href: '/dashboard/settings/authentication',
+    icon: <HugeiconsIcon icon={Key01Icon} className="size-4" />,
+  },
+  {
+    value: 'Faturamento',
+    label: 'Faturamento',
+    href: '/dashboard/settings/billing',
+    icon: <HugeiconsIcon icon={CreditCardIcon} className="size-4" />,
+  },
+  {
+    value: 'Notificações',
+    label: 'Notificações',
+    href: '/dashboard/settings/notifications',
+    icon: <HugeiconsIcon icon={Notification01Icon} className="size-4" />,
+  },
+  {
+    value: 'Zona de Perigo',
+    label: 'Zona de Perigo',
+    href: '/dashboard/settings/danger',
+    icon: (
+      <HugeiconsIcon
+        icon={AlertDiamondIcon}
+        className="size-4 text-destructive"
+      />
+    ),
+  },
+]
+
+export function SettingsNav() {
+  const isMobile = useIsMobile()
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Find current tab from URL
+  const currentTab =
+    settingsNavItems.find((item) => location.pathname.startsWith(item.href))
+      ?.value ?? 'Perfil'
+
+  if (isMobile) {
+    return (
+      <NativeSelect
+        value={currentTab}
+        onChange={(e) => {
+          const item = settingsNavItems.find((i) => i.value === e.target.value)
+          if (item) {
+            navigate({ to: item.href })
+          }
+        }}
+        className="w-full"
+      >
+        {settingsNavItems.map((item) => (
+          <NativeSelectOption key={item.value} value={item.value}>
+            {item.label}
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+    )
+  }
+
+  return (
+    <nav className="w-50 shrink-0" aria-label="Configurações">
+      <ul className="flex flex-col gap-1">
+        {settingsNavItems.map((item) => {
+          const isActive = location.pathname.startsWith(item.href)
+          return (
+            <li key={item.value}>
+              <Link
+                to={item.href}
+                className={cn(
+                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'hover:bg-muted hover:text-foreground',
+                  isActive
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground',
+                )}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </nav>
+  )
+}
