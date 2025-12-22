@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/auth.ts",
-    "./client": "./src/auth-client.ts"
+    "./client": "./src/auth-client.ts",
+    "./access": "./src/access.ts"
   },
   "description": "",
   "scripts": {
