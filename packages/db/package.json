@@ -11,20 +11,23 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio --port 4000"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
+    "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.8.3"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
+    "@types/node": "^22.10.2",
     "typescript": "^5.9.3"
   }
 }

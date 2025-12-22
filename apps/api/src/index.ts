@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import { cors } from "hono/cors"; // 1. Import CORS
+import { cors } from "hono/cors";
+import { authRouter } from "./routes/auth";
 import { tasksRouter } from "./routes/tasks";
 
 const app = new Hono();
@@ -20,6 +21,7 @@ const routes = app
   .get("/hello", (c) => {
     return c.json({ message: "Hello!" });
   })
+  .route("/api/auth", authRouter)
   .route("/tasks", tasksRouter);
 
 export type AppType = typeof routes;

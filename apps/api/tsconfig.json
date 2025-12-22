@@ -1,7 +1,10 @@
 {
+  "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
-    "strict": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
-  }
+    "jsxImportSource": "hono/jsx",
+    "noEmit": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
 }

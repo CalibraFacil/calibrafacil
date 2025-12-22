@@ -12,7 +12,7 @@ function DashboardIndex() {
           Painel de Controle
         </h1>
         <p className="text-muted-foreground">
-          Bem-vindo ao seu painel de controle.
+          Olá, usuário! Bem-vindo ao seu painel de controle.
         </p>
       </div>
     </div>
