@@ -2,8 +2,20 @@ import { organizationClient } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ac, roles } from "./access";
 
+function getApiBaseURL(): string {
+  if (typeof window === "undefined") {
+    return "https://localhost:3000";
+  }
+  const host = window.location.hostname;
+  // For network access (e.g., iPhone testing via IP)
+  if (host !== "localhost") {
+    return `https://${host}:3000`;
+  }
+  return "https://localhost:3000";
+}
+
 export const authClient = createBetterAuthClient({
-  baseURL: "https://localhost:3000",
+  baseURL: getApiBaseURL(),
   fetchOptions: {
     credentials: "include",
   },

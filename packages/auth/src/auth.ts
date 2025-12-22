@@ -4,9 +4,9 @@ import { db } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
 import { organization } from "better-auth/plugins";
 import { ac, roles } from "./access";
-import { tanstackStartCookies } from "better-auth/tanstack-start";
 
 export const auth = betterAuth({
+  baseURL: process.env.API_URL || "https://localhost:3000",
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,
@@ -30,24 +30,17 @@ export const auth = betterAuth({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       creatorRole: "owner" as any,
     }),
-    tanstackStartCookies(),
   ],
   trustedOrigins:
     process.env.NODE_ENV === "production"
       ? [
           process.env.APP1_URL,
           process.env.APP2_URL,
-          process.env.APP_API_URL,
         ].filter((url): url is string => Boolean(url))
-      : [
-          "https://localhost:5173",
-          "https://192.168.0.10:5173",
-          "https://localhost:3000",
-          "https://192.168.0.10:3000",
-        ],
-  cookies: {
-    sessionToken: {
-      sameSite: "none",
+      : ["https://localhost:5173", "https://192.168.0.10:5173"],
+  advanced: {
+    defaultCookieAttributes: {
+      sameSite: "none" as const,
       secure: true,
     },
   },

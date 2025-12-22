@@ -1,6 +1,4 @@
-import { Outlet, createFileRoute, redirect } from '@tanstack/react-router'
-
-import { authClient } from '@calibra-facil/auth/client'
+import { Outlet, createFileRoute } from '@tanstack/react-router'
 
 import { AppSidebar } from '@/components/app-sidebar'
 import { DashboardHeader } from '@/components/dashboard-header'
