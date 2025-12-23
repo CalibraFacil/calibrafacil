@@ -79,13 +79,13 @@ const data = {
       url: '#',
       icon: <HugeiconsIcon icon={UserIcon} />,
     },
+  ],
+  navSecondary: [
     {
       title: 'Configurações',
       url: '/dashboard/settings',
       icon: <HugeiconsIcon icon={Settings05Icon} />,
     },
-  ],
-  navSecondary: [
     {
       title: 'Suporte',
       url: '/support',
