@@ -1,8 +1,10 @@
 import {
   AlertDiamondIcon,
+  Building06Icon,
   CreditCardIcon,
   Key01Icon,
   Notification01Icon,
+  PaintBoardIcon,
   ShieldKeyIcon,
   UserIcon,
 } from '@hugeicons/core-free-icons'
@@ -22,37 +24,49 @@ interface SettingsNavItem {
 
 const settingsNavItems: Array<SettingsNavItem> = [
   {
-    value: 'Perfil',
+    value: 'profile',
     label: 'Perfil',
     href: '/dashboard/settings/profile',
     icon: <HugeiconsIcon icon={UserIcon} className="size-4" />,
   },
   {
-    value: 'Perfil',
+    value: 'organization',
+    label: 'Organização',
+    href: '/dashboard/settings/organization',
+    icon: <HugeiconsIcon icon={Building06Icon} className="size-4" />,
+  },
+  {
+    value: 'security',
     label: 'Segurança',
     href: '/dashboard/settings/security',
     icon: <HugeiconsIcon icon={ShieldKeyIcon} className="size-4" />,
   },
   {
-    value: 'Autenticação',
+    value: 'authentication',
     label: 'Autenticação',
     href: '/dashboard/settings/authentication',
     icon: <HugeiconsIcon icon={Key01Icon} className="size-4" />,
   },
   {
-    value: 'Faturamento',
+    value: 'appearance',
+    label: 'Aparência',
+    href: '/dashboard/settings/appearance',
+    icon: <HugeiconsIcon icon={PaintBoardIcon} className="size-4" />,
+  },
+  {
+    value: 'billing',
     label: 'Faturamento',
     href: '/dashboard/settings/billing',
     icon: <HugeiconsIcon icon={CreditCardIcon} className="size-4" />,
   },
   {
-    value: 'Notificações',
+    value: 'notifications',
     label: 'Notificações',
     href: '/dashboard/settings/notifications',
     icon: <HugeiconsIcon icon={Notification01Icon} className="size-4" />,
   },
   {
-    value: 'Zona de Perigo',
+    value: 'danger',
     label: 'Zona de Perigo',
     href: '/dashboard/settings/danger',
     icon: (
@@ -72,7 +86,7 @@ export function SettingsNav() {
   // Find current tab from URL
   const currentTab =
     settingsNavItems.find((item) => location.pathname.startsWith(item.href))
-      ?.value ?? 'Perfil'
+      ?.value ?? 'profile'
 
   if (isMobile) {
     return (

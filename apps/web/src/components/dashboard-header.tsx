@@ -1,8 +1,6 @@
 import { Link, useMatches } from '@tanstack/react-router'
 import { Fragment, useMemo } from 'react'
 
-import { ModeToggle } from './mode-toggle'
-
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -68,7 +66,6 @@ export function DashboardHeader() {
           </BreadcrumbList>
         </Breadcrumb>
       </div>
-      <ModeToggle />
     </header>
   )
 }

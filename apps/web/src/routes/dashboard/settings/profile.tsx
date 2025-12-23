@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 import { useSettings } from '@/contexts/settings-context'
 import {
@@ -30,12 +31,11 @@ export const Route = createFileRoute('/dashboard/settings/profile')({
 })
 
 function ProfileSettingsPage() {
-  const { user, isLoading, isUpdating, updateProfile, error, clearError } =
+  const { user, isLoading, isUpdating, updateProfile, clearError } =
     useSettings()
 
   const [name, setName] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
 
   // Sync name from user data
   useEffect(() => {
@@ -51,7 +51,6 @@ function ProfileSettingsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
-    setSuccess(false)
     clearError()
 
     if (!name.trim()) {
@@ -61,9 +60,11 @@ function ProfileSettingsPage() {
 
     try {
       await updateProfile({ name: name.trim() })
-      setSuccess(true)
-    } catch {
-      // Error already handled in context
+      toast.success('Perfil atualizado com sucesso!')
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Falha ao atualizar perfil'
+      toast.error(message)
     }
   }
 
@@ -118,7 +119,6 @@ function ProfileSettingsPage() {
                   onChange={(e) => {
                     setName(e.target.value)
                     setFormError(null)
-                    setSuccess(false)
                   }}
                   disabled={isUpdating}
                   placeholder="Seu nome completo"
@@ -140,20 +140,6 @@ function ProfileSettingsPage() {
                   com o suporte se precisar alterar.
                 </FieldDescription>
               </Field>
-
-              {/* Error message */}
-              {error && (
-                <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
-                  {error}
-                </div>
-              )}
-
-              {/* Success message */}
-              {success && (
-                <div className="bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 rounded-md p-3 text-sm">
-                  Perfil atualizado com sucesso!
-                </div>
-              )}
 
               {/* Submit */}
               <div className="flex justify-end">

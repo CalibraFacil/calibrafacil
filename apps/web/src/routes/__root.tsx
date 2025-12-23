@@ -12,6 +12,7 @@ import appCss from '../styles.css?url'
 import type { QueryClient } from '@tanstack/react-query'
 
 import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from '@/components/ui/sonner'
 
 // Inline script to apply theme before React hydrates (prevents flicker)
 const themeScript = `
@@ -74,6 +75,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           storageKey="theme"
         >
           {children}
+          <Toaster richColors position="top-center" />
         </ThemeProvider>
         <Scripts />
       </body>

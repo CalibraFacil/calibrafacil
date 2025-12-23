@@ -17,10 +17,12 @@ import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
 import { Route as DashboardSettingsSecurityRouteImport } from './routes/dashboard/settings/security'
 import { Route as DashboardSettingsProfileRouteImport } from './routes/dashboard/settings/profile'
+import { Route as DashboardSettingsOrganizationRouteImport } from './routes/dashboard/settings/organization'
 import { Route as DashboardSettingsNotificationsRouteImport } from './routes/dashboard/settings/notifications'
 import { Route as DashboardSettingsDangerRouteImport } from './routes/dashboard/settings/danger'
 import { Route as DashboardSettingsBillingRouteImport } from './routes/dashboard/settings/billing'
 import { Route as DashboardSettingsAuthenticationRouteImport } from './routes/dashboard/settings/authentication'
+import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
 
 const DashboardRouteRoute = DashboardRouteRouteImport.update({
   id: '/dashboard',
@@ -64,6 +66,12 @@ const DashboardSettingsProfileRoute =
     path: '/profile',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
+const DashboardSettingsOrganizationRoute =
+  DashboardSettingsOrganizationRouteImport.update({
+    id: '/organization',
+    path: '/organization',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
 const DashboardSettingsNotificationsRoute =
   DashboardSettingsNotificationsRouteImport.update({
     id: '/notifications',
@@ -87,6 +95,12 @@ const DashboardSettingsAuthenticationRoute =
     path: '/authentication',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
+const DashboardSettingsAppearanceRoute =
+  DashboardSettingsAppearanceRouteImport.update({
+    id: '/appearance',
+    path: '/appearance',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -95,10 +109,12 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof DashboardIndexRoute
   '/sign-in': typeof SignInIndexRoute
   '/sign-up': typeof SignUpIndexRoute
+  '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
+  '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
 }
@@ -108,10 +124,12 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardIndexRoute
   '/sign-in': typeof SignInIndexRoute
   '/sign-up': typeof SignUpIndexRoute
+  '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
+  '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
 }
@@ -123,10 +141,12 @@ export interface FileRoutesById {
   '/dashboard/': typeof DashboardIndexRoute
   '/sign-in/': typeof SignInIndexRoute
   '/sign-up/': typeof SignUpIndexRoute
+  '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
+  '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
 }
@@ -139,10 +159,12 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/sign-in'
     | '/sign-up'
+    | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/notifications'
+    | '/dashboard/settings/organization'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
   fileRoutesByTo: FileRoutesByTo
@@ -152,10 +174,12 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/sign-in'
     | '/sign-up'
+    | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/notifications'
+    | '/dashboard/settings/organization'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
   id:
@@ -166,10 +190,12 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/sign-in/'
     | '/sign-up/'
+    | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/notifications'
+    | '/dashboard/settings/organization'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
   fileRoutesById: FileRoutesById
@@ -239,6 +265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsProfileRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
+    '/dashboard/settings/organization': {
+      id: '/dashboard/settings/organization'
+      path: '/organization'
+      fullPath: '/dashboard/settings/organization'
+      preLoaderRoute: typeof DashboardSettingsOrganizationRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
     '/dashboard/settings/notifications': {
       id: '/dashboard/settings/notifications'
       path: '/notifications'
@@ -267,24 +300,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsAuthenticationRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
+    '/dashboard/settings/appearance': {
+      id: '/dashboard/settings/appearance'
+      path: '/appearance'
+      fullPath: '/dashboard/settings/appearance'
+      preLoaderRoute: typeof DashboardSettingsAppearanceRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
   }
 }
 
 interface DashboardSettingsRouteRouteChildren {
+  DashboardSettingsAppearanceRoute: typeof DashboardSettingsAppearanceRoute
   DashboardSettingsAuthenticationRoute: typeof DashboardSettingsAuthenticationRoute
   DashboardSettingsBillingRoute: typeof DashboardSettingsBillingRoute
   DashboardSettingsDangerRoute: typeof DashboardSettingsDangerRoute
   DashboardSettingsNotificationsRoute: typeof DashboardSettingsNotificationsRoute
+  DashboardSettingsOrganizationRoute: typeof DashboardSettingsOrganizationRoute
   DashboardSettingsProfileRoute: typeof DashboardSettingsProfileRoute
   DashboardSettingsSecurityRoute: typeof DashboardSettingsSecurityRoute
 }
 
 const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
   {
+    DashboardSettingsAppearanceRoute: DashboardSettingsAppearanceRoute,
     DashboardSettingsAuthenticationRoute: DashboardSettingsAuthenticationRoute,
     DashboardSettingsBillingRoute: DashboardSettingsBillingRoute,
     DashboardSettingsDangerRoute: DashboardSettingsDangerRoute,
     DashboardSettingsNotificationsRoute: DashboardSettingsNotificationsRoute,
+    DashboardSettingsOrganizationRoute: DashboardSettingsOrganizationRoute,
     DashboardSettingsProfileRoute: DashboardSettingsProfileRoute,
     DashboardSettingsSecurityRoute: DashboardSettingsSecurityRoute,
   }

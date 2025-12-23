@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
 import { useSettings } from '@/contexts/settings-context'
 import {
@@ -43,13 +44,11 @@ function SecuritySettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()
     setPasswordError(null)
-    setPasswordSuccess(false)
 
     if (!currentPassword) {
       setPasswordError('Digite sua senha atual')
@@ -69,14 +68,13 @@ function SecuritySettingsPage() {
     setIsChangingPassword(true)
     try {
       await changePassword({ currentPassword, newPassword })
-      setPasswordSuccess(true)
+      toast.success('Senha alterada com sucesso!')
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch (err) {
-      setPasswordError(
-        err instanceof Error ? err.message : 'Falha ao alterar senha',
-      )
+      const message = err instanceof Error ? err.message : 'Falha ao alterar senha'
+      toast.error(message)
     } finally {
       setIsChangingPassword(false)
     }
@@ -121,7 +119,6 @@ function SecuritySettingsPage() {
                   onChange={(e) => {
                     setCurrentPassword(e.target.value)
                     setPasswordError(null)
-                    setPasswordSuccess(false)
                   }}
                   disabled={isChangingPassword}
                   placeholder="Digite sua senha atual"
@@ -136,7 +133,6 @@ function SecuritySettingsPage() {
                   onChange={(e) => {
                     setNewPassword(e.target.value)
                     setPasswordError(null)
-                    setPasswordSuccess(false)
                   }}
                   disabled={isChangingPassword}
                   placeholder="Digite sua nova senha"
@@ -153,19 +149,12 @@ function SecuritySettingsPage() {
                   onChange={(e) => {
                     setConfirmPassword(e.target.value)
                     setPasswordError(null)
-                    setPasswordSuccess(false)
                   }}
                   disabled={isChangingPassword}
                   placeholder="Confirme sua nova senha"
                 />
                 {passwordError && <FieldError>{passwordError}</FieldError>}
               </Field>
-
-              {passwordSuccess && (
-                <div className="bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 rounded-md p-3 text-sm">
-                  Senha alterada com sucesso!
-                </div>
-              )}
 
               <div className="flex justify-end">
                 <Button type="submit" disabled={isChangingPassword}>
