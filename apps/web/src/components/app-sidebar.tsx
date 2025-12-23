@@ -19,6 +19,7 @@ import { OrganizationSwitcher } from './organization-switcher'
 import { NavMain } from './nav-main'
 import { NavProjects } from './nav-projects'
 import { NavUser } from './nav-user'
+import { SidebarSearch } from './sidebar-search'
 
 import {
   Sidebar,
@@ -121,6 +122,7 @@ export function AppSidebar() {
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
         <OrganizationSwitcher />
+        <SidebarSearch />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />

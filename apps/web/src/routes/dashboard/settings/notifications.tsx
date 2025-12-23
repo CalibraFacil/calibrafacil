@@ -137,7 +137,7 @@ function NotificationsSettingsPage() {
         <CardHeader>
           <CardTitle>Comunicacoes de Marketing</CardTitle>
           <CardDescription>
-            Gerencie suas preferencias de comunicacao promocional.
+            Gerencie suas preferências de comunicação promocional.
           </CardDescription>
         </CardHeader>
         <CardContent>

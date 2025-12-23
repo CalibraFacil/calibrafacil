@@ -37,7 +37,6 @@ function ProfileSettingsPage() {
   const [name, setName] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
 
-  // Sync name from user data
   useEffect(() => {
     if (user?.name) {
       setName(user.name)
@@ -82,32 +81,39 @@ function ProfileSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Perfil</CardTitle>
-          <CardDescription>
-            Gerencie suas informações de perfil público.
-          </CardDescription>
+          <CardDescription>Gerencie seu perfil de usuário.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit}>
             <FieldGroup>
-              {/* Avatar Section */}
-              <Field orientation="horizontal">
-                <FieldLabel>Foto</FieldLabel>
-                <div className="flex items-center gap-4">
-                  <Avatar size="lg">
+              <Field>
+                <div className="flex flex-row items-center gap-6">
+                  {/* Left Column: Avatar */}
+                  <Avatar className="size-20 sm:size-24">
                     <AvatarImage
                       src={user?.image ?? ''}
                       alt={user?.name ?? ''}
                     />
-                    <AvatarFallback>
+                    <AvatarFallback className="text-xl sm:text-2xl">
                       {getInitials(user?.name ?? 'U')}
                     </AvatarFallback>
                   </Avatar>
-                  <Label>Alterar foto</Label>
-                  <Input type="file" accept="image/*" disabled={isUpdating} />
+
+                  {/* Right Column: Label, Input, and Description */}
+                  <div className="flex flex-col gap-2 w-full max-w-sm">
+                    <Label htmlFor="avatar-upload">Alterar foto</Label>
+                    <Input
+                      id="avatar-upload"
+                      type="file"
+                      accept="image/*"
+                      disabled={isUpdating}
+                      className="cursor-pointer"
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      Sua foto de perfil será exibida em toda a plataforma.
+                    </span>
+                  </div>
                 </div>
-                <FieldDescription>
-                  Sua foto de perfil será exibida em toda a plataforma.
-                </FieldDescription>
               </Field>
 
               {/* Name Field */}
@@ -141,8 +147,7 @@ function ProfileSettingsPage() {
                 </FieldDescription>
               </Field>
 
-              {/* Submit */}
-              <div className="flex justify-end">
+              <div className="flex justify-end pt-4">
                 <Button type="submit" disabled={isUpdating}>
                   {isUpdating ? 'Salvando...' : 'Salvar alterações'}
                 </Button>
@@ -163,10 +168,15 @@ function ProfileSkeleton() {
         <Skeleton className="h-4 w-48 mt-2" />
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-10 w-10 rounded-full" />
-          <Skeleton className="h-8 w-24" />
+        <div className="flex items-center gap-6">
+          <Skeleton className="size-20 rounded-full" />
+          <div className="space-y-2 w-full max-w-sm">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-4 w-48" />
+          </div>
         </div>
+
         <div className="space-y-2">
           <Skeleton className="h-4 w-12" />
           <Skeleton className="h-9 w-full" />
