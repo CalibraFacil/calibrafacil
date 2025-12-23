@@ -13,7 +13,10 @@
   },
   "dependencies": {
     "@calibra-facil/db": "workspace:^",
-    "better-auth": "^1.4.7"
+    "@calibra-facil/email": "workspace:^",
+    "better-auth": "^1.4.7",
+    "react": "^19.0.0",
+    "resend": "^6.6.0"
   },
   "keywords": [],
   "author": "",

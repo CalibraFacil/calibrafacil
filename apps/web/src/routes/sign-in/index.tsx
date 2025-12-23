@@ -1,7 +1,14 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { SignInForm } from '@/components/sign-in-form'
 
+type SignInSearch = {
+  redirect?: string
+}
+
 export const Route = createFileRoute('/sign-in/')({
+  validateSearch: (search: Record<string, unknown>): SignInSearch => ({
+    redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
+  }),
   head: () => ({
     meta: [
       {
@@ -15,6 +22,7 @@ export const Route = createFileRoute('/sign-in/')({
 })
 
 function SignInPage() {
+  const { redirect } = Route.useSearch()
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       <div className="flex flex-col gap-4 p-6 md:p-10">
@@ -28,7 +36,7 @@ function SignInPage() {
         </div>
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-xs">
-            <SignInForm />
+            <SignInForm redirect={redirect} />
           </div>
         </div>
       </div>

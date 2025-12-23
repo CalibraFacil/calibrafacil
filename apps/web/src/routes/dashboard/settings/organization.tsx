@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Building06Icon,
+  Cancel01Icon,
   Delete02Icon,
   Mail01Icon,
-  UserMultiple02Icon,
+  SentIcon,
+  UserIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
@@ -47,6 +49,13 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 export const Route = createFileRoute('/dashboard/settings/organization')({
   head: () => ({
@@ -68,6 +77,15 @@ interface Member {
   }
 }
 
+interface Invitation {
+  id: string
+  email: string
+  role: string
+  status: 'pending' | 'accepted' | 'rejected' | 'canceled'
+  expiresAt: Date
+  inviterId: string
+}
+
 function OrganizationSettingsPage() {
   const { data: activeOrg, isPending: isLoadingOrg } = useActiveOrganization()
 
@@ -79,16 +97,31 @@ function OrganizationSettingsPage() {
   const [members, setMembers] = useState<Array<Member>>([])
   const [membersLoading, setMembersLoading] = useState(false)
 
+  const [invitations, setInvitations] = useState<Array<Invitation>>([])
+  const [invitationsLoading, setInvitationsLoading] = useState(false)
+  const [cancellingInvitation, setCancellingInvitation] = useState<
+    string | null
+  >(null)
+
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole] = useState<
-    'member' | 'admin' | 'technician' | 'client_user'
-  >('member')
+  const [inviteRole, setInviteRole] = useState<string>('member')
   const [isInviting, setIsInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
+
+  const [memberToRemove, setMemberToRemove] = useState<Member | null>(null)
+  const [isRemoving, setIsRemoving] = useState(false)
+
+  const [updatingRoleFor, setUpdatingRoleFor] = useState<string | null>(null)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
+
+  const availableRoles = [
+    { value: 'member', label: 'Membro' },
+    { value: 'technician', label: 'Técnico' },
+    { value: 'admin', label: 'Administrador' },
+  ] as const
 
   useEffect(() => {
     if (activeOrg) {
@@ -126,7 +159,33 @@ function OrganizationSettingsPage() {
       }
     }
 
+    const fetchInvitations = async () => {
+      setInvitationsLoading(true)
+      try {
+        const result = await authClient.organization.listInvitations({
+          query: { organizationId: activeOrg.id },
+        })
+        if (!cancelled && result.data) {
+          setInvitations(
+            result.data.map((inv) => ({
+              ...inv,
+              expiresAt: new Date(inv.expiresAt),
+            })),
+          )
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load invitations:', err)
+        }
+      } finally {
+        if (!cancelled) {
+          setInvitationsLoading(false)
+        }
+      }
+    }
+
     fetchMembers()
+    fetchInvitations()
     return () => {
       cancelled = true
     }
@@ -151,6 +210,28 @@ function OrganizationSettingsPage() {
       console.error('Failed to load members:', err)
     } finally {
       setMembersLoading(false)
+    }
+  }
+
+  const loadInvitations = async () => {
+    if (!activeOrg) return
+    setInvitationsLoading(true)
+    try {
+      const result = await authClient.organization.listInvitations({
+        query: { organizationId: activeOrg.id },
+      })
+      if (result.data) {
+        setInvitations(
+          result.data.map((inv) => ({
+            ...inv,
+            expiresAt: new Date(inv.expiresAt),
+          })),
+        )
+      }
+    } catch (err) {
+      console.error('Failed to load invitations:', err)
+    } finally {
+      setInvitationsLoading(false)
     }
   }
 
@@ -220,7 +301,7 @@ function OrganizationSettingsPage() {
     try {
       const result = await authClient.organization.inviteMember({
         email: inviteEmail.trim(),
-        role: inviteRole,
+        role: inviteRole as 'member' | 'admin' | 'technician',
         organizationId: activeOrg.id,
       })
       if (result.error) {
@@ -228,6 +309,7 @@ function OrganizationSettingsPage() {
       }
       toast.success(`Convite enviado para ${inviteEmail}`)
       setInviteEmail('')
+      await loadInvitations()
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Falha ao enviar convite'
@@ -238,21 +320,69 @@ function OrganizationSettingsPage() {
     }
   }
 
-  const handleRemoveMember = async (memberIdOrEmail: string) => {
+  const handleRemoveMember = async () => {
+    if (!memberToRemove) return
+
+    setIsRemoving(true)
     try {
       const result = await authClient.organization.removeMember({
-        memberIdOrEmail,
+        memberIdOrEmail: memberToRemove.user.email,
         organizationId: activeOrg.id,
       })
       if (result.error) {
         throw new Error(result.error.message ?? 'Falha ao remover membro')
       }
       toast.success('Membro removido com sucesso')
+      setMemberToRemove(null)
       await loadMembers()
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Falha ao remover membro'
       toast.error(message)
+    } finally {
+      setIsRemoving(false)
+    }
+  }
+
+  const handleUpdateMemberRole = async (memberId: string, newRole: string) => {
+    setUpdatingRoleFor(memberId)
+    try {
+      const result = await authClient.organization.updateMemberRole({
+        memberId,
+        role: newRole,
+        organizationId: activeOrg.id,
+      })
+      if (result.error) {
+        throw new Error(result.error.message ?? 'Falha ao atualizar função')
+      }
+      toast.success('Função atualizada com sucesso')
+      await loadMembers()
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Falha ao atualizar função'
+      toast.error(message)
+    } finally {
+      setUpdatingRoleFor(null)
+    }
+  }
+
+  const handleCancelInvitation = async (invitationId: string) => {
+    setCancellingInvitation(invitationId)
+    try {
+      const result = await authClient.organization.cancelInvitation({
+        invitationId,
+      })
+      if (result.error) {
+        throw new Error(result.error.message ?? 'Falha ao cancelar convite')
+      }
+      toast.success('Convite cancelado com sucesso')
+      await loadInvitations()
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Falha ao cancelar convite'
+      toast.error(message)
+    } finally {
+      setCancellingInvitation(null)
     }
   }
 
@@ -290,6 +420,55 @@ function OrganizationSettingsPage() {
       client_user: 'Cliente',
     }
     return labels[role] || role
+  }
+
+  const formatTimeRemaining = (expiresAt: Date) => {
+    const now = new Date()
+    const diff = expiresAt.getTime() - now.getTime()
+
+    if (diff <= 0) return 'expirado'
+
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    const days = Math.floor(hours / 24)
+
+    if (days > 0) {
+      return `${days} dia${days > 1 ? 's' : ''}`
+    }
+    if (hours > 0) {
+      return `${hours} hora${hours > 1 ? 's' : ''}`
+    }
+    const minutes = Math.floor(diff / (1000 * 60))
+    return `${minutes} minuto${minutes > 1 ? 's' : ''}`
+  }
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      pending: 'Pendente',
+      accepted: 'Aceito',
+      rejected: 'Rejeitado',
+      canceled: 'Cancelado',
+    }
+    return labels[status] || status
+  }
+
+  const getStatusVariant = (
+    status: string,
+  ): 'default' | 'secondary' | 'destructive' | 'outline' => {
+    const variants: Record<
+      string,
+      'default' | 'secondary' | 'destructive' | 'outline'
+    > = {
+      pending: 'default',
+      accepted: 'secondary',
+      rejected: 'destructive',
+      canceled: 'outline',
+    }
+    return variants[status] || 'secondary'
+  }
+
+  const getInviterName = (inviterId: string) => {
+    const member = members.find((m) => m.userId === inviterId)
+    return member?.user.name
   }
 
   return (
@@ -369,10 +548,7 @@ function OrganizationSettingsPage() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                        <HugeiconsIcon
-                          icon={UserMultiple02Icon}
-                          className="h-5 w-5"
-                        />
+                        <HugeiconsIcon icon={UserIcon} className="h-5 w-5" />
                       </div>
                       <div>
                         <p className="font-medium">{member.user.name}</p>
@@ -382,14 +558,39 @@ function OrganizationSettingsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="secondary">
-                        {getRoleLabel(member.role)}
-                      </Badge>
+                      {member.role === 'owner' ? (
+                        <Badge variant="secondary">
+                          {getRoleLabel(member.role)}
+                        </Badge>
+                      ) : (
+                        <Select
+                          value={member.role}
+                          onValueChange={(value) =>
+                            value && handleUpdateMemberRole(member.id, value)
+                          }
+                          disabled={updatingRoleFor === member.id}
+                        >
+                          <SelectTrigger size="sm" className="w-[140px]">
+                            <SelectValue>
+                              {updatingRoleFor === member.id
+                                ? 'Atualizando...'
+                                : getRoleLabel(member.role)}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableRoles.map((role) => (
+                              <SelectItem key={role.value} value={role.value}>
+                                {role.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                       {member.role !== 'owner' && (
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => handleRemoveMember(member.user.email)}
+                          onClick={() => setMemberToRemove(member)}
                         >
                           <HugeiconsIcon
                             icon={Delete02Icon}
@@ -420,6 +621,25 @@ function OrganizationSettingsPage() {
                         placeholder="email@exemplo.com"
                       />
                     </div>
+                    <Select
+                      value={inviteRole}
+                      onValueChange={(value) => value && setInviteRole(value)}
+                      disabled={isInviting}
+                    >
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue>
+                          {availableRoles.find((r) => r.value === inviteRole)
+                            ?.label || 'Membro'}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableRoles.map((role) => (
+                          <SelectItem key={role.value} value={role.value}>
+                            {role.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button type="submit" disabled={isInviting}>
                       <HugeiconsIcon icon={Mail01Icon} />
                       {isInviting ? 'Enviando...' : 'Convidar'}
@@ -433,11 +653,129 @@ function OrganizationSettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Invitations Card */}
+      {(invitations.length > 0 || invitationsLoading) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HugeiconsIcon icon={SentIcon} className="h-5 w-5" />
+              Convites
+            </CardTitle>
+            <CardDescription>
+              Histórico de convites enviados para a organização.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {invitationsLoading ? (
+              <InvitationsSkeleton />
+            ) : (
+              <div className="space-y-3">
+                {invitations.map((invitation) => {
+                  const isPending = invitation.status === 'pending'
+                  const isExpired =
+                    isPending && invitation.expiresAt < new Date()
+                  return (
+                    <div
+                      key={invitation.id}
+                      className="flex items-center justify-between p-4 border rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                          <HugeiconsIcon
+                            icon={Mail01Icon}
+                            className="h-5 w-5"
+                          />
+                        </div>
+                        <div>
+                          <p className="font-medium">{invitation.email}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {getRoleLabel(invitation.role)}
+                            {getInviterName(invitation.inviterId) && (
+                              <span className="ml-1">
+                                · Convidado por{' '}
+                                {getInviterName(invitation.inviterId)}
+                              </span>
+                            )}
+                            {isPending && !isExpired && (
+                              <span className="ml-1">
+                                · Expira em{' '}
+                                {formatTimeRemaining(invitation.expiresAt)}
+                              </span>
+                            )}
+                            {isExpired && (
+                              <span className="text-destructive ml-1">
+                                · Expirado
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={getStatusVariant(invitation.status)}>
+                          {getStatusLabel(invitation.status)}
+                        </Badge>
+                        {isPending && !isExpired && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() =>
+                              handleCancelInvitation(invitation.id)
+                            }
+                            disabled={cancellingInvitation === invitation.id}
+                          >
+                            <HugeiconsIcon
+                              icon={Cancel01Icon}
+                              className="h-4 w-4 text-muted-foreground"
+                            />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Remove Member Confirmation Dialog */}
+      <AlertDialog
+        open={!!memberToRemove}
+        onOpenChange={(open) => {
+          if (!open) setMemberToRemove(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover membro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você está prestes a remover{' '}
+              <strong>{memberToRemove?.user.name}</strong> (
+              {memberToRemove?.user.email}) da organização. Esta ação pode ser
+              desfeita convidando o membro novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRemoving}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveMember}
+              disabled={isRemoving}
+              variant="destructive"
+            >
+              {isRemoving ? 'Removendo...' : 'Remover membro'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Danger Zone */}
       <Card className="border-destructive/50">
         <CardHeader>
           <CardTitle className="text-destructive">
-            Excluir Organizacao
+            Excluir Organização
           </CardTitle>
           <CardDescription>
             Exclua permanentemente esta organização e todos os seus dados.
@@ -542,6 +880,28 @@ function MembersSkeleton() {
             </div>
           </div>
           <Skeleton className="h-5 w-20" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function InvitationsSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[1, 2].map((i) => (
+        <div
+          key={i}
+          className="flex items-center justify-between p-4 border rounded-lg"
+        >
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-48" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          </div>
+          <Skeleton className="h-8 w-8" />
         </div>
       ))}
     </div>

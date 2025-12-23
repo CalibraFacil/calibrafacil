@@ -11,10 +11,15 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 
+interface SignUpFormProps extends React.ComponentProps<'form'> {
+  redirect?: string
+}
+
 export function SignUpForm({
   className,
+  redirect,
   ...props
-}: React.ComponentProps<'form'>) {
+}: SignUpFormProps) {
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -40,7 +45,7 @@ export function SignUpForm({
       return
     }
 
-    navigate({ to: '/dashboard' })
+    navigate({ to: redirect || '/dashboard' })
   }
 
   return (
