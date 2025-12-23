@@ -50,7 +50,7 @@ export function NavProjects({
                 render={
                   <SidebarMenuAction showOnHover>
                     <HugeiconsIcon icon={MoreHorizontalIcon} />
-                    <span className="sr-only">More</span>
+                    <span className="sr-only">Mais</span>
                   </SidebarMenuAction>
                 }
               />
