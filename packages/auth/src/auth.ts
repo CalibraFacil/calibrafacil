@@ -33,6 +33,18 @@ export const auth = betterAuth({
       // Organization creator gets full control
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       creatorRole: "owner" as any,
+      // Add type field to distinguish LAB vs CLIENT organizations
+      schema: {
+        organization: {
+          additionalFields: {
+            type: {
+              type: "string",
+              defaultValue: "LAB",
+              input: false,
+            },
+          },
+        },
+      },
       async sendInvitationEmail(data) {
         const appUrl = process.env.APP_URL || "https://localhost:5173";
         const inviteLink = `${appUrl}/accept-invitation/${data.id}`;

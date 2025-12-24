@@ -6,6 +6,8 @@ import {
   boolean,
   index,
   uniqueIndex,
+  serial,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -90,6 +92,7 @@ export const organization = pgTable(
     logo: text("logo"),
     createdAt: timestamp("created_at").notNull(),
     metadata: text("metadata"),
+    type: text("type").default("LAB"),
   },
   (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
 );
@@ -133,6 +136,48 @@ export const invitation = pgTable(
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
   ],
+);
+
+// =============================================================================
+// CUSTOMER - Client companies that send equipment for calibration
+// =============================================================================
+
+/**
+ * Address type for customer addresses
+ */
+export type CustomerAddress = {
+  cep?: string;
+  number?: string;
+  street?: string;
+  neighbourhood?: string;
+  city?: string;
+  state?: string;
+};
+
+/**
+ * Customer table - Business data for client organizations.
+ * Links to Better Auth organization via authOrganizationId.
+ * This is the "bridge" between business logic and identity provider.
+ */
+export const customer = pgTable(
+  "customer",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(), // Razao Social / Nome Fantasia
+    taxId: text("tax_id"), // CNPJ/VAT
+    email: text("email"), // Contact email
+    phone: text("phone"), // Optional
+    address: jsonb("address").$type<CustomerAddress>(), // CEP, number, street, etc.
+    authOrganizationId: text("auth_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("customer_auth_org_id_idx").on(table.authOrganizationId)],
 );
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -180,5 +225,12 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
   user: one(user, {
     fields: [invitation.inviterId],
     references: [user.id],
+  }),
+}));
+
+export const customerRelations = relations(customer, ({ one }) => ({
+  organization: one(organization, {
+    fields: [customer.authOrganizationId],
+    references: [organization.id],
   }),
 }));

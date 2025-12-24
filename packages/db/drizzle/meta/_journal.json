@@ -8,6 +8,20 @@
       "when": 1766361817397,
       "tag": "0000_late_ricochet",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1766544564222,
+      "tag": "0001_confused_jubilee",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1766545480207,
+      "tag": "0002_sour_dragon_man",
+      "breakpoints": true
     }
   ]
 }

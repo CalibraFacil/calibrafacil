@@ -23,6 +23,16 @@ export const authClient = createBetterAuthClient({
     organizationClient({
       ac,
       roles,
+      schema: {
+        organization: {
+          additionalFields: {
+            type: {
+              type: "string",
+              defaultValue: "LAB",
+            },
+          },
+        },
+      },
     }),
   ],
 });

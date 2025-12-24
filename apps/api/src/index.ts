@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "@calibra-facil/auth";
+import { customersRouter } from "./routes/customers";
 
 const app = new Hono();
 
@@ -77,9 +78,12 @@ app.use(
   }),
 );
 
-const routes = app.get("/hello", (c) => {
-  return c.json({ message: "Hello!" });
-});
+// API Routes
+const routes = app
+  .get("/hello", (c) => {
+    return c.json({ message: "Hello!" });
+  })
+  .route("/api/customers", customersRouter);
 
 export type AppType = typeof routes;
 export default {

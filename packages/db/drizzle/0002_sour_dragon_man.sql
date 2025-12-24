@@ -1,0 +1,1 @@
+ALTER TABLE "organization" ADD COLUMN "type" text DEFAULT 'LAB';

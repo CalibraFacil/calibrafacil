@@ -9,8 +9,10 @@
   },
   "dependencies": {
     "@calibra-facil/auth": "workspace:^",
+    "@calibra-facil/db": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@hono/zod-validator": "^0.7.6",
+    "drizzle-orm": "^0.45.1",
     "hono": "^4.11.1",
     "resend": "^6.6.0",
     "zod": "^4.2.1"

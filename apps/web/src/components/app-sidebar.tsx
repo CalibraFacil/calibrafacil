@@ -76,8 +76,8 @@ const data = {
       icon: <HugeiconsIcon icon={File01Icon} />,
     },
     {
-      title: 'Customers',
-      url: '#',
+      title: 'Clientes',
+      url: '/dashboard/clients',
       icon: <HugeiconsIcon icon={UserIcon} />,
     },
   ],

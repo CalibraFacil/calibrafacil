@@ -16,6 +16,8 @@ import { Route as SignInIndexRouteImport } from './routes/sign-in/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitation/$id'
 import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
+import { Route as DashboardClientsRouteRouteImport } from './routes/dashboard/clients/route'
+import { Route as DashboardClientsIndexRouteImport } from './routes/dashboard/clients/index'
 import { Route as DashboardSettingsSecurityRouteImport } from './routes/dashboard/settings/security'
 import { Route as DashboardSettingsProfileRouteImport } from './routes/dashboard/settings/profile'
 import { Route as DashboardSettingsOrganizationRouteImport } from './routes/dashboard/settings/organization'
@@ -24,6 +26,7 @@ import { Route as DashboardSettingsDangerRouteImport } from './routes/dashboard/
 import { Route as DashboardSettingsBillingRouteImport } from './routes/dashboard/settings/billing'
 import { Route as DashboardSettingsAuthenticationRouteImport } from './routes/dashboard/settings/authentication'
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
+import { Route as DashboardClientsNewRouteImport } from './routes/dashboard/clients/new'
 
 const DashboardRouteRoute = DashboardRouteRouteImport.update({
   id: '/dashboard',
@@ -59,6 +62,16 @@ const DashboardSettingsRouteRoute = DashboardSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardClientsRouteRoute = DashboardClientsRouteRouteImport.update({
+  id: '/clients',
+  path: '/clients',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardClientsIndexRoute = DashboardClientsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardClientsRouteRoute,
 } as any)
 const DashboardSettingsSecurityRoute =
   DashboardSettingsSecurityRouteImport.update({
@@ -107,15 +120,22 @@ const DashboardSettingsAppearanceRoute =
     path: '/appearance',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
+const DashboardClientsNewRoute = DashboardClientsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => DashboardClientsRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/sign-in': typeof SignInIndexRoute
   '/sign-up': typeof SignUpIndexRoute
+  '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
@@ -124,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
+  '/dashboard/clients/': typeof DashboardClientsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -132,6 +153,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardIndexRoute
   '/sign-in': typeof SignInIndexRoute
   '/sign-up': typeof SignUpIndexRoute
+  '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
@@ -140,16 +162,19 @@ export interface FileRoutesByTo {
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
+  '/dashboard/clients': typeof DashboardClientsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/sign-in/': typeof SignInIndexRoute
   '/sign-up/': typeof SignUpIndexRoute
+  '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
@@ -158,17 +183,20 @@ export interface FileRoutesById {
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
+  '/dashboard/clients/': typeof DashboardClientsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/dashboard/clients'
     | '/dashboard/settings'
     | '/accept-invitation/$id'
     | '/dashboard/'
     | '/sign-in'
     | '/sign-up'
+    | '/dashboard/clients/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
@@ -177,6 +205,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/organization'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
+    | '/dashboard/clients/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -185,6 +214,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/sign-in'
     | '/sign-up'
+    | '/dashboard/clients/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
@@ -193,15 +223,18 @@ export interface FileRouteTypes {
     | '/dashboard/settings/organization'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
+    | '/dashboard/clients'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/dashboard/clients'
     | '/dashboard/settings'
     | '/accept-invitation/$id'
     | '/dashboard/'
     | '/sign-in/'
     | '/sign-up/'
+    | '/dashboard/clients/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
@@ -210,6 +243,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/organization'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
+    | '/dashboard/clients/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -271,6 +305,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsRouteRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/clients': {
+      id: '/dashboard/clients'
+      path: '/clients'
+      fullPath: '/dashboard/clients'
+      preLoaderRoute: typeof DashboardClientsRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/clients/': {
+      id: '/dashboard/clients/'
+      path: '/'
+      fullPath: '/dashboard/clients/'
+      preLoaderRoute: typeof DashboardClientsIndexRouteImport
+      parentRoute: typeof DashboardClientsRouteRoute
+    }
     '/dashboard/settings/security': {
       id: '/dashboard/settings/security'
       path: '/security'
@@ -327,8 +375,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsAppearanceRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
+    '/dashboard/clients/new': {
+      id: '/dashboard/clients/new'
+      path: '/new'
+      fullPath: '/dashboard/clients/new'
+      preLoaderRoute: typeof DashboardClientsNewRouteImport
+      parentRoute: typeof DashboardClientsRouteRoute
+    }
   }
 }
+
+interface DashboardClientsRouteRouteChildren {
+  DashboardClientsNewRoute: typeof DashboardClientsNewRoute
+  DashboardClientsIndexRoute: typeof DashboardClientsIndexRoute
+}
+
+const DashboardClientsRouteRouteChildren: DashboardClientsRouteRouteChildren = {
+  DashboardClientsNewRoute: DashboardClientsNewRoute,
+  DashboardClientsIndexRoute: DashboardClientsIndexRoute,
+}
+
+const DashboardClientsRouteRouteWithChildren =
+  DashboardClientsRouteRoute._addFileChildren(
+    DashboardClientsRouteRouteChildren,
+  )
 
 interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsAppearanceRoute: typeof DashboardSettingsAppearanceRoute
@@ -359,11 +429,13 @@ const DashboardSettingsRouteRouteWithChildren =
   )
 
 interface DashboardRouteRouteChildren {
+  DashboardClientsRouteRoute: typeof DashboardClientsRouteRouteWithChildren
   DashboardSettingsRouteRoute: typeof DashboardSettingsRouteRouteWithChildren
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
+  DashboardClientsRouteRoute: DashboardClientsRouteRouteWithChildren,
   DashboardSettingsRouteRoute: DashboardSettingsRouteRouteWithChildren,
   DashboardIndexRoute: DashboardIndexRoute,
 }
