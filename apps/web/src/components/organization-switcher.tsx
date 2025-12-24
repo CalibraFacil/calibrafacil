@@ -219,11 +219,11 @@ export function OrganizationSwitcher() {
                 id="org-slug"
                 value={orgSlug}
                 onChange={(e) => setOrgSlug(e.target.value)}
-                placeholder="zboratorio"
+                placeholder="Laboratório"
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Usado na URL: {orgSlug || 'slug'}.calibrafacil.com/
+                Usado na URL: app.calibrafacil.com/{orgSlug || 'slug'}
               </p>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
