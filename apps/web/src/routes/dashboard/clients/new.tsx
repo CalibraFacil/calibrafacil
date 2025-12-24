@@ -2,7 +2,12 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowDown01Icon, ArrowLeft01Icon } from '@hugeicons/core-free-icons'
+import {
+  ArrowDown01Icon,
+  ArrowLeft01Icon,
+  Copy01Icon,
+  Tick02Icon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { api } from '@/utils/api'
@@ -27,6 +32,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 export const Route = createFileRoute('/dashboard/clients/new')({
   head: () => ({
@@ -75,6 +88,32 @@ function NewClientPage() {
   )
   const [addressOpen, setAddressOpen] = useState(false)
 
+  // Invitation dialog state
+  const [showInviteDialog, setShowInviteDialog] = useState(false)
+  const [invitationId, setInvitationId] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  // Generate the invitation URL for the portal
+  const getInviteUrl = () => {
+    if (!invitationId) return ''
+    // Use the portal URL (port 5174)
+    const host = window.location.hostname
+    return `https://${host}:5174/accept-invite?token=${invitationId}`
+  }
+
+  const handleCopyLink = async () => {
+    const url = getInviteUrl()
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    toast.success('Link copiado!')
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleCloseDialog = () => {
+    setShowInviteDialog(false)
+    navigate({ to: '/dashboard/clients' })
+  }
+
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
       const res = await api.api.customers.$post({
@@ -106,10 +145,18 @@ function NewClientPage() {
 
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })
-      toast.success('Cliente e acesso ao portal criados com sucesso!')
-      navigate({ to: '/dashboard/clients' })
+
+      // Check if the response contains an invitationId
+      const result = data as { invitationId?: string | null }
+      if (result.invitationId) {
+        setInvitationId(result.invitationId)
+        setShowInviteDialog(true)
+      } else {
+        toast.success('Cliente criado com sucesso!')
+        navigate({ to: '/dashboard/clients' })
+      }
     },
     onError: (error) => {
       toast.error(error.message)
@@ -355,6 +402,51 @@ function NewClientPage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Invitation Link Dialog */}
+      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Cliente criado com sucesso!</DialogTitle>
+            <DialogDescription>
+              Um link de convite foi gerado para o cliente acessar o portal.
+              Copie e envie para o cliente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Link de convite</label>
+              <div className="flex gap-2">
+                <Input
+                  value={getInviteUrl()}
+                  readOnly
+                  className="font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleCopyLink}
+                >
+                  <HugeiconsIcon
+                    icon={copied ? Tick02Icon : Copy01Icon}
+                    className="size-4"
+                  />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Este link permite que o cliente crie uma conta e acesse o
+                portal.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button onClick={handleCloseDialog}>Concluir</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

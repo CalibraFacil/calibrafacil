@@ -44,6 +44,7 @@ export interface MemberData {
   id: string;
   role: RoleName;
   organizationId: string;
+  organizationType: OrgType;
   userId: string;
 }
 
@@ -81,6 +82,15 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
     await next();
   }
 );
+
+// =============================================================================
+// ORGANIZATION TYPE
+// =============================================================================
+
+/**
+ * Organization types for access control
+ */
+export type OrgType = "LAB" | "CLIENT";
 
 // =============================================================================
 // ORGANIZATION MIDDLEWARE
@@ -127,10 +137,14 @@ export const requireOrganization = createMiddleware<{ Variables: AuthVariables }
       });
     }
 
+    // Extract organization type from metadata or default to LAB
+    const orgType = (fullOrganization.metadata?.type as OrgType) ?? "LAB";
+
     c.set("member", {
       id: currentMember.id,
       role: currentMember.role as RoleName,
       organizationId: session.session.activeOrganizationId,
+      organizationType: orgType,
       userId: session.user.id,
     });
 
@@ -196,6 +210,42 @@ export function requireRole(allowedRoles: RoleName[]) {
     if (!allowedRoles.includes(member.role)) {
       throw new HTTPException(403, {
         message: "Insufficient role privileges",
+      });
+    }
+
+    await next();
+  });
+}
+
+// =============================================================================
+// ORGANIZATION TYPE MIDDLEWARE
+// =============================================================================
+
+/**
+ * Middleware factory to require a specific organization type.
+ * Must be used after `requireAuth` and `requireOrganization`.
+ *
+ * This provides defense-in-depth by ensuring only LAB organizations
+ * can access internal lab routes, regardless of RBAC permissions.
+ * Essential for ISO 17025 auditability.
+ *
+ * @example
+ * app.post(
+ *   "/customers",
+ *   requireAuth,
+ *   requireOrganization,
+ *   requireOrgType("LAB"),
+ *   requirePermission({ client: ["create"] }),
+ *   handler
+ * );
+ */
+export function requireOrgType(allowedType: OrgType) {
+  return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
+    const member = c.get("member");
+
+    if (member.organizationType !== allowedType) {
+      throw new HTTPException(403, {
+        message: `This action requires a ${allowedType} organization`,
       });
     }
 
@@ -286,4 +336,15 @@ export function withPermission(permissions: PermissionCheck) {
  */
 export function withRole(allowedRoles: RoleName[]) {
   return [...requireProtected, requireRole(allowedRoles)] as const;
+}
+
+/**
+ * Create a protected LAB-only route handler with permission check.
+ * Combines: requireAuth + requireOrganization + requireOrgType("LAB") + requirePermission
+ *
+ * @example
+ * app.post("/customers", ...withLabPermission({ client: ["create"] }), handler);
+ */
+export function withLabPermission(permissions: PermissionCheck) {
+  return [...requireProtected, requireOrgType("LAB"), requirePermission(permissions)] as const;
 }

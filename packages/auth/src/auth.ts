@@ -68,10 +68,15 @@ export const auth = betterAuth({
   trustedOrigins:
     process.env.NODE_ENV === "production"
       ? [
-          process.env.APP1_URL,
-          process.env.APP2_URL,
+          process.env.APP_URL,
+          process.env.PORTAL_URL,
         ].filter((url): url is string => Boolean(url))
-      : ["https://localhost:5173", "https://192.168.0.10:5173"],
+      : [
+          "https://localhost:5173",
+          "https://localhost:5174",
+          "https://192.168.0.10:5173",
+          "https://192.168.0.10:5174",
+        ],
   advanced: {
     defaultCookieAttributes: {
       sameSite: "none" as const,

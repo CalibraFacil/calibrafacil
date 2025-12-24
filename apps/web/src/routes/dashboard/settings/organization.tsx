@@ -570,7 +570,7 @@ function OrganizationSettingsPage() {
                           }
                           disabled={updatingRoleFor === member.id}
                         >
-                          <SelectTrigger size="sm" className="w-[140px]">
+                          <SelectTrigger size="sm" className="w-35">
                             <SelectValue>
                               {updatingRoleFor === member.id
                                 ? 'Atualizando...'
@@ -626,7 +626,7 @@ function OrganizationSettingsPage() {
                       onValueChange={(value) => value && setInviteRole(value)}
                       disabled={isInviting}
                     >
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-35">
                         <SelectValue>
                           {availableRoles.find((r) => r.value === inviteRole)
                             ?.label || 'Membro'}

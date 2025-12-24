@@ -2,12 +2,15 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "@calibra-facil/auth";
 import { customersRouter } from "./routes/customers";
+import { invitationsRouter } from "./routes/invitations";
 
 const app = new Hono();
 
 const allowedOrigins = [
   "https://localhost:5173",
+  "https://localhost:5174",
   "https://192.168.0.10:5173",
+  "https://192.168.0.10:5174",
 ];
 
 // CORS middleware - must be before auth routes
@@ -83,7 +86,8 @@ const routes = app
   .get("/hello", (c) => {
     return c.json({ message: "Hello!" });
   })
-  .route("/api/customers", customersRouter);
+  .route("/api/customers", customersRouter)
+  .route("/api/invitations", invitationsRouter);
 
 export type AppType = typeof routes;
 export default {

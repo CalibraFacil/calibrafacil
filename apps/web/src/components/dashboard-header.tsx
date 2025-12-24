@@ -15,11 +15,15 @@ import { SidebarTrigger } from '@/components/ui/sidebar'
 const routeLabels: Record<string, string> = {
   '/dashboard': 'Painel de Controle',
   '/dashboard/settings': 'Configurações',
-  '/dashboard/analytics': 'Analytics',
-  '/dashboard/orders': 'Pedidos',
-  '/dashboard/products': 'Produtos',
-  '/dashboard/invoices': 'Faturas',
-  '/dashboard/customers': 'Clientes',
+  '/dashboard/settings/profile': 'Perfil',
+  '/dashboard/settings/organization': 'Organização',
+  '/dashboard/settings/billing': 'Faturamento',
+  '/dashboard/settings/notifications': 'Notificações',
+  '/dashboard/settings/security': 'Segurança',
+  '/dashboard/settings/authentication': 'Autenticação',
+  '/dashboard/settings/appearance': 'Aparência',
+  '/dashboard/settings/danger': 'Zona de Perigo',
+  '/dashboard/clients': 'Clientes',
 }
 
 export function DashboardHeader() {
