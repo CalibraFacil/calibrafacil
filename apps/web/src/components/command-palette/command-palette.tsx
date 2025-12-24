@@ -78,7 +78,6 @@ export function CommandPalette() {
             {activePage === 'root' && (
               <>
                 <ContextGroup />
-                <CommandSeparator />
                 <QuickCreateGroup />
                 <CommandSeparator />
                 <GlobalSearchGroup searchValue={searchValue} />
