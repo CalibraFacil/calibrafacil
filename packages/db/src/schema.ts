@@ -11,6 +11,23 @@ import {
   integer,
 } from "drizzle-orm/pg-core";
 
+// =============================================================================
+// ASSET TYPE - Dynamic Instrument Classification (ISO 17025)
+// =============================================================================
+
+/**
+ * Field definition for dynamic asset specifications.
+ * This defines the "blueprint" for what fields an instrument type requires.
+ */
+export type AssetTypeFieldDefinition = {
+  key: string; // e.g., "resolution"
+  label: string; // e.g., "Resolution (d)"
+  type: "text" | "number" | "select";
+  options?: string[]; // For select type
+  unit?: string; // e.g., "g", "°C", "mm"
+  required?: boolean;
+};
+
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -137,6 +154,36 @@ export const invitation = pgTable(
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
   ],
+);
+
+// =============================================================================
+// ASSET TYPE - Instrument Classification Blueprint
+// =============================================================================
+
+/**
+ * Asset Type table - Defines instrument categories and their specification fields.
+ * Each type has a "definition" that describes what dynamic fields assets of this type need.
+ * Examples: Digital Balance, Thermohygrometer, Caliper, Micrometer, etc.
+ */
+export const assetType = pgTable(
+  "asset_type",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(), // e.g., "Balança Digital"
+    slug: text("slug").notNull().unique(), // e.g., "balanca-digital"
+    description: text("description"), // Optional description
+    // The Blueprint: Defines what specification fields this type requires
+    // Example: [{ key: "resolution", label: "Resolução", type: "number", unit: "g", required: true }]
+    definition: jsonb("definition")
+      .$type<AssetTypeFieldDefinition[]>()
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [uniqueIndex("asset_type_slug_uidx").on(table.slug)],
 );
 
 // =============================================================================
@@ -321,6 +368,12 @@ export const asset = pgTable(
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "cascade" }),
+    // Dynamic Instrument Classification
+    assetTypeId: integer("asset_type_id")
+      .notNull()
+      .references(() => assetType.id),
+    // Dynamic specifications stored as JSONB (e.g., { "resolution": 0.001, "capacity": 220 })
+    specifications: jsonb("specifications").$type<Record<string, unknown>>(),
     name: text("name").notNull(), // e.g., "Analytical Balance", "Pressure Gauge"
     manufacturer: text("manufacturer"), // e.g., "Mettler Toledo", "Fluke"
     model: text("model"), // e.g., "XPE205", "700G"
@@ -339,6 +392,7 @@ export const asset = pgTable(
   },
   (table) => [
     index("asset_customer_id_idx").on(table.customerId),
+    index("asset_type_id_idx").on(table.assetTypeId),
     index("asset_status_idx").on(table.status),
     uniqueIndex("asset_tag_uidx").on(table.tag),
   ],
@@ -378,10 +432,18 @@ export const assetAuditLog = pgTable(
 // ASSET RELATIONS
 // =============================================================================
 
+export const assetTypeRelations = relations(assetType, ({ many }) => ({
+  assets: many(asset),
+}));
+
 export const assetRelations = relations(asset, ({ one, many }) => ({
   customer: one(customer, {
     fields: [asset.customerId],
     references: [customer.id],
+  }),
+  assetType: one(assetType, {
+    fields: [asset.assetTypeId],
+    references: [assetType.id],
   }),
   auditLogs: many(assetAuditLog),
 }));

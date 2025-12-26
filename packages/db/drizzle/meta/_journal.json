@@ -43,6 +43,13 @@
       "when": 1766756621165,
       "tag": "0005_purple_luckman",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1766758277247,
+      "tag": "0006_motionless_callisto",
+      "breakpoints": true
     }
   ]
 }

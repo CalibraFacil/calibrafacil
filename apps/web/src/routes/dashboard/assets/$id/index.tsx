@@ -11,10 +11,12 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { SpecificationsDisplay } from '@/components/specifications-display'
+import type { SpecFieldDefinition } from '@/components/dynamic-specs-form'
 
 export const Route = createFileRoute('/dashboard/assets/$id/')({
   head: () => ({
-    meta: [{ title: 'Detalhes do Ativo | CalibraFacil' }],
+    meta: [{ title: 'Detalhes do Ativo | CalibraFácil' }],
   }),
   component: AssetDetailPage,
 })
@@ -83,6 +85,10 @@ function AssetDetailPage() {
     )
   }
 
+  // Get specifications and definition from asset
+  const specifications = asset.specifications as Record<string, unknown> | null
+  const definition = asset.assetTypeDefinition as SpecFieldDefinition[] | null
+
   return (
     <div className="grid gap-6 md:grid-cols-2">
       {/* Basic Information */}
@@ -92,6 +98,14 @@ function AssetDetailPage() {
           <CardDescription>Dados de identificação do ativo.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-muted-foreground">
+              Tipo de Instrumento
+            </label>
+            <p className="text-sm">
+              <Badge variant="secondary">{asset.assetTypeName}</Badge>
+            </p>
+          </div>
           <div>
             <label className="text-sm font-medium text-muted-foreground">
               Nome
@@ -138,7 +152,7 @@ function AssetDetailPage() {
       {/* Calibration Information */}
       <Card>
         <CardHeader>
-          <CardTitle>Calibracao</CardTitle>
+          <CardTitle>Calibração</CardTitle>
           <CardDescription>
             Informações sobre calibrações do ativo.
           </CardDescription>
@@ -164,6 +178,24 @@ function AssetDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Technical Specifications */}
+      {definition && definition.length > 0 && (
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Especificações Técnicas</CardTitle>
+            <CardDescription>
+              Características técnicas do instrumento.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SpecificationsDisplay
+              definition={definition}
+              specifications={specifications}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Comments */}
       {asset.comments && (

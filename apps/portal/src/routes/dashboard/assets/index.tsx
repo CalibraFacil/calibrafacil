@@ -36,12 +36,16 @@ type Asset = {
   id: number;
   customerId: number;
   customerName: string;
+  assetTypeId: number;
+  assetTypeName: string;
+  assetTypeSlug: string;
   name: string;
   manufacturer: string | null;
   model: string | null;
   serialNumber: string;
   tag: string;
   status: AssetStatus;
+  specifications: Record<string, unknown> | null;
   lastCalibrationDate: string | null;
   nextCalibrationDate: string | null;
   comments: string | null;
@@ -124,6 +128,7 @@ function AssetsPage() {
                   <thead>
                     <tr className="border-b">
                       <th className="px-4 py-3 text-left font-medium">Tag</th>
+                      <th className="px-4 py-3 text-left font-medium">Tipo</th>
                       <th className="px-4 py-3 text-left font-medium">Nome</th>
                       <th className="px-4 py-3 text-left font-medium">
                         Fabricante
@@ -144,6 +149,11 @@ function AssetsPage() {
                       <tr key={asset.id} className="border-b hover:bg-muted/50">
                         <td className="px-4 py-3 font-mono font-medium">
                           {asset.tag}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center rounded-full bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
+                            {asset.assetTypeName}
+                          </span>
                         </td>
                         <td className="px-4 py-3">{asset.name}</td>
                         <td className="px-4 py-3">
