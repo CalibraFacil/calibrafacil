@@ -36,11 +36,7 @@ export type Address = z.infer<typeof AddressSchema>;
 export const CreateCustomerSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   taxId: z.string().optional(),
-  email: z
-    .string()
-    .email("Email invalido")
-    .optional()
-    .or(z.literal("")),
+  email: z.string().email("Email invalido").optional().or(z.literal("")),
   phone: z.string().optional(),
   address: AddressSchema.optional(),
 });
@@ -77,7 +73,9 @@ export const CreatePortalInvitationSchema = z.object({
   role: z.enum(["client_user"]).default("client_user"),
 });
 
-export type CreatePortalInvitationInput = z.infer<typeof CreatePortalInvitationSchema>;
+export type CreatePortalInvitationInput = z.infer<
+  typeof CreatePortalInvitationSchema
+>;
 
 /**
  * Schema for updating a portal member's role
@@ -126,7 +124,9 @@ export type CustomerComplianceInput = z.infer<typeof CustomerComplianceSchema>;
  */
 export const UpdateComplianceSchema = z.object({
   compliance: CustomerComplianceSchema,
-  reason: z.string().min(1, "Motivo e obrigatorio para alteracoes de conformidade"),
+  reason: z
+    .string()
+    .min(1, "Motivo e obrigatorio para alteracoes de conformidade"),
 });
 
 export type UpdateComplianceInput = z.infer<typeof UpdateComplianceSchema>;
@@ -140,3 +140,59 @@ export const AuditLogQuerySchema = z.object({
 });
 
 export type AuditLogQuery = z.infer<typeof AuditLogQuerySchema>;
+
+// =============================================================================
+// ASSET SCHEMAS - Equipment/Instruments
+// =============================================================================
+
+/**
+ * Asset status values
+ */
+export const AssetStatusSchema = z.enum([
+  "ACTIVE",
+  "INACTIVE",
+  "MAINTENANCE",
+  "SCRAPPED",
+]);
+
+export type AssetStatus = z.infer<typeof AssetStatusSchema>;
+
+/**
+ * Schema for creating a new asset
+ */
+export const CreateAssetSchema = z.object({
+  customerId: z.coerce.number().min(1, "Cliente e obrigatorio"),
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  manufacturer: z.string().optional(),
+  model: z.string().optional(),
+  serialNumber: z.string().min(1, "Numero de serie e obrigatorio"),
+  tag: z.string().min(1, "Tag e obrigatorio"),
+  status: AssetStatusSchema.optional().default("ACTIVE"),
+  lastCalibrationDate: z.string().optional(),
+  nextCalibrationDate: z.string().optional(),
+  comments: z.string().optional(),
+});
+
+export type CreateAssetInput = z.infer<typeof CreateAssetSchema>;
+
+/**
+ * Schema for updating an asset
+ */
+export const UpdateAssetSchema = CreateAssetSchema.partial().omit({
+  customerId: true,
+});
+
+export type UpdateAssetInput = z.infer<typeof UpdateAssetSchema>;
+
+/**
+ * Schema for listing assets with pagination and filtering
+ */
+export const ListAssetsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  customerId: z.coerce.number().optional(),
+  status: AssetStatusSchema.optional(),
+  query: z.string().optional(), // Search by name, tag, serialNumber
+});
+
+export type ListAssetsQuery = z.infer<typeof ListAssetsQuerySchema>;

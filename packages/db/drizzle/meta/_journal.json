@@ -29,6 +29,20 @@
       "when": 1766615709966,
       "tag": "0003_soft_blue_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1766712623026,
+      "tag": "0004_wealthy_exiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1766756621165,
+      "tag": "0005_purple_luckman",
+      "breakpoints": true
     }
   ]
 }

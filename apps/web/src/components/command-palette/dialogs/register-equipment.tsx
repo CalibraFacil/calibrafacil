@@ -56,7 +56,7 @@ export function RegisterEquipmentDialog() {
     const client = mockClients.find((c) => c.id === clientId)
     const type = equipmentTypes.find((t) => t.id === equipmentType)
 
-    toast.success('Equipamento registrado com sucesso', {
+    toast.success('Ativo registrado com sucesso', {
       description: `${type?.name} - NS: ${serialNumber} | Cliente: ${client?.name}`,
     })
 
@@ -86,10 +86,10 @@ export function RegisterEquipmentDialog() {
     <Dialog open={equipmentDialogOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Registrar Entrada de Equipamento</DialogTitle>
+          <DialogTitle>Registrar Entrada de Ativo</DialogTitle>
           <DialogDescription>
-            Registre a entrada de um novo equipamento para calibração. Este
-            formulário cria o registro inicial no sistema.
+            Registre a entrada de um novo ativo para calibração. Este formulário
+            cria o registro inicial no sistema.
           </DialogDescription>
         </DialogHeader>
 
@@ -113,7 +113,7 @@ export function RegisterEquipmentDialog() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="equipment-type">Tipo de Equipamento</Label>
+              <Label htmlFor="equipment-type">Tipo de Ativo</Label>
               <NativeSelect
                 id="equipment-type"
                 value={equipmentType}
@@ -184,7 +184,7 @@ export function RegisterEquipmentDialog() {
             <Label htmlFor="observations">Observações</Label>
             <Textarea
               id="observations"
-              placeholder="Observações adicionais sobre o equipamento..."
+              placeholder="Observações adicionais sobre o ativo..."
               value={observations}
               onChange={(e) => setObservations(e.target.value)}
               rows={3}

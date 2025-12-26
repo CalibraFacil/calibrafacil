@@ -11,6 +11,7 @@ import {
   ShoppingBag01Icon,
   ShoppingCart01Icon,
   UserIcon,
+  Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
@@ -79,6 +80,11 @@ const data = {
       title: 'Clientes',
       url: '/dashboard/clients',
       icon: <HugeiconsIcon icon={UserIcon} />,
+    },
+    {
+      title: 'Ativos',
+      url: '/dashboard/assets',
+      icon: <HugeiconsIcon icon={Wrench01Icon} />,
     },
   ],
   navSecondary: [

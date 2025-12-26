@@ -52,9 +52,9 @@ function NotificationsSettingsPage() {
     },
     {
       id: 'equipment-due',
-      title: 'Equipamento com calibração vencendo',
+      title: 'Ativo com calibração vencendo',
       description:
-        'Receba um email quando um equipamento estiver próximo da data de recalibração',
+        'Receba um email quando um ativo estiver próximo da data de recalibração',
       enabled: true,
     },
   ])

@@ -6,6 +6,8 @@ import {
   createRootRouteWithContext,
 } from '@tanstack/react-router'
 
+import { NuqsAdapter } from 'nuqs/adapters/tanstack-router'
+
 import { QueryClientProvider } from '@tanstack/react-query'
 import appCss from '../styles.css?url'
 
@@ -53,7 +55,9 @@ function RootComponent() {
   return (
     <RootDocument>
       <QueryClientProvider client={queryClient}>
-        <Outlet />
+        <NuqsAdapter>
+          <Outlet />
+        </NuqsAdapter>
       </QueryClientProvider>
     </RootDocument>
   )
