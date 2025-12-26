@@ -7,7 +7,7 @@ import {
   UpdateAssetSchema,
   ListAssetsQuerySchema,
 } from "@calibra-facil/schemas";
-import { eq, ilike, or, count, and } from "drizzle-orm";
+import { eq, ilike, or, count, and, isNull } from "drizzle-orm";
 import {
   withLabPermission,
   withPermission,
@@ -112,8 +112,8 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
       try {
         const offset = (page - 1) * limit;
 
-        // Build conditions array
-        const conditions = [];
+        // Build conditions array - always exclude soft-deleted assets
+        const conditions = [isNull(asset.deletedAt)];
 
         // If user is a client_user, they can only see their organization's assets
         if (member.organizationType === "CLIENT") {
@@ -146,15 +146,16 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Search by name, tag, or serialNumber
         if (query) {
-          conditions.push(
-            or(
-              ilike(asset.name, `%${query}%`),
-              ilike(asset.tag, `%${query}%`),
-              ilike(asset.serialNumber, `%${query}%`),
-              ilike(asset.manufacturer, `%${query}%`),
-              ilike(asset.model, `%${query}%`),
-            ),
+          const searchCondition = or(
+            ilike(asset.name, `%${query}%`),
+            ilike(asset.tag, `%${query}%`),
+            ilike(asset.serialNumber, `%${query}%`),
+            ilike(asset.manufacturer, `%${query}%`),
+            ilike(asset.model, `%${query}%`),
           );
+          if (searchCondition) {
+            conditions.push(searchCondition);
+          }
         }
 
         const whereCondition =
@@ -241,7 +242,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .from(asset)
         .innerJoin(customer, eq(asset.customerId, customer.id))
-        .where(eq(asset.id, id))
+        .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
         .limit(1);
 
       if (!foundAsset) {
@@ -286,11 +287,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       try {
-        // Get existing asset
+        // Get existing asset (exclude soft-deleted)
         const [existingAsset] = await db
           .select()
           .from(asset)
-          .where(eq(asset.id, id))
+          .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
           .limit(1);
 
         if (!existingAsset) {
@@ -412,7 +413,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const [existingAsset] = await db
           .select()
           .from(asset)
-          .where(eq(asset.id, id))
+          .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
           .limit(1);
 
         if (!existingAsset) {
@@ -433,8 +434,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             null,
         });
 
-        // Delete the asset (cascade will handle audit logs)
-        await db.delete(asset).where(eq(asset.id, id));
+        // Soft delete the asset (preserves audit logs for ISO 17025 compliance)
+        await db
+          .update(asset)
+          .set({ deletedAt: new Date() })
+          .where(eq(asset.id, id));
 
         return c.json({ success: true });
       } catch (error) {

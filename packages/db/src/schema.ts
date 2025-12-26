@@ -330,6 +330,7 @@ export const asset = pgTable(
     lastCalibrationDate: timestamp("last_calibration_date"),
     nextCalibrationDate: timestamp("next_calibration_date"),
     comments: text("comments"), // Additional notes about the equipment
+    deletedAt: timestamp("deleted_at"), // Soft delete for ISO 17025 compliance
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
