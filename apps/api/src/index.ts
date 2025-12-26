@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { auth } from "@calibra-facil/auth";
 import { customersRouter } from "./routes/customers";
 import { invitationsRouter } from "./routes/invitations";
+import { portalRouter } from "./routes/portal";
 
 const app = new Hono();
 
@@ -87,7 +88,8 @@ const routes = app
     return c.json({ message: "Hello!" });
   })
   .route("/api/customers", customersRouter)
-  .route("/api/invitations", invitationsRouter);
+  .route("/api/invitations", invitationsRouter)
+  .route("/api/portal", portalRouter);
 
 export type AppType = typeof routes;
 export default {

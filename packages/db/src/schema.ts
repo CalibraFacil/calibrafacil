@@ -155,6 +155,22 @@ export type CustomerAddress = {
 };
 
 /**
+ * Compliance tracking for ISO 17025:2017 clause 7.1
+ * Tracks customer qualification status, contracts, and quality requirements
+ */
+export type CustomerCompliance = {
+  qualificationStatus: "pending" | "qualified" | "suspended" | "expired";
+  qualificationDate?: string;
+  qualificationExpiresAt?: string;
+  contractNumber?: string;
+  contractSignedAt?: string;
+  contractExpiresAt?: string;
+  qualityRequirementsAcknowledged: boolean;
+  qualityRequirementsAcknowledgedAt?: string;
+  notes?: string;
+};
+
+/**
  * Customer table - Business data for client organizations.
  * Links to Better Auth organization via authOrganizationId.
  * This is the "bridge" between business logic and identity provider.
@@ -171,6 +187,9 @@ export const customer = pgTable(
     authOrganizationId: text("auth_organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    // ISO 17025:2017 compliance tracking
+    compliance: jsonb("compliance").$type<CustomerCompliance>(),
+    internalNotes: text("internal_notes"), // Internal notes for lab staff
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -178,6 +197,36 @@ export const customer = pgTable(
       .notNull(),
   },
   (table) => [index("customer_auth_org_id_idx").on(table.authOrganizationId)],
+);
+
+// =============================================================================
+// CUSTOMER AUDIT LOG - ISO 17025:2017 Clause 8.4 (Control of records)
+// =============================================================================
+
+/**
+ * Audit log for customer changes.
+ * Tracks all modifications for compliance and traceability.
+ */
+export const customerAuditLog = pgTable(
+  "customer_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    customerId: serial("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // 'create', 'update', 'compliance_change', 'user_invited', 'user_removed', etc.
+    changes: jsonb("changes"), // { field: { old: x, new: y } }
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"), // Required for compliance changes per ISO 17025
+  },
+  (table) => [
+    index("customer_audit_log_customer_id_idx").on(table.customerId),
+    index("customer_audit_log_performed_at_idx").on(table.performedAt),
+  ],
 );
 
 export const userRelations = relations(user, ({ many }) => ({
@@ -228,9 +277,21 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
   }),
 }));
 
-export const customerRelations = relations(customer, ({ one }) => ({
+export const customerRelations = relations(customer, ({ one, many }) => ({
   organization: one(organization, {
     fields: [customer.authOrganizationId],
     references: [organization.id],
+  }),
+  auditLogs: many(customerAuditLog),
+}));
+
+export const customerAuditLogRelations = relations(customerAuditLog, ({ one }) => ({
+  customer: one(customer, {
+    fields: [customerAuditLog.customerId],
+    references: [customer.id],
+  }),
+  performedByUser: one(user, {
+    fields: [customerAuditLog.performedBy],
+    references: [user.id],
   }),
 }));

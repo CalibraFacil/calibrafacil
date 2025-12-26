@@ -2,12 +2,23 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { auth } from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
-import { customer } from "@calibra-facil/db/schema";
+import {
+  customer,
+  organization,
+  member,
+  invitation,
+  user,
+  customerAuditLog,
+} from "@calibra-facil/db/schema";
 import {
   CreateCustomerSchema,
   ListCustomersQuerySchema,
+  UpdateCustomerSchema,
+  CreatePortalInvitationSchema,
+  UpdateComplianceSchema,
+  AuditLogQuerySchema,
 } from "@calibra-facil/schemas";
-import { eq, ilike, or, count } from "drizzle-orm";
+import { eq, ilike, or, count, and, desc } from "drizzle-orm";
 import { withLabPermission, type AuthVariables } from "../middleware/permission";
 
 /**
@@ -51,7 +62,6 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           body: {
             name: input.name,
             slug,
-            metadata: { type: "CLIENT" },
           },
           headers: c.req.raw.headers,
         });
@@ -59,6 +69,13 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         if (!orgResult?.id) {
           return c.json({ error: "Falha ao criar organizacao do cliente" }, 500);
         }
+
+        // Set organization type to CLIENT directly in database
+        // (Better Auth additionalFields may not be properly passed via API)
+        await db
+          .update(organization)
+          .set({ type: "CLIENT" })
+          .where(eq(organization.id, orgResult.id));
 
         // Step 2: Insert customer record with authOrganizationId
         const [newCustomer] = await db
@@ -183,6 +200,640 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       } catch (error) {
         console.error("Error getting customer:", error);
         return c.json({ error: "Erro ao buscar cliente" }, 500);
+      }
+    }
+  )
+
+  // =========================================================================
+  // PUT /:id - Update customer
+  // =========================================================================
+  .put(
+    "/:id",
+    ...withLabPermission({ client: ["update"] }),
+    zValidator("json", UpdateCustomerSchema),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const input = c.req.valid("json");
+      const session = c.get("session");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        // Get existing customer for audit log
+        const [existingCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
+
+        if (!existingCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        // Build changes object for audit log
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        for (const [key, value] of Object.entries(input)) {
+          const oldValue = existingCustomer[key as keyof typeof existingCustomer];
+          if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
+            changes[key] = { old: oldValue, new: value };
+          }
+        }
+
+        // Update customer
+        const [updatedCustomer] = await db
+          .update(customer)
+          .set({
+            ...input,
+            updatedAt: new Date(),
+          })
+          .where(eq(customer.id, id))
+          .returning();
+
+        // Log audit entry if there were changes
+        if (Object.keys(changes).length > 0) {
+          await db.insert(customerAuditLog).values({
+            customerId: id,
+            action: "update",
+            changes,
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+          });
+        }
+
+        return c.json(updatedCustomer);
+      } catch (error) {
+        console.error("Error updating customer:", error);
+        return c.json({ error: "Erro ao atualizar cliente" }, 500);
+      }
+    }
+  )
+
+  // =========================================================================
+  // DELETE /:id - Delete customer
+  // =========================================================================
+  .delete(
+    "/:id",
+    ...withLabPermission({ client: ["delete"] }),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const session = c.get("session");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const [existingCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
+
+        if (!existingCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        // TODO: Check for active calibrations before deleting
+        // For now, we allow deletion
+
+        // Log audit entry before deletion
+        await db.insert(customerAuditLog).values({
+          customerId: id,
+          action: "delete",
+          changes: { customer: { old: existingCustomer, new: null } },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        });
+
+        // Delete the customer (cascade will handle audit logs)
+        await db.delete(customer).where(eq(customer.id, id));
+
+        // Also delete the associated organization
+        await db.delete(organization).where(eq(organization.id, existingCustomer.authOrganizationId));
+
+        return c.json({ success: true });
+      } catch (error) {
+        console.error("Error deleting customer:", error);
+        return c.json({ error: "Erro ao excluir cliente" }, 500);
+      }
+    }
+  )
+
+  // =========================================================================
+  // GET /:id/members - List portal users for customer
+  // =========================================================================
+  .get(
+    "/:id/members",
+    ...withLabPermission({ client: ["manage_portal"] }),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        // Get customer to find authOrganizationId
+        const [foundCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
+
+        if (!foundCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        // Get members of the CLIENT organization with user details
+        const members = await db
+          .select({
+            id: member.id,
+            userId: member.userId,
+            role: member.role,
+            createdAt: member.createdAt,
+            userName: user.name,
+            userEmail: user.email,
+            userImage: user.image,
+          })
+          .from(member)
+          .innerJoin(user, eq(member.userId, user.id))
+          .where(eq(member.organizationId, foundCustomer.authOrganizationId));
+
+        return c.json(members);
+      } catch (error) {
+        console.error("Error listing customer members:", error);
+        return c.json({ error: "Erro ao listar usuarios do portal" }, 500);
+      }
+    }
+  )
+
+  // =========================================================================
+  // GET /:id/invitations - List invitations for customer
+  // =========================================================================
+  .get(
+    "/:id/invitations",
+    ...withLabPermission({ client: ["manage_portal"] }),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        // Get customer to find authOrganizationId
+        const [foundCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
+
+        if (!foundCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        // Get invitations for the CLIENT organization
+        const invitations = await db
+          .select({
+            id: invitation.id,
+            email: invitation.email,
+            role: invitation.role,
+            status: invitation.status,
+            expiresAt: invitation.expiresAt,
+            createdAt: invitation.createdAt,
+            inviterName: user.name,
+            inviterEmail: user.email,
+          })
+          .from(invitation)
+          .innerJoin(user, eq(invitation.inviterId, user.id))
+          .where(eq(invitation.organizationId, foundCustomer.authOrganizationId))
+          .orderBy(desc(invitation.createdAt));
+
+        return c.json(invitations);
+      } catch (error) {
+        console.error("Error listing customer invitations:", error);
+        return c.json({ error: "Erro ao listar convites" }, 500);
+      }
+    }
+  )
+
+  // =========================================================================
+  // POST /:id/invitations - Create invitation for portal user
+  // =========================================================================
+  .post(
+    "/:id/invitations",
+    ...withLabPermission({ client: ["manage_portal"] }),
+    zValidator("json", CreatePortalInvitationSchema),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const { email, role } = c.req.valid("json");
+      const session = c.get("session");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        // Get customer to find authOrganizationId
+        const [foundCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
+
+        if (!foundCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        // Create invitation via Better Auth
+        const inviteResult = await auth.api.createInvitation({
+          body: {
+            email,
+            role: role || "client_user",
+            organizationId: foundCustomer.authOrganizationId,
+          },
+          headers: c.req.raw.headers,
+        });
+
+        if (!inviteResult?.id) {
+          return c.json({ error: "Falha ao criar convite" }, 500);
+        }
+
+        // Log audit entry
+        await db.insert(customerAuditLog).values({
+          customerId: id,
+          action: "user_invited",
+          changes: { email, role: role || "client_user", invitationId: inviteResult.id },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        });
+
+        return c.json({ id: inviteResult.id, email, role: role || "client_user" }, 201);
+      } catch (error) {
+        console.error("Error creating invitation:", error);
+        return c.json({ error: "Erro ao criar convite" }, 500);
+      }
+    }
+  )
+
+  // =========================================================================
+  // POST /:id/invitations/:invId/resend - Resend invitation
+  // =========================================================================
+  .post(
+    "/:id/invitations/:invId/resend",
+    ...withLabPermission({ client: ["manage_portal"] }),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const invId = c.req.param("invId");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        // Get customer to verify ownership
+        const [foundCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
+
+        if (!foundCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        // Get invitation to verify it belongs to this customer
+        const [foundInvitation] = await db
+          .select()
+          .from(invitation)
+          .where(
+            and(
+              eq(invitation.id, invId),
+              eq(invitation.organizationId, foundCustomer.authOrganizationId)
+            )
+          )
+          .limit(1);
+
+        if (!foundInvitation) {
+          return c.json({ error: "Convite nao encontrado" }, 404);
+        }
+
+        if (foundInvitation.status !== "pending") {
+          return c.json({ error: "Apenas convites pendentes podem ser reenviados" }, 400);
+        }
+
+        // Cancel old invitation and create a new one
+        await auth.api.cancelInvitation({
+          body: { invitationId: invId },
+          headers: c.req.raw.headers,
+        });
+
+        const newInvite = await auth.api.createInvitation({
+          body: {
+            email: foundInvitation.email,
+            role: "client_user" as const,
+            organizationId: foundCustomer.authOrganizationId,
+          },
+          headers: c.req.raw.headers,
+        });
+
+        return c.json({ id: (newInvite as { id: string })?.id, email: foundInvitation.email });
+      } catch (error) {
+        console.error("Error resending invitation:", error);
+        return c.json({ error: "Erro ao reenviar convite" }, 500);
+      }
+    }
+  )
+
+  // =========================================================================
+  // DELETE /:id/invitations/:invId - Cancel invitation
+  // =========================================================================
+  .delete(
+    "/:id/invitations/:invId",
+    ...withLabPermission({ client: ["manage_portal"] }),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const invId = c.req.param("invId");
+      const session = c.get("session");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        // Get customer to verify ownership
+        const [foundCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
+
+        if (!foundCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        // Get invitation to verify it belongs to this customer
+        const [foundInvitation] = await db
+          .select()
+          .from(invitation)
+          .where(
+            and(
+              eq(invitation.id, invId),
+              eq(invitation.organizationId, foundCustomer.authOrganizationId)
+            )
+          )
+          .limit(1);
+
+        if (!foundInvitation) {
+          return c.json({ error: "Convite nao encontrado" }, 404);
+        }
+
+        if (foundInvitation.status !== "pending") {
+          return c.json({ error: "Apenas convites pendentes podem ser cancelados" }, 400);
+        }
+
+        // Cancel invitation via Better Auth
+        await auth.api.cancelInvitation({
+          body: { invitationId: invId },
+          headers: c.req.raw.headers,
+        });
+
+        // Log audit entry
+        await db.insert(customerAuditLog).values({
+          customerId: id,
+          action: "invitation_canceled",
+          changes: { email: foundInvitation.email, invitationId: invId },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        });
+
+        return c.json({ success: true });
+      } catch (error) {
+        console.error("Error canceling invitation:", error);
+        return c.json({ error: "Erro ao cancelar convite" }, 500);
+      }
+    }
+  )
+
+  // =========================================================================
+  // DELETE /:id/members/:memberId - Remove member from portal
+  // =========================================================================
+  .delete(
+    "/:id/members/:memberId",
+    ...withLabPermission({ client: ["manage_portal"] }),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const memberId = c.req.param("memberId");
+      const session = c.get("session");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        // Get customer to verify ownership
+        const [foundCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
+
+        if (!foundCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        // Get member to verify it belongs to this customer's organization
+        const [foundMember] = await db
+          .select({
+            id: member.id,
+            userId: member.userId,
+            role: member.role,
+            userName: user.name,
+            userEmail: user.email,
+          })
+          .from(member)
+          .innerJoin(user, eq(member.userId, user.id))
+          .where(
+            and(
+              eq(member.id, memberId),
+              eq(member.organizationId, foundCustomer.authOrganizationId)
+            )
+          )
+          .limit(1);
+
+        if (!foundMember) {
+          return c.json({ error: "Membro nao encontrado" }, 404);
+        }
+
+        // Remove member via Better Auth
+        await auth.api.removeMember({
+          body: {
+            memberIdOrEmail: memberId,
+            organizationId: foundCustomer.authOrganizationId,
+          },
+          headers: c.req.raw.headers,
+        });
+
+        // Log audit entry
+        await db.insert(customerAuditLog).values({
+          customerId: id,
+          action: "user_removed",
+          changes: { email: foundMember.userEmail, name: foundMember.userName, memberId },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        });
+
+        return c.json({ success: true });
+      } catch (error) {
+        console.error("Error removing member:", error);
+        return c.json({ error: "Erro ao remover membro" }, 500);
+      }
+    }
+  )
+
+  // =========================================================================
+  // PUT /:id/compliance - Update compliance data
+  // =========================================================================
+  .put(
+    "/:id/compliance",
+    ...withLabPermission({ client: ["update"] }),
+    zValidator("json", UpdateComplianceSchema),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const { compliance, reason } = c.req.valid("json");
+      const session = c.get("session");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        // Get existing customer for audit log
+        const [existingCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
+
+        if (!existingCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        // Merge with existing compliance data, ensuring required fields have defaults
+        const baseCompliance = existingCustomer.compliance ?? {
+          qualificationStatus: "pending" as const,
+          qualityRequirementsAcknowledged: false,
+        };
+
+        const updatedCompliance = {
+          ...baseCompliance,
+          ...compliance,
+          // Ensure qualificationStatus has a value
+          qualificationStatus: compliance.qualificationStatus ?? baseCompliance.qualificationStatus ?? "pending" as const,
+          qualityRequirementsAcknowledged: compliance.qualityRequirementsAcknowledged ?? baseCompliance.qualityRequirementsAcknowledged ?? false,
+          // Auto-set acknowledgment timestamp if acknowledged
+          ...(compliance.qualityRequirementsAcknowledged && !baseCompliance.qualityRequirementsAcknowledged
+            ? { qualityRequirementsAcknowledgedAt: new Date().toISOString() }
+            : {}),
+        };
+
+        // Update customer
+        const [updatedCustomer] = await db
+          .update(customer)
+          .set({
+            compliance: updatedCompliance,
+            updatedAt: new Date(),
+          })
+          .where(eq(customer.id, id))
+          .returning();
+
+        // Log audit entry with reason (required for compliance changes per ISO 17025)
+        await db.insert(customerAuditLog).values({
+          customerId: id,
+          action: "compliance_change",
+          changes: { old: existingCustomer.compliance, new: updatedCompliance },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+          reason,
+        });
+
+        return c.json(updatedCustomer);
+      } catch (error) {
+        console.error("Error updating compliance:", error);
+        return c.json({ error: "Erro ao atualizar conformidade" }, 500);
+      }
+    }
+  )
+
+  // =========================================================================
+  // GET /:id/audit-log - Get audit trail for customer
+  // =========================================================================
+  .get(
+    "/:id/audit-log",
+    ...withLabPermission({ client: ["manage_portal"] }),
+    zValidator("query", AuditLogQuerySchema),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const { page, limit } = c.req.valid("query");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        // Verify customer exists
+        const [foundCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
+
+        if (!foundCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
+
+        const offset = (page - 1) * limit;
+
+        // Get audit log entries with user details
+        const entries = await db
+          .select({
+            id: customerAuditLog.id,
+            action: customerAuditLog.action,
+            changes: customerAuditLog.changes,
+            performedAt: customerAuditLog.performedAt,
+            reason: customerAuditLog.reason,
+            performedByName: user.name,
+            performedByEmail: user.email,
+          })
+          .from(customerAuditLog)
+          .innerJoin(user, eq(customerAuditLog.performedBy, user.id))
+          .where(eq(customerAuditLog.customerId, id))
+          .orderBy(desc(customerAuditLog.performedAt))
+          .limit(limit)
+          .offset(offset);
+
+        // Get total count
+        const countResult = await db
+          .select({ total: count() })
+          .from(customerAuditLog)
+          .where(eq(customerAuditLog.customerId, id));
+
+        const total = countResult[0]?.total ?? 0;
+
+        return c.json({
+          data: entries,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        });
+      } catch (error) {
+        console.error("Error getting audit log:", error);
+        return c.json({ error: "Erro ao buscar historico" }, 500);
       }
     }
   );

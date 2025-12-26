@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   Building02Icon,
@@ -45,6 +45,7 @@ export const Route = createFileRoute('/dashboard/clients/')({
 })
 
 function ClientsPage() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const limit = 20
@@ -76,7 +77,7 @@ function ClientsPage() {
             <div>
               <CardTitle>Clientes</CardTitle>
               <CardDescription>
-                Gerencie os clientes do laboratorio.
+                Gerencie os clientes do laboratório.
               </CardDescription>
             </div>
             <Button render={<Link to="/dashboard/clients/new" />}>
@@ -158,7 +159,16 @@ function ClientsPage() {
                   </TableHeader>
                   <TableBody>
                     {data.data.map((customer) => (
-                      <TableRow key={customer.id}>
+                      <TableRow
+                        key={customer.id}
+                        className="cursor-pointer"
+                        onClick={() =>
+                          navigate({
+                            to: '/dashboard/clients/$id',
+                            params: { id: String(customer.id) },
+                          })
+                        }
+                      >
                         <TableCell className="font-medium">
                           {customer.name}
                         </TableCell>
@@ -168,7 +178,7 @@ function ClientsPage() {
                           {customer.authOrganizationId ? (
                             <Badge variant="secondary">Vinculado</Badge>
                           ) : (
-                            <Badge variant="outline">Nao vinculado</Badge>
+                            <Badge variant="outline">Não vinculado</Badge>
                           )}
                         </TableCell>
                       </TableRow>
@@ -204,7 +214,7 @@ function ClientsPage() {
                       }
                       disabled={page === data.pagination.totalPages}
                     >
-                      Proximo
+                      Próximo
                     </Button>
                   </div>
                 </div>

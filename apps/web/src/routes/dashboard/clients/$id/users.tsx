@@ -1,0 +1,576 @@
+import { createFileRoute, useParams } from '@tanstack/react-router'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { HugeiconsIcon } from '@hugeicons/react'
+import {
+  Delete02Icon,
+  Mail01Icon,
+  PlusSignIcon,
+  SentIcon,
+  UserMultipleIcon,
+} from '@hugeicons/core-free-icons'
+
+import { api } from '@/utils/api'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
+
+export const Route = createFileRoute('/dashboard/clients/$id/users')({
+  component: ClientUsersTab,
+})
+
+type PortalMember = {
+  id: string
+  userId: string
+  role: string
+  createdAt: string
+  userName: string
+  userEmail: string
+  userImage: string | null
+}
+
+type PortalInvitation = {
+  id: string
+  email: string
+  role: string | null
+  status: string
+  expiresAt: string
+  createdAt: string
+  inviterName: string
+  inviterEmail: string
+}
+
+function ClientUsersTab() {
+  const { id } = useParams({ from: '/dashboard/clients/$id/users' })
+  const queryClient = useQueryClient()
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteError, setInviteError] = useState<string | null>(null)
+
+  const { data: members = [], isLoading: membersLoading } = useQuery({
+    queryKey: ['customer-members', id],
+    queryFn: async () => {
+      const res = await api.api.customers[':id'].members.$get({
+        param: { id },
+      })
+      if (!res.ok) {
+        throw new Error('Falha ao carregar usuarios')
+      }
+      return res.json() as Promise<Array<PortalMember>>
+    },
+  })
+
+  const { data: invitations = [], isLoading: invitationsLoading } = useQuery({
+    queryKey: ['customer-invitations', id],
+    queryFn: async () => {
+      const res = await api.api.customers[':id'].invitations.$get({
+        param: { id },
+      })
+      if (!res.ok) {
+        throw new Error('Falha ao carregar convites')
+      }
+      return res.json() as Promise<Array<PortalInvitation>>
+    },
+  })
+
+  const inviteMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await api.api.customers[':id'].invitations.$post({
+        param: { id },
+        json: { email, role: 'client_user' },
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(
+          (error as { error?: string }).error || 'Falha ao enviar convite',
+        )
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
+      toast.success('Convite enviado com sucesso!')
+      setInviteOpen(false)
+      setInviteEmail('')
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const resendMutation = useMutation({
+    mutationFn: async (invId: string) => {
+      const res = await api.api.customers[':id'].invitations[
+        ':invId'
+      ].resend.$post({
+        param: { id, invId },
+      })
+      if (!res.ok) {
+        throw new Error('Falha ao reenviar convite')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
+      toast.success('Convite reenviado!')
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const cancelInvitationMutation = useMutation({
+    mutationFn: async (invId: string) => {
+      const res = await api.api.customers[':id'].invitations[':invId'].$delete({
+        param: { id, invId },
+      })
+      if (!res.ok) {
+        throw new Error('Falha ao cancelar convite')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
+      toast.success('Convite cancelado!')
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const removeMemberMutation = useMutation({
+    mutationFn: async (memberId: string) => {
+      const res = await api.api.customers[':id'].members[':memberId'].$delete({
+        param: { id, memberId },
+      })
+      if (!res.ok) {
+        throw new Error('Falha ao remover usuário')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer-members', id] })
+      toast.success('Usuário removido!')
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const handleInvite = (e: React.FormEvent) => {
+    e.preventDefault()
+    setInviteError(null)
+
+    if (!inviteEmail.trim()) {
+      setInviteError('Email é obrigatório')
+      return
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail)) {
+      setInviteError('Email invalido')
+      return
+    }
+
+    inviteMutation.mutate(inviteEmail.trim())
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+  }
+
+  const getStatusBadge = (status: string, expiresAt: string) => {
+    const isExpired = new Date(expiresAt) < new Date()
+
+    if (status === 'accepted') {
+      return <Badge variant="default">Aceito</Badge>
+    }
+    if (status === 'canceled') {
+      return <Badge variant="secondary">Cancelado</Badge>
+    }
+    if (isExpired) {
+      return <Badge variant="destructive">Expirado</Badge>
+    }
+    return <Badge variant="outline">Pendente</Badge>
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Portal Users Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Usuários do Portal</CardTitle>
+              <CardDescription>
+                Usuários com acesso ao portal do cliente.
+              </CardDescription>
+            </div>
+            <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+              <DialogTrigger render={<Button />}>
+                <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+                Convidar Usuário
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Convidar Usuário</DialogTitle>
+                  <DialogDescription>
+                    Envie um convite por email para um novo usuário do portal.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleInvite}>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="invite-email">Email</FieldLabel>
+                      <Input
+                        id="invite-email"
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => {
+                          setInviteEmail(e.target.value)
+                          setInviteError(null)
+                        }}
+                        placeholder="usuario@empresa.com"
+                        disabled={inviteMutation.isPending}
+                      />
+                      {inviteError && <FieldError>{inviteError}</FieldError>}
+                    </Field>
+                  </FieldGroup>
+                  <DialogFooter className="mt-6">
+                    <DialogClose render={<Button variant="outline" />}>
+                      Cancelar
+                    </DialogClose>
+                    <Button type="submit" disabled={inviteMutation.isPending}>
+                      {inviteMutation.isPending
+                        ? 'Enviando...'
+                        : 'Enviar Convite'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {membersLoading ? (
+            <MembersTableSkeleton />
+          ) : members.length === 0 ? (
+            <Empty className="py-8">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={UserMultipleIcon} />
+                </EmptyMedia>
+                <EmptyTitle>Nenhum usuário</EmptyTitle>
+                <EmptyDescription>
+                  Convide usuários para acessar o portal do cliente.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Função</TableHead>
+                    <TableHead className="w-20">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {members.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-medium">
+                        {m.userName}
+                      </TableCell>
+                      <TableCell>{m.userEmail}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {m.role === 'client_user' ? 'Usuário' : m.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <AlertDialog>
+                          <AlertDialogTrigger
+                            render={<Button variant="ghost" size="icon-sm" />}
+                          >
+                            <HugeiconsIcon
+                              icon={Delete02Icon}
+                              className="size-4 text-destructive"
+                            />
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Remover usuário
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Tem certeza que deseja remover {m.userName} do
+                                portal? Esta ação não pode ser desfeita.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                variant="destructive"
+                                onClick={() =>
+                                  removeMemberMutation.mutate(m.id)
+                                }
+                                disabled={removeMemberMutation.isPending}
+                              >
+                                Remover
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Invitations Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Convites</CardTitle>
+          <CardDescription>
+            Convites enviados para acesso ao portal.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {invitationsLoading ? (
+            <InvitationsTableSkeleton />
+          ) : invitations.length === 0 ? (
+            <Empty className="py-8">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={Mail01Icon} />
+                </EmptyMedia>
+                <EmptyTitle>Nenhum convite</EmptyTitle>
+                <EmptyDescription>
+                  Convites enviados aparecerão aqui.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Expira em</TableHead>
+                    <TableHead className="w-30">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invitations.map((inv) => {
+                    const isPending =
+                      inv.status === 'pending' &&
+                      new Date(inv.expiresAt) >= new Date()
+                    return (
+                      <TableRow key={inv.id}>
+                        <TableCell className="font-medium">
+                          {inv.email}
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(inv.status, inv.expiresAt)}
+                        </TableCell>
+                        <TableCell>{formatDate(inv.expiresAt)}</TableCell>
+                        <TableCell>
+                          {isPending && (
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => resendMutation.mutate(inv.id)}
+                                disabled={resendMutation.isPending}
+                                title="Reenviar"
+                              >
+                                <HugeiconsIcon
+                                  icon={SentIcon}
+                                  className="size-4"
+                                />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger
+                                  render={
+                                    <Button variant="ghost" size="icon-sm" />
+                                  }
+                                >
+                                  <HugeiconsIcon
+                                    icon={Delete02Icon}
+                                    className="size-4 text-destructive"
+                                  />
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Cancelar convite
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja cancelar o convite
+                                      para {inv.email}?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>
+                                      Voltar
+                                    </AlertDialogCancel>
+                                    <AlertDialogAction
+                                      variant="destructive"
+                                      onClick={() =>
+                                        cancelInvitationMutation.mutate(inv.id)
+                                      }
+                                      disabled={
+                                        cancelInvitationMutation.isPending
+                                      }
+                                    >
+                                      Cancelar Convite
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function MembersTableSkeleton() {
+  return (
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Nome</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Função</TableHead>
+            <TableHead className="w-20">Ações</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <TableRow key={i}>
+              <TableCell>
+                <Skeleton className="h-4 w-32" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-40" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-5 w-16" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-8 w-8" />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+function InvitationsTableSkeleton() {
+  return (
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Email</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Expira em</TableHead>
+            <TableHead className="w-30">Ações</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 2 }).map((_, i) => (
+            <TableRow key={i}>
+              <TableCell>
+                <Skeleton className="h-4 w-40" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-5 w-20" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-24" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-8 w-16" />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}

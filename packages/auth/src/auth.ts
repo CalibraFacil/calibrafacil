@@ -40,7 +40,7 @@ export const auth = betterAuth({
             type: {
               type: "string",
               defaultValue: "LAB",
-              input: false,
+              input: true, // Allow passing type when creating organizations
             },
           },
         },

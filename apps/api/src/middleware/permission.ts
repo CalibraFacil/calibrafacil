@@ -137,8 +137,8 @@ export const requireOrganization = createMiddleware<{ Variables: AuthVariables }
       });
     }
 
-    // Extract organization type from metadata or default to LAB
-    const orgType = (fullOrganization.metadata?.type as OrgType) ?? "LAB";
+    // Extract organization type (direct column, not in metadata)
+    const orgType = (fullOrganization.type as OrgType) ?? "LAB";
 
     c.set("member", {
       id: currentMember.id,

@@ -29,6 +29,7 @@ export const authClient = createBetterAuthClient({
             type: {
               type: "string",
               defaultValue: "LAB",
+              input: true, // Allow passing type when creating organizations
             },
           },
         },

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { authClient, useSession } from "@calibra-facil/auth/client";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -44,6 +44,9 @@ function AcceptInvitePage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Track if invitation was already accepted to prevent duplicate calls
+  const invitationAcceptedRef = useRef(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -106,6 +109,9 @@ function AcceptInvitePage() {
     async function handleLoggedInUser() {
       if (!session || !invitation) return;
 
+      // Skip if invitation was already accepted by handleSubmit
+      if (invitationAcceptedRef.current) return;
+
       // User is already logged in - check if email matches
       if (session.user.email !== invitation.email) {
         setError(
@@ -136,6 +142,7 @@ function AcceptInvitePage() {
       // Try to accept the invitation if it's still pending
       if (invitation.status === "pending") {
         setSubmitting(true);
+        invitationAcceptedRef.current = true;
         try {
           const result = await authClient.organization.acceptInvitation({
             invitationId: invitation.id,
@@ -144,11 +151,13 @@ function AcceptInvitePage() {
           if (result.error) {
             // Check if error is because already accepted/member
             if (result.error.message?.includes("already") ||
-                result.error.code === "ALREADY_MEMBER") {
+                result.error.code === "ALREADY_MEMBER" ||
+                result.error.code === "INVITATION_NOT_FOUND") {
               toast.success("Você já é membro desta organização!");
               navigate({ to: "/" });
               return;
             }
+            invitationAcceptedRef.current = false;
             toast.error("Erro ao aceitar convite");
             setSubmitting(false);
             return;
@@ -157,6 +166,7 @@ function AcceptInvitePage() {
           toast.success("Convite aceito com sucesso!");
           navigate({ to: "/" });
         } catch {
+          invitationAcceptedRef.current = false;
           toast.error("Erro ao aceitar convite");
           setSubmitting(false);
         }
@@ -201,6 +211,9 @@ function AcceptInvitePage() {
         setSubmitting(false);
         return;
       }
+
+      // Mark as accepted BEFORE calling acceptInvitation to prevent useEffect from also calling it
+      invitationAcceptedRef.current = true;
 
       // After signup, accept the invitation to join the organization
       const acceptResult = await authClient.organization.acceptInvitation({

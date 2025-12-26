@@ -24,22 +24,23 @@ const routeLabels: Record<string, string> = {
   '/dashboard/settings/appearance': 'Aparência',
   '/dashboard/settings/danger': 'Zona de Perigo',
   '/dashboard/clients': 'Clientes',
+  '/dashboard/clients/$id/info': 'Informações',
+  '/dashboard/clients/$id/users': 'Usuários',
+  '/dashboard/clients/$id/equipment': 'Equipamentos',
+  '/dashboard/clients/$id/calibrations': 'Calibrações',
+  '/dashboard/clients/$id/compliance': 'Conformidade',
 }
 
 export function DashboardHeader() {
   const matches = useMatches()
 
   const breadcrumbs = useMemo(() => {
-    const dashboardMatches = matches.filter(
-      (match) =>
-        match.pathname.startsWith('/dashboard') && match.pathname !== '/',
-    )
-
-    return dashboardMatches.map((match) => ({
-      path: match.pathname,
-      label:
-        routeLabels[match.pathname] || match.pathname.split('/').pop() || '',
-    }))
+    return matches
+      .filter((m) => m.routeId?.startsWith('/dashboard'))
+      .map((m) => ({
+        path: m.pathname,
+        label: routeLabels[m.routeId] ?? m.pathname.split('/').pop() ?? '',
+      }))
   }, [matches])
 
   return (

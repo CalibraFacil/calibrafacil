@@ -46,9 +46,16 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export function OrganizationSwitcher() {
   const { isMobile } = useSidebar()
-  const { data: organizations, isPending: isLoadingOrgs } =
+  const { data: allOrganizations, isPending: isLoadingOrgs } =
     useListOrganizations()
   const { data: activeOrg } = useActiveOrganization()
+
+  // Filter to only show LAB organizations in the dashboard switcher
+  // The 'type' field is a direct column on organization table (not in metadata)
+  const organizations = React.useMemo(() => {
+    if (!allOrganizations) return []
+    return allOrganizations.filter((org) => org.type !== 'CLIENT')
+  }, [allOrganizations])
 
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [orgName, setOrgName] = React.useState('')
@@ -79,6 +86,8 @@ export function OrganizationSwitcher() {
     const { error } = await organization.create({
       name: orgName,
       slug: orgSlug,
+      // Explicitly set type to LAB for organizations created from dashboard
+      type: 'LAB',
     })
 
     setIsCreating(false)
