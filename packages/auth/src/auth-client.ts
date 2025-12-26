@@ -1,4 +1,7 @@
-import { organizationClient } from "better-auth/client/plugins";
+import {
+  organizationClient,
+  multiSessionClient,
+} from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ac, roles } from "./access";
 
@@ -35,6 +38,8 @@ export const authClient = createBetterAuthClient({
         },
       },
     }),
+    // Multi-session support for dashboard + portal simultaneous logins
+    multiSessionClient(),
   ],
 });
 
@@ -54,6 +59,8 @@ export const {
   revokeOtherSessions,
   revokeSessions,
   deleteUser,
+  // Multi-session methods
+  multiSession,
 } = authClient;
 
 // =============================================================================

@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
-import { organization } from "better-auth/plugins";
+import { organization, multiSession } from "better-auth/plugins";
 import { Resend } from "resend";
 import { OrganizationInvitationEmail } from "@calibra-facil/email";
 import { ac, roles } from "./access";
@@ -51,7 +51,8 @@ export const auth = betterAuth({
 
         await resend.emails.send({
           from:
-            process.env.EMAIL_FROM || "Calibra Fácil <noreply@calibrafacil.com>",
+            process.env.EMAIL_FROM ||
+            "Calibra Fácil <noreply@calibrafacil.com>",
           to: data.email,
           subject: `Convite para ${data.organization.name}`,
           react: OrganizationInvitationEmail({
@@ -64,13 +65,16 @@ export const auth = betterAuth({
         });
       },
     }),
+    // Multi-session support for dashboard + portal simultaneous logins
+    multiSession({
+      maximumSessions: 5, // Allow up to 5 concurrent sessions per device
+    }),
   ],
   trustedOrigins:
     process.env.NODE_ENV === "production"
-      ? [
-          process.env.APP_URL,
-          process.env.PORTAL_URL,
-        ].filter((url): url is string => Boolean(url))
+      ? [process.env.APP_URL, process.env.PORTAL_URL].filter(
+          (url): url is string => Boolean(url),
+        )
       : [
           "https://localhost:5173",
           "https://localhost:5174",
