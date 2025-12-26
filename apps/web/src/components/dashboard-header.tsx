@@ -24,9 +24,12 @@ const routeLabels: Record<string, string> = {
   '/dashboard/settings/appearance': 'Aparência',
   '/dashboard/settings/danger': 'Zona de Perigo',
   '/dashboard/clients': 'Clientes',
+  '/dashboard/assets': 'Ativos',
+  '/dashboard/assets/new': 'Novo Ativo',
+  '/dashboard/assets/$id/edit': 'Editar Ativo',
   '/dashboard/clients/$id/info': 'Informações',
   '/dashboard/clients/$id/users': 'Usuários',
-  '/dashboard/clients/$id/equipment': 'Equipamentos',
+  '/dashboard/clients/$id/assets': 'Ativos',
   '/dashboard/clients/$id/calibrations': 'Calibrações',
   '/dashboard/clients/$id/compliance': 'Conformidade',
 }

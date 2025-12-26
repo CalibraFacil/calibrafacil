@@ -207,8 +207,7 @@ export function OrganizationSwitcher() {
           <DialogHeader>
             <DialogTitle>Criar Laboratório</DialogTitle>
             <DialogDescription>
-              Crie um novo laboratório para gerenciar suas calibrações e
-              equipamentos.
+              Crie um novo laboratório para gerenciar suas calibrações e ativos.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateOrganization} className="grid gap-4">

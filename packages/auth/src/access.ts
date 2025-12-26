@@ -448,12 +448,12 @@ export const roleLabels: Record<RoleName, string> = {
  * Role descriptions for UI display (Portuguese)
  */
 export const roleDescriptions: Record<RoleName, string> = {
-  member: "Acesso somente leitura aos dados do laboratorio",
-  technician: "Executa calibracoes e gerencia equipamentos e clientes",
-  admin: "Controle operacional completo, aprova e rejeita calibracoes",
-  owner: "Controle total incluindo faturamento e exclusao da organizacao",
+  member: "Acesso somente leitura aos dados do laboratório",
+  technician: "Executa calibrações e gerencia ativos e clientes",
+  admin: "Controle operacional completo, aprova e rejeita calibrações",
+  owner: "Controle total incluindo faturamento e exclusão da organização",
   client_user:
-    "Acesso ao portal do cliente para visualizar equipamentos e certificados",
+    "Acesso ao portal do cliente para visualizar ativos e certificados",
 };
 
 /**

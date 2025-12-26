@@ -56,7 +56,7 @@ export function QuickCreateGroup() {
         }}
       >
         <HugeiconsIcon icon={Package01Icon} className="text-green-500" />
-        <span>Registrar Entrada de Equipamento</span>
+        <span>Registrar Entrada de Ativo</span>
         <CommandShortcut>⌘I</CommandShortcut>
       </CommandItem>
 

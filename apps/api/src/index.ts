@@ -4,6 +4,7 @@ import { auth } from "@calibra-facil/auth";
 import { customersRouter } from "./routes/customers";
 import { invitationsRouter } from "./routes/invitations";
 import { portalRouter } from "./routes/portal";
+import { assetsRouter } from "./routes/assets";
 
 const app = new Hono();
 
@@ -89,7 +90,8 @@ const routes = app
   })
   .route("/api/customers", customersRouter)
   .route("/api/invitations", invitationsRouter)
-  .route("/api/portal", portalRouter);
+  .route("/api/portal", portalRouter)
+  .route("/api/assets", assetsRouter);
 
 export type AppType = typeof routes;
 export default {

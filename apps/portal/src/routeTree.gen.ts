@@ -11,7 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
+import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardAssetsRouteRouteImport } from './routes/dashboard/assets/route'
+import { Route as DashboardAssetsIndexRouteImport } from './routes/dashboard/assets/index'
 
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
@@ -23,38 +27,84 @@ const AcceptInviteRoute = AcceptInviteRouteImport.update({
   path: '/accept-invite',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardRouteRoute = DashboardRouteRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardAssetsRouteRoute = DashboardAssetsRouteRouteImport.update({
+  id: '/assets',
+  path: '/assets',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardAssetsIndexRoute = DashboardAssetsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardAssetsRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRouteRouteWithChildren
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
+  '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
+  '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/assets/': typeof DashboardAssetsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
+  '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/assets': typeof DashboardAssetsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRouteRouteWithChildren
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
+  '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
+  '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/assets/': typeof DashboardAssetsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/accept-invite' | '/sign-in'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/accept-invite'
+    | '/sign-in'
+    | '/dashboard/assets'
+    | '/dashboard/'
+    | '/dashboard/assets/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/accept-invite' | '/sign-in'
-  id: '__root__' | '/' | '/accept-invite' | '/sign-in'
+  to: '/' | '/accept-invite' | '/sign-in' | '/dashboard' | '/dashboard/assets'
+  id:
+    | '__root__'
+    | '/'
+    | '/dashboard'
+    | '/accept-invite'
+    | '/sign-in'
+    | '/dashboard/assets'
+    | '/dashboard/'
+    | '/dashboard/assets/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
   AcceptInviteRoute: typeof AcceptInviteRoute
   SignInRoute: typeof SignInRoute
 }
@@ -75,6 +125,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcceptInviteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -82,11 +139,58 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/': {
+      id: '/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/assets': {
+      id: '/dashboard/assets'
+      path: '/assets'
+      fullPath: '/dashboard/assets'
+      preLoaderRoute: typeof DashboardAssetsRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/assets/': {
+      id: '/dashboard/assets/'
+      path: '/'
+      fullPath: '/dashboard/assets/'
+      preLoaderRoute: typeof DashboardAssetsIndexRouteImport
+      parentRoute: typeof DashboardAssetsRouteRoute
+    }
   }
 }
 
+interface DashboardAssetsRouteRouteChildren {
+  DashboardAssetsIndexRoute: typeof DashboardAssetsIndexRoute
+}
+
+const DashboardAssetsRouteRouteChildren: DashboardAssetsRouteRouteChildren = {
+  DashboardAssetsIndexRoute: DashboardAssetsIndexRoute,
+}
+
+const DashboardAssetsRouteRouteWithChildren =
+  DashboardAssetsRouteRoute._addFileChildren(DashboardAssetsRouteRouteChildren)
+
+interface DashboardRouteRouteChildren {
+  DashboardAssetsRouteRoute: typeof DashboardAssetsRouteRouteWithChildren
+  DashboardIndexRoute: typeof DashboardIndexRoute
+}
+
+const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
+  DashboardAssetsRouteRoute: DashboardAssetsRouteRouteWithChildren,
+  DashboardIndexRoute: DashboardIndexRoute,
+}
+
+const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
+  DashboardRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DashboardRouteRoute: DashboardRouteRouteWithChildren,
   AcceptInviteRoute: AcceptInviteRoute,
   SignInRoute: SignInRoute,
 }

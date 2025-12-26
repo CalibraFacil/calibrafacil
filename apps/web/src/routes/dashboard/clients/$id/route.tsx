@@ -44,8 +44,8 @@ const navItems = [
   },
   {
     value: 'equipment',
-    label: 'Equipamentos',
-    href: (id: string) => `/dashboard/clients/${id}/equipment`,
+    label: 'Ativos',
+    href: (id: string) => `/dashboard/clients/${id}/assets`,
     icon: ToolsIcon,
   },
   {

@@ -8,6 +8,7 @@ import {
   uniqueIndex,
   serial,
   jsonb,
+  integer,
 } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -283,15 +284,114 @@ export const customerRelations = relations(customer, ({ one, many }) => ({
     references: [organization.id],
   }),
   auditLogs: many(customerAuditLog),
+  assets: many(asset),
 }));
 
-export const customerAuditLogRelations = relations(customerAuditLog, ({ one }) => ({
+export const customerAuditLogRelations = relations(
+  customerAuditLog,
+  ({ one }) => ({
+    customer: one(customer, {
+      fields: [customerAuditLog.customerId],
+      references: [customer.id],
+    }),
+    performedByUser: one(user, {
+      fields: [customerAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+// =============================================================================
+// ASSET - Equipment/Instruments under test (EUT) from clients
+// =============================================================================
+
+/**
+ * Asset status values for equipment lifecycle tracking
+ */
+export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
+
+/**
+ * Asset table - Equipment/Instruments linked to customers.
+ * Each asset belongs to a customer and can have calibration history.
+ */
+export const asset = pgTable(
+  "asset",
+  {
+    id: serial("id").primaryKey(),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "cascade" }),
+    name: text("name").notNull(), // e.g., "Analytical Balance", "Pressure Gauge"
+    manufacturer: text("manufacturer"), // e.g., "Mettler Toledo", "Fluke"
+    model: text("model"), // e.g., "XPE205", "700G"
+    serialNumber: text("serial_number").notNull(), // Manufacturer's serial number
+    tag: text("tag").notNull().unique(), // Internal Lab ID / Asset ID (unique across lab)
+    status: text("status").$type<AssetStatus>().default("ACTIVE").notNull(),
+    lastCalibrationDate: timestamp("last_calibration_date"),
+    nextCalibrationDate: timestamp("next_calibration_date"),
+    comments: text("comments"), // Additional notes about the equipment
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("asset_customer_id_idx").on(table.customerId),
+    index("asset_status_idx").on(table.status),
+    uniqueIndex("asset_tag_uidx").on(table.tag),
+  ],
+);
+
+// =============================================================================
+// ASSET AUDIT LOG - ISO 17025:2017 Clause 8.4 (Control of records)
+// =============================================================================
+
+/**
+ * Audit log for asset changes.
+ * Tracks all modifications for compliance and traceability.
+ */
+export const assetAuditLog = pgTable(
+  "asset_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    assetId: integer("asset_id")
+      .notNull()
+      .references(() => asset.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // 'create', 'update', 'delete', 'status_change', etc.
+    changes: jsonb("changes"), // { field: { old: x, new: y } }
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"), // Required for status changes per ISO 17025
+  },
+  (table) => [
+    index("asset_audit_log_asset_id_idx").on(table.assetId),
+    index("asset_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// ASSET RELATIONS
+// =============================================================================
+
+export const assetRelations = relations(asset, ({ one, many }) => ({
   customer: one(customer, {
-    fields: [customerAuditLog.customerId],
+    fields: [asset.customerId],
     references: [customer.id],
   }),
+  auditLogs: many(assetAuditLog),
+}));
+
+export const assetAuditLogRelations = relations(assetAuditLog, ({ one }) => ({
+  asset: one(asset, {
+    fields: [assetAuditLog.assetId],
+    references: [asset.id],
+  }),
   performedByUser: one(user, {
-    fields: [customerAuditLog.performedBy],
+    fields: [assetAuditLog.performedBy],
     references: [user.id],
   }),
 }));
