@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/dashboard/settings/appearance')({
   head: () => ({
-    meta: [{ title: 'Aparencia | Configuracoes | CalibraFacil' }],
+    meta: [{ title: 'Aparência | Configuracoes | CalibraFácil' }],
   }),
   component: AppearanceSettingsPage,
 })

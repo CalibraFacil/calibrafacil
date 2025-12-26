@@ -25,11 +25,13 @@ import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+
 export const Route = createFileRoute('/dashboard/clients/$id')({
   component: ClientDetailLayout,
 })
 
-const navItems = [
+const tabs = [
   {
     value: 'info',
     label: 'Informações',
@@ -43,7 +45,7 @@ const navItems = [
     icon: UserMultipleIcon,
   },
   {
-    value: 'equipment',
+    value: 'assets',
     label: 'Ativos',
     href: (id: string) => `/dashboard/clients/${id}/assets`,
     icon: ToolsIcon,
@@ -74,17 +76,13 @@ function ClientDetailLayout() {
       const res = await api.api.customers[':id'].$get({
         param: { id },
       })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar cliente')
-      }
+      if (!res.ok) throw new Error('Falha ao carregar cliente')
       return res.json()
     },
   })
 
-  // Find current tab from URL
-  const currentTab =
-    navItems.find((item) => location.pathname.startsWith(item.href(id)))
-      ?.value ?? 'info'
+  const activeTab =
+    tabs.find((t) => location.pathname.startsWith(t.href(id)))?.value ?? 'info'
 
   return (
     <div className="space-y-6">
@@ -98,6 +96,7 @@ function ClientDetailLayout() {
         >
           <HugeiconsIcon icon={ArrowLeft02Icon} className="size-5" />
         </Button>
+
         <div className="flex-1 min-w-0">
           {isLoading ? (
             <div className="space-y-2">
@@ -105,7 +104,7 @@ function ClientDetailLayout() {
               <Skeleton className="h-4 w-32" />
             </div>
           ) : customer ? (
-            <div>
+            <>
               <h1 className="text-2xl font-semibold tracking-tight truncate">
                 {customer.name}
               </h1>
@@ -132,63 +131,50 @@ function ClientDetailLayout() {
                   </Badge>
                 )}
               </div>
-            </div>
+            </>
           ) : (
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-destructive">
-                Cliente nao encontrado
-              </h1>
-            </div>
+            <h1 className="text-2xl font-semibold text-destructive">
+              Cliente não encontrado
+            </h1>
           )}
         </div>
       </div>
 
-      {/* Tab Navigation */}
+      {/* Tabs */}
       {isMobile ? (
         <NativeSelect
-          value={currentTab}
+          value={activeTab}
           onChange={(e) => {
-            const item = navItems.find((i) => i.value === e.target.value)
-            if (item) {
-              navigate({ to: item.href(id) })
-            }
+            const tab = tabs.find((t) => t.value === e.target.value)
+            if (tab) navigate({ to: tab.href(id) })
           }}
-          className="w-full"
         >
-          {navItems.map((item) => (
-            <NativeSelectOption key={item.value} value={item.value}>
-              {item.label}
+          {tabs.map((tab) => (
+            <NativeSelectOption key={tab.value} value={tab.value}>
+              {tab.label}
             </NativeSelectOption>
           ))}
         </NativeSelect>
       ) : (
-        <nav className="border-b" aria-label="Tabs">
-          <ul className="-mb-px flex gap-1">
-            {navItems.map((item) => {
-              const isActive = location.pathname.startsWith(item.href(id))
-              return (
-                <li key={item.value}>
-                  <Link
-                    to={item.href(id)}
-                    className={cn(
-                      'inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'border-foreground text-foreground'
-                        : 'border-transparent text-muted-foreground hover:border-muted-foreground/30 hover:text-foreground',
-                    )}
-                    aria-current={isActive ? 'page' : undefined}
-                  >
-                    <HugeiconsIcon icon={item.icon} className="size-4" />
-                    {item.label}
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-        </nav>
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => {
+            const tab = tabs.find((t) => t.value === value)
+            if (tab) navigate({ to: tab.href(id) })
+          }}
+        >
+          <TabsList variant="line">
+            {tabs.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value}>
+                <HugeiconsIcon icon={tab.icon} />
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       )}
 
-      {/* Tab Content */}
+      {/* Route content */}
       <div className="min-w-0">
         <Outlet />
       </div>

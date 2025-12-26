@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export const Route = createFileRoute('/dashboard/settings/authentication')({
   head: () => ({
-    meta: [{ title: 'Autenticação | Configurações | CalibraFacil' }],
+    meta: [{ title: 'Autenticação | Configurações | CalibraFácil' }],
   }),
   component: AuthenticationSettingsPage,
 })
