@@ -9,8 +9,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/dashboard/assets/")({
+export const Route = createFileRoute("/portal/assets/")({
   head: () => ({
     meta: [{ title: "Meus Ativos | Portal do Cliente" }],
   }),
@@ -22,7 +23,7 @@ type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
 const statusLabels: Record<AssetStatus, string> = {
   ACTIVE: "Ativo",
   INACTIVE: "Inativo",
-  MAINTENANCE: "Manutenção",
+  MAINTENANCE: "Manutencao",
   SCRAPPED: "Descartado",
 };
 
@@ -195,15 +196,17 @@ function AssetsPage() {
                     ativos)
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      className="rounded-md border px-3 py-1 text-sm disabled:opacity-50"
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
                       disabled={page === 1}
                     >
                       Anterior
-                    </button>
-                    <button
-                      className="rounded-md border px-3 py-1 text-sm disabled:opacity-50"
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() =>
                         setPage((p) =>
                           Math.min(data.pagination.totalPages, p + 1),
@@ -212,7 +215,7 @@ function AssetsPage() {
                       disabled={page === data.pagination.totalPages}
                     >
                       Proximo
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

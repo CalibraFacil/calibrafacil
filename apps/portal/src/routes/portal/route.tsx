@@ -1,28 +1,39 @@
-import {
-  Link,
-  Outlet,
-  createFileRoute,
-  useNavigate,
-} from "@tanstack/react-router";
+import { Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+
 import {
   organization,
-  signOut,
   useActiveOrganization,
   useSession,
 } from "@calibra-facil/auth/client";
-import { Button } from "@/components/ui/button";
+import { PortalSidebar } from "@/components/portal-sidebar";
+import { PortalHeader } from "@/components/portal-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/dashboard")({
-  component: DashboardLayout,
+export const Route = createFileRoute("/portal")({
+  component: PortalLayout,
 });
 
 function getApiBaseUrl(): string {
   const host =
     typeof window !== "undefined" ? window.location.hostname : "localhost";
   return `https://${host}:3000`;
+}
+
+function getWebAppUrl(): string {
+  const host =
+    typeof window !== "undefined" ? window.location.hostname : "localhost";
+  return `https://${host}:5173`;
 }
 
 type PortalOrganization = {
@@ -35,12 +46,13 @@ type PortalOrganization = {
   memberRole: string;
 };
 
-function DashboardLayout() {
+function PortalLayout() {
   const navigate = useNavigate();
   const { data: session, isPending: sessionPending } = useSession();
   const { data: activeOrg, isPending: activeOrgLoading } =
     useActiveOrganization();
 
+  // Fetch CLIENT organizations where user is a client_user (not owner/admin)
   const { data: clientOrganizations = [], isPending: orgsLoading } = useQuery({
     queryKey: ["portal-organizations"],
     queryFn: async (): Promise<Array<PortalOrganization>> => {
@@ -60,20 +72,24 @@ function DashboardLayout() {
 
   const hasClientAccess = clientOrganizations.length > 0;
 
+  // Redirect to sign-in if not authenticated
   useEffect(() => {
     if (!sessionPending && !session) {
       navigate({ to: "/sign-in" });
     }
   }, [sessionPending, session, navigate]);
 
+  // Context Enforcer: Auto-switch to a CLIENT org where user is client_user
   useEffect(() => {
     async function enforceClientContext() {
       if (orgsLoading || activeOrgLoading || !hasClientAccess) return;
 
+      // Check if active org is in our allowed CLIENT orgs list
       const isActiveOrgAllowed =
         activeOrg && clientOrganizations.some((org) => org.id === activeOrg.id);
 
       if (!isActiveOrgAllowed && clientOrganizations[0]) {
+        // Auto-switch to first allowed CLIENT organization
         await organization.setActive({
           organizationId: clientOrganizations[0].id,
         });
@@ -92,10 +108,12 @@ function DashboardLayout() {
     clientOrganizations,
   ]);
 
+  // Check if we're in the middle of switching contexts
   const isActiveOrgAllowed =
     activeOrg && clientOrganizations.some((org) => org.id === activeOrg.id);
   const isSwitchingContext = hasClientAccess && !isActiveOrgAllowed;
 
+  // Show loading state
   if (
     sessionPending ||
     !session ||
@@ -110,52 +128,51 @@ function DashboardLayout() {
     );
   }
 
+  // No CLIENT access - show error page
   if (!hasClientAccess) {
-    navigate({ to: "/" });
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Acesso Nao Disponivel</CardTitle>
+            <CardDescription>
+              Voce nao possui acesso a nenhuma organizacao cliente. Se voce e um
+              usuario do laboratorio, acesse o painel principal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Button
+              onClick={() => {
+                window.location.href = `${getWebAppUrl()}/dashboard`;
+              }}
+            >
+              Acessar Painel do Laboratorio
+            </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                const { signOut } = await import("@calibra-facil/auth/client");
+                await signOut();
+                navigate({ to: "/sign-in" });
+              }}
+            >
+              Sair
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate({ to: "/sign-in" });
-  };
-
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card">
-        <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          <div className="flex items-center gap-4">
-            <span className="font-semibold">Portal do Cliente</span>
-            {activeOrg && (
-              <span className="text-sm text-muted-foreground">
-                {activeOrg.name}
-              </span>
-            )}
-          </div>
-          <nav className="flex items-center gap-4">
-            <Link
-              to="/dashboard/assets"
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              Ativos
-            </Link>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {session.user.name}
-              </span>
-              <Button variant="outline" size="sm" onClick={handleSignOut}>
-                Sair
-              </Button>
-            </div>
-          </nav>
-        </div>
-      </header>
-
-      {/* Main content */}
-      <main className="container mx-auto p-4">
-        <Outlet />
-      </main>
-    </div>
+    <SidebarProvider>
+      <PortalSidebar />
+      <SidebarInset>
+        <PortalHeader />
+        <main className="flex-1 p-4">
+          <Outlet />
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
