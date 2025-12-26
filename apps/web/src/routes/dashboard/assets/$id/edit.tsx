@@ -5,7 +5,7 @@ import {
   useParams,
 } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -36,10 +36,14 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DatePicker } from '@/components/ui/date-picker'
+import {
+  DynamicSpecsForm,
+  type SpecFieldDefinition,
+} from '@/components/dynamic-specs-form'
 
 export const Route = createFileRoute('/dashboard/assets/$id/edit')({
   head: () => ({
-    meta: [{ title: 'Editar Ativo | CalibraFacil' }],
+    meta: [{ title: 'Editar Ativo | CalibraFácil' }],
   }),
   component: EditAssetPage,
 })
@@ -61,6 +65,7 @@ interface FormData {
   lastCalibrationDate: Date | undefined
   nextCalibrationDate: Date | undefined
   comments: string
+  specifications: Record<string, unknown>
 }
 
 const initialFormData: FormData = {
@@ -73,6 +78,7 @@ const initialFormData: FormData = {
   lastCalibrationDate: undefined,
   nextCalibrationDate: undefined,
   comments: '',
+  specifications: {},
 }
 
 function parseDate(date: string | Date | null | undefined): Date | undefined {
@@ -87,9 +93,9 @@ function EditAssetPage() {
   const { id } = useParams({ from: '/dashboard/assets/$id/edit' })
 
   const [formData, setFormData] = useState<FormData>(initialFormData)
-  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
-    {},
-  )
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof FormData | string, string>>
+  >({})
 
   // Fetch the asset data
   const {
@@ -122,9 +128,16 @@ function EditAssetPage() {
         lastCalibrationDate: parseDate(asset.lastCalibrationDate),
         nextCalibrationDate: parseDate(asset.nextCalibrationDate),
         comments: asset.comments || '',
+        specifications: (asset.specifications as Record<string, unknown>) || {},
       })
     }
   }, [asset])
+
+  // Get the asset type definition from the asset data
+  const assetTypeDefinition = useMemo(() => {
+    if (!asset?.assetTypeDefinition) return []
+    return asset.assetTypeDefinition as SpecFieldDefinition[]
+  }, [asset?.assetTypeDefinition])
 
   const updateMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -142,6 +155,10 @@ function EditAssetPage() {
           nextCalibrationDate:
             data.nextCalibrationDate?.toISOString() || undefined,
           comments: data.comments || undefined,
+          specifications:
+            Object.keys(data.specifications).length > 0
+              ? data.specifications
+              : undefined,
         },
       })
 
@@ -166,20 +183,32 @@ function EditAssetPage() {
   })
 
   const validate = (): boolean => {
-    const newErrors: Partial<Record<keyof FormData, string>> = {}
+    const newErrors: Partial<Record<keyof FormData | string, string>> = {}
 
     if (!formData.name.trim()) {
-      newErrors.name = 'Nome e obrigatorio'
+      newErrors.name = 'Nome é obrigatório'
     } else if (formData.name.trim().length < 2) {
       newErrors.name = 'Nome deve ter pelo menos 2 caracteres'
     }
 
     if (!formData.serialNumber.trim()) {
-      newErrors.serialNumber = 'Numero de serie e obrigatorio'
+      newErrors.serialNumber = 'Número de série é obrigatório'
     }
 
     if (!formData.tag.trim()) {
-      newErrors.tag = 'Tag e obrigatoria'
+      newErrors.tag = 'Tag é obrigatória'
+    }
+
+    // Validate required specification fields
+    if (assetTypeDefinition.length > 0) {
+      for (const field of assetTypeDefinition) {
+        if (field.required) {
+          const value = formData.specifications[field.key]
+          if (value === undefined || value === null || value === '') {
+            newErrors[`spec_${field.key}`] = `${field.label} é obrigatório`
+          }
+        }
+      }
     }
 
     setErrors(newErrors)
@@ -205,6 +234,17 @@ function EditAssetPage() {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
   }
+
+  // Get specification errors in the format expected by DynamicSpecsForm
+  const specErrors = useMemo(() => {
+    const result: Record<string, string> = {}
+    for (const [key, value] of Object.entries(errors)) {
+      if (key.startsWith('spec_') && value) {
+        result[key.replace('spec_', '')] = value
+      }
+    }
+    return result
+  }, [errors])
 
   if (isLoading) {
     return (
@@ -289,6 +329,15 @@ function EditAssetPage() {
                 </FieldDescription>
               </Field>
 
+              {/* Asset Type - Read only */}
+              <Field>
+                <FieldLabel>Tipo de Instrumento</FieldLabel>
+                <Input value={asset.assetTypeName} disabled />
+                <FieldDescription>
+                  O tipo de instrumento não pode ser alterado após o cadastro.
+                </FieldDescription>
+              </Field>
+
               {/* Name */}
               <Field>
                 <FieldLabel htmlFor="name">Nome do Equipamento *</FieldLabel>
@@ -296,7 +345,7 @@ function EditAssetPage() {
                   id="name"
                   value={formData.name}
                   onChange={(e) => updateField('name', e.target.value)}
-                  placeholder="Ex: Balanca Analitica"
+                  placeholder="Ex: Balança Analítica"
                   disabled={updateMutation.isPending}
                 />
                 {errors.name && <FieldError>{errors.name}</FieldError>}
@@ -347,7 +396,7 @@ function EditAssetPage() {
               {/* Serial Number */}
               <Field>
                 <FieldLabel htmlFor="serialNumber">
-                  Numero de Serie *
+                  Número de Série *
                 </FieldLabel>
                 <Input
                   id="serialNumber"
@@ -384,11 +433,22 @@ function EditAssetPage() {
                 </Select>
               </Field>
 
+              {/* Dynamic Specifications Form */}
+              {assetTypeDefinition.length > 0 && (
+                <DynamicSpecsForm
+                  definition={assetTypeDefinition}
+                  value={formData.specifications}
+                  onChange={(specs) => updateField('specifications', specs)}
+                  disabled={updateMutation.isPending}
+                  errors={specErrors}
+                />
+              )}
+
               {/* Calibration Dates */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="lastCalibrationDate">
-                    Ultima Calibracao
+                    Última Calibração
                   </FieldLabel>
                   <DatePicker
                     value={formData.lastCalibrationDate}

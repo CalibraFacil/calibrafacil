@@ -142,6 +142,60 @@ export const AuditLogQuerySchema = z.object({
 export type AuditLogQuery = z.infer<typeof AuditLogQuerySchema>;
 
 // =============================================================================
+// ASSET TYPE SCHEMAS - Dynamic Instrument Classification
+// =============================================================================
+
+/**
+ * Field definition for dynamic asset specifications
+ */
+export const AssetTypeFieldSchema = z.object({
+  key: z.string().min(1, "Chave é obrigatória"),
+  label: z.string().min(1, "Rótulo é obrigatório"),
+  type: z.enum(["text", "number", "select"]),
+  options: z.array(z.string()).optional(),
+  unit: z.string().optional(),
+  required: z.boolean().optional(),
+});
+
+export type AssetTypeField = z.infer<typeof AssetTypeFieldSchema>;
+
+/**
+ * Schema for creating a new asset type
+ */
+export const CreateAssetTypeSchema = z.object({
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  slug: z
+    .string()
+    .min(2, "Slug deve ter pelo menos 2 caracteres")
+    .regex(
+      /^[a-z0-9-]+$/,
+      "Slug deve conter apenas letras minúsculas, números e hífens",
+    ),
+  description: z.string().optional(),
+  definition: z
+    .array(AssetTypeFieldSchema)
+    .min(1, "Defina pelo menos um campo de especificação"),
+});
+
+export type CreateAssetTypeInput = z.infer<typeof CreateAssetTypeSchema>;
+
+/**
+ * Schema for updating an asset type
+ */
+export const UpdateAssetTypeSchema = CreateAssetTypeSchema.partial();
+
+export type UpdateAssetTypeInput = z.infer<typeof UpdateAssetTypeSchema>;
+
+/**
+ * Schema for listing asset types
+ */
+export const ListAssetTypesQuerySchema = z.object({
+  query: z.string().optional(),
+});
+
+export type ListAssetTypesQuery = z.infer<typeof ListAssetTypesQuerySchema>;
+
+// =============================================================================
 // ASSET SCHEMAS - Equipment/Instruments
 // =============================================================================
 
@@ -161,25 +215,29 @@ export type AssetStatus = z.infer<typeof AssetStatusSchema>;
  * Schema for creating a new asset
  */
 export const CreateAssetSchema = z.object({
-  customerId: z.coerce.number().min(1, "Cliente e obrigatorio"),
+  customerId: z.coerce.number().min(1, "Cliente é obrigatório"),
+  assetTypeId: z.coerce.number().min(1, "Tipo de instrumento é obrigatório"),
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   manufacturer: z.string().optional(),
   model: z.string().optional(),
-  serialNumber: z.string().min(1, "Numero de serie e obrigatorio"),
-  tag: z.string().min(1, "Tag e obrigatorio"),
+  serialNumber: z.string().min(1, "Número de série é obrigatório"),
+  tag: z.string().min(1, "Tag é obrigatória"),
   status: AssetStatusSchema.optional().default("ACTIVE"),
   lastCalibrationDate: z.string().optional(),
   nextCalibrationDate: z.string().optional(),
   comments: z.string().optional(),
+  specifications: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type CreateAssetInput = z.infer<typeof CreateAssetSchema>;
 
 /**
  * Schema for updating an asset
+ * Note: customerId and assetTypeId cannot be changed after creation
  */
 export const UpdateAssetSchema = CreateAssetSchema.partial().omit({
   customerId: true,
+  assetTypeId: true,
 });
 
 export type UpdateAssetInput = z.infer<typeof UpdateAssetSchema>;
@@ -191,6 +249,7 @@ export const ListAssetsQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),
   customerId: z.coerce.number().optional(),
+  assetTypeId: z.coerce.number().optional(),
   status: AssetStatusSchema.optional(),
   query: z.string().optional(), // Search by name, tag, serialNumber
 });

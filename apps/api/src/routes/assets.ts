@@ -1,7 +1,12 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
-import { asset, assetAuditLog, customer } from "@calibra-facil/db/schema";
+import {
+  asset,
+  assetAuditLog,
+  customer,
+  assetType,
+} from "@calibra-facil/db/schema";
 import {
   CreateAssetSchema,
   UpdateAssetSchema,
@@ -35,7 +40,37 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           .limit(1);
 
         if (!foundCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
+          return c.json({ error: "Cliente não encontrado" }, 404);
+        }
+
+        // Validate that asset type exists
+        const [foundAssetType] = await db
+          .select()
+          .from(assetType)
+          .where(eq(assetType.id, input.assetTypeId))
+          .limit(1);
+
+        if (!foundAssetType) {
+          return c.json({ error: "Tipo de instrumento não encontrado" }, 404);
+        }
+
+        // Validate specifications against asset type definition
+        if (foundAssetType.definition && input.specifications) {
+          const requiredFields = foundAssetType.definition.filter(
+            (field) => field.required,
+          );
+          for (const field of requiredFields) {
+            if (
+              input.specifications[field.key] === undefined ||
+              input.specifications[field.key] === null ||
+              input.specifications[field.key] === ""
+            ) {
+              return c.json(
+                { error: `Campo obrigatório: ${field.label}` },
+                400,
+              );
+            }
+          }
         }
 
         // Check if tag is unique
@@ -46,7 +81,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           .limit(1);
 
         if (existingAsset) {
-          return c.json({ error: "Tag ja esta em uso" }, 400);
+          return c.json({ error: "Tag já está em uso" }, 400);
         }
 
         // Parse dates if provided
@@ -62,6 +97,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           .insert(asset)
           .values({
             customerId: input.customerId,
+            assetTypeId: input.assetTypeId,
             name: input.name,
             manufacturer: input.manufacturer || null,
             model: input.model || null,
@@ -71,6 +107,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             lastCalibrationDate,
             nextCalibrationDate,
             comments: input.comments || null,
+            specifications: input.specifications || null,
           })
           .returning();
 
@@ -106,7 +143,8 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withPermission({ equipment: ["read"] }),
     zValidator("query", ListAssetsQuerySchema),
     async (c) => {
-      const { page, limit, customerId, status, query } = c.req.valid("query");
+      const { page, limit, customerId, assetTypeId, status, query } =
+        c.req.valid("query");
       const member = c.get("member");
 
       try {
@@ -139,6 +177,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           conditions.push(eq(asset.customerId, customerId));
         }
 
+        // Filter by asset type
+        if (assetTypeId) {
+          conditions.push(eq(asset.assetTypeId, assetTypeId));
+        }
+
         // Filter by status
         if (status) {
           conditions.push(eq(asset.status, status));
@@ -161,18 +204,22 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const whereCondition =
           conditions.length > 0 ? and(...conditions) : undefined;
 
-        // Get assets with customer info
+        // Get assets with customer and asset type info
         const assets = await db
           .select({
             id: asset.id,
             customerId: asset.customerId,
             customerName: customer.name,
+            assetTypeId: asset.assetTypeId,
+            assetTypeName: assetType.name,
+            assetTypeSlug: assetType.slug,
             name: asset.name,
             manufacturer: asset.manufacturer,
             model: asset.model,
             serialNumber: asset.serialNumber,
             tag: asset.tag,
             status: asset.status,
+            specifications: asset.specifications,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
             comments: asset.comments,
@@ -181,6 +228,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           })
           .from(asset)
           .innerJoin(customer, eq(asset.customerId, customer.id))
+          .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
           .where(whereCondition)
           .orderBy(asset.tag)
           .limit(limit)
@@ -191,6 +239,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           .select({ total: count() })
           .from(asset)
           .innerJoin(customer, eq(asset.customerId, customer.id))
+          .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
           .where(whereCondition);
 
         const total = countResult[0]?.total ?? 0;
@@ -219,7 +268,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
     const member = c.get("member");
 
     if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
+      return c.json({ error: "ID inválido" }, 400);
     }
 
     try {
@@ -228,12 +277,17 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           id: asset.id,
           customerId: asset.customerId,
           customerName: customer.name,
+          assetTypeId: asset.assetTypeId,
+          assetTypeName: assetType.name,
+          assetTypeSlug: assetType.slug,
+          assetTypeDefinition: assetType.definition,
           name: asset.name,
           manufacturer: asset.manufacturer,
           model: asset.model,
           serialNumber: asset.serialNumber,
           tag: asset.tag,
           status: asset.status,
+          specifications: asset.specifications,
           lastCalibrationDate: asset.lastCalibrationDate,
           nextCalibrationDate: asset.nextCalibrationDate,
           comments: asset.comments,
@@ -242,11 +296,12 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .from(asset)
         .innerJoin(customer, eq(asset.customerId, customer.id))
+        .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
         .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
         .limit(1);
 
       if (!foundAsset) {
-        return c.json({ error: "Ativo nao encontrado" }, 404);
+        return c.json({ error: "Ativo não encontrado" }, 404);
       }
 
       // If user is a client_user, verify they can access this asset
@@ -354,6 +409,8 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           updateData.nextCalibrationDate = nextCalibrationDate;
         if (input.comments !== undefined)
           updateData.comments = input.comments || null;
+        if (input.specifications !== undefined)
+          updateData.specifications = input.specifications || null;
 
         // Build changes object for audit log
         const changes: Record<string, { old: unknown; new: unknown }> = {};

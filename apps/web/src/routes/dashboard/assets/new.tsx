@@ -40,6 +40,10 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { DatePicker } from '@/components/ui/date-picker'
+import {
+  DynamicSpecsForm,
+  type SpecFieldDefinition,
+} from '@/components/dynamic-specs-form'
 
 const statusLabels: Record<FormData['status'], string> = {
   ACTIVE: 'Ativo',
@@ -57,6 +61,7 @@ export const Route = createFileRoute('/dashboard/assets/new')({
 
 interface FormData {
   customerId: number | null
+  assetTypeId: number | null
   name: string
   manufacturer: string
   model: string
@@ -66,10 +71,12 @@ interface FormData {
   lastCalibrationDate: Date | undefined
   nextCalibrationDate: Date | undefined
   comments: string
+  specifications: Record<string, unknown>
 }
 
 const initialFormData: FormData = {
   customerId: null,
+  assetTypeId: null,
   name: '',
   manufacturer: '',
   model: '',
@@ -79,6 +86,15 @@ const initialFormData: FormData = {
   lastCalibrationDate: undefined,
   nextCalibrationDate: undefined,
   comments: '',
+  specifications: {},
+}
+
+type AssetType = {
+  id: number
+  name: string
+  slug: string
+  description: string | null
+  definition: SpecFieldDefinition[]
 }
 
 function NewAssetPage() {
@@ -89,9 +105,9 @@ function NewAssetPage() {
   const [customerIdParam] = useQueryState('customerId', parseAsInteger)
 
   const [formData, setFormData] = useState<FormData>(initialFormData)
-  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
-    {},
-  )
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof FormData | string, string>>
+  >({})
   const [customerSearch, setCustomerSearch] = useState('')
 
   // Pre-fill customerId from query param on mount
@@ -119,7 +135,24 @@ function NewAssetPage() {
 
       return res.json()
     },
-    staleTime: 30000, // Cache for 30 seconds
+    staleTime: 30000,
+  })
+
+  // Fetch asset types for the dropdown
+  const { data: assetTypesData, isLoading: assetTypesLoading } = useQuery({
+    queryKey: ['asset-types'],
+    queryFn: async () => {
+      const res = await api.api['asset-types'].$get({
+        query: {},
+      })
+
+      if (!res.ok) {
+        throw new Error('Falha ao carregar tipos de instrumento')
+      }
+
+      return res.json() as Promise<{ data: AssetType[] }>
+    },
+    staleTime: 60000, // Cache for 1 minute
   })
 
   // Get the selected customer name
@@ -131,15 +164,27 @@ function NewAssetPage() {
     return customer?.name || ''
   }, [formData.customerId, customersData?.data])
 
+  // Get the selected asset type
+  const selectedAssetType = useMemo(() => {
+    if (!formData.assetTypeId || !assetTypesData?.data) return null
+    return (
+      assetTypesData.data.find((t) => t.id === formData.assetTypeId) || null
+    )
+  }, [formData.assetTypeId, assetTypesData?.data])
+
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (!data.customerId) {
-        throw new Error('Cliente e obrigatorio')
+        throw new Error('Cliente é obrigatório')
+      }
+      if (!data.assetTypeId) {
+        throw new Error('Tipo de instrumento é obrigatório')
       }
 
       const res = await api.api.assets.$post({
         json: {
           customerId: data.customerId,
+          assetTypeId: data.assetTypeId,
           name: data.name,
           manufacturer: data.manufacturer || undefined,
           model: data.model || undefined,
@@ -151,6 +196,10 @@ function NewAssetPage() {
           nextCalibrationDate:
             data.nextCalibrationDate?.toISOString() || undefined,
           comments: data.comments || undefined,
+          specifications:
+            Object.keys(data.specifications).length > 0
+              ? data.specifications
+              : undefined,
         },
       })
 
@@ -174,16 +223,20 @@ function NewAssetPage() {
   })
 
   const validate = (): boolean => {
-    const newErrors: Partial<Record<keyof FormData, string>> = {}
+    const newErrors: Partial<Record<keyof FormData | string, string>> = {}
 
     if (!formData.customerId) {
       newErrors.customerId = 'Cliente é obrigatório'
     }
 
+    if (!formData.assetTypeId) {
+      newErrors.assetTypeId = 'Tipo de instrumento é obrigatório'
+    }
+
     if (!formData.name.trim()) {
       newErrors.name = 'Nome é obrigatório'
     } else if (formData.name.trim().length < 2) {
-      newErrors.name = 'Nome deve ter pelo menos 2 carácteres'
+      newErrors.name = 'Nome deve ter pelo menos 2 caracteres'
     }
 
     if (!formData.serialNumber.trim()) {
@@ -192,6 +245,18 @@ function NewAssetPage() {
 
     if (!formData.tag.trim()) {
       newErrors.tag = 'Tag é obrigatória'
+    }
+
+    // Validate required specification fields
+    if (selectedAssetType?.definition) {
+      for (const field of selectedAssetType.definition) {
+        if (field.required) {
+          const value = formData.specifications[field.key]
+          if (value === undefined || value === null || value === '') {
+            newErrors[`spec_${field.key}`] = `${field.label} é obrigatório`
+          }
+        }
+      }
     }
 
     setErrors(newErrors)
@@ -217,6 +282,43 @@ function NewAssetPage() {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
   }
+
+  // Handle asset type change - reset specifications when type changes
+  const handleAssetTypeChange = (typeId: number | null) => {
+    setFormData((prev) => ({
+      ...prev,
+      assetTypeId: typeId,
+      specifications: {}, // Reset specifications when type changes
+    }))
+    // Clear type error
+    if (errors.assetTypeId) {
+      setErrors((prev) => ({ ...prev, assetTypeId: undefined }))
+    }
+    // Clear specification errors
+    const specErrorKeys = Object.keys(errors).filter((k) =>
+      k.startsWith('spec_'),
+    )
+    if (specErrorKeys.length > 0) {
+      setErrors((prev) => {
+        const newErrors = { ...prev }
+        for (const key of specErrorKeys) {
+          delete newErrors[key]
+        }
+        return newErrors
+      })
+    }
+  }
+
+  // Get specification errors in the format expected by DynamicSpecsForm
+  const specErrors = useMemo(() => {
+    const result: Record<string, string> = {}
+    for (const [key, value] of Object.entries(errors)) {
+      if (key.startsWith('spec_') && value) {
+        result[key.replace('spec_', '')] = value
+      }
+    }
+    return result
+  }, [errors])
 
   return (
     <div className="space-y-6">
@@ -289,6 +391,43 @@ function NewAssetPage() {
                 )}
               </Field>
 
+              {/* Asset Type Selection */}
+              <Field>
+                <FieldLabel htmlFor="assetType">
+                  Tipo de Instrumento *
+                </FieldLabel>
+                <Select
+                  value={
+                    formData.assetTypeId ? String(formData.assetTypeId) : ''
+                  }
+                  onValueChange={(value) => {
+                    handleAssetTypeChange(value ? Number(value) : null)
+                  }}
+                  disabled={createMutation.isPending || assetTypesLoading}
+                >
+                  <SelectTrigger id="assetType">
+                    <span>
+                      {assetTypesLoading
+                        ? 'Carregando...'
+                        : selectedAssetType?.name || 'Selecione o tipo...'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assetTypesData?.data?.map((type) => (
+                      <SelectItem key={type.id} value={String(type.id)}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldDescription>
+                  O tipo define as especificações técnicas do instrumento.
+                </FieldDescription>
+                {errors.assetTypeId && (
+                  <FieldError>{errors.assetTypeId}</FieldError>
+                )}
+              </Field>
+
               {/* Name */}
               <Field>
                 <FieldLabel htmlFor="name">Nome do Ativo *</FieldLabel>
@@ -296,7 +435,7 @@ function NewAssetPage() {
                   id="name"
                   value={formData.name}
                   onChange={(e) => updateField('name', e.target.value)}
-                  placeholder="Ex: Balanca Analítica"
+                  placeholder="Ex: Balança Analítica"
                   disabled={createMutation.isPending}
                 />
                 {errors.name && <FieldError>{errors.name}</FieldError>}
@@ -347,7 +486,7 @@ function NewAssetPage() {
               {/* Serial Number */}
               <Field>
                 <FieldLabel htmlFor="serialNumber">
-                  Número de Serie *
+                  Número de Série *
                 </FieldLabel>
                 <Input
                   id="serialNumber"
@@ -383,6 +522,17 @@ function NewAssetPage() {
                   </SelectContent>
                 </Select>
               </Field>
+
+              {/* Dynamic Specifications Form */}
+              {selectedAssetType && selectedAssetType.definition.length > 0 && (
+                <DynamicSpecsForm
+                  definition={selectedAssetType.definition}
+                  value={formData.specifications}
+                  onChange={(specs) => updateField('specifications', specs)}
+                  disabled={createMutation.isPending}
+                  errors={specErrors}
+                />
+              )}
 
               {/* Calibration Dates */}
               <div className="grid gap-4 sm:grid-cols-2">

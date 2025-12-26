@@ -5,6 +5,7 @@ import { customersRouter } from "./routes/customers";
 import { invitationsRouter } from "./routes/invitations";
 import { portalRouter } from "./routes/portal";
 import { assetsRouter } from "./routes/assets";
+import { assetTypesRouter } from "./routes/asset-types";
 
 const app = new Hono();
 
@@ -91,7 +92,8 @@ const routes = app
   .route("/api/customers", customersRouter)
   .route("/api/invitations", invitationsRouter)
   .route("/api/portal", portalRouter)
-  .route("/api/assets", assetsRouter);
+  .route("/api/assets", assetsRouter)
+  .route("/api/asset-types", assetTypesRouter);
 
 export type AppType = typeof routes;
 export default {

@@ -55,7 +55,7 @@ import {
 
 export const Route = createFileRoute('/dashboard/assets/')({
   head: () => ({
-    meta: [{ title: 'Ativos | CalibraFacil' }],
+    meta: [{ title: 'Ativos | CalibraFácil' }],
   }),
   component: AssetsPage,
 })
@@ -319,6 +319,7 @@ function AssetsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Tag</TableHead>
+                      <TableHead>Tipo</TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Fabricante</TableHead>
                       <TableHead>N. Serie</TableHead>
@@ -341,6 +342,11 @@ function AssetsPage() {
                       >
                         <TableCell className="font-mono font-medium">
                           {asset.tag}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {asset.assetTypeName}
+                          </Badge>
                         </TableCell>
                         <TableCell>{asset.name}</TableCell>
                         <TableCell>{asset.manufacturer || '-'}</TableCell>
@@ -426,6 +432,7 @@ function AssetsTableSkeleton() {
           <TableHeader>
             <TableRow>
               <TableHead>Tag</TableHead>
+              <TableHead>Tipo</TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Fabricante</TableHead>
               <TableHead>N. Serie</TableHead>
@@ -439,6 +446,9 @@ function AssetsTableSkeleton() {
               <TableRow key={i}>
                 <TableCell>
                   <Skeleton className="h-4 w-16" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-5 w-24" />
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-4 w-32" />
