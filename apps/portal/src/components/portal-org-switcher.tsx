@@ -51,11 +51,14 @@ export function PortalOrgSwitcher() {
 
   const handleSetActiveOrganization = async (orgId: string) => {
     await organization.setActive({ organizationId: orgId });
+    // Store preference for portal to avoid conflicts with dashboard
+    localStorage.setItem("portal-active-org", orgId);
   };
 
   const handleGoToLab = (orgId: string) => {
-    // Set the org as active and redirect to web app
+    // Set the org as active, store preference for dashboard, and redirect
     organization.setActive({ organizationId: orgId }).then(() => {
+      localStorage.setItem("dashboard-active-org", orgId);
       window.location.href = `${getWebAppUrl()}/dashboard`;
     });
   };

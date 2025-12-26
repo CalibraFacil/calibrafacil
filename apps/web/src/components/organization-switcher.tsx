@@ -104,6 +104,8 @@ export function OrganizationSwitcher() {
 
   const handleSetActiveOrganization = async (orgId: string) => {
     await organization.setActive({ organizationId: orgId })
+    // Store preference for dashboard to avoid conflicts with portal
+    localStorage.setItem('dashboard-active-org', orgId)
   }
 
   if (isLoadingOrgs) {

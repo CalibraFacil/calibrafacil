@@ -1,5 +1,5 @@
 import { Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import {
@@ -19,6 +19,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+
+const PORTAL_ORG_KEY = "portal-active-org";
 
 export const Route = createFileRoute("/portal")({
   component: PortalLayout,
@@ -52,6 +54,10 @@ function PortalLayout() {
   const { data: activeOrg, isPending: activeOrgLoading } =
     useActiveOrganization();
 
+  // Track if we've already done initial context setup
+  const hasSetupContext = useRef(false);
+  const [isSettingUp, setIsSettingUp] = useState(true);
+
   // Fetch CLIENT organizations where user is a client_user (not owner/admin)
   const { data: clientOrganizations = [], isPending: orgsLoading } = useQuery({
     queryKey: ["portal-organizations"],
@@ -79,26 +85,54 @@ function PortalLayout() {
     }
   }, [sessionPending, session, navigate]);
 
-  // Context Enforcer: Auto-switch to a CLIENT org where user is client_user
+  // Context Setup: Only runs once on initial load
+  // Uses localStorage to remember preferred org, avoiding conflicts with dashboard
   useEffect(() => {
-    async function enforceClientContext() {
-      if (orgsLoading || activeOrgLoading || !hasClientAccess) return;
-
-      // Check if active org is in our allowed CLIENT orgs list
-      const isActiveOrgAllowed =
-        activeOrg && clientOrganizations.some((org) => org.id === activeOrg.id);
-
-      if (!isActiveOrgAllowed && clientOrganizations[0]) {
-        // Auto-switch to first allowed CLIENT organization
-        await organization.setActive({
-          organizationId: clientOrganizations[0].id,
-        });
+    async function setupPortalContext() {
+      if (
+        orgsLoading ||
+        activeOrgLoading ||
+        !session ||
+        hasSetupContext.current
+      )
+        return;
+      if (!hasClientAccess) {
+        setIsSettingUp(false);
+        return;
       }
+
+      hasSetupContext.current = true;
+
+      // Get stored preference for portal
+      const storedOrgId = localStorage.getItem(PORTAL_ORG_KEY);
+
+      // Check if stored org is a valid CLIENT org
+      const storedOrg = storedOrgId
+        ? clientOrganizations.find((org) => org.id === storedOrgId)
+        : null;
+
+      // Determine target org: stored preference > current if CLIENT > first CLIENT
+      let targetOrg = storedOrg;
+      if (!targetOrg) {
+        targetOrg = clientOrganizations.find((org) => org.id === activeOrg?.id);
+      }
+      if (!targetOrg) {
+        targetOrg = clientOrganizations[0];
+      }
+
+      // Only switch if needed
+      if (targetOrg && activeOrg?.id !== targetOrg.id) {
+        await organization.setActive({ organizationId: targetOrg.id });
+        localStorage.setItem(PORTAL_ORG_KEY, targetOrg.id);
+      } else if (targetOrg) {
+        // Store current selection
+        localStorage.setItem(PORTAL_ORG_KEY, targetOrg.id);
+      }
+
+      setIsSettingUp(false);
     }
 
-    if (session) {
-      enforceClientContext();
-    }
+    setupPortalContext();
   }, [
     session,
     orgsLoading,
@@ -108,18 +142,13 @@ function PortalLayout() {
     clientOrganizations,
   ]);
 
-  // Check if we're in the middle of switching contexts
-  const isActiveOrgAllowed =
-    activeOrg && clientOrganizations.some((org) => org.id === activeOrg.id);
-  const isSwitchingContext = hasClientAccess && !isActiveOrgAllowed;
-
   // Show loading state
   if (
     sessionPending ||
     !session ||
     orgsLoading ||
     activeOrgLoading ||
-    isSwitchingContext
+    isSettingUp
   ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
