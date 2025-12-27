@@ -50,6 +50,13 @@
       "when": 1766758277247,
       "tag": "0006_motionless_callisto",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1766855780474,
+      "tag": "0007_misty_lightspeed",
+      "breakpoints": true
     }
   ]
 }

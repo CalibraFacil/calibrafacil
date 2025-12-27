@@ -82,9 +82,7 @@ describe("Data Flattening", () => {
       const result = flattenForExecution(data, { maxDepth: 3 });
 
       // Should stop at depth 3
-      expect(
-        Object.keys(result).some((k) => k.includes("level6"))
-      ).toBe(false);
+      expect(Object.keys(result).some((k) => k.includes("level6"))).toBe(false);
     });
 
     it("should apply custom include keys", () => {
@@ -393,6 +391,76 @@ describe("Data Flattening", () => {
       const result = flattenForExecution(data, { normalizeUnits: false });
 
       expect(result["mass"]).toBe("500 g");
+    });
+  });
+
+  describe("preserveArrays option", () => {
+    it("should preserve numeric arrays when enabled", () => {
+      const data = {
+        readings: [10, 10.1, 9.9, 10.2],
+      };
+
+      const result = flattenForExecution(data, { preserveArrays: true });
+
+      // Array should be preserved
+      expect(result["readings"]).toEqual([10, 10.1, 9.9, 10.2]);
+      // Count should still be present
+      expect(result["readings_count"]).toBe(4);
+      // Individual indices should also be present (default includeArrayIndices: true)
+      expect(result["readings_0"]).toBe(10);
+      expect(result["readings_1"]).toBe(10.1);
+    });
+
+    it("should not preserve arrays by default (backward compatible)", () => {
+      const data = {
+        readings: [10, 10.1, 9.9],
+      };
+
+      const result = flattenForExecution(data);
+
+      // Array should not be preserved (undefined key)
+      expect(result["readings"]).toBeUndefined();
+      // Individual indices should be present
+      expect(result["readings_0"]).toBe(10);
+      expect(result["readings_1"]).toBe(10.1);
+      expect(result["readings_count"]).toBe(3);
+    });
+
+    it("should work with table-like nested structures", () => {
+      // Simulates a table input with rows
+      const data = {
+        repeatability_test: [
+          { reading: 10.0 },
+          { reading: 10.1 },
+          { reading: 9.9 },
+        ],
+      };
+
+      const result = flattenForExecution(data, { preserveArrays: true });
+
+      // Nested array of objects should be flattened, not preserved as array
+      expect(result["repeatability_test_0_reading"]).toBe(10.0);
+      expect(result["repeatability_test_1_reading"]).toBe(10.1);
+      expect(result["repeatability_test_2_reading"]).toBe(9.9);
+    });
+
+    it("should preserve arrays without indices when includeArrayIndices is false", () => {
+      const data = {
+        readings: [10, 20, 30],
+      };
+
+      const result = flattenForExecution(data, {
+        preserveArrays: true,
+        includeArrayIndices: false,
+      });
+
+      // Array should be preserved
+      expect(result["readings"]).toEqual([10, 20, 30]);
+      // Individual indices should NOT be present
+      expect(result["readings_0"]).toBeUndefined();
+      expect(result["readings_1"]).toBeUndefined();
+      // Count should still be present
+      expect(result["readings_count"]).toBe(3);
     });
   });
 });

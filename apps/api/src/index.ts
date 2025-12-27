@@ -6,6 +6,7 @@ import { invitationsRouter } from "./routes/invitations";
 import { portalRouter } from "./routes/portal";
 import { assetsRouter } from "./routes/assets";
 import { assetTypesRouter } from "./routes/asset-types";
+import { methodsRouter } from "./routes/methods";
 
 const app = new Hono();
 
@@ -107,7 +108,8 @@ const routes = app
   .route("/api/invitations", invitationsRouter)
   .route("/api/portal", portalRouter)
   .route("/api/assets", assetsRouter)
-  .route("/api/asset-types", assetTypesRouter);
+  .route("/api/asset-types", assetTypesRouter)
+  .route("/api/methods", methodsRouter);
 
 export type AppType = typeof routes;
 export default {

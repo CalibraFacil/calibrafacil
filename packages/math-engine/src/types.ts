@@ -49,7 +49,7 @@ export const TypeBResultSchema = z.object({
       name: z.string(),
       standardUncertainty: z.number(),
       degreesOfFreedom: z.number(),
-    })
+    }),
   ),
   totalTypeB: z.number(),
 });
@@ -83,7 +83,13 @@ export type CombinedUncertaintyResult = z.infer<
 // ============================================
 export const FormulaContextSchema = z.record(
   z.string(),
-  z.union([z.number(), z.string(), z.boolean(), z.null()])
+  z.union([
+    z.number(),
+    z.string(),
+    z.boolean(),
+    z.null(),
+    z.array(z.number()), // Allow numeric arrays for vector operations (mean, std, etc.)
+  ]),
 );
 export type FormulaContext = z.infer<typeof FormulaContextSchema>;
 
@@ -93,7 +99,9 @@ export const FormulaExecutionInputSchema = z.object({
   precision: z.number().int().min(1).max(128).optional().default(32),
 });
 export type FormulaExecutionInput = z.input<typeof FormulaExecutionInputSchema>;
-export type FormulaExecutionInputParsed = z.output<typeof FormulaExecutionInputSchema>;
+export type FormulaExecutionInputParsed = z.output<
+  typeof FormulaExecutionInputSchema
+>;
 
 export const FormulaExecutionResultSchema = z.object({
   result: z.union([z.number(), z.string()]),
