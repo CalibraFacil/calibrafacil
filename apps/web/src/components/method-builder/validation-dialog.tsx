@@ -134,7 +134,7 @@ export function ValidationDialog({
 
           {availableVariables.length > 0 && (
             <Field>
-              <FieldLabel>Variaveis Disponiveis</FieldLabel>
+              <FieldLabel>Variáveis Disponíveis</FieldLabel>
               <div className="flex flex-wrap gap-1">
                 {availableVariables.map((v) => (
                   <Button
