@@ -168,7 +168,7 @@ function MethodsListPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })
-      toast.success('Nova versao criada')
+      toast.success('Nova versão criada')
       navigate({
         to: '/dashboard/methods/$id/edit',
         params: { id: String(data.id) },
