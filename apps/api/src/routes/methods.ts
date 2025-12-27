@@ -274,6 +274,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         // Check for name conflict if name is being changed
+        // Use version 1 for consistency with creation logic (base method check)
         if (input.name && input.name !== existing.name) {
           const [duplicate] = await db
             .select()
@@ -282,7 +283,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               and(
                 eq(calibrationMethod.organizationId, member.organizationId),
                 eq(calibrationMethod.name, input.name),
-                eq(calibrationMethod.version, existing.version),
+                eq(calibrationMethod.version, 1),
                 ne(calibrationMethod.id, id),
               ),
             )

@@ -90,10 +90,15 @@ export function ValidationDialog({
   }
 
   const insertVariable = (varKey: string) => {
-    setValidation((v) => ({
-      ...v,
-      expression: v.expression + varKey,
-    }))
+    setValidation((v) => {
+      const expr = v.expression
+      // Add a space before the variable if expression doesn't end with space, operator, or opening paren
+      const needsSpace = expr.length > 0 && !/[\s+\-*/%^(,<>=!&|]$/.test(expr)
+      return {
+        ...v,
+        expression: expr + (needsSpace ? ' ' : '') + varKey,
+      }
+    })
   }
 
   return (

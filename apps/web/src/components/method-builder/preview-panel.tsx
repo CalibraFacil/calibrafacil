@@ -63,8 +63,18 @@ export function PreviewPanel({
         // Extract each column as an array
         for (const col of field.columns) {
           const columnValues = value
-            .map((row: Record<string, unknown>) => row[col.key])
-            .filter((v): v is number => typeof v === 'number')
+            .map((row: Record<string, unknown>) => {
+              const cellValue = row[col.key]
+              // Handle numbers directly
+              if (typeof cellValue === 'number') return cellValue
+              // Parse numeric strings
+              if (typeof cellValue === 'string' && cellValue.trim() !== '') {
+                const parsed = parseFloat(cellValue)
+                return isNaN(parsed) ? null : parsed
+              }
+              return null
+            })
+            .filter((v): v is number => v !== null)
           if (columnValues.length > 0) {
             processedData[`${field.key}_${col.key}`] = columnValues
           }
@@ -212,7 +222,12 @@ export function PreviewPanel({
               value={(value as number) ?? ''}
               onChange={(e) => {
                 const val = e.target.value
-                updateField(field.key, val === '' ? '' : parseFloat(val))
+                if (val === '') {
+                  updateField(field.key, '')
+                } else {
+                  const parsed = parseFloat(val)
+                  updateField(field.key, isNaN(parsed) ? '' : parsed)
+                }
               }}
               className={field.unit ? 'rounded-r-none' : ''}
             />

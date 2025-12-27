@@ -97,7 +97,7 @@ export function TableInputRenderer({
                       <Input
                         type={col.type}
                         step={col.type === 'number' ? 'any' : undefined}
-                        value={(row[col.key] as string | number) ?? ''}
+                        value={row[col.key] != null ? String(row[col.key]) : ''}
                         onChange={(e) => {
                           const val = e.target.value
                           updateCell(
@@ -105,7 +105,7 @@ export function TableInputRenderer({
                             col.key,
                             col.type === 'number'
                               ? val === ''
-                                ? ''
+                                ? null
                                 : parseFloat(val)
                               : val,
                           )

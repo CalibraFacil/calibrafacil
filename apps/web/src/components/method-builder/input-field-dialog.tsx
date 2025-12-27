@@ -47,6 +47,81 @@ function slugify(text: string): string {
     .replace(/_+/g, '_') // Collapse multiple underscores
 }
 
+// Reserved words from math-engine that cannot be used as variable keys
+const MATH_ENGINE_RESERVED_WORDS = new Set([
+  // Math.js built-in functions
+  'abs',
+  'sqrt',
+  'pow',
+  'exp',
+  'log',
+  'log10',
+  'log2',
+  'sin',
+  'cos',
+  'tan',
+  'asin',
+  'acos',
+  'atan',
+  'atan2',
+  'sinh',
+  'cosh',
+  'tanh',
+  'asinh',
+  'acosh',
+  'atanh',
+  'ceil',
+  'floor',
+  'round',
+  'trunc',
+  'sign',
+  'min',
+  'max',
+  'mean',
+  'median',
+  'std',
+  'variance',
+  'sum',
+  'prod',
+  'gcd',
+  'lcm',
+  'mod',
+  'factorial',
+  // Constants
+  'pi',
+  'e',
+  'i',
+  'Infinity',
+  'NaN',
+  'true',
+  'false',
+  'null',
+  // Math-engine specific context variables
+  'u_typeA',
+  'u_typeB',
+  'u_combined',
+  'U_expanded',
+  'k',
+  'mean',
+  'std_dev',
+  'n',
+  // Blocked functions (security)
+  'import',
+  'createUnit',
+  'reviver',
+  'evaluate',
+  'parse',
+  'simplify',
+  'derivative',
+  'resolve',
+  'compile',
+  'chain',
+])
+
+function isReservedWord(key: string): boolean {
+  return MATH_ENGINE_RESERVED_WORDS.has(key.toLowerCase())
+}
+
 const defaultColumn: MethodTableColumn = {
   key: 'value',
   label: 'Valor',
@@ -75,6 +150,10 @@ export function InputFieldDialog({
       if (initialData) {
         setField(initialData)
         setAutoKey(false)
+        // When editing, treat all existing column keys as manually set
+        if (initialData.columns) {
+          setManualColumnKeys(new Set(initialData.columns.map((_, i) => i)))
+        }
       } else {
         setField({
           key: '',
@@ -83,6 +162,7 @@ export function InputFieldDialog({
           required: false,
         })
         setAutoKey(true)
+        setManualColumnKeys(new Set())
       }
       setErrors({})
     }
@@ -121,10 +201,30 @@ export function InputFieldDialog({
     setField((f) => ({ ...f, columns: newColumns }))
   }
 
+  // Track which column keys have been manually edited
+  const [manualColumnKeys, setManualColumnKeys] = useState<Set<number>>(
+    new Set(),
+  )
+
   const updateColumn = (index: number, updates: Partial<MethodTableColumn>) => {
     const newColumns = [...(field.columns || [])]
     newColumns[index] = { ...newColumns[index], ...updates }
     setField((f) => ({ ...f, columns: newColumns }))
+  }
+
+  const updateColumnLabel = (index: number, label: string) => {
+    const updates: Partial<MethodTableColumn> = { label }
+    // Only auto-generate key if user hasn't manually edited it
+    if (!manualColumnKeys.has(index)) {
+      updates.key = slugify(label)
+    }
+    updateColumn(index, updates)
+  }
+
+  const updateColumnKey = (index: number, key: string) => {
+    // Mark this column's key as manually edited
+    setManualColumnKeys((prev) => new Set(prev).add(index))
+    updateColumn(index, { key })
   }
 
   const removeColumn = (index: number) => {
@@ -162,6 +262,9 @@ export function InputFieldDialog({
         'Chave deve começar com letra e conter apenas letras, números e underscore'
     } else if (existingKeys.includes(field.key)) {
       newErrors.key = 'Esta chave já está em uso'
+    } else if (isReservedWord(field.key)) {
+      newErrors.key =
+        'Esta chave é uma palavra reservada do motor de cálculo (ex: abs, sqrt, mean, etc.)'
     }
 
     if (field.type === 'select') {
@@ -348,10 +451,7 @@ export function InputFieldDialog({
                       <Input
                         value={column.label}
                         onChange={(e) =>
-                          updateColumn(index, {
-                            label: e.target.value,
-                            key: slugify(e.target.value),
-                          })
+                          updateColumnLabel(index, e.target.value)
                         }
                         placeholder="Rótulo"
                       />
@@ -359,7 +459,7 @@ export function InputFieldDialog({
                         <Input
                           value={column.key}
                           onChange={(e) =>
-                            updateColumn(index, { key: e.target.value })
+                            updateColumnKey(index, e.target.value)
                           }
                           placeholder="Chave"
                           className="flex-1"

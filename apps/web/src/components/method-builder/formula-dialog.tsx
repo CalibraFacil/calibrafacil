@@ -109,10 +109,15 @@ export function FormulaDialog({
   }
 
   const insertVariable = (varKey: string) => {
-    setFormula((f) => ({
-      ...f,
-      expression: f.expression + varKey,
-    }))
+    setFormula((f) => {
+      const expr = f.expression
+      // Add a space before the variable if expression doesn't end with space, operator, or opening paren
+      const needsSpace = expr.length > 0 && !/[\s+\-*/%^(,]$/.test(expr)
+      return {
+        ...f,
+        expression: expr + (needsSpace ? ' ' : '') + varKey,
+      }
+    })
   }
 
   return (
