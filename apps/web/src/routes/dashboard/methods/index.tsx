@@ -427,7 +427,7 @@ function MethodsListPage() {
                       onClick={() => setPage(page + 1)}
                       disabled={page >= data.pagination.totalPages}
                     >
-                      Proximo
+                      Próximo
                     </Button>
                   </div>
                 </div>
