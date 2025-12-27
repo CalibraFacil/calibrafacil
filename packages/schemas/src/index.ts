@@ -291,7 +291,7 @@ export const MethodInputFieldSchema = z
   .object({
     key: z
       .string()
-      .min(1, "Chave e obrigatória")
+      .min(1, "Chave é obrigatória")
       .regex(
         /^[a-zA-Z][a-zA-Z0-9_]*$/,
         "Chave deve comecar com letra e conter apenas letras, numeros e underscore",
