@@ -377,7 +377,7 @@ function MethodsListPage() {
                                     icon={Copy01Icon}
                                     className="mr-2 h-4 w-4"
                                   />
-                                  Nova Versao
+                                  Nova Versão
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() =>
