@@ -443,14 +443,15 @@ export function withRole(allowedRoles: RoleName[]) {
 
 /**
  * Create a protected LAB-only route handler with permission check.
- * Combines: requireAuth + requireOrganization + requireOrgType("LAB") + requirePermission
+ * Uses lab auth only (lab_session cookie) to avoid conflicts with portal sessions.
+ * Combines: requireLabAuth + requireOrganization + requireOrgType("LAB") + requirePermission
  *
  * @example
  * app.post("/customers", ...withLabPermission({ client: ["create"] }), handler);
  */
 export function withLabPermission(permissions: PermissionCheck) {
   return [
-    ...requireProtected,
+    ...requireLabProtected,
     requireOrgType("LAB"),
     requirePermission(permissions),
   ] as const;
