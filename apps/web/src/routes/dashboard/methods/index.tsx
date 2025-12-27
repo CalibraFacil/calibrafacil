@@ -301,7 +301,7 @@ function MethodsListPage() {
                   <TableRow>
                     <TableHead>Nome</TableHead>
                     <TableHead>Tipo de Instrumento</TableHead>
-                    <TableHead>Versao</TableHead>
+                    <TableHead>Versão</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Campos</TableHead>
                     <TableHead className="w-12"></TableHead>
