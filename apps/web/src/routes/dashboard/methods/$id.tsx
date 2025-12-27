@@ -97,7 +97,7 @@ function MethodDetailPage() {
     return (
       <Card>
         <CardContent className="pt-6">
-          <p>Método nao encontrado</p>
+          <p>Método não encontrado</p>
         </CardContent>
       </Card>
     )
