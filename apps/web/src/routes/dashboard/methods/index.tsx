@@ -161,7 +161,7 @@ function MethodsListPage() {
       if (!res.ok) {
         const error = await res.json()
         throw new Error(
-          (error as { error?: string }).error || 'Erro ao criar nova versao',
+          (error as { error?: string }).error || 'Erro ao criar nova versão',
         )
       }
       return res.json() as Promise<{ id: number }>
