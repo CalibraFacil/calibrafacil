@@ -1,7 +1,4 @@
-import {
-  organizationClient,
-  multiSessionClient,
-} from "better-auth/client/plugins";
+import { organizationClient } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ac, roles } from "./access";
 
@@ -17,32 +14,53 @@ function getApiBaseURL(): string {
   return "https://localhost:3000";
 }
 
-export const authClient = createBetterAuthClient({
+// Shared organization plugin config
+const organizationPluginConfig = organizationClient({
+  ac,
+  roles,
+  schema: {
+    organization: {
+      additionalFields: {
+        type: {
+          type: "string",
+          defaultValue: "LAB",
+          input: true, // Allow passing type when creating organizations
+        },
+      },
+    },
+  },
+});
+
+/**
+ * Lab Auth Client - for the main dashboard application (apps/web)
+ * Connects to: /api/auth/lab/*
+ */
+export const labAuthClient = createBetterAuthClient({
   baseURL: getApiBaseURL(),
+  basePath: "/api/auth/lab",
   fetchOptions: {
     credentials: "include",
   },
-  plugins: [
-    organizationClient({
-      ac,
-      roles,
-      schema: {
-        organization: {
-          additionalFields: {
-            type: {
-              type: "string",
-              defaultValue: "LAB",
-              input: true, // Allow passing type when creating organizations
-            },
-          },
-        },
-      },
-    }),
-    // Multi-session support for dashboard + portal simultaneous logins
-    multiSessionClient(),
-  ],
+  plugins: [organizationPluginConfig],
 });
 
+/**
+ * Portal Auth Client - for the client portal application (apps/portal)
+ * Connects to: /api/auth/portal/*
+ */
+export const portalAuthClient = createBetterAuthClient({
+  baseURL: getApiBaseURL(),
+  basePath: "/api/auth/portal",
+  fetchOptions: {
+    credentials: "include",
+  },
+  plugins: [organizationPluginConfig],
+});
+
+// Keep the original 'authClient' export for backwards compatibility (uses lab auth)
+export const authClient = labAuthClient;
+
+// Lab auth exports (for apps/web)
 export const {
   signIn,
   signUp,
@@ -59,9 +77,17 @@ export const {
   revokeOtherSessions,
   revokeSessions,
   deleteUser,
-  // Multi-session methods
-  multiSession,
-} = authClient;
+} = labAuthClient;
+
+// Portal-specific exports (for apps/portal)
+export const portalSignIn = portalAuthClient.signIn;
+export const portalSignUp = portalAuthClient.signUp;
+export const portalSignOut = portalAuthClient.signOut;
+export const usePortalSession = portalAuthClient.useSession;
+export const usePortalListOrganizations = portalAuthClient.useListOrganizations;
+export const usePortalActiveOrganization =
+  portalAuthClient.useActiveOrganization;
+export const portalOrganization = portalAuthClient.organization;
 
 // =============================================================================
 // PERMISSION CHECKING UTILITIES

@@ -3,9 +3,10 @@ import { useEffect, useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import {
-  organization,
-  useActiveOrganization,
-  useSession,
+  portalOrganization,
+  usePortalActiveOrganization,
+  usePortalSession,
+  portalSignOut,
 } from "@calibra-facil/auth/client";
 import { PortalSidebar } from "@/components/portal-sidebar";
 import { PortalHeader } from "@/components/portal-header";
@@ -50,9 +51,9 @@ type PortalOrganization = {
 
 function PortalLayout() {
   const navigate = useNavigate();
-  const { data: session, isPending: sessionPending } = useSession();
+  const { data: session, isPending: sessionPending } = usePortalSession();
   const { data: activeOrg, isPending: activeOrgLoading } =
-    useActiveOrganization();
+    usePortalActiveOrganization();
 
   // Track if we've already done initial context setup
   const hasSetupContext = useRef(false);
@@ -122,7 +123,7 @@ function PortalLayout() {
 
       // Only switch if needed
       if (targetOrg && activeOrg?.id !== targetOrg.id) {
-        await organization.setActive({ organizationId: targetOrg.id });
+        await portalOrganization.setActive({ organizationId: targetOrg.id });
         localStorage.setItem(PORTAL_ORG_KEY, targetOrg.id);
       } else if (targetOrg) {
         // Store current selection
@@ -180,8 +181,7 @@ function PortalLayout() {
             <Button
               variant="outline"
               onClick={async () => {
-                const { signOut } = await import("@calibra-facil/auth/client");
-                await signOut();
+                await portalSignOut();
                 navigate({ to: "/sign-in" });
               }}
             >

@@ -1,6 +1,12 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import { auth } from "@calibra-facil/auth";
+import { labAuth, portalAuth } from "@calibra-facil/auth";
+import { db } from "@calibra-facil/db";
+import {
+  member as memberTable,
+  organization as organizationTable,
+} from "@calibra-facil/db/schema";
+import { eq, and } from "drizzle-orm";
 import type {
   PermissionCheck,
   CalibrationState,
@@ -61,15 +67,16 @@ export interface AuthVariables {
 // =============================================================================
 
 /**
- * Middleware to require authentication.
+ * Middleware to require authentication using Lab auth.
+ * For use on dashboard/lab routes.
  * Sets `session` in the context.
  *
  * @example
- * app.use("*", requireAuth);
+ * app.use("*", requireLabAuth);
  */
-export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
+export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
-    const session = await auth.api.getSession({
+    const session = await labAuth.api.getSession({
       headers: c.req.raw.headers,
     });
 
@@ -80,7 +87,63 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
     c.set("session", session as SessionData);
 
     await next();
-  }
+  },
+);
+
+/**
+ * Middleware to require authentication using Portal auth.
+ * For use on client portal routes.
+ * Sets `session` in the context.
+ *
+ * @example
+ * app.use("*", requirePortalAuth);
+ */
+export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
+  async (c, next) => {
+    const session = await portalAuth.api.getSession({
+      headers: c.req.raw.headers,
+    });
+
+    if (!session) {
+      throw new HTTPException(401, { message: "Unauthorized" });
+    }
+
+    c.set("session", session as SessionData);
+
+    await next();
+  },
+);
+
+/**
+ * Middleware to require authentication (tries both auth instances).
+ * For use on routes that should accept both lab and portal users.
+ * Sets `session` in the context.
+ *
+ * @example
+ * app.use("*", requireAuth);
+ */
+export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
+  async (c, next) => {
+    // Try portal auth first (portal_session cookie)
+    let session = await portalAuth.api.getSession({
+      headers: c.req.raw.headers,
+    });
+
+    // If no portal session, try lab auth (lab_session cookie)
+    if (!session) {
+      session = await labAuth.api.getSession({
+        headers: c.req.raw.headers,
+      });
+    }
+
+    if (!session) {
+      throw new HTTPException(401, { message: "Unauthorized" });
+    }
+
+    c.set("session", session as SessionData);
+
+    await next();
+  },
 );
 
 // =============================================================================
@@ -98,59 +161,71 @@ export type OrgType = "LAB" | "CLIENT";
 
 /**
  * Middleware to require an active organization.
- * Must be used after `requireAuth`.
+ * Must be used after `requireAuth` (or requireLabAuth/requirePortalAuth).
  * Sets `member` in the context.
+ *
+ * Uses direct database query instead of auth API to avoid cookie conflicts
+ * when both lab and portal sessions exist.
  *
  * @example
  * app.use("*", requireAuth);
  * app.use("*", requireOrganization);
  */
-export const requireOrganization = createMiddleware<{ Variables: AuthVariables }>(
-  async (c, next) => {
-    const session = c.get("session");
+export const requireOrganization = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const session = c.get("session");
 
-    if (!session?.session?.activeOrganizationId) {
-      throw new HTTPException(400, {
-        message: "No active organization. Please select an organization.",
-      });
-    }
-
-    // Get member info for the active organization
-    const fullOrganization = await auth.api.getFullOrganization({
-      headers: c.req.raw.headers,
+  if (!session?.session?.activeOrganizationId) {
+    throw new HTTPException(400, {
+      message: "No active organization. Please select an organization.",
     });
-
-    if (!fullOrganization?.members) {
-      throw new HTTPException(403, {
-        message: "Not a member of this organization",
-      });
-    }
-
-    // Find the current user's membership
-    const currentMember = fullOrganization.members.find(
-      (m: { userId: string }) => m.userId === session.user.id
-    );
-
-    if (!currentMember) {
-      throw new HTTPException(403, {
-        message: "Not a member of this organization",
-      });
-    }
-
-    // Extract organization type (direct column, not in metadata)
-    const orgType = (fullOrganization.type as OrgType) ?? "LAB";
-
-    c.set("member", {
-      id: currentMember.id,
-      role: currentMember.role as RoleName,
-      organizationId: session.session.activeOrganizationId,
-      organizationType: orgType,
-      userId: session.user.id,
-    });
-
-    await next();
   }
-);
+
+  const activeOrgId = session.session.activeOrganizationId;
+  const userId = session.user.id;
+
+  // Query the database directly for member and organization info
+  // This avoids issues with multiple auth cookies
+  const result = await db
+    .select({
+      memberId: memberTable.id,
+      memberRole: memberTable.role,
+      orgType: organizationTable.type,
+    })
+    .from(memberTable)
+    .innerJoin(
+      organizationTable,
+      eq(memberTable.organizationId, organizationTable.id),
+    )
+    .where(
+      and(
+        eq(memberTable.userId, userId),
+        eq(memberTable.organizationId, activeOrgId),
+      ),
+    )
+    .limit(1);
+
+  const memberInfo = result[0];
+
+  if (!memberInfo) {
+    throw new HTTPException(403, {
+      message: "Not a member of this organization",
+    });
+  }
+
+  const orgType = (memberInfo.orgType as OrgType) ?? "LAB";
+
+  c.set("member", {
+    id: memberInfo.memberId,
+    role: memberInfo.memberRole as RoleName,
+    organizationId: activeOrgId,
+    organizationType: orgType,
+    userId: userId,
+  });
+
+  await next();
+});
 
 // =============================================================================
 // PERMISSION MIDDLEWARE
@@ -171,10 +246,19 @@ export const requireOrganization = createMiddleware<{ Variables: AuthVariables }
  */
 export function requirePermission(permissions: PermissionCheck) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
-    const result = await auth.api.hasPermission({
+    // Try lab auth first
+    let result = await labAuth.api.hasPermission({
       headers: c.req.raw.headers,
       body: { permission: permissions },
     });
+
+    // If no result from lab, try portal
+    if (!result?.success) {
+      result = await portalAuth.api.hasPermission({
+        headers: c.req.raw.headers,
+        body: { permission: permissions },
+      });
+    }
 
     if (!result?.success) {
       throw new HTTPException(403, {
@@ -262,7 +346,7 @@ export function requireOrgType(allowedType: OrgType) {
  * Should fetch the calibration and return its current state.
  */
 export type CalibrationStateGetter<T extends { Variables: AuthVariables }> = (
-  c: Parameters<ReturnType<typeof createMiddleware<T>>>[0]
+  c: Parameters<ReturnType<typeof createMiddleware<T>>>[0],
 ) => Promise<CalibrationState>;
 
 /**
@@ -286,10 +370,9 @@ export type CalibrationStateGetter<T extends { Variables: AuthVariables }> = (
  *   handler
  * );
  */
-export function requireCalibrationAction<T extends { Variables: AuthVariables }>(
-  action: CalibrationAction,
-  getState: CalibrationStateGetter<T>
-) {
+export function requireCalibrationAction<
+  T extends { Variables: AuthVariables },
+>(action: CalibrationAction, getState: CalibrationStateGetter<T>) {
   return createMiddleware<T>(async (c, next) => {
     const member = c.get("member") as MemberData;
     const state = await getState(c);
@@ -309,7 +392,7 @@ export function requireCalibrationAction<T extends { Variables: AuthVariables }>
 // =============================================================================
 
 /**
- * Combined middleware for protected routes.
+ * Combined middleware for protected routes (accepts both lab and portal auth).
  * Requires authentication and active organization.
  *
  * @example
@@ -317,6 +400,26 @@ export function requireCalibrationAction<T extends { Variables: AuthVariables }>
  * protectedRoutes.use("*", ...requireProtected);
  */
 export const requireProtected = [requireAuth, requireOrganization] as const;
+
+/**
+ * Combined middleware for LAB-protected routes.
+ * Only accepts lab_session cookies.
+ * Requires authentication and active organization.
+ */
+export const requireLabProtected = [
+  requireLabAuth,
+  requireOrganization,
+] as const;
+
+/**
+ * Combined middleware for Portal-protected routes.
+ * Only accepts portal_session cookies.
+ * Requires authentication and active organization.
+ */
+export const requirePortalProtected = [
+  requirePortalAuth,
+  requireOrganization,
+] as const;
 
 /**
  * Create a protected route handler with permission check.
@@ -346,5 +449,9 @@ export function withRole(allowedRoles: RoleName[]) {
  * app.post("/customers", ...withLabPermission({ client: ["create"] }), handler);
  */
 export function withLabPermission(permissions: PermissionCheck) {
-  return [...requireProtected, requireOrgType("LAB"), requirePermission(permissions)] as const;
+  return [
+    ...requireProtected,
+    requireOrgType("LAB"),
+    requirePermission(permissions),
+  ] as const;
 }

@@ -1,7 +1,7 @@
 import { Logout01Icon, UnfoldMoreIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import { signOut, useSession } from "@calibra-facil/auth/client";
+import { portalSignOut, usePortalSession } from "@calibra-facil/auth/client";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -23,7 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function PortalNavUser() {
   const { isMobile } = useSidebar();
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending } = usePortalSession();
 
   const getInitials = (name: string) =>
     name
@@ -35,7 +35,7 @@ export function PortalNavUser() {
       .toUpperCase();
 
   const handleSignOut = async () => {
-    await signOut({
+    await portalSignOut({
       fetchOptions: {
         onSuccess: () => {
           window.location.href = "/sign-in";

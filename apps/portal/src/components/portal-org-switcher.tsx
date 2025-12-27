@@ -4,9 +4,9 @@ import { Building02Icon, UnfoldMoreIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import {
-  organization,
-  useActiveOrganization,
-  useListOrganizations,
+  portalOrganization,
+  usePortalActiveOrganization,
+  usePortalListOrganizations,
 } from "@calibra-facil/auth/client";
 
 import {
@@ -36,8 +36,8 @@ function getWebAppUrl(): string {
 export function PortalOrgSwitcher() {
   const { isMobile } = useSidebar();
   const { data: allOrganizations, isPending: isLoadingOrgs } =
-    useListOrganizations();
-  const { data: activeOrg } = useActiveOrganization();
+    usePortalListOrganizations();
+  const { data: activeOrg } = usePortalActiveOrganization();
 
   // Separate organizations by type
   const { clientOrgs, labOrgs } = React.useMemo(() => {
@@ -50,14 +50,14 @@ export function PortalOrgSwitcher() {
   }, [allOrganizations]);
 
   const handleSetActiveOrganization = async (orgId: string) => {
-    await organization.setActive({ organizationId: orgId });
+    await portalOrganization.setActive({ organizationId: orgId });
     // Store preference for portal to avoid conflicts with dashboard
     localStorage.setItem("portal-active-org", orgId);
   };
 
   const handleGoToLab = (orgId: string) => {
     // Set the org as active, store preference for dashboard, and redirect
-    organization.setActive({ organizationId: orgId }).then(() => {
+    portalOrganization.setActive({ organizationId: orgId }).then(() => {
       localStorage.setItem("dashboard-active-org", orgId);
       window.location.href = `${getWebAppUrl()}/dashboard`;
     });
