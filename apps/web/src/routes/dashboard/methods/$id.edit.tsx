@@ -124,8 +124,8 @@ function EditMethodPage() {
     return (
       <div className="p-6">
         <p>
-          Este método esta publicado e nao pode ser editado diretamente. Crie
-          uma nova versao para fazer alteracoes.
+          Este método está publicado e não pode ser editado diretamente. Crie
+          uma nova versão para fazer alterações.
         </p>
         <Button
           variant="outline"
