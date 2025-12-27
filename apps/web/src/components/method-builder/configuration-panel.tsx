@@ -85,7 +85,7 @@ export function ConfigurationPanel({
     queryFn: async () => {
       const res = await api.api['asset-types'].$get({ query: {} })
       if (!res.ok) throw new Error('Falha ao carregar tipos')
-      return res.json() as Promise<{ data: Arrat<AssetType> }>
+      return res.json() as Promise<{ data: Array<AssetType> }>
     },
     staleTime: 60000,
   })
