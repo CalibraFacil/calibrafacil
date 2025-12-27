@@ -2,11 +2,15 @@ import { Hono } from "hono";
 import { db } from "@calibra-facil/db";
 import { member, organization } from "@calibra-facil/db/schema";
 import { eq, and } from "drizzle-orm";
-import { requireAuth, type AuthVariables } from "../middleware/permission";
+import {
+  requirePortalAuth,
+  type AuthVariables,
+} from "../middleware/permission";
 
 /**
  * Portal routes - endpoints specific to the client portal.
  * These routes handle client-facing functionality.
+ * Uses Portal auth (portal_session cookie) for authentication.
  */
 export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -19,7 +23,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   // This ensures lab admins (who create CLIENT orgs and become "owner")
   // don't see those orgs in the client portal.
   // =========================================================================
-  .get("/organizations", requireAuth, async (c) => {
+  .get("/organizations", requirePortalAuth, async (c) => {
     const session = c.get("session");
 
     try {
@@ -41,8 +45,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(member.userId, session.user.id),
             eq(organization.type, "CLIENT"),
-            eq(member.role, "client_user")
-          )
+            eq(member.role, "client_user"),
+          ),
         );
 
       return c.json(clientOrganizations);

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { authClient, useSession } from "@calibra-facil/auth/client";
+import { portalAuthClient, usePortalSession } from "@calibra-facil/auth/client";
 import { z } from "zod";
 import { toast } from "sonner";
 
@@ -38,7 +38,7 @@ type InvitationData = {
 function AcceptInvitePage() {
   const { token } = Route.useSearch();
   const navigate = useNavigate();
-  const { data: session, isPending: sessionLoading } = useSession();
+  const { data: session, isPending: sessionLoading } = usePortalSession();
 
   const [invitation, setInvitation] = useState<InvitationData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,8 @@ function AcceptInvitePage() {
 
   // Get API base URL
   const getApiBaseUrl = () => {
-    const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    const host =
+      typeof window !== "undefined" ? window.location.hostname : "localhost";
     return `https://${host}:3000`;
   };
 
@@ -70,9 +71,12 @@ function AcceptInvitePage() {
 
       try {
         // Use our public API endpoint that doesn't require authentication
-        const response = await fetch(`${getApiBaseUrl()}/api/invitations/${token}`, {
-          credentials: "include",
-        });
+        const response = await fetch(
+          `${getApiBaseUrl()}/api/invitations/${token}`,
+          {
+            credentials: "include",
+          },
+        );
 
         if (!response.ok) {
           if (response.status === 404) {
@@ -122,10 +126,10 @@ function AcceptInvitePage() {
 
       // Check if user is already a member of this organization
       try {
-        const orgsResult = await authClient.organization.list();
+        const orgsResult = await portalAuthClient.organization.list();
         if (orgsResult.data) {
           const isMember = orgsResult.data.some(
-            (org) => org.slug === invitation.organizationSlug
+            (org) => org.slug === invitation.organizationSlug,
           );
 
           if (isMember) {
@@ -144,15 +148,17 @@ function AcceptInvitePage() {
         setSubmitting(true);
         invitationAcceptedRef.current = true;
         try {
-          const result = await authClient.organization.acceptInvitation({
+          const result = await portalAuthClient.organization.acceptInvitation({
             invitationId: invitation.id,
           });
 
           if (result.error) {
             // Check if error is because already accepted/member
-            if (result.error.message?.includes("already") ||
-                result.error.code === "ALREADY_MEMBER" ||
-                result.error.code === "INVITATION_NOT_FOUND") {
+            if (
+              result.error.message?.includes("already") ||
+              result.error.code === "ALREADY_MEMBER" ||
+              result.error.code === "INVITATION_NOT_FOUND"
+            ) {
               toast.success("Você já é membro desta organização!");
               navigate({ to: "/" });
               return;
@@ -199,7 +205,7 @@ function AcceptInvitePage() {
       // Atomic signup with invitation acceptance
       // This creates the user AND adds them to the organization in a single transaction
       // The invitationId parameter tells Better Auth to automatically accept the invitation
-      const result = await authClient.signUp.email({
+      const result = await portalAuthClient.signUp.email({
         email: invitation.email,
         password,
         name,
@@ -216,9 +222,11 @@ function AcceptInvitePage() {
       invitationAcceptedRef.current = true;
 
       // After signup, accept the invitation to join the organization
-      const acceptResult = await authClient.organization.acceptInvitation({
-        invitationId: invitation.id,
-      });
+      const acceptResult = await portalAuthClient.organization.acceptInvitation(
+        {
+          invitationId: invitation.id,
+        },
+      );
 
       if (acceptResult.error) {
         // User created but couldn't accept invitation - still consider it a success

@@ -11,11 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
-import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
+import { Route as PortalRouteRouteImport } from './routes/portal/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
-import { Route as DashboardAssetsRouteRouteImport } from './routes/dashboard/assets/route'
-import { Route as DashboardAssetsIndexRouteImport } from './routes/dashboard/assets/index'
+import { Route as PortalIndexRouteImport } from './routes/portal/index'
+import { Route as PortalSettingsRouteRouteImport } from './routes/portal/settings/route'
+import { Route as PortalAssetsRouteRouteImport } from './routes/portal/assets/route'
+import { Route as PortalSettingsIndexRouteImport } from './routes/portal/settings/index'
+import { Route as PortalAssetsIndexRouteImport } from './routes/portal/assets/index'
+import { Route as PortalSettingsAppearanceRouteImport } from './routes/portal/settings/appearance'
 
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
@@ -27,9 +30,9 @@ const AcceptInviteRoute = AcceptInviteRouteImport.update({
   path: '/accept-invite',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardRouteRoute = DashboardRouteRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const PortalRouteRoute = PortalRouteRouteImport.update({
+  id: '/portal',
+  path: '/portal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,74 +40,111 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardIndexRoute = DashboardIndexRouteImport.update({
+const PortalIndexRoute = PortalIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => DashboardRouteRoute,
+  getParentRoute: () => PortalRouteRoute,
 } as any)
-const DashboardAssetsRouteRoute = DashboardAssetsRouteRouteImport.update({
+const PortalSettingsRouteRoute = PortalSettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => PortalRouteRoute,
+} as any)
+const PortalAssetsRouteRoute = PortalAssetsRouteRouteImport.update({
   id: '/assets',
   path: '/assets',
-  getParentRoute: () => DashboardRouteRoute,
+  getParentRoute: () => PortalRouteRoute,
 } as any)
-const DashboardAssetsIndexRoute = DashboardAssetsIndexRouteImport.update({
+const PortalSettingsIndexRoute = PortalSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => DashboardAssetsRouteRoute,
+  getParentRoute: () => PortalSettingsRouteRoute,
 } as any)
+const PortalAssetsIndexRoute = PortalAssetsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PortalAssetsRouteRoute,
+} as any)
+const PortalSettingsAppearanceRoute =
+  PortalSettingsAppearanceRouteImport.update({
+    id: '/appearance',
+    path: '/appearance',
+    getParentRoute: () => PortalSettingsRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/portal': typeof PortalRouteRouteWithChildren
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
-  '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
-  '/dashboard/': typeof DashboardIndexRoute
-  '/dashboard/assets/': typeof DashboardAssetsIndexRoute
+  '/portal/assets': typeof PortalAssetsRouteRouteWithChildren
+  '/portal/settings': typeof PortalSettingsRouteRouteWithChildren
+  '/portal/': typeof PortalIndexRoute
+  '/portal/settings/appearance': typeof PortalSettingsAppearanceRoute
+  '/portal/assets/': typeof PortalAssetsIndexRoute
+  '/portal/settings/': typeof PortalSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
-  '/dashboard': typeof DashboardIndexRoute
-  '/dashboard/assets': typeof DashboardAssetsIndexRoute
+  '/portal': typeof PortalIndexRoute
+  '/portal/settings/appearance': typeof PortalSettingsAppearanceRoute
+  '/portal/assets': typeof PortalAssetsIndexRoute
+  '/portal/settings': typeof PortalSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/portal': typeof PortalRouteRouteWithChildren
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
-  '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
-  '/dashboard/': typeof DashboardIndexRoute
-  '/dashboard/assets/': typeof DashboardAssetsIndexRoute
+  '/portal/assets': typeof PortalAssetsRouteRouteWithChildren
+  '/portal/settings': typeof PortalSettingsRouteRouteWithChildren
+  '/portal/': typeof PortalIndexRoute
+  '/portal/settings/appearance': typeof PortalSettingsAppearanceRoute
+  '/portal/assets/': typeof PortalAssetsIndexRoute
+  '/portal/settings/': typeof PortalSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/dashboard'
+    | '/portal'
     | '/accept-invite'
     | '/sign-in'
-    | '/dashboard/assets'
-    | '/dashboard/'
-    | '/dashboard/assets/'
+    | '/portal/assets'
+    | '/portal/settings'
+    | '/portal/'
+    | '/portal/settings/appearance'
+    | '/portal/assets/'
+    | '/portal/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/accept-invite' | '/sign-in' | '/dashboard' | '/dashboard/assets'
+  to:
+    | '/'
+    | '/accept-invite'
+    | '/sign-in'
+    | '/portal'
+    | '/portal/settings/appearance'
+    | '/portal/assets'
+    | '/portal/settings'
   id:
     | '__root__'
     | '/'
-    | '/dashboard'
+    | '/portal'
     | '/accept-invite'
     | '/sign-in'
-    | '/dashboard/assets'
-    | '/dashboard/'
-    | '/dashboard/assets/'
+    | '/portal/assets'
+    | '/portal/settings'
+    | '/portal/'
+    | '/portal/settings/appearance'
+    | '/portal/assets/'
+    | '/portal/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
+  PortalRouteRoute: typeof PortalRouteRouteWithChildren
   AcceptInviteRoute: typeof AcceptInviteRoute
   SignInRoute: typeof SignInRoute
 }
@@ -125,11 +165,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcceptInviteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteRouteImport
+    '/portal': {
+      id: '/portal'
+      path: '/portal'
+      fullPath: '/portal'
+      preLoaderRoute: typeof PortalRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -139,58 +179,94 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard/': {
-      id: '/dashboard/'
+    '/portal/': {
+      id: '/portal/'
       path: '/'
-      fullPath: '/dashboard/'
-      preLoaderRoute: typeof DashboardIndexRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      fullPath: '/portal/'
+      preLoaderRoute: typeof PortalIndexRouteImport
+      parentRoute: typeof PortalRouteRoute
     }
-    '/dashboard/assets': {
-      id: '/dashboard/assets'
+    '/portal/settings': {
+      id: '/portal/settings'
+      path: '/settings'
+      fullPath: '/portal/settings'
+      preLoaderRoute: typeof PortalSettingsRouteRouteImport
+      parentRoute: typeof PortalRouteRoute
+    }
+    '/portal/assets': {
+      id: '/portal/assets'
       path: '/assets'
-      fullPath: '/dashboard/assets'
-      preLoaderRoute: typeof DashboardAssetsRouteRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      fullPath: '/portal/assets'
+      preLoaderRoute: typeof PortalAssetsRouteRouteImport
+      parentRoute: typeof PortalRouteRoute
     }
-    '/dashboard/assets/': {
-      id: '/dashboard/assets/'
+    '/portal/settings/': {
+      id: '/portal/settings/'
       path: '/'
-      fullPath: '/dashboard/assets/'
-      preLoaderRoute: typeof DashboardAssetsIndexRouteImport
-      parentRoute: typeof DashboardAssetsRouteRoute
+      fullPath: '/portal/settings/'
+      preLoaderRoute: typeof PortalSettingsIndexRouteImport
+      parentRoute: typeof PortalSettingsRouteRoute
+    }
+    '/portal/assets/': {
+      id: '/portal/assets/'
+      path: '/'
+      fullPath: '/portal/assets/'
+      preLoaderRoute: typeof PortalAssetsIndexRouteImport
+      parentRoute: typeof PortalAssetsRouteRoute
+    }
+    '/portal/settings/appearance': {
+      id: '/portal/settings/appearance'
+      path: '/appearance'
+      fullPath: '/portal/settings/appearance'
+      preLoaderRoute: typeof PortalSettingsAppearanceRouteImport
+      parentRoute: typeof PortalSettingsRouteRoute
     }
   }
 }
 
-interface DashboardAssetsRouteRouteChildren {
-  DashboardAssetsIndexRoute: typeof DashboardAssetsIndexRoute
+interface PortalAssetsRouteRouteChildren {
+  PortalAssetsIndexRoute: typeof PortalAssetsIndexRoute
 }
 
-const DashboardAssetsRouteRouteChildren: DashboardAssetsRouteRouteChildren = {
-  DashboardAssetsIndexRoute: DashboardAssetsIndexRoute,
+const PortalAssetsRouteRouteChildren: PortalAssetsRouteRouteChildren = {
+  PortalAssetsIndexRoute: PortalAssetsIndexRoute,
 }
 
-const DashboardAssetsRouteRouteWithChildren =
-  DashboardAssetsRouteRoute._addFileChildren(DashboardAssetsRouteRouteChildren)
+const PortalAssetsRouteRouteWithChildren =
+  PortalAssetsRouteRoute._addFileChildren(PortalAssetsRouteRouteChildren)
 
-interface DashboardRouteRouteChildren {
-  DashboardAssetsRouteRoute: typeof DashboardAssetsRouteRouteWithChildren
-  DashboardIndexRoute: typeof DashboardIndexRoute
+interface PortalSettingsRouteRouteChildren {
+  PortalSettingsAppearanceRoute: typeof PortalSettingsAppearanceRoute
+  PortalSettingsIndexRoute: typeof PortalSettingsIndexRoute
 }
 
-const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
-  DashboardAssetsRouteRoute: DashboardAssetsRouteRouteWithChildren,
-  DashboardIndexRoute: DashboardIndexRoute,
+const PortalSettingsRouteRouteChildren: PortalSettingsRouteRouteChildren = {
+  PortalSettingsAppearanceRoute: PortalSettingsAppearanceRoute,
+  PortalSettingsIndexRoute: PortalSettingsIndexRoute,
 }
 
-const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
-  DashboardRouteRouteChildren,
+const PortalSettingsRouteRouteWithChildren =
+  PortalSettingsRouteRoute._addFileChildren(PortalSettingsRouteRouteChildren)
+
+interface PortalRouteRouteChildren {
+  PortalAssetsRouteRoute: typeof PortalAssetsRouteRouteWithChildren
+  PortalSettingsRouteRoute: typeof PortalSettingsRouteRouteWithChildren
+  PortalIndexRoute: typeof PortalIndexRoute
+}
+
+const PortalRouteRouteChildren: PortalRouteRouteChildren = {
+  PortalAssetsRouteRoute: PortalAssetsRouteRouteWithChildren,
+  PortalSettingsRouteRoute: PortalSettingsRouteRouteWithChildren,
+  PortalIndexRoute: PortalIndexRoute,
+}
+
+const PortalRouteRouteWithChildren = PortalRouteRoute._addFileChildren(
+  PortalRouteRouteChildren,
 )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DashboardRouteRoute: DashboardRouteRouteWithChildren,
+  PortalRouteRoute: PortalRouteRouteWithChildren,
   AcceptInviteRoute: AcceptInviteRoute,
   SignInRoute: SignInRoute,
 }

@@ -4,23 +4,24 @@ import {
   ScriptOnce,
   Scripts,
   createRootRouteWithContext,
-} from '@tanstack/react-router'
+} from "@tanstack/react-router";
 
-import { QueryClientProvider } from '@tanstack/react-query'
-import appCss from '../styles.css?url'
+import { QueryClientProvider } from "@tanstack/react-query";
+import appCss from "../styles.css?url";
 
-import type { QueryClient } from '@tanstack/react-query'
+import type { QueryClient } from "@tanstack/react-query";
 
-import { Toaster } from '@/components/ui/sonner'
+import { Toaster } from "@/components/ui/sonner";
 
 // Inline script to apply theme before React hydrates (prevents flicker)
+// Uses unified 'theme' key shared with web app
 const themeScript = `
 (function() {
   try {
-    var stored = localStorage.getItem('portal-theme');
-    var theme = stored === 'dark' || stored === 'light' ? stored : null;
+    var stored = localStorage.getItem('theme');
+    var theme = stored === 'dark' || stored === 'light' || stored === 'system' ? stored : 'system';
 
-    if (!theme) {
+    if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
 
@@ -29,25 +30,25 @@ const themeScript = `
     document.documentElement.classList.add('light');
   }
 })();
-`
+`;
 
 export const Route = createRootRouteWithContext<{
-  queryClient: QueryClient
+  queryClient: QueryClient;
 }>()({
   ssr: false,
   head: () => ({
     meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'CalibraFácil | Portal do Cliente' },
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { title: "CalibraFácil | Portal do Cliente" },
     ],
-    links: [{ rel: 'stylesheet', href: appCss }],
+    links: [{ rel: "stylesheet", href: appCss }],
   }),
   component: RootComponent,
-})
+});
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext()
+  const { queryClient } = Route.useRouteContext();
 
   return (
     <RootDocument>
@@ -55,7 +56,7 @@ function RootComponent() {
         <Outlet />
       </QueryClientProvider>
     </RootDocument>
-  )
+  );
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
@@ -71,5 +72,5 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <Scripts />
       </body>
     </html>
-  )
+  );
 }

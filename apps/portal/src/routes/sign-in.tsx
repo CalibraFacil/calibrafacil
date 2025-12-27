@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { signIn } from "@calibra-facil/auth/client";
+import { portalSignIn } from "@calibra-facil/auth/client";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,7 @@ function SignInPage() {
     setError(null);
     setIsLoading(true);
 
-    const { error } = await signIn.email({
+    const { error } = await portalSignIn.email({
       email,
       password,
     });

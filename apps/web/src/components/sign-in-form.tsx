@@ -15,11 +15,7 @@ interface SignInFormProps extends React.ComponentProps<'form'> {
   redirect?: string
 }
 
-export function SignInForm({
-  className,
-  redirect,
-  ...props
-}: SignInFormProps) {
+export function SignInForm({ className, redirect, ...props }: SignInFormProps) {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -36,13 +32,13 @@ export function SignInForm({
       password,
     })
 
-    setIsLoading(false)
-
     if (error) {
+      setIsLoading(false)
       setError(error.message ?? 'Failed to sign in')
       return
     }
 
+    setIsLoading(false)
     navigate({ to: redirect || '/dashboard' })
   }
 

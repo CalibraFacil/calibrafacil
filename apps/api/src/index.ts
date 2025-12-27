@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { auth } from "@calibra-facil/auth";
+import { labAuth, portalAuth } from "@calibra-facil/auth";
 import { customersRouter } from "./routes/customers";
 import { invitationsRouter } from "./routes/invitations";
 import { portalRouter } from "./routes/portal";
@@ -52,9 +52,23 @@ app.options("/api/auth/*", (c) => {
   return new Response(null, { status: 403 });
 });
 
-// Better Auth handler - mounted directly, not through sub-router
-app.on(["POST", "GET"], "/api/auth/*", async (c) => {
-  const response = await auth.handler(c.req.raw);
+// Lab Auth handler - for dashboard app (apps/web)
+app.on(["POST", "GET"], "/api/auth/lab/*", async (c) => {
+  const response = await labAuth.handler(c.req.raw);
+
+  // Add CORS headers to Better Auth response
+  const origin = c.req.header("Origin");
+  if (origin && allowedOrigins.includes(origin)) {
+    response.headers.set("Access-Control-Allow-Origin", origin);
+    response.headers.set("Access-Control-Allow-Credentials", "true");
+  }
+
+  return response;
+});
+
+// Portal Auth handler - for client portal app (apps/portal)
+app.on(["POST", "GET"], "/api/auth/portal/*", async (c) => {
+  const response = await portalAuth.handler(c.req.raw);
 
   // Add CORS headers to Better Auth response
   const origin = c.req.header("Origin");

@@ -1,0 +1,90 @@
+import { Link, useLocation } from "@tanstack/react-router";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  Home01Icon,
+  Wrench01Icon,
+  File01Icon,
+} from "@hugeicons/core-free-icons";
+
+import {
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuBadge,
+} from "@/components/ui/sidebar";
+
+type NavItem = {
+  title: string;
+  url: string;
+  icon: React.ReactNode;
+  badge?: string;
+  disabled?: boolean;
+};
+
+const navItems: NavItem[] = [
+  {
+    title: "Painel",
+    url: "/portal",
+    icon: <HugeiconsIcon icon={Home01Icon} />,
+  },
+  {
+    title: "Ativos",
+    url: "/portal/assets",
+    icon: <HugeiconsIcon icon={Wrench01Icon} />,
+  },
+  {
+    title: "Certificados",
+    url: "/portal/certificates",
+    icon: <HugeiconsIcon icon={File01Icon} />,
+    badge: "em breve",
+    disabled: true,
+  },
+];
+
+export function PortalNavMain() {
+  const location = useLocation();
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>Portal</SidebarGroupLabel>
+
+      <SidebarMenu>
+        {navItems.map((item) => {
+          const isActive =
+            location.pathname === item.url ||
+            (item.url !== "/portal" && location.pathname.startsWith(item.url));
+
+          return (
+            <SidebarMenuItem key={item.title}>
+              {item.disabled ? (
+                <SidebarMenuButton
+                  isActive={false}
+                  className="opacity-60 cursor-not-allowed"
+                  disabled
+                >
+                  {item.icon}
+                  <span>{item.title}</span>
+                  {item.badge && (
+                    <SidebarMenuBadge className="bg-muted text-muted-foreground text-[10px] px-1.5">
+                      {item.badge}
+                    </SidebarMenuBadge>
+                  )}
+                </SidebarMenuButton>
+              ) : (
+                <SidebarMenuButton
+                  render={<Link to={item.url} />}
+                  isActive={isActive}
+                >
+                  {item.icon}
+                  <span>{item.title}</span>
+                </SidebarMenuButton>
+              )}
+            </SidebarMenuItem>
+          );
+        })}
+      </SidebarMenu>
+    </SidebarGroup>
+  );
+}
