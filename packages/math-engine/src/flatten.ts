@@ -153,9 +153,14 @@ export function flattenForExecution(
         if (opts.preserveArrays) {
           result[currentKey] = numericValues;
           inputsUsed.push(currentKey);
+          // Store count for aggregate functions
+          result[`${currentKey}_count`] = numericValues.length;
+          inputsUsed.push(`${currentKey}_count`);
+          // Skip indexed variables when preserveArrays is true to avoid doubling context size
+          return;
         }
 
-        // Also create indexed access (for backward compatibility or specific point access)
+        // Create indexed access when not preserving arrays (for specific point access)
         if (opts.includeArrayIndices) {
           numericValues.forEach((item, index) => {
             const key = `${currentKey}_${index}`;

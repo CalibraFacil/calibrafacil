@@ -274,7 +274,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         // Check for name conflict if name is being changed
-        // Use version 1 for consistency with creation logic (base method check)
+        // Check against all versions to prevent naming conflicts
         if (input.name && input.name !== existing.name) {
           const [duplicate] = await db
             .select()
@@ -283,7 +283,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               and(
                 eq(calibrationMethod.organizationId, member.organizationId),
                 eq(calibrationMethod.name, input.name),
-                eq(calibrationMethod.version, 1),
                 ne(calibrationMethod.id, id),
               ),
             )
@@ -581,7 +580,8 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         if (existingDraft) {
           return c.json(
             {
-              error: "Ja existe um rascunho para este método",
+              error:
+                "Ja existe um rascunho para este método. Edite o rascunho existente ou exclua-o antes de criar uma nova versão.",
               existingDraftId: existingDraft.id,
             },
             400,
@@ -623,7 +623,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           .returning();
 
         if (!newMethod) {
-          return c.json({ error: "Erro ao criar nova versao" }, 500);
+          return c.json({ error: "Erro ao criar nova versão" }, 500);
         }
 
         // Audit log
@@ -642,7 +642,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json(newMethod, 201);
       } catch (error) {
         console.error("Error creating new version:", error);
-        return c.json({ error: "Erro ao criar nova versao" }, 500);
+        return c.json({ error: "Erro ao criar nova versão" }, 500);
       }
     },
   )

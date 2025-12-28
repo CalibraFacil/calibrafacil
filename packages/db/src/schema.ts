@@ -565,9 +565,11 @@ export const calibrationMethod = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     createdBy: text("created_by")
       .notNull()
-      .references(() => user.id),
+      .references(() => user.id, { onDelete: "restrict" }),
     publishedAt: timestamp("published_at"),
-    publishedBy: text("published_by").references(() => user.id),
+    publishedBy: text("published_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
     archivedAt: timestamp("archived_at"),
   },
   (table) => [

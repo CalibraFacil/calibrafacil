@@ -60,7 +60,8 @@ export function PreviewPanel({
       const value = previewData[field.key]
 
       if (field.type === 'table' && Array.isArray(value) && field.columns) {
-        // Extract each column as an array
+        // Extract each column as an array, ensuring consistent lengths for vector math
+        const rowCount = value.length
         for (const col of field.columns) {
           const columnValues = value
             .map((row: Record<string, unknown>) => {
@@ -75,7 +76,8 @@ export function PreviewPanel({
               return null
             })
             .filter((v): v is number => v !== null)
-          if (columnValues.length > 0) {
+          // Only include column if all rows have valid values (consistent length)
+          if (columnValues.length === rowCount && columnValues.length > 0) {
             processedData[`${field.key}_${col.key}`] = columnValues
           }
         }
