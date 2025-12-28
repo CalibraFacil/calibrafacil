@@ -9,6 +9,7 @@ import {
   serial,
   jsonb,
   integer,
+  real,
 } from "drizzle-orm/pg-core";
 
 // =============================================================================
@@ -777,6 +778,161 @@ export const serviceAuditLogRelations = relations(
     }),
     performedByUser: one(user, {
       fields: [serviceAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+// =============================================================================
+// REFERENCE STANDARD - Lab's Own Calibration Equipment (ISO 17025 Clause 6.4)
+// =============================================================================
+
+/**
+ * Certified value for multi-value standards (e.g., weight sets).
+ * Stores individual values from a calibration certificate.
+ */
+export type CertifiedValue = {
+  nominal: string; // Display label, e.g., "100g"
+  value: number; // Actual certified value, e.g., 100.005
+  uncertainty: number; // Uncertainty for this specific value
+  unit: string; // Unit, e.g., "g", "mg"
+};
+
+/**
+ * Reference Standard status for lifecycle tracking
+ */
+export type ReferenceStandardStatus =
+  | "ACTIVE"
+  | "INACTIVE"
+  | "OUT_OF_TOLERANCE"
+  | "SENT_FOR_CALIBRATION";
+
+/**
+ * Uncertainty distribution types
+ */
+export type UncertaintyDistribution = "normal" | "rectangular";
+
+/**
+ * Reference Standard table - Lab's own master instruments for calibrations.
+ * These are the "Truth" used to calibrate client equipment.
+ *
+ * Key concepts:
+ * - Distinct from Client Assets (EUT) - these are the lab's own equipment
+ * - Certificate data is critical for uncertainty calculations
+ * - Supports both single-value (e.g., single weight) and multi-value (e.g., weight set)
+ * - ISO 17025:2017 Clause 6.4 - Equipment
+ */
+export const referenceStandard = pgTable(
+  "reference_standard",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(), // e.g., "Conjunto de Pesos E2"
+    type: text("type"), // Optional category: "Peso", "Bloco Padrão", etc.
+    serialNumber: text("serial_number").notNull(),
+    manufacturer: text("manufacturer"),
+    model: text("model"),
+    // Certificate traceability
+    certificateNumber: text("certificate_number").notNull(),
+    calibratedBy: text("calibrated_by"), // Calibration lab name (traceability)
+    calibrationDate: timestamp("calibration_date").notNull(),
+    nextCalibrationDate: timestamp("next_calibration_date").notNull(),
+    // Single-value metrology data
+    referenceValue: real("reference_value"), // For single-value standards
+    uncertainty: real("uncertainty"),
+    uncertaintyUnit: text("uncertainty_unit"),
+    coverageFactor: real("coverage_factor").default(2.0).notNull(),
+    distribution: text("distribution")
+      .$type<UncertaintyDistribution>()
+      .default("normal")
+      .notNull(),
+    drift: real("drift"),
+    // Multi-value metrology data (for sets like weight sets, gauge blocks)
+    certifiedValues: jsonb("certified_values").$type<CertifiedValue[]>(),
+    // Status
+    status: text("status")
+      .$type<ReferenceStandardStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    // Audit
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    deletedAt: timestamp("deleted_at"), // Soft delete
+  },
+  (table) => [
+    index("standard_organization_id_idx").on(table.organizationId),
+    index("standard_status_idx").on(table.status),
+    index("standard_next_cal_date_idx").on(table.nextCalibrationDate),
+  ],
+);
+
+// =============================================================================
+// REFERENCE STANDARD AUDIT LOG - ISO 17025:2017 Clause 8.4 (Control of records)
+// =============================================================================
+
+/**
+ * Audit log for reference standard changes.
+ * Tracks all modifications for compliance and traceability.
+ * Critical for ISO 17025 equipment management audits.
+ */
+export const referenceStandardAuditLog = pgTable(
+  "reference_standard_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    standardId: integer("standard_id")
+      .notNull()
+      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // 'create', 'update', 'renew', 'status_change', 'delete'
+    changes: jsonb("changes"), // { field: { old: x, new: y } }
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"), // Required for renewals and status changes (ISO 17025)
+  },
+  (table) => [
+    index("standard_audit_log_standard_id_idx").on(table.standardId),
+    index("standard_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// REFERENCE STANDARD RELATIONS
+// =============================================================================
+
+export const referenceStandardRelations = relations(
+  referenceStandard,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [referenceStandard.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [referenceStandard.createdBy],
+      references: [user.id],
+    }),
+    auditLogs: many(referenceStandardAuditLog),
+  }),
+);
+
+export const referenceStandardAuditLogRelations = relations(
+  referenceStandardAuditLog,
+  ({ one }) => ({
+    standard: one(referenceStandard, {
+      fields: [referenceStandardAuditLog.standardId],
+      references: [referenceStandard.id],
+    }),
+    performedByUser: one(user, {
+      fields: [referenceStandardAuditLog.performedBy],
       references: [user.id],
     }),
   }),

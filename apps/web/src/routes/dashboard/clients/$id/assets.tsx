@@ -126,7 +126,7 @@ function ClientEquipmentTab() {
               className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2"
             />
             <Input
-              placeholder="Buscar por nome, tag, serie..."
+              placeholder="Buscar por nome, tag, série..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)
@@ -186,7 +186,7 @@ function ClientEquipmentTab() {
                     <TableHead>Tag</TableHead>
                     <TableHead>Nome</TableHead>
                     <TableHead>Fabricante</TableHead>
-                    <TableHead>N. Serie</TableHead>
+                    <TableHead>N. Série</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Prox. Calibração</TableHead>
                   </TableRow>
@@ -274,7 +274,7 @@ function EquipmentTableSkeleton() {
             <TableHead>Tag</TableHead>
             <TableHead>Nome</TableHead>
             <TableHead>Fabricante</TableHead>
-            <TableHead>N. Serie</TableHead>
+            <TableHead>N. Série</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Prox. Calibração</TableHead>
           </TableRow>

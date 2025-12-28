@@ -135,7 +135,7 @@ function AssetsPage() {
                         Fabricante
                       </th>
                       <th className="px-4 py-3 text-left font-medium">
-                        N. Serie
+                        N. Série
                       </th>
                       <th className="px-4 py-3 text-left font-medium">
                         Status

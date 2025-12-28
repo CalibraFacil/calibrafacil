@@ -89,9 +89,13 @@ const data = {
       icon: <HugeiconsIcon icon={Wrench01Icon} />,
     },
     {
-      title: 'Métodos de Calibração',
-      url: '/dashboard/methods',
+      title: 'Laboratório',
+      url: '#',
       icon: <HugeiconsIcon icon={MathIcon} />,
+      items: [
+        { title: 'Métodos de Calibração', url: '/dashboard/methods' },
+        { title: 'Padrões de Referência', url: '/dashboard/standards' },
+      ],
     },
     {
       title: 'Serviços',

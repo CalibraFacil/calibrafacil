@@ -473,3 +473,153 @@ export const ListServicesQuerySchema = z.object({
 });
 
 export type ListServicesQuery = z.infer<typeof ListServicesQuerySchema>;
+
+// =============================================================================
+// REFERENCE STANDARD SCHEMAS - Lab Equipment Registry (ISO 17025 Clause 6.4)
+// =============================================================================
+
+/**
+ * Reference Standard status values
+ */
+export const ReferenceStandardStatusSchema = z.enum([
+  "ACTIVE",
+  "INACTIVE",
+  "OUT_OF_TOLERANCE",
+  "SENT_FOR_CALIBRATION",
+]);
+
+export type ReferenceStandardStatus = z.infer<
+  typeof ReferenceStandardStatusSchema
+>;
+
+/**
+ * Uncertainty distribution types
+ */
+export const UncertaintyDistributionSchema = z.enum(["normal", "rectangular"]);
+
+export type UncertaintyDistribution = z.infer<
+  typeof UncertaintyDistributionSchema
+>;
+
+/**
+ * Certified value for multi-value standards (e.g., weight sets, gauge block sets)
+ * Each entry represents one value from the calibration certificate
+ */
+export const CertifiedValueSchema = z.object({
+  nominal: z.string().min(1, "Valor nominal e obrigatorio"),
+  value: z.coerce.number({ message: "Valor certificado e obrigatorio" }),
+  uncertainty: z.coerce.number().positive("Incerteza deve ser positiva"),
+  unit: z.string().min(1, "Unidade e obrigatoria"),
+});
+
+export type CertifiedValue = z.infer<typeof CertifiedValueSchema>;
+
+/**
+ * Schema for creating a new reference standard
+ * Supports both single-value and multi-value (set) standards
+ */
+export const CreateReferenceStandardSchema = z
+  .object({
+    name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+    type: z.string().optional(), // Optional category: "Peso", "Bloco Padrão", etc.
+    serialNumber: z.string().min(1, "Número de série é obrigatório"),
+    manufacturer: z.string().optional(),
+    model: z.string().optional(),
+    // Certificate traceability
+    certificateNumber: z.string().min(1, "Número do certificado é obrigatório"),
+    calibratedBy: z.string().optional(),
+    calibrationDate: z.string().min(1, "Data de calibração é obrigatória"),
+    nextCalibrationDate: z.string().min(1, "Próxima calibração é obrigatória"),
+    // Single-value metrology data (optional if using certifiedValues)
+    referenceValue: z.coerce.number().optional().nullable(),
+    uncertainty: z.coerce.number().positive().optional().nullable(),
+    uncertaintyUnit: z.string().optional().nullable(),
+    coverageFactor: z.coerce.number().positive().default(2.0),
+    distribution: UncertaintyDistributionSchema.default("normal"),
+    drift: z.coerce.number().optional().nullable(),
+    // Multi-value metrology data (for sets)
+    certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
+    // Status
+    status: ReferenceStandardStatusSchema.default("ACTIVE"),
+  })
+  .refine(
+    (data) => {
+      // Must have either single-value data OR certifiedValues array
+      const hasSingleValue =
+        data.referenceValue != null && data.uncertainty != null;
+      const hasMultiValue =
+        data.certifiedValues && data.certifiedValues.length > 0;
+      return hasSingleValue || hasMultiValue;
+    },
+    {
+      message:
+        "Informe o valor de referencia e incerteza, ou os valores certificados do conjunto",
+    },
+  );
+
+export type CreateReferenceStandardInput = z.infer<
+  typeof CreateReferenceStandardSchema
+>;
+
+/**
+ * Schema for updating a reference standard
+ */
+export const UpdateReferenceStandardSchema = z.object({
+  name: z.string().min(2).optional(),
+  type: z.string().optional().nullable(),
+  serialNumber: z.string().min(1).optional(),
+  manufacturer: z.string().optional().nullable(),
+  model: z.string().optional().nullable(),
+  certificateNumber: z.string().min(1).optional(),
+  calibratedBy: z.string().optional().nullable(),
+  calibrationDate: z.string().optional(),
+  nextCalibrationDate: z.string().optional(),
+  referenceValue: z.coerce.number().optional().nullable(),
+  uncertainty: z.coerce.number().positive().optional().nullable(),
+  uncertaintyUnit: z.string().optional().nullable(),
+  coverageFactor: z.coerce.number().positive().optional(),
+  distribution: UncertaintyDistributionSchema.optional(),
+  drift: z.coerce.number().optional().nullable(),
+  certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
+  status: ReferenceStandardStatusSchema.optional(),
+});
+
+export type UpdateReferenceStandardInput = z.infer<
+  typeof UpdateReferenceStandardSchema
+>;
+
+/**
+ * Schema for renewing a reference standard's calibration certificate
+ * This is a special action that requires a reason for audit purposes
+ */
+export const RenewCertificateSchema = z.object({
+  certificateNumber: z.string().min(1, "Número do certificado é obrigatório"),
+  calibratedBy: z.string().optional(),
+  calibrationDate: z.string().min(1, "Data de calibração é obrigatória"),
+  nextCalibrationDate: z.string().min(1, "Próxima calibração é obrigatória"),
+  // Updated metrology data
+  referenceValue: z.coerce.number().optional().nullable(),
+  uncertainty: z.coerce.number().positive().optional().nullable(),
+  uncertaintyUnit: z.string().optional().nullable(),
+  coverageFactor: z.coerce.number().positive().optional(),
+  certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
+  // Required for audit trail (ISO 17025)
+  reason: z.string().min(1, "Motivo da renovacao e obrigatorio"),
+});
+
+export type RenewCertificateInput = z.infer<typeof RenewCertificateSchema>;
+
+/**
+ * Schema for listing reference standards with pagination and filtering
+ */
+export const ListReferenceStandardsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  query: z.string().optional(), // Search by name, serialNumber
+  status: ReferenceStandardStatusSchema.optional(),
+  expiringWithinDays: z.coerce.number().optional(), // Filter by upcoming calibration due date
+});
+
+export type ListReferenceStandardsQuery = z.infer<
+  typeof ListReferenceStandardsQuerySchema
+>;
