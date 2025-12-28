@@ -24,7 +24,6 @@ import {
 } from "@calibra-facil/schemas";
 import {
   withLabPermission,
-  withPermission,
   type AuthVariables,
 } from "../middleware/permission";
 import { eq, and, ilike, desc, count, lte, gte, inArray } from "drizzle-orm";
@@ -87,10 +86,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get(
     "/",
-    ...withPermission({ calibration: ["read"] }),
+    ...withLabPermission({ calibration: ["read"] }),
     zValidator("query", ListJobsQuerySchema),
     async (c) => {
-      const member = c.get("member");
+      const memberData = c.get("member");
       const {
         page,
         limit,
@@ -109,7 +108,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Build conditions - always scope to organization
       const conditions = [
-        eq(calibrationJob.organizationId, member.organizationId),
+        eq(calibrationJob.organizationId, memberData.organizationId),
       ];
 
       if (query) {
@@ -237,7 +236,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /:id - Get single job with full details
   // =========================================================================
-  .get("/:id", ...withPermission({ calibration: ["read"] }), async (c) => {
+  .get("/:id", ...withLabPermission({ calibration: ["read"] }), async (c) => {
     const memberData = c.get("member");
     const id = parseInt(c.req.param("id"), 10);
 
@@ -338,7 +337,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             customerId: asset.customerId,
             assetTypeId: asset.assetTypeId,
             deletedAt: asset.deletedAt,
-            customerOrgId: customer.authOrganizationId,
+            labOrganizationId: customer.labOrganizationId, // UPDATED: Check labOrg, not authOrg
           })
           .from(asset)
           .innerJoin(customer, eq(asset.customerId, customer.id))
@@ -353,7 +352,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Ativo foi removido" }, 400);
         }
 
-        if (assetData.customerOrgId !== memberData.organizationId) {
+        // Verify that the customer is managed by THIS lab
+        if (assetData.labOrganizationId !== memberData.organizationId) {
           return c.json(
             { error: "Ativo nao pertence a esta organizacao" },
             403,
@@ -1011,7 +1011,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get(
     "/:id/audit-log",
-    ...withPermission({ calibration: ["read"] }),
+    ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
       const id = parseInt(c.req.param("id"), 10);
@@ -1062,7 +1062,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get(
     "/technicians/list",
-    ...withPermission({ calibration: ["read"] }),
+    ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
 
