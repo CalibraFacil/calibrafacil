@@ -172,6 +172,18 @@ export const statements = {
    * - update: Modify billing settings, manage subscription
    */
   billing: ["read", "update"],
+
+  // ---------------------------------------------------------------------------
+  // SERVICE - Commercial service catalog / product registry
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Create a new service offering
+   * - read: View service details and pricing
+   * - update: Modify service information
+   * - delete: Deactivate a service (soft delete)
+   */
+  service: ["create", "read", "update", "delete"],
 } as const;
 
 // =============================================================================
@@ -208,6 +220,8 @@ export const member = ac.newRole({
   certificate: ["read", "download"],
   report: ["read"],
   settings: ["read"],
+  // Read-only access to service catalog
+  service: ["read"],
 });
 
 /**
@@ -253,6 +267,9 @@ export const technician = ac.newRole({
 
   // Read-only settings
   settings: ["read"],
+
+  // Read-only access to service catalog (needs to see services to create jobs)
+  service: ["read"],
 });
 
 /**
@@ -305,6 +322,9 @@ export const admin = ac.newRole({
 
   // Read-only billing (cannot modify subscription)
   billing: ["read"],
+
+  // Full service catalog management
+  service: ["create", "read", "update", "delete"],
 });
 
 /**
@@ -356,6 +376,9 @@ export const owner = ac.newRole({
 
   // Full billing access (owner-only)
   billing: ["read", "update"],
+
+  // Full service catalog management
+  service: ["create", "read", "update", "delete"],
 });
 
 /**
@@ -381,6 +404,9 @@ export const client_user = ac.newRole({
 
   // Billing: can see their invoices
   billing: ["read"],
+
+  // Read-only access to service catalog (can see services for quote requests)
+  service: ["read"],
 });
 
 // =============================================================================

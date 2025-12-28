@@ -413,3 +413,63 @@ export const ListMethodsQuerySchema = z.object({
 });
 
 export type ListMethodsQuery = z.infer<typeof ListMethodsQuerySchema>;
+
+// =============================================================================
+// SERVICE SCHEMAS - Commercial Service Catalog (Product Registry)
+// =============================================================================
+
+/**
+ * Schema for creating a new service
+ * Price is stored in cents (e.g., 15000 = R$ 150,00)
+ * Nullable price means "Call for Quote" / "Sob Consulta"
+ */
+export const CreateServiceSchema = z.object({
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  description: z.string().optional(),
+  methodId: z.coerce.number().optional().nullable(),
+  assetTypeId: z.coerce.number().optional().nullable(),
+  price: z.coerce
+    .number()
+    .int("Preço deve ser um número inteiro (centavos)")
+    .min(0, "Preço não pode ser negativo")
+    .optional()
+    .nullable(),
+  currency: z.string().default("BRL"),
+  tat: z.coerce
+    .number()
+    .int("Prazo deve ser um número inteiro")
+    .min(1, "Prazo deve ser pelo menos 1 dia")
+    .optional()
+    .nullable(),
+  isActive: z.boolean().optional().default(true),
+});
+
+export type CreateServiceInput = z.infer<typeof CreateServiceSchema>;
+
+/**
+ * Schema for updating a service
+ */
+export const UpdateServiceSchema = CreateServiceSchema.partial();
+
+export type UpdateServiceInput = z.infer<typeof UpdateServiceSchema>;
+
+/**
+ * Schema for listing services with filtering
+ */
+export const ListServicesQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  query: z.string().optional(),
+  assetTypeId: z.coerce.number().optional(),
+  methodId: z.coerce.number().optional(),
+  isActive: z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (val === "true") return true;
+      if (val === "false") return false;
+      return undefined;
+    }),
+});
+
+export type ListServicesQuery = z.infer<typeof ListServicesQuerySchema>;

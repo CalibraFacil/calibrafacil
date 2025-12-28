@@ -18,6 +18,7 @@ import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitati
 import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
 import { Route as DashboardClientsRouteRouteImport } from './routes/dashboard/clients/route'
 import { Route as DashboardAssetsRouteRouteImport } from './routes/dashboard/assets/route'
+import { Route as DashboardServicesIndexRouteImport } from './routes/dashboard/services/index'
 import { Route as DashboardMethodsIndexRouteImport } from './routes/dashboard/methods/index'
 import { Route as DashboardClientsIndexRouteImport } from './routes/dashboard/clients/index'
 import { Route as DashboardAssetsIndexRouteImport } from './routes/dashboard/assets/index'
@@ -29,6 +30,7 @@ import { Route as DashboardSettingsDangerRouteImport } from './routes/dashboard/
 import { Route as DashboardSettingsBillingRouteImport } from './routes/dashboard/settings/billing'
 import { Route as DashboardSettingsAuthenticationRouteImport } from './routes/dashboard/settings/authentication'
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
+import { Route as DashboardServicesNewRouteImport } from './routes/dashboard/services/new'
 import { Route as DashboardMethodsNewRouteImport } from './routes/dashboard/methods/new'
 import { Route as DashboardMethodsIdRouteImport } from './routes/dashboard/methods/$id'
 import { Route as DashboardClientsNewRouteImport } from './routes/dashboard/clients/new'
@@ -37,6 +39,7 @@ import { Route as DashboardClientsIdRouteRouteImport } from './routes/dashboard/
 import { Route as DashboardAssetsIdRouteRouteImport } from './routes/dashboard/assets/$id/route'
 import { Route as DashboardClientsIdIndexRouteImport } from './routes/dashboard/clients/$id/index'
 import { Route as DashboardAssetsIdIndexRouteImport } from './routes/dashboard/assets/$id/index'
+import { Route as DashboardServicesIdEditRouteImport } from './routes/dashboard/services/$id/edit'
 import { Route as DashboardMethodsIdEditRouteImport } from './routes/dashboard/methods/$id.edit'
 import { Route as DashboardClientsIdUsersRouteImport } from './routes/dashboard/clients/$id/users'
 import { Route as DashboardClientsIdInfoRouteImport } from './routes/dashboard/clients/$id/info'
@@ -88,6 +91,11 @@ const DashboardClientsRouteRoute = DashboardClientsRouteRouteImport.update({
 const DashboardAssetsRouteRoute = DashboardAssetsRouteRouteImport.update({
   id: '/assets',
   path: '/assets',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardServicesIndexRoute = DashboardServicesIndexRouteImport.update({
+  id: '/services/',
+  path: '/services/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardMethodsIndexRoute = DashboardMethodsIndexRouteImport.update({
@@ -152,6 +160,11 @@ const DashboardSettingsAppearanceRoute =
     path: '/appearance',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
+const DashboardServicesNewRoute = DashboardServicesNewRouteImport.update({
+  id: '/services/new',
+  path: '/services/new',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardMethodsNewRoute = DashboardMethodsNewRouteImport.update({
   id: '/methods/new',
   path: '/methods/new',
@@ -191,6 +204,11 @@ const DashboardAssetsIdIndexRoute = DashboardAssetsIdIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DashboardAssetsIdRouteRoute,
+} as any)
+const DashboardServicesIdEditRoute = DashboardServicesIdEditRouteImport.update({
+  id: '/services/$id/edit',
+  path: '/services/$id/edit',
+  getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardMethodsIdEditRoute = DashboardMethodsIdEditRouteImport.update({
   id: '/edit',
@@ -247,6 +265,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/methods/$id': typeof DashboardMethodsIdRouteWithChildren
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
+  '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
@@ -258,6 +277,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
   '/dashboard/clients/': typeof DashboardClientsIndexRoute
   '/dashboard/methods': typeof DashboardMethodsIndexRoute
+  '/dashboard/services': typeof DashboardServicesIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
@@ -265,6 +285,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/clients/$id/info': typeof DashboardClientsIdInfoRoute
   '/dashboard/clients/$id/users': typeof DashboardClientsIdUsersRoute
   '/dashboard/methods/$id/edit': typeof DashboardMethodsIdEditRoute
+  '/dashboard/services/$id/edit': typeof DashboardServicesIdEditRoute
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
 }
@@ -279,6 +300,7 @@ export interface FileRoutesByTo {
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/methods/$id': typeof DashboardMethodsIdRouteWithChildren
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
+  '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
@@ -290,6 +312,7 @@ export interface FileRoutesByTo {
   '/dashboard/assets': typeof DashboardAssetsIndexRoute
   '/dashboard/clients': typeof DashboardClientsIndexRoute
   '/dashboard/methods': typeof DashboardMethodsIndexRoute
+  '/dashboard/services': typeof DashboardServicesIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
@@ -297,6 +320,7 @@ export interface FileRoutesByTo {
   '/dashboard/clients/$id/info': typeof DashboardClientsIdInfoRoute
   '/dashboard/clients/$id/users': typeof DashboardClientsIdUsersRoute
   '/dashboard/methods/$id/edit': typeof DashboardMethodsIdEditRoute
+  '/dashboard/services/$id/edit': typeof DashboardServicesIdEditRoute
   '/dashboard/assets/$id': typeof DashboardAssetsIdIndexRoute
   '/dashboard/clients/$id': typeof DashboardClientsIdIndexRoute
 }
@@ -317,6 +341,7 @@ export interface FileRoutesById {
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/methods/$id': typeof DashboardMethodsIdRouteWithChildren
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
+  '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
@@ -328,6 +353,7 @@ export interface FileRoutesById {
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
   '/dashboard/clients/': typeof DashboardClientsIndexRoute
   '/dashboard/methods/': typeof DashboardMethodsIndexRoute
+  '/dashboard/services/': typeof DashboardServicesIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
@@ -335,6 +361,7 @@ export interface FileRoutesById {
   '/dashboard/clients/$id/info': typeof DashboardClientsIdInfoRoute
   '/dashboard/clients/$id/users': typeof DashboardClientsIdUsersRoute
   '/dashboard/methods/$id/edit': typeof DashboardMethodsIdEditRoute
+  '/dashboard/services/$id/edit': typeof DashboardServicesIdEditRoute
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
 }
@@ -356,6 +383,7 @@ export interface FileRouteTypes {
     | '/dashboard/clients/new'
     | '/dashboard/methods/$id'
     | '/dashboard/methods/new'
+    | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
@@ -367,6 +395,7 @@ export interface FileRouteTypes {
     | '/dashboard/assets/'
     | '/dashboard/clients/'
     | '/dashboard/methods'
+    | '/dashboard/services'
     | '/dashboard/assets/$id/edit'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
@@ -374,6 +403,7 @@ export interface FileRouteTypes {
     | '/dashboard/clients/$id/info'
     | '/dashboard/clients/$id/users'
     | '/dashboard/methods/$id/edit'
+    | '/dashboard/services/$id/edit'
     | '/dashboard/assets/$id/'
     | '/dashboard/clients/$id/'
   fileRoutesByTo: FileRoutesByTo
@@ -388,6 +418,7 @@ export interface FileRouteTypes {
     | '/dashboard/clients/new'
     | '/dashboard/methods/$id'
     | '/dashboard/methods/new'
+    | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
@@ -399,6 +430,7 @@ export interface FileRouteTypes {
     | '/dashboard/assets'
     | '/dashboard/clients'
     | '/dashboard/methods'
+    | '/dashboard/services'
     | '/dashboard/assets/$id/edit'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
@@ -406,6 +438,7 @@ export interface FileRouteTypes {
     | '/dashboard/clients/$id/info'
     | '/dashboard/clients/$id/users'
     | '/dashboard/methods/$id/edit'
+    | '/dashboard/services/$id/edit'
     | '/dashboard/assets/$id'
     | '/dashboard/clients/$id'
   id:
@@ -425,6 +458,7 @@ export interface FileRouteTypes {
     | '/dashboard/clients/new'
     | '/dashboard/methods/$id'
     | '/dashboard/methods/new'
+    | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
@@ -436,6 +470,7 @@ export interface FileRouteTypes {
     | '/dashboard/assets/'
     | '/dashboard/clients/'
     | '/dashboard/methods/'
+    | '/dashboard/services/'
     | '/dashboard/assets/$id/edit'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
@@ -443,6 +478,7 @@ export interface FileRouteTypes {
     | '/dashboard/clients/$id/info'
     | '/dashboard/clients/$id/users'
     | '/dashboard/methods/$id/edit'
+    | '/dashboard/services/$id/edit'
     | '/dashboard/assets/$id/'
     | '/dashboard/clients/$id/'
   fileRoutesById: FileRoutesById
@@ -518,6 +554,13 @@ declare module '@tanstack/react-router' {
       path: '/assets'
       fullPath: '/dashboard/assets'
       preLoaderRoute: typeof DashboardAssetsRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/services/': {
+      id: '/dashboard/services/'
+      path: '/services'
+      fullPath: '/dashboard/services'
+      preLoaderRoute: typeof DashboardServicesIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/methods/': {
@@ -597,6 +640,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsAppearanceRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
+    '/dashboard/services/new': {
+      id: '/dashboard/services/new'
+      path: '/services/new'
+      fullPath: '/dashboard/services/new'
+      preLoaderRoute: typeof DashboardServicesNewRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/methods/new': {
       id: '/dashboard/methods/new'
       path: '/methods/new'
@@ -652,6 +702,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/assets/$id/'
       preLoaderRoute: typeof DashboardAssetsIdIndexRouteImport
       parentRoute: typeof DashboardAssetsIdRouteRoute
+    }
+    '/dashboard/services/$id/edit': {
+      id: '/dashboard/services/$id/edit'
+      path: '/services/$id/edit'
+      fullPath: '/dashboard/services/$id/edit'
+      preLoaderRoute: typeof DashboardServicesIdEditRouteImport
+      parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/methods/$id/edit': {
       id: '/dashboard/methods/$id/edit'
@@ -823,7 +880,10 @@ interface DashboardRouteRouteChildren {
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardMethodsIdRoute: typeof DashboardMethodsIdRouteWithChildren
   DashboardMethodsNewRoute: typeof DashboardMethodsNewRoute
+  DashboardServicesNewRoute: typeof DashboardServicesNewRoute
   DashboardMethodsIndexRoute: typeof DashboardMethodsIndexRoute
+  DashboardServicesIndexRoute: typeof DashboardServicesIndexRoute
+  DashboardServicesIdEditRoute: typeof DashboardServicesIdEditRoute
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
@@ -833,7 +893,10 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardMethodsIdRoute: DashboardMethodsIdRouteWithChildren,
   DashboardMethodsNewRoute: DashboardMethodsNewRoute,
+  DashboardServicesNewRoute: DashboardServicesNewRoute,
   DashboardMethodsIndexRoute: DashboardMethodsIndexRoute,
+  DashboardServicesIndexRoute: DashboardServicesIndexRoute,
+  DashboardServicesIdEditRoute: DashboardServicesIdEditRoute,
 }
 
 const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(

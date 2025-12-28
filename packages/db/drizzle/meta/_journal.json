@@ -64,6 +64,13 @@
       "when": 1766881064132,
       "tag": "0008_huge_boomerang",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1766883019563,
+      "tag": "0009_tired_randall",
+      "breakpoints": true
     }
   ]
 }
