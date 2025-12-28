@@ -1,17 +1,14 @@
 import {
   Book02Icon,
-  ChartIcon,
+  Building02Icon,
   CropIcon,
   CustomerSupportIcon,
-  File01Icon,
   Home01Icon,
   MapsIcon,
-  MathIcon,
   PieChartIcon,
   Settings05Icon,
-  ShoppingBag01Icon,
   ShoppingBasket03Icon,
-  ShoppingCart01Icon,
+  TaskAdd01Icon,
   UserIcon,
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
@@ -40,43 +37,10 @@ import {
 const data = {
   navMain: [
     {
-      title: 'Painel de Controle',
+      title: 'Painel',
       url: '/dashboard',
       icon: <HugeiconsIcon icon={Home01Icon} />,
       isActive: true,
-    },
-    {
-      title: 'Analytics',
-      url: '#',
-      icon: <HugeiconsIcon icon={ChartIcon} />,
-      items: [
-        { title: 'Reports', url: '#' },
-        { title: 'Metrics', url: '#' },
-      ],
-    },
-    {
-      title: 'Orders',
-      url: '#',
-      icon: <HugeiconsIcon icon={ShoppingBag01Icon} />,
-      items: [
-        { title: 'All Orders', url: '#' },
-        { title: 'Pending', url: '#' },
-        { title: 'Completed', url: '#' },
-      ],
-    },
-    {
-      title: 'Products',
-      url: '#',
-      icon: <HugeiconsIcon icon={ShoppingCart01Icon} />,
-      items: [
-        { title: 'All Products', url: '#' },
-        { title: 'Categories', url: '#' },
-      ],
-    },
-    {
-      title: 'Invoices',
-      url: '#',
-      icon: <HugeiconsIcon icon={File01Icon} />,
     },
     {
       title: 'Clientes',
@@ -91,7 +55,7 @@ const data = {
     {
       title: 'Laboratório',
       url: '#',
-      icon: <HugeiconsIcon icon={MathIcon} />,
+      icon: <HugeiconsIcon icon={Building02Icon} />,
       items: [
         { title: 'Métodos de Calibração', url: '/dashboard/methods' },
         { title: 'Padrões de Referência', url: '/dashboard/standards' },
@@ -100,7 +64,7 @@ const data = {
     {
       title: 'Serviços',
       url: '/dashboard/services',
-      icon: <HugeiconsIcon icon={ShoppingBasket03Icon} />,
+      icon: <HugeiconsIcon icon={TaskAdd01Icon} />,
     },
   ],
   navSecondary: [
@@ -122,17 +86,17 @@ const data = {
   ],
   projects: [
     {
-      name: 'Design Engineering',
+      name: 'Engenharia de Métodos',
       url: '#',
       icon: CropIcon,
     },
     {
-      name: 'Sales & Marketing',
+      name: 'Relatórios',
       url: '#',
       icon: PieChartIcon,
     },
     {
-      name: 'Travel',
+      name: 'Compliance',
       url: '#',
       icon: MapsIcon,
     },
