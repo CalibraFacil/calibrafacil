@@ -288,11 +288,10 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
       let finalAssetTypeId = input.assetTypeId;
 
       if (input.methodId !== undefined) {
-        if (input.methodId === null) {
-          // Method is being removed, allow assetTypeId to be freely changed
-          if (input.assetTypeId !== undefined) {
-            finalAssetTypeId = input.assetTypeId;
-          }
+      if (input.methodId === null) {
+        // Method is being removed, clear the locked assetType constraint
+        finalAssetTypeId = input.assetTypeId ?? null;
+      } else {
         } else {
           // Method is being set or changed
           const [method] = await db
