@@ -1,18 +1,18 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  File01Icon,
   Home01Icon,
   Wrench01Icon,
-  File01Icon,
 } from "@hugeicons/core-free-icons";
 
 import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuBadge,
 } from "@/components/ui/sidebar";
 
 type NavItem = {
@@ -23,7 +23,7 @@ type NavItem = {
   disabled?: boolean;
 };
 
-const navItems: NavItem[] = [
+const navItems: Array<NavItem> = [
   {
     title: "Painel",
     url: "/portal",

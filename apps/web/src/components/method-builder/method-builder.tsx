@@ -90,7 +90,7 @@ export function MethodBuilder({
               <Badge variant={statusVariants[method.status]}>
                 {statusLabels[method.status]}
               </Badge>
-              {!isNew && <span>Versao {method.version}</span>}
+              {!isNew && <span>Versão {method.version}</span>}
               {isDirty && (
                 <span className="text-amber-600">Alterações não salvas</span>
               )}

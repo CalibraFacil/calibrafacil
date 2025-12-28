@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Wrench01Icon, File01Icon } from "@hugeicons/core-free-icons";
+import { File01Icon, Wrench01Icon } from "@hugeicons/core-free-icons";
 
 import {
   Card,
@@ -75,7 +75,7 @@ function PortalHome() {
               <div>
                 <CardTitle className="text-lg">Certificados</CardTitle>
                 <CardDescription>
-                  Acesse certificados de calibracao
+                  Acesse certificados de calibração
                 </CardDescription>
               </div>
             </div>

@@ -141,7 +141,7 @@ function AssetsPage() {
                         Status
                       </th>
                       <th className="px-4 py-3 text-left font-medium">
-                        Prox. Calibracao
+                        Prox. Calibração
                       </th>
                     </tr>
                   </thead>
