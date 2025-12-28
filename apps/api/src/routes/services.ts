@@ -287,38 +287,46 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
       // If methodId is being changed, validate it
       let finalAssetTypeId = input.assetTypeId;
 
-      if (input.methodId !== undefined && input.methodId !== null) {
-        const [method] = await db
-          .select({
-            id: calibrationMethod.id,
-            assetTypeId: calibrationMethod.assetTypeId,
-            status: calibrationMethod.status,
-          })
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, input.methodId),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!method) {
-          return c.json({ error: "Método não encontrado" }, 400);
-        }
-
-        // Enforce method's assetTypeId constraint
-        if (method.assetTypeId) {
-          if (input.assetTypeId && input.assetTypeId !== method.assetTypeId) {
-            return c.json(
-              {
-                error:
-                  "Tipo de instrumento deve corresponder ao método selecionado",
-              },
-              400,
-            );
+      if (input.methodId !== undefined) {
+        if (input.methodId === null) {
+          // Method is being removed, allow assetTypeId to be freely changed
+          if (input.assetTypeId !== undefined) {
+            finalAssetTypeId = input.assetTypeId;
           }
-          finalAssetTypeId = method.assetTypeId;
+        } else {
+          // Method is being set or changed
+          const [method] = await db
+            .select({
+              id: calibrationMethod.id,
+              assetTypeId: calibrationMethod.assetTypeId,
+              status: calibrationMethod.status,
+            })
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.id, input.methodId),
+                eq(calibrationMethod.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
+
+          if (!method) {
+            return c.json({ error: "Método não encontrado" }, 400);
+          }
+
+          // Enforce method's assetTypeId constraint
+          if (method.assetTypeId) {
+            if (input.assetTypeId && input.assetTypeId !== method.assetTypeId) {
+              return c.json(
+                {
+                  error:
+                    "Tipo de instrumento deve corresponder ao método selecionado",
+                },
+                400,
+              );
+            }
+            finalAssetTypeId = method.assetTypeId;
+          }
         }
       }
 
