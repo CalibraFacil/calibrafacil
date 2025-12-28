@@ -1,5 +1,4 @@
 import {
-  AiChemistry02Icon,
   Book02Icon,
   ChartIcon,
   CropIcon,
@@ -7,6 +6,7 @@ import {
   File01Icon,
   Home01Icon,
   MapsIcon,
+  MathIcon,
   PieChartIcon,
   Settings05Icon,
   ShoppingBag01Icon,
@@ -90,7 +90,7 @@ const data = {
     {
       title: 'Métodos de Calibração',
       url: '/dashboard/methods',
-      icon: <HugeiconsIcon icon={AiChemistry02Icon} />,
+      icon: <HugeiconsIcon icon={MathIcon} />,
     },
   ],
   navSecondary: [
