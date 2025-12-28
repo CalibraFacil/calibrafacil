@@ -1,13 +1,13 @@
 import {
   Book02Icon,
   Building02Icon,
+  ClipboardIcon,
   CropIcon,
   CustomerSupportIcon,
   Home01Icon,
   MapsIcon,
   PieChartIcon,
   Settings05Icon,
-  ShoppingBasket03Icon,
   TaskAdd01Icon,
   UserIcon,
   Wrench01Icon,
@@ -62,9 +62,14 @@ const data = {
       ],
     },
     {
-      title: 'Serviços',
+      title: 'Servicos',
       url: '/dashboard/services',
       icon: <HugeiconsIcon icon={TaskAdd01Icon} />,
+    },
+    {
+      title: 'Ordens de Servico',
+      url: '/dashboard/jobs',
+      icon: <HugeiconsIcon icon={ClipboardIcon} />,
     },
   ],
   navSecondary: [

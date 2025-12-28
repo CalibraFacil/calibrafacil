@@ -623,3 +623,137 @@ export const ListReferenceStandardsQuerySchema = z.object({
 export type ListReferenceStandardsQuery = z.infer<
   typeof ListReferenceStandardsQuerySchema
 >;
+
+// =============================================================================
+// CALIBRATION JOB SCHEMAS - Work Order (ISO 17025 Operational Layer)
+// =============================================================================
+
+/**
+ * Job status values for workflow tracking
+ */
+export const JobStatusSchema = z.enum([
+  "DRAFT",
+  "IN_PROGRESS",
+  "REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "CANCELED",
+]);
+
+export type JobStatus = z.infer<typeof JobStatusSchema>;
+
+/**
+ * Method Snapshot schema - Frozen copy of method at job creation
+ * This is read-only after job creation (never modified)
+ */
+export const MethodSnapshotSchema = z.object({
+  methodId: z.number(),
+  methodName: z.string(),
+  methodVersion: z.number(),
+  dataFields: z.array(MethodInputFieldSchema),
+  formulas: z.array(MethodFormulaSchema),
+  validations: z.array(MethodValidationSchema),
+  uncertaintyParams: z.array(MethodTypeBComponentSchema),
+});
+
+export type MethodSnapshot = z.infer<typeof MethodSnapshotSchema>;
+
+/**
+ * Schema for creating a new calibration job
+ * The method snapshot is created server-side from the service's linked method
+ */
+export const CreateJobSchema = z.object({
+  assetId: z.coerce.number().min(1, "Ativo e obrigatorio"),
+  serviceId: z.coerce.number().min(1, "Servico e obrigatorio"),
+  technicianId: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(), // ISO date string
+});
+
+export type CreateJobInput = z.infer<typeof CreateJobSchema>;
+
+/**
+ * Schema for updating a calibration job
+ * Only basic fields can be updated (not the method snapshot)
+ */
+export const UpdateJobSchema = z.object({
+  technicianId: z.string().optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+  status: JobStatusSchema.optional(),
+});
+
+export type UpdateJobInput = z.infer<typeof UpdateJobSchema>;
+
+/**
+ * Schema for assigning a technician to a job
+ */
+export const AssignTechnicianSchema = z.object({
+  technicianId: z.string().min(1, "Tecnico e obrigatorio"),
+});
+
+export type AssignTechnicianInput = z.infer<typeof AssignTechnicianSchema>;
+
+/**
+ * Schema for submitting job data (execution by technician)
+ * The data structure matches the method's dataFields definition
+ */
+export const SubmitJobDataSchema = z.object({
+  data: z.record(z.string(), z.unknown()),
+});
+
+export type SubmitJobDataInput = z.infer<typeof SubmitJobDataSchema>;
+
+/**
+ * Schema for submitting job for review
+ */
+export const SubmitForReviewSchema = z.object({
+  data: z.record(z.string(), z.unknown()),
+});
+
+export type SubmitForReviewInput = z.infer<typeof SubmitForReviewSchema>;
+
+/**
+ * Schema for approving a job
+ */
+export const ApproveJobSchema = z.object({
+  reason: z.string().optional(), // Optional approval notes
+});
+
+export type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
+
+/**
+ * Schema for rejecting a job
+ */
+export const RejectJobSchema = z.object({
+  reason: z.string().min(1, "Motivo da rejeicao e obrigatorio"),
+});
+
+export type RejectJobInput = z.infer<typeof RejectJobSchema>;
+
+/**
+ * Schema for canceling a job
+ */
+export const CancelJobSchema = z.object({
+  reason: z.string().min(1, "Motivo do cancelamento e obrigatorio"),
+});
+
+export type CancelJobInput = z.infer<typeof CancelJobSchema>;
+
+/**
+ * Schema for listing jobs with pagination and filtering
+ */
+export const ListJobsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  query: z.string().optional(), // Search by jobId
+  status: JobStatusSchema.optional(),
+  customerId: z.coerce.number().optional(),
+  assetId: z.coerce.number().optional(),
+  serviceId: z.coerce.number().optional(),
+  technicianId: z.string().optional(),
+  dateFrom: z.string().optional(), // ISO date string
+  dateTo: z.string().optional(), // ISO date string
+  dueSoon: z.coerce.boolean().optional(), // Filter jobs due in next 7 days
+  overdue: z.coerce.boolean().optional(), // Filter overdue jobs
+});
+
+export type ListJobsQuery = z.infer<typeof ListJobsQuerySchema>;

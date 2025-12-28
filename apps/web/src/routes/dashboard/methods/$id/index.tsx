@@ -16,7 +16,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 
-export const Route = createFileRoute('/dashboard/methods/$id')({
+export const Route = createFileRoute('/dashboard/methods/$id/')({
   head: () => ({
     meta: [{ title: 'Detalhes do Método | CalibraFacil' }],
   }),

@@ -13,7 +13,6 @@ import {
 } from "@calibra-facil/schemas";
 import {
   withLabPermission,
-  withPermission,
   type AuthVariables,
 } from "../middleware/permission";
 import { eq, and, or, ilike, desc, count, isNull, lte, gte } from "drizzle-orm";
@@ -42,7 +41,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get(
     "/",
-    ...withPermission({ standard: ["read"] }),
+    ...withLabPermission({ standard: ["read"] }),
     zValidator("query", ListReferenceStandardsQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -142,7 +141,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /:id - Get single reference standard by ID
   // =========================================================================
-  .get("/:id", ...withPermission({ standard: ["read"] }), async (c) => {
+  .get("/:id", ...withLabPermission({ standard: ["read"] }), async (c) => {
     const member = c.get("member");
     const id = parseInt(c.req.param("id"), 10);
 
@@ -635,7 +634,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get(
     "/:id/audit-log",
-    ...withPermission({ standard: ["read"] }),
+    ...withLabPermission({ standard: ["read"] }),
     async (c) => {
       const member = c.get("member");
       const id = parseInt(c.req.param("id"), 10);

@@ -221,8 +221,8 @@ export type CustomerCompliance = {
 
 /**
  * Customer table - Business data for client organizations.
- * Links to Better Auth organization via authOrganizationId.
- * This is the "bridge" between business logic and identity provider.
+ * Links to Better Auth organization via authOrganizationId (the CLIENT org for portal access).
+ * Links to LAB organization via labOrganizationId (the LAB that manages this customer).
  */
 export const customer = pgTable(
   "customer",
@@ -233,7 +233,12 @@ export const customer = pgTable(
     email: text("email"), // Contact email
     phone: text("phone"), // Optional
     address: jsonb("address").$type<CustomerAddress>(), // CEP, number, street, etc.
+    // The CLIENT organization for portal access (created when customer is created)
     authOrganizationId: text("auth_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // The LAB organization that manages this customer
+    labOrganizationId: text("lab_organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     // ISO 17025:2017 compliance tracking
@@ -245,7 +250,10 @@ export const customer = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("customer_auth_org_id_idx").on(table.authOrganizationId)],
+  (table) => [
+    index("customer_auth_org_id_idx").on(table.authOrganizationId),
+    index("customer_lab_org_id_idx").on(table.labOrganizationId),
+  ],
 );
 
 // =============================================================================
@@ -937,3 +945,213 @@ export const referenceStandardAuditLogRelations = relations(
     }),
   }),
 );
+
+// =============================================================================
+// CALIBRATION JOB - Work Order (ISO 17025 Operational Layer)
+// =============================================================================
+
+/**
+ * Job status values for workflow tracking
+ * - DRAFT: Created, not started
+ * - IN_PROGRESS: Technician is executing the calibration
+ * - REVIEW: Submitted for manager review
+ * - APPROVED: Manager approved, ready for certificate generation
+ * - REJECTED: Manager rejected, needs rework
+ * - CANCELED: Job was canceled (soft delete equivalent)
+ */
+export type JobStatus =
+  | "DRAFT"
+  | "IN_PROGRESS"
+  | "REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELED";
+
+/**
+ * Method Snapshot - Frozen copy of method at job creation time.
+ * This ensures future changes to the Method do not affect historical jobs.
+ * Critical for ISO 17025 compliance: must be able to reproduce calculations
+ * exactly as performed, even years later.
+ */
+export type MethodSnapshot = {
+  methodId: number;
+  methodName: string;
+  methodVersion: number;
+  dataFields: MethodInputField[];
+  formulas: MethodFormula[];
+  validations: MethodValidation[];
+  uncertaintyParams: MethodTypeBComponent[];
+};
+
+/**
+ * Calibration Job table - The Work Order / Operational Record
+ * ISO 17025:2017 Clause 7.7 - Ensuring Validity of Results
+ *
+ * Key concepts:
+ * - Connects Customer + Asset + Service + Method into a single record
+ * - Method configuration is SNAPSHOTTED at job creation (immutable history)
+ * - Workflow states enforce ISO 17025 separation of duties
+ * - Approved jobs are immutable for compliance
+ */
+export const calibrationJob = pgTable(
+  "calibration_job",
+  {
+    id: serial("id").primaryKey(),
+    // Human-readable ID: "JOB-2024-0001" (per organization per year)
+    jobId: text("job_id").notNull(),
+    // Organization scope
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // Customer who owns the asset
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "restrict" }),
+    // Asset being calibrated
+    assetId: integer("asset_id")
+      .notNull()
+      .references(() => asset.id, { onDelete: "restrict" }),
+    // Service (commercial wrapper, contains pricing/TAT)
+    serviceId: integer("service_id")
+      .notNull()
+      .references(() => service.id, { onDelete: "restrict" }),
+    // Assigned technician (nullable - can be assigned later)
+    technicianId: text("technician_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    // CRITICAL: Frozen copy of method configuration at job creation
+    // This ensures reproducibility per ISO 17025 requirements
+    methodSnapshot: jsonb("method_snapshot").$type<MethodSnapshot>().notNull(),
+    // Workflow status
+    status: text("status").$type<JobStatus>().default("DRAFT").notNull(),
+    // Dates
+    dueDate: timestamp("due_date"),
+    performedAt: timestamp("performed_at"),
+    // Execution data (filled by technician during calibration)
+    data: jsonb("data").$type<Record<string, unknown>>(),
+    // Calculated results (output from math engine)
+    results: jsonb("results").$type<Record<string, unknown>>(),
+    // Certificate URL (populated after approval and PDF generation)
+    certificateUrl: text("certificate_url"),
+    // Timestamps and actors
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    // Approval tracking
+    approvedBy: text("approved_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    approvedAt: timestamp("approved_at"),
+    // Rejection tracking
+    rejectedBy: text("rejected_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    rejectedAt: timestamp("rejected_at"),
+    rejectionReason: text("rejection_reason"),
+  },
+  (table) => [
+    index("job_organization_id_idx").on(table.organizationId),
+    index("job_customer_id_idx").on(table.customerId),
+    index("job_asset_id_idx").on(table.assetId),
+    index("job_service_id_idx").on(table.serviceId),
+    index("job_technician_id_idx").on(table.technicianId),
+    index("job_status_idx").on(table.status),
+    index("job_due_date_idx").on(table.dueDate),
+    uniqueIndex("job_org_job_id_uidx").on(table.organizationId, table.jobId),
+  ],
+);
+
+// =============================================================================
+// CALIBRATION JOB AUDIT LOG - ISO 17025:2017 Clause 8.4 (Control of records)
+// =============================================================================
+
+/**
+ * Audit log for calibration job changes.
+ * Tracks all modifications for compliance and traceability.
+ * Critical for ISO 17025 audits and legal defensibility.
+ */
+export const jobAuditLog = pgTable(
+  "job_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => calibrationJob.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // 'create', 'update', 'submit', 'approve', 'reject', 'cancel', 'assign', 'execute'
+    changes: jsonb("changes"), // { field: { old: x, new: y } }
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"), // Required for rejections, cancellations, approvals
+  },
+  (table) => [
+    index("job_audit_log_job_id_idx").on(table.jobId),
+    index("job_audit_log_performed_at_idx").on(table.performedAt),
+    index("job_audit_log_action_idx").on(table.action),
+  ],
+);
+
+// =============================================================================
+// CALIBRATION JOB RELATIONS
+// =============================================================================
+
+export const calibrationJobRelations = relations(
+  calibrationJob,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [calibrationJob.organizationId],
+      references: [organization.id],
+    }),
+    customer: one(customer, {
+      fields: [calibrationJob.customerId],
+      references: [customer.id],
+    }),
+    asset: one(asset, {
+      fields: [calibrationJob.assetId],
+      references: [asset.id],
+    }),
+    service: one(service, {
+      fields: [calibrationJob.serviceId],
+      references: [service.id],
+    }),
+    technician: one(user, {
+      fields: [calibrationJob.technicianId],
+      references: [user.id],
+      relationName: "jobTechnician",
+    }),
+    createdByUser: one(user, {
+      fields: [calibrationJob.createdBy],
+      references: [user.id],
+      relationName: "jobCreator",
+    }),
+    approvedByUser: one(user, {
+      fields: [calibrationJob.approvedBy],
+      references: [user.id],
+      relationName: "jobApprover",
+    }),
+    rejectedByUser: one(user, {
+      fields: [calibrationJob.rejectedBy],
+      references: [user.id],
+      relationName: "jobRejecter",
+    }),
+    auditLogs: many(jobAuditLog),
+  }),
+);
+
+export const jobAuditLogRelations = relations(jobAuditLog, ({ one }) => ({
+  job: one(calibrationJob, {
+    fields: [jobAuditLog.jobId],
+    references: [calibrationJob.id],
+  }),
+  performedByUser: one(user, {
+    fields: [jobAuditLog.performedBy],
+    references: [user.id],
+  }),
+}));

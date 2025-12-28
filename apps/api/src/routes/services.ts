@@ -14,7 +14,6 @@ import {
 } from "@calibra-facil/schemas";
 import {
   withLabPermission,
-  withPermission,
   type AuthVariables,
 } from "../middleware/permission";
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
@@ -39,7 +38,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get(
     "/",
-    ...withPermission({ service: ["read"] }),
+    ...withLabPermission({ service: ["read"] }),
     zValidator("query", ListServicesQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -117,7 +116,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /:id - Get single service by ID
   // =========================================================================
-  .get("/:id", ...withPermission({ service: ["read"] }), async (c) => {
+  .get("/:id", ...withLabPermission({ service: ["read"] }), async (c) => {
     const member = c.get("member");
     const id = parseInt(c.req.param("id"), 10);
 

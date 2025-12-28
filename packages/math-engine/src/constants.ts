@@ -83,16 +83,11 @@ export const INCLUDE_KEYS = new Set([
 
 // ============================================
 // Keys to EXCLUDE from execution scope
+// NOTE: Keep this minimal - substring matching means "nominal" would exclude
+// "linearity_nominal_value", "nominal_reading", etc.
 // ============================================
 export const EXCLUDE_KEYS = new Set([
-  "nominal",
-  "reference",
-  "target",
-  "expected",
-  "theoretical",
-  "standard",
-  "ref",
-  "nom",
+  // Only exclude keys that are truly never needed in formulas
 ]);
 
 // ============================================

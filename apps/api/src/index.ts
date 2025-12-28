@@ -9,6 +9,7 @@ import { assetTypesRouter } from "./routes/asset-types";
 import { methodsRouter } from "./routes/methods";
 import { servicesRouter } from "./routes/services";
 import { standardsRouter } from "./routes/standards";
+import { jobsRouter } from "./routes/jobs";
 
 const app = new Hono();
 
@@ -113,7 +114,8 @@ const routes = app
   .route("/api/asset-types", assetTypesRouter)
   .route("/api/methods", methodsRouter)
   .route("/api/services", servicesRouter)
-  .route("/api/standards", standardsRouter);
+  .route("/api/standards", standardsRouter)
+  .route("/api/jobs", jobsRouter);
 
 export type AppType = typeof routes;
 export default {

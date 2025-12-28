@@ -13,7 +13,7 @@ import { MethodBuilder } from '@/components/method-builder'
 
 export const Route = createFileRoute('/dashboard/methods/$id/edit')({
   head: () => ({
-    meta: [{ title: 'Editar Método | CalibraFacil' }],
+    meta: [{ title: 'Editar Método | CalibraFácil' }],
   }),
   component: EditMethodPage,
 })
@@ -113,8 +113,8 @@ function EditMethodPage() {
       <div className="space-y-4 p-6">
         <Skeleton className="h-8 w-48" />
         <div className="flex gap-4">
-          <Skeleton className="h-[600px] w-1/2" />
-          <Skeleton className="h-[600px] w-1/2" />
+          <Skeleton className="h-150 w-1/2" />
+          <Skeleton className="h-150 w-1/2" />
         </div>
       </div>
     )

@@ -23,7 +23,9 @@ describe("Data Flattening", () => {
       expect(result["point2_reading"]).toBe(20.3);
     });
 
-    it("should exclude nominal/reference/target keys", () => {
+    it("should include all keys (no default exclusions)", () => {
+      // EXCLUDE_KEYS is intentionally empty to allow user-defined variable names
+      // like "linearity_nominal_value", "standard_ref", etc.
       const data = {
         reading: 100,
         nominal: 100,
@@ -33,10 +35,11 @@ describe("Data Flattening", () => {
 
       const result = flattenForExecution(data);
 
+      // All keys should be included
       expect(result["reading"]).toBe(100);
-      expect(result["nominal"]).toBeUndefined();
-      expect(result["reference"]).toBeUndefined();
-      expect(result["target"]).toBeUndefined();
+      expect(result["nominal"]).toBe(100);
+      expect(result["reference"]).toBe(99.99);
+      expect(result["target"]).toBe(100);
     });
 
     it("should handle arrays with indices", () => {
@@ -461,6 +464,36 @@ describe("Data Flattening", () => {
       expect(result["readings_1"]).toBeUndefined();
       // Count should still be present
       expect(result["readings_count"]).toBe(3);
+    });
+
+    it("should preserve empty arrays when preserveArrays is enabled", () => {
+      const data = {
+        readings: [],
+        measurements: [],
+      };
+
+      const result = flattenForExecution(data, { preserveArrays: true });
+
+      // Empty arrays should be preserved (variables must exist in scope)
+      expect(result["readings"]).toEqual([]);
+      expect(result["measurements"]).toEqual([]);
+      // Count should be 0
+      expect(result["readings_count"]).toBe(0);
+      expect(result["measurements_count"]).toBe(0);
+      // No indexed variables (nothing to index)
+      expect(result["readings_0"]).toBeUndefined();
+    });
+
+    it("should discard empty arrays when preserveArrays is disabled (default)", () => {
+      const data = {
+        readings: [],
+      };
+
+      const result = flattenForExecution(data);
+
+      // Empty arrays should not create any variables
+      expect(result["readings"]).toBeUndefined();
+      expect(result["readings_count"]).toBeUndefined();
     });
   });
 });
