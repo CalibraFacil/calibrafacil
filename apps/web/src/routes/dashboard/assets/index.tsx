@@ -7,8 +7,8 @@ import {
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { useState, useMemo } from 'react'
-import { useQueryState, parseAsInteger } from 'nuqs'
+import { useMemo, useState } from 'react'
+import { parseAsInteger, useQueryState } from 'nuqs'
 
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
@@ -166,7 +166,7 @@ function AssetsPage() {
         <CardContent>
           {/* Search and filters */}
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
+            <div className="relative flex-1 min-w-50">
               <HugeiconsIcon
                 icon={Search01Icon}
                 className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2"
@@ -183,7 +183,7 @@ function AssetsPage() {
             </div>
 
             {/* Customer filter */}
-            <div className="w-full sm:w-[220px]">
+            <div className="w-full sm:w-55">
               <Combobox
                 value={customerIdParam ? String(customerIdParam) : ''}
                 onValueChange={(value) => {
@@ -225,7 +225,7 @@ function AssetsPage() {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-full sm:w-[160px]">
+              <SelectTrigger className="w-full sm:w-40">
                 <span>
                   {statusFilter
                     ? statusLabels[statusFilter as AssetStatus]
@@ -322,10 +322,10 @@ function AssetsPage() {
                       <TableHead>Tipo</TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Fabricante</TableHead>
-                      <TableHead>N. Serie</TableHead>
+                      <TableHead>N. Série</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Prox. Calibracao</TableHead>
+                      <TableHead>Próx. Calibração</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -438,7 +438,7 @@ function AssetsTableSkeleton() {
               <TableHead>N. Serie</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Prox. Calibracao</TableHead>
+              <TableHead>Prox. Calibração</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

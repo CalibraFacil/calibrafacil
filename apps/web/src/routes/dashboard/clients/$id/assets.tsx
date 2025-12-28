@@ -188,7 +188,7 @@ function ClientEquipmentTab() {
                     <TableHead>Fabricante</TableHead>
                     <TableHead>N. Serie</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Prox. Calibracao</TableHead>
+                    <TableHead>Prox. Calibração</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -276,7 +276,7 @@ function EquipmentTableSkeleton() {
             <TableHead>Fabricante</TableHead>
             <TableHead>N. Serie</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Prox. Calibracao</TableHead>
+            <TableHead>Prox. Calibração</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  Sun02Icon,
-  Moon02Icon,
   ComputerIcon,
+  Moon02Icon,
+  Sun02Icon,
 } from "@hugeicons/core-free-icons";
 
 import {
