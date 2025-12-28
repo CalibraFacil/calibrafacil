@@ -10,6 +10,7 @@ import {
   PieChartIcon,
   Settings05Icon,
   ShoppingBag01Icon,
+  ShoppingBasket03Icon,
   ShoppingCart01Icon,
   UserIcon,
   Wrench01Icon,
@@ -91,6 +92,11 @@ const data = {
       title: 'Métodos de Calibração',
       url: '/dashboard/methods',
       icon: <HugeiconsIcon icon={MathIcon} />,
+    },
+    {
+      title: 'Serviços',
+      url: '/dashboard/services',
+      icon: <HugeiconsIcon icon={ShoppingBasket03Icon} />,
     },
   ],
   navSecondary: [

@@ -661,3 +661,123 @@ export const methodAuditLogRelations = relations(methodAuditLog, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+// =============================================================================
+// SERVICE - Commercial Service Catalog (Product Registry)
+// =============================================================================
+
+/**
+ * Service table - Links commercial offerings to calibration methods.
+ * This is the "Commercial Wrapper" around technical Methods.
+ *
+ * Key concepts:
+ * - Services are what the lab sells (e.g., "Calibração de Balança Digital 0-220g")
+ * - Links to a validated Method for technical execution
+ * - Contains pricing and turnaround time for quotes
+ * - Soft-delete only (isActive) for financial audit trail
+ *
+ * ISO 17025 Clause 7.1 - Service Agreements
+ */
+export const service = pgTable(
+  "service",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(), // E.g., "Calibração de Paquímetro 0-150mm"
+    description: text("description"),
+    // Link to calibration method (nullable - repair services don't need methods)
+    methodId: integer("method_id").references(() => calibrationMethod.id, {
+      onDelete: "set null",
+    }),
+    // Link to asset type for filtering during job creation
+    // When methodId has an assetTypeId, this MUST match (enforced at app level)
+    assetTypeId: integer("asset_type_id").references(() => assetType.id, {
+      onDelete: "set null",
+    }),
+    // Pricing in cents (e.g., 15000 = R$ 150,00)
+    // Nullable for "Call for Quote" / "Sob Consulta" services
+    price: integer("price"),
+    currency: text("currency").default("BRL").notNull(),
+    // Turnaround time in business days
+    tat: integer("tat"),
+    // Soft delete - never hard delete commercial data
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("service_organization_id_idx").on(table.organizationId),
+    index("service_method_id_idx").on(table.methodId),
+    index("service_asset_type_id_idx").on(table.assetTypeId),
+    index("service_is_active_idx").on(table.isActive),
+  ],
+);
+
+// =============================================================================
+// SERVICE AUDIT LOG - ISO 17025:2017 Clause 8.4 (Control of records)
+// =============================================================================
+
+/**
+ * Audit log for service changes.
+ * Tracks all modifications for compliance and financial traceability.
+ */
+export const serviceAuditLog = pgTable(
+  "service_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    serviceId: integer("service_id")
+      .notNull()
+      .references(() => service.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // 'create', 'update', 'deactivate', 'reactivate'
+    changes: jsonb("changes"), // { field: { old: x, new: y } }
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"), // Optional reason for change
+  },
+  (table) => [
+    index("service_audit_log_service_id_idx").on(table.serviceId),
+    index("service_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// SERVICE RELATIONS
+// =============================================================================
+
+export const serviceRelations = relations(service, ({ one, many }) => ({
+  organization: one(organization, {
+    fields: [service.organizationId],
+    references: [organization.id],
+  }),
+  method: one(calibrationMethod, {
+    fields: [service.methodId],
+    references: [calibrationMethod.id],
+  }),
+  assetType: one(assetType, {
+    fields: [service.assetTypeId],
+    references: [assetType.id],
+  }),
+  auditLogs: many(serviceAuditLog),
+}));
+
+export const serviceAuditLogRelations = relations(
+  serviceAuditLog,
+  ({ one }) => ({
+    service: one(service, {
+      fields: [serviceAuditLog.serviceId],
+      references: [service.id],
+    }),
+    performedByUser: one(user, {
+      fields: [serviceAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
