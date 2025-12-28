@@ -16,6 +16,7 @@ export interface FlattenOptions {
   maxDepth?: number;
   includeArrayIndices?: boolean;
   normalizeUnits?: boolean;
+  preserveArrays?: boolean; // Keep arrays intact for vector math functions (mean, std, etc.)
 }
 
 const DEFAULT_OPTIONS: Required<FlattenOptions> = {
@@ -25,6 +26,7 @@ const DEFAULT_OPTIONS: Required<FlattenOptions> = {
   maxDepth: 5,
   includeArrayIndices: true,
   normalizeUnits: true,
+  preserveArrays: false, // Default false for backward compatibility
 };
 
 // ============================================
@@ -47,7 +49,7 @@ export function parseUnitValue(input: string): UnitValue | null {
 // ============================================
 export function normalizeToSI(
   value: number,
-  unit: string
+  unit: string,
 ): { value: number; baseUnit: string } | null {
   const conversion = UNIT_TO_SI[unit];
   if (!conversion) return null;
@@ -63,7 +65,7 @@ export function normalizeToSI(
 // ============================================
 function processValue(
   val: unknown,
-  normalizeUnits: boolean
+  normalizeUnits: boolean,
 ): number | string | boolean | null {
   if (typeof val === "number") return val;
   if (typeof val === "boolean") return val;
@@ -104,7 +106,7 @@ function shouldExcludeKey(key: string, excludeSet: Set<string>): boolean {
 // ============================================
 export function flattenForExecution(
   data: Record<string, unknown>,
-  options: FlattenOptions = {}
+  options: FlattenOptions = {},
 ): FormulaContext {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const includeSet = new Set([...INCLUDE_KEYS, ...opts.includeKeys]);
@@ -143,10 +145,22 @@ export function flattenForExecution(
     if (Array.isArray(obj)) {
       // For numeric arrays, create individual indexed variables
       const numericValues = obj.filter(
-        (item): item is number => typeof item === "number"
+        (item): item is number => typeof item === "number",
       );
 
       if (numericValues.length === obj.length && numericValues.length > 0) {
+        // Preserve array if option is enabled (for vector math: mean, std, etc.)
+        if (opts.preserveArrays) {
+          result[currentKey] = numericValues;
+          inputsUsed.push(currentKey);
+          // Store count for aggregate functions
+          result[`${currentKey}_count`] = numericValues.length;
+          inputsUsed.push(`${currentKey}_count`);
+          // Skip indexed variables when preserveArrays is true to avoid doubling context size
+          return;
+        }
+
+        // Create indexed access when not preserving arrays (for specific point access)
         if (opts.includeArrayIndices) {
           numericValues.forEach((item, index) => {
             const key = `${currentKey}_${index}`;
@@ -186,7 +200,7 @@ export function flattenForExecution(
 // ============================================
 export function extractReadings(
   data: Record<string, unknown>,
-  readingKeys: string[] = ["reading", "value", "leitura", "measured"]
+  readingKeys: string[] = ["reading", "value", "leitura", "measured"],
 ): number[] {
   const readings: number[] = [];
   const seen = new Set<number>();
@@ -199,7 +213,7 @@ export function extractReadings(
       const isReadingKey = readingKeys.some(
         (rk) =>
           parentKey.toLowerCase().includes(rk.toLowerCase()) ||
-          parentKey === ""
+          parentKey === "",
       );
       if (isReadingKey && !seen.has(obj)) {
         readings.push(obj);
@@ -223,7 +237,7 @@ export function extractReadings(
     if (typeof obj === "object") {
       for (const [key, value] of Object.entries(obj)) {
         const isReadingKey = readingKeys.some((rk) =>
-          key.toLowerCase().includes(rk.toLowerCase())
+          key.toLowerCase().includes(rk.toLowerCase()),
         );
 
         if (isReadingKey) {
@@ -254,7 +268,7 @@ export function extractReadings(
 // ============================================
 export function injectEnvironmentData(
   context: FormulaContext,
-  environment: Record<string, number | undefined>
+  environment: Record<string, number | undefined>,
 ): FormulaContext {
   const result = { ...context };
 
@@ -272,7 +286,7 @@ export function injectEnvironmentData(
 // ============================================
 export function injectInstrumentSpecs(
   context: FormulaContext,
-  specs: Record<string, number | undefined>
+  specs: Record<string, number | undefined>,
 ): FormulaContext {
   const result = { ...context };
 
@@ -290,6 +304,6 @@ export function injectInstrumentSpecs(
 // ============================================
 export function getInputsUsed(context: FormulaContext): string[] {
   return Object.keys(context).filter(
-    (key) => context[key] !== null && context[key] !== undefined
+    (key) => context[key] !== null && context[key] !== undefined,
   );
 }

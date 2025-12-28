@@ -458,3 +458,206 @@ export const assetAuditLogRelations = relations(assetAuditLog, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+// =============================================================================
+// CALIBRATION METHOD - ISO 17025 Validated Calibration Templates
+// =============================================================================
+
+/**
+ * Method status values for versioning workflow
+ * - DRAFT: Work in progress, can be edited
+ * - PUBLISHED: Active and immutable, used for calibrations
+ * - ARCHIVED: No longer active, kept for historical reference
+ */
+export type MethodStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+
+/**
+ * Input field definition for method data collection.
+ * Defines what the technician types during calibration.
+ */
+export type MethodInputField = {
+  key: string; // Variable name, e.g., "reading_1"
+  label: string; // Display label, e.g., "Reading 1"
+  type: "text" | "number" | "select" | "table";
+  unit?: string; // e.g., "mm", "°C"
+  required?: boolean;
+  options?: string[]; // For select type
+  defaultValue?: string | number;
+  // For table type only:
+  columns?: Array<{
+    key: string;
+    label: string;
+    type: "text" | "number";
+    unit?: string;
+  }>;
+};
+
+/**
+ * Formula definition for computed values.
+ * Defines how results are calculated from inputs.
+ */
+export type MethodFormula = {
+  outputKey: string; // Variable name for result, e.g., "error"
+  expression: string; // Math expression, e.g., "reading_1 - nominal"
+  label?: string; // Display label, e.g., "Measurement Error"
+  unit?: string;
+};
+
+/**
+ * Validation rule for pass/fail criteria.
+ * Defines acceptance criteria per ISO 17025.
+ */
+export type MethodValidation = {
+  expression: string; // Boolean expression, e.g., "abs(error) < tolerance"
+  message: string; // Message shown on failure
+  severity: "error" | "warning";
+};
+
+/**
+ * Default Type B uncertainty component for the method.
+ * Pre-configured systematic uncertainty sources.
+ */
+export type MethodTypeBComponent = {
+  name: string;
+  value: number;
+  distribution: "normal" | "rectangular" | "triangular" | "u-shaped";
+  coverageFactor?: number;
+  divisor?: number;
+  degreesOfFreedom?: number;
+};
+
+/**
+ * Calibration Method table - Versioned calibration templates
+ * ISO 17025:2017 Clause 7.2 - Method Validation
+ *
+ * Key concepts:
+ * - Methods are organization-scoped (each lab owns their methods)
+ * - Published methods are immutable for ISO compliance
+ * - Editing a published method creates a new version (clone)
+ * - Version chain tracked via parentId
+ */
+export const calibrationMethod = pgTable(
+  "calibration_method",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    assetTypeId: integer("asset_type_id").references(() => assetType.id),
+    name: text("name").notNull(),
+    description: text("description"),
+    version: integer("version").default(1).notNull(),
+    status: text("status").$type<MethodStatus>().default("DRAFT").notNull(),
+    // JSONB fields for method definition
+    dataFields: jsonb("data_fields").$type<MethodInputField[]>().notNull(),
+    formulas: jsonb("formulas").$type<MethodFormula[]>().default([]).notNull(),
+    validations: jsonb("validations")
+      .$type<MethodValidation[]>()
+      .default([])
+      .notNull(),
+    uncertaintyParams: jsonb("uncertainty_params")
+      .$type<MethodTypeBComponent[]>()
+      .default([])
+      .notNull(),
+    // Version chain - links to the parent version
+    parentId: integer("parent_id"),
+    // Timestamps and actors
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    publishedAt: timestamp("published_at"),
+    publishedBy: text("published_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    archivedAt: timestamp("archived_at"),
+  },
+  (table) => [
+    index("method_organization_id_idx").on(table.organizationId),
+    index("method_asset_type_id_idx").on(table.assetTypeId),
+    index("method_status_idx").on(table.status),
+    index("method_parent_id_idx").on(table.parentId),
+    uniqueIndex("method_org_name_version_uidx").on(
+      table.organizationId,
+      table.name,
+      table.version,
+    ),
+  ],
+);
+
+// =============================================================================
+// METHOD AUDIT LOG - ISO 17025:2017 Clause 8.4 (Control of records)
+// =============================================================================
+
+/**
+ * Audit log for method changes.
+ * Tracks all modifications for compliance and traceability.
+ * Critical for ISO 17025 Clause 7.2 (Method Validation) audits.
+ */
+export const methodAuditLog = pgTable(
+  "method_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    methodId: integer("method_id")
+      .notNull()
+      .references(() => calibrationMethod.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // 'create', 'update', 'publish', 'archive', 'new_version'
+    changes: jsonb("changes"), // { field: { old: x, new: y } }
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"), // Optional reason for change
+  },
+  (table) => [
+    index("method_audit_log_method_id_idx").on(table.methodId),
+    index("method_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// CALIBRATION METHOD RELATIONS
+// =============================================================================
+
+export const calibrationMethodRelations = relations(
+  calibrationMethod,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [calibrationMethod.organizationId],
+      references: [organization.id],
+    }),
+    assetType: one(assetType, {
+      fields: [calibrationMethod.assetTypeId],
+      references: [assetType.id],
+    }),
+    parent: one(calibrationMethod, {
+      fields: [calibrationMethod.parentId],
+      references: [calibrationMethod.id],
+      relationName: "versionChain",
+    }),
+    versions: many(calibrationMethod, { relationName: "versionChain" }),
+    createdByUser: one(user, {
+      fields: [calibrationMethod.createdBy],
+      references: [user.id],
+      relationName: "methodCreator",
+    }),
+    publishedByUser: one(user, {
+      fields: [calibrationMethod.publishedBy],
+      references: [user.id],
+      relationName: "methodPublisher",
+    }),
+    auditLogs: many(methodAuditLog),
+  }),
+);
+
+export const methodAuditLogRelations = relations(methodAuditLog, ({ one }) => ({
+  method: one(calibrationMethod, {
+    fields: [methodAuditLog.methodId],
+    references: [calibrationMethod.id],
+  }),
+  performedByUser: one(user, {
+    fields: [methodAuditLog.performedBy],
+    references: [user.id],
+  }),
+}));

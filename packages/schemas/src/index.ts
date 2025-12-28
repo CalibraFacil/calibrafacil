@@ -255,3 +255,161 @@ export const ListAssetsQuerySchema = z.object({
 });
 
 export type ListAssetsQuery = z.infer<typeof ListAssetsQuerySchema>;
+
+// =============================================================================
+// CALIBRATION METHOD SCHEMAS - ISO 17025 Validated Templates
+// =============================================================================
+
+/**
+ * Method status values
+ */
+export const MethodStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]);
+export type MethodStatus = z.infer<typeof MethodStatusSchema>;
+
+/**
+ * Table column definition for table-type inputs
+ */
+export const MethodTableColumnSchema = z.object({
+  key: z
+    .string()
+    .min(1, "Chave é obrigatória")
+    .regex(
+      /^[a-zA-Z][a-zA-Z0-9_]*$/,
+      "Chave deve comecar com letra e conter apenas letras, numeros e underscore",
+    ),
+  label: z.string().min(1, "Rotulo é obrigatório"),
+  type: z.enum(["text", "number"]),
+  unit: z.string().optional(),
+});
+
+export type MethodTableColumn = z.infer<typeof MethodTableColumnSchema>;
+
+/**
+ * Input field definition for method data collection
+ */
+export const MethodInputFieldSchema = z
+  .object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve comecar com letra e conter apenas letras, numeros e underscore",
+      ),
+    label: z.string().min(1, "Rótulo é obrigatório"),
+    type: z.enum(["text", "number", "select", "table"]),
+    unit: z.string().optional(),
+    required: z.boolean().optional().default(false),
+    options: z.array(z.string()).optional(),
+    defaultValue: z.union([z.string(), z.number()]).optional(),
+    columns: z.array(MethodTableColumnSchema).optional(),
+  })
+  .refine(
+    (data) => {
+      // If type is "select", options must be provided
+      if (
+        data.type === "select" &&
+        (!data.options || data.options.length === 0)
+      ) {
+        return false;
+      }
+      return true;
+    },
+    { message: "Opcoes sao obrigatorias para campos do tipo 'select'" },
+  )
+  .refine(
+    (data) => {
+      // If type is "table", columns must be provided
+      if (
+        data.type === "table" &&
+        (!data.columns || data.columns.length === 0)
+      ) {
+        return false;
+      }
+      return true;
+    },
+    { message: "Colunas sao obrigatorias para campos do tipo 'table'" },
+  );
+
+export type MethodInputField = z.infer<typeof MethodInputFieldSchema>;
+
+/**
+ * Formula definition for computed values
+ */
+export const MethodFormulaSchema = z.object({
+  outputKey: z
+    .string()
+    .min(1, "Chave de saida é obrigatória")
+    .regex(
+      /^[a-zA-Z][a-zA-Z0-9_]*$/,
+      "Chave deve comecar com letra e conter apenas letras, numeros e underscore",
+    ),
+  expression: z.string().min(1, "Expressão é obrigatória"),
+  label: z.string().optional(),
+  unit: z.string().optional(),
+});
+
+export type MethodFormula = z.infer<typeof MethodFormulaSchema>;
+
+/**
+ * Validation rule for pass/fail criteria
+ */
+export const MethodValidationSchema = z.object({
+  expression: z.string().min(1, "Expressão é obrigatória"),
+  message: z.string().min(1, "Mensagem é obrigatória"),
+  severity: z.enum(["error", "warning"]),
+});
+
+export type MethodValidation = z.infer<typeof MethodValidationSchema>;
+
+/**
+ * Type B uncertainty component for method defaults
+ */
+export const MethodTypeBComponentSchema = z.object({
+  name: z.string().min(1, "Nome e obrigatorio"),
+  value: z.number().positive("Valor deve ser positivo"),
+  distribution: z.enum(["normal", "rectangular", "triangular", "u-shaped"]),
+  coverageFactor: z.number().positive().optional(),
+  divisor: z.number().positive().optional(),
+  degreesOfFreedom: z.number().positive().optional().default(50),
+});
+
+export type MethodTypeBComponent = z.infer<typeof MethodTypeBComponentSchema>;
+
+/**
+ * Schema for creating a new method
+ */
+export const CreateMethodSchema = z.object({
+  assetTypeId: z.coerce.number().optional(),
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  description: z.string().optional(),
+  dataFields: z
+    .array(MethodInputFieldSchema)
+    .min(1, "Defina pelo menos um campo de entrada"),
+  formulas: z.array(MethodFormulaSchema).default([]),
+  validations: z.array(MethodValidationSchema).default([]),
+  uncertaintyParams: z.array(MethodTypeBComponentSchema).default([]),
+});
+
+export type CreateMethodInput = z.infer<typeof CreateMethodSchema>;
+
+/**
+ * Schema for updating a method (only DRAFT status)
+ */
+export const UpdateMethodSchema = CreateMethodSchema.partial();
+
+export type UpdateMethodInput = z.infer<typeof UpdateMethodSchema>;
+
+/**
+ * Schema for listing methods with pagination and filtering
+ */
+export const ListMethodsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  status: MethodStatusSchema.optional(),
+  assetTypeId: z.coerce.number().optional(),
+  query: z.string().optional(),
+  includeArchived: z.coerce.boolean().optional().default(false),
+});
+
+export type ListMethodsQuery = z.infer<typeof ListMethodsQuerySchema>;

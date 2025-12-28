@@ -1,4 +1,5 @@
 import {
+  AiChemistry02Icon,
   Book02Icon,
   ChartIcon,
   CropIcon,
@@ -85,6 +86,11 @@ const data = {
       title: 'Ativos',
       url: '/dashboard/assets',
       icon: <HugeiconsIcon icon={Wrench01Icon} />,
+    },
+    {
+      title: 'Métodos de Calibração',
+      url: '/dashboard/methods',
+      icon: <HugeiconsIcon icon={AiChemistry02Icon} />,
     },
   ],
   navSecondary: [

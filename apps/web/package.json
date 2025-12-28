@@ -15,6 +15,7 @@
     "@base-ui/react": "^1.0.0",
     "@calibra-facil/api": "workspace:^",
     "@calibra-facil/auth": "workspace:^",
+    "@calibra-facil/math-engine": "workspace:^",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@fontsource-variable/figtree": "^5.2.10",
