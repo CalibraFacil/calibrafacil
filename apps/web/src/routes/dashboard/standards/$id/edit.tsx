@@ -1,0 +1,1099 @@
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import { HugeiconsIcon } from '@hugeicons/react'
+import {
+  ArrowLeft01Icon,
+  Delete02Icon,
+  InformationCircleIcon,
+  PlusSignIcon,
+  RefreshIcon,
+} from '@hugeicons/core-free-icons'
+
+import { api } from '@/utils/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+
+export const Route = createFileRoute('/dashboard/standards/$id/edit')({
+  head: () => ({
+    meta: [{ title: 'Editar Padrão | CalibraFácil' }],
+  }),
+  component: EditStandardPage,
+})
+
+interface CertifiedValue {
+  nominal: string
+  value: string
+  uncertainty: string
+  unit: string
+}
+
+interface FormData {
+  name: string
+  type: string
+  serialNumber: string
+  manufacturer: string
+  model: string
+  certificateNumber: string
+  calibratedBy: string
+  calibrationDate: string
+  nextCalibrationDate: string
+  referenceValue: string
+  uncertainty: string
+  uncertaintyUnit: string
+  coverageFactor: string
+  distribution: 'normal' | 'rectangular'
+  drift: string
+  certifiedValues: Array<CertifiedValue>
+  status: 'ACTIVE' | 'INACTIVE' | 'OUT_OF_TOLERANCE' | 'SENT_FOR_CALIBRATION'
+}
+
+interface RenewFormData {
+  certificateNumber: string
+  calibratedBy: string
+  calibrationDate: string
+  nextCalibrationDate: string
+  referenceValue: string
+  uncertainty: string
+  uncertaintyUnit: string
+  coverageFactor: string
+  certifiedValues: Array<CertifiedValue>
+  reason: string
+}
+
+function EditStandardPage() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { id } = Route.useParams()
+  const standardId = parseInt(id, 10)
+
+  const [formData, setFormData] = useState<FormData | null>(null)
+  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
+    {},
+  )
+  const [isMultiValue, setIsMultiValue] = useState(false)
+
+  // Renew dialog state
+  const [showRenewDialog, setShowRenewDialog] = useState(false)
+  const [renewFormData, setRenewFormData] = useState<RenewFormData | null>(null)
+  const [renewErrors, setRenewErrors] = useState<
+    Partial<Record<keyof RenewFormData, string>>
+  >({})
+
+  // Fetch standard data
+  const { data: standard, isLoading } = useQuery({
+    queryKey: ['standards', standardId],
+    queryFn: async () => {
+      const res = await api.api.standards[':id'].$get({
+        param: { id: String(standardId) },
+      })
+
+      if (!res.ok) {
+        throw new Error('Falha ao carregar padrão')
+      }
+
+      return res.json()
+    },
+    enabled: !isNaN(standardId),
+  })
+
+  // Populate form when data loads
+  useEffect(() => {
+    if (standard) {
+      const hasCertifiedValues = !!(
+        standard.certifiedValues && standard.certifiedValues.length > 0
+      )
+      setIsMultiValue(hasCertifiedValues)
+
+      setFormData({
+        name: standard.name,
+        type: standard.type || '',
+        serialNumber: standard.serialNumber,
+        manufacturer: standard.manufacturer || '',
+        model: standard.model || '',
+        certificateNumber: standard.certificateNumber,
+        calibratedBy: standard.calibratedBy || '',
+        calibrationDate: standard.calibrationDate
+          ? new Date(standard.calibrationDate).toISOString().split('T')[0]
+          : '',
+        nextCalibrationDate: standard.nextCalibrationDate
+          ? new Date(standard.nextCalibrationDate).toISOString().split('T')[0]
+          : '',
+        referenceValue: standard.referenceValue?.toString() || '',
+        uncertainty: standard.uncertainty?.toString() || '',
+        uncertaintyUnit: standard.uncertaintyUnit || '',
+        coverageFactor: standard.coverageFactor?.toString() || '2.0',
+        distribution: standard.distribution || 'normal',
+        drift: standard.drift?.toString() || '',
+        certifiedValues: hasCertifiedValues
+          ? standard.certifiedValues!.map(
+              (cv: {
+                nominal: string
+                value: number
+                uncertainty: number
+                unit: string
+              }) => ({
+                nominal: cv.nominal,
+                value: cv.value.toString(),
+                uncertainty: cv.uncertainty.toString(),
+                unit: cv.unit,
+              }),
+            )
+          : [],
+        status: standard.status,
+      })
+    }
+  }, [standard])
+
+  // Update mutation
+  const updateMutation = useMutation({
+    mutationFn: async (data: FormData) => {
+      const payload: Record<string, unknown> = {
+        name: data.name,
+        type: data.type || null,
+        serialNumber: data.serialNumber,
+        manufacturer: data.manufacturer || null,
+        model: data.model || null,
+        certificateNumber: data.certificateNumber,
+        calibratedBy: data.calibratedBy || null,
+        calibrationDate: data.calibrationDate,
+        nextCalibrationDate: data.nextCalibrationDate,
+        coverageFactor: parseFloat(data.coverageFactor) || 2.0,
+        distribution: data.distribution,
+        drift: data.drift ? parseFloat(data.drift) : null,
+        status: data.status,
+      }
+
+      if (isMultiValue && data.certifiedValues.length > 0) {
+        payload.certifiedValues = data.certifiedValues.map((cv) => ({
+          nominal: cv.nominal,
+          value: parseFloat(cv.value),
+          uncertainty: parseFloat(cv.uncertainty),
+          unit: cv.unit,
+        }))
+        payload.referenceValue = null
+        payload.uncertainty = null
+        payload.uncertaintyUnit = null
+      } else {
+        payload.referenceValue = data.referenceValue
+          ? parseFloat(data.referenceValue)
+          : null
+        payload.uncertainty = data.uncertainty
+          ? parseFloat(data.uncertainty)
+          : null
+        payload.uncertaintyUnit = data.uncertaintyUnit || null
+        payload.certifiedValues = null
+      }
+
+      const res = await api.api.standards[':id'].$put({
+        param: { id: String(standardId) },
+        json: payload,
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(
+          (error as { error?: string }).error || 'Erro ao atualizar padrão',
+        )
+      }
+
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['standards'] })
+      toast.success('Padrão atualizado com sucesso!')
+      navigate({ to: '/dashboard/standards' })
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  // Renew mutation
+  const renewMutation = useMutation({
+    mutationFn: async (data: RenewFormData) => {
+      const payload: Record<string, unknown> = {
+        certificateNumber: data.certificateNumber,
+        calibratedBy: data.calibratedBy || undefined,
+        calibrationDate: data.calibrationDate,
+        nextCalibrationDate: data.nextCalibrationDate,
+        reason: data.reason,
+      }
+
+      if (data.coverageFactor) {
+        payload.coverageFactor = parseFloat(data.coverageFactor)
+      }
+
+      if (isMultiValue && data.certifiedValues.length > 0) {
+        payload.certifiedValues = data.certifiedValues.map((cv) => ({
+          nominal: cv.nominal,
+          value: parseFloat(cv.value),
+          uncertainty: parseFloat(cv.uncertainty),
+          unit: cv.unit,
+        }))
+      } else {
+        if (data.referenceValue) {
+          payload.referenceValue = parseFloat(data.referenceValue)
+        }
+        if (data.uncertainty) {
+          payload.uncertainty = parseFloat(data.uncertainty)
+        }
+        if (data.uncertaintyUnit) {
+          payload.uncertaintyUnit = data.uncertaintyUnit
+        }
+      }
+
+      const res = await api.api.standards[':id'].renew.$post({
+        param: { id: String(standardId) },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        json: payload as any,
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(
+          (error as { error?: string }).error || 'Erro ao renovar certificado',
+        )
+      }
+
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['standards'] })
+      toast.success('Certificado renovado com sucesso!')
+      setShowRenewDialog(false)
+      navigate({ to: '/dashboard/standards' })
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  // Validation
+  const validate = (): boolean => {
+    if (!formData) return false
+    const newErrors: Partial<Record<keyof FormData, string>> = {}
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Nome e obrigatorio'
+    }
+    if (!formData.serialNumber.trim()) {
+      newErrors.serialNumber = 'Número de série é obrigatório'
+    }
+    if (!formData.certificateNumber.trim()) {
+      newErrors.certificateNumber = 'Numero do certificado e obrigatorio'
+    }
+    if (!formData.calibrationDate) {
+      newErrors.calibrationDate = 'Data de calibração é obrigatória'
+    }
+    if (!formData.nextCalibrationDate) {
+      newErrors.nextCalibrationDate = 'Próxima calibração é obrigatória'
+    }
+
+    if (isMultiValue) {
+      if (formData.certifiedValues.length === 0) {
+        newErrors.certifiedValues = 'Adicione pelo menos um valor certificado'
+      }
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const validateRenew = (): boolean => {
+    if (!renewFormData) return false
+    const newErrors: Partial<Record<keyof RenewFormData, string>> = {}
+
+    if (!renewFormData.certificateNumber.trim()) {
+      newErrors.certificateNumber = 'Numero do certificado e obrigatorio'
+    }
+    if (!renewFormData.calibrationDate) {
+      newErrors.calibrationDate = 'Data de calibração é obrigatória'
+    }
+    if (!renewFormData.nextCalibrationDate) {
+      newErrors.nextCalibrationDate = 'Próxima calibração é obrigatória'
+    }
+    if (!renewFormData.reason.trim()) {
+      newErrors.reason = 'Motivo da renovacao e obrigatorio'
+    }
+
+    setRenewErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData || !validate()) return
+    updateMutation.mutate(formData)
+  }
+
+  const handleRenewSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!renewFormData || !validateRenew()) return
+    renewMutation.mutate(renewFormData)
+  }
+
+  const updateField = <TKey extends keyof FormData>(
+    field: TKey,
+    value: FormData[TKey],
+  ) => {
+    if (!formData) return
+    setFormData((prev) => (prev ? { ...prev, [field]: value } : null))
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }))
+    }
+  }
+
+  const addCertifiedValue = () => {
+    if (!formData) return
+    setFormData((prev) =>
+      prev
+        ? {
+            ...prev,
+            certifiedValues: [
+              ...prev.certifiedValues,
+              { nominal: '', value: '', uncertainty: '', unit: '' },
+            ],
+          }
+        : null,
+    )
+  }
+
+  const removeCertifiedValue = (index: number) => {
+    if (!formData) return
+    setFormData((prev) =>
+      prev
+        ? {
+            ...prev,
+            certifiedValues: prev.certifiedValues.filter((_, i) => i !== index),
+          }
+        : null,
+    )
+  }
+
+  const updateCertifiedValue = (
+    index: number,
+    field: keyof CertifiedValue,
+    value: string,
+  ) => {
+    if (!formData) return
+    setFormData((prev) =>
+      prev
+        ? {
+            ...prev,
+            certifiedValues: prev.certifiedValues.map((cv, i) =>
+              i === index ? { ...cv, [field]: value } : cv,
+            ),
+          }
+        : null,
+    )
+  }
+
+  const openRenewDialog = () => {
+    if (!formData) return
+    setRenewFormData({
+      certificateNumber: '',
+      calibratedBy: formData.calibratedBy,
+      calibrationDate: '',
+      nextCalibrationDate: '',
+      referenceValue: formData.referenceValue,
+      uncertainty: formData.uncertainty,
+      uncertaintyUnit: formData.uncertaintyUnit,
+      coverageFactor: formData.coverageFactor,
+      certifiedValues: formData.certifiedValues,
+      reason: '',
+    })
+    setRenewErrors({})
+    setShowRenewDialog(true)
+  }
+
+  if (isLoading || !formData) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-24" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate({ to: '/dashboard/standards' })}
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
+          Voltar
+        </Button>
+        <Button variant="outline" onClick={openRenewDialog}>
+          <HugeiconsIcon icon={RefreshIcon} className="mr-2 h-4 w-4" />
+          Renovar Certificado
+        </Button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Identification Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Identificação</CardTitle>
+            <CardDescription>
+              Informações básicas do padrão de referência
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FieldGroup>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Field>
+                  <FieldLabel htmlFor="name">Nome *</FieldLabel>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => updateField('name', e.target.value)}
+                    disabled={updateMutation.isPending}
+                  />
+                  {errors.name && <FieldError>{errors.name}</FieldError>}
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="type">Tipo</FieldLabel>
+                  <Input
+                    id="type"
+                    value={formData.type}
+                    onChange={(e) => updateField('type', e.target.value)}
+                    disabled={updateMutation.isPending}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="serialNumber">N Série *</FieldLabel>
+                  <Input
+                    id="serialNumber"
+                    value={formData.serialNumber}
+                    onChange={(e) =>
+                      updateField('serialNumber', e.target.value)
+                    }
+                    disabled={updateMutation.isPending}
+                  />
+                  {errors.serialNumber && (
+                    <FieldError>{errors.serialNumber}</FieldError>
+                  )}
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel htmlFor="manufacturer">Fabricante</FieldLabel>
+                  <Input
+                    id="manufacturer"
+                    value={formData.manufacturer}
+                    onChange={(e) =>
+                      updateField('manufacturer', e.target.value)
+                    }
+                    disabled={updateMutation.isPending}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="model">Modelo</FieldLabel>
+                  <Input
+                    id="model"
+                    value={formData.model}
+                    onChange={(e) => updateField('model', e.target.value)}
+                    disabled={updateMutation.isPending}
+                  />
+                </Field>
+              </div>
+            </FieldGroup>
+          </CardContent>
+        </Card>
+
+        {/* Certificate Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Certificado de Calibração</CardTitle>
+            <CardDescription>
+              Dados de rastreabilidade do certificado
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FieldGroup>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel htmlFor="certificateNumber">
+                    N Certificado *
+                  </FieldLabel>
+                  <Input
+                    id="certificateNumber"
+                    value={formData.certificateNumber}
+                    onChange={(e) =>
+                      updateField('certificateNumber', e.target.value)
+                    }
+                    disabled={updateMutation.isPending}
+                  />
+                  {errors.certificateNumber && (
+                    <FieldError>{errors.certificateNumber}</FieldError>
+                  )}
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="calibratedBy">Calibrado por</FieldLabel>
+                  <Input
+                    id="calibratedBy"
+                    value={formData.calibratedBy}
+                    onChange={(e) =>
+                      updateField('calibratedBy', e.target.value)
+                    }
+                    disabled={updateMutation.isPending}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel htmlFor="calibrationDate">
+                    Data de Calibração *
+                  </FieldLabel>
+                  <Input
+                    id="calibrationDate"
+                    type="date"
+                    value={formData.calibrationDate}
+                    onChange={(e) =>
+                      updateField('calibrationDate', e.target.value)
+                    }
+                    disabled={updateMutation.isPending}
+                  />
+                  {errors.calibrationDate && (
+                    <FieldError>{errors.calibrationDate}</FieldError>
+                  )}
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="nextCalibrationDate">
+                    Próxima Calibração *
+                  </FieldLabel>
+                  <Input
+                    id="nextCalibrationDate"
+                    type="date"
+                    value={formData.nextCalibrationDate}
+                    onChange={(e) =>
+                      updateField('nextCalibrationDate', e.target.value)
+                    }
+                    disabled={updateMutation.isPending}
+                  />
+                  {errors.nextCalibrationDate && (
+                    <FieldError>{errors.nextCalibrationDate}</FieldError>
+                  )}
+                </Field>
+              </div>
+            </FieldGroup>
+          </CardContent>
+        </Card>
+
+        {/* Metrology Data Card */}
+        <Card className="border-primary/50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <HugeiconsIcon
+                    icon={InformationCircleIcon}
+                    className="h-5 w-5 text-primary"
+                  />
+                  Dados Metrológicos
+                </CardTitle>
+                <CardDescription>
+                  Estes dados são utilizados no cálculo de incerteza
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  Valor Único
+                </span>
+                <Switch
+                  checked={isMultiValue}
+                  onCheckedChange={(checked) => {
+                    setIsMultiValue(checked)
+                    if (checked && formData.certifiedValues.length === 0) {
+                      addCertifiedValue()
+                    }
+                  }}
+                  disabled={updateMutation.isPending}
+                />
+                <span className="text-sm text-muted-foreground">Conjunto</span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <FieldGroup>
+              {!isMultiValue ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="referenceValue">
+                      Valor de Referencia
+                    </FieldLabel>
+                    <Input
+                      id="referenceValue"
+                      type="number"
+                      step="any"
+                      value={formData.referenceValue}
+                      onChange={(e) =>
+                        updateField('referenceValue', e.target.value)
+                      }
+                      disabled={updateMutation.isPending}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="uncertainty">Incerteza</FieldLabel>
+                    <Input
+                      id="uncertainty"
+                      type="number"
+                      step="any"
+                      value={formData.uncertainty}
+                      onChange={(e) =>
+                        updateField('uncertainty', e.target.value)
+                      }
+                      disabled={updateMutation.isPending}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="uncertaintyUnit">Unidade</FieldLabel>
+                    <Input
+                      id="uncertaintyUnit"
+                      value={formData.uncertaintyUnit}
+                      onChange={(e) =>
+                        updateField('uncertaintyUnit', e.target.value)
+                      }
+                      disabled={updateMutation.isPending}
+                    />
+                  </Field>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {formData.certifiedValues.map((cv, index) => (
+                    <div
+                      key={index}
+                      className="flex items-end gap-2 p-3 bg-muted/50 rounded-lg"
+                    >
+                      <Field className="flex-1">
+                        <FieldLabel>Nominal</FieldLabel>
+                        <Input
+                          value={cv.nominal}
+                          onChange={(e) =>
+                            updateCertifiedValue(
+                              index,
+                              'nominal',
+                              e.target.value,
+                            )
+                          }
+                          disabled={updateMutation.isPending}
+                        />
+                      </Field>
+                      <Field className="flex-1">
+                        <FieldLabel>Valor Certificado</FieldLabel>
+                        <Input
+                          type="number"
+                          step="any"
+                          value={cv.value}
+                          onChange={(e) =>
+                            updateCertifiedValue(index, 'value', e.target.value)
+                          }
+                          disabled={updateMutation.isPending}
+                        />
+                      </Field>
+                      <Field className="flex-1">
+                        <FieldLabel>Incerteza</FieldLabel>
+                        <Input
+                          type="number"
+                          step="any"
+                          value={cv.uncertainty}
+                          onChange={(e) =>
+                            updateCertifiedValue(
+                              index,
+                              'uncertainty',
+                              e.target.value,
+                            )
+                          }
+                          disabled={updateMutation.isPending}
+                        />
+                      </Field>
+                      <Field className="w-24">
+                        <FieldLabel>Unidade</FieldLabel>
+                        <Input
+                          value={cv.unit}
+                          onChange={(e) =>
+                            updateCertifiedValue(index, 'unit', e.target.value)
+                          }
+                          disabled={updateMutation.isPending}
+                        />
+                      </Field>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeCertifiedValue(index)}
+                        disabled={
+                          updateMutation.isPending ||
+                          formData.certifiedValues.length <= 1
+                        }
+                      >
+                        <HugeiconsIcon
+                          icon={Delete02Icon}
+                          className="h-4 w-4"
+                        />
+                      </Button>
+                    </div>
+                  ))}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addCertifiedValue}
+                    disabled={updateMutation.isPending}
+                  >
+                    <HugeiconsIcon
+                      icon={PlusSignIcon}
+                      className="mr-2 h-4 w-4"
+                    />
+                    Adicionar Valor
+                  </Button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+                <Field>
+                  <FieldLabel htmlFor="coverageFactor">
+                    Fator de Cobertura (k)
+                  </FieldLabel>
+                  <Input
+                    id="coverageFactor"
+                    type="number"
+                    step="0.1"
+                    value={formData.coverageFactor}
+                    onChange={(e) =>
+                      updateField('coverageFactor', e.target.value)
+                    }
+                    disabled={updateMutation.isPending}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="distribution">Distribuicao</FieldLabel>
+                  <Select
+                    value={formData.distribution}
+                    onValueChange={(v) =>
+                      updateField('distribution', v as 'normal' | 'rectangular')
+                    }
+                    disabled={updateMutation.isPending}
+                  >
+                    <SelectTrigger id="distribution">
+                      <span>
+                        {formData.distribution === 'normal'
+                          ? 'Normal'
+                          : 'Retangular'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="rectangular">Retangular</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="drift">Drift</FieldLabel>
+                  <Input
+                    id="drift"
+                    type="number"
+                    step="any"
+                    value={formData.drift}
+                    onChange={(e) => updateField('drift', e.target.value)}
+                    disabled={updateMutation.isPending}
+                  />
+                </Field>
+              </div>
+            </FieldGroup>
+          </CardContent>
+        </Card>
+
+        {/* Status Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Field>
+              <FieldLabel htmlFor="status">Status do Padrão</FieldLabel>
+              <Select
+                value={formData.status}
+                onValueChange={(v) =>
+                  updateField('status', v as FormData['status'])
+                }
+                disabled={updateMutation.isPending}
+              >
+                <SelectTrigger id="status" className="w-64">
+                  <span>
+                    {formData.status === 'ACTIVE'
+                      ? 'Ativo'
+                      : formData.status === 'INACTIVE'
+                        ? 'Inativo'
+                        : formData.status === 'OUT_OF_TOLERANCE'
+                          ? 'Fora de Tolerância'
+                          : 'Em Calibração'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ACTIVE">Ativo</SelectItem>
+                  <SelectItem value="INACTIVE">Inativo</SelectItem>
+                  <SelectItem value="OUT_OF_TOLERANCE">
+                    Fora de Tolerancia
+                  </SelectItem>
+                  <SelectItem value="SENT_FOR_CALIBRATION">
+                    Em Calibração
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </CardContent>
+        </Card>
+
+        {/* Submit Buttons */}
+        <div className="flex justify-end gap-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate({ to: '/dashboard/standards' })}
+            disabled={updateMutation.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={updateMutation.isPending}>
+            {updateMutation.isPending ? 'Salvando...' : 'Salvar Alteracoes'}
+          </Button>
+        </div>
+      </form>
+
+      {/* Renew Certificate Dialog */}
+      <Dialog open={showRenewDialog} onOpenChange={setShowRenewDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Renovar Certificado de Calibração</DialogTitle>
+            <DialogDescription>
+              Atualize os dados do certificado após uma nova calibração. O
+              motivo é obrigatório para rastreabilidade (ISO 17025).
+            </DialogDescription>
+          </DialogHeader>
+
+          {renewFormData && (
+            <form onSubmit={handleRenewSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel>Novo N Certificado *</FieldLabel>
+                  <Input
+                    value={renewFormData.certificateNumber}
+                    onChange={(e) =>
+                      setRenewFormData((prev) =>
+                        prev
+                          ? { ...prev, certificateNumber: e.target.value }
+                          : null,
+                      )
+                    }
+                    placeholder="Ex: CAL-2025-001"
+                    disabled={renewMutation.isPending}
+                  />
+                  {renewErrors.certificateNumber && (
+                    <FieldError>{renewErrors.certificateNumber}</FieldError>
+                  )}
+                </Field>
+
+                <Field>
+                  <FieldLabel>Calibrado por</FieldLabel>
+                  <Input
+                    value={renewFormData.calibratedBy}
+                    onChange={(e) =>
+                      setRenewFormData((prev) =>
+                        prev ? { ...prev, calibratedBy: e.target.value } : null,
+                      )
+                    }
+                    disabled={renewMutation.isPending}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Field>
+                  <FieldLabel>Nova Data de Calibração *</FieldLabel>
+                  <Input
+                    type="date"
+                    value={renewFormData.calibrationDate}
+                    onChange={(e) =>
+                      setRenewFormData((prev) =>
+                        prev
+                          ? { ...prev, calibrationDate: e.target.value }
+                          : null,
+                      )
+                    }
+                    disabled={renewMutation.isPending}
+                  />
+                  {renewErrors.calibrationDate && (
+                    <FieldError>{renewErrors.calibrationDate}</FieldError>
+                  )}
+                </Field>
+
+                <Field>
+                  <FieldLabel>Nova Próxima Calibração *</FieldLabel>
+                  <Input
+                    type="date"
+                    value={renewFormData.nextCalibrationDate}
+                    onChange={(e) =>
+                      setRenewFormData((prev) =>
+                        prev
+                          ? { ...prev, nextCalibrationDate: e.target.value }
+                          : null,
+                      )
+                    }
+                    disabled={renewMutation.isPending}
+                  />
+                  {renewErrors.nextCalibrationDate && (
+                    <FieldError>{renewErrors.nextCalibrationDate}</FieldError>
+                  )}
+                </Field>
+              </div>
+
+              {!isMultiValue && (
+                <div className="grid grid-cols-3 gap-4">
+                  <Field>
+                    <FieldLabel>Novo Valor de Referencia</FieldLabel>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={renewFormData.referenceValue}
+                      onChange={(e) =>
+                        setRenewFormData((prev) =>
+                          prev
+                            ? { ...prev, referenceValue: e.target.value }
+                            : null,
+                        )
+                      }
+                      disabled={renewMutation.isPending}
+                    />
+                    <FieldDescription>
+                      Deixe em branco para manter
+                    </FieldDescription>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel>Nova Incerteza</FieldLabel>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={renewFormData.uncertainty}
+                      onChange={(e) =>
+                        setRenewFormData((prev) =>
+                          prev
+                            ? { ...prev, uncertainty: e.target.value }
+                            : null,
+                        )
+                      }
+                      disabled={renewMutation.isPending}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel>Unidade</FieldLabel>
+                    <Input
+                      value={renewFormData.uncertaintyUnit}
+                      onChange={(e) =>
+                        setRenewFormData((prev) =>
+                          prev
+                            ? { ...prev, uncertaintyUnit: e.target.value }
+                            : null,
+                        )
+                      }
+                      disabled={renewMutation.isPending}
+                    />
+                  </Field>
+                </div>
+              )}
+
+              <Field>
+                <FieldLabel>Motivo da Renovacao *</FieldLabel>
+                <Textarea
+                  value={renewFormData.reason}
+                  onChange={(e) =>
+                    setRenewFormData((prev) =>
+                      prev ? { ...prev, reason: e.target.value } : null,
+                    )
+                  }
+                  placeholder="Ex: Recalibracao anual conforme procedimento PQ-001"
+                  rows={3}
+                  disabled={renewMutation.isPending}
+                />
+                <FieldDescription>
+                  Obrigatorio para rastreabilidade (ISO 17025 Clause 8.4)
+                </FieldDescription>
+                {renewErrors.reason && (
+                  <FieldError>{renewErrors.reason}</FieldError>
+                )}
+              </Field>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowRenewDialog(false)}
+                  disabled={renewMutation.isPending}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={renewMutation.isPending}>
+                  {renewMutation.isPending
+                    ? 'Renovando...'
+                    : 'Renovar Certificado'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

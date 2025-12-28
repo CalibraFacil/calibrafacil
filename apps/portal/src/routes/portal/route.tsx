@@ -166,8 +166,8 @@ function PortalLayout() {
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Acesso Nao Disponivel</CardTitle>
             <CardDescription>
-              Voce nao possui acesso a nenhuma organizacao cliente. Se voce e um
-              usuario do laboratorio, acesse o painel principal.
+              Você não possui acesso a nenhuma organização de cliente. Se você é
+              um usuário do laboratório, acesse o painel principal.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -176,7 +176,7 @@ function PortalLayout() {
                 window.location.href = `${getWebAppUrl()}/dashboard`;
               }}
             >
-              Acessar Painel do Laboratorio
+              Acessar Painel do Laboratório
             </Button>
             <Button
               variant="outline"

@@ -154,7 +154,7 @@ function AssetsPage() {
             <div>
               <CardTitle>Ativos</CardTitle>
               <CardDescription>
-                Gerencie os ativos e instrumentos do laboratorio.
+                Gerencie os ativos e instrumentos do laboratório.
               </CardDescription>
             </div>
             <Button render={<Link to="/dashboard/assets/new" />}>
@@ -435,7 +435,7 @@ function AssetsTableSkeleton() {
               <TableHead>Tipo</TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Fabricante</TableHead>
-              <TableHead>N. Serie</TableHead>
+              <TableHead>N. Série</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Prox. Calibração</TableHead>
