@@ -206,9 +206,13 @@ function NewStandardPage() {
         }
       }
     } else {
-      if (!formData.referenceValue && !formData.uncertainty) {
-        // Allow empty single value if transitioning to multi-value
-      } else {
+    } else {
+      // Single-value mode - must provide both referenceValue and uncertainty, or neither
+      const hasReferenceValue = !!formData.referenceValue
+      const hasUncertainty = !!formData.uncertainty
+      
+      if (hasReferenceValue || hasUncertainty) {
+        // If providing single-value data, all fields are required
         if (!formData.referenceValue) {
           newErrors.referenceValue = 'Valor de referencia e obrigatorio'
         }
@@ -219,6 +223,7 @@ function NewStandardPage() {
           newErrors.uncertaintyUnit = 'Unidade da incerteza e obrigatoria'
         }
       }
+    }
     }
 
     setErrors(newErrors)
