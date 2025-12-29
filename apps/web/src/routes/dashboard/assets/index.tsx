@@ -21,16 +21,6 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import {
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -52,6 +42,8 @@ import {
   ComboboxItem,
   ComboboxList,
 } from '@/components/ui/combobox'
+import { DataTable } from '@/components/ui/data-table'
+import { type Asset, type AssetsTableMeta, assetsColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/assets/')({
   head: () => ({
@@ -69,22 +61,6 @@ const statusLabels: Record<AssetStatus, string> = {
   SCRAPPED: 'Descartado',
 }
 
-const statusVariants: Record<
-  AssetStatus,
-  'default' | 'secondary' | 'outline' | 'destructive'
-> = {
-  ACTIVE: 'default',
-  INACTIVE: 'secondary',
-  MAINTENANCE: 'outline',
-  SCRAPPED: 'destructive',
-}
-
-function formatDate(date: string | Date | null | undefined): string {
-  if (!date) return '-'
-  const d = new Date(date)
-  return d.toLocaleDateString('pt-BR')
-}
-
 function AssetsPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
@@ -92,14 +68,12 @@ function AssetsPage() {
   const [page, setPage] = useState(1)
   const limit = 20
 
-  // Customer filter with URL sync via nuqs
   const [customerIdParam, setCustomerIdParam] = useQueryState(
     'customerId',
     parseAsInteger,
   )
   const [customerSearch, setCustomerSearch] = useState('')
 
-  // Fetch customers for the filter combobox
   const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ['customers', 'search', customerSearch],
     queryFn: async () => {
@@ -118,7 +92,6 @@ function AssetsPage() {
     staleTime: 30000,
   })
 
-  // Get the selected customer name for display
   const selectedCustomerName = useMemo(() => {
     if (!customerIdParam || !customersData?.data) return ''
     const customer = customersData.data.find((c) => c.id === customerIdParam)
@@ -142,9 +115,31 @@ function AssetsPage() {
         throw new Error('Falha ao carregar ativos')
       }
 
-      return res.json()
+      return res.json() as Promise<{
+        data: Asset[]
+        pagination: {
+          page: number
+          limit: number
+          total: number
+          totalPages: number
+        }
+      }>
     },
   })
+
+  const tableMeta: AssetsTableMeta = {
+    onCustomerClick: (customerId) => {
+      setCustomerIdParam(customerId)
+      setPage(1)
+    },
+  }
+
+  const handleRowClick = (asset: Asset) => {
+    navigate({
+      to: '/dashboard/assets/$id',
+      params: { id: String(asset.id) },
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -260,9 +255,6 @@ function AssetsPage() {
             )}
           </div>
 
-          {/* Loading state */}
-          {isLoading && <AssetsTableSkeleton />}
-
           {/* Error state */}
           {error && (
             <div className="text-destructive py-8 text-center">
@@ -312,167 +304,28 @@ function AssetsPage() {
           )}
 
           {/* Data table */}
-          {!isLoading && !error && data?.data && data.data.length > 0 && (
-            <>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tag</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Fabricante</TableHead>
-                      <TableHead>N. Série</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Próx. Calibração</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.data.map((asset) => (
-                      <TableRow
-                        key={asset.id}
-                        className="cursor-pointer"
-                        onClick={() =>
-                          navigate({
-                            to: '/dashboard/assets/$id',
-                            params: { id: String(asset.id) },
-                          })
-                        }
-                      >
-                        <TableCell className="font-mono font-medium">
-                          {asset.tag}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {asset.assetTypeName}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{asset.name}</TableCell>
-                        <TableCell>{asset.manufacturer || '-'}</TableCell>
-                        <TableCell className="font-mono">
-                          {asset.serialNumber}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className="cursor-pointer hover:bg-accent"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setCustomerIdParam(asset.customerId)
-                              setPage(1)
-                            }}
-                          >
-                            {asset.customerName}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              statusVariants[asset.status as AssetStatus]
-                            }
-                          >
-                            {statusLabels[asset.status as AssetStatus]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {formatDate(asset.nextCalibrationDate)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+          {!error && (data?.data?.length ?? 0) > 0 && (
+            <DataTable
+              columns={assetsColumns}
+              data={data?.data ?? []}
+              isLoading={isLoading}
+              pagination={data?.pagination}
+              onPageChange={setPage}
+              onRowClick={handleRowClick}
+              meta={tableMeta}
+            />
+          )}
 
-              {/* Pagination */}
-              {data.pagination.totalPages > 1 && (
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="text-muted-foreground text-sm">
-                    Pagina {data.pagination.page} de{' '}
-                    {data.pagination.totalPages} ({data.pagination.total}{' '}
-                    ativos)
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setPage((p) =>
-                          Math.min(data.pagination.totalPages, p + 1),
-                        )
-                      }
-                      disabled={page === data.pagination.totalPages}
-                    >
-                      Proximo
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
+          {/* Loading state when no data yet */}
+          {isLoading && !data && (
+            <DataTable
+              columns={assetsColumns}
+              data={[]}
+              isLoading={true}
+            />
           )}
         </CardContent>
       </Card>
-    </div>
-  )
-}
-
-function AssetsTableSkeleton() {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Tag</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Nome</TableHead>
-              <TableHead>Fabricante</TableHead>
-              <TableHead>N. Série</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Prox. Calibração</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <TableRow key={i}>
-                <TableCell>
-                  <Skeleton className="h-4 w-16" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-5 w-24" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-32" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-24" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-20" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-5 w-24" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-5 w-16" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-20" />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
     </div>
   )
 }

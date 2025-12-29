@@ -7,18 +7,12 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
   AiChemistry02Icon,
-  Archive01Icon,
-  Copy01Icon,
-  Edit02Icon,
-  MoreHorizontalIcon,
   PlusSignIcon,
 } from '@hugeicons/core-free-icons'
 
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   Empty,
   EmptyContent,
@@ -35,25 +29,17 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
+import { DataTable } from '@/components/ui/data-table'
+import {
+  type Method,
+  type MethodsTableMeta,
+  methodsColumns,
+} from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/methods/')({
   head: () => ({
@@ -64,35 +50,10 @@ export const Route = createFileRoute('/dashboard/methods/')({
 
 type MethodStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
 
-interface Method {
-  id: number
-  name: string
-  description: string | null
-  version: number
-  status: MethodStatus
-  assetTypeId: number | null
-  assetTypeName: string | null
-  dataFields: Array<unknown>
-  formulas: Array<unknown>
-  validations: Array<unknown>
-  createdAt: string
-  publishedAt: string | null
-  parentId: number | null
-}
-
 const statusLabels: Record<MethodStatus, string> = {
   DRAFT: 'Rascunho',
   PUBLISHED: 'Publicado',
   ARCHIVED: 'Arquivado',
-}
-
-const statusVariants: Record<
-  MethodStatus,
-  'default' | 'secondary' | 'outline'
-> = {
-  DRAFT: 'secondary',
-  PUBLISHED: 'default',
-  ARCHIVED: 'outline',
 }
 
 function MethodsListPage() {
@@ -184,6 +145,11 @@ function MethodsListPage() {
     setPage(1)
   }
 
+  const tableMeta: MethodsTableMeta = {
+    onArchive: (id) => archiveMutation.mutate(id),
+    onNewVersion: (id) => newVersionMutation.mutate(id),
+  }
+
   if (error) {
     return (
       <Card>
@@ -250,14 +216,8 @@ function MethodsListPage() {
             </Button>
           </form>
 
-          {/* Table */}
-          {isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : data?.data.length === 0 ? (
+          {/* Empty State */}
+          {!isLoading && data?.data.length === 0 ? (
             <Empty className="border">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -295,144 +255,14 @@ function MethodsListPage() {
               </EmptyContent>
             </Empty>
           ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Tipo de Instrumento</TableHead>
-                    <TableHead>Versão</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Campos</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data?.data.map((method) => (
-                    <TableRow key={method.id}>
-                      <TableCell>
-                        <Link
-                          to="/dashboard/methods/$id"
-                          params={{ id: String(method.id) }}
-                          className="font-medium hover:underline"
-                        >
-                          {method.name}
-                        </Link>
-                        {method.description && (
-                          <p className="text-sm text-muted-foreground truncate max-w-xs">
-                            {method.description}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {method.assetTypeName || (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>v{method.version}</TableCell>
-                      <TableCell>
-                        <Badge variant={statusVariants[method.status]}>
-                          {statusLabels[method.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {method.dataFields.length} campos,{' '}
-                        {method.formulas.length} fórmulas
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={<Button variant="ghost" size="icon" />}
-                          >
-                            <HugeiconsIcon
-                              icon={MoreHorizontalIcon}
-                              className="h-4 w-4"
-                            />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {method.status === 'DRAFT' && (
-                              <DropdownMenuItem
-                                render={() => (
-                                  <Link
-                                    to="/dashboard/methods/$id/edit"
-                                    params={{ id: String(method.id) }}
-                                  >
-                                    <HugeiconsIcon
-                                      icon={Edit02Icon}
-                                      className="mr-2 h-4 w-4"
-                                    />
-                                    Editar
-                                  </Link>
-                                )}
-                              ></DropdownMenuItem>
-                            )}
-                            {method.status === 'PUBLISHED' && (
-                              <>
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    newVersionMutation.mutate(method.id)
-                                  }
-                                >
-                                  <HugeiconsIcon
-                                    icon={Copy01Icon}
-                                    className="mr-2 h-4 w-4"
-                                  />
-                                  Nova Versão
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    archiveMutation.mutate(method.id)
-                                  }
-                                >
-                                  <HugeiconsIcon
-                                    icon={Archive01Icon}
-                                    className="mr-2 h-4 w-4"
-                                  />
-                                  Arquivar
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {/* Pagination */}
-              {data && data.pagination.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Mostrando{' '}
-                    {(data.pagination.page - 1) * data.pagination.limit + 1} a{' '}
-                    {Math.min(
-                      data.pagination.page * data.pagination.limit,
-                      data.pagination.total,
-                    )}{' '}
-                    de {data.pagination.total} métodos
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(page - 1)}
-                      disabled={page === 1}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(page + 1)}
-                      disabled={page >= data.pagination.totalPages}
-                    >
-                      Próximo
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
+            <DataTable
+              columns={methodsColumns}
+              data={data?.data ?? []}
+              isLoading={isLoading}
+              pagination={data?.pagination}
+              onPageChange={setPage}
+              meta={tableMeta}
+            />
           )}
         </CardContent>
       </Card>

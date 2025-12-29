@@ -4,20 +4,11 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { parseAsInteger, useQueryState } from 'nuqs'
 import { HugeiconsIcon } from '@hugeicons/react'
-import {
-  Cancel01Icon,
-  CheckmarkCircle02Icon,
-  Edit02Icon,
-  MoreHorizontalIcon,
-  PlusSignIcon,
-  ShoppingBasket03Icon,
-} from '@hugeicons/core-free-icons'
+import { PlusSignIcon, ShoppingBasket03Icon } from '@hugeicons/core-free-icons'
 
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   Empty,
   EmptyContent,
@@ -34,26 +25,17 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
+import { DataTable } from '@/components/ui/data-table'
+import {
+  type Service,
+  type ServicesTableMeta,
+  servicesColumns,
+} from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/services/')({
   head: () => ({
@@ -61,48 +43,6 @@ export const Route = createFileRoute('/dashboard/services/')({
   }),
   component: ServicesListPage,
 })
-
-interface Service {
-  id: number
-  name: string
-  description: string | null
-  methodId: number | null
-  methodName: string | null
-  methodStatus: string | null
-  assetTypeId: number | null
-  assetTypeName: string | null
-  price: number | null
-  currency: string
-  tat: number | null
-  isActive: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-/**
- * Format price from cents to BRL currency string
- * Returns "Sob consulta" for null prices
- */
-function formatPrice(priceInCents: number | null, currency: string): string {
-  if (priceInCents === null) {
-    return 'Sob consulta'
-  }
-
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: currency || 'BRL',
-  }).format(priceInCents / 100)
-}
-
-/**
- * Format turnaround time in days
- */
-function formatTat(tat: number | null): string {
-  if (tat === null) {
-    return '-'
-  }
-  return `${tat} ${tat === 1 ? 'dia' : 'dias'}`
-}
 
 function ServicesListPage() {
   const queryClient = useQueryClient()
@@ -114,7 +54,6 @@ function ServicesListPage() {
 
   const limit = 20
 
-  // Fetch services
   const { data, isLoading, error } = useQuery({
     queryKey: ['services', page, search, statusFilter],
     queryFn: async () => {
@@ -148,7 +87,6 @@ function ServicesListPage() {
     },
   })
 
-  // Deactivate mutation
   const deactivateMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await api.api.services[':id'].$delete({
@@ -171,7 +109,6 @@ function ServicesListPage() {
     },
   })
 
-  // Reactivate mutation
   const reactivateMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await api.api.services[':id'].$put({
@@ -198,6 +135,11 @@ function ServicesListPage() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     setPage(1)
+  }
+
+  const tableMeta: ServicesTableMeta = {
+    onDeactivate: (id) => deactivateMutation.mutate(id),
+    onReactivate: (id) => reactivateMutation.mutate(id),
   }
 
   if (error) {
@@ -267,14 +209,8 @@ function ServicesListPage() {
             </Button>
           </form>
 
-          {/* Table */}
-          {isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : data?.data.length === 0 ? (
+          {/* Empty State */}
+          {!isLoading && data?.data.length === 0 ? (
             <Empty className="border">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -312,161 +248,14 @@ function ServicesListPage() {
               </EmptyContent>
             </Empty>
           ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Método</TableHead>
-                    <TableHead>Tipo de Instrumento</TableHead>
-                    <TableHead>Preço</TableHead>
-                    <TableHead>Prazo</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data?.data.map((service) => (
-                    <TableRow
-                      key={service.id}
-                      className={!service.isActive ? 'opacity-60' : ''}
-                    >
-                      <TableCell>
-                        <Link
-                          to="/dashboard/services/$id/edit"
-                          params={{ id: String(service.id) }}
-                          className="font-medium hover:underline"
-                        >
-                          {service.name}
-                        </Link>
-                        {service.description && (
-                          <p className="text-sm text-muted-foreground truncate max-w-xs">
-                            {service.description}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {service.methodName ? (
-                          <Link
-                            to="/dashboard/methods/$id"
-                            params={{ id: String(service.methodId) }}
-                            className="hover:underline text-primary"
-                          >
-                            {service.methodName}
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {service.assetTypeName || (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-mono">
-                        {formatPrice(service.price, service.currency)}
-                      </TableCell>
-                      <TableCell>{formatTat(service.tat)}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={service.isActive ? 'default' : 'secondary'}
-                        >
-                          {service.isActive ? 'Ativo' : 'Inativo'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={<Button variant="ghost" size="icon" />}
-                          >
-                            <HugeiconsIcon
-                              icon={MoreHorizontalIcon}
-                              className="h-4 w-4"
-                            />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              render={() => (
-                                <Link
-                                  to="/dashboard/services/$id/edit"
-                                  params={{ id: String(service.id) }}
-                                >
-                                  <HugeiconsIcon
-                                    icon={Edit02Icon}
-                                    className="mr-2 h-4 w-4"
-                                  />
-                                  Editar
-                                </Link>
-                              )}
-                            />
-                            <DropdownMenuSeparator />
-                            {service.isActive ? (
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  deactivateMutation.mutate(service.id)
-                                }
-                                className="text-destructive"
-                              >
-                                <HugeiconsIcon
-                                  icon={Cancel01Icon}
-                                  className="mr-2 h-4 w-4"
-                                />
-                                Desativar
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  reactivateMutation.mutate(service.id)
-                                }
-                              >
-                                <HugeiconsIcon
-                                  icon={CheckmarkCircle02Icon}
-                                  className="mr-2 h-4 w-4"
-                                />
-                                Reativar
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {/* Pagination */}
-              {data && data.pagination.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Mostrando{' '}
-                    {(data.pagination.page - 1) * data.pagination.limit + 1} a{' '}
-                    {Math.min(
-                      data.pagination.page * data.pagination.limit,
-                      data.pagination.total,
-                    )}{' '}
-                    de {data.pagination.total} serviços
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(page - 1)}
-                      disabled={page === 1}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage(page + 1)}
-                      disabled={page >= data.pagination.totalPages}
-                    >
-                      Próximo
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
+            <DataTable
+              columns={servicesColumns}
+              data={data?.data ?? []}
+              isLoading={isLoading}
+              pagination={data?.pagination}
+              onPageChange={setPage}
+              meta={tableMeta}
+            />
           )}
         </CardContent>
       </Card>
