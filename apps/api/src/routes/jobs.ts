@@ -30,32 +30,34 @@ import { eq, and, ilike, desc, count, lte, gte, inArray } from "drizzle-orm";
 
 /**
  * Generates a unique job ID for the organization.
- * Format: JOB-YYYY-XXXX (per organization per year)
- *
- * Uses a simple COUNT(*) + 1 approach which is sufficient for
- * labs with reasonable job volumes (< 100 jobs/second).
+ * Format: CAL-YYYY-XXXX (per organization per year)
  */
 async function generateJobId(
   organizationId: string,
   year: number,
 ): Promise<string> {
-  const prefix = `JOB-${year}-`;
+  const prefix = `CAL-${year}-`;
 
-  // Count existing jobs for this org and year
-  const [result] = await db
-    .select({ count: count() })
-    .from(calibrationJob)
-    .where(
-      and(
-        eq(calibrationJob.organizationId, organizationId),
-        ilike(calibrationJob.jobId, `${prefix}%`),
-      ),
-    );
+  const sequence = await db.transaction(async (tx) => {
+    const [result] = await tx
+      .select({ jobId: calibrationJob.jobId })
+      .from(calibrationJob)
+      .where(
+        and(
+          eq(calibrationJob.organizationId, organizationId),
+          ilike(calibrationJob.jobId, `${prefix}%`),
+        ),
+      )
+      .orderBy(desc(calibrationJob.jobId))
+      .limit(1)
+      .for("update");
 
-  const sequence = (result?.count ?? 0) + 1;
-  const paddedSequence = sequence.toString().padStart(4, "0");
+    if (!result?.jobId) return 1;
+    const match = result.jobId.match(/(\d+)$/);
+    return match?.[1] ? parseInt(match[1], 10) + 1 : 1;
+  });
 
-  return `${prefix}${paddedSequence}`;
+  return `${prefix}${sequence.toString().padStart(4, "0")}`;
 }
 
 /**
@@ -213,8 +215,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
         daysUntilDue: job.dueDate
           ? Math.ceil(
-              (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-            )
+            (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+          )
           : null,
         // Extract method name from snapshot for display
         methodName: (job.methodSnapshot as MethodSnapshot)?.methodName,
@@ -308,8 +310,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
       daysUntilDue: job.dueDate
         ? Math.ceil(
-            (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-          )
+          (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+        )
         : null,
     };
 
