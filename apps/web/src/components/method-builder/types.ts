@@ -60,7 +60,9 @@ export interface MethodData {
 }
 
 export interface FormulaResult {
-  value?: number
+  // Value is stored as string or string[] to preserve BigNumber precision
+  // This prevents "Cannot convert >15 significant digits" errors when chaining
+  value?: string | Array<string>
   displayValue?: string
   error?: string
 }

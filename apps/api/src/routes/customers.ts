@@ -19,7 +19,10 @@ import {
   AuditLogQuerySchema,
 } from "@calibra-facil/schemas";
 import { eq, ilike, or, count, and, desc } from "drizzle-orm";
-import { withLabPermission, type AuthVariables } from "../middleware/permission";
+import {
+  withLabPermission,
+  type AuthVariables,
+} from "../middleware/permission";
 
 /**
  * Generate a URL-friendly slug from a string
@@ -62,12 +65,16 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           body: {
             name: input.name,
             slug,
+            type: "CLIENT",
           },
           headers: c.req.raw.headers,
         });
 
         if (!orgResult?.id) {
-          return c.json({ error: "Falha ao criar organizacao do cliente" }, 500);
+          return c.json(
+            { error: "Falha ao criar organizacao do cliente" },
+            500,
+          );
         }
 
         // Set organization type to CLIENT directly in database
@@ -77,7 +84,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           .set({ type: "CLIENT" })
           .where(eq(organization.id, orgResult.id));
 
-        // Step 2: Insert customer record with authOrganizationId
+        // Step 2: Insert customer record
+        // - authOrganizationId: The CLIENT org (for portal access)
+        // - labOrganizationId: The LAB org that manages this customer (current user's org)
+        const memberData = c.get("member");
         const [newCustomer] = await db
           .insert(customer)
           .values({
@@ -87,6 +97,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             phone: input.phone || null,
             address: input.address || null,
             authOrganizationId: orgResult.id,
+            labOrganizationId: memberData.organizationId,
           })
           .returning();
 
@@ -114,7 +125,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         console.error("Error creating customer:", error);
         return c.json({ error: "Erro ao criar cliente" }, 500);
       }
-    }
+    },
   )
 
   // =========================================================================
@@ -126,33 +137,42 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("query", ListCustomersQuerySchema),
     async (c) => {
       const { page, limit, query } = c.req.valid("query");
+      const memberData = c.get("member");
 
       try {
         const offset = (page - 1) * limit;
 
-        // Build search condition if query provided
-        const searchCondition = query
-          ? or(
-              ilike(customer.name, `%${query}%`),
-              ilike(customer.taxId, `%${query}%`),
-              ilike(customer.email, `%${query}%`)
-            )
-          : undefined;
+        // Build conditions - always filter by LAB organization
+        const conditions = [
+          eq(customer.labOrganizationId, memberData.organizationId),
+        ];
 
-        // Get customers with pagination
+        // Add search condition if query provided
+        if (query) {
+          const searchCondition = or(
+            ilike(customer.name, `%${query}%`),
+            ilike(customer.taxId, `%${query}%`),
+            ilike(customer.email, `%${query}%`),
+          );
+          if (searchCondition) {
+            conditions.push(searchCondition);
+          }
+        }
+
+        // Get customers with pagination (filtered by organization)
         const customers = await db
           .select()
           .from(customer)
-          .where(searchCondition)
+          .where(and(...conditions))
           .orderBy(customer.name)
           .limit(limit)
           .offset(offset);
 
-        // Get total count for pagination
+        // Get total count for pagination (filtered by organization)
         const countResult = await db
           .select({ total: count() })
           .from(customer)
-          .where(searchCondition);
+          .where(and(...conditions));
 
         const total = countResult[0]?.total ?? 0;
 
@@ -169,40 +189,42 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         console.error("Error listing customers:", error);
         return c.json({ error: "Erro ao listar clientes" }, 500);
       }
-    }
+    },
   )
 
   // =========================================================================
   // GET /:id - Get customer by ID
   // =========================================================================
-  .get(
-    "/:id",
-    ...withLabPermission({ client: ["read"] }),
-    async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
+  .get("/:id", ...withLabPermission({ client: ["read"] }), async (c) => {
+    const id = parseInt(c.req.param("id"), 10);
+    const memberData = c.get("member");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      try {
-        const [foundCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
-
-        if (!foundCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
-
-        return c.json(foundCustomer);
-      } catch (error) {
-        console.error("Error getting customer:", error);
-        return c.json({ error: "Erro ao buscar cliente" }, 500);
-      }
+    if (isNaN(id)) {
+      return c.json({ error: "ID invalido" }, 400);
     }
-  )
+
+    try {
+      const [foundCustomer] = await db
+        .select()
+        .from(customer)
+        .where(
+          and(
+            eq(customer.id, id),
+            eq(customer.labOrganizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!foundCustomer) {
+        return c.json({ error: "Cliente nao encontrado" }, 404);
+      }
+
+      return c.json(foundCustomer);
+    } catch (error) {
+      console.error("Error getting customer:", error);
+      return c.json({ error: "Erro ao buscar cliente" }, 500);
+    }
+  })
 
   // =========================================================================
   // PUT /:id - Update customer
@@ -235,7 +257,8 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         // Build changes object for audit log
         const changes: Record<string, { old: unknown; new: unknown }> = {};
         for (const [key, value] of Object.entries(input)) {
-          const oldValue = existingCustomer[key as keyof typeof existingCustomer];
+          const oldValue =
+            existingCustomer[key as keyof typeof existingCustomer];
           if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
             changes[key] = { old: oldValue, new: value };
           }
@@ -258,7 +281,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             action: "update",
             changes,
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+            ipAddress:
+              c.req.header("x-forwarded-for") ??
+              c.req.header("x-real-ip") ??
+              null,
           });
         }
 
@@ -267,59 +293,58 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         console.error("Error updating customer:", error);
         return c.json({ error: "Erro ao atualizar cliente" }, 500);
       }
-    }
+    },
   )
 
   // =========================================================================
   // DELETE /:id - Delete customer
   // =========================================================================
-  .delete(
-    "/:id",
-    ...withLabPermission({ client: ["delete"] }),
-    async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
-      const session = c.get("session");
+  .delete("/:id", ...withLabPermission({ client: ["delete"] }), async (c) => {
+    const id = parseInt(c.req.param("id"), 10);
+    const session = c.get("session");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
-
-      try {
-        const [existingCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
-
-        if (!existingCustomer) {
-          return c.json({ error: "Cliente nao encontrado" }, 404);
-        }
-
-        // TODO: Check for active calibrations before deleting
-        // For now, we allow deletion
-
-        // Log audit entry before deletion
-        await db.insert(customerAuditLog).values({
-          customerId: id,
-          action: "delete",
-          changes: { customer: { old: existingCustomer, new: null } },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
-        });
-
-        // Delete the customer (cascade will handle audit logs)
-        await db.delete(customer).where(eq(customer.id, id));
-
-        // Also delete the associated organization
-        await db.delete(organization).where(eq(organization.id, existingCustomer.authOrganizationId));
-
-        return c.json({ success: true });
-      } catch (error) {
-        console.error("Error deleting customer:", error);
-        return c.json({ error: "Erro ao excluir cliente" }, 500);
-      }
+    if (isNaN(id)) {
+      return c.json({ error: "ID invalido" }, 400);
     }
-  )
+
+    try {
+      const [existingCustomer] = await db
+        .select()
+        .from(customer)
+        .where(eq(customer.id, id))
+        .limit(1);
+
+      if (!existingCustomer) {
+        return c.json({ error: "Cliente nao encontrado" }, 404);
+      }
+
+      // TODO: Check for active calibrations before deleting
+      // For now, we allow deletion
+
+      // Log audit entry before deletion
+      await db.insert(customerAuditLog).values({
+        customerId: id,
+        action: "delete",
+        changes: { customer: { old: existingCustomer, new: null } },
+        performedBy: session.user.id,
+        ipAddress:
+          c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+      });
+
+      // Delete the customer (cascade will handle audit logs)
+      await db.delete(customer).where(eq(customer.id, id));
+
+      // Also delete the associated organization
+      await db
+        .delete(organization)
+        .where(eq(organization.id, existingCustomer.authOrganizationId));
+
+      return c.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      return c.json({ error: "Erro ao excluir cliente" }, 500);
+    }
+  })
 
   // =========================================================================
   // GET /:id/members - List portal users for customer
@@ -366,7 +391,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         console.error("Error listing customer members:", error);
         return c.json({ error: "Erro ao listar usuarios do portal" }, 500);
       }
-    }
+    },
   )
 
   // =========================================================================
@@ -408,7 +433,9 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           })
           .from(invitation)
           .innerJoin(user, eq(invitation.inviterId, user.id))
-          .where(eq(invitation.organizationId, foundCustomer.authOrganizationId))
+          .where(
+            eq(invitation.organizationId, foundCustomer.authOrganizationId),
+          )
           .orderBy(desc(invitation.createdAt));
 
         return c.json(invitations);
@@ -416,7 +443,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         console.error("Error listing customer invitations:", error);
         return c.json({ error: "Erro ao listar convites" }, 500);
       }
-    }
+    },
   )
 
   // =========================================================================
@@ -465,17 +492,27 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         await db.insert(customerAuditLog).values({
           customerId: id,
           action: "user_invited",
-          changes: { email, role: role || "client_user", invitationId: inviteResult.id },
+          changes: {
+            email,
+            role: role || "client_user",
+            invitationId: inviteResult.id,
+          },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+          ipAddress:
+            c.req.header("x-forwarded-for") ??
+            c.req.header("x-real-ip") ??
+            null,
         });
 
-        return c.json({ id: inviteResult.id, email, role: role || "client_user" }, 201);
+        return c.json(
+          { id: inviteResult.id, email, role: role || "client_user" },
+          201,
+        );
       } catch (error) {
         console.error("Error creating invitation:", error);
         return c.json({ error: "Erro ao criar convite" }, 500);
       }
-    }
+    },
   )
 
   // =========================================================================
@@ -511,8 +548,8 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(invitation.id, invId),
-              eq(invitation.organizationId, foundCustomer.authOrganizationId)
-            )
+              eq(invitation.organizationId, foundCustomer.authOrganizationId),
+            ),
           )
           .limit(1);
 
@@ -521,7 +558,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         if (foundInvitation.status !== "pending") {
-          return c.json({ error: "Apenas convites pendentes podem ser reenviados" }, 400);
+          return c.json(
+            { error: "Apenas convites pendentes podem ser reenviados" },
+            400,
+          );
         }
 
         // Cancel old invitation and create a new one
@@ -539,12 +579,15 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           headers: c.req.raw.headers,
         });
 
-        return c.json({ id: (newInvite as { id: string })?.id, email: foundInvitation.email });
+        return c.json({
+          id: (newInvite as { id: string })?.id,
+          email: foundInvitation.email,
+        });
       } catch (error) {
         console.error("Error resending invitation:", error);
         return c.json({ error: "Erro ao reenviar convite" }, 500);
       }
-    }
+    },
   )
 
   // =========================================================================
@@ -581,8 +624,8 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(invitation.id, invId),
-              eq(invitation.organizationId, foundCustomer.authOrganizationId)
-            )
+              eq(invitation.organizationId, foundCustomer.authOrganizationId),
+            ),
           )
           .limit(1);
 
@@ -591,7 +634,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         if (foundInvitation.status !== "pending") {
-          return c.json({ error: "Apenas convites pendentes podem ser cancelados" }, 400);
+          return c.json(
+            { error: "Apenas convites pendentes podem ser cancelados" },
+            400,
+          );
         }
 
         // Cancel invitation via Better Auth
@@ -606,7 +652,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           action: "invitation_canceled",
           changes: { email: foundInvitation.email, invitationId: invId },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+          ipAddress:
+            c.req.header("x-forwarded-for") ??
+            c.req.header("x-real-ip") ??
+            null,
         });
 
         return c.json({ success: true });
@@ -614,7 +663,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         console.error("Error canceling invitation:", error);
         return c.json({ error: "Erro ao cancelar convite" }, 500);
       }
-    }
+    },
   )
 
   // =========================================================================
@@ -658,8 +707,8 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(member.id, memberId),
-              eq(member.organizationId, foundCustomer.authOrganizationId)
-            )
+              eq(member.organizationId, foundCustomer.authOrganizationId),
+            ),
           )
           .limit(1);
 
@@ -680,9 +729,16 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         await db.insert(customerAuditLog).values({
           customerId: id,
           action: "user_removed",
-          changes: { email: foundMember.userEmail, name: foundMember.userName, memberId },
+          changes: {
+            email: foundMember.userEmail,
+            name: foundMember.userName,
+            memberId,
+          },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+          ipAddress:
+            c.req.header("x-forwarded-for") ??
+            c.req.header("x-real-ip") ??
+            null,
         });
 
         return c.json({ success: true });
@@ -690,7 +746,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         console.error("Error removing member:", error);
         return c.json({ error: "Erro ao remover membro" }, 500);
       }
-    }
+    },
   )
 
   // =========================================================================
@@ -731,10 +787,17 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           ...baseCompliance,
           ...compliance,
           // Ensure qualificationStatus has a value
-          qualificationStatus: compliance.qualificationStatus ?? baseCompliance.qualificationStatus ?? "pending" as const,
-          qualityRequirementsAcknowledged: compliance.qualityRequirementsAcknowledged ?? baseCompliance.qualityRequirementsAcknowledged ?? false,
+          qualificationStatus:
+            compliance.qualificationStatus ??
+            baseCompliance.qualificationStatus ??
+            ("pending" as const),
+          qualityRequirementsAcknowledged:
+            compliance.qualityRequirementsAcknowledged ??
+            baseCompliance.qualityRequirementsAcknowledged ??
+            false,
           // Auto-set acknowledgment timestamp if acknowledged
-          ...(compliance.qualityRequirementsAcknowledged && !baseCompliance.qualityRequirementsAcknowledged
+          ...(compliance.qualityRequirementsAcknowledged &&
+          !baseCompliance.qualityRequirementsAcknowledged
             ? { qualityRequirementsAcknowledgedAt: new Date().toISOString() }
             : {}),
         };
@@ -755,7 +818,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           action: "compliance_change",
           changes: { old: existingCustomer.compliance, new: updatedCompliance },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+          ipAddress:
+            c.req.header("x-forwarded-for") ??
+            c.req.header("x-real-ip") ??
+            null,
           reason,
         });
 
@@ -764,7 +830,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         console.error("Error updating compliance:", error);
         return c.json({ error: "Erro ao atualizar conformidade" }, 500);
       }
-    }
+    },
   )
 
   // =========================================================================
@@ -835,5 +901,5 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         console.error("Error getting audit log:", error);
         return c.json({ error: "Erro ao buscar historico" }, 500);
       }
-    }
+    },
   );

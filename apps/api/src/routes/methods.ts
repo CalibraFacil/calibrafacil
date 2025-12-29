@@ -15,7 +15,6 @@ import {
 import { eq, and, ilike, or, count, desc, ne } from "drizzle-orm";
 import {
   withLabPermission,
-  withPermission,
   type AuthVariables,
 } from "../middleware/permission";
 
@@ -25,7 +24,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get(
     "/",
-    ...withPermission({ template: ["read"] }),
+    ...withLabPermission({ template: ["read"] }),
     zValidator("query", ListMethodsQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -111,7 +110,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /:id - Get a single method by ID
   // =========================================================================
-  .get("/:id", ...withPermission({ template: ["read"] }), async (c) => {
+  .get("/:id", ...withLabPermission({ template: ["read"] }), async (c) => {
     const member = c.get("member");
     const id = parseInt(c.req.param("id"), 10);
 
@@ -699,7 +698,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get(
     "/:id/versions",
-    ...withPermission({ template: ["read"] }),
+    ...withLabPermission({ template: ["read"] }),
     async (c) => {
       const member = c.get("member");
       const id = parseInt(c.req.param("id"), 10);
@@ -755,48 +754,52 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /:id/audit - Get audit log for a method
   // =========================================================================
-  .get("/:id/audit", ...withPermission({ template: ["read"] }), async (c) => {
-    const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+  .get(
+    "/:id/audit",
+    ...withLabPermission({ template: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
 
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
-
-    try {
-      // Verify method belongs to org
-      const [method] = await db
-        .select({ id: calibrationMethod.id })
-        .from(calibrationMethod)
-        .where(
-          and(
-            eq(calibrationMethod.id, id),
-            eq(calibrationMethod.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!method) {
-        return c.json({ error: "Método nao encontrado" }, 404);
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
       }
 
-      const logs = await db
-        .select({
-          id: methodAuditLog.id,
-          action: methodAuditLog.action,
-          changes: methodAuditLog.changes,
-          performedAt: methodAuditLog.performedAt,
-          performedByName: user.name,
-          reason: methodAuditLog.reason,
-        })
-        .from(methodAuditLog)
-        .leftJoin(user, eq(methodAuditLog.performedBy, user.id))
-        .where(eq(methodAuditLog.methodId, id))
-        .orderBy(desc(methodAuditLog.performedAt));
+      try {
+        // Verify method belongs to org
+        const [method] = await db
+          .select({ id: calibrationMethod.id })
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
 
-      return c.json({ data: logs });
-    } catch (error) {
-      console.error("Error getting audit log:", error);
-      return c.json({ error: "Erro ao buscar historico" }, 500);
-    }
-  });
+        if (!method) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
+
+        const logs = await db
+          .select({
+            id: methodAuditLog.id,
+            action: methodAuditLog.action,
+            changes: methodAuditLog.changes,
+            performedAt: methodAuditLog.performedAt,
+            performedByName: user.name,
+            reason: methodAuditLog.reason,
+          })
+          .from(methodAuditLog)
+          .leftJoin(user, eq(methodAuditLog.performedBy, user.id))
+          .where(eq(methodAuditLog.methodId, id))
+          .orderBy(desc(methodAuditLog.performedAt));
+
+        return c.json({ data: logs });
+      } catch (error) {
+        console.error("Error getting audit log:", error);
+        return c.json({ error: "Erro ao buscar historico" }, 500);
+      }
+    },
+  );

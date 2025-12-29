@@ -58,7 +58,7 @@ export class CalibrationEngine {
   // Formula Execution (sync only)
   // ============================================
   evaluateFormula(
-    input: FormulaExecutionInput
+    input: FormulaExecutionInput,
   ): EngineResult<FormulaExecutionResult> {
     try {
       const validated = FormulaExecutionInputSchema.parse(input);
@@ -74,29 +74,70 @@ export class CalibrationEngine {
 
       const result = this.secureMath.evaluate(
         validated.formula,
-        validated.context as Record<string, unknown>
+        validated.context as Record<string, unknown>,
       );
       const executionTimeMs = performance.now() - startTime;
 
-      // Convert result to number
-      let resultAsNumber: number;
-      let resultString: string;
+      // Convert result - supports scalars AND arrays (vector math)
+      // IMPORTANT: We store STRING representations to preserve BigNumber precision
+      // and avoid "Cannot convert >15 significant digits" errors when chaining formulas
+      let resultAsNumber: number | null = null;
+      let resultValue: string | string[];
 
-      if (typeof result === "object" && result !== null && "toNumber" in result) {
-        // BigNumber
+      // 1. Handle BigNumber (mathjs arbitrary precision)
+      if (
+        typeof result === "object" &&
+        result !== null &&
+        "toNumber" in result &&
+        "toString" in result
+      ) {
         resultAsNumber = (result as { toNumber: () => number }).toNumber();
-        resultString = (result as { toString: () => string }).toString();
-      } else if (typeof result === "number") {
+        // Store as STRING to preserve precision for subsequent formulas
+        resultValue = (result as { toString: () => string }).toString();
+      }
+      // 2. Handle Arrays / Matrices (Vector Math: e.g., `readings - standard`)
+      else if (
+        Array.isArray(result) ||
+        (typeof result === "object" && result !== null && "toArray" in result)
+      ) {
+        // Convert mathjs Matrix to JS Array if needed
+        const arr: unknown[] = Array.isArray(result)
+          ? result
+          : (result as { toArray: () => unknown[] }).toArray();
+
+        // Convert BigNumbers inside array to STRING to preserve precision
+        resultValue = arr.map((item: unknown) => {
+          if (typeof item === "object" && item !== null && "toString" in item) {
+            return (item as { toString: () => string }).toString();
+          }
+          if (typeof item === "number") return String(item);
+          return String(item);
+        });
+
+        // Array result - no single number representation
+        resultAsNumber = null;
+      }
+      // 3. Handle plain numbers - convert to string to avoid precision issues
+      else if (typeof result === "number") {
         resultAsNumber = result;
-        resultString = result.toString();
-      } else {
-        throw new Error(`Unexpected result type: ${typeof result}`);
+        resultValue = String(result);
+      }
+      // 4. Handle booleans (from validation expressions)
+      else if (typeof result === "boolean") {
+        resultAsNumber = result ? 1 : 0;
+        resultValue = String(resultAsNumber);
+      }
+      // 5. Fallback for strings or other types
+      else {
+        resultValue = String(result);
+        const parsed = Number(result);
+        resultAsNumber = isNaN(parsed) ? null : parsed;
       }
 
       return {
         success: true,
         data: {
-          result: resultString,
+          result: resultValue,
           resultAsNumber,
           formula: validated.formula,
           executionTimeMs,
@@ -160,12 +201,12 @@ export class CalibrationEngine {
   calculateCombined(
     typeA?: TypeAResult,
     typeB?: TypeBResult,
-    confidenceLevel: number = 0.9545
+    confidenceLevel: number = 0.9545,
   ): EngineResult<CombinedUncertaintyResult> {
     try {
       const result = calculateCombinedUncertainty(
         { typeA, typeB },
-        confidenceLevel
+        confidenceLevel,
       );
       return { success: true, data: result };
     } catch (error) {
@@ -186,7 +227,7 @@ export class CalibrationEngine {
   performCalibration(
     data: CalibrationData,
     typeBComponents: TypeBComponent[] = [],
-    formulas: string[] = []
+    formulas: string[] = [],
   ): EngineResult<CalibrationResult> {
     try {
       const validated = CalibrationDataSchema.parse(data);
@@ -243,7 +284,9 @@ export class CalibrationEngine {
         context["u_typeB"] = round(typeBResult.totalTypeB);
       }
 
-      context["u_combined"] = round(combinedCalc.data.combinedStandardUncertainty);
+      context["u_combined"] = round(
+        combinedCalc.data.combinedStandardUncertainty,
+      );
       context["U_expanded"] = round(combinedCalc.data.expandedUncertainty);
       context["k"] = round(combinedCalc.data.coverageFactor);
 
@@ -269,7 +312,8 @@ export class CalibrationEngine {
           typeA: typeAResult,
           typeB: typeBResult,
           combined: combinedCalc.data,
-          formulaResults: formulaResults.length > 0 ? formulaResults : undefined,
+          formulaResults:
+            formulaResults.length > 0 ? formulaResults : undefined,
           meta: {
             engineVersion: ENGINE_VERSION,
             timestamp: new Date().toISOString(),
@@ -294,7 +338,7 @@ export class CalibrationEngine {
   // ============================================
   prepareContext(
     data: Record<string, unknown>,
-    options?: FlattenOptions
+    options?: FlattenOptions,
   ): FormulaContext {
     return flattenForExecution(data, options);
   }
@@ -314,7 +358,10 @@ export class CalibrationEngine {
       const message = error.message.toLowerCase();
 
       // Check for security violations first (highest priority)
-      if (message.includes("security violation") || message.includes("dangerous pattern")) {
+      if (
+        message.includes("security violation") ||
+        message.includes("dangerous pattern")
+      ) {
         return "SECURITY_VIOLATION";
       }
 
@@ -349,7 +396,7 @@ export class CalibrationEngine {
 // Factory function for convenience
 // ============================================
 export function createEngine(
-  config?: Partial<MathEngineConfig>
+  config?: Partial<MathEngineConfig>,
 ): CalibrationEngine {
   return new CalibrationEngine(config);
 }

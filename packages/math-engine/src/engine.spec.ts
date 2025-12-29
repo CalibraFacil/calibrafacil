@@ -111,7 +111,8 @@ describe("CalibrationEngine", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.result).toBe("0.3");
+        // Result is now a number (not string) for scalar values
+        expect(result.data.result).toBeCloseTo(0.3, 15);
         expect(result.data.resultAsNumber).toBeCloseTo(0.3, 15);
       }
     });
@@ -139,6 +140,89 @@ describe("CalibrationEngine", () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.resultAsNumber).toBeCloseTo(2e20, 10);
+      }
+    });
+  });
+
+  describe("Vector Math Support", () => {
+    it("should return array of strings for vector operations", () => {
+      const result = engine.evaluateFormula({
+        formula: "readings - standard",
+        context: {
+          readings: [10.1, 10.2, 9.9],
+          standard: 10,
+        },
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Result should be an array of strings (for BigNumber precision)
+        expect(Array.isArray(result.data.result)).toBe(true);
+        const arr = result.data.result as string[];
+        expect(arr.length).toBe(3);
+        // Values are strings representing the numbers
+        expect(parseFloat(arr[0]!)).toBeCloseTo(0.1, 5);
+        expect(parseFloat(arr[1]!)).toBeCloseTo(0.2, 5);
+        expect(parseFloat(arr[2]!)).toBeCloseTo(-0.1, 5);
+        // resultAsNumber should be null for arrays
+        expect(result.data.resultAsNumber).toBeNull();
+      }
+    });
+
+    it("should allow chaining vector results with aggregate functions", () => {
+      const engine = createEngine();
+
+      // First calculate errors (vector)
+      const errorsResult = engine.evaluateFormula({
+        formula: "readings - standard",
+        context: {
+          readings: [10.1, 10.2, 9.9],
+          standard: 10,
+        },
+      });
+
+      expect(errorsResult.success).toBe(true);
+      if (!errorsResult.success) return;
+
+      // Then use max on the errors array (passing string array - mathjs handles it)
+      const maxResult = engine.evaluateFormula({
+        formula: "max(abs(errors))",
+        context: {
+          errors: errorsResult.data.result, // string[] now
+        },
+      });
+
+      expect(maxResult.success).toBe(true);
+      if (maxResult.success) {
+        expect(maxResult.data.resultAsNumber).toBeCloseTo(0.2, 5);
+      }
+    });
+
+    it("should calculate std on arrays", () => {
+      const result = engine.evaluateFormula({
+        formula: "std(readings)",
+        context: {
+          readings: [10, 10.1, 9.9, 10.2],
+        },
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.resultAsNumber).toBeCloseTo(0.1291, 3);
+      }
+    });
+
+    it("should calculate mean on arrays", () => {
+      const result = engine.evaluateFormula({
+        formula: "mean(readings)",
+        context: {
+          readings: [10, 20, 30],
+        },
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.resultAsNumber).toBeCloseTo(20, 5);
       }
     });
   });
@@ -211,7 +295,11 @@ describe("CalibrationEngine", () => {
 
       const typeB = {
         components: [
-          { name: "resolution", standardUncertainty: 0.006, degreesOfFreedom: 50 },
+          {
+            name: "resolution",
+            standardUncertainty: 0.006,
+            degreesOfFreedom: 50,
+          },
         ],
         totalTypeB: 0.006,
       };
@@ -269,8 +357,13 @@ describe("CalibrationEngine", () => {
         },
         [
           { name: "resolution", value: 0.01, distribution: "rectangular" },
-          { name: "reference", value: 0.05, distribution: "normal", coverageFactor: 2 },
-        ]
+          {
+            name: "reference",
+            value: 0.05,
+            distribution: "normal",
+            coverageFactor: 2,
+          },
+        ],
       );
 
       expect(result.success).toBe(true);
@@ -286,7 +379,7 @@ describe("CalibrationEngine", () => {
           readings: [{ value: 10.1 }, { value: 10.2 }],
         },
         [],
-        ["mean * 2", "u_combined * 2"]
+        ["mean * 2", "u_combined * 2"],
       );
 
       expect(result.success).toBe(true);
@@ -294,7 +387,10 @@ describe("CalibrationEngine", () => {
         expect(result.data.formulaResults).toBeDefined();
         expect(result.data.formulaResults!.length).toBeGreaterThanOrEqual(1);
         // Check first formula result
-        expect(result.data.formulaResults![0]?.resultAsNumber).toBeCloseTo(20.3, 1);
+        expect(result.data.formulaResults![0]?.resultAsNumber).toBeCloseTo(
+          20.3,
+          1,
+        );
       }
     });
 
@@ -323,7 +419,7 @@ describe("CalibrationEngine", () => {
         expect(result.data.meta).toBeDefined();
         expect(result.data.meta.engineVersion).toBe(ENGINE_VERSION);
         expect(result.data.meta.timestamp).toMatch(
-          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
         );
         expect(Array.isArray(result.data.meta.inputsUsed)).toBe(true);
       }
@@ -347,7 +443,7 @@ describe("CalibrationEngine", () => {
           reading: 100,
           secretValue: 999,
         },
-        { excludeKeys: ["secretValue"] }
+        { excludeKeys: ["secretValue"] },
       );
 
       expect(context["reading"]).toBe(100);

@@ -59,11 +59,13 @@ export function PreviewPanel({
     for (const field of method.dataFields) {
       const value = previewData[field.key]
 
-      if (field.type === 'table' && Array.isArray(value) && field.columns) {
-        // Extract each column as an array, ensuring consistent lengths for vector math
-        const rowCount = value.length
+      if (field.type === 'table' && field.columns) {
+        // Extract each column as an array for vector math (mean, std, etc.)
+        // Arrays are ALWAYS included, even if empty - variables must exist in scope
+        const rows = Array.isArray(value) ? value : []
+
         for (const col of field.columns) {
-          const columnValues = value
+          const columnValues = rows
             .map((row: Record<string, unknown>) => {
               const cellValue = row[col.key]
               // Handle numbers directly
@@ -76,13 +78,12 @@ export function PreviewPanel({
               return null
             })
             .filter((v): v is number => v !== null)
-          // Only include column if all rows have valid values (consistent length)
-          if (columnValues.length === rowCount && columnValues.length > 0) {
-            processedData[`${field.key}_${col.key}`] = columnValues
-          }
+
+          // Always include column - empty array [] is valid
+          processedData[`${field.key}_${col.key}`] = columnValues
         }
-        // Also store the full array
-        processedData[field.key] = value
+        // Also store the full array (even if empty)
+        processedData[field.key] = rows
       } else if (value !== undefined && value !== '') {
         processedData[field.key] = value
       }
@@ -94,21 +95,37 @@ export function PreviewPanel({
   // Evaluate all formulas
   const formulaResults = useMemo(() => {
     const results: Record<string, FormulaResult> = {}
-    const runningContext = { ...context }
+    const runningContext: Record<string, unknown> = { ...context }
 
     for (const formula of method.formulas) {
       const result = engine.evaluateFormula({
         formula: formula.expression,
-        context: runningContext,
+        context: runningContext as FormulaContext,
       })
 
       if (result.success) {
-        results[formula.outputKey] = {
-          value: result.data.resultAsNumber,
-          displayValue: String(result.data.result),
+        // Store the RAW result (string/number/array) to preserve BigNumber precision
+        // This prevents "Cannot convert >15 significant digits to BigNumber" errors
+        const rawValue = result.data.result
+
+        // Format for display
+        let displayValue: string
+        if (Array.isArray(rawValue)) {
+          // Pretty print array: [0.0001, -0.0001]
+          displayValue = `[${rawValue.map((v) => String(v)).join(', ')}]`
+        } else {
+          displayValue = String(rawValue)
         }
-        // Add to running context for subsequent formulas
-        runningContext[formula.outputKey] = result.data.resultAsNumber
+
+        results[formula.outputKey] = {
+          value: rawValue, // Store raw value (fixes arrays showing "-")
+          displayValue,
+        }
+
+        // CRITICAL: Inject RAW result back into context for subsequent formulas
+        // Passing string/array prevents BigNumber conversion errors with messy floats
+        // mathjs handles string-to-BigNumber conversion safely
+        runningContext[formula.outputKey] = rawValue
       } else {
         results[formula.outputKey] = {
           error: result.error.message,
@@ -122,7 +139,9 @@ export function PreviewPanel({
   // Evaluate validations
   const validationResults = useMemo((): Array<ValidationResult> => {
     // Build context with formula results
-    const fullContext: FormulaContext = { ...context }
+    // Use Record<string, unknown> to allow mixed types (strings, numbers, arrays)
+    // mathjs handles string-to-BigNumber conversion safely at runtime
+    const fullContext: Record<string, unknown> = { ...context }
     for (const [key, result] of Object.entries(formulaResults)) {
       if (result.value !== undefined) {
         fullContext[key] = result.value
@@ -132,7 +151,7 @@ export function PreviewPanel({
     return method.validations.map((validation) => {
       const result = engine.evaluateFormula({
         formula: validation.expression,
-        context: fullContext,
+        context: fullContext as FormulaContext,
       })
 
       if (result.success) {

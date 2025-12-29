@@ -88,7 +88,8 @@ export const FormulaContextSchema = z.record(
     z.string(),
     z.boolean(),
     z.null(),
-    z.array(z.number()), // Allow numeric arrays for vector operations (mean, std, etc.)
+    z.array(z.number()), // Numeric arrays for direct input
+    z.array(z.string()), // String arrays from formula results (preserve BigNumber precision)
   ]),
 );
 export type FormulaContext = z.infer<typeof FormulaContextSchema>;
@@ -104,8 +105,14 @@ export type FormulaExecutionInputParsed = z.output<
 >;
 
 export const FormulaExecutionResultSchema = z.object({
-  result: z.union([z.number(), z.string()]),
-  resultAsNumber: z.number(),
+  // Result is stored as STRING or STRING ARRAY to preserve BigNumber precision
+  // This prevents "Cannot convert >15 significant digits" errors when chaining formulas
+  result: z.union([
+    z.string(), // Scalar result (number converted to string for precision)
+    z.array(z.string()), // Vector result (array of strings for precision)
+  ]),
+  // The numeric representation (for display/simple checks) - null for arrays
+  resultAsNumber: z.number().nullable(),
   formula: z.string(),
   executionTimeMs: z.number(),
 });

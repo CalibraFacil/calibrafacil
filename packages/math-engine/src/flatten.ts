@@ -148,27 +148,28 @@ export function flattenForExecution(
         (item): item is number => typeof item === "number",
       );
 
-      if (numericValues.length === obj.length && numericValues.length > 0) {
+      // Check if array is all-numeric (or empty when preserveArrays is enabled)
+      const isAllNumeric = numericValues.length === obj.length;
+      const shouldProcess =
+        isAllNumeric && (numericValues.length > 0 || opts.preserveArrays);
+
+      if (shouldProcess) {
         // Preserve array if option is enabled (for vector math: mean, std, etc.)
         if (opts.preserveArrays) {
-          result[currentKey] = numericValues;
+          result[currentKey] = numericValues; // Could be [] - that's valid!
           inputsUsed.push(currentKey);
-          // Store count for aggregate functions
-          result[`${currentKey}_count`] = numericValues.length;
-          inputsUsed.push(`${currentKey}_count`);
-          // Skip indexed variables when preserveArrays is true to avoid doubling context size
-          return;
         }
 
-        // Create indexed access when not preserving arrays (for specific point access)
-        if (opts.includeArrayIndices) {
+        // Create indexed access for specific point access (e.g., readings_0)
+        if (opts.includeArrayIndices && numericValues.length > 0) {
           numericValues.forEach((item, index) => {
             const key = `${currentKey}_${index}`;
             result[key] = item;
             inputsUsed.push(key);
           });
         }
-        // Store count for aggregate functions
+
+        // Store count for aggregate functions (0 for empty arrays)
         result[`${currentKey}_count`] = numericValues.length;
         inputsUsed.push(`${currentKey}_count`);
         return;

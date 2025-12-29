@@ -15,7 +15,6 @@ import {
 import { eq, ilike, or, count, and, isNull } from "drizzle-orm";
 import {
   withLabPermission,
-  withPermission,
   type AuthVariables,
 } from "../middleware/permission";
 
@@ -140,7 +139,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get(
     "/",
-    ...withPermission({ equipment: ["read"] }),
+    ...withLabPermission({ equipment: ["read"] }),
     zValidator("query", ListAssetsQuerySchema),
     async (c) => {
       const { page, limit, customerId, assetTypeId, status, query } =
@@ -263,7 +262,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /:id - Get asset by ID
   // =========================================================================
-  .get("/:id", ...withPermission({ equipment: ["read"] }), async (c) => {
+  .get("/:id", ...withLabPermission({ equipment: ["read"] }), async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     const member = c.get("member");
 
@@ -329,7 +328,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .put(
     "/:id",
-    ...withPermission({ equipment: ["update"] }),
+    ...withLabPermission({ equipment: ["update"] }),
     zValidator("json", UpdateAssetSchema),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
