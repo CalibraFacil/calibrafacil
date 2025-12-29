@@ -1,92 +1,144 @@
-import * as React from 'react'
+import { useNavigate } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  Certificate01Icon,
+  ClipboardIcon,
   RulerIcon,
   UserIcon,
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
-import { toast } from 'sonner'
 
 import { useCommandPalette } from '../command-context'
-import type { MockAsset } from '@/lib/mock/assets'
-import type { MockCertificate } from '@/lib/mock/certificates'
-import type { MockClient } from '@/lib/mock/clients'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
+import { api } from '@/utils/api'
 import {
   CommandGroup,
   CommandItem,
   CommandShortcut,
 } from '@/components/ui/command'
-import { searchAssets } from '@/lib/mock/assets'
-import { searchCertificates } from '@/lib/mock/certificates'
-import { searchClients } from '@/lib/mock/clients'
 
-type SearchMode = 'assets' | 'certificates' | 'clients' | 'standards' | null
+type SearchMode = 'assets' | 'clients' | 'standards' | 'jobs' | null
+
+// Derive search mode from active page
+function getSearchModeFromPage(activePage: string): SearchMode {
+  switch (activePage) {
+    case 'search-assets':
+      return 'assets'
+    case 'search-clients':
+      return 'clients'
+    case 'search-standards':
+      return 'standards'
+    case 'search-jobs':
+      return 'jobs'
+    default:
+      return null
+  }
+}
 
 export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
+  const navigate = useNavigate()
   const { setOpen, setPages, activePage } = useCommandPalette()
-  const [searchMode, setSearchMode] = React.useState<SearchMode>(null)
+  const debouncedSearch = useDebouncedValue(searchValue, 300)
 
-  // Reset search mode when navigating back to root
-  React.useEffect(() => {
-    if (activePage === 'root') {
-      setSearchMode(null)
-    }
-  }, [activePage])
+  // Derive search mode from active page
+  const searchMode = getSearchModeFromPage(activePage)
 
-  // Search results based on current mode and search value
-  const assetResults = React.useMemo(() => {
-    if (searchMode !== 'assets' || !searchValue.trim()) return []
-    return searchAssets(searchValue).slice(0, 5)
-  }, [searchMode, searchValue])
+  // Asset search
+  const { data: assetResults, isLoading: assetsLoading } = useQuery({
+    queryKey: ['command-search', 'assets', debouncedSearch],
+    queryFn: async () => {
+      if (!debouncedSearch.trim()) return []
+      const res = await api.api.assets.$get({
+        query: { query: debouncedSearch, limit: '5', page: '1' },
+      })
+      if (!res.ok) throw new Error('Search failed')
+      const data = await res.json()
+      return data.data
+    },
+    enabled: searchMode === 'assets' && debouncedSearch.trim().length > 0,
+    staleTime: 30000,
+  })
 
-  const certificateResults = React.useMemo(() => {
-    if (searchMode !== 'certificates' || !searchValue.trim()) return []
-    return searchCertificates(searchValue).slice(0, 5)
-  }, [searchMode, searchValue])
+  // Client search
+  const { data: clientResults, isLoading: clientsLoading } = useQuery({
+    queryKey: ['command-search', 'clients', debouncedSearch],
+    queryFn: async () => {
+      if (!debouncedSearch.trim()) return []
+      const res = await api.api.customers.$get({
+        query: { query: debouncedSearch, limit: '5', page: '1' },
+      })
+      if (!res.ok) throw new Error('Search failed')
+      const data = await res.json()
+      return data.data
+    },
+    enabled: searchMode === 'clients' && debouncedSearch.trim().length > 0,
+    staleTime: 30000,
+  })
 
-  const clientResults = React.useMemo(() => {
-    if (searchMode !== 'clients' || !searchValue.trim()) return []
-    return searchClients(searchValue).slice(0, 5)
-  }, [searchMode, searchValue])
+  // Standards search
+  const { data: standardResults, isLoading: standardsLoading } = useQuery({
+    queryKey: ['command-search', 'standards', debouncedSearch],
+    queryFn: async () => {
+      if (!debouncedSearch.trim()) return []
+      const res = await api.api.standards.$get({
+        query: { query: debouncedSearch, limit: '5', page: '1' },
+      })
+      if (!res.ok) throw new Error('Search failed')
+      const data = await res.json()
+      return data.data
+    },
+    enabled: searchMode === 'standards' && debouncedSearch.trim().length > 0,
+    staleTime: 30000,
+  })
 
-  const handleSelectAsset = (asset: MockAsset) => {
-    toast.success(`Ativo selecionado: ${asset.name}`, {
-      description: `NS: ${asset.serialNumber} | Cliente: ${asset.clientName}`,
-    })
-    setOpen(false)
-  }
+  // Jobs search
+  const { data: jobResults, isLoading: jobsLoading } = useQuery({
+    queryKey: ['command-search', 'jobs', debouncedSearch],
+    queryFn: async () => {
+      if (!debouncedSearch.trim()) return []
+      const res = await api.api.jobs.$get({
+        query: { query: debouncedSearch, limit: '5', page: '1' },
+      })
+      if (!res.ok) throw new Error('Search failed')
+      const data = await res.json()
+      return data.data
+    },
+    enabled: searchMode === 'jobs' && debouncedSearch.trim().length > 0,
+    staleTime: 30000,
+  })
 
-  const handleSelectCertificate = (cert: MockCertificate) => {
-    toast.success(`Certificado selecionado: ${cert.certificateNumber}`, {
-      description: `${cert.assetName} | Válido até: ${cert.expirationDate}`,
-    })
-    setOpen(false)
-  }
-
-  const handleSelectClient = (client: MockClient) => {
-    toast.success(`Cliente selecionado: ${client.name}`, {
-      description: `${client.activeAssets} ativos | Contato: ${client.contactPerson}`,
-    })
-    setOpen(false)
-  }
-
-  // If we're in a search mode, show results
+  // Asset results view
   if (searchMode === 'assets') {
+    const isLoading = assetsLoading
+    const results = assetResults ?? []
     return (
       <CommandGroup heading="Resultados - Ativos">
-        {assetResults.length === 0 && searchValue.trim() && (
+        {isLoading && (
           <div className="py-6 text-center text-sm text-muted-foreground">
-            Nenhum ativo encontrado para "{searchValue}"
+            Buscando...
           </div>
         )}
-        {assetResults.map((asset) => (
-          <CommandItem key={asset.id} onSelect={() => handleSelectAsset(asset)}>
+        {!isLoading && results.length === 0 && debouncedSearch.trim() && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Nenhum ativo encontrado para "{debouncedSearch}"
+          </div>
+        )}
+        {results.map((asset) => (
+          <CommandItem
+            key={asset.id}
+            onSelect={() => {
+              navigate({
+                to: '/dashboard/assets/$id',
+                params: { id: String(asset.id) },
+              })
+              setOpen(false)
+            }}
+          >
             <HugeiconsIcon icon={Wrench01Icon} />
             <div className="flex flex-col">
-              <span>{asset.name}</span>
+              <span>{asset.assetTypeName || asset.tag || 'Ativo'}</span>
               <span className="text-xs text-muted-foreground">
-                {asset.serialNumber} • {asset.clientName}
+                {asset.serialNumber || asset.tag} • {asset.customerName || 'Sem cliente'}
               </span>
             </div>
           </CommandItem>
@@ -95,50 +147,38 @@ export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
     )
   }
 
-  if (searchMode === 'certificates') {
-    return (
-      <CommandGroup heading="Resultados - Certificados">
-        {certificateResults.length === 0 && searchValue.trim() && (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            Nenhum certificado encontrado para "{searchValue}"
-          </div>
-        )}
-        {certificateResults.map((cert) => (
-          <CommandItem
-            key={cert.id}
-            onSelect={() => handleSelectCertificate(cert)}
-          >
-            <HugeiconsIcon icon={Certificate01Icon} />
-            <div className="flex flex-col">
-              <span>{cert.certificateNumber}</span>
-              <span className="text-xs text-muted-foreground">
-                {cert.assetName} • {cert.clientName}
-              </span>
-            </div>
-          </CommandItem>
-        ))}
-      </CommandGroup>
-    )
-  }
-
+  // Client results view
   if (searchMode === 'clients') {
+    const isLoading = clientsLoading
+    const results = clientResults ?? []
     return (
       <CommandGroup heading="Resultados - Clientes">
-        {clientResults.length === 0 && searchValue.trim() && (
+        {isLoading && (
           <div className="py-6 text-center text-sm text-muted-foreground">
-            Nenhum cliente encontrado para "{searchValue}"
+            Buscando...
           </div>
         )}
-        {clientResults.map((client) => (
+        {!isLoading && results.length === 0 && debouncedSearch.trim() && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Nenhum cliente encontrado para "{debouncedSearch}"
+          </div>
+        )}
+        {results.map((client) => (
           <CommandItem
             key={client.id}
-            onSelect={() => handleSelectClient(client)}
+            onSelect={() => {
+              navigate({
+                to: '/dashboard/clients/$id',
+                params: { id: String(client.id) },
+              })
+              setOpen(false)
+            }}
           >
             <HugeiconsIcon icon={UserIcon} />
             <div className="flex flex-col">
               <span>{client.name}</span>
               <span className="text-xs text-muted-foreground">
-                {client.contactPerson} • {client.activeAssets} ativos
+                {client.email || client.taxId || 'Sem email'}
               </span>
             </div>
           </CommandItem>
@@ -147,12 +187,78 @@ export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
     )
   }
 
+  // Standards results view - navigate to list with search since detail page doesn't exist
   if (searchMode === 'standards') {
+    const isLoading = standardsLoading
+    const results = standardResults ?? []
     return (
       <CommandGroup heading="Resultados - Padrões">
-        <div className="py-6 text-center text-sm text-muted-foreground">
-          Busca de padrões será implementada em breve.
-        </div>
+        {isLoading && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Buscando...
+          </div>
+        )}
+        {!isLoading && results.length === 0 && debouncedSearch.trim() && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Nenhum padrão encontrado para "{debouncedSearch}"
+          </div>
+        )}
+        {results.map((standard) => (
+          <CommandItem
+            key={standard.id}
+            onSelect={() => {
+              // Navigate to standards list - detail page coming soon
+              navigate({ to: '/dashboard/standards' })
+              setOpen(false)
+            }}
+          >
+            <HugeiconsIcon icon={RulerIcon} />
+            <div className="flex flex-col">
+              <span>{standard.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {standard.serialNumber} • {standard.manufacturer || 'Sem fabricante'}
+              </span>
+            </div>
+          </CommandItem>
+        ))}
+      </CommandGroup>
+    )
+  }
+
+  // Jobs results view - navigate to list since detail page doesn't exist
+  if (searchMode === 'jobs') {
+    const isLoading = jobsLoading
+    const results = jobResults ?? []
+    return (
+      <CommandGroup heading="Resultados - Ordens de Serviço">
+        {isLoading && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Buscando...
+          </div>
+        )}
+        {!isLoading && results.length === 0 && debouncedSearch.trim() && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Nenhuma ordem encontrada para "{debouncedSearch}"
+          </div>
+        )}
+        {results.map((job) => (
+          <CommandItem
+            key={job.id}
+            onSelect={() => {
+              // Navigate to jobs list - detail page coming soon
+              navigate({ to: '/dashboard/jobs' })
+              setOpen(false)
+            }}
+          >
+            <HugeiconsIcon icon={ClipboardIcon} />
+            <div className="flex flex-col">
+              <span>{job.jobId || `OS-${job.id}`}</span>
+              <span className="text-xs text-muted-foreground">
+                {job.methodName || 'Sem método'} • {job.status}
+              </span>
+            </div>
+          </CommandItem>
+        ))}
       </CommandGroup>
     )
   }
@@ -162,7 +268,6 @@ export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
     <CommandGroup heading="Busca Global">
       <CommandItem
         onSelect={() => {
-          setSearchMode('assets')
           setPages((prev) => [...prev, 'search-assets'])
         }}
       >
@@ -173,34 +278,31 @@ export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
 
       <CommandItem
         onSelect={() => {
-          setSearchMode('certificates')
-          setPages((prev) => [...prev, 'search-certificates'])
-        }}
-      >
-        <HugeiconsIcon icon={Certificate01Icon} />
-        <span>Buscar Certificado...</span>
-        <CommandShortcut>⌘2</CommandShortcut>
-      </CommandItem>
-
-      <CommandItem
-        onSelect={() => {
-          setSearchMode('clients')
           setPages((prev) => [...prev, 'search-clients'])
         }}
       >
         <HugeiconsIcon icon={UserIcon} />
         <span>Buscar Cliente...</span>
-        <CommandShortcut>⌘3</CommandShortcut>
+        <CommandShortcut>⌘2</CommandShortcut>
       </CommandItem>
 
       <CommandItem
         onSelect={() => {
-          setSearchMode('standards')
           setPages((prev) => [...prev, 'search-standards'])
         }}
       >
         <HugeiconsIcon icon={RulerIcon} />
         <span>Buscar Padrão...</span>
+        <CommandShortcut>⌘3</CommandShortcut>
+      </CommandItem>
+
+      <CommandItem
+        onSelect={() => {
+          setPages((prev) => [...prev, 'search-jobs'])
+        }}
+      >
+        <HugeiconsIcon icon={ClipboardIcon} />
+        <span>Buscar Ordem de Serviço...</span>
         <CommandShortcut>⌘4</CommandShortcut>
       </CommandItem>
     </CommandGroup>

@@ -28,8 +28,6 @@ type CommandPaletteContextType = {
   // Dialog states for nested dialogs
   environmentalDialogOpen: boolean
   setEnvironmentalDialogOpen: (open: boolean) => void
-  equipmentDialogOpen: boolean
-  setEquipmentDialogOpen: (open: boolean) => void
 }
 
 const CommandPaletteContext =
@@ -57,7 +55,6 @@ export function CommandPaletteProvider({
   >([])
   const [environmentalDialogOpen, setEnvironmentalDialogOpen] =
     React.useState(false)
-  const [equipmentDialogOpen, setEquipmentDialogOpen] = React.useState(false)
   const location = useLocation()
 
   const activePage = pages[pages.length - 1] ?? 'root'
@@ -115,8 +112,6 @@ export function CommandPaletteProvider({
         activePage,
         environmentalDialogOpen,
         setEnvironmentalDialogOpen,
-        equipmentDialogOpen,
-        setEquipmentDialogOpen,
       }}
     >
       {children}
