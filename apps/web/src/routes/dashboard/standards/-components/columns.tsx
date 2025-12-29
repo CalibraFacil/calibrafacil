@@ -19,6 +19,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils"
 
 type StandardStatus = "ACTIVE" | "INACTIVE" | "OUT_OF_TOLERANCE" | "SENT_FOR_CALIBRATION"
 
@@ -196,10 +197,12 @@ export const standardsColumns: ColumnDef<ReferenceStandard>[] = [
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                            render={() => (
+                            render={(props) => (
                                 <Link
+                                    {...props}
                                     to="/dashboard/standards/$id/edit"
                                     params={{ id: String(row.original.id) }}
+                                    className={cn(props.className, "w-full flex items-center")}
                                 >
                                     <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
                                     Editar
@@ -207,11 +210,13 @@ export const standardsColumns: ColumnDef<ReferenceStandard>[] = [
                             )}
                         />
                         <DropdownMenuItem
-                            render={() => (
+                            render={(props) => (
                                 <Link
+                                    {...props}
                                     to="/dashboard/standards/$id/edit"
                                     params={{ id: String(row.original.id) }}
                                     search={{ renew: true }}
+                                    className={cn(props.className, "w-full flex items-center")}
                                 >
                                     <HugeiconsIcon icon={RefreshIcon} className="mr-2 h-4 w-4" />
                                     Renovar Certificado

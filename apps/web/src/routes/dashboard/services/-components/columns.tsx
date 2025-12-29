@@ -17,6 +17,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils"
 
 export interface Service {
     id: number
@@ -138,10 +139,12 @@ export const servicesColumns: ColumnDef<Service>[] = [
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                            render={() => (
+                            render={(props) => (
                                 <Link
+                                    {...props}
                                     to="/dashboard/services/$id/edit"
                                     params={{ id: String(row.original.id) }}
+                                    className={cn(props.className, "w-full flex items-center")}
                                 >
                                     <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
                                     Editar

@@ -16,6 +16,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils"
 
 type JobStatus =
     | "DRAFT"
@@ -176,10 +177,12 @@ export const jobsColumns: ColumnDef<Job>[] = [
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     <DropdownMenuItem
-                        render={() => (
+                        render={(props) => (
                             <Link
+                                {...props}
                                 to="/dashboard/jobs/$id"
                                 params={{ id: String(row.original.id) }}
+                                className={cn(props.className, "w-full flex items-center")}
                             >
                                 <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
                                 Ver Detalhes
@@ -188,10 +191,12 @@ export const jobsColumns: ColumnDef<Job>[] = [
                     />
                     {row.original.status === "DRAFT" && (
                         <DropdownMenuItem
-                            render={() => (
+                            render={(props) => (
                                 <Link
+                                    {...props}
                                     to="/dashboard/jobs/$id"
                                     params={{ id: String(row.original.id) }}
+                                    className={cn(props.className, "w-full flex items-center")}
                                 >
                                     <HugeiconsIcon icon={Calendar03Icon} className="mr-2 h-4 w-4" />
                                     Iniciar Execução
