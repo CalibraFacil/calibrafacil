@@ -7,6 +7,12 @@ import {
   Settings05Icon,
   Building02Icon,
   Logout01Icon,
+  UserIcon,
+  Wrench01Icon,
+  RulerIcon,
+  ClipboardIcon,
+  TaskAdd01Icon,
+  CropIcon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 
@@ -33,29 +39,66 @@ export function NavigationGroup() {
     setOpen(false)
   }
 
+  const navItems = [
+    {
+      label: 'Painel de Controle',
+      icon: Home01Icon,
+      to: '/dashboard' as const,
+      shortcut: '⌘H',
+    },
+    {
+      label: 'Clientes',
+      icon: UserIcon,
+      to: '/dashboard/clients' as const,
+    },
+    {
+      label: 'Ativos',
+      icon: Wrench01Icon,
+      to: '/dashboard/assets' as const,
+    },
+    {
+      label: 'Padrões de Referência',
+      icon: RulerIcon,
+      to: '/dashboard/standards' as const,
+    },
+    {
+      label: 'Métodos de Calibração',
+      icon: CropIcon,
+      to: '/dashboard/methods' as const,
+    },
+    {
+      label: 'Serviços',
+      icon: TaskAdd01Icon,
+      to: '/dashboard/services' as const,
+    },
+    {
+      label: 'Ordens de Serviço',
+      icon: ClipboardIcon,
+      to: '/dashboard/jobs' as const,
+    },
+    {
+      label: 'Configurações',
+      icon: Settings05Icon,
+      to: '/dashboard/settings' as const,
+      shortcut: '⌘,',
+    },
+  ]
+
   return (
     <CommandGroup heading="Navegação">
-      <CommandItem
-        onSelect={() => {
-          navigate({ to: '/dashboard' })
-          setOpen(false)
-        }}
-      >
-        <HugeiconsIcon icon={Home01Icon} />
-        <span>Ir para Painel de Controle</span>
-        <CommandShortcut>⌘H</CommandShortcut>
-      </CommandItem>
-
-      <CommandItem
-        onSelect={() => {
-          navigate({ to: '/dashboard/settings' })
-          setOpen(false)
-        }}
-      >
-        <HugeiconsIcon icon={Settings05Icon} />
-        <span>Ir para Configurações</span>
-        <CommandShortcut>⌘,</CommandShortcut>
-      </CommandItem>
+      {navItems.map((item) => (
+        <CommandItem
+          key={item.to}
+          onSelect={() => {
+            navigate({ to: item.to })
+            setOpen(false)
+          }}
+        >
+          <HugeiconsIcon icon={item.icon} />
+          <span>{item.label}</span>
+          {item.shortcut && <CommandShortcut>{item.shortcut}</CommandShortcut>}
+        </CommandItem>
+      ))}
 
       <CommandItem
         onSelect={() => {

@@ -6,7 +6,6 @@ import { QuickCreateGroup } from './groups/quick-create'
 import { GlobalSearchGroup } from './groups/global-search'
 import { NavigationGroup } from './groups/navigation-group'
 import { LogEnvironmentalDialog } from './dialogs/log-environmental'
-import { RegisterEquipmentDialog } from './dialogs/register-equipment'
 
 import {
   Command,
@@ -53,6 +52,8 @@ export function CommandPalette() {
         return 'Buscar cliente por nome ou CNPJ...'
       case 'search-standards':
         return 'Buscar padrão por identificação...'
+      case 'search-jobs':
+        return 'Buscar ordem de serviço...'
       default:
         return 'Digite um comando ou busque...'
     }
@@ -66,7 +67,7 @@ export function CommandPalette() {
         title="Paleta de Comandos"
         description="Use atalhos de teclado para navegar rapidamente pelo sistema."
       >
-        <Command onKeyDown={handleKeyDown}>
+        <Command onKeyDown={handleKeyDown} shouldFilter={activePage === 'root'}>
           <CommandInput
             placeholder={getPlaceholder()}
             value={searchValue}
@@ -95,7 +96,6 @@ export function CommandPalette() {
 
       {/* Dialogs that can be opened from command palette */}
       <LogEnvironmentalDialog />
-      <RegisterEquipmentDialog />
     </>
   )
 }

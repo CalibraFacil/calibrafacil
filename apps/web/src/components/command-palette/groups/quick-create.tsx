@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
@@ -15,17 +16,15 @@ import {
 } from '@/components/ui/command'
 
 export function QuickCreateGroup() {
-  const { setOpen, setEnvironmentalDialogOpen, setEquipmentDialogOpen } =
-    useCommandPalette()
+  const navigate = useNavigate()
+  const { setOpen, setEnvironmentalDialogOpen } = useCommandPalette()
 
   return (
     <CommandGroup heading="Criação Rápida">
       <CommandItem
         onSelect={() => {
-          toast.info('Abrindo assistente de nova ordem...', {
-            description: 'Iniciando fluxo de criação de ordem de serviço.',
-          })
           setOpen(false)
+          navigate({ to: '/dashboard/jobs/new' })
         }}
       >
         <HugeiconsIcon icon={Add01Icon} className="text-blue-500" />
@@ -36,7 +35,6 @@ export function QuickCreateGroup() {
       <CommandItem
         onSelect={() => {
           setOpen(false)
-          // Small delay to allow command palette to close
           setTimeout(() => {
             setEnvironmentalDialogOpen(true)
           }, 100)
@@ -50,9 +48,7 @@ export function QuickCreateGroup() {
       <CommandItem
         onSelect={() => {
           setOpen(false)
-          setTimeout(() => {
-            setEquipmentDialogOpen(true)
-          }, 100)
+          navigate({ to: '/dashboard/assets/new' })
         }}
       >
         <HugeiconsIcon icon={Package01Icon} className="text-green-500" />
@@ -62,15 +58,17 @@ export function QuickCreateGroup() {
 
       <CommandItem
         onSelect={() => {
-          toast.info('Abrindo formulário de NCR...', {
-            description: 'Criando novo Relatório de Não Conformidade.',
+          toast.info('Em breve', {
+            description: 'Relatórios de Não Conformidade serão implementados em breve.',
           })
           setOpen(false)
         }}
       >
         <HugeiconsIcon icon={AlertDiamondIcon} className="text-red-500" />
-        <span>Criar Relatório de Não Conformidade</span>
-        <CommandShortcut>⌘R</CommandShortcut>
+        <span className="flex items-center gap-2">
+          Criar Relatório de Não Conformidade
+          <span className="text-xs text-muted-foreground">(Em breve)</span>
+        </span>
       </CommandItem>
     </CommandGroup>
   )
