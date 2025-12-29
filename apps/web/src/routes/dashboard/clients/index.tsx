@@ -19,16 +19,6 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import {
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -36,6 +26,8 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
+import { DataTable } from '@/components/ui/data-table'
+import { type Client, clientsColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/clients/')({
   head: () => ({
@@ -65,9 +57,24 @@ function ClientsPage() {
         throw new Error('Falha ao carregar clientes')
       }
 
-      return res.json()
+      return res.json() as Promise<{
+        data: Client[]
+        pagination: {
+          page: number
+          limit: number
+          total: number
+          totalPages: number
+        }
+      }>
     },
   })
+
+  const handleRowClick = (client: Client) => {
+    navigate({
+      to: '/dashboard/clients/$id',
+      params: { id: String(client.id) },
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -106,9 +113,6 @@ function ClientsPage() {
             </div>
           </div>
 
-          {/* Loading state */}
-          {isLoading && <ClientsTableSkeleton />}
-
           {/* Error state */}
           {error && (
             <div className="text-destructive py-8 text-center">
@@ -145,121 +149,27 @@ function ClientsPage() {
           )}
 
           {/* Data table */}
-          {!isLoading && !error && data?.data && data.data.length > 0 && (
-            <>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>CNPJ/CPF</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Portal</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.data.map((customer) => (
-                      <TableRow
-                        key={customer.id}
-                        className="cursor-pointer"
-                        onClick={() =>
-                          navigate({
-                            to: '/dashboard/clients/$id',
-                            params: { id: String(customer.id) },
-                          })
-                        }
-                      >
-                        <TableCell className="font-medium">
-                          {customer.name}
-                        </TableCell>
-                        <TableCell>{customer.taxId || '-'}</TableCell>
-                        <TableCell>{customer.email || '-'}</TableCell>
-                        <TableCell>
-                          {customer.authOrganizationId ? (
-                            <Badge variant="secondary">Vinculado</Badge>
-                          ) : (
-                            <Badge variant="outline">Não vinculado</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+          {!error && (data?.data?.length ?? 0) > 0 && (
+            <DataTable
+              columns={clientsColumns}
+              data={data?.data ?? []}
+              isLoading={isLoading}
+              pagination={data?.pagination}
+              onPageChange={setPage}
+              onRowClick={handleRowClick}
+            />
+          )}
 
-              {/* Pagination */}
-              {data.pagination.totalPages > 1 && (
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="text-muted-foreground text-sm">
-                    Pagina {data.pagination.page} de{' '}
-                    {data.pagination.totalPages} ({data.pagination.total}{' '}
-                    clientes)
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setPage((p) =>
-                          Math.min(data.pagination.totalPages, p + 1),
-                        )
-                      }
-                      disabled={page === data.pagination.totalPages}
-                    >
-                      Próximo
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
+          {/* Loading state when no data yet */}
+          {isLoading && !data && (
+            <DataTable
+              columns={clientsColumns}
+              data={[]}
+              isLoading={true}
+            />
           )}
         </CardContent>
       </Card>
-    </div>
-  )
-}
-
-function ClientsTableSkeleton() {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nome</TableHead>
-              <TableHead>CNPJ/CPF</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Portal</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <TableRow key={i}>
-                <TableCell>
-                  <Skeleton className="h-4 w-32" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-28" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-40" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-5 w-20" />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
     </div>
   )
 }
