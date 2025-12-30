@@ -28,6 +28,7 @@ export default defineConfig({
     tanstackStart({
       spa: {
         enabled: true,
+        prerender: { enabled: false }, // Disable prerendering to avoid auth init issues in CI
       },
     }),
     viteReact(),
