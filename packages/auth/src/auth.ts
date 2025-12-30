@@ -7,7 +7,18 @@ import { Resend } from "resend";
 import { OrganizationInvitationEmail } from "@calibra-facil/email";
 import { ac, roles } from "./access";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy-init Resend to support Cloudflare Workers (env vars not available at module load)
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      throw new Error("RESEND_API_KEY is not configured");
+    }
+    _resend = new Resend(apiKey);
+  }
+  return _resend;
+}
 
 // Shared configuration for both auth instances
 const sharedConfig = {
@@ -26,14 +37,14 @@ const sharedConfig = {
   trustedOrigins:
     process.env.NODE_ENV === "production"
       ? [process.env.APP_URL, process.env.PORTAL_URL].filter(
-          (url): url is string => Boolean(url),
-        )
+        (url): url is string => Boolean(url),
+      )
       : [
-          "https://localhost:5173",
-          "https://localhost:5174",
-          "https://192.168.0.10:5173",
-          "https://192.168.0.10:5174",
-        ],
+        "https://localhost:5173",
+        "https://localhost:5174",
+        "https://192.168.0.10:5173",
+        "https://192.168.0.10:5174",
+      ],
   advanced: {
     defaultCookieAttributes: {
       sameSite: "none" as const,
@@ -70,7 +81,7 @@ function createOrganizationPlugin() {
       const appUrl = process.env.APP_URL || "https://localhost:5173";
       const inviteLink = `${appUrl}/accept-invitation/${data.id}`;
 
-      await resend.emails.send({
+      await getResend().emails.send({
         from:
           process.env.EMAIL_FROM || "Calibra Fácil <noreply@calibrafacil.com>",
         to: data.email,

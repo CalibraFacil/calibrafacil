@@ -935,6 +935,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
   // =========================================================================
   // POST /:id/approve - Approve job (manager only)
+  // Enqueues certificate generation instead of directly approving
   // =========================================================================
   .post(
     "/:id/approve",
@@ -976,13 +977,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      // Update job
+      // Update job status to GENERATING_PDF (async generation)
       const [updated] = await db
         .update(calibrationJob)
         .set({
-          status: "APPROVED",
-          approvedBy: session.user.id,
-          approvedAt: new Date(),
+          status: "GENERATING_PDF",
         })
         .where(eq(calibrationJob.id, id))
         .returning();
@@ -992,15 +991,31 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         jobId: id,
         action: "approve",
         changes: {
-          status: { old: existing.status, new: "APPROVED" },
+          status: { old: existing.status, new: "GENERATING_PDF" },
         },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: input.reason || "Aprovado",
+        reason: input.reason || "Aprovado - Gerando PDF",
       });
 
+      // Enqueue certificate generation (Cloudflare Queue)
+      // The PDF_QUEUE binding is available via c.env in Cloudflare Workers
+      type CloudflareQueue = { send: (body: unknown) => Promise<void> };
+      const env = c.env as { PDF_QUEUE?: CloudflareQueue };
+      if (env.PDF_QUEUE) {
+        await env.PDF_QUEUE.send({
+          jobId: id,
+          userId: session.user.id,
+        });
+      } else {
+        // Fallback for local dev: log a warning
+        console.warn(
+          `PDF_QUEUE not available. Job ${id} needs manual certificate generation.`,
+        );
+      }
+
       return c.json({
-        message: "Job aprovado com sucesso",
+        message: "Gerando certificado...",
         data: updated,
       });
     },

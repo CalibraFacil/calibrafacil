@@ -955,7 +955,8 @@ export const referenceStandardAuditLogRelations = relations(
  * - DRAFT: Created, not started
  * - IN_PROGRESS: Technician is executing the calibration
  * - REVIEW: Submitted for manager review
- * - APPROVED: Manager approved, ready for certificate generation
+ * - GENERATING_PDF: Approved, certificate being generated async
+ * - APPROVED: Certificate generated and ready
  * - REJECTED: Manager rejected, needs rework
  * - CANCELED: Job was canceled (soft delete equivalent)
  */
@@ -963,6 +964,7 @@ export type JobStatus =
   | "DRAFT"
   | "IN_PROGRESS"
   | "REVIEW"
+  | "GENERATING_PDF"
   | "APPROVED"
   | "REJECTED"
   | "CANCELED";
