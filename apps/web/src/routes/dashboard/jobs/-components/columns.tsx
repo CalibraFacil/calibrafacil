@@ -194,12 +194,27 @@ export const jobsColumns: ColumnDef<Job>[] = [
                             render={(props) => (
                                 <Link
                                     {...props}
-                                    to="/dashboard/jobs/$id"
+                                    to="/dashboard/jobs/$id/execute"
                                     params={{ id: String(row.original.id) }}
                                     className={cn(props.className, "w-full flex items-center")}
                                 >
                                     <HugeiconsIcon icon={Calendar03Icon} className="mr-2 h-4 w-4" />
                                     Iniciar Execução
+                                </Link>
+                            )}
+                        />
+                    )}
+                    {(row.original.status === "IN_PROGRESS" || row.original.status === "REJECTED") && (
+                        <DropdownMenuItem
+                            render={(props) => (
+                                <Link
+                                    {...props}
+                                    to="/dashboard/jobs/$id/execute"
+                                    params={{ id: String(row.original.id) }}
+                                    className={cn(props.className, "w-full flex items-center")}
+                                >
+                                    <HugeiconsIcon icon={Calendar03Icon} className="mr-2 h-4 w-4" />
+                                    Continuar Execução
                                 </Link>
                             )}
                         />

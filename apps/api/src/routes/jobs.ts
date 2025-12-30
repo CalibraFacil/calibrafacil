@@ -8,9 +8,11 @@ import {
   customer,
   service,
   calibrationMethod,
+  referenceStandard,
   user,
   member,
   type MethodSnapshot,
+  type StandardSnapshot,
 } from "@calibra-facil/db/schema";
 import {
   CreateJobSchema,
@@ -21,12 +23,18 @@ import {
   ApproveJobSchema,
   RejectJobSchema,
   CancelJobSchema,
+  ExecuteJobSchema,
 } from "@calibra-facil/schemas";
 import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
 import { eq, and, ilike, desc, count, lte, gte, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+
+// Aliases for multiple user joins
+const approverUser = alias(user, "approverUser");
+const rejectorUser = alias(user, "rejectorUser");
 
 /**
  * Generates a unique job ID for the organization.
@@ -282,12 +290,16 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         serviceTat: service.tat,
         technicianId: calibrationJob.technicianId,
         technicianName: user.name,
+        approverName: approverUser.name,
+        rejectorName: rejectorUser.name,
       })
       .from(calibrationJob)
       .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
       .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
       .leftJoin(service, eq(calibrationJob.serviceId, service.id))
       .leftJoin(user, eq(calibrationJob.technicianId, user.id))
+      .leftJoin(approverUser, eq(calibrationJob.approvedBy, approverUser.id))
+      .leftJoin(rejectorUser, eq(calibrationJob.rejectedBy, rejectorUser.id))
       .where(
         and(
           eq(calibrationJob.id, id),
@@ -781,6 +793,141 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
       return c.json({
         message: "Job submetido para revisao",
+        data: updated,
+      });
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/execute - Save execution data (worksheet auto-save / manual save)
+  // =========================================================================
+  .post(
+    "/:id/execute",
+    ...withLabPermission({ calibration: ["update"] }),
+    zValidator("json", ExecuteJobSchema),
+    async (c) => {
+      const memberData = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      const input = c.req.valid("json");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      // Get existing job
+      const [existing] = await db
+        .select()
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      // Can only execute from DRAFT, IN_PROGRESS, or REJECTED
+      if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+        return c.json(
+          {
+            error: `Nao e possivel executar um job com status ${existing.status}`,
+          },
+          400,
+        );
+      }
+
+      // Build standards snapshot if standards were selected
+      let standardsSnapshot: StandardSnapshot[] | null = null;
+      if (input.selectedStandardIds && input.selectedStandardIds.length > 0) {
+        const standards = await db
+          .select()
+          .from(referenceStandard)
+          .where(
+            and(
+              inArray(referenceStandard.id, input.selectedStandardIds),
+              eq(referenceStandard.organizationId, memberData.organizationId),
+            ),
+          );
+
+        // Validate all standards are ACTIVE
+        const inactiveStandards = standards.filter(
+          (s) => s.status !== "ACTIVE",
+        );
+        if (inactiveStandards.length > 0) {
+          return c.json(
+            {
+              error: `Os seguintes padroes nao estao ativos: ${inactiveStandards.map((s) => s.name).join(", ")}`,
+            },
+            400,
+          );
+        }
+
+        // Validate all standards have valid certificates (not expired)
+        const now = new Date();
+        const expiredStandards = standards.filter(
+          (s) => s.nextCalibrationDate < now,
+        );
+        if (expiredStandards.length > 0) {
+          return c.json(
+            {
+              error: `Os seguintes padroes estao com certificado vencido: ${expiredStandards.map((s) => s.name).join(", ")}`,
+            },
+            400,
+          );
+        }
+
+        // Create snapshot of standards - freeze values at execution time
+        standardsSnapshot = standards.map((s) => ({
+          id: s.id,
+          name: s.name,
+          certificateNumber: s.certificateNumber,
+          calibrationDate: s.calibrationDate,
+          uncertainty: s.uncertainty,
+          uncertaintyUnit: s.uncertaintyUnit,
+          coverageFactor: s.coverageFactor,
+          distribution: s.distribution,
+          drift: s.drift,
+          certifiedValues: s.certifiedValues,
+        }));
+      }
+
+      // Determine new status
+      const newStatus = existing.status === "DRAFT" ? "IN_PROGRESS" : existing.status;
+
+      // Update job with execution data
+      const [updated] = await db
+        .update(calibrationJob)
+        .set({
+          data: input.data,
+          results: input.results || null,
+          standardsSnapshot: standardsSnapshot || existing.standardsSnapshot,
+          status: newStatus,
+        })
+        .where(eq(calibrationJob.id, id))
+        .returning();
+
+      // Audit log
+      await db.insert(jobAuditLog).values({
+        jobId: id,
+        action: "execute",
+        changes: {
+          status: existing.status !== newStatus ? { old: existing.status, new: newStatus } : undefined,
+          data: { old: existing.data, new: input.data },
+          standardsSnapshot: standardsSnapshot
+            ? { old: existing.standardsSnapshot, new: standardsSnapshot }
+            : undefined,
+        },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
+
+      return c.json({
+        message: "Dados salvos com sucesso",
         data: updated,
       });
     },
