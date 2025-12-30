@@ -16,6 +16,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils"
 
 type MethodStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED"
 
@@ -118,10 +119,12 @@ export const methodsColumns: ColumnDef<Method>[] = [
                     <DropdownMenuContent align="end">
                         {row.original.status === "DRAFT" && (
                             <DropdownMenuItem
-                                render={() => (
+                                render={(props) => (
                                     <Link
+                                        {...props}
                                         to="/dashboard/methods/$id/edit"
                                         params={{ id: String(row.original.id) }}
+                                        className={cn(props.className, "w-full flex items-center")}
                                     >
                                         <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
                                         Editar

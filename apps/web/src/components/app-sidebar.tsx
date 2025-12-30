@@ -62,12 +62,12 @@ const data = {
       ],
     },
     {
-      title: 'Servicos',
+      title: 'Serviços',
       url: '/dashboard/services',
       icon: <HugeiconsIcon icon={TaskAdd01Icon} />,
     },
     {
-      title: 'Ordens de Servico',
+      title: 'Ordens de Serviço',
       url: '/dashboard/jobs',
       icon: <HugeiconsIcon icon={ClipboardIcon} />,
     },
