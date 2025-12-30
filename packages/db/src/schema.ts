@@ -984,6 +984,26 @@ export type MethodSnapshot = {
 };
 
 /**
+ * Standard Snapshot - Frozen copy of reference standards at execution time.
+ * This ensures the standard values used are recorded exactly as they were
+ * during calibration, even if the standard is recalibrated later.
+ * Critical for ISO 17025 compliance: traceability and reproducibility.
+ */
+export type StandardSnapshot = {
+  id: number;
+  name: string;
+  certificateNumber: string;
+  calibrationDate: Date;
+  uncertainty: number | null;
+  uncertaintyUnit: string | null;
+  coverageFactor: number;
+  distribution: UncertaintyDistribution;
+  drift: number | null;
+  certifiedValues: CertifiedValue[] | null;
+};
+
+
+/**
  * Calibration Job table - The Work Order / Operational Record
  * ISO 17025:2017 Clause 7.7 - Ensuring Validity of Results
  *
@@ -1031,6 +1051,9 @@ export const calibrationJob = pgTable(
     data: jsonb("data").$type<Record<string, unknown>>(),
     // Calculated results (output from math engine)
     results: jsonb("results").$type<Record<string, unknown>>(),
+    // Frozen copy of reference standards used during execution
+    // This ensures traceability per ISO 17025 requirements
+    standardsSnapshot: jsonb("standards_snapshot").$type<StandardSnapshot[]>(),
     // Certificate URL (populated after approval and PDF generation)
     certificateUrl: text("certificate_url"),
     // Timestamps and actors

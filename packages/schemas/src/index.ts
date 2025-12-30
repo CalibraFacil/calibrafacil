@@ -739,6 +739,37 @@ export const CancelJobSchema = z.object({
 export type CancelJobInput = z.infer<typeof CancelJobSchema>;
 
 /**
+ * Standard Snapshot schema - Frozen copy of reference standard at execution
+ * This is read-only after job execution (never modified)
+ */
+export const StandardSnapshotSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  certificateNumber: z.string(),
+  calibrationDate: z.string(),
+  uncertainty: z.number().nullable(),
+  uncertaintyUnit: z.string().nullable(),
+  coverageFactor: z.number(),
+  distribution: UncertaintyDistributionSchema,
+  drift: z.number().nullable(),
+  certifiedValues: z.array(CertifiedValueSchema).nullable(),
+});
+
+export type StandardSnapshot = z.infer<typeof StandardSnapshotSchema>;
+
+/**
+ * Schema for executing a job (saving worksheet data)
+ * Includes selected reference standards for ISO 17025 traceability
+ */
+export const ExecuteJobSchema = z.object({
+  selectedStandardIds: z.array(z.number()).optional(),
+  data: z.record(z.string(), z.unknown()),
+  results: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type ExecuteJobInput = z.infer<typeof ExecuteJobSchema>;
+
+/**
  * Schema for listing jobs with pagination and filtering
  */
 export const ListJobsQuerySchema = z.object({

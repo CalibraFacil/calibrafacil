@@ -92,6 +92,13 @@
       "when": 1766948953491,
       "tag": "0012_striped_the_hood",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1767028783985,
+      "tag": "0013_add_standards_snapshot",
+      "breakpoints": true
     }
   ]
 }
