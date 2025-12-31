@@ -32,7 +32,7 @@ const allowedOrigins = new Set([
   "https://localhost:5174",
   "https://192.168.0.10:5173",
   "https://192.168.0.10:5174",
-  "https://dashboard.calibrafacil.com",
+  "https://calibrafacil.com",
   "https://portal.calibrafacil.com",
   "https://api.calibrafacil.com",
 ]);

@@ -71,7 +71,7 @@ function createSharedConfig() {
     },
     trustedOrigins: isProduction
       ? [
-        "https://dashboard.calibrafacil.com",
+        "https://calibrafacil.com",
         "https://portal.calibrafacil.com",
       ]
       : [
