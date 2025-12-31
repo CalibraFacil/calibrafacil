@@ -127,18 +127,5 @@ const routes = app
 
 export type AppType = typeof routes;
 
-/**
- * Bun (local dev) vs Cloudflare Workers (prod)
- */
-const isBun = typeof Bun !== "undefined";
-
-export default isBun
-  ? {
-    port: 3000,
-    fetch: app.fetch,
-    tls: {
-      key: Bun.file("./certs/key.pem"),
-      cert: Bun.file("./certs/cert.pem"),
-    },
-  }
-  : app;
+// Export the Hono app for Cloudflare Workers
+export default app;
