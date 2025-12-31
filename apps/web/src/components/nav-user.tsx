@@ -42,14 +42,9 @@ export function NavUser() {
       .join('')
       .toUpperCase()
 
-  const handleSignOut = async () => {
-    await signOut({
-      fetchOptions: {
-        onSuccess: () => {
-          window.location.href = '/sign-in'
-        },
-      },
-    })
+  const handleSignOut = () => {
+    void signOut() // fire it off
+    window.location.replace("/sign-in")
   }
 
   if (isPending) {

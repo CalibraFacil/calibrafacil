@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { labAuth, portalAuth } from "@calibra-facil/auth";
+
 import { customersRouter } from "./routes/customers";
 import { invitationsRouter } from "./routes/invitations";
 import { portalRouter } from "./routes/portal";
@@ -13,103 +14,73 @@ import { jobsRouter } from "./routes/jobs";
 
 const app = new Hono();
 
-const allowedOrigins = [
+const allowedOrigins = new Set([
   "https://localhost:5173",
   "https://localhost:5174",
   "https://192.168.0.10:5173",
+  "https://192.168.0.10:5174",
   "https://dashboard.calibrafacil.com",
   "https://portal.calibrafacil.com",
   "https://api.calibrafacil.com",
-  "https://192.168.0.10:5174",
-];
+]);
 
-// CORS middleware - must be before auth routes
-app.use(
-  "/api/auth/*",
-  cors({
-    origin: (origin) => {
-      if (allowedOrigins.includes(origin)) {
-        return origin;
-      }
-      return origin ? "" : allowedOrigins[0];
-    },
-    allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-    credentials: true,
-  }),
-);
+function getCorsOrigin(origin?: string) {
+  if (!origin) return undefined;
+  return allowedOrigins.has(origin) ? origin : undefined;
+}
 
-// Explicit OPTIONS handler for preflight requests
-app.options("/api/auth/*", (c) => {
-  const origin = c.req.header("Origin");
-  if (origin && allowedOrigins.includes(origin)) {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "600",
-      },
-    });
-  }
-  return new Response(null, { status: 403 });
-});
-
-// Lab Auth handler - for dashboard app (apps/web)
-app.on(["POST", "GET"], "/api/auth/lab/*", async (c) => {
-  const response = await labAuth.handler(c.req.raw);
-
-  // Add CORS headers to Better Auth response
-  const origin = c.req.header("Origin");
-  if (origin && allowedOrigins.includes(origin)) {
-    response.headers.set("Access-Control-Allow-Origin", origin);
-    response.headers.set("Access-Control-Allow-Credentials", "true");
-  }
-
-  return response;
-});
-
-// Portal Auth handler - for client portal app (apps/portal)
-app.on(["POST", "GET"], "/api/auth/portal/*", async (c) => {
-  const response = await portalAuth.handler(c.req.raw);
-
-  // Add CORS headers to Better Auth response
-  const origin = c.req.header("Origin");
-  if (origin && allowedOrigins.includes(origin)) {
-    response.headers.set("Access-Control-Allow-Origin", origin);
-    response.headers.set("Access-Control-Allow-Credentials", "true");
-  }
-
-  return response;
-});
-
-// Other routes with their own CORS if needed
+/**
+ * GLOBAL CORS
+ * - Handles OPTIONS automatically
+ * - Applies to ALL routes
+ */
 app.use(
   "*",
   cors({
-    origin: (origin) => {
-      if (allowedOrigins.includes(origin)) {
-        return origin;
-      }
-      return origin ? "" : allowedOrigins[0];
-    },
+    origin: (origin) => getCorsOrigin(origin),
+    credentials: true,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-    credentials: true,
   }),
 );
 
-// API Routes
+/**
+ * Helper: attach CORS headers to Better Auth responses
+ */
+function withCors(c: any, res: Response) {
+  const origin = getCorsOrigin(c.req.header("Origin"));
+  if (!origin) return res;
+
+  const headers = new Headers(res.headers);
+  headers.set("Access-Control-Allow-Origin", origin);
+  headers.set("Access-Control-Allow-Credentials", "true");
+  headers.append("Vary", "Origin");
+
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  });
+}
+
+/**
+ * AUTH ROUTES
+ */
+app.on(["GET", "POST"], "/api/auth/lab/*", async (c) => {
+  const res = await labAuth.handler(c.req.raw);
+  return withCors(c, res);
+});
+
+app.on(["GET", "POST"], "/api/auth/portal/*", async (c) => {
+  const res = await portalAuth.handler(c.req.raw);
+  return withCors(c, res);
+});
+
+/**
+ * API ROUTES
+ */
 const routes = app
-  .get("/hello", (c) => {
-    return c.json({ message: "Hello!" });
-  })
+  .get("/hello", (c) => c.json({ message: "Hello!" }))
   .route("/api/customers", customersRouter)
   .route("/api/invitations", invitationsRouter)
   .route("/api/portal", portalRouter)
@@ -122,7 +93,9 @@ const routes = app
 
 export type AppType = typeof routes;
 
-// Conditional export: Bun (local dev) vs Cloudflare Workers (production)
+/**
+ * Bun (local dev) vs Cloudflare Workers (prod)
+ */
 const isBun = typeof Bun !== "undefined";
 
 export default isBun
