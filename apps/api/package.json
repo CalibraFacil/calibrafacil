@@ -5,7 +5,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "dev": "wrangler dev --port 3000 --local-protocol https",
-    "build": "tsc --noEmit",
+    "build": "echo 'API build handled by Wrangler'",
+    "typecheck": "tsc --noEmit",
     "deploy": "wrangler deploy"
   },
   "dependencies": {
