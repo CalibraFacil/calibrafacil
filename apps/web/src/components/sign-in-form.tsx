@@ -94,14 +94,14 @@ export function SignInForm({ className, redirect, ...props }: SignInFormProps) {
             {isLoading ? 'Entrando...' : 'Entrar'}
           </Button>
         </Field>
-        <Field>
+        {/* <Field>
           <FieldDescription className="text-center">
             Não possui uma conta?{' '}
             <Link to="/sign-up" className="underline underline-offset-4">
               Cadastre-se
             </Link>
           </FieldDescription>
-        </Field>
+        </Field> */}
       </FieldGroup>
     </form>
   )
