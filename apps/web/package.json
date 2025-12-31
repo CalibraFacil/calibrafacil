@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_OPTIONS='--import ./instrument.server.mjs' vite dev --port 5173 --host",
-    "build": "vite build && cp instrument.server.mjs .output/server",
+    "build": "vite build && (cp instrument.server.mjs dist/server 2>/dev/null || true)",
     "preview": "vite preview",
     "start": "node --import ./.output/server/instrument.server.mjs .output/server/index.mjs",
     "test": "vitest run",
