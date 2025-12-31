@@ -37,15 +37,24 @@ async function fetchJobData(
       cj.standards_snapshot,
       cj.results,
       cj.data,
+      -- Organization (Lab) info
+      o.name as lab_name,
+      -- Customer info (complete)
       c.name as customer_name,
+      c.tax_id as customer_tax_id,
+      c.phone as customer_phone,
+      c.email as customer_email,
       c.address as customer_address,
+      -- Asset info
       a.name as asset_name,
       a.serial_number,
       a.tag,
       a.model,
       a.manufacturer,
+      -- Approver
       u.name as approver_name
     FROM calibration_job cj
+    LEFT JOIN organization o ON cj.organization_id = o.id
     LEFT JOIN customer c ON cj.customer_id = c.id
     LEFT JOIN asset a ON cj.asset_id = a.id
     LEFT JOIN "user" u ON cj.approved_by = u.id
@@ -57,14 +66,19 @@ async function fetchJobData(
     if (result.rows.length === 0) return null;
 
     const row = result.rows[0];
-    const data = row.data as Record<string, unknown> | null;
 
     return {
         jobId: row.job_id,
         performedAt: row.performed_at,
         approvedAt: row.approved_at,
+        lab: {
+            name: row.lab_name || "Laboratório de Calibração",
+        },
         customer: {
             name: row.customer_name,
+            taxId: row.customer_tax_id,
+            phone: row.customer_phone,
+            email: row.customer_email,
             address: row.customer_address,
         },
         asset: {
@@ -76,16 +90,12 @@ async function fetchJobData(
         },
         methodSnapshot: row.method_snapshot,
         standardsSnapshot: row.standards_snapshot,
+        data: row.data,
         results: row.results,
-        environment: data
-            ? {
-                temperature: data.temperature as number | undefined,
-                humidity: data.humidity as number | undefined,
-            }
-            : undefined,
         approverName: row.approver_name,
     };
 }
+
 
 async function updateJobWithCertificate(
     client: Client,
@@ -95,18 +105,17 @@ async function updateJobWithCertificate(
 ): Promise<void> {
     const now = new Date();
 
+    // Only update status and certificate_url - approved_by/approved_at are already set by API
     await client.query(
         `
     UPDATE calibration_job
     SET 
       status = 'APPROVED',
       certificate_url = $2,
-      approved_at = $3,
-      approved_by = $4,
       updated_at = $3
     WHERE id = $1
     `,
-        [jobId, certificateUrl, now, userId]
+        [jobId, certificateUrl, now]
     );
 
     await client.query(
@@ -165,73 +174,87 @@ async function setJobError(
     );
 }
 
+// Helper to run a database operation with a fresh connection
+async function withDbClient<T>(
+    env: Env,
+    operation: (client: Client) => Promise<T>
+): Promise<T> {
+    const client = new Client({
+        connectionString: env.HYPERDRIVE.connectionString,
+    });
+    await client.connect();
+    try {
+        return await operation(client);
+    } finally {
+        await client.end();
+    }
+}
+
 export default {
     async queue(
         batch: MessageBatch<QueueMessage>,
         env: Env,
-        ctx: ExecutionContext
+        _ctx: ExecutionContext
     ): Promise<void> {
-        const client = new Client({
-            connectionString: env.HYPERDRIVE.connectionString,
-        });
-        await client.connect();
+        for (const msg of batch.messages) {
+            const { jobId, userId } = msg.body;
+            console.log(`Processing certificate for job ${jobId}`);
 
-        try {
-            for (const msg of batch.messages) {
-                const { jobId, userId } = msg.body;
-                console.log(`Processing certificate for job ${jobId}`);
-
-                try {
-                    // 1. Fetch job data
-                    const job = await fetchJobData(client, jobId);
-                    if (!job) {
-                        console.error(`Job ${jobId} not found`);
-                        msg.ack();
-                        continue;
-                    }
-
-                    // 2. Render HTML
-                    const html = renderToString(React.createElement(CertificateHtml, { job }));
-                    const fullHtml = `<!DOCTYPE html>${html}`;
-
-                    // 3. Generate PDF with Puppeteer
-                    const browser = await puppeteer.launch(env.BROWSER);
-                    const page = await browser.newPage();
-                    await page.setContent(fullHtml, { waitUntil: "networkidle0" });
-                    const pdfBuffer = await page.pdf({
-                        format: "A4",
-                        printBackground: true,
-                        margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
-                    });
-                    await browser.close();
-
-                    // 4. Upload to R2
-                    const filename = `cert-${job.jobId}.pdf`;
-                    await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
-                        httpMetadata: { contentType: "application/pdf" },
-                    });
-
-                    // 5. Build public URL (adjust domain as needed)
-                    const certificateUrl = `https://certificates.calibra.com/${filename}`;
-
-                    // 6. Update DB
-                    await updateJobWithCertificate(client, jobId, certificateUrl, userId);
-
-                    console.log(`Certificate generated for job ${jobId}: ${certificateUrl}`);
+            try {
+                // 1. Fetch job data (fresh connection)
+                const job = await withDbClient(env, (client) => fetchJobData(client, jobId));
+                if (!job) {
+                    console.error(`Job ${jobId} not found`);
                     msg.ack();
-                } catch (error) {
-                    console.error(`Error processing job ${jobId}:`, error);
-                    await setJobError(
+                    continue;
+                }
+
+                // 2. Render HTML
+                const html = renderToString(React.createElement(CertificateHtml, { job }));
+                const fullHtml = `<!DOCTYPE html>${html}`;
+
+                // 3. Generate PDF with Puppeteer (slow operation - no DB connection held)
+                const browser = await puppeteer.launch(env.BROWSER);
+                const page = await browser.newPage();
+                await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+                const pdfBuffer = await page.pdf({
+                    format: "A4",
+                    printBackground: true,
+                    margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
+                });
+                await browser.close();
+
+                // 4. Upload to R2
+                const filename = `cert-${job.jobId}.pdf`;
+                await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
+                    httpMetadata: { contentType: "application/pdf" },
+                });
+
+                // 5. Build public URL (adjust domain as needed)
+                const certificateUrl = `https://certificates.calibrafacil.com/${filename}`;
+
+                // 6. Update DB (fresh connection after slow operations)
+                await withDbClient(env, (client) =>
+                    updateJobWithCertificate(client, jobId, certificateUrl, userId)
+                );
+
+                console.log(`Certificate generated for job ${jobId}: ${certificateUrl}`);
+                msg.ack();
+            } catch (error) {
+                console.error(`Error processing job ${jobId}:`, error);
+                // Record error with fresh connection
+                await withDbClient(env, (client) =>
+                    setJobError(
                         client,
                         jobId,
                         error instanceof Error ? error.message : String(error),
                         userId
-                    );
-                    msg.ack(); // Ack to not retry indefinitely
-                }
+                    )
+                ).catch((dbError) => {
+                    console.error(`Failed to record error for job ${jobId}:`, dbError);
+                });
+                msg.ack(); // Ack to not retry indefinitely
             }
-        } finally {
-            ctx.waitUntil(client.end());
         }
     },
 

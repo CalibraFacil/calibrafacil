@@ -977,11 +977,14 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      // Update job status to GENERATING_PDF (async generation)
+      // Update job status to GENERATING_PDF and set approver info
+      // (we set approved_by now so the PDF worker can fetch it)
       const [updated] = await db
         .update(calibrationJob)
         .set({
           status: "GENERATING_PDF",
+          approvedBy: session.user.id,
+          approvedAt: new Date(),
         })
         .where(eq(calibrationJob.id, id))
         .returning();

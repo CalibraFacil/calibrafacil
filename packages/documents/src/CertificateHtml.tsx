@@ -9,10 +9,44 @@ export type CustomerAddress = {
     state?: string;
 };
 
+// Method input field definition (from method builder)
+export type MethodInputField = {
+    key: string;
+    label: string;
+    type: "text" | "number" | "select" | "table";
+    unit?: string;
+    required?: boolean;
+    options?: string[];
+    defaultValue?: string | number;
+    columns?: Array<{
+        key: string;
+        label: string;
+        type: "text" | "number";
+        unit?: string;
+    }>;
+};
+
+// Method formula definition (for labeling results)
+export type MethodFormula = {
+    outputKey: string;
+    expression: string;
+    label?: string;
+    unit?: string;
+};
+
 export type MethodSnapshot = {
     methodId: number;
     methodName: string;
     methodVersion: number;
+    dataFields?: MethodInputField[];
+    formulas?: MethodFormula[];
+};
+
+export type CertifiedValue = {
+    nominal: string;
+    value: number;
+    uncertainty: number;
+    unit: string;
 };
 
 export type StandardSnapshot = {
@@ -23,14 +57,21 @@ export type StandardSnapshot = {
     uncertainty: number | null;
     uncertaintyUnit: string | null;
     coverageFactor: number;
+    certifiedValues?: CertifiedValue[] | null;
 };
 
 export type JobData = {
     jobId: string;
     performedAt: Date | null;
     approvedAt: Date | null;
+    lab: {
+        name: string;
+    };
     customer: {
         name: string;
+        taxId?: string | null;
+        phone?: string | null;
+        email?: string | null;
         address: CustomerAddress | null;
     };
     asset: {
@@ -42,11 +83,8 @@ export type JobData = {
     };
     methodSnapshot: MethodSnapshot;
     standardsSnapshot: StandardSnapshot[] | null;
+    data: Record<string, unknown> | null;
     results: Record<string, unknown> | null;
-    environment?: {
-        temperature?: number;
-        humidity?: number;
-    };
     approverName: string | null;
 };
 
@@ -193,6 +231,15 @@ const styles = `
     color: #666;
     margin-top: 24px;
   }
+  .data-table {
+    margin-top: 8px;
+  }
+  .data-table-title {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 4px;
+    font-size: 10pt;
+  }
 `;
 
 function formatDate(date: Date | null | string): string {
@@ -201,10 +248,17 @@ function formatDate(date: Date | null | string): string {
     return d.toLocaleDateString("pt-BR");
 }
 
+function formatNumber(value: number, decimals = 4): string {
+    return value.toLocaleString("pt-BR", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    });
+}
+
 function formatValue(value: unknown): string {
     if (value === null || value === undefined) return "-";
     if (Array.isArray(value)) return value.join(", ");
-    if (typeof value === "number") return value.toLocaleString("pt-BR");
+    if (typeof value === "number") return formatNumber(value);
     return String(value);
 }
 
@@ -221,8 +275,92 @@ function formatAddress(address: CustomerAddress | null): string {
     return parts.join(", ") || "-";
 }
 
+function formatTaxId(taxId: string | null | undefined): string {
+    if (!taxId) return "-";
+    // Format CNPJ: XX.XXX.XXX/XXXX-XX
+    if (taxId.length === 14) {
+        return `${taxId.slice(0, 2)}.${taxId.slice(2, 5)}.${taxId.slice(5, 8)}/${taxId.slice(8, 12)}-${taxId.slice(12)}`;
+    }
+    // Format CPF: XXX.XXX.XXX-XX
+    if (taxId.length === 11) {
+        return `${taxId.slice(0, 3)}.${taxId.slice(3, 6)}.${taxId.slice(6, 9)}-${taxId.slice(9)}`;
+    }
+    return taxId;
+}
+
+// Render a data table based on method dataField definition
+function DataTable({
+    field,
+    data,
+}: {
+    field: MethodInputField;
+    data: unknown[];
+}) {
+    if (!field.columns || !Array.isArray(data) || data.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="data-table">
+            <div className="data-table-title">{field.label}</div>
+            <table>
+                <thead>
+                    <tr>
+                        {field.columns.map((col) => (
+                            <th key={col.key}>
+                                {col.label}
+                                {col.unit ? ` (${col.unit})` : ""}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {data.map((row, i) => (
+                        <tr key={i}>
+                            {field.columns!.map((col) => (
+                                <td key={col.key}>
+                                    {formatValue(
+                                        (row as Record<string, unknown>)[col.key]
+                                    )}
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 export function CertificateHtml({ job }: { job: JobData }) {
-    const resultEntries = job.results ? Object.entries(job.results) : [];
+    const dataFields = job.methodSnapshot?.dataFields || [];
+    const formulas = job.methodSnapshot?.formulas || [];
+
+    // Separate table fields from scalar fields
+    const tableFields = dataFields.filter((f) => f.type === "table");
+    const scalarFields = dataFields.filter((f) => f.type !== "table");
+
+    // Get environment data (look for common keys)
+    const envTemperature =
+        (job.data?.temp_start as number) ??
+        (job.data?.temperature as number) ??
+        (job.data?.temperatura as number);
+    const envHumidity =
+        (job.data?.humidity as number) ?? (job.data?.umidade as number);
+
+    // Build results with labels from formulas
+    const resultEntries: Array<{ key: string; label: string; value: unknown; unit?: string }> = [];
+    if (job.results) {
+        for (const [key, value] of Object.entries(job.results)) {
+            const formula = formulas.find((f) => f.outputKey === key);
+            resultEntries.push({
+                key,
+                label: formula?.label || key,
+                value,
+                unit: formula?.unit,
+            });
+        }
+    }
 
     return (
         <html lang="pt-BR">
@@ -238,7 +376,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
                         <div className="logo-section">
                             <div className="logo-placeholder">LAB</div>
                             <div className="lab-info">
-                                <h1>Laboratório de Calibração</h1>
+                                <h1>{job.lab.name}</h1>
                                 <p>ISO/IEC 17025:2017</p>
                             </div>
                         </div>
@@ -257,11 +395,23 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                 <span className="info-value">{job.customer.name}</span>
                             </div>
                             <div className="info-row">
+                                <span className="info-label">CNPJ/CPF:</span>
+                                <span className="info-value">
+                                    {formatTaxId(job.customer.taxId)}
+                                </span>
+                            </div>
+                            <div className="info-row">
                                 <span className="info-label">Endereço:</span>
                                 <span className="info-value">
                                     {formatAddress(job.customer.address)}
                                 </span>
                             </div>
+                            {job.customer.phone && (
+                                <div className="info-row">
+                                    <span className="info-label">Telefone:</span>
+                                    <span className="info-value">{job.customer.phone}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -315,23 +465,23 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     </div>
 
                     {/* Environment */}
-                    {job.environment && (
+                    {(envTemperature !== undefined || envHumidity !== undefined) && (
                         <div className="section">
                             <div className="section-title">Condições Ambientais</div>
                             <div className="info-grid">
-                                {job.environment.temperature !== undefined && (
+                                {envTemperature !== undefined && (
                                     <div className="info-row">
                                         <span className="info-label">Temperatura:</span>
                                         <span className="info-value">
-                                            {job.environment.temperature} °C
+                                            {envTemperature} °C
                                         </span>
                                     </div>
                                 )}
-                                {job.environment.humidity !== undefined && (
+                                {envHumidity !== undefined && (
                                     <div className="info-row">
                                         <span className="info-label">Umidade:</span>
                                         <span className="info-value">
-                                            {job.environment.humidity} %
+                                            {envHumidity} %
                                         </span>
                                     </div>
                                 )}
@@ -370,6 +520,24 @@ export function CertificateHtml({ job }: { job: JobData }) {
                         </div>
                     )}
 
+                    {/* Calibration Data Tables */}
+                    {tableFields.length > 0 && job.data && (
+                        <div className="section">
+                            <div className="section-title">Dados de Calibração</div>
+                            {tableFields.map((field) => {
+                                const tableData = job.data?.[field.key];
+                                if (!Array.isArray(tableData)) return null;
+                                return (
+                                    <DataTable
+                                        key={field.key}
+                                        field={field}
+                                        data={tableData}
+                                    />
+                                );
+                            })}
+                        </div>
+                    )}
+
                     {/* Results */}
                     {resultEntries.length > 0 && (
                         <div className="section">
@@ -382,10 +550,13 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {resultEntries.map(([key, value]) => (
+                                    {resultEntries.map(({ key, label, value, unit }) => (
                                         <tr key={key}>
-                                            <td>{key}</td>
-                                            <td>{formatValue(value)}</td>
+                                            <td>{label}</td>
+                                            <td>
+                                                {formatValue(value)}
+                                                {unit ? ` ${unit}` : ""}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
