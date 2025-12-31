@@ -42,7 +42,6 @@ const sharedConfig = {
       ? [
         "https://dashboard.calibrafacil.com",
         "https://portal.calibrafacil.com",
-        "https://api.calibrafacil.com",
       ]
       : [
         "https://localhost:5173",
@@ -119,7 +118,10 @@ function createOrganizationPlugin() {
 export const labAuth = betterAuth({
   ...sharedConfig,
   basePath: "/api/auth/lab",
-  baseURL: process.env.API_URL || "https://localhost:3000",
+  baseURL:
+    process.env.NODE_ENV === "production"
+      ? process.env.API_URL!
+      : "https://localhost:3000",
   advanced: {
     ...sharedConfig.advanced,
     cookiePrefix: "lab",
@@ -135,7 +137,10 @@ export const labAuth = betterAuth({
 export const portalAuth = betterAuth({
   ...sharedConfig,
   basePath: "/api/auth/portal",
-  baseURL: process.env.API_URL || "https://localhost:3000",
+  baseURL:
+    process.env.NODE_ENV === "production"
+      ? process.env.API_URL!
+      : "https://localhost:3000",
   advanced: {
     ...sharedConfig.advanced,
     cookiePrefix: "portal",
