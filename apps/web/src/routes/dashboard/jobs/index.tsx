@@ -43,6 +43,7 @@ type JobStatus =
   | 'DRAFT'
   | 'IN_PROGRESS'
   | 'REVIEW'
+  | 'GENERATING_PDF'
   | 'APPROVED'
   | 'REJECTED'
   | 'CANCELED'
@@ -51,6 +52,7 @@ const statusLabels: Record<JobStatus, string> = {
   DRAFT: 'Rascunho',
   IN_PROGRESS: 'Em Execucao',
   REVIEW: 'Em Revisao',
+  GENERATING_PDF: 'Gerando PDF',
   APPROVED: 'Aprovado',
   REJECTED: 'Rejeitado',
   CANCELED: 'Cancelado',
@@ -153,6 +155,7 @@ function JobsListPage() {
                 <SelectItem value="DRAFT">Rascunho</SelectItem>
                 <SelectItem value="IN_PROGRESS">Em Execucao</SelectItem>
                 <SelectItem value="REVIEW">Em Revisao</SelectItem>
+                <SelectItem value="GENERATING_PDF">Gerando PDF</SelectItem>
                 <SelectItem value="APPROVED">Aprovado</SelectItem>
                 <SelectItem value="REJECTED">Rejeitado</SelectItem>
                 <SelectItem value="CANCELED">Cancelado</SelectItem>

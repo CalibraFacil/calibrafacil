@@ -18,10 +18,22 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
+// Animated dots for loading states
+function LoadingDots() {
+    return (
+        <span className="inline-flex" aria-hidden="true">
+            <span className="animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "0ms" }}>.</span>
+            <span className="animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "150ms" }}>.</span>
+            <span className="animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "300ms" }}>.</span>
+        </span>
+    )
+}
+
 type JobStatus =
     | "DRAFT"
     | "IN_PROGRESS"
     | "REVIEW"
+    | "GENERATING_PDF"
     | "APPROVED"
     | "REJECTED"
     | "CANCELED"
@@ -54,6 +66,7 @@ const statusLabels: Record<JobStatus, string> = {
     DRAFT: "Rascunho",
     IN_PROGRESS: "Em Execução",
     REVIEW: "Em Revisão",
+    GENERATING_PDF: "Gerando PDF",
     APPROVED: "Aprovado",
     REJECTED: "Rejeitado",
     CANCELED: "Cancelado",
@@ -66,6 +79,7 @@ const statusVariants: Record<
     DRAFT: "secondary",
     IN_PROGRESS: "default",
     REVIEW: "outline",
+    GENERATING_PDF: "outline",
     APPROVED: "default",
     REJECTED: "destructive",
     CANCELED: "secondary",
@@ -162,11 +176,25 @@ export const jobsColumns: ColumnDef<Job>[] = [
     {
         accessorKey: "status",
         header: "Status",
-        cell: ({ row }) => (
-            <Badge variant={statusVariants[row.original.status]}>
-                {statusLabels[row.original.status]}
-            </Badge>
-        ),
+        cell: ({ row }) => {
+            const status = row.original.status
+            const isGenerating = status === "GENERATING_PDF"
+
+            return (
+                <Badge
+                    variant={statusVariants[status]}
+                    className={isGenerating ? "bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700" : ""}
+                >
+                    {isGenerating && (
+                        <span className="inline-flex">
+                            <span className="animate-[ellipsis_1.5s_infinite]">Gerando PDF</span>
+                            <span className="w-4 text-left"><LoadingDots /></span>
+                        </span>
+                    )}
+                    {!isGenerating && statusLabels[status]}
+                </Badge>
+            )
+        },
     },
     {
         id: "actions",

@@ -635,6 +635,7 @@ export const JobStatusSchema = z.enum([
   "DRAFT",
   "IN_PROGRESS",
   "REVIEW",
+  "GENERATING_PDF",
   "APPROVED",
   "REJECTED",
   "CANCELED",

@@ -198,11 +198,15 @@ export default {
     ): Promise<void> {
         for (const msg of batch.messages) {
             const { jobId, userId } = msg.body;
-            console.log(`Processing certificate for job ${jobId}`);
+            const totalStart = performance.now();
+            console.log(`[START] Processing certificate for job ${jobId}`);
 
             try {
                 // 1. Fetch job data (fresh connection)
+                const dbFetchStart = performance.now();
                 const job = await withDbClient(env, (client) => fetchJobData(client, jobId));
+                console.log(`[TIMING] fetchJobData: ${Math.round(performance.now() - dbFetchStart)}ms`);
+
                 if (!job) {
                     console.error(`Job ${jobId} not found`);
                     msg.ack();
@@ -210,35 +214,77 @@ export default {
                 }
 
                 // 2. Render HTML
+                const renderStart = performance.now();
                 const html = renderToString(React.createElement(CertificateHtml, { job }));
                 const fullHtml = `<!DOCTYPE html>${html}`;
+                console.log(`[TIMING] renderToString: ${Math.round(performance.now() - renderStart)}ms (${fullHtml.length} bytes)`);
 
                 // 3. Generate PDF with Puppeteer (slow operation - no DB connection held)
+                const browserStart = performance.now();
                 const browser = await puppeteer.launch(env.BROWSER);
+                console.log(`[TIMING] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`);
+
+                const pageStart = performance.now();
                 const page = await browser.newPage();
-                await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+                console.log(`[TIMING] browser.newPage: ${Math.round(performance.now() - pageStart)}ms`);
+
+                // Block all external network requests for maximum speed
+                await page.setRequestInterception(true);
+                page.on('request', (req) => {
+                    const url = req.url();
+                    // Allow data: URLs (inline resources) and about:blank
+                    if (url.startsWith('data:') || url.startsWith('about:')) {
+                        req.continue();
+                    } else {
+                        // Log and block anything else
+                        console.log(`[BLOCKED] ${req.resourceType()}: ${url}`);
+                        req.abort();
+                    }
+                });
+
+                // Set viewport for A4 at 96dpi
+                await page.setViewport({ width: 794, height: 1123 });
+
+                // Emulate print media BEFORE loading content (avoids re-render)
+                await page.emulateMediaType('print');
+
+                // Load HTML - use domcontentloaded, NOT networkidle0!
+                // networkidle0 was causing 15+ minute waits
+                const contentStart = performance.now();
+                await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
+                console.log(`[TIMING] page.setContent: ${Math.round(performance.now() - contentStart)}ms`);
+
+                const pdfStart = performance.now();
                 const pdfBuffer = await page.pdf({
                     format: "A4",
                     printBackground: true,
+                    preferCSSPageSize: false,
                     margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
                 });
+                console.log(`[TIMING] page.pdf: ${Math.round(performance.now() - pdfStart)}ms (${pdfBuffer.length} bytes)`);
+
                 await browser.close();
 
                 // 4. Upload to R2
+                const r2Start = performance.now();
                 const filename = `cert-${job.jobId}.pdf`;
                 await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
                     httpMetadata: { contentType: "application/pdf" },
                 });
+                console.log(`[TIMING] R2 upload: ${Math.round(performance.now() - r2Start)}ms`);
 
                 // 5. Build public URL (adjust domain as needed)
                 const certificateUrl = `https://certificates.calibrafacil.com/${filename}`;
 
                 // 6. Update DB (fresh connection after slow operations)
+                const dbUpdateStart = performance.now();
                 await withDbClient(env, (client) =>
                     updateJobWithCertificate(client, jobId, certificateUrl, userId)
                 );
+                console.log(`[TIMING] updateDB: ${Math.round(performance.now() - dbUpdateStart)}ms`);
 
-                console.log(`Certificate generated for job ${jobId}: ${certificateUrl}`);
+                const totalMs = Math.round(performance.now() - totalStart);
+                console.log(`[DONE] Certificate generated for job ${jobId} in ${totalMs}ms: ${certificateUrl}`);
                 msg.ack();
             } catch (error) {
                 console.error(`Error processing job ${jobId}:`, error);

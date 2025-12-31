@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { Spinner } from '@/components/ui/spinner'
 import {
     Card,
     CardContent,
@@ -53,6 +54,7 @@ type JobStatus =
     | 'DRAFT'
     | 'IN_PROGRESS'
     | 'REVIEW'
+    | 'GENERATING_PDF'
     | 'APPROVED'
     | 'REJECTED'
     | 'CANCELED'
@@ -61,6 +63,7 @@ const statusLabels: Record<JobStatus, string> = {
     DRAFT: 'Rascunho',
     IN_PROGRESS: 'Em Execução',
     REVIEW: 'Em Revisão',
+    GENERATING_PDF: 'Gerando PDF',
     APPROVED: 'Aprovado',
     REJECTED: 'Rejeitado',
     CANCELED: 'Cancelado',
@@ -73,6 +76,7 @@ const statusVariants: Record<
     DRAFT: 'secondary',
     IN_PROGRESS: 'default',
     REVIEW: 'outline',
+    GENERATING_PDF: 'outline',
     APPROVED: 'default',
     REJECTED: 'destructive',
     CANCELED: 'secondary',
@@ -134,6 +138,11 @@ function JobDetailPage() {
                 throw new Error('Falha ao carregar job')
             }
             return res.json()
+        },
+        // Auto-refresh every 2s while PDF is being generated
+        refetchInterval: (query) => {
+            const status = query.state.data?.status
+            return status === 'GENERATING_PDF' ? 2000 : false
         },
     })
 
@@ -383,8 +392,18 @@ function JobDetailPage() {
                             </CardDescription>
                         </div>
                         <div className="text-right">
-                            <Badge variant={statusVariants[job.status as JobStatus]}>
-                                {statusLabels[job.status as JobStatus]}
+                            <Badge
+                                variant={statusVariants[job.status as JobStatus]}
+                                className={job.status === 'GENERATING_PDF' ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700' : ''}
+                            >
+                                {job.status === 'GENERATING_PDF' ? (
+                                    <span className="inline-flex items-center gap-1">
+                                        <Spinner className="size-3" />
+                                        Gerando PDF...
+                                    </span>
+                                ) : (
+                                    statusLabels[job.status as JobStatus]
+                                )}
                             </Badge>
                             {job.isOverdue && (
                                 <Badge variant="destructive" className="ml-2">
@@ -573,6 +592,7 @@ function JobDetailPage() {
                             onClick={() => approveMutation.mutate()}
                             disabled={approveMutation.isPending}
                         >
+                            {approveMutation.isPending && <Spinner className="mr-2" />}
                             {approveMutation.isPending ? 'Aprovando...' : 'Aprovar'}
                         </Button>
                     </DialogFooter>
