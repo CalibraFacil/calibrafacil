@@ -17,6 +17,9 @@ const allowedOrigins = [
   "https://localhost:5173",
   "https://localhost:5174",
   "https://192.168.0.10:5173",
+  "https://dashboard.calibrafacil.com",
+  "https://portal.calibrafacil.com",
+  "https://api.calibrafacil.com",
   "https://192.168.0.10:5174",
 ];
 
