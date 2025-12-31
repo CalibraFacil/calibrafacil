@@ -23,7 +23,8 @@ function getResend(): Resend {
 // Shared configuration for both auth instances
 const sharedConfig = {
   // Explicit secret for Better Auth 1.4.x Cloudflare compatibility
-  secret: process.env.BETTER_AUTH_SECRET,
+  // Build-time fallback prevents prerender failures (auth isn't used during build)
+  secret: process.env.BETTER_AUTH_SECRET || "BUILD_PLACEHOLDER_NOT_FOR_PRODUCTION",
   database: drizzleAdapter(db, {
     provider: "pg" as const,
     schema,
