@@ -3,16 +3,15 @@ import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ac, roles } from "./access";
 
 function getApiBaseURL(): string {
-  if (typeof window === "undefined") {
-    return "https://localhost:3000";
+  // In the browser, always use the current origin (Cloudflare / prod-safe)
+  if (typeof window !== "undefined") {
+    return window.location.origin;
   }
-  const host = window.location.hostname;
-  // For network access (e.g., iPhone testing via IP)
-  if (host !== "localhost") {
-    return `https://${host}:3000`;
-  }
+
+  // Server / build-time fallback
   return "https://localhost:3000";
 }
+
 
 // Shared organization plugin config
 const organizationPluginConfig = organizationClient({
