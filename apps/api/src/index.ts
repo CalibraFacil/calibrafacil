@@ -1,6 +1,7 @@
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
 
 import { customersRouter } from "./routes/customers";
 import { invitationsRouter } from "./routes/invitations";
@@ -43,8 +44,6 @@ function getCorsOrigin(origin?: string) {
 
 /**
  * GLOBAL CORS
- * - Handles OPTIONS automatically
- * - Applies to ALL routes
  */
 app.use(
   "*",
@@ -88,16 +87,16 @@ function withCors(c: any, res: Response) {
 }
 
 /**
- * AUTH ROUTES - Import auth lazily to ensure env is set first
+ * AUTH ROUTES - Create fresh auth instance per request
  */
 app.on(["GET", "POST"], "/api/auth/lab/*", async (c) => {
-  const { labAuth } = await import("@calibra-facil/auth");
+  const labAuth = createLabAuth();
   const res = await labAuth.handler(c.req.raw);
   return withCors(c, res);
 });
 
 app.on(["GET", "POST"], "/api/auth/portal/*", async (c) => {
-  const { portalAuth } = await import("@calibra-facil/auth");
+  const portalAuth = createPortalAuth();
   const res = await portalAuth.handler(c.req.raw);
   return withCors(c, res);
 });

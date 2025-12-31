@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import { labAuth, portalAuth } from "@calibra-facil/auth";
+import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
   member as memberTable,
@@ -76,6 +76,7 @@ export interface AuthVariables {
  */
 export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
+    const labAuth = createLabAuth();
     const session = await labAuth.api.getSession({
       headers: c.req.raw.headers,
     });
@@ -100,6 +101,7 @@ export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
  */
 export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
+    const portalAuth = createPortalAuth();
     const session = await portalAuth.api.getSession({
       headers: c.req.raw.headers,
     });
@@ -124,6 +126,9 @@ export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
  */
 export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
+    const portalAuth = createPortalAuth();
+    const labAuth = createLabAuth();
+
     // Try portal auth first (portal_session cookie)
     let session = await portalAuth.api.getSession({
       headers: c.req.raw.headers,
@@ -246,6 +251,9 @@ export const requireOrganization = createMiddleware<{
  */
 export function requirePermission(permissions: PermissionCheck) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
+    const labAuth = createLabAuth();
+    const portalAuth = createPortalAuth();
+
     // Try lab auth first
     let result = await labAuth.api.hasPermission({
       headers: c.req.raw.headers,
