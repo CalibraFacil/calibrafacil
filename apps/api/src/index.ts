@@ -1,7 +1,6 @@
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { labAuth, portalAuth } from "@calibra-facil/auth";
 
 import { customersRouter } from "./routes/customers";
 import { invitationsRouter } from "./routes/invitations";
@@ -13,7 +12,19 @@ import { servicesRouter } from "./routes/services";
 import { standardsRouter } from "./routes/standards";
 import { jobsRouter } from "./routes/jobs";
 
-const app = new Hono();
+// Environment variables type for Cloudflare Workers
+interface Env {
+  NODE_ENV: string;
+  API_URL: string;
+  APP_URL: string;
+  BETTER_AUTH_SECRET: string;
+  RESEND_FROM_EMAIL: string;
+  RESEND_API_KEY: string;
+  DATABASE_URL: string;
+  [key: string]: unknown;
+}
+
+const app = new Hono<{ Bindings: Env }>();
 
 const allowedOrigins = new Set([
   "https://localhost:5173",
@@ -46,6 +57,18 @@ app.use(
 );
 
 /**
+ * Middleware: Inject Cloudflare env into process.env for packages that use it
+ */
+app.use("*", async (c, next) => {
+  for (const [key, value] of Object.entries(c.env)) {
+    if (typeof value === "string") {
+      process.env[key] = value;
+    }
+  }
+  await next();
+});
+
+/**
  * Helper: attach CORS headers to Better Auth responses
  */
 function withCors(c: any, res: Response) {
@@ -65,14 +88,16 @@ function withCors(c: any, res: Response) {
 }
 
 /**
- * AUTH ROUTES
+ * AUTH ROUTES - Import auth lazily to ensure env is set first
  */
 app.on(["GET", "POST"], "/api/auth/lab/*", async (c) => {
+  const { labAuth } = await import("@calibra-facil/auth");
   const res = await labAuth.handler(c.req.raw);
   return withCors(c, res);
 });
 
 app.on(["GET", "POST"], "/api/auth/portal/*", async (c) => {
+  const { portalAuth } = await import("@calibra-facil/auth");
   const res = await portalAuth.handler(c.req.raw);
   return withCors(c, res);
 });
@@ -108,14 +133,4 @@ export default isBun
       cert: Bun.file("./certs/cert.pem"),
     },
   }
-  : {
-    fetch: (request: Request, env: Record<string, string>, ctx: ExecutionContext) => {
-      // Inject Cloudflare Worker env vars into process.env for packages that use it
-      for (const [key, value] of Object.entries(env)) {
-        if (typeof value === "string") {
-          process.env[key] = value;
-        }
-      }
-      return app.fetch(request, env, ctx);
-    },
-  };
+  : app;
