@@ -1,4 +1,4 @@
-import puppeteer from "@cloudflare/puppeteer";
+import puppeteer, { type Browser, type Page } from "@cloudflare/puppeteer";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
 import { CertificateHtml, type JobData } from "@calibra-facil/documents";
@@ -190,118 +190,153 @@ async function withDbClient<T>(
     }
 }
 
+/**
+ * Configures a page for optimal PDF generation
+ */
+async function configurePage(page: Page): Promise<void> {
+    // Block all external network requests for maximum speed
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+        const url = req.url();
+        // Allow data: URLs (inline resources) and about:blank
+        if (url.startsWith('data:') || url.startsWith('about:')) {
+            req.continue();
+        } else {
+            req.abort();
+        }
+    });
+
+    // Set viewport for A4 at 96dpi
+    await page.setViewport({ width: 794, height: 1123 });
+
+    // Emulate print media BEFORE loading content (avoids re-render)
+    await page.emulateMediaType('print');
+}
+
+/**
+ * Generates a PDF from HTML content using an existing page
+ */
+async function generatePdfFromHtml(page: Page, html: string): Promise<Uint8Array> {
+    const fullHtml = `<!DOCTYPE html>${html}`;
+
+    // Load HTML - use domcontentloaded, NOT networkidle0!
+    await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
+
+    return await page.pdf({
+        format: "A4",
+        printBackground: true,
+        preferCSSPageSize: false,
+        margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
+    });
+}
+
+/**
+ * Process a single job with an existing browser/page
+ */
+async function processJob(
+    env: Env,
+    page: Page,
+    jobId: number,
+    userId: string
+): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
+    const totalStart = performance.now();
+    console.log(`[JOB ${jobId}] Starting`);
+
+    try {
+        // 1. Fetch job data
+        const dbFetchStart = performance.now();
+        const job = await withDbClient(env, (client) => fetchJobData(client, jobId));
+        console.log(`[JOB ${jobId}] fetchJobData: ${Math.round(performance.now() - dbFetchStart)}ms`);
+
+        if (!job) {
+            return { success: false, error: "Job not found" };
+        }
+
+        // 2. Render HTML
+        const renderStart = performance.now();
+        const html = renderToString(React.createElement(CertificateHtml, { job }));
+        console.log(`[JOB ${jobId}] renderToString: ${Math.round(performance.now() - renderStart)}ms`);
+
+        // 3. Generate PDF (reusing existing page)
+        const pdfStart = performance.now();
+        const pdfBuffer = await generatePdfFromHtml(page, html);
+        console.log(`[JOB ${jobId}] generatePdf: ${Math.round(performance.now() - pdfStart)}ms (${pdfBuffer.length} bytes)`);
+
+        // 4. Upload to R2
+        const r2Start = performance.now();
+        const filename = `cert-${job.jobId}.pdf`;
+        await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
+            httpMetadata: { contentType: "application/pdf" },
+        });
+        console.log(`[JOB ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`);
+
+        // 5. Build public URL
+        const certificateUrl = `https://certificates.calibrafacil.com/${filename}`;
+
+        // 6. Update DB
+        const dbUpdateStart = performance.now();
+        await withDbClient(env, (client) =>
+            updateJobWithCertificate(client, jobId, certificateUrl, userId)
+        );
+        console.log(`[JOB ${jobId}] updateDB: ${Math.round(performance.now() - dbUpdateStart)}ms`);
+
+        const totalMs = Math.round(performance.now() - totalStart);
+        console.log(`[JOB ${jobId}] DONE in ${totalMs}ms: ${certificateUrl}`);
+
+        return { success: true, certificateUrl };
+    } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[JOB ${jobId}] Error:`, errorMsg);
+        return { success: false, error: errorMsg };
+    }
+}
+
 export default {
     async queue(
         batch: MessageBatch<QueueMessage>,
         env: Env,
         _ctx: ExecutionContext
     ): Promise<void> {
-        for (const msg of batch.messages) {
-            const { jobId, userId } = msg.body;
-            const totalStart = performance.now();
-            console.log(`[START] Processing certificate for job ${jobId}`);
+        const batchSize = batch.messages.length;
+        console.log(`[BATCH] Processing ${batchSize} job(s)`);
+        const batchStart = performance.now();
 
-            try {
-                // 1. Fetch job data (fresh connection)
-                const dbFetchStart = performance.now();
-                const job = await withDbClient(env, (client) => fetchJobData(client, jobId));
-                console.log(`[TIMING] fetchJobData: ${Math.round(performance.now() - dbFetchStart)}ms`);
+        // Launch browser ONCE for the entire batch
+        const browserStart = performance.now();
+        const browser = await puppeteer.launch(env.BROWSER);
+        console.log(`[BATCH] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`);
 
-                if (!job) {
-                    console.error(`Job ${jobId} not found`);
-                    msg.ack();
-                    continue;
+        // Create page ONCE and reuse
+        const pageStart = performance.now();
+        const page = await browser.newPage();
+        await configurePage(page);
+        console.log(`[BATCH] browser.newPage + configure: ${Math.round(performance.now() - pageStart)}ms`);
+
+        try {
+            // Process each job with the shared browser/page
+            for (const msg of batch.messages) {
+                const { jobId, userId } = msg.body;
+
+                const result = await processJob(env, page, jobId, userId);
+
+                if (!result.success) {
+                    // Record error with fresh connection
+                    await withDbClient(env, (client) =>
+                        setJobError(client, jobId, result.error || "Unknown error", userId)
+                    ).catch((dbError) => {
+                        console.error(`[JOB ${jobId}] Failed to record error:`, dbError);
+                    });
                 }
 
-                // 2. Render HTML
-                const renderStart = performance.now();
-                const html = renderToString(React.createElement(CertificateHtml, { job }));
-                const fullHtml = `<!DOCTYPE html>${html}`;
-                console.log(`[TIMING] renderToString: ${Math.round(performance.now() - renderStart)}ms (${fullHtml.length} bytes)`);
-
-                // 3. Generate PDF with Puppeteer (slow operation - no DB connection held)
-                const browserStart = performance.now();
-                const browser = await puppeteer.launch(env.BROWSER);
-                console.log(`[TIMING] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`);
-
-                const pageStart = performance.now();
-                const page = await browser.newPage();
-                console.log(`[TIMING] browser.newPage: ${Math.round(performance.now() - pageStart)}ms`);
-
-                // Block all external network requests for maximum speed
-                await page.setRequestInterception(true);
-                page.on('request', (req) => {
-                    const url = req.url();
-                    // Allow data: URLs (inline resources) and about:blank
-                    if (url.startsWith('data:') || url.startsWith('about:')) {
-                        req.continue();
-                    } else {
-                        // Log and block anything else
-                        console.log(`[BLOCKED] ${req.resourceType()}: ${url}`);
-                        req.abort();
-                    }
-                });
-
-                // Set viewport for A4 at 96dpi
-                await page.setViewport({ width: 794, height: 1123 });
-
-                // Emulate print media BEFORE loading content (avoids re-render)
-                await page.emulateMediaType('print');
-
-                // Load HTML - use domcontentloaded, NOT networkidle0!
-                // networkidle0 was causing 15+ minute waits
-                const contentStart = performance.now();
-                await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
-                console.log(`[TIMING] page.setContent: ${Math.round(performance.now() - contentStart)}ms`);
-
-                const pdfStart = performance.now();
-                const pdfBuffer = await page.pdf({
-                    format: "A4",
-                    printBackground: true,
-                    preferCSSPageSize: false,
-                    margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
-                });
-                console.log(`[TIMING] page.pdf: ${Math.round(performance.now() - pdfStart)}ms (${pdfBuffer.length} bytes)`);
-
-                await browser.close();
-
-                // 4. Upload to R2
-                const r2Start = performance.now();
-                const filename = `cert-${job.jobId}.pdf`;
-                await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
-                    httpMetadata: { contentType: "application/pdf" },
-                });
-                console.log(`[TIMING] R2 upload: ${Math.round(performance.now() - r2Start)}ms`);
-
-                // 5. Build public URL (adjust domain as needed)
-                const certificateUrl = `https://certificates.calibrafacil.com/${filename}`;
-
-                // 6. Update DB (fresh connection after slow operations)
-                const dbUpdateStart = performance.now();
-                await withDbClient(env, (client) =>
-                    updateJobWithCertificate(client, jobId, certificateUrl, userId)
-                );
-                console.log(`[TIMING] updateDB: ${Math.round(performance.now() - dbUpdateStart)}ms`);
-
-                const totalMs = Math.round(performance.now() - totalStart);
-                console.log(`[DONE] Certificate generated for job ${jobId} in ${totalMs}ms: ${certificateUrl}`);
                 msg.ack();
-            } catch (error) {
-                console.error(`Error processing job ${jobId}:`, error);
-                // Record error with fresh connection
-                await withDbClient(env, (client) =>
-                    setJobError(
-                        client,
-                        jobId,
-                        error instanceof Error ? error.message : String(error),
-                        userId
-                    )
-                ).catch((dbError) => {
-                    console.error(`Failed to record error for job ${jobId}:`, dbError);
-                });
-                msg.ack(); // Ack to not retry indefinitely
             }
+        } finally {
+            // Always close browser at the end
+            await browser.close();
         }
+
+        const batchMs = Math.round(performance.now() - batchStart);
+        console.log(`[BATCH] Completed ${batchSize} job(s) in ${batchMs}ms (avg: ${Math.round(batchMs / batchSize)}ms/job)`);
     },
 
     // Health check endpoint

@@ -57,13 +57,22 @@ app.use(
 
 /**
  * Middleware: Inject Cloudflare env into process.env for packages that use it
+ * Also inject Hyperdrive connection string for database package
  */
 app.use("*", async (c, next) => {
+  // Inject string env vars
   for (const [key, value] of Object.entries(c.env)) {
     if (typeof value === "string") {
       process.env[key] = value;
     }
   }
+
+  // Inject Hyperdrive connection string if available
+  const hyperdrive = c.env.HYPERDRIVE as { connectionString?: string } | undefined;
+  if (hyperdrive?.connectionString) {
+    process.env.HYPERDRIVE_URL = hyperdrive.connectionString;
+  }
+
   await next();
 });
 

@@ -6,28 +6,52 @@ if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
         // dotenv not available, likely running in CF Workers
     }
 }
-import { drizzle, type NeonDatabase } from 'drizzle-orm/neon-serverless';
+
+import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js';
+import { drizzle as drizzleNeon, type NeonDatabase } from 'drizzle-orm/neon-serverless';
+import postgres from 'postgres';
 import { Pool } from '@neondatabase/serverless';
 import * as schema from './schema';
 
+type Database = NeonDatabase<typeof schema> | ReturnType<typeof drizzlePostgres<typeof schema>>;
+
 /**
  * Creates a fresh database connection.
- * In Cloudflare Workers, each request should create its own connection
- * to avoid I/O context isolation issues.
+ * 
+ * Uses different drivers based on environment:
+ * - HYPERDRIVE_URL: Uses postgres.js driver (recommended for Cloudflare Hyperdrive)
+ * - DATABASE_URL: Uses Neon serverless driver (for local dev or direct connection)
+ * 
+ * @see https://neon.com/docs/guides/cloudflare-hyperdrive
+ * @see https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-drivers-and-libraries/drizzle-orm/
  */
-export function getDb(): NeonDatabase<typeof schema> {
-    const connectionString = process.env.DATABASE_URL;
-    if (!connectionString) {
-        throw new Error('DATABASE_URL is not configured');
+export function getDb(): Database {
+    // Hyperdrive - use postgres.js driver (recommended by Cloudflare and Neon)
+    const hyperdriveUrl = process.env.HYPERDRIVE_URL;
+    if (hyperdriveUrl) {
+        const sql = postgres(hyperdriveUrl, {
+            // Limit connections for Workers (concurrent external connection limits)
+            max: 5,
+            // Disable fetch_types for better performance (avoids extra round-trip)
+            fetch_types: false,
+        });
+        return drizzlePostgres(sql, { schema });
     }
-    const pool = new Pool({ connectionString });
-    return drizzle(pool, { schema });
+
+    // Fallback to Neon serverless driver for local dev
+    const databaseUrl = process.env.DATABASE_URL;
+    if (databaseUrl) {
+        const pool = new Pool({ connectionString: databaseUrl });
+        return drizzleNeon(pool, { schema });
+    }
+
+    throw new Error('No database connection configured. Set HYPERDRIVE_URL or DATABASE_URL.');
 }
 
 // For backwards compatibility - creates fresh connection on each access
 // Note: In CF Workers, always use getDb() to ensure proper initialization
-export const db = new Proxy({} as NeonDatabase<typeof schema>, {
+export const db = new Proxy({} as Database, {
     get(_, prop) {
-        return getDb()[prop as keyof NeonDatabase<typeof schema>];
+        return getDb()[prop as keyof Database];
     },
 });
