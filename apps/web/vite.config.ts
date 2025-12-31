@@ -1,12 +1,10 @@
-import fs from 'node:fs'
-import path from 'node:path'
 import { defineConfig } from 'vite'
-
-import { devtools } from '@tanstack/devtools-vite'
-import { tanstackStart } from '@tanstack/react-start/plugin/vite'
+import tanstackRouter from '@tanstack/router-plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import viteTsConfigPaths from 'vite-tsconfig-paths'
 import tailwindcss from '@tailwindcss/vite'
+import path from 'node:path'
+import fs from 'node:fs'
 
 // Only load HTTPS certs in dev (they don't exist in CI)
 const keyPath = path.resolve(__dirname, './certs/localhost+1-key.pem')
@@ -22,20 +20,15 @@ export default defineConfig({
     https: httpsConfig,
   },
   optimizeDeps: {
-    exclude: ['better-auth'], // Avoid ESM/CJS interop issues with Better Auth
+    exclude: ['better-auth'],
   },
   plugins: [
-    devtools(),
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
     }),
     tailwindcss(),
-    tanstackStart({
-      spa: {
-        enabled: true,
-        prerender: { enabled: false }, // Disable prerendering to avoid auth init issues in CI
-      },
-    }),
+    tanstackRouter(),
     viteReact(),
   ],
 })
+

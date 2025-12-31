@@ -15,6 +15,9 @@ node_modules
 # Testing
 coverage
 
+# Cloudflare
+.wrangler
+
 # Turbo
 .turbo
 

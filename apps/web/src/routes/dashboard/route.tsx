@@ -1,4 +1,4 @@
-import { Outlet, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Outlet, createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef } from 'react'
 
 import {
@@ -11,7 +11,6 @@ import { CommandPalette } from '@/components/command-palette/command-palette'
 import { CommandPaletteProvider } from '@/components/command-palette/command-context'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { authMiddleware } from '@/middleware/auth'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Card,
@@ -21,12 +20,17 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { authClient } from '@calibra-facil/auth/client'
 
 const DASHBOARD_ORG_KEY = 'dashboard-active-org'
 
 export const Route = createFileRoute('/dashboard')({
-  server: {
-    middleware: [authMiddleware],
+  beforeLoad: async () => {
+    const session = await authClient.getSession()
+
+    if (!session) {
+      throw redirect({ to: '/sign-in' })
+    }
   },
   component: DashboardLayout,
 })
