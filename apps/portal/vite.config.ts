@@ -20,6 +20,9 @@ export default defineConfig({
     port: 5174,
     https: httpsConfig,
   },
+  optimizeDeps: {
+    exclude: ["better-auth"], // Avoid ESM/CJS interop issues with Better Auth
+  },
   plugins: [
     viteTsConfigPaths({
       projects: ["./tsconfig.json"],

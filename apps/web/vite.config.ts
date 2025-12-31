@@ -21,6 +21,9 @@ export default defineConfig({
     port: 5173,
     https: httpsConfig,
   },
+  optimizeDeps: {
+    exclude: ['better-auth'], // Avoid ESM/CJS interop issues with Better Auth
+  },
   plugins: [
     devtools(),
     viteTsConfigPaths({
