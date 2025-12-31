@@ -1,3 +1,4 @@
+import type { ExecutionContext } from "@cloudflare/workers-types";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { labAuth, portalAuth } from "@calibra-facil/auth";
@@ -107,4 +108,14 @@ export default isBun
       cert: Bun.file("./certs/cert.pem"),
     },
   }
-  : { fetch: app.fetch };
+  : {
+    fetch: (request: Request, env: Record<string, string>, ctx: ExecutionContext) => {
+      // Inject Cloudflare Worker env vars into process.env for packages that use it
+      for (const [key, value] of Object.entries(env)) {
+        if (typeof value === "string") {
+          process.env[key] = value;
+        }
+      }
+      return app.fetch(request, env, ctx);
+    },
+  };
