@@ -39,9 +39,11 @@ const sharedConfig = {
   },
   trustedOrigins:
     process.env.NODE_ENV === "production"
-      ? [process.env.APP_URL, process.env.PORTAL_URL].filter(
-        (url): url is string => Boolean(url),
-      )
+      ? [
+        "https://dashboard.calibrafacil.com",
+        "https://portal.calibrafacil.com",
+        "https://api.calibrafacil.com",
+      ]
       : [
         "https://localhost:5173",
         "https://localhost:5174",
@@ -49,6 +51,14 @@ const sharedConfig = {
         "https://192.168.0.10:5174",
       ],
   advanced: {
+    // Cross-subdomain cookies for shared auth between web and portal
+    crossSubDomainCookies:
+      process.env.NODE_ENV === "production"
+        ? {
+          enabled: true,
+          domain: ".calibrafacil.com", // Shared across all subdomains
+        }
+        : { enabled: false },
     defaultCookieAttributes: {
       sameSite: "none" as const,
       secure: true,
