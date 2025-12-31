@@ -1,14 +1,15 @@
+/// <reference path="./vite-env.d.ts" />
 import { organizationClient } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ac, roles } from "./access";
 
 function getApiBaseURL(): string {
-  // In the browser, always use the current origin (Cloudflare / prod-safe)
-  if (typeof window !== "undefined") {
-    return window.location.origin;
+  // Primary source of truth (Cloudflare Pages, Vite)
+  if (typeof window !== "undefined" && import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
   }
 
-  // Server / build-time fallback
+  // Fallback for local development
   return "https://localhost:3000";
 }
 
