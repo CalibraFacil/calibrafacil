@@ -50,9 +50,7 @@ function SignInPage() {
         <div className="relative z-10 mt-auto">
           <blockquote className="space-y-2">
             <p className="text-lg">
-              &ldquo;Lorem ipsum dolor sit amet, consectetur adipiscing elit,
-              sed do eiusmod tempor incididunt ut labore et dolore magna
-              aliqua.&rdquo;
+              &ldquo;O CalibraFácil é a solução perfeita para a gestão metrológica de laboratórios. Simplifica nossos processos e nos ajuda a atender melhor nossos clientes.&rdquo;
             </p>
             <footer className="text-sm">João Santos</footer>
           </blockquote>

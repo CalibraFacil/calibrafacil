@@ -15,7 +15,7 @@ const CTA: React.FC = () => {
           Pronto para modernizar seu laboratório?
         </h2>
         <p className="text-xl text-sky-100 mb-10 max-w-2xl mx-auto">
-          Junte-se a mais de 200 laboratórios acreditados que já confiam no CalibraFácil para sua gestão metrológica.
+          Junte-se à maior rede de laboratórios acreditados que já confiam no CalibraFácil para sua gestão metrológica.
         </p>
 
         <div className="flex flex-col sm:flex-row justify-center gap-4">
