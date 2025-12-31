@@ -10,25 +10,24 @@ import { drizzle, type NeonDatabase } from 'drizzle-orm/neon-serverless';
 import { Pool } from '@neondatabase/serverless';
 import * as schema from './schema';
 
-// Lazy-init to support Cloudflare Workers (env vars not available at module load)
-let _db: NeonDatabase<typeof schema> | null = null;
-
+/**
+ * Creates a fresh database connection.
+ * In Cloudflare Workers, each request should create its own connection
+ * to avoid I/O context isolation issues.
+ */
 export function getDb(): NeonDatabase<typeof schema> {
-    if (!_db) {
-        const connectionString = process.env.DATABASE_URL;
-        if (!connectionString) {
-            throw new Error('DATABASE_URL is not configured');
-        }
-        const pool = new Pool({ connectionString });
-        _db = drizzle(pool, { schema });
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+        throw new Error('DATABASE_URL is not configured');
     }
-    return _db;
+    const pool = new Pool({ connectionString });
+    return drizzle(pool, { schema });
 }
 
-// For backwards compatibility - lazy getter
+// For backwards compatibility - creates fresh connection on each access
 // Note: In CF Workers, always use getDb() to ensure proper initialization
 export const db = new Proxy({} as NeonDatabase<typeof schema>, {
     get(_, prop) {
-        return getDb()[prop as keyof typeof _db];
+        return getDb()[prop as keyof NeonDatabase<typeof schema>];
     },
 });
