@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Menu01Icon, Cancel01Icon, KnightShieldIcon } from '@hugeicons/core-free-icons';
+import { Menu01Icon, Cancel01Icon, Shield01Icon } from '@hugeicons/core-free-icons';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { ModeToggle } from './mode-toggle';
@@ -38,7 +38,7 @@ const Navbar: React.FC = () => {
         {/* Logo */}
         <div className="flex items-center gap-2 group cursor-pointer" onClick={() => window.scrollTo(0, 0)}>
           <div className="bg-sky-600 text-white p-1.5 rounded-lg group-hover:bg-sky-500 transition-colors">
-            <HugeiconsIcon icon={KnightShieldIcon} size={24} strokeWidth={2.5} />
+            <HugeiconsIcon icon={Shield01Icon} size={24} strokeWidth={2.5} />
           </div>
           <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
             Calibra<span className="text-sky-600">Fácil</span>

@@ -4,7 +4,7 @@ import {
   InstagramIcon,
   FacebookIcon,
   LinkedinIcon,
-  KnightShieldIcon,
+  Shield01Icon,
 } from "@hugeicons/core-free-icons";
 
 const Footer: React.FC = () => {
@@ -15,7 +15,7 @@ const Footer: React.FC = () => {
           <div className="col-span-1 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
               <div className="bg-sky-600 text-white p-1 rounded-lg">
-                <HugeiconsIcon icon={KnightShieldIcon} size={20} strokeWidth={2.5} />
+                <HugeiconsIcon icon={Shield01Icon} size={20} strokeWidth={2.5} />
               </div>
               <span className="text-lg font-bold text-slate-900 dark:text-white">
                 Calibra<span className="text-sky-600">Fácil</span>
