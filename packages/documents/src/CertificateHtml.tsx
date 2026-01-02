@@ -66,6 +66,21 @@ export type JobData = {
     approvedAt: Date | null;
     lab: {
         name: string;
+        cnpj?: string | null;
+        accreditationNumber?: string | null;
+        accreditationBody?: string | null;
+        street?: string | null;
+        number?: string | null;
+        complement?: string | null;
+        neighbourhood?: string | null;
+        city?: string | null;
+        state?: string | null;
+        cep?: string | null;
+        phone?: string | null;
+        email?: string | null;
+        website?: string | null;
+        technicalManagerName?: string | null;
+        technicalManagerTitle?: string | null;
     };
     customer: {
         name: string;
@@ -192,6 +207,7 @@ const styles = `
     border: 1px solid #ddd;
     padding: 6px 8px;
     text-align: left;
+    white-space: pre-line;
   }
   th {
     background: #f5f5f5;
@@ -257,7 +273,8 @@ function formatNumber(value: number, decimals = 4): string {
 
 function formatValue(value: unknown): string {
     if (value === null || value === undefined) return "-";
-    if (Array.isArray(value)) return value.join(", ");
+    if (Array.isArray(value))
+        return value.map((v) => formatValue(v)).join("\n");
     if (typeof value === "number") return formatNumber(value);
     return String(value);
 }
@@ -273,6 +290,19 @@ function formatAddress(address: CustomerAddress | null): string {
         address.cep,
     ].filter(Boolean);
     return parts.join(", ") || "-";
+}
+
+function formatLabAddress(lab: JobData["lab"]): string | null {
+    const parts = [
+        lab.street,
+        lab.number,
+        lab.complement,
+        lab.neighbourhood,
+        lab.city,
+        lab.state,
+        lab.cep,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(", ") : null;
 }
 
 function formatTaxId(taxId: string | null | undefined): string {
@@ -377,7 +407,26 @@ export function CertificateHtml({ job }: { job: JobData }) {
                             <div className="logo-placeholder">LAB</div>
                             <div className="lab-info">
                                 <h1>{job.lab.name}</h1>
-                                <p>ISO/IEC 17025:2017</p>
+                                {job.lab.cnpj && (
+                                    <p>CNPJ: {formatTaxId(job.lab.cnpj)}</p>
+                                )}
+                                {job.lab.accreditationNumber && (
+                                    <p>
+                                        {job.lab.accreditationNumber}
+                                        {job.lab.accreditationBody &&
+                                            ` - ${job.lab.accreditationBody}`}
+                                    </p>
+                                )}
+                                {formatLabAddress(job.lab) && (
+                                    <p>{formatLabAddress(job.lab)}</p>
+                                )}
+                                {(job.lab.phone || job.lab.email) && (
+                                    <p>
+                                        {job.lab.phone}
+                                        {job.lab.phone && job.lab.email && " | "}
+                                        {job.lab.email}
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <div className="cert-number">
@@ -473,7 +522,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                     <div className="info-row">
                                         <span className="info-label">Temperatura:</span>
                                         <span className="info-value">
-                                            {envTemperature} °C
+                                            {formatNumber(envTemperature, 1)} °C
                                         </span>
                                     </div>
                                 )}
@@ -481,7 +530,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                     <div className="info-row">
                                         <span className="info-label">Umidade:</span>
                                         <span className="info-value">
-                                            {envHumidity} %
+                                            {formatNumber(envHumidity, 1)} %
                                         </span>
                                     </div>
                                 )}
@@ -508,15 +557,75 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                             <td>{std.name}</td>
                                             <td>{std.certificateNumber}</td>
                                             <td>
-                                                {std.uncertainty !== null
-                                                    ? `±${std.uncertainty} ${std.uncertaintyUnit || ""}`
-                                                    : "-"}
+                                                {std.certifiedValues &&
+                                                std.certifiedValues.length > 0
+                                                    ? "Vários (ver tabela)"
+                                                    : std.uncertainty !== null
+                                                      ? `±${formatNumber(std.uncertainty)} ${std.uncertaintyUnit || ""}`
+                                                      : "-"}
                                             </td>
                                             <td>{formatDate(std.calibrationDate)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
+
+                            {/* Certified Values for Weight Sets */}
+                            {job.standardsSnapshot.some(
+                                (std) =>
+                                    std.certifiedValues &&
+                                    std.certifiedValues.length > 0
+                            ) && (
+                                <div className="data-table">
+                                    <div className="data-table-title">
+                                        Valores Certificados dos Padrões
+                                    </div>
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Padrão</th>
+                                                <th>Valor Nominal</th>
+                                                <th>Valor Certificado</th>
+                                                <th>Incerteza</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {job.standardsSnapshot.flatMap(
+                                                (std) =>
+                                                    std.certifiedValues?.map(
+                                                        (cv, i) => (
+                                                            <tr
+                                                                key={`${std.id}-${i}`}
+                                                            >
+                                                                <td>
+                                                                    {i === 0
+                                                                        ? std.name
+                                                                        : ""}
+                                                                </td>
+                                                                <td>
+                                                                    {cv.nominal}
+                                                                </td>
+                                                                <td>
+                                                                    {formatNumber(
+                                                                        cv.value
+                                                                    )}{" "}
+                                                                    {cv.unit}
+                                                                </td>
+                                                                <td>
+                                                                    ±
+                                                                    {formatNumber(
+                                                                        cv.uncertainty
+                                                                    )}{" "}
+                                                                    {cv.unit}
+                                                                </td>
+                                                            </tr>
+                                                        )
+                                                    ) || []
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -567,8 +676,15 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     {/* Signature */}
                     <div className="signature-section">
                         <div className="signature-box">
-                            <div className="signature-line">{job.approverName || "-"}</div>
-                            <div>Responsável Técnico</div>
+                            <div className="signature-line">
+                                {job.lab.technicalManagerName ||
+                                    job.approverName ||
+                                    "-"}
+                            </div>
+                            <div>
+                                {job.lab.technicalManagerTitle ||
+                                    "Responsável Técnico"}
+                            </div>
                             <div style={{ fontSize: "8pt", color: "#666" }}>
                                 {formatDate(job.approvedAt)}
                             </div>
@@ -578,7 +694,6 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     {/* Footer */}
                     <div className="footer">
                         <div>Emitido em: {formatDate(new Date())}</div>
-                        <div>Página 1 de 1</div>
                     </div>
 
                     {/* End of Document Marker (ISO requirement) */}

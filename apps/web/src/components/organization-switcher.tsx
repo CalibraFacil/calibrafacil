@@ -58,6 +58,9 @@ export function OrganizationSwitcher() {
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [orgName, setOrgName] = React.useState('')
   const [orgSlug, setOrgSlug] = React.useState('')
+  const [orgCnpj, setOrgCnpj] = React.useState('')
+  const [orgPhone, setOrgPhone] = React.useState('')
+  const [orgEmail, setOrgEmail] = React.useState('')
   const [isCreating, setIsCreating] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -84,8 +87,10 @@ export function OrganizationSwitcher() {
     const { error } = await organization.create({
       name: orgName,
       slug: orgSlug,
-      // Explicitly set type to LAB for organizations created from dashboard
       type: 'LAB',
+      cnpj: orgCnpj || undefined,
+      phone: orgPhone || undefined,
+      email: orgEmail || undefined,
     })
 
     setIsCreating(false)
@@ -97,6 +102,9 @@ export function OrganizationSwitcher() {
 
     setOrgName('')
     setOrgSlug('')
+    setOrgCnpj('')
+    setOrgPhone('')
+    setOrgEmail('')
     setDialogOpen(false)
   }
 
@@ -233,6 +241,36 @@ export function OrganizationSwitcher() {
               <p className="text-xs text-muted-foreground">
                 Usado na URL: app.calibrafacil.com/{orgSlug || 'slug'}
               </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="org-cnpj">CNPJ (opcional)</Label>
+              <Input
+                id="org-cnpj"
+                value={orgCnpj}
+                onChange={(e) => setOrgCnpj(e.target.value)}
+                placeholder="00.000.000/0000-00"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="org-phone">Telefone (opcional)</Label>
+                <Input
+                  id="org-phone"
+                  value={orgPhone}
+                  onChange={(e) => setOrgPhone(e.target.value)}
+                  placeholder="(11) 99999-9999"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="org-email">Email (opcional)</Label>
+                <Input
+                  id="org-email"
+                  type="email"
+                  value={orgEmail}
+                  onChange={(e) => setOrgEmail(e.target.value)}
+                  placeholder="contato@lab.com.br"
+                />
+              </div>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <DialogFooter>

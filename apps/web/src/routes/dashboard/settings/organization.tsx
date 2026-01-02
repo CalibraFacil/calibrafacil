@@ -94,6 +94,24 @@ function OrganizationSettingsPage() {
   const [isUpdating, setIsUpdating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  // ISO 17025 / RBC compliance fields
+  const [cnpj, setCnpj] = useState('')
+  const [accreditationNumber, setAccreditationNumber] = useState('')
+  const [accreditationBody, setAccreditationBody] = useState('')
+  const [street, setStreet] = useState('')
+  const [number, setNumber] = useState('')
+  const [complement, setComplement] = useState('')
+  const [neighbourhood, setNeighbourhood] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [cep, setCep] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [website, setWebsite] = useState('')
+  const [technicalManagerName, setTechnicalManagerName] = useState('')
+  const [technicalManagerTitle, setTechnicalManagerTitle] = useState('')
+  const [isUpdatingIso, setIsUpdatingIso] = useState(false)
+
   const [members, setMembers] = useState<Array<Member>>([])
   const [membersLoading, setMembersLoading] = useState(false)
 
@@ -127,8 +145,24 @@ function OrganizationSettingsPage() {
     if (activeOrg) {
       setName(activeOrg.name)
       setSlug(activeOrg.slug)
+      // ISO 17025 fields
+      setCnpj((activeOrg as any).cnpj || '')
+      setAccreditationNumber((activeOrg as any).accreditationNumber || '')
+      setAccreditationBody((activeOrg as any).accreditationBody || '')
+      setStreet((activeOrg as any).street || '')
+      setNumber((activeOrg as any).number || '')
+      setComplement((activeOrg as any).complement || '')
+      setNeighbourhood((activeOrg as any).neighbourhood || '')
+      setCity((activeOrg as any).city || '')
+      setState((activeOrg as any).state || '')
+      setCep((activeOrg as any).cep || '')
+      setPhone((activeOrg as any).phone || '')
+      setEmail((activeOrg as any).email || '')
+      setWebsite((activeOrg as any).website || '')
+      setTechnicalManagerName((activeOrg as any).technicalManagerName || '')
+      setTechnicalManagerTitle((activeOrg as any).technicalManagerTitle || '')
     }
-  }, [activeOrg?.id, activeOrg?.name, activeOrg?.slug])
+  }, [activeOrg])
 
   useEffect(() => {
     if (!activeOrg?.id) return
@@ -285,6 +319,42 @@ function OrganizationSettingsPage() {
       toast.error(message)
     } finally {
       setIsUpdating(false)
+    }
+  }
+
+  const handleUpdateIso17025 = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsUpdatingIso(true)
+    try {
+      const result = await authClient.organization.update({
+        data: {
+          cnpj: cnpj.trim() || undefined,
+          accreditationNumber: accreditationNumber.trim() || undefined,
+          accreditationBody: accreditationBody.trim() || undefined,
+          street: street.trim() || undefined,
+          number: number.trim() || undefined,
+          complement: complement.trim() || undefined,
+          neighbourhood: neighbourhood.trim() || undefined,
+          city: city.trim() || undefined,
+          state: state.trim() || undefined,
+          cep: cep.trim() || undefined,
+          phone: phone.trim() || undefined,
+          email: email.trim() || undefined,
+          website: website.trim() || undefined,
+          technicalManagerName: technicalManagerName.trim() || undefined,
+          technicalManagerTitle: technicalManagerTitle.trim() || undefined,
+        },
+      })
+      if (result.error) {
+        throw new Error(result.error.message ?? 'Falha ao atualizar informações')
+      }
+      toast.success('Informações ISO 17025 atualizadas com sucesso!')
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Falha ao atualizar informações'
+      toast.error(message)
+    } finally {
+      setIsUpdatingIso(false)
     }
   }
 
@@ -516,6 +586,221 @@ function OrganizationSettingsPage() {
               <div className="flex justify-end">
                 <Button type="submit" disabled={isUpdating}>
                   {isUpdating ? 'Salvando...' : 'Salvar alterações'}
+                </Button>
+              </div>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* ISO 17025 / RBC Compliance Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Informações ISO 17025</CardTitle>
+          <CardDescription>
+            Dados do laboratório para certificados de calibração conforme ISO/IEC
+            17025 e RBC/Inmetro.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleUpdateIso17025}>
+            <FieldGroup>
+              {/* Identification */}
+              <Field>
+                <FieldLabel htmlFor="org-cnpj">CNPJ</FieldLabel>
+                <Input
+                  id="org-cnpj"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(e.target.value)}
+                  disabled={isUpdatingIso}
+                  placeholder="00.000.000/0000-00"
+                />
+              </Field>
+
+              {/* Accreditation */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="org-accreditation-number">
+                    Número de Acreditação
+                  </FieldLabel>
+                  <Input
+                    id="org-accreditation-number"
+                    value={accreditationNumber}
+                    onChange={(e) => setAccreditationNumber(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="RBC 0123"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-accreditation-body">
+                    Órgão Acreditador
+                  </FieldLabel>
+                  <Input
+                    id="org-accreditation-body"
+                    value={accreditationBody}
+                    onChange={(e) => setAccreditationBody(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="CGCRE/Inmetro"
+                  />
+                </Field>
+              </div>
+
+              <Separator />
+
+              {/* Address */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="org-street">Rua</FieldLabel>
+                  <Input
+                    id="org-street"
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="Rua das Calibrações"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-number">Número</FieldLabel>
+                  <Input
+                    id="org-number"
+                    value={number}
+                    onChange={(e) => setNumber(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="123"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="org-complement">Complemento</FieldLabel>
+                  <Input
+                    id="org-complement"
+                    value={complement}
+                    onChange={(e) => setComplement(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="Sala 101"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-neighbourhood">Bairro</FieldLabel>
+                  <Input
+                    id="org-neighbourhood"
+                    value={neighbourhood}
+                    onChange={(e) => setNeighbourhood(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="Centro"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field>
+                  <FieldLabel htmlFor="org-city">Cidade</FieldLabel>
+                  <Input
+                    id="org-city"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="São Paulo"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-state">Estado</FieldLabel>
+                  <Input
+                    id="org-state"
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="SP"
+                    maxLength={2}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-cep">CEP</FieldLabel>
+                  <Input
+                    id="org-cep"
+                    value={cep}
+                    onChange={(e) => setCep(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="00000-000"
+                  />
+                </Field>
+              </div>
+
+              <Separator />
+
+              {/* Contact */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field>
+                  <FieldLabel htmlFor="org-phone">Telefone</FieldLabel>
+                  <Input
+                    id="org-phone"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="(11) 99999-9999"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-email">Email</FieldLabel>
+                  <Input
+                    id="org-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="contato@lab.com.br"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-website">Website</FieldLabel>
+                  <Input
+                    id="org-website"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="https://lab.com.br"
+                  />
+                </Field>
+              </div>
+
+              <Separator />
+
+              {/* Technical Manager */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="org-technical-manager-name">
+                    Responsável Técnico
+                  </FieldLabel>
+                  <Input
+                    id="org-technical-manager-name"
+                    value={technicalManagerName}
+                    onChange={(e) => setTechnicalManagerName(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="Dr. João Silva"
+                  />
+                  <FieldDescription>
+                    Nome que aparecerá nos certificados de calibração.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-technical-manager-title">
+                    Cargo/Título
+                  </FieldLabel>
+                  <Input
+                    id="org-technical-manager-title"
+                    value={technicalManagerTitle}
+                    onChange={(e) => setTechnicalManagerTitle(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="Responsável Técnico"
+                  />
+                </Field>
+              </div>
+
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isUpdatingIso}>
+                  {isUpdatingIso ? 'Salvando...' : 'Salvar informações'}
                 </Button>
               </div>
             </FieldGroup>

@@ -99,6 +99,13 @@
       "when": 1767028783985,
       "tag": "0013_add_standards_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1767312770817,
+      "tag": "0014_yellow_mandroid",
+      "breakpoints": true
     }
   ]
 }

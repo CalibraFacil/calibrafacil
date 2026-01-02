@@ -29,7 +29,7 @@ async function fetchJobData(
 ): Promise<JobData | null> {
     const result = await client.query(
         `
-    SELECT 
+    SELECT
       cj.job_id,
       cj.performed_at,
       cj.approved_at,
@@ -39,6 +39,21 @@ async function fetchJobData(
       cj.data,
       -- Organization (Lab) info
       o.name as lab_name,
+      o.cnpj as lab_cnpj,
+      o.accreditation_number as lab_accreditation_number,
+      o.accreditation_body as lab_accreditation_body,
+      o.street as lab_street,
+      o.number as lab_number,
+      o.complement as lab_complement,
+      o.neighbourhood as lab_neighbourhood,
+      o.city as lab_city,
+      o.state as lab_state,
+      o.cep as lab_cep,
+      o.phone as lab_phone,
+      o.email as lab_email,
+      o.website as lab_website,
+      o.technical_manager_name as lab_technical_manager_name,
+      o.technical_manager_title as lab_technical_manager_title,
       -- Customer info (complete)
       c.name as customer_name,
       c.tax_id as customer_tax_id,
@@ -73,6 +88,21 @@ async function fetchJobData(
         approvedAt: row.approved_at,
         lab: {
             name: row.lab_name || "Laboratório de Calibração",
+            cnpj: row.lab_cnpj,
+            accreditationNumber: row.lab_accreditation_number,
+            accreditationBody: row.lab_accreditation_body,
+            street: row.lab_street,
+            number: row.lab_number,
+            complement: row.lab_complement,
+            neighbourhood: row.lab_neighbourhood,
+            city: row.lab_city,
+            state: row.lab_state,
+            cep: row.lab_cep,
+            phone: row.lab_phone,
+            email: row.lab_email,
+            website: row.lab_website,
+            technicalManagerName: row.lab_technical_manager_name,
+            technicalManagerTitle: row.lab_technical_manager_title,
         },
         customer: {
             name: row.customer_name,
@@ -226,7 +256,14 @@ async function generatePdfFromHtml(page: Page, html: string): Promise<Uint8Array
         format: "A4",
         printBackground: true,
         preferCSSPageSize: false,
-        margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
+        displayHeaderFooter: true,
+        headerTemplate: "<div></div>",
+        footerTemplate: `
+            <div style="width: 100%; font-size: 9px; text-align: center; color: #666;">
+                Página <span class="pageNumber"></span> de <span class="totalPages"></span>
+            </div>
+        `,
+        margin: { top: "10mm", bottom: "15mm", left: "10mm", right: "10mm" },
     });
 }
 
@@ -332,7 +369,9 @@ export default {
             }
         } finally {
             // Always close browser at the end
-            await browser.close();
+            await browser.close().catch((e) => {
+                console.error("[BATCH] browser.close failed:", e);
+            });
         }
 
         const batchMs = Math.round(performance.now() - batchStart);
