@@ -319,15 +319,18 @@ async function processLabelJob(
             return { success: false, error: "Job not found" };
         }
 
-        // 2. Generate QR code
+        // 2. Generate QR code as SVG (canvas not available in Workers)
         const qrStart = performance.now();
         const verificationUrl = `https://verify.calibrafacil.com/v/${data.verificationToken}`;
-        const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl, {
+        const qrSvg = await QRCode.toString(verificationUrl, {
+            type: "svg",
             width: 200,
             margin: 1,
             errorCorrectionLevel: "M",
             color: { dark: "#000000", light: "#ffffff" },
         });
+        // Convert SVG to data URL for embedding in HTML
+        const qrCodeDataUrl = `data:image/svg+xml;base64,${btoa(qrSvg)}`;
         console.log(`[LABEL ${jobId}] QR generation: ${Math.round(performance.now() - qrStart)}ms`);
 
         // 3. Render HTML

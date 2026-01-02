@@ -37,7 +37,8 @@ import { Label } from '@/components/ui/label'
 import { AuditTimeline, buildJobTimelineEvents } from '@/components/audit-timeline'
 import { api } from '@/utils/api'
 import { toast } from 'sonner'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Spinner } from '@/components/ui/spinner'
 
 interface MethodSnapshot {
@@ -136,9 +137,39 @@ function formatValue(value: unknown, unit?: string): string {
 
 export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
     const { methodSnapshot, data, results, standardsSnapshot } = job
+    const queryClient = useQueryClient()
     const [isDownloading, setIsDownloading] = useState(false)
     const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)
     const [isDownloadingLabel, setIsDownloadingLabel] = useState(false)
+    const [labelPending, setLabelPending] = useState(false)
+
+    // Poll for label completion when generation was triggered
+    useEffect(() => {
+        if (!labelPending) return
+
+        // If label is now available, stop polling
+        if (job.labelUrl) {
+            setLabelPending(false)
+            toast.success('Etiqueta gerada com sucesso!')
+            return
+        }
+
+        // Poll every 2 seconds
+        const interval = setInterval(() => {
+            queryClient.invalidateQueries({ queryKey: ['jobs', String(job.id)] })
+        }, 2000)
+
+        // Stop polling after 30 seconds
+        const timeout = setTimeout(() => {
+            setLabelPending(false)
+            clearInterval(interval)
+        }, 30000)
+
+        return () => {
+            clearInterval(interval)
+            clearTimeout(timeout)
+        }
+    }, [labelPending, job.labelUrl, job.id, queryClient])
 
     const handleDownloadCertificate = async () => {
         setIsDownloading(true)
@@ -171,7 +202,9 @@ export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
                 const error = (await res.json()) as { error?: string }
                 throw new Error(error.error || 'Falha ao gerar etiqueta')
             }
-            toast.success('Etiqueta sendo gerada... Aguarde alguns segundos e tente baixar.')
+            // Start polling for label completion
+            setLabelPending(true)
+            toast.info('Gerando etiqueta... Aguarde.')
         } catch (error) {
             toast.error(
                 error instanceof Error ? error.message : 'Erro ao gerar etiqueta'
@@ -331,14 +364,14 @@ export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
                     <Button
                         variant="outline"
                         onClick={job.labelUrl ? handleDownloadLabel : handleGenerateLabel}
-                        disabled={isGeneratingLabel || isDownloadingLabel}
+                        disabled={isGeneratingLabel || isDownloadingLabel || labelPending}
                     >
-                        {(isGeneratingLabel || isDownloadingLabel) ? (
+                        {(isGeneratingLabel || isDownloadingLabel || labelPending) ? (
                             <Spinner className="mr-2 h-4 w-4" />
                         ) : (
                             <HugeiconsIcon icon={PrinterIcon} className="mr-2 h-4 w-4" />
                         )}
-                        {job.labelUrl ? 'Baixar Etiqueta' : 'Gerar Etiqueta QR'}
+                        {labelPending ? 'Gerando...' : job.labelUrl ? 'Baixar Etiqueta' : 'Gerar Etiqueta QR'}
                     </Button>
                     <Button variant="outline">
                         <HugeiconsIcon icon={Mail01Icon} className="mr-2 h-4 w-4" />
