@@ -1,8 +1,9 @@
 import puppeteer, { type Browser, type Page } from "@cloudflare/puppeteer";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
-import { CertificateHtml, type JobData } from "@calibra-facil/documents";
+import { CertificateHtml, type JobData, LabelHtml, type LabelData } from "@calibra-facil/documents";
 import React from "react";
+import QRCode from "qrcode";
 
 interface Env {
     BROWSER: Fetcher;
@@ -10,7 +11,10 @@ interface Env {
     HYPERDRIVE: Hyperdrive;
 }
 
+// Discriminated union for queue messages - supports both certificate and label generation
+// type field is optional for backwards compatibility (defaults to CERTIFICATE)
 interface QueueMessage {
+    type?: "CERTIFICATE" | "LABEL";
     jobId: number;
     userId: string;
 }
@@ -204,6 +208,171 @@ async function setJobError(
     );
 }
 
+// =============================================================================
+// LABEL GENERATION FUNCTIONS
+// =============================================================================
+
+async function fetchLabelData(
+    client: Client,
+    jobId: number
+): Promise<{ label: LabelData; verificationToken: string } | null> {
+    const result = await client.query(
+        `
+    SELECT
+      cj.job_id,
+      cj.performed_at,
+      cj.verification_token,
+      o.name as lab_name,
+      a.tag as asset_tag
+    FROM calibration_job cj
+    LEFT JOIN organization o ON cj.organization_id = o.id
+    LEFT JOIN asset a ON cj.asset_id = a.id
+    WHERE cj.id = $1
+    `,
+        [jobId]
+    );
+
+    if (result.rows.length === 0) return null;
+
+    const row = result.rows[0];
+
+    return {
+        label: {
+            jobId: row.job_id,
+            labName: row.lab_name || "Laboratório",
+            assetTag: row.asset_tag || "-",
+            calibrationDate: row.performed_at,
+            qrCodeDataUrl: "", // Will be filled after QR generation
+        },
+        verificationToken: row.verification_token,
+    };
+}
+
+async function updateJobWithLabel(
+    client: Client,
+    jobId: number,
+    labelUrl: string,
+    userId: string
+): Promise<void> {
+    const now = new Date();
+
+    await client.query(
+        `
+    UPDATE calibration_job
+    SET label_url = $2, updated_at = $3
+    WHERE id = $1
+    `,
+        [jobId, labelUrl, now]
+    );
+
+    await client.query(
+        `
+    INSERT INTO job_audit_log (job_id, action, changes, performed_by, performed_at)
+    VALUES ($1, $2, $3, $4, $5)
+    `,
+        [
+            jobId,
+            "label_generated",
+            JSON.stringify({ labelUrl: { old: null, new: labelUrl } }),
+            userId,
+            now,
+        ]
+    );
+}
+
+/**
+ * Generates a small PDF for thermal printer labels
+ */
+async function generateLabelPdf(page: Page, html: string): Promise<Uint8Array> {
+    const fullHtml = `<!DOCTYPE html>${html}`;
+
+    await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
+
+    return await page.pdf({
+        width: "50mm",
+        height: "30mm",
+        printBackground: true,
+        preferCSSPageSize: true,
+        margin: { top: "0", bottom: "0", left: "0", right: "0" },
+    });
+}
+
+/**
+ * Process a label generation job
+ */
+async function processLabelJob(
+    env: Env,
+    page: Page,
+    jobId: number,
+    userId: string
+): Promise<{ success: boolean; labelUrl?: string; error?: string }> {
+    const totalStart = performance.now();
+    console.log(`[LABEL ${jobId}] Starting`);
+
+    try {
+        // 1. Fetch label data
+        const dbFetchStart = performance.now();
+        const data = await withDbClient(env, (client) => fetchLabelData(client, jobId));
+        console.log(`[LABEL ${jobId}] fetchLabelData: ${Math.round(performance.now() - dbFetchStart)}ms`);
+
+        if (!data) {
+            return { success: false, error: "Job not found" };
+        }
+
+        // 2. Generate QR code
+        const qrStart = performance.now();
+        const verificationUrl = `https://verify.calibrafacil.com/v/${data.verificationToken}`;
+        const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl, {
+            width: 200,
+            margin: 1,
+            errorCorrectionLevel: "M",
+            color: { dark: "#000000", light: "#ffffff" },
+        });
+        console.log(`[LABEL ${jobId}] QR generation: ${Math.round(performance.now() - qrStart)}ms`);
+
+        // 3. Render HTML
+        const renderStart = performance.now();
+        const labelData: LabelData = {
+            ...data.label,
+            qrCodeDataUrl,
+        };
+        const html = renderToString(React.createElement(LabelHtml, { label: labelData }));
+        console.log(`[LABEL ${jobId}] renderToString: ${Math.round(performance.now() - renderStart)}ms`);
+
+        // 4. Generate PDF
+        const pdfStart = performance.now();
+        const pdfBuffer = await generateLabelPdf(page, html);
+        console.log(`[LABEL ${jobId}] generatePdf: ${Math.round(performance.now() - pdfStart)}ms (${pdfBuffer.length} bytes)`);
+
+        // 5. Upload to R2
+        const r2Start = performance.now();
+        const filename = `label-${data.label.jobId}.pdf`;
+        await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
+            httpMetadata: { contentType: "application/pdf" },
+        });
+        console.log(`[LABEL ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`);
+
+        // 6. Build public URL
+        const labelUrl = `https://certificates.calibrafacil.com/${filename}`;
+
+        // 7. Update DB
+        const dbUpdateStart = performance.now();
+        await withDbClient(env, (client) =>
+            updateJobWithLabel(client, jobId, labelUrl, userId)
+        );
+        console.log(`[LABEL ${jobId}] updateDB: ${Math.round(performance.now() - dbUpdateStart)}ms`);
+
+        const totalMs = Math.round(performance.now() - totalStart);
+        console.log(`[LABEL ${jobId}] DONE in ${totalMs}ms: ${labelUrl}`);
+
+        return { success: true, labelUrl };
+    } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[LABEL ${jobId}] Error:`, errorMsg);
+        return { success: false, error: errorMsg };
+    }
+}
+
 // Helper to run a database operation with a fresh connection
 async function withDbClient<T>(
     env: Env,
@@ -352,17 +521,29 @@ export default {
         try {
             // Process each job with the shared browser/page
             for (const msg of batch.messages) {
-                const { jobId, userId } = msg.body;
+                const { jobId, userId, type } = msg.body;
 
-                const result = await processJob(env, page, jobId, userId);
+                // Default to CERTIFICATE for backwards compatibility
+                const messageType = type || "CERTIFICATE";
 
-                if (!result.success) {
-                    // Record error with fresh connection
-                    await withDbClient(env, (client) =>
-                        setJobError(client, jobId, result.error || "Unknown error", userId)
-                    ).catch((dbError) => {
-                        console.error(`[JOB ${jobId}] Failed to record error:`, dbError);
-                    });
+                let result: { success: boolean; error?: string };
+
+                if (messageType === "LABEL") {
+                    result = await processLabelJob(env, page, jobId, userId);
+                    // Label failures don't change job status - just log the error
+                    if (!result.success) {
+                        console.error(`[LABEL ${jobId}] Failed:`, result.error);
+                    }
+                } else {
+                    result = await processJob(env, page, jobId, userId);
+                    // Certificate failures set job to REJECTED
+                    if (!result.success) {
+                        await withDbClient(env, (client) =>
+                            setJobError(client, jobId, result.error || "Unknown error", userId)
+                        ).catch((dbError) => {
+                            console.error(`[JOB ${jobId}] Failed to record error:`, dbError);
+                        });
+                    }
                 }
 
                 msg.ack();

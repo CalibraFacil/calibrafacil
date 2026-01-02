@@ -1301,4 +1301,110 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
       return c.json({ url });
     },
+  )
+
+  // =========================================================================
+  // POST /:id/generate-label - Enqueue thermal label generation
+  // =========================================================================
+  .post(
+    "/:id/generate-label",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const memberData = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [job] = await db
+        .select({
+          id: calibrationJob.id,
+          status: calibrationJob.status,
+          labelUrl: calibrationJob.labelUrl,
+        })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!job) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      // Only approved jobs can have labels generated
+      if (job.status !== "APPROVED") {
+        return c.json(
+          { error: "Apenas jobs aprovados podem ter etiquetas geradas" },
+          400,
+        );
+      }
+
+      // Enqueue label generation
+      type CloudflareQueue = { send: (body: unknown) => Promise<void> };
+      const env = c.env as { PDF_QUEUE?: CloudflareQueue };
+
+      if (env.PDF_QUEUE) {
+        await env.PDF_QUEUE.send({
+          type: "LABEL",
+          jobId: id,
+          userId: session.user.id,
+        });
+      } else {
+        console.warn(`PDF_QUEUE not available for label generation`);
+        return c.json({ error: "Servico de geracao indisponivel" }, 503);
+      }
+
+      return c.json({
+        message: "Gerando etiqueta...",
+        jobId: id,
+      });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/download-label - Generate presigned URL for label download
+  // =========================================================================
+  .get(
+    "/:id/download-label",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const memberData = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [job] = await db
+        .select({ labelUrl: calibrationJob.labelUrl })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!job) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      if (!job.labelUrl) {
+        return c.json({ error: "Etiqueta ainda nao foi gerada" }, 400);
+      }
+
+      const env = c.env as R2Env;
+      const key = extractKeyFromUrl(job.labelUrl);
+      const client = createR2Client(env);
+      const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
+
+      return c.json({ url });
+    },
   );
