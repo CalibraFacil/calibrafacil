@@ -38,7 +38,6 @@ import { AuditTimeline, buildJobTimelineEvents } from '@/components/audit-timeli
 import { api } from '@/utils/api'
 import { toast } from 'sonner'
 import { useState, useEffect } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { Spinner } from '@/components/ui/spinner'
 
 interface MethodSnapshot {
@@ -101,6 +100,7 @@ interface ApprovedJob {
 interface ApprovedJobRecordProps {
     job: ApprovedJob
     onBack: () => void
+    onRefresh: () => void
 }
 
 function formatDate(dateString: string | null | undefined): string {
@@ -135,15 +135,15 @@ function formatValue(value: unknown, unit?: string): string {
     return String(value)
 }
 
-export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
+export function ApprovedJobRecord({ job, onBack, onRefresh }: ApprovedJobRecordProps) {
     const { methodSnapshot, data, results, standardsSnapshot } = job
-    const queryClient = useQueryClient()
     const [isDownloading, setIsDownloading] = useState(false)
     const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)
     const [isDownloadingLabel, setIsDownloadingLabel] = useState(false)
     const [labelPending, setLabelPending] = useState(false)
 
     // Poll for label completion when generation was triggered
+    // labelUrl is the single source of truth - polling continues until it appears
     useEffect(() => {
         if (!labelPending) return
 
@@ -155,21 +155,18 @@ export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
         }
 
         // Poll every 2 seconds
-        const interval = setInterval(() => {
-            queryClient.invalidateQueries({ queryKey: ['jobs', String(job.id)] })
-        }, 2000)
+        const interval = setInterval(onRefresh, 2000)
 
-        // Stop polling after 30 seconds
-        const timeout = setTimeout(() => {
-            setLabelPending(false)
-            clearInterval(interval)
+        // Warn user if taking too long (but don't stop polling)
+        const warningTimeout = setTimeout(() => {
+            toast.warning('A geração está demorando mais que o esperado...')
         }, 30000)
 
         return () => {
             clearInterval(interval)
-            clearTimeout(timeout)
+            clearTimeout(warningTimeout)
         }
-    }, [labelPending, job.labelUrl, job.id, queryClient])
+    }, [labelPending, job.labelUrl, onRefresh])
 
     const handleDownloadCertificate = async () => {
         setIsDownloading(true)

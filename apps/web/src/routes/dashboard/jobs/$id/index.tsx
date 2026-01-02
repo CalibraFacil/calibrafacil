@@ -1,6 +1,6 @@
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -122,6 +122,11 @@ function JobDetailPage() {
     const [rejectReason, setRejectReason] = useState('')
     const [cancelReason, setCancelReason] = useState('')
     const [selectedTechnician, setSelectedTechnician] = useState<string>('')
+
+    // Stable callback for refreshing job data (used by ApprovedJobRecord for label polling)
+    const refreshJob = useCallback(() => {
+        queryClient.invalidateQueries({ queryKey: ['jobs', id] })
+    }, [queryClient, id])
 
     // Fetch job
     const {
@@ -293,6 +298,7 @@ function JobDetailPage() {
             <ApprovedJobRecord
                 job={job as Parameters<typeof ApprovedJobRecord>[0]['job']}
                 onBack={() => navigate({ to: '/dashboard/jobs' })}
+                onRefresh={refreshJob}
             />
         )
     }
