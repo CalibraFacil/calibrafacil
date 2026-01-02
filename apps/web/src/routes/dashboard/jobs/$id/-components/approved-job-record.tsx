@@ -35,6 +35,8 @@ import {
 } from '@/components/ui/table'
 import { Label } from '@/components/ui/label'
 import { AuditTimeline, buildJobTimelineEvents } from '@/components/audit-timeline'
+import { api } from '@/utils/api'
+import { toast } from 'sonner'
 
 interface MethodSnapshot {
     methodId: number
@@ -131,6 +133,24 @@ function formatValue(value: unknown, unit?: string): string {
 
 export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
     const { methodSnapshot, data, results, standardsSnapshot } = job
+
+    const handleDownloadCertificate = async () => {
+        try {
+            const res = await api.api.jobs[':id'].download.$get({
+                param: { id: String(job.id) },
+            })
+            if (!res.ok) {
+                const error = (await res.json()) as { error?: string }
+                throw new Error(error.error || 'Falha ao gerar link')
+            }
+            const data = (await res.json()) as { url: string }
+            window.open(data.url, '_blank')
+        } catch (error) {
+            toast.error(
+                error instanceof Error ? error.message : 'Erro ao baixar certificado'
+            )
+        }
+    }
 
     // Render a single field value (read-only)
     const renderFieldValue = (field: MethodSnapshot['dataFields'][0]) => {
@@ -244,7 +264,11 @@ export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
 
                 <div className="flex items-center gap-2">
                     {/* Primary Action */}
-                    <Button className="bg-primary">
+                    <Button
+                        className="bg-primary"
+                        onClick={handleDownloadCertificate}
+                        disabled={!job.certificateUrl}
+                    >
                         <HugeiconsIcon icon={FileDownloadIcon} className="mr-2 h-4 w-4" />
                         Baixar Certificado
                     </Button>
