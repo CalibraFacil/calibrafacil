@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -1074,6 +1074,12 @@ export const calibrationJob = pgTable(
     standardsSnapshot: jsonb("standards_snapshot").$type<StandardSnapshot[]>(),
     // Certificate URL (populated after approval and PDF generation)
     certificateUrl: text("certificate_url"),
+    // Public verification token (UUID) - unguessable link for auditors/clients
+    // Uses PostgreSQL's native gen_random_uuid() for automatic generation
+    verificationToken: text("verification_token")
+      .notNull()
+      .unique()
+      .default(sql`gen_random_uuid()`),
     // Timestamps and actors
     createdAt: timestamp("created_at").defaultNow().notNull(),
     createdBy: text("created_by")

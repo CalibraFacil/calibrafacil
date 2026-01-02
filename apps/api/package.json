@@ -10,6 +10,8 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.958.0",
+    "@aws-sdk/s3-request-presigner": "^3.958.0",
     "@calibra-facil/auth": "workspace:^",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",

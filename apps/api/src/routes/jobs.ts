@@ -30,6 +30,12 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { eq, and, ilike, desc, count, lte, gte, inArray } from "drizzle-orm";
+import {
+  createR2Client,
+  generatePresignedUrl,
+  extractKeyFromUrl,
+  type R2Env,
+} from "../lib/storage";
 import { alias } from "drizzle-orm/pg-core";
 
 // Aliases for multiple user joins
@@ -1252,5 +1258,47 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         .orderBy(user.name);
 
       return c.json({ data: technicians });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/download - Generate presigned URL for certificate download
+  // =========================================================================
+  .get(
+    "/:id/download",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const memberData = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [job] = await db
+        .select({ certificateUrl: calibrationJob.certificateUrl })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!job) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      if (!job.certificateUrl) {
+        return c.json({ error: "Certificado ainda nao foi gerado" }, 400);
+      }
+
+      const env = c.env as R2Env;
+      const key = extractKeyFromUrl(job.certificateUrl);
+      const client = createR2Client(env);
+      const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
+
+      return c.json({ url });
     },
   );

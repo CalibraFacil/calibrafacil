@@ -35,6 +35,10 @@ import {
 } from '@/components/ui/table'
 import { Label } from '@/components/ui/label'
 import { AuditTimeline, buildJobTimelineEvents } from '@/components/audit-timeline'
+import { api } from '@/utils/api'
+import { toast } from 'sonner'
+import { useState } from 'react'
+import { Spinner } from '@/components/ui/spinner'
 
 interface MethodSnapshot {
     methodId: number
@@ -131,6 +135,28 @@ function formatValue(value: unknown, unit?: string): string {
 
 export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
     const { methodSnapshot, data, results, standardsSnapshot } = job
+    const [isDownloading, setIsDownloading] = useState(false)
+
+    const handleDownloadCertificate = async () => {
+        setIsDownloading(true)
+        try {
+            const res = await api.api.jobs[':id'].download.$get({
+                param: { id: String(job.id) },
+            })
+            if (!res.ok) {
+                const error = (await res.json()) as { error?: string }
+                throw new Error(error.error || 'Falha ao gerar link')
+            }
+            const data = (await res.json()) as { url: string }
+            window.open(data.url, '_blank')
+        } catch (error) {
+            toast.error(
+                error instanceof Error ? error.message : 'Erro ao baixar certificado'
+            )
+        } finally {
+            setIsDownloading(false)
+        }
+    }
 
     // Render a single field value (read-only)
     const renderFieldValue = (field: MethodSnapshot['dataFields'][0]) => {
@@ -244,8 +270,16 @@ export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
 
                 <div className="flex items-center gap-2">
                     {/* Primary Action */}
-                    <Button className="bg-primary">
-                        <HugeiconsIcon icon={FileDownloadIcon} className="mr-2 h-4 w-4" />
+                    <Button
+                        className="bg-primary"
+                        onClick={handleDownloadCertificate}
+                        disabled={!job.certificateUrl || isDownloading}
+                    >
+                        {isDownloading ? (
+                            <Spinner className="mr-2 h-4 w-4" />
+                        ) : (
+                            <HugeiconsIcon icon={FileDownloadIcon} className="mr-2 h-4 w-4" />
+                        )}
                         Baixar Certificado
                     </Button>
 
@@ -425,16 +459,51 @@ export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
                         </CardContent>
                     </Card>
 
-                    {/* Certificate Preview Placeholder */}
+                    {/* Certificate Preview */}
                     <Card>
-                        <CardHeader>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-base">Certificado</CardTitle>
+                            {job.certificateUrl && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleDownloadCertificate}
+                                    disabled={isDownloading}
+                                >
+                                    {isDownloading ? (
+                                        <Spinner className="mr-2 h-3 w-3" />
+                                    ) : (
+                                        <HugeiconsIcon
+                                            icon={FileDownloadIcon}
+                                            className="mr-2 h-3 w-3"
+                                        />
+                                    )}
+                                    Download
+                                </Button>
+                            )}
                         </CardHeader>
                         <CardContent>
                             {job.certificateUrl ? (
-                                <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center">
+                                <div className="space-y-3">
+                                    <div
+                                        className="aspect-[3/4] bg-muted rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                                        onClick={handleDownloadCertificate}
+                                    >
+                                        <iframe
+                                            src={`${job.certificateUrl}#toolbar=0&navpanes=0`}
+                                            className="w-full h-full border-0 pointer-events-none"
+                                            title="Certificate Preview"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground text-center">
+                                        Clique para abrir em nova aba
+                                    </p>
+                                </div>
+                            ) : job.status === 'GENERATING_PDF' ? (
+                                <div className="aspect-[3/4] bg-muted/50 rounded-lg flex flex-col items-center justify-center gap-3">
+                                    <Spinner className="h-8 w-8 text-muted-foreground" />
                                     <p className="text-sm text-muted-foreground">
-                                        Preview do certificado
+                                        Gerando certificado...
                                     </p>
                                 </div>
                             ) : (
@@ -444,9 +513,7 @@ export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
                                         className="h-8 w-8 text-muted-foreground"
                                     />
                                     <p className="text-sm text-muted-foreground text-center">
-                                        Certificado será gerado
-                                        <br />
-                                        após configuração
+                                        Certificado não disponível
                                     </p>
                                 </div>
                             )}
