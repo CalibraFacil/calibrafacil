@@ -264,7 +264,17 @@ function formatDate(date: Date | null | string): string {
     return d.toLocaleDateString("pt-BR");
 }
 
-function formatNumber(value: number, decimals = 4): string {
+function formatNumber(value: number, minDecimals = 4): string {
+    let decimals = minDecimals;
+
+    // Auto-expand precision for small numbers (ISO 17025 compliance)
+    const abs = Math.abs(value);
+    if (abs > 0) {
+        if (abs < 0.0001) decimals = 5;
+        if (abs < 0.00001) decimals = 6;
+        if (abs < 0.000001) decimals = 7;
+    }
+
     return value.toLocaleString("pt-BR", {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
@@ -274,7 +284,7 @@ function formatNumber(value: number, decimals = 4): string {
 function formatValue(value: unknown): string {
     if (value === null || value === undefined) return "-";
     if (Array.isArray(value))
-        return value.map((v) => formatValue(v)).join("\n");
+        return value.map((v) => formatValue(v)).join(", ");
     if (typeof value === "number") return formatNumber(value);
     return String(value);
 }
