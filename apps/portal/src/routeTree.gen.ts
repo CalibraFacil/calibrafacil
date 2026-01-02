@@ -14,6 +14,7 @@ import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as PortalRouteRouteImport } from './routes/portal/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalIndexRouteImport } from './routes/portal/index'
+import { Route as VTokenRouteImport } from './routes/v/$token'
 import { Route as PortalSettingsRouteRouteImport } from './routes/portal/settings/route'
 import { Route as PortalAssetsRouteRouteImport } from './routes/portal/assets/route'
 import { Route as PortalSettingsIndexRouteImport } from './routes/portal/settings/index'
@@ -44,6 +45,11 @@ const PortalIndexRoute = PortalIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => PortalRouteRoute,
+} as any)
+const VTokenRoute = VTokenRouteImport.update({
+  id: '/v/$token',
+  path: '/v/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const PortalSettingsRouteRoute = PortalSettingsRouteRouteImport.update({
   id: '/settings',
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof SignInRoute
   '/portal/assets': typeof PortalAssetsRouteRouteWithChildren
   '/portal/settings': typeof PortalSettingsRouteRouteWithChildren
+  '/v/$token': typeof VTokenRoute
   '/portal/': typeof PortalIndexRoute
   '/portal/settings/appearance': typeof PortalSettingsAppearanceRoute
   '/portal/assets/': typeof PortalAssetsIndexRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
+  '/v/$token': typeof VTokenRoute
   '/portal': typeof PortalIndexRoute
   '/portal/settings/appearance': typeof PortalSettingsAppearanceRoute
   '/portal/assets': typeof PortalAssetsIndexRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/sign-in': typeof SignInRoute
   '/portal/assets': typeof PortalAssetsRouteRouteWithChildren
   '/portal/settings': typeof PortalSettingsRouteRouteWithChildren
+  '/v/$token': typeof VTokenRoute
   '/portal/': typeof PortalIndexRoute
   '/portal/settings/appearance': typeof PortalSettingsAppearanceRoute
   '/portal/assets/': typeof PortalAssetsIndexRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/portal/assets'
     | '/portal/settings'
+    | '/v/$token'
     | '/portal/'
     | '/portal/settings/appearance'
     | '/portal/assets/'
@@ -124,6 +134,7 @@ export interface FileRouteTypes {
     | '/'
     | '/accept-invite'
     | '/sign-in'
+    | '/v/$token'
     | '/portal'
     | '/portal/settings/appearance'
     | '/portal/assets'
@@ -136,6 +147,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/portal/assets'
     | '/portal/settings'
+    | '/v/$token'
     | '/portal/'
     | '/portal/settings/appearance'
     | '/portal/assets/'
@@ -147,6 +159,7 @@ export interface RootRouteChildren {
   PortalRouteRoute: typeof PortalRouteRouteWithChildren
   AcceptInviteRoute: typeof AcceptInviteRoute
   SignInRoute: typeof SignInRoute
+  VTokenRoute: typeof VTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -185,6 +198,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/'
       preLoaderRoute: typeof PortalIndexRouteImport
       parentRoute: typeof PortalRouteRoute
+    }
+    '/v/$token': {
+      id: '/v/$token'
+      path: '/v/$token'
+      fullPath: '/v/$token'
+      preLoaderRoute: typeof VTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/portal/settings': {
       id: '/portal/settings'
@@ -269,6 +289,7 @@ const rootRouteChildren: RootRouteChildren = {
   PortalRouteRoute: PortalRouteRouteWithChildren,
   AcceptInviteRoute: AcceptInviteRoute,
   SignInRoute: SignInRoute,
+  VTokenRoute: VTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
