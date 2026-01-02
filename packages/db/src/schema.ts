@@ -1074,6 +1074,8 @@ export const calibrationJob = pgTable(
     standardsSnapshot: jsonb("standards_snapshot").$type<StandardSnapshot[]>(),
     // Certificate URL (populated after approval and PDF generation)
     certificateUrl: text("certificate_url"),
+    // Label URL for thermal printer sticker (populated after label generation)
+    labelUrl: text("label_url"),
     // Public verification token (UUID) - unguessable link for auditors/clients
     // Uses PostgreSQL's native gen_random_uuid() for automatic generation
     verificationToken: text("verification_token")

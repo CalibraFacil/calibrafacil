@@ -94,6 +94,7 @@ interface ApprovedJob {
     performedAt: string | null
     createdAt: string
     certificateUrl?: string | null
+    labelUrl?: string | null
 }
 
 interface ApprovedJobRecordProps {
@@ -136,6 +137,8 @@ function formatValue(value: unknown, unit?: string): string {
 export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
     const { methodSnapshot, data, results, standardsSnapshot } = job
     const [isDownloading, setIsDownloading] = useState(false)
+    const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)
+    const [isDownloadingLabel, setIsDownloadingLabel] = useState(false)
 
     const handleDownloadCertificate = async () => {
         setIsDownloading(true)
@@ -155,6 +158,47 @@ export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
             )
         } finally {
             setIsDownloading(false)
+        }
+    }
+
+    const handleGenerateLabel = async () => {
+        setIsGeneratingLabel(true)
+        try {
+            const res = await api.api.jobs[':id']['generate-label'].$post({
+                param: { id: String(job.id) },
+            })
+            if (!res.ok) {
+                const error = (await res.json()) as { error?: string }
+                throw new Error(error.error || 'Falha ao gerar etiqueta')
+            }
+            toast.success('Etiqueta sendo gerada... Aguarde alguns segundos e tente baixar.')
+        } catch (error) {
+            toast.error(
+                error instanceof Error ? error.message : 'Erro ao gerar etiqueta'
+            )
+        } finally {
+            setIsGeneratingLabel(false)
+        }
+    }
+
+    const handleDownloadLabel = async () => {
+        setIsDownloadingLabel(true)
+        try {
+            const res = await api.api.jobs[':id']['download-label'].$get({
+                param: { id: String(job.id) },
+            })
+            if (!res.ok) {
+                const error = (await res.json()) as { error?: string }
+                throw new Error(error.error || 'Falha ao gerar link')
+            }
+            const data = (await res.json()) as { url: string }
+            window.open(data.url, '_blank')
+        } catch (error) {
+            toast.error(
+                error instanceof Error ? error.message : 'Erro ao baixar etiqueta'
+            )
+        } finally {
+            setIsDownloadingLabel(false)
         }
     }
 
@@ -284,9 +328,17 @@ export function ApprovedJobRecord({ job, onBack }: ApprovedJobRecordProps) {
                     </Button>
 
                     {/* Secondary Actions */}
-                    <Button variant="outline">
-                        <HugeiconsIcon icon={PrinterIcon} className="mr-2 h-4 w-4" />
-                        Imprimir Etiqueta QR
+                    <Button
+                        variant="outline"
+                        onClick={job.labelUrl ? handleDownloadLabel : handleGenerateLabel}
+                        disabled={isGeneratingLabel || isDownloadingLabel}
+                    >
+                        {(isGeneratingLabel || isDownloadingLabel) ? (
+                            <Spinner className="mr-2 h-4 w-4" />
+                        ) : (
+                            <HugeiconsIcon icon={PrinterIcon} className="mr-2 h-4 w-4" />
+                        )}
+                        {job.labelUrl ? 'Baixar Etiqueta' : 'Gerar Etiqueta QR'}
                     </Button>
                     <Button variant="outline">
                         <HugeiconsIcon icon={Mail01Icon} className="mr-2 h-4 w-4" />
