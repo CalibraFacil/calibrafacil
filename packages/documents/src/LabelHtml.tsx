@@ -34,12 +34,12 @@ const labelStyles = `
     padding: 1.5mm;
     font-family: Arial, Helvetica, sans-serif;
     display: flex;
-    gap: 2mm;
+    gap: 1.5mm;
     background: white;
     color: black;
   }
   .qr-section {
-    width: 24mm;
+    width: 22mm;
     height: 27mm;
     flex-shrink: 0;
     display: flex;
@@ -47,8 +47,8 @@ const labelStyles = `
     justify-content: center;
   }
   .qr-section img {
-    width: 24mm;
-    height: 24mm;
+    width: 22mm;
+    height: 22mm;
     image-rendering: pixelated;
   }
   .info-section {
@@ -60,28 +60,28 @@ const labelStyles = `
     min-width: 0;
   }
   .calibrado {
-    font-size: 9pt;
+    font-size: 8pt;
     font-weight: bold;
     text-align: center;
     background: black;
     color: white;
-    padding: 0.8mm 1mm;
-    letter-spacing: 0.3mm;
+    padding: 0.8mm 0.5mm;
+    letter-spacing: 0.2mm;
     text-transform: uppercase;
   }
   .lab-name {
-    font-size: 6pt;
+    font-size: 5.5pt;
     font-weight: bold;
     text-align: center;
-    margin-top: 1mm;
+    margin-top: 0.5mm;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .details {
-    font-size: 7pt;
+    font-size: 6.5pt;
     line-height: 1.4;
-    margin-top: 1mm;
+    margin-top: 0.5mm;
   }
   .details .field {
     display: flex;
@@ -97,10 +97,10 @@ const labelStyles = `
     text-overflow: ellipsis;
   }
   .cert-number {
-    font-size: 5.5pt;
+    font-size: 5pt;
     text-align: center;
     border-top: 0.3mm solid black;
-    padding-top: 0.8mm;
+    padding-top: 0.5mm;
     margin-top: auto;
     font-family: 'Courier New', monospace;
   }
