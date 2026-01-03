@@ -13,6 +13,7 @@ import { servicesRouter } from "./routes/services";
 import { standardsRouter } from "./routes/standards";
 import { jobsRouter } from "./routes/jobs";
 import { verifyRouter } from "./routes/verify";
+import { dashboardRouter } from "./routes/dashboard";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -125,7 +126,8 @@ const routes = app
   .route("/api/services", servicesRouter)
   .route("/api/standards", standardsRouter)
   .route("/api/jobs", jobsRouter)
-  .route("/api/verify", verifyRouter);
+  .route("/api/verify", verifyRouter)
+  .route("/api/dashboard", dashboardRouter);
 
 export type AppType = typeof routes;
 
