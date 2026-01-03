@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -246,6 +246,26 @@ function NewJobPage() {
     }
   }, [formData.serviceId, servicesData?.data])
 
+  // Computed display values for combobox inputs
+  const selectedCustomerName = useMemo(() => {
+    return selectedCustomer?.name || ''
+  }, [selectedCustomer])
+
+  const selectedAssetDisplayName = useMemo(() => {
+    if (!selectedAsset) return ''
+    return `${selectedAsset.name} (${selectedAsset.tag})`
+  }, [selectedAsset])
+
+  const selectedServiceName = useMemo(() => {
+    return selectedService?.name || ''
+  }, [selectedService])
+
+  const selectedTechnicianName = useMemo(() => {
+    if (!formData.technicianId || !techniciansData?.data) return ''
+    const tech = techniciansData.data.find((t) => t.id === formData.technicianId)
+    return tech?.name || ''
+  }, [formData.technicianId, techniciansData?.data])
+
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -366,7 +386,10 @@ function NewJobPage() {
                       }
                       disabled={createMutation.isPending}
                     >
-                      <ComboboxInput placeholder="Selecionar cliente..." />
+                      <ComboboxInput
+                        placeholder="Selecionar cliente..."
+                        value={selectedCustomerName}
+                      />
                       <ComboboxContent>
                         <ComboboxList>
                           <ComboboxEmpty>
@@ -415,6 +438,7 @@ function NewJobPage() {
                             ? 'Selecionar ativo...'
                             : 'Selecione um cliente primeiro'
                         }
+                        value={selectedAssetDisplayName}
                       />
                       <ComboboxContent>
                         <ComboboxList>
@@ -469,6 +493,7 @@ function NewJobPage() {
                             ? 'Selecionar servico...'
                             : 'Selecione um ativo primeiro'
                         }
+                        value={selectedServiceName}
                       />
                       <ComboboxContent>
                         <ComboboxList>
@@ -528,7 +553,10 @@ function NewJobPage() {
                           }
                           disabled={createMutation.isPending}
                         >
-                          <ComboboxInput placeholder="Atribuir tecnico..." />
+                          <ComboboxInput
+                            placeholder="Atribuir tecnico..."
+                            value={selectedTechnicianName}
+                          />
                           <ComboboxContent>
                             <ComboboxList>
                               <ComboboxEmpty>
