@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -145,6 +145,21 @@ function NewServicePage() {
       setIsAssetTypeLocked(false)
     }
   }, [formData.methodId, methodsData?.data])
+
+  // Computed display values for combobox inputs
+  const selectedMethodName = useMemo(() => {
+    if (!formData.methodId || !methodsData?.data) return ''
+    const method = methodsData.data.find((m) => m.id === formData.methodId)
+    return method?.name || ''
+  }, [formData.methodId, methodsData?.data])
+
+  const selectedAssetTypeName = useMemo(() => {
+    if (!formData.assetTypeId || !assetTypesData?.data) return ''
+    const assetType = assetTypesData.data.find(
+      (at) => at.id === formData.assetTypeId,
+    )
+    return assetType?.name || ''
+  }, [formData.assetTypeId, assetTypesData?.data])
 
   // Create mutation
   const createMutation = useMutation({
@@ -307,7 +322,10 @@ function NewServicePage() {
                   }
                   disabled={createMutation.isPending}
                 >
-                  <ComboboxInput placeholder="Selecionar método..." />
+                  <ComboboxInput
+                    placeholder="Selecionar método..."
+                    value={selectedMethodName}
+                  />
                   <ComboboxContent>
                     <ComboboxList>
                       <ComboboxEmpty>
@@ -356,13 +374,8 @@ function NewServicePage() {
                   disabled={createMutation.isPending || isAssetTypeLocked}
                 >
                   <ComboboxInput
-                    placeholder={
-                      isAssetTypeLocked
-                        ? assetTypesData?.data?.find(
-                            (at) => at.id === formData.assetTypeId,
-                          )?.name || 'Selecionar...'
-                        : 'Selecionar tipo...'
-                    }
+                    placeholder="Selecionar tipo..."
+                    value={selectedAssetTypeName}
                   />
                   <ComboboxContent>
                     <ComboboxList>
