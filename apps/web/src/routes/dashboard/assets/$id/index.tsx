@@ -3,6 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 
 import { api } from '@/utils/api'
 import {
+  AuditTimeline,
+  buildAuditTimelineEvents,
+  type AuditLogRecord,
+} from '@/components/audit-timeline'
+import {
   Card,
   CardContent,
   CardDescription,
@@ -53,6 +58,22 @@ function AssetDetailPage() {
         throw new Error('Falha ao carregar ativo')
       }
       return res.json()
+    },
+  })
+
+  // Fetch audit log for ISO 17025 compliance (Clause 8.4)
+  const { data: auditLogData } = useQuery({
+    queryKey: ['asset', id, 'audit-log'],
+    queryFn: async () => {
+      const res = await api.api.assets[':id']['audit-log'].$get({
+        param: { id },
+      })
+
+      if (!res.ok) {
+        throw new Error('Falha ao carregar histórico')
+      }
+
+      return res.json() as Promise<{ data: AuditLogRecord[] }>
     },
   })
 
@@ -227,6 +248,16 @@ function AssetDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Audit Log - ISO 17025 Clause 8.4 (Control of Records) */}
+      {auditLogData?.data && auditLogData.data.length > 0 && (
+        <div className="md:col-span-2">
+          <AuditTimeline
+            events={buildAuditTimelineEvents(auditLogData.data)}
+            title="Histórico de Alterações (ISO 17025)"
+          />
+        </div>
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import {
   serviceAuditLog,
   calibrationMethod,
   assetType,
+  user,
 } from "@calibra-facil/db/schema";
 import {
   CreateServiceSchema,
@@ -458,4 +459,55 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
     });
 
     return c.json({ message: "Serviço desativado com sucesso", data: updated });
-  });
+  })
+
+  // =========================================================================
+  // GET /:id/audit-log - Get audit log for a service (ISO 17025 Clause 8.4)
+  // =========================================================================
+  .get(
+    "/:id/audit-log",
+    ...withLabPermission({ service: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID inválido" }, 400);
+      }
+
+      // Verify service exists and belongs to organization
+      const [existing] = await db
+        .select({ id: service.id })
+        .from(service)
+        .where(
+          and(
+            eq(service.id, id),
+            eq(service.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json({ error: "Serviço não encontrado" }, 404);
+      }
+
+      // Get audit logs with performer details
+      const logs = await db
+        .select({
+          id: serviceAuditLog.id,
+          action: serviceAuditLog.action,
+          changes: serviceAuditLog.changes,
+          performedAt: serviceAuditLog.performedAt,
+          performedBy: serviceAuditLog.performedBy,
+          performerName: user.name,
+          ipAddress: serviceAuditLog.ipAddress,
+          reason: serviceAuditLog.reason,
+        })
+        .from(serviceAuditLog)
+        .leftJoin(user, eq(serviceAuditLog.performedBy, user.id))
+        .where(eq(serviceAuditLog.serviceId, id))
+        .orderBy(desc(serviceAuditLog.performedAt));
+
+      return c.json({ data: logs });
+    },
+  );
