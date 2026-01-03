@@ -9,6 +9,11 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { api } from '@/utils/api'
+import {
+  AuditTimeline,
+  buildAuditTimelineEvents,
+  type AuditLogRecord,
+} from '@/components/audit-timeline'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -149,6 +154,22 @@ function EditServicePage() {
       return res.json() as Promise<{
         data: Array<AssetType>
       }>
+    },
+  })
+
+  // Fetch audit log for ISO 17025 compliance (Clause 8.4)
+  const { data: auditLogData } = useQuery({
+    queryKey: ['services', id, 'audit-log'],
+    queryFn: async () => {
+      const res = await api.api.services[':id']['audit-log'].$get({
+        param: { id },
+      })
+
+      if (!res.ok) {
+        throw new Error('Falha ao carregar histórico')
+      }
+
+      return res.json() as Promise<{ data: AuditLogRecord[] }>
     },
   })
 
@@ -585,6 +606,14 @@ function EditServicePage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Audit Log - ISO 17025 Clause 8.4 (Control of Records) */}
+      {auditLogData?.data && auditLogData.data.length > 0 && (
+        <AuditTimeline
+          events={buildAuditTimelineEvents(auditLogData.data)}
+          title="Histórico de Alterações (ISO 17025)"
+        />
+      )}
     </div>
   )
 }

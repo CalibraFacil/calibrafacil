@@ -6,13 +6,14 @@ import {
   assetAuditLog,
   customer,
   assetType,
+  user,
 } from "@calibra-facil/db/schema";
 import {
   CreateAssetSchema,
   UpdateAssetSchema,
   ListAssetsQuerySchema,
 } from "@calibra-facil/schemas";
-import { eq, ilike, or, count, and, isNull } from "drizzle-orm";
+import { eq, ilike, or, count, and, isNull, desc } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
@@ -500,6 +501,70 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
       } catch (error) {
         console.error("Error deleting asset:", error);
         return c.json({ error: "Erro ao excluir ativo" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/audit-log - Get audit log for an asset (ISO 17025 Clause 8.4)
+  // =========================================================================
+  .get(
+    "/:id/audit-log",
+    ...withLabPermission({ equipment: ["read"] }),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const member = c.get("member");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID inválido" }, 400);
+      }
+
+      try {
+        // Verify asset exists (include soft-deleted for audit trail access)
+        const [existingAsset] = await db
+          .select({ id: asset.id, customerId: asset.customerId })
+          .from(asset)
+          .where(eq(asset.id, id))
+          .limit(1);
+
+        if (!existingAsset) {
+          return c.json({ error: "Ativo não encontrado" }, 404);
+        }
+
+        // If user is a client_user, verify they can access this asset's audit log
+        if (member.organizationType === "CLIENT") {
+          const [linkedCustomer] = await db
+            .select()
+            .from(customer)
+            .where(eq(customer.authOrganizationId, member.organizationId))
+            .limit(1);
+
+          if (!linkedCustomer || linkedCustomer.id !== existingAsset.customerId) {
+            return c.json({ error: "Acesso negado" }, 403);
+          }
+        }
+
+        // Get audit logs with performer details
+        const logs = await db
+          .select({
+            id: assetAuditLog.id,
+            action: assetAuditLog.action,
+            changes: assetAuditLog.changes,
+            performedAt: assetAuditLog.performedAt,
+            performedBy: assetAuditLog.performedBy,
+            performerName: user.name,
+            ipAddress: assetAuditLog.ipAddress,
+            reason: assetAuditLog.reason,
+          })
+          .from(assetAuditLog)
+          .leftJoin(user, eq(assetAuditLog.performedBy, user.id))
+          .where(eq(assetAuditLog.assetId, id))
+          .orderBy(desc(assetAuditLog.performedAt));
+
+        return c.json({ data: logs });
+      } catch (error) {
+        console.error("Error getting asset audit log:", error);
+        return c.json({ error: "Erro ao buscar histórico" }, 500);
       }
     },
   );
