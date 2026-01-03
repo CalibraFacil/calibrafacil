@@ -13,9 +13,19 @@ import {
     Edit02Icon,
     CheckmarkCircle02Icon,
     ArrowLeft01Icon,
+    MoreVerticalIcon,
 } from '@hugeicons/core-free-icons'
 
 import { Button } from '@/components/ui/button'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
 import {
     Card,
@@ -283,8 +293,8 @@ export function ApprovedJobRecord({ job, onBack, onRefresh }: ApprovedJobRecordP
         const isPassed = value !== undefined && value !== null
 
         return (
-            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 bg-muted/50 rounded-lg">
+                <div className="min-w-0">
                     <span className="font-medium">{formula.label || formula.outputKey}</span>
                     {formula.unit && (
                         <span className="text-xs text-muted-foreground ml-1">
@@ -292,12 +302,12 @@ export function ApprovedJobRecord({ job, onBack, onRefresh }: ApprovedJobRecordP
                         </span>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
-                    <span className="font-mono text-lg">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-base sm:text-lg break-all">
                         {formatValue(value, formula.unit)}
                     </span>
                     {validation && isPassed && (
-                        <Badge variant="default" className="bg-green-600">
+                        <Badge variant="default" className="bg-green-600 shrink-0">
                             <HugeiconsIcon
                                 icon={CheckmarkCircle02Icon}
                                 className="h-3 w-3 mr-1"
@@ -313,18 +323,18 @@ export function ApprovedJobRecord({ job, onBack, onRefresh }: ApprovedJobRecordP
     return (
         <div className="space-y-6">
             {/* Header - Status & Actions */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="sm" onClick={onBack}>
+                    <Button variant="ghost" size="sm" onClick={onBack} className="shrink-0">
                         <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
                         Voltar
                     </Button>
-                    <div>
-                        <div className="flex items-center gap-3">
-                            <h1 className="text-2xl font-bold font-mono">{job.jobId}</h1>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <h1 className="text-xl md:text-2xl font-bold font-mono truncate">{job.jobId}</h1>
                             <Badge
                                 variant="default"
-                                className="bg-green-600 text-white text-sm px-3 py-1"
+                                className="bg-green-600 text-white text-sm px-3 py-1 shrink-0"
                             >
                                 <HugeiconsIcon
                                     icon={CheckmarkCircle02Icon}
@@ -333,7 +343,7 @@ export function ApprovedJobRecord({ job, onBack, onRefresh }: ApprovedJobRecordP
                                 APROVADO
                             </Badge>
                         </div>
-                        <p className="text-muted-foreground">
+                        <p className="text-muted-foreground text-sm md:text-base truncate">
                             {job.assetName}
                             {job.assetTag && (
                                 <span className="font-mono ml-1">({job.assetTag})</span>
@@ -342,8 +352,8 @@ export function ApprovedJobRecord({ job, onBack, onRefresh }: ApprovedJobRecordP
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    {/* Primary Action */}
+                {/* Desktop Actions - Hidden on mobile */}
+                <div className="hidden md:flex items-center gap-2 shrink-0">
                     <Button
                         className="bg-primary"
                         onClick={handleDownloadCertificate}
@@ -357,7 +367,6 @@ export function ApprovedJobRecord({ job, onBack, onRefresh }: ApprovedJobRecordP
                         Baixar Certificado
                     </Button>
 
-                    {/* Secondary Actions */}
                     <Button
                         variant="outline"
                         onClick={job.labelUrl ? handleDownloadLabel : handleGenerateLabel}
@@ -378,6 +387,56 @@ export function ApprovedJobRecord({ job, onBack, onRefresh }: ApprovedJobRecordP
                         <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
                         Criar Emenda
                     </Button>
+                </div>
+
+                {/* Mobile Actions - DropdownMenu */}
+                <div className="flex md:hidden gap-2">
+                    <Button
+                        className="bg-primary flex-1"
+                        onClick={handleDownloadCertificate}
+                        disabled={!job.certificateUrl || isDownloading}
+                    >
+                        {isDownloading ? (
+                            <Spinner className="mr-2 h-4 w-4" />
+                        ) : (
+                            <HugeiconsIcon icon={FileDownloadIcon} className="mr-2 h-4 w-4" />
+                        )}
+                        Baixar Certificado
+                    </Button>
+
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            render={(props) => (
+                                <Button variant="outline" size="icon" {...props}>
+                                    <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
+                                </Button>
+                            )}
+                        />
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuGroup>
+                                <DropdownMenuLabel>Distribuição</DropdownMenuLabel>
+                                <DropdownMenuItem
+                                    onClick={job.labelUrl ? handleDownloadLabel : handleGenerateLabel}
+                                    disabled={isGeneratingLabel || isDownloadingLabel || labelPending}
+                                >
+                                    <HugeiconsIcon icon={PrinterIcon} className="h-4 w-4" />
+                                    {labelPending ? 'Gerando...' : job.labelUrl ? 'Baixar Etiqueta' : 'Gerar Etiqueta QR'}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem>
+                                    <HugeiconsIcon icon={Mail01Icon} className="h-4 w-4" />
+                                    Enviar por Email
+                                </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuGroup>
+                                <DropdownMenuLabel>Mais opções</DropdownMenuLabel>
+                                <DropdownMenuItem className="text-muted-foreground">
+                                    <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
+                                    Criar Emenda
+                                </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
@@ -403,14 +462,14 @@ export function ApprovedJobRecord({ job, onBack, onRefresh }: ApprovedJobRecordP
                                             key={std.id}
                                             className="p-3 bg-muted/30 rounded-lg border border-muted"
                                         >
-                                            <div className="flex items-start justify-between">
-                                                <div>
-                                                    <span className="font-medium">{std.name}</span>
-                                                    <p className="text-sm text-muted-foreground">
+                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                                <div className="min-w-0">
+                                                    <span className="font-medium break-words">{std.name}</span>
+                                                    <p className="text-sm text-muted-foreground break-all">
                                                         Certificado: {std.certificateNumber}
                                                     </p>
                                                 </div>
-                                                <div className="text-right text-sm">
+                                                <div className="text-left sm:text-right text-sm shrink-0">
                                                     <p>
                                                         Calibrado em: {formatDate(std.calibrationDate)}
                                                     </p>
