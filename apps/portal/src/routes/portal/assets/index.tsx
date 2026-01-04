@@ -12,9 +12,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/portal/assets/")({
-  head: () => ({
-    meta: [{ title: "Meus Ativos | Portal do Cliente" }],
-  }),
   component: AssetsPage,
 });
 

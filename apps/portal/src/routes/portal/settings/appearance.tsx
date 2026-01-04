@@ -17,9 +17,6 @@ import {
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/portal/settings/appearance")({
-  head: () => ({
-    meta: [{ title: "Aparencia | Portal do Cliente" }],
-  }),
   component: AppearancePage,
 });
 
