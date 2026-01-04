@@ -14,9 +14,9 @@ function getApiBaseURL(): string {
 }
 
 export const api = hc<AppType>(getApiBaseURL(), {
-  fetch: (input, init) =>
+  fetch: (input: RequestInfo | URL, init?: RequestInit) =>
     fetch(input, {
       ...init,
-    credentials: 'include',
+      credentials: 'include',
     }),
 })

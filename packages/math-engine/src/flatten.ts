@@ -1,5 +1,4 @@
 import {
-  INCLUDE_KEYS,
   EXCLUDE_KEYS,
   UNIT_TO_SI,
   UNIT_VALUE_PATTERN,
@@ -109,7 +108,6 @@ export function flattenForExecution(
   options: FlattenOptions = {},
 ): FormulaContext {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  const includeSet = new Set([...INCLUDE_KEYS, ...opts.includeKeys]);
   const excludeSet = new Set([...EXCLUDE_KEYS, ...opts.excludeKeys]);
 
   const result: FormulaContext = {};

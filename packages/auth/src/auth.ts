@@ -155,8 +155,8 @@ export function createPortalAuth() {
 
 // For backwards compatibility in non-Worker environments (like local dev with Bun)
 // These are lazily initialized on first use
-let _labAuth: ReturnType<typeof betterAuth> | null = null;
-let _portalAuth: ReturnType<typeof betterAuth> | null = null;
+let _labAuth: ReturnType<typeof createLabAuth> | null = null;
+let _portalAuth: ReturnType<typeof createPortalAuth> | null = null;
 
 export function getLabAuth() {
   if (!_labAuth) {
@@ -172,18 +172,22 @@ export function getPortalAuth() {
   return _portalAuth;
 }
 
+// Type definitions for auth instances with organization plugin
+export type LabAuth = ReturnType<typeof createLabAuth>;
+export type PortalAuth = ReturnType<typeof createPortalAuth>;
+
 // Legacy exports for backwards compatibility (lazy getters)
 export const labAuth = {
   get api() { return getLabAuth().api; },
   get handler() { return getLabAuth().handler; },
-};
+} as Pick<LabAuth, 'api' | 'handler'>;
 
 export const portalAuth = {
   get api() { return getPortalAuth().api; },
   get handler() { return getPortalAuth().handler; },
-};
+} as Pick<PortalAuth, 'api' | 'handler'>;
 
 export const auth = labAuth;
 
-export type Auth = ReturnType<typeof betterAuth>;
+export type Auth = LabAuth;
 export type Session = Auth["$Infer"]["Session"];
