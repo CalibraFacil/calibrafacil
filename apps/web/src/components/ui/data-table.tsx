@@ -74,7 +74,7 @@ export function DataTable<TData, TValue>({
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            {columns.map((column, i) => (
+                            {columns.map((_, i) => (
                                 <TableHead key={i}>
                                     <Skeleton className="h-4 w-20" />
                                 </TableHead>

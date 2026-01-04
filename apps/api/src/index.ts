@@ -1,4 +1,3 @@
-import type { ExecutionContext } from "@cloudflare/workers-types";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
