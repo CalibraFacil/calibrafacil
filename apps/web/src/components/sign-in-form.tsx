@@ -3,6 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { signIn } from '@calibra-facil/auth/client'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Field,
   FieldDescription,
@@ -91,7 +92,14 @@ export function SignInForm({ className, redirect, ...props }: SignInFormProps) {
         </Field>
         <Field>
           <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Entrando...' : 'Entrar'}
+            {isLoading ? (
+              <>
+                <Spinner className="mr-2" />
+                Entrando...
+              </>
+            ) : (
+              'Entrar'
+            )}
           </Button>
         </Field>
         {/* <Field>
