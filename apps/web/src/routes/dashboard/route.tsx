@@ -26,7 +26,7 @@ const DASHBOARD_ORG_KEY = 'dashboard-active-org'
 
 export const Route = createFileRoute('/dashboard')({
   beforeLoad: async () => {
-    const session = await authClient.getSession()
+    const { data: session } = await authClient.getSession()
 
     if (!session) {
       throw redirect({ to: '/sign-in' })
