@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vite";
 
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import tanstackRouter from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import viteTsConfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
@@ -28,12 +28,7 @@ export default defineConfig({
       projects: ["./tsconfig.json"],
     }),
     tailwindcss(),
-    tanstackStart({
-      spa: {
-        enabled: true,
-        prerender: { enabled: false }, // Disable prerendering to avoid auth init issues in CI
-      },
-    }),
+    tanstackRouter(),
     viteReact(),
   ],
 });

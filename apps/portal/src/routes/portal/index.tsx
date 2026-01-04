@@ -12,9 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/portal/")({
-  head: () => ({
-    meta: [{ title: "Painel | Portal do Cliente" }],
-  }),
   component: PortalHome,
 });
 
