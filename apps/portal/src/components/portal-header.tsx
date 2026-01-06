@@ -13,11 +13,11 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
 const routeLabels: Record<string, string> = {
-  "/portal": "Painel",
-  "/portal/assets": "Ativos",
-  "/portal/certificates": "Certificados",
-  "/portal/settings": "Configurações",
-  "/portal/settings/appearance": "Aparência",
+  "/_authenticated": "Painel",
+  "/_authenticated/assets": "Ativos",
+  "/_authenticated/certificates": "Certificados",
+  "/_authenticated/settings": "Configurações",
+  "/_authenticated/settings/appearance": "Aparência",
 };
 
 export function PortalHeader() {
@@ -25,7 +25,7 @@ export function PortalHeader() {
 
   const breadcrumbs = useMemo(() => {
     return matches
-      .filter((m) => m.routeId?.startsWith("/portal"))
+      .filter((m) => m.routeId?.startsWith("/_authenticated"))
       .map((m) => ({
         path: m.pathname,
         label: routeLabels[m.routeId] ?? m.pathname.split("/").pop() ?? "",

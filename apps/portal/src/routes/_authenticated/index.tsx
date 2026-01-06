@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/portal/")({
+export const Route = createFileRoute("/_authenticated/")({
   component: PortalHome,
 });
 
@@ -52,7 +52,7 @@ function PortalHome() {
             <Button
               variant="outline"
               className="w-full"
-              render={<Link to="/portal/assets" />}
+              render={<Link to="/assets" />}
             >
               Ver Ativos
             </Button>

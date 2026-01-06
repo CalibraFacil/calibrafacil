@@ -11,15 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
-import { Route as PortalRouteRouteImport } from './routes/portal/route'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as PortalIndexRouteImport } from './routes/portal/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as VTokenRouteImport } from './routes/v/$token'
-import { Route as PortalSettingsRouteRouteImport } from './routes/portal/settings/route'
-import { Route as PortalAssetsRouteRouteImport } from './routes/portal/assets/route'
-import { Route as PortalSettingsIndexRouteImport } from './routes/portal/settings/index'
-import { Route as PortalAssetsIndexRouteImport } from './routes/portal/assets/index'
-import { Route as PortalSettingsAppearanceRouteImport } from './routes/portal/settings/appearance'
+import { Route as AuthenticatedSettingsRouteRouteImport } from './routes/_authenticated/settings/route'
+import { Route as AuthenticatedAssetsRouteRouteImport } from './routes/_authenticated/assets/route'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedAssetsIndexRouteImport } from './routes/_authenticated/assets/index'
+import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
 
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
@@ -31,132 +30,121 @@ const AcceptInviteRoute = AcceptInviteRouteImport.update({
   path: '/accept-invite',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PortalRouteRoute = PortalRouteRouteImport.update({
-  id: '/portal',
-  path: '/portal',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PortalIndexRoute = PortalIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => PortalRouteRoute,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const VTokenRoute = VTokenRouteImport.update({
   id: '/v/$token',
   path: '/v/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PortalSettingsRouteRoute = PortalSettingsRouteRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => PortalRouteRoute,
-} as any)
-const PortalAssetsRouteRoute = PortalAssetsRouteRouteImport.update({
-  id: '/assets',
-  path: '/assets',
-  getParentRoute: () => PortalRouteRoute,
-} as any)
-const PortalSettingsIndexRoute = PortalSettingsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => PortalSettingsRouteRoute,
-} as any)
-const PortalAssetsIndexRoute = PortalAssetsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => PortalAssetsRouteRoute,
-} as any)
-const PortalSettingsAppearanceRoute =
-  PortalSettingsAppearanceRouteImport.update({
+const AuthenticatedSettingsRouteRoute =
+  AuthenticatedSettingsRouteRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAssetsRouteRoute =
+  AuthenticatedAssetsRouteRouteImport.update({
+    id: '/assets',
+    path: '/assets',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+  } as any)
+const AuthenticatedAssetsIndexRoute =
+  AuthenticatedAssetsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAssetsRouteRoute,
+  } as any)
+const AuthenticatedSettingsAppearanceRoute =
+  AuthenticatedSettingsAppearanceRouteImport.update({
     id: '/appearance',
     path: '/appearance',
-    getParentRoute: () => PortalSettingsRouteRoute,
+    getParentRoute: () => AuthenticatedSettingsRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/portal': typeof PortalRouteRouteWithChildren
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
-  '/portal/assets': typeof PortalAssetsRouteRouteWithChildren
-  '/portal/settings': typeof PortalSettingsRouteRouteWithChildren
+  '/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
+  '/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
   '/v/$token': typeof VTokenRoute
-  '/portal/': typeof PortalIndexRoute
-  '/portal/settings/appearance': typeof PortalSettingsAppearanceRoute
-  '/portal/assets/': typeof PortalAssetsIndexRoute
-  '/portal/settings/': typeof PortalSettingsIndexRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
+  '/assets/': typeof AuthenticatedAssetsIndexRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
   '/v/$token': typeof VTokenRoute
-  '/portal': typeof PortalIndexRoute
-  '/portal/settings/appearance': typeof PortalSettingsAppearanceRoute
-  '/portal/assets': typeof PortalAssetsIndexRoute
-  '/portal/settings': typeof PortalSettingsIndexRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
+  '/assets': typeof AuthenticatedAssetsIndexRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/portal': typeof PortalRouteRouteWithChildren
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
-  '/portal/assets': typeof PortalAssetsRouteRouteWithChildren
-  '/portal/settings': typeof PortalSettingsRouteRouteWithChildren
+  '/_authenticated/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
+  '/_authenticated/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
   '/v/$token': typeof VTokenRoute
-  '/portal/': typeof PortalIndexRoute
-  '/portal/settings/appearance': typeof PortalSettingsAppearanceRoute
-  '/portal/assets/': typeof PortalAssetsIndexRoute
-  '/portal/settings/': typeof PortalSettingsIndexRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
+  '/_authenticated/assets/': typeof AuthenticatedAssetsIndexRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
-    | '/portal'
     | '/accept-invite'
     | '/sign-in'
-    | '/portal/assets'
-    | '/portal/settings'
+    | '/assets'
+    | '/settings'
     | '/v/$token'
-    | '/portal/'
-    | '/portal/settings/appearance'
-    | '/portal/assets/'
-    | '/portal/settings/'
+    | '/'
+    | '/settings/appearance'
+    | '/assets/'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
     | '/accept-invite'
     | '/sign-in'
     | '/v/$token'
-    | '/portal'
-    | '/portal/settings/appearance'
-    | '/portal/assets'
-    | '/portal/settings'
+    | '/'
+    | '/settings/appearance'
+    | '/assets'
+    | '/settings'
   id:
     | '__root__'
-    | '/'
-    | '/portal'
+    | '/_authenticated'
     | '/accept-invite'
     | '/sign-in'
-    | '/portal/assets'
-    | '/portal/settings'
+    | '/_authenticated/assets'
+    | '/_authenticated/settings'
     | '/v/$token'
-    | '/portal/'
-    | '/portal/settings/appearance'
-    | '/portal/assets/'
-    | '/portal/settings/'
+    | '/_authenticated/'
+    | '/_authenticated/settings/appearance'
+    | '/_authenticated/assets/'
+    | '/_authenticated/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  PortalRouteRoute: typeof PortalRouteRouteWithChildren
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AcceptInviteRoute: typeof AcceptInviteRoute
   SignInRoute: typeof SignInRoute
   VTokenRoute: typeof VTokenRoute
@@ -178,26 +166,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcceptInviteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/portal': {
-      id: '/portal'
-      path: '/portal'
-      fullPath: '/portal'
-      preLoaderRoute: typeof PortalRouteRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
+    '/_authenticated/': {
+      id: '/_authenticated/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/portal/': {
-      id: '/portal/'
-      path: '/'
-      fullPath: '/portal/'
-      preLoaderRoute: typeof PortalIndexRouteImport
-      parentRoute: typeof PortalRouteRoute
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/v/$token': {
       id: '/v/$token'
@@ -206,87 +187,91 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/portal/settings': {
-      id: '/portal/settings'
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
       path: '/settings'
-      fullPath: '/portal/settings'
-      preLoaderRoute: typeof PortalSettingsRouteRouteImport
-      parentRoute: typeof PortalRouteRoute
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/portal/assets': {
-      id: '/portal/assets'
+    '/_authenticated/assets': {
+      id: '/_authenticated/assets'
       path: '/assets'
-      fullPath: '/portal/assets'
-      preLoaderRoute: typeof PortalAssetsRouteRouteImport
-      parentRoute: typeof PortalRouteRoute
+      fullPath: '/assets'
+      preLoaderRoute: typeof AuthenticatedAssetsRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/portal/settings/': {
-      id: '/portal/settings/'
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
       path: '/'
-      fullPath: '/portal/settings/'
-      preLoaderRoute: typeof PortalSettingsIndexRouteImport
-      parentRoute: typeof PortalSettingsRouteRoute
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
     }
-    '/portal/assets/': {
-      id: '/portal/assets/'
+    '/_authenticated/assets/': {
+      id: '/_authenticated/assets/'
       path: '/'
-      fullPath: '/portal/assets/'
-      preLoaderRoute: typeof PortalAssetsIndexRouteImport
-      parentRoute: typeof PortalAssetsRouteRoute
+      fullPath: '/assets/'
+      preLoaderRoute: typeof AuthenticatedAssetsIndexRouteImport
+      parentRoute: typeof AuthenticatedAssetsRouteRoute
     }
-    '/portal/settings/appearance': {
-      id: '/portal/settings/appearance'
+    '/_authenticated/settings/appearance': {
+      id: '/_authenticated/settings/appearance'
       path: '/appearance'
-      fullPath: '/portal/settings/appearance'
-      preLoaderRoute: typeof PortalSettingsAppearanceRouteImport
-      parentRoute: typeof PortalSettingsRouteRoute
+      fullPath: '/settings/appearance'
+      preLoaderRoute: typeof AuthenticatedSettingsAppearanceRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
     }
   }
 }
 
-interface PortalAssetsRouteRouteChildren {
-  PortalAssetsIndexRoute: typeof PortalAssetsIndexRoute
+interface AuthenticatedAssetsRouteRouteChildren {
+  AuthenticatedAssetsIndexRoute: typeof AuthenticatedAssetsIndexRoute
 }
 
-const PortalAssetsRouteRouteChildren: PortalAssetsRouteRouteChildren = {
-  PortalAssetsIndexRoute: PortalAssetsIndexRoute,
+const AuthenticatedAssetsRouteRouteChildren: AuthenticatedAssetsRouteRouteChildren =
+  {
+    AuthenticatedAssetsIndexRoute: AuthenticatedAssetsIndexRoute,
+  }
+
+const AuthenticatedAssetsRouteRouteWithChildren =
+  AuthenticatedAssetsRouteRoute._addFileChildren(
+    AuthenticatedAssetsRouteRouteChildren,
+  )
+
+interface AuthenticatedSettingsRouteRouteChildren {
+  AuthenticatedSettingsAppearanceRoute: typeof AuthenticatedSettingsAppearanceRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
-const PortalAssetsRouteRouteWithChildren =
-  PortalAssetsRouteRoute._addFileChildren(PortalAssetsRouteRouteChildren)
+const AuthenticatedSettingsRouteRouteChildren: AuthenticatedSettingsRouteRouteChildren =
+  {
+    AuthenticatedSettingsAppearanceRoute: AuthenticatedSettingsAppearanceRoute,
+    AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
+  }
 
-interface PortalSettingsRouteRouteChildren {
-  PortalSettingsAppearanceRoute: typeof PortalSettingsAppearanceRoute
-  PortalSettingsIndexRoute: typeof PortalSettingsIndexRoute
+const AuthenticatedSettingsRouteRouteWithChildren =
+  AuthenticatedSettingsRouteRoute._addFileChildren(
+    AuthenticatedSettingsRouteRouteChildren,
+  )
+
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAssetsRouteRoute: typeof AuthenticatedAssetsRouteRouteWithChildren
+  AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
-const PortalSettingsRouteRouteChildren: PortalSettingsRouteRouteChildren = {
-  PortalSettingsAppearanceRoute: PortalSettingsAppearanceRoute,
-  PortalSettingsIndexRoute: PortalSettingsIndexRoute,
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAssetsRouteRoute: AuthenticatedAssetsRouteRouteWithChildren,
+  AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
 
-const PortalSettingsRouteRouteWithChildren =
-  PortalSettingsRouteRoute._addFileChildren(PortalSettingsRouteRouteChildren)
-
-interface PortalRouteRouteChildren {
-  PortalAssetsRouteRoute: typeof PortalAssetsRouteRouteWithChildren
-  PortalSettingsRouteRoute: typeof PortalSettingsRouteRouteWithChildren
-  PortalIndexRoute: typeof PortalIndexRoute
-}
-
-const PortalRouteRouteChildren: PortalRouteRouteChildren = {
-  PortalAssetsRouteRoute: PortalAssetsRouteRouteWithChildren,
-  PortalSettingsRouteRoute: PortalSettingsRouteRouteWithChildren,
-  PortalIndexRoute: PortalIndexRoute,
-}
-
-const PortalRouteRouteWithChildren = PortalRouteRoute._addFileChildren(
-  PortalRouteRouteChildren,
-)
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  PortalRouteRoute: PortalRouteRouteWithChildren,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AcceptInviteRoute: AcceptInviteRoute,
   SignInRoute: SignInRoute,
   VTokenRoute: VTokenRoute,

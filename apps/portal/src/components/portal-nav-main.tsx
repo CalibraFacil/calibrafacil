@@ -26,17 +26,17 @@ type NavItem = {
 const navItems: Array<NavItem> = [
   {
     title: "Painel",
-    url: "/portal",
+    url: "/",
     icon: <HugeiconsIcon icon={Home01Icon} />,
   },
   {
     title: "Ativos",
-    url: "/portal/assets",
+    url: "/assets",
     icon: <HugeiconsIcon icon={Wrench01Icon} />,
   },
   {
     title: "Certificados",
-    url: "/portal/certificates",
+    url: "/certificates",
     icon: <HugeiconsIcon icon={File01Icon} />,
     badge: "em breve",
     disabled: true,
@@ -54,7 +54,7 @@ export function PortalNavMain() {
         {navItems.map((item) => {
           const isActive =
             location.pathname === item.url ||
-            (item.url !== "/portal" && location.pathname.startsWith(item.url));
+            (item.url !== "/" && location.pathname.startsWith(item.url));
 
           return (
             <SidebarMenuItem key={item.title}>

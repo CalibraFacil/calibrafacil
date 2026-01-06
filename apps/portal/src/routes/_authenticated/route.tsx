@@ -24,7 +24,7 @@ import { getApiBaseUrl } from "@/lib/utils";
 
 const PORTAL_ORG_KEY = "portal-active-org";
 
-export const Route = createFileRoute("/portal")({
+export const Route = createFileRoute("/_authenticated")({
   component: PortalLayout,
 });
 
