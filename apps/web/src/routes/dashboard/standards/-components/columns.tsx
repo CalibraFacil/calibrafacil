@@ -8,6 +8,7 @@ import {
     Edit02Icon,
     MoreHorizontalIcon,
     RefreshIcon,
+    ViewIcon,
 } from "@hugeicons/core-free-icons"
 
 import { Badge } from "@/components/ui/badge"
@@ -112,7 +113,7 @@ export const standardsColumns: ColumnDef<ReferenceStandard>[] = [
         cell: ({ row }) => (
             <div>
                 <Link
-                    to="/dashboard/standards/$id/edit"
+                    to="/dashboard/standards/$id"
                     params={{ id: String(row.original.id) }}
                     className="font-medium hover:underline"
                 >
@@ -196,6 +197,19 @@ export const standardsColumns: ColumnDef<ReferenceStandard>[] = [
                         <HugeiconsIcon icon={MoreHorizontalIcon} className="h-4 w-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                            render={(props) => (
+                                <Link
+                                    {...props}
+                                    to="/dashboard/standards/$id"
+                                    params={{ id: String(row.original.id) }}
+                                    className={cn(props.className, "w-full flex items-center")}
+                                >
+                                    <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
+                                    Visualizar
+                                </Link>
+                            )}
+                        />
                         <DropdownMenuItem
                             render={(props) => (
                                 <Link

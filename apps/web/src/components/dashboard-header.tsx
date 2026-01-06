@@ -60,11 +60,13 @@ const routeLabels: Record<string, string> = {
   // Services
   '/dashboard/services': 'Serviços',
   '/dashboard/services/new': 'Novo Serviço',
+  '/dashboard/services/$id': 'Serviço',
   '/dashboard/services/$id/edit': 'Editar Serviço',
 
   // Standards
   '/dashboard/standards': 'Padrões',
   '/dashboard/standards/new': 'Novo Padrão',
+  '/dashboard/standards/$id': 'Padrão',
   '/dashboard/standards/$id/edit': 'Editar Padrão',
 }
 
@@ -74,6 +76,8 @@ function extractEntityIds(pathname: string): {
   assetId?: string
   methodId?: string
   jobId?: string
+  serviceId?: string
+  standardId?: string
 } {
   const parts = pathname.split('/')
   const result: {
@@ -81,6 +85,8 @@ function extractEntityIds(pathname: string): {
     assetId?: string
     methodId?: string
     jobId?: string
+    serviceId?: string
+    standardId?: string
   } = {}
 
   // /dashboard/clients/:id/...
@@ -111,6 +117,20 @@ function extractEntityIds(pathname: string): {
     if (id !== 'new') result.jobId = id
   }
 
+  // /dashboard/services/:id/...
+  const servicesIndex = parts.indexOf('services')
+  if (servicesIndex !== -1 && parts[servicesIndex + 1]) {
+    const id = parts[servicesIndex + 1]
+    if (id !== 'new') result.serviceId = id
+  }
+
+  // /dashboard/standards/:id/...
+  const standardsIndex = parts.indexOf('standards')
+  if (standardsIndex !== -1 && parts[standardsIndex + 1]) {
+    const id = parts[standardsIndex + 1]
+    if (id !== 'new') result.standardId = id
+  }
+
   return result
 }
 
@@ -119,7 +139,8 @@ export function DashboardHeader() {
 
   // Extract IDs from current pathname
   const pathname = matches[matches.length - 1]?.pathname ?? ''
-  const { customerId, assetId, methodId, jobId } = extractEntityIds(pathname)
+  const { customerId, assetId, methodId, jobId, serviceId, standardId } =
+    extractEntityIds(pathname)
 
   // Reactive queries for entity names
   const { data: customer } = useQuery({
@@ -174,6 +195,32 @@ export function DashboardHeader() {
     staleTime: 5 * 60 * 1000,
   })
 
+  const { data: service } = useQuery({
+    queryKey: ['service', serviceId],
+    queryFn: async () => {
+      const res = await api.api.services[':id'].$get({
+        param: { id: serviceId! },
+      })
+      if (!res.ok) throw new Error('Failed to fetch service')
+      return res.json()
+    },
+    enabled: !!serviceId,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: standard } = useQuery({
+    queryKey: ['standard', standardId],
+    queryFn: async () => {
+      const res = await api.api.standards[':id'].$get({
+        param: { id: standardId! },
+      })
+      if (!res.ok) throw new Error('Failed to fetch standard')
+      return res.json()
+    },
+    enabled: !!standardId,
+    staleTime: 5 * 60 * 1000,
+  })
+
   // Build entity name lookup
   const entityNames: Record<string, string> = useMemo(() => {
     const names: Record<string, string> = {}
@@ -181,8 +228,23 @@ export function DashboardHeader() {
     if (assetId && asset?.name) names[assetId] = asset.name
     if (methodId && method?.name) names[methodId] = method.name
     if (jobId && job?.jobId) names[jobId] = job.jobId
+    if (serviceId && service?.name) names[serviceId] = service.name
+    if (standardId && standard?.name) names[standardId] = standard.name
     return names
-  }, [customerId, customer, assetId, asset, methodId, method, jobId, job])
+  }, [
+    customerId,
+    customer,
+    assetId,
+    asset,
+    methodId,
+    method,
+    jobId,
+    job,
+    serviceId,
+    service,
+    standardId,
+    standard,
+  ])
 
   const breadcrumbs = useMemo(() => {
     return (
