@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getApiBaseUrl } from "@/lib/utils";
 
 const PORTAL_ORG_KEY = "portal-active-org";
 
@@ -27,13 +28,10 @@ export const Route = createFileRoute("/portal")({
   component: PortalLayout,
 });
 
-function getApiBaseUrl(): string {
-  const host =
-    typeof window !== "undefined" ? window.location.hostname : "localhost";
-  return `https://${host}:3000`;
-}
-
 function getWebAppUrl(): string {
+  if (import.meta.env.VITE_WEB_URL) {
+    return import.meta.env.VITE_WEB_URL;
+  }
   const host =
     typeof window !== "undefined" ? window.location.hostname : "localhost";
   return `https://${host}:5173`;

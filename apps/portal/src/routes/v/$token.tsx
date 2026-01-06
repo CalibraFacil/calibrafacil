@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { getApiBaseUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/v/$token")({
   component: VerifyPage,
@@ -45,15 +46,6 @@ function VerifyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-
-  const getApiBaseUrl = () => {
-    if (import.meta.env.VITE_API_URL) {
-      return import.meta.env.VITE_API_URL;
-    }
-    const host =
-      typeof window !== "undefined" ? window.location.hostname : "localhost";
-    return `https://${host}:3000`;
-  };
 
   useEffect(() => {
     async function fetchVerification() {
