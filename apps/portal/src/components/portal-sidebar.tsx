@@ -22,7 +22,7 @@ import {
 const navSecondary = [
   {
     title: "Configurações",
-    url: "/portal/settings",
+    url: "/settings",
     icon: <HugeiconsIcon icon={Settings05Icon} />,
   },
 ];

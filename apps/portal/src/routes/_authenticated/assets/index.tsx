@@ -12,7 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { getApiBaseUrl } from "@/lib/utils";
 
-export const Route = createFileRoute("/portal/assets/")({
+export const Route = createFileRoute("/_authenticated/assets/")({
   component: AssetsPage,
 });
 

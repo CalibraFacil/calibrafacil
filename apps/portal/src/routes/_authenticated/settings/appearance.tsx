@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/portal/settings/appearance")({
+export const Route = createFileRoute("/_authenticated/settings/appearance")({
   component: AppearancePage,
 });
 
