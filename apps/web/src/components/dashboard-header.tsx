@@ -50,7 +50,6 @@ const routeLabels: Record<string, string> = {
   '/dashboard/methods/new': 'Novo Método',
   '/dashboard/methods/$id': 'Método',
   '/dashboard/methods/$id/edit': 'Editar Método',
-  '/dashboard/methods/$id/preview': 'Visualizar Método',
 
   // Jobs (Ordens de Serviço)
   '/dashboard/jobs': 'Ordens de Serviço',
@@ -186,53 +185,57 @@ export function DashboardHeader() {
   }, [customerId, customer, assetId, asset, methodId, method, jobId, job])
 
   const breadcrumbs = useMemo(() => {
-    return matches
-      .filter((m) => {
-        // Filter only dashboard routes
-        if (!m.routeId?.startsWith('/dashboard')) return false
+    return (
+      matches
+        .filter((m) => {
+          // Filter only dashboard routes
+          if (!m.routeId?.startsWith('/dashboard')) return false
 
-        // Remove index routes that duplicate layout routes
-        if (m.routeId.endsWith('/')) {
-          const layoutId = m.routeId.slice(0, -1)
-          const hasLayout = matches.some((other) => other.routeId === layoutId)
-          if (hasLayout) return false
-        }
-
-        return true
-      })
-      .map((m) => {
-        // Normalize routeId by removing trailing slash for label lookup
-        const normalizedRouteId = m.routeId.endsWith('/')
-          ? m.routeId.slice(0, -1)
-          : m.routeId
-
-        let label = routeLabels[normalizedRouteId]
-
-        // For routes that end with $id (entity routes), try to get entity name
-        // Only replace for routes like /clients/$id, not /clients/$id/info
-        if (normalizedRouteId.endsWith('$id')) {
-          const pathParts = m.pathname.split('/')
-          const routeParts = normalizedRouteId.split('/')
-          const idIndex = routeParts.findIndex((part) => part === '$id')
-          const id = pathParts[idIndex]
-
-          if (id && entityNames[id]) {
-            label = entityNames[id]
+          // Remove index routes that duplicate layout routes
+          if (m.routeId.endsWith('/')) {
+            const layoutId = m.routeId.slice(0, -1)
+            const hasLayout = matches.some(
+              (other) => other.routeId === layoutId,
+            )
+            if (hasLayout) return false
           }
-        }
 
-        // Fallback to last path segment if no label found
-        if (!label) {
-          label = m.pathname.split('/').pop() ?? ''
-        }
+          return true
+        })
+        .map((m) => {
+          // Normalize routeId by removing trailing slash for label lookup
+          const normalizedRouteId = m.routeId.endsWith('/')
+            ? m.routeId.slice(0, -1)
+            : m.routeId
 
-        return {
-          path: m.pathname,
-          label,
-        }
-      })
-      // Filter out breadcrumbs with empty labels
-      .filter((crumb) => crumb.label.trim() !== '')
+          let label = routeLabels[normalizedRouteId]
+
+          // For routes that end with $id (entity routes), try to get entity name
+          // Only replace for routes like /clients/$id, not /clients/$id/info
+          if (normalizedRouteId.endsWith('$id')) {
+            const pathParts = m.pathname.split('/')
+            const routeParts = normalizedRouteId.split('/')
+            const idIndex = routeParts.findIndex((part) => part === '$id')
+            const id = pathParts[idIndex]
+
+            if (id && entityNames[id]) {
+              label = entityNames[id]
+            }
+          }
+
+          // Fallback to last path segment if no label found
+          if (!label) {
+            label = m.pathname.split('/').pop() ?? ''
+          }
+
+          return {
+            path: m.pathname,
+            label,
+          }
+        })
+        // Filter out breadcrumbs with empty labels
+        .filter((crumb) => crumb.label.trim() !== '')
+    )
   }, [matches, entityNames])
 
   return (
