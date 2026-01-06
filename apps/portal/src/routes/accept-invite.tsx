@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { getApiBaseUrl } from "@/lib/utils";
 
 const searchSchema = z.object({
   token: z.string().optional(),
@@ -52,13 +53,6 @@ function AcceptInvitePage() {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  // Get API base URL
-  const getApiBaseUrl = () => {
-    const host =
-      typeof window !== "undefined" ? window.location.hostname : "localhost";
-    return `https://${host}:3000`;
-  };
 
   // Fetch invitation details using our public API endpoint
   useEffect(() => {

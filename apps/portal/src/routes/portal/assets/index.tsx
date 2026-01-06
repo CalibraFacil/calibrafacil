@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { getApiBaseUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/portal/assets/")({
   component: AssetsPage,
@@ -23,12 +24,6 @@ const statusLabels: Record<AssetStatus, string> = {
   MAINTENANCE: "Manutencao",
   SCRAPPED: "Descartado",
 };
-
-function getApiBaseUrl(): string {
-  const host =
-    typeof window !== "undefined" ? window.location.hostname : "localhost";
-  return `https://${host}:3000`;
-}
 
 type Asset = {
   id: number;
