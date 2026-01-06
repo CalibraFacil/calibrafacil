@@ -15,7 +15,11 @@ import { Route as SignUpIndexRouteImport } from './routes/sign-up/index'
 import { Route as SignInIndexRouteImport } from './routes/sign-in/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitation/$id'
+import { Route as DashboardStandardsRouteRouteImport } from './routes/dashboard/standards/route'
 import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
+import { Route as DashboardServicesRouteRouteImport } from './routes/dashboard/services/route'
+import { Route as DashboardMethodsRouteRouteImport } from './routes/dashboard/methods/route'
+import { Route as DashboardJobsRouteRouteImport } from './routes/dashboard/jobs/route'
 import { Route as DashboardClientsRouteRouteImport } from './routes/dashboard/clients/route'
 import { Route as DashboardAssetsRouteRouteImport } from './routes/dashboard/assets/route'
 import { Route as DashboardStandardsIndexRouteImport } from './routes/dashboard/standards/index'
@@ -85,9 +89,29 @@ const AcceptInvitationIdRoute = AcceptInvitationIdRouteImport.update({
   path: '/accept-invitation/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardStandardsRouteRoute = DashboardStandardsRouteRouteImport.update({
+  id: '/standards',
+  path: '/standards',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardSettingsRouteRoute = DashboardSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardServicesRouteRoute = DashboardServicesRouteRouteImport.update({
+  id: '/services',
+  path: '/services',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardMethodsRouteRoute = DashboardMethodsRouteRouteImport.update({
+  id: '/methods',
+  path: '/methods',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardJobsRouteRoute = DashboardJobsRouteRouteImport.update({
+  id: '/jobs',
+  path: '/jobs',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardClientsRouteRoute = DashboardClientsRouteRouteImport.update({
@@ -101,24 +125,24 @@ const DashboardAssetsRouteRoute = DashboardAssetsRouteRouteImport.update({
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardStandardsIndexRoute = DashboardStandardsIndexRouteImport.update({
-  id: '/standards/',
-  path: '/standards/',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardStandardsRouteRoute,
 } as any)
 const DashboardServicesIndexRoute = DashboardServicesIndexRouteImport.update({
-  id: '/services/',
-  path: '/services/',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardServicesRouteRoute,
 } as any)
 const DashboardMethodsIndexRoute = DashboardMethodsIndexRouteImport.update({
-  id: '/methods/',
-  path: '/methods/',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardMethodsRouteRoute,
 } as any)
 const DashboardJobsIndexRoute = DashboardJobsIndexRouteImport.update({
-  id: '/jobs/',
-  path: '/jobs/',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardJobsRouteRoute,
 } as any)
 const DashboardClientsIndexRoute = DashboardClientsIndexRouteImport.update({
   id: '/',
@@ -131,9 +155,9 @@ const DashboardAssetsIndexRoute = DashboardAssetsIndexRouteImport.update({
   getParentRoute: () => DashboardAssetsRouteRoute,
 } as any)
 const DashboardStandardsNewRoute = DashboardStandardsNewRouteImport.update({
-  id: '/standards/new',
-  path: '/standards/new',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => DashboardStandardsRouteRoute,
 } as any)
 const DashboardSettingsSecurityRoute =
   DashboardSettingsSecurityRouteImport.update({
@@ -183,19 +207,19 @@ const DashboardSettingsAppearanceRoute =
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
 const DashboardServicesNewRoute = DashboardServicesNewRouteImport.update({
-  id: '/services/new',
-  path: '/services/new',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => DashboardServicesRouteRoute,
 } as any)
 const DashboardMethodsNewRoute = DashboardMethodsNewRouteImport.update({
-  id: '/methods/new',
-  path: '/methods/new',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => DashboardMethodsRouteRoute,
 } as any)
 const DashboardJobsNewRoute = DashboardJobsNewRouteImport.update({
-  id: '/jobs/new',
-  path: '/jobs/new',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => DashboardJobsRouteRoute,
 } as any)
 const DashboardClientsNewRoute = DashboardClientsNewRouteImport.update({
   id: '/new',
@@ -218,14 +242,14 @@ const DashboardAssetsIdRouteRoute = DashboardAssetsIdRouteRouteImport.update({
   getParentRoute: () => DashboardAssetsRouteRoute,
 } as any)
 const DashboardMethodsIdIndexRoute = DashboardMethodsIdIndexRouteImport.update({
-  id: '/methods/$id/',
-  path: '/methods/$id/',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/$id/',
+  path: '/$id/',
+  getParentRoute: () => DashboardMethodsRouteRoute,
 } as any)
 const DashboardJobsIdIndexRoute = DashboardJobsIdIndexRouteImport.update({
-  id: '/jobs/$id/',
-  path: '/jobs/$id/',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/$id/',
+  path: '/$id/',
+  getParentRoute: () => DashboardJobsRouteRoute,
 } as any)
 const DashboardClientsIdIndexRoute = DashboardClientsIdIndexRouteImport.update({
   id: '/',
@@ -239,24 +263,24 @@ const DashboardAssetsIdIndexRoute = DashboardAssetsIdIndexRouteImport.update({
 } as any)
 const DashboardStandardsIdEditRoute =
   DashboardStandardsIdEditRouteImport.update({
-    id: '/standards/$id/edit',
-    path: '/standards/$id/edit',
-    getParentRoute: () => DashboardRouteRoute,
+    id: '/$id/edit',
+    path: '/$id/edit',
+    getParentRoute: () => DashboardStandardsRouteRoute,
   } as any)
 const DashboardServicesIdEditRoute = DashboardServicesIdEditRouteImport.update({
-  id: '/services/$id/edit',
-  path: '/services/$id/edit',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/$id/edit',
+  path: '/$id/edit',
+  getParentRoute: () => DashboardServicesRouteRoute,
 } as any)
 const DashboardMethodsIdEditRoute = DashboardMethodsIdEditRouteImport.update({
-  id: '/methods/$id/edit',
-  path: '/methods/$id/edit',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/$id/edit',
+  path: '/$id/edit',
+  getParentRoute: () => DashboardMethodsRouteRoute,
 } as any)
 const DashboardJobsIdExecuteRoute = DashboardJobsIdExecuteRouteImport.update({
-  id: '/jobs/$id/execute',
-  path: '/jobs/$id/execute',
-  getParentRoute: () => DashboardRouteRoute,
+  id: '/$id/execute',
+  path: '/$id/execute',
+  getParentRoute: () => DashboardJobsRouteRoute,
 } as any)
 const DashboardClientsIdUsersRoute = DashboardClientsIdUsersRouteImport.update({
   id: '/users',
@@ -297,7 +321,11 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
   '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
+  '/dashboard/jobs': typeof DashboardJobsRouteRouteWithChildren
+  '/dashboard/methods': typeof DashboardMethodsRouteRouteWithChildren
+  '/dashboard/services': typeof DashboardServicesRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
+  '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/sign-in': typeof SignInIndexRoute
@@ -320,10 +348,10 @@ export interface FileRoutesByFullPath {
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
   '/dashboard/clients/': typeof DashboardClientsIndexRoute
-  '/dashboard/jobs': typeof DashboardJobsIndexRoute
-  '/dashboard/methods': typeof DashboardMethodsIndexRoute
-  '/dashboard/services': typeof DashboardServicesIndexRoute
-  '/dashboard/standards': typeof DashboardStandardsIndexRoute
+  '/dashboard/jobs/': typeof DashboardJobsIndexRoute
+  '/dashboard/methods/': typeof DashboardMethodsIndexRoute
+  '/dashboard/services/': typeof DashboardServicesIndexRoute
+  '/dashboard/standards/': typeof DashboardStandardsIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
   '/dashboard/clients/$id/assets': typeof DashboardClientsIdAssetsRoute
   '/dashboard/clients/$id/calibrations': typeof DashboardClientsIdCalibrationsRoute
@@ -387,7 +415,11 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
   '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
+  '/dashboard/jobs': typeof DashboardJobsRouteRouteWithChildren
+  '/dashboard/methods': typeof DashboardMethodsRouteRouteWithChildren
+  '/dashboard/services': typeof DashboardServicesRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
+  '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/sign-in/': typeof SignInIndexRoute
@@ -436,7 +468,11 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dashboard/assets'
     | '/dashboard/clients'
+    | '/dashboard/jobs'
+    | '/dashboard/methods'
+    | '/dashboard/services'
     | '/dashboard/settings'
+    | '/dashboard/standards'
     | '/accept-invitation/$id'
     | '/dashboard/'
     | '/sign-in'
@@ -459,10 +495,10 @@ export interface FileRouteTypes {
     | '/dashboard/standards/new'
     | '/dashboard/assets/'
     | '/dashboard/clients/'
-    | '/dashboard/jobs'
-    | '/dashboard/methods'
-    | '/dashboard/services'
-    | '/dashboard/standards'
+    | '/dashboard/jobs/'
+    | '/dashboard/methods/'
+    | '/dashboard/services/'
+    | '/dashboard/standards/'
     | '/dashboard/assets/$id/edit'
     | '/dashboard/clients/$id/assets'
     | '/dashboard/clients/$id/calibrations'
@@ -525,7 +561,11 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dashboard/assets'
     | '/dashboard/clients'
+    | '/dashboard/jobs'
+    | '/dashboard/methods'
+    | '/dashboard/services'
     | '/dashboard/settings'
+    | '/dashboard/standards'
     | '/accept-invitation/$id'
     | '/dashboard/'
     | '/sign-in/'
@@ -620,11 +660,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcceptInvitationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/standards': {
+      id: '/dashboard/standards'
+      path: '/standards'
+      fullPath: '/dashboard/standards'
+      preLoaderRoute: typeof DashboardStandardsRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/settings': {
       id: '/dashboard/settings'
       path: '/settings'
       fullPath: '/dashboard/settings'
       preLoaderRoute: typeof DashboardSettingsRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/services': {
+      id: '/dashboard/services'
+      path: '/services'
+      fullPath: '/dashboard/services'
+      preLoaderRoute: typeof DashboardServicesRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/methods': {
+      id: '/dashboard/methods'
+      path: '/methods'
+      fullPath: '/dashboard/methods'
+      preLoaderRoute: typeof DashboardMethodsRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/jobs': {
+      id: '/dashboard/jobs'
+      path: '/jobs'
+      fullPath: '/dashboard/jobs'
+      preLoaderRoute: typeof DashboardJobsRouteRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/clients': {
@@ -643,31 +711,31 @@ declare module '@tanstack/react-router' {
     }
     '/dashboard/standards/': {
       id: '/dashboard/standards/'
-      path: '/standards'
-      fullPath: '/dashboard/standards'
+      path: '/'
+      fullPath: '/dashboard/standards/'
       preLoaderRoute: typeof DashboardStandardsIndexRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardStandardsRouteRoute
     }
     '/dashboard/services/': {
       id: '/dashboard/services/'
-      path: '/services'
-      fullPath: '/dashboard/services'
+      path: '/'
+      fullPath: '/dashboard/services/'
       preLoaderRoute: typeof DashboardServicesIndexRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardServicesRouteRoute
     }
     '/dashboard/methods/': {
       id: '/dashboard/methods/'
-      path: '/methods'
-      fullPath: '/dashboard/methods'
+      path: '/'
+      fullPath: '/dashboard/methods/'
       preLoaderRoute: typeof DashboardMethodsIndexRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardMethodsRouteRoute
     }
     '/dashboard/jobs/': {
       id: '/dashboard/jobs/'
-      path: '/jobs'
-      fullPath: '/dashboard/jobs'
+      path: '/'
+      fullPath: '/dashboard/jobs/'
       preLoaderRoute: typeof DashboardJobsIndexRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardJobsRouteRoute
     }
     '/dashboard/clients/': {
       id: '/dashboard/clients/'
@@ -685,10 +753,10 @@ declare module '@tanstack/react-router' {
     }
     '/dashboard/standards/new': {
       id: '/dashboard/standards/new'
-      path: '/standards/new'
+      path: '/new'
       fullPath: '/dashboard/standards/new'
       preLoaderRoute: typeof DashboardStandardsNewRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardStandardsRouteRoute
     }
     '/dashboard/settings/security': {
       id: '/dashboard/settings/security'
@@ -748,24 +816,24 @@ declare module '@tanstack/react-router' {
     }
     '/dashboard/services/new': {
       id: '/dashboard/services/new'
-      path: '/services/new'
+      path: '/new'
       fullPath: '/dashboard/services/new'
       preLoaderRoute: typeof DashboardServicesNewRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardServicesRouteRoute
     }
     '/dashboard/methods/new': {
       id: '/dashboard/methods/new'
-      path: '/methods/new'
+      path: '/new'
       fullPath: '/dashboard/methods/new'
       preLoaderRoute: typeof DashboardMethodsNewRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardMethodsRouteRoute
     }
     '/dashboard/jobs/new': {
       id: '/dashboard/jobs/new'
-      path: '/jobs/new'
+      path: '/new'
       fullPath: '/dashboard/jobs/new'
       preLoaderRoute: typeof DashboardJobsNewRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardJobsRouteRoute
     }
     '/dashboard/clients/new': {
       id: '/dashboard/clients/new'
@@ -797,17 +865,17 @@ declare module '@tanstack/react-router' {
     }
     '/dashboard/methods/$id/': {
       id: '/dashboard/methods/$id/'
-      path: '/methods/$id'
+      path: '/$id'
       fullPath: '/dashboard/methods/$id'
       preLoaderRoute: typeof DashboardMethodsIdIndexRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardMethodsRouteRoute
     }
     '/dashboard/jobs/$id/': {
       id: '/dashboard/jobs/$id/'
-      path: '/jobs/$id'
+      path: '/$id'
       fullPath: '/dashboard/jobs/$id'
       preLoaderRoute: typeof DashboardJobsIdIndexRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardJobsRouteRoute
     }
     '/dashboard/clients/$id/': {
       id: '/dashboard/clients/$id/'
@@ -825,31 +893,31 @@ declare module '@tanstack/react-router' {
     }
     '/dashboard/standards/$id/edit': {
       id: '/dashboard/standards/$id/edit'
-      path: '/standards/$id/edit'
+      path: '/$id/edit'
       fullPath: '/dashboard/standards/$id/edit'
       preLoaderRoute: typeof DashboardStandardsIdEditRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardStandardsRouteRoute
     }
     '/dashboard/services/$id/edit': {
       id: '/dashboard/services/$id/edit'
-      path: '/services/$id/edit'
+      path: '/$id/edit'
       fullPath: '/dashboard/services/$id/edit'
       preLoaderRoute: typeof DashboardServicesIdEditRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardServicesRouteRoute
     }
     '/dashboard/methods/$id/edit': {
       id: '/dashboard/methods/$id/edit'
-      path: '/methods/$id/edit'
+      path: '/$id/edit'
       fullPath: '/dashboard/methods/$id/edit'
       preLoaderRoute: typeof DashboardMethodsIdEditRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardMethodsRouteRoute
     }
     '/dashboard/jobs/$id/execute': {
       id: '/dashboard/jobs/$id/execute'
-      path: '/jobs/$id/execute'
+      path: '/$id/execute'
       fullPath: '/dashboard/jobs/$id/execute'
       preLoaderRoute: typeof DashboardJobsIdExecuteRouteImport
-      parentRoute: typeof DashboardRouteRoute
+      parentRoute: typeof DashboardJobsRouteRoute
     }
     '/dashboard/clients/$id/users': {
       id: '/dashboard/clients/$id/users'
@@ -968,6 +1036,60 @@ const DashboardClientsRouteRouteWithChildren =
     DashboardClientsRouteRouteChildren,
   )
 
+interface DashboardJobsRouteRouteChildren {
+  DashboardJobsNewRoute: typeof DashboardJobsNewRoute
+  DashboardJobsIndexRoute: typeof DashboardJobsIndexRoute
+  DashboardJobsIdExecuteRoute: typeof DashboardJobsIdExecuteRoute
+  DashboardJobsIdIndexRoute: typeof DashboardJobsIdIndexRoute
+}
+
+const DashboardJobsRouteRouteChildren: DashboardJobsRouteRouteChildren = {
+  DashboardJobsNewRoute: DashboardJobsNewRoute,
+  DashboardJobsIndexRoute: DashboardJobsIndexRoute,
+  DashboardJobsIdExecuteRoute: DashboardJobsIdExecuteRoute,
+  DashboardJobsIdIndexRoute: DashboardJobsIdIndexRoute,
+}
+
+const DashboardJobsRouteRouteWithChildren =
+  DashboardJobsRouteRoute._addFileChildren(DashboardJobsRouteRouteChildren)
+
+interface DashboardMethodsRouteRouteChildren {
+  DashboardMethodsNewRoute: typeof DashboardMethodsNewRoute
+  DashboardMethodsIndexRoute: typeof DashboardMethodsIndexRoute
+  DashboardMethodsIdEditRoute: typeof DashboardMethodsIdEditRoute
+  DashboardMethodsIdIndexRoute: typeof DashboardMethodsIdIndexRoute
+}
+
+const DashboardMethodsRouteRouteChildren: DashboardMethodsRouteRouteChildren = {
+  DashboardMethodsNewRoute: DashboardMethodsNewRoute,
+  DashboardMethodsIndexRoute: DashboardMethodsIndexRoute,
+  DashboardMethodsIdEditRoute: DashboardMethodsIdEditRoute,
+  DashboardMethodsIdIndexRoute: DashboardMethodsIdIndexRoute,
+}
+
+const DashboardMethodsRouteRouteWithChildren =
+  DashboardMethodsRouteRoute._addFileChildren(
+    DashboardMethodsRouteRouteChildren,
+  )
+
+interface DashboardServicesRouteRouteChildren {
+  DashboardServicesNewRoute: typeof DashboardServicesNewRoute
+  DashboardServicesIndexRoute: typeof DashboardServicesIndexRoute
+  DashboardServicesIdEditRoute: typeof DashboardServicesIdEditRoute
+}
+
+const DashboardServicesRouteRouteChildren: DashboardServicesRouteRouteChildren =
+  {
+    DashboardServicesNewRoute: DashboardServicesNewRoute,
+    DashboardServicesIndexRoute: DashboardServicesIndexRoute,
+    DashboardServicesIdEditRoute: DashboardServicesIdEditRoute,
+  }
+
+const DashboardServicesRouteRouteWithChildren =
+  DashboardServicesRouteRoute._addFileChildren(
+    DashboardServicesRouteRouteChildren,
+  )
+
 interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsAppearanceRoute: typeof DashboardSettingsAppearanceRoute
   DashboardSettingsAuthenticationRoute: typeof DashboardSettingsAuthenticationRoute
@@ -996,46 +1118,44 @@ const DashboardSettingsRouteRouteWithChildren =
     DashboardSettingsRouteRouteChildren,
   )
 
+interface DashboardStandardsRouteRouteChildren {
+  DashboardStandardsNewRoute: typeof DashboardStandardsNewRoute
+  DashboardStandardsIndexRoute: typeof DashboardStandardsIndexRoute
+  DashboardStandardsIdEditRoute: typeof DashboardStandardsIdEditRoute
+}
+
+const DashboardStandardsRouteRouteChildren: DashboardStandardsRouteRouteChildren =
+  {
+    DashboardStandardsNewRoute: DashboardStandardsNewRoute,
+    DashboardStandardsIndexRoute: DashboardStandardsIndexRoute,
+    DashboardStandardsIdEditRoute: DashboardStandardsIdEditRoute,
+  }
+
+const DashboardStandardsRouteRouteWithChildren =
+  DashboardStandardsRouteRoute._addFileChildren(
+    DashboardStandardsRouteRouteChildren,
+  )
+
 interface DashboardRouteRouteChildren {
   DashboardAssetsRouteRoute: typeof DashboardAssetsRouteRouteWithChildren
   DashboardClientsRouteRoute: typeof DashboardClientsRouteRouteWithChildren
+  DashboardJobsRouteRoute: typeof DashboardJobsRouteRouteWithChildren
+  DashboardMethodsRouteRoute: typeof DashboardMethodsRouteRouteWithChildren
+  DashboardServicesRouteRoute: typeof DashboardServicesRouteRouteWithChildren
   DashboardSettingsRouteRoute: typeof DashboardSettingsRouteRouteWithChildren
+  DashboardStandardsRouteRoute: typeof DashboardStandardsRouteRouteWithChildren
   DashboardIndexRoute: typeof DashboardIndexRoute
-  DashboardJobsNewRoute: typeof DashboardJobsNewRoute
-  DashboardMethodsNewRoute: typeof DashboardMethodsNewRoute
-  DashboardServicesNewRoute: typeof DashboardServicesNewRoute
-  DashboardStandardsNewRoute: typeof DashboardStandardsNewRoute
-  DashboardJobsIndexRoute: typeof DashboardJobsIndexRoute
-  DashboardMethodsIndexRoute: typeof DashboardMethodsIndexRoute
-  DashboardServicesIndexRoute: typeof DashboardServicesIndexRoute
-  DashboardStandardsIndexRoute: typeof DashboardStandardsIndexRoute
-  DashboardJobsIdExecuteRoute: typeof DashboardJobsIdExecuteRoute
-  DashboardMethodsIdEditRoute: typeof DashboardMethodsIdEditRoute
-  DashboardServicesIdEditRoute: typeof DashboardServicesIdEditRoute
-  DashboardStandardsIdEditRoute: typeof DashboardStandardsIdEditRoute
-  DashboardJobsIdIndexRoute: typeof DashboardJobsIdIndexRoute
-  DashboardMethodsIdIndexRoute: typeof DashboardMethodsIdIndexRoute
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardAssetsRouteRoute: DashboardAssetsRouteRouteWithChildren,
   DashboardClientsRouteRoute: DashboardClientsRouteRouteWithChildren,
+  DashboardJobsRouteRoute: DashboardJobsRouteRouteWithChildren,
+  DashboardMethodsRouteRoute: DashboardMethodsRouteRouteWithChildren,
+  DashboardServicesRouteRoute: DashboardServicesRouteRouteWithChildren,
   DashboardSettingsRouteRoute: DashboardSettingsRouteRouteWithChildren,
+  DashboardStandardsRouteRoute: DashboardStandardsRouteRouteWithChildren,
   DashboardIndexRoute: DashboardIndexRoute,
-  DashboardJobsNewRoute: DashboardJobsNewRoute,
-  DashboardMethodsNewRoute: DashboardMethodsNewRoute,
-  DashboardServicesNewRoute: DashboardServicesNewRoute,
-  DashboardStandardsNewRoute: DashboardStandardsNewRoute,
-  DashboardJobsIndexRoute: DashboardJobsIndexRoute,
-  DashboardMethodsIndexRoute: DashboardMethodsIndexRoute,
-  DashboardServicesIndexRoute: DashboardServicesIndexRoute,
-  DashboardStandardsIndexRoute: DashboardStandardsIndexRoute,
-  DashboardJobsIdExecuteRoute: DashboardJobsIdExecuteRoute,
-  DashboardMethodsIdEditRoute: DashboardMethodsIdEditRoute,
-  DashboardServicesIdEditRoute: DashboardServicesIdEditRoute,
-  DashboardStandardsIdEditRoute: DashboardStandardsIdEditRoute,
-  DashboardJobsIdIndexRoute: DashboardJobsIdIndexRoute,
-  DashboardMethodsIdIndexRoute: DashboardMethodsIdIndexRoute,
 }
 
 const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
