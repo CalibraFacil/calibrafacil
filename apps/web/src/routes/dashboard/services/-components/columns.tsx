@@ -6,6 +6,7 @@ import {
     CheckmarkCircle02Icon,
     Edit02Icon,
     MoreHorizontalIcon,
+    ViewIcon,
 } from "@hugeicons/core-free-icons"
 
 import { Badge } from "@/components/ui/badge"
@@ -66,7 +67,7 @@ export const servicesColumns: ColumnDef<Service>[] = [
         cell: ({ row }) => (
             <div>
                 <Link
-                    to="/dashboard/services/$id/edit"
+                    to="/dashboard/services/$id"
                     params={{ id: String(row.original.id) }}
                     className="font-medium hover:underline"
                 >
@@ -138,6 +139,19 @@ export const servicesColumns: ColumnDef<Service>[] = [
                         <HugeiconsIcon icon={MoreHorizontalIcon} className="h-4 w-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                            render={(props) => (
+                                <Link
+                                    {...props}
+                                    to="/dashboard/services/$id"
+                                    params={{ id: String(row.original.id) }}
+                                    className={cn(props.className, "w-full flex items-center")}
+                                >
+                                    <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
+                                    Visualizar
+                                </Link>
+                            )}
+                        />
                         <DropdownMenuItem
                             render={(props) => (
                                 <Link
