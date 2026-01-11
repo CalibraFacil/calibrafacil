@@ -29,6 +29,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { requirePlanLimit } from "../middleware/tier-guard";
 import { eq, and, ilike, desc, count, lte, gte, inArray } from "drizzle-orm";
 import {
   createR2Client,
@@ -343,6 +344,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ calibration: ["create"] }),
+    requirePlanLimit("certificates"), // Check plan limit before creating job
     zValidator("json", CreateJobSchema),
     async (c) => {
       const memberData = c.get("member");
