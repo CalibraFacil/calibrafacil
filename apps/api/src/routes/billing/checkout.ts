@@ -1,0 +1,581 @@
+import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
+import { db } from "@calibra-facil/db";
+import {
+  subscription,
+  paymentHistory,
+  organization,
+} from "@calibra-facil/db/schema";
+import { eq } from "drizzle-orm";
+import {
+  withLabPermission,
+  type AuthVariables,
+} from "../../middleware/permission";
+import {
+  getPlan,
+  getPlanPrice,
+  type BillingCycle,
+} from "@calibra-facil/shared";
+import {
+  createCustomer,
+  findCustomerByExternalReference,
+  createSubscription,
+  createCreditCardSubscription,
+  getSubscriptionPayments,
+  getPaymentPixQrCode,
+  getPaymentBoletoLine,
+  formatAsaasDate,
+  calculatePeriodEnd,
+} from "../../services/asaas";
+
+/* =============================================================================
+ * VALIDATION
+ * ========================================================================== */
+
+const CreditCardSchema = z.object({
+  holderName: z.string().min(3),
+  number: z.string().min(13).max(19),
+  expiryMonth: z.string().length(2),
+  expiryYear: z.string().length(4),
+  ccv: z.string().min(3).max(4),
+});
+
+const CardHolderInfoSchema = z.object({
+  name: z.string().min(3),
+  email: z.string().email(),
+  cpfCnpj: z.string().min(11).max(14),
+  postalCode: z.string().min(8).max(9),
+  addressNumber: z.string().min(1),
+  addressComplement: z.string().optional(),
+  phone: z.string().optional(),
+  mobilePhone: z.string().optional(),
+});
+
+const CreditCardCheckoutSchema = z.object({
+  planId: z.enum(["STANDARD", "PROFESSIONAL", "ENTERPRISE"]),
+  cycle: z.enum(["MONTHLY", "YEARLY"]),
+  creditCard: CreditCardSchema,
+  cardHolder: CardHolderInfoSchema,
+});
+
+const PixBoletoCheckoutSchema = z.object({
+  planId: z.enum(["STANDARD", "PROFESSIONAL", "ENTERPRISE"]),
+  cycle: z.enum(["MONTHLY", "YEARLY"]),
+  customerInfo: z
+    .object({
+      name: z.string().min(3),
+      email: z.string().email().optional(),
+      cpfCnpj: z.string().min(11).max(14),
+      phone: z.string().optional(),
+    })
+    .optional(),
+});
+
+/* =============================================================================
+ * ROUTER
+ * ========================================================================== */
+
+export const checkoutRouter = new Hono<{ Variables: AuthVariables }>();
+
+/* =============================================================================
+ * CREDIT CARD
+ * ========================================================================== */
+
+checkoutRouter.post(
+  "/credit-card",
+  ...withLabPermission({ billing: ["update"] }),
+  zValidator("json", CreditCardCheckoutSchema),
+  async (c) => {
+    const input = c.req.valid("json");
+    const member = c.get("member");
+
+    const org = await db.query.organization.findFirst({
+      where: eq(organization.id, member.organizationId),
+    });
+    if (!org) return c.json({ error: "Organização não encontrada" }, 404);
+
+    const existingSub = await db.query.subscription.findFirst({
+      where: eq(subscription.organizationId, member.organizationId),
+    });
+
+    if (existingSub?.status === "ACTIVE") {
+      return c.json({ error: "Já existe assinatura ativa" }, 400);
+    }
+
+    const asaasCustomerId = await ensureAsaasCustomer(org.id, {
+      name: org.name,
+      cpfCnpj: org.cnpj!,
+      email: org.email ?? input.cardHolder.email,
+      phone: org.phone ?? input.cardHolder.mobilePhone,
+    });
+
+    const price = getPlanPrice(input.planId, input.cycle);
+    if (!price) return c.json({ error: "Plano inválido" }, 400);
+
+    const now = new Date();
+    const plan = getPlan(input.planId);
+
+    /* ASAAS API (creates subscription + charges CC) */
+    const asaasSub = await createCreditCardSubscription({
+      customer: asaasCustomerId,
+      billingType: "CREDIT_CARD",
+      value: price / 100,
+      nextDueDate: formatAsaasDate(now),
+      cycle: input.cycle,
+      description: `CalibraFacil - ${plan.name}`,
+      externalReference: member.organizationId,
+      creditCard: input.creditCard,
+      creditCardHolderInfo: input.cardHolder,
+    });
+
+    /* TRANSACTION: Save subscription + update organization */
+    const subData = {
+      organizationId: member.organizationId,
+      planId: input.planId,
+      billingCycle: input.cycle as BillingCycle,
+      status: "TRIAL" as const, // Will be promoted to ACTIVE by webhook on payment confirmation
+      asaasSubscriptionId: asaasSub.id,
+      asaasCustomerId,
+      currentPeriodStart: now,
+      currentPeriodEnd: calculatePeriodEnd(now, input.cycle),
+      nextBillingDate: calculatePeriodEnd(now, input.cycle),
+    };
+
+    const newSub = await db.transaction(async (tx) => {
+      const [sub] = await tx
+        .insert(subscription)
+        .values(subData)
+        .onConflictDoUpdate({
+          target: subscription.organizationId,
+          set: subData,
+        })
+        .returning();
+
+      if (!sub) throw new Error("Failed to create subscription");
+
+      await tx
+        .update(organization)
+        .set({ asaasCustomerId })
+        .where(eq(organization.id, member.organizationId));
+
+      return sub;
+    });
+
+    return c.json({ subscription: newSub }, 201);
+  },
+);
+
+/* =============================================================================
+ * PIX
+ * ========================================================================== */
+
+checkoutRouter.post(
+  "/pix",
+  ...withLabPermission({ billing: ["update"] }),
+  zValidator("json", PixBoletoCheckoutSchema),
+  async (c) => {
+    const input = c.req.valid("json");
+    const member = c.get("member");
+
+    const org = await db.query.organization.findFirst({
+      where: eq(organization.id, member.organizationId),
+    });
+    if (!org) return c.json({ error: "Organização não encontrada" }, 404);
+
+    const existingSub = await db.query.subscription.findFirst({
+      where: eq(subscription.organizationId, member.organizationId),
+    });
+
+    if (existingSub?.status === "ACTIVE") {
+      return c.json({ error: "Já existe assinatura ativa" }, 400);
+    }
+
+    const customerInfo = input.customerInfo ?? {
+      name: org.name,
+      cpfCnpj: org.cnpj!,
+      email: org.email ?? undefined,
+      phone: org.phone ?? undefined,
+    };
+
+    const asaasCustomerId = await ensureAsaasCustomer(org.id, customerInfo);
+
+    const price = getPlanPrice(input.planId, input.cycle);
+    if (!price) return c.json({ error: "Plano inválido" }, 400);
+
+    const now = new Date();
+    const plan = getPlan(input.planId);
+
+    // Use SELECT FOR UPDATE to prevent duplicate Asaas subscriptions
+    const result = await db.transaction(async (tx) => {
+      // Upsert local subscription first
+      const subData = {
+        organizationId: member.organizationId,
+        planId: input.planId,
+        billingCycle: input.cycle as BillingCycle,
+        status: "TRIAL" as const,
+        asaasCustomerId,
+        currentPeriodStart: now,
+        currentPeriodEnd: calculatePeriodEnd(now, input.cycle),
+        nextBillingDate: now,
+      };
+
+      const [localSub] = await tx
+        .insert(subscription)
+        .values(subData)
+        .onConflictDoUpdate({
+          target: subscription.organizationId,
+          set: subData,
+        })
+        .returning();
+
+      if (!localSub) throw new Error("Failed to create subscription");
+
+      // Lock the row and re-read to check for asaasSubscriptionId
+      const [lockedSub] = await tx
+        .select()
+        .from(subscription)
+        .where(eq(subscription.id, localSub.id))
+        .for("update");
+
+      if (!lockedSub) throw new Error("Failed to lock subscription");
+
+      let asaasSubscriptionId = lockedSub.asaasSubscriptionId;
+
+      // Create Asaas subscription if needed (while holding lock)
+      if (!asaasSubscriptionId) {
+        const asaasSub = await createSubscription({
+          customer: asaasCustomerId,
+          billingType: "PIX",
+          value: price / 100,
+          nextDueDate: formatAsaasDate(now),
+          cycle: input.cycle,
+          description: `CalibraFacil - ${plan.name}`,
+          externalReference: member.organizationId,
+        });
+
+        asaasSubscriptionId = asaasSub.id;
+
+        await tx
+          .update(subscription)
+          .set({ asaasSubscriptionId })
+          .where(eq(subscription.id, localSub.id));
+      }
+
+      // Fetch payment info (while holding lock)
+      const payments = await getSubscriptionPayments(asaasSubscriptionId, {
+        limit: 1,
+      });
+      const payment = payments.data?.[0];
+
+      let pix = null;
+
+      if (payment) {
+        try {
+          const qr = await getPaymentPixQrCode(payment.id);
+          pix = {
+            qrCodeImage: `data:image/png;base64,${qr.encodedImage}`,
+            payload: qr.payload,
+            expirationDate: qr.expirationDate,
+          };
+        } catch {}
+
+        // Insert payment history
+        await tx
+          .insert(paymentHistory)
+          .values({
+            subscriptionId: localSub.id,
+            organizationId: member.organizationId,
+            asaasPaymentId: payment.id,
+            amount: price,
+            currency: "BRL",
+            paymentMethod: "PIX",
+            status: "PENDING",
+            source: "CHECKOUT",
+            dueDate: new Date(payment.dueDate),
+            asaasPixQrCodeUrl: pix?.qrCodeImage,
+            asaasPixPayload: pix?.payload,
+          })
+          .onConflictDoNothing({ target: paymentHistory.asaasPaymentId });
+      }
+
+      return {
+        subscriptionId: localSub.id,
+        asaasSubscriptionId,
+        pix,
+        paymentId: payment?.id,
+      };
+    });
+
+    return c.json(
+      {
+        ...result,
+        status: "PENDING",
+      },
+      201,
+    );
+  },
+);
+
+/* =============================================================================
+ * BOLETO (MESMA LÓGICA DO PIX)
+ * ========================================================================== */
+
+checkoutRouter.post(
+  "/boleto",
+  ...withLabPermission({ billing: ["update"] }),
+  zValidator("json", PixBoletoCheckoutSchema),
+  async (c) => {
+    const input = c.req.valid("json");
+    const member = c.get("member");
+
+    const org = await db.query.organization.findFirst({
+      where: eq(organization.id, member.organizationId),
+    });
+    if (!org) return c.json({ error: "Organização não encontrada" }, 404);
+
+    const existingSub = await db.query.subscription.findFirst({
+      where: eq(subscription.organizationId, member.organizationId),
+    });
+
+    if (existingSub?.status === "ACTIVE") {
+      return c.json({ error: "Já existe assinatura ativa" }, 400);
+    }
+
+    const price = getPlanPrice(input.planId, input.cycle);
+    if (!price) return c.json({ error: "Plano inválido" }, 400);
+
+    const asaasCustomerId = await ensureAsaasCustomer(org.id, {
+      name: org.name,
+      cpfCnpj: org.cnpj!,
+      email: org.email ?? undefined,
+      phone: org.phone ?? undefined,
+    });
+
+    const now = new Date();
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 3);
+    const plan = getPlan(input.planId);
+
+    // Use SELECT FOR UPDATE to prevent duplicate Asaas subscriptions
+    const result = await db.transaction(async (tx) => {
+      // Upsert local subscription first
+      const subData = {
+        organizationId: member.organizationId,
+        planId: input.planId,
+        billingCycle: input.cycle as BillingCycle,
+        status: "TRIAL" as const,
+        asaasCustomerId,
+        currentPeriodStart: now,
+        currentPeriodEnd: calculatePeriodEnd(now, input.cycle),
+        nextBillingDate: dueDate,
+      };
+
+      const [localSub] = await tx
+        .insert(subscription)
+        .values(subData)
+        .onConflictDoUpdate({
+          target: subscription.organizationId,
+          set: subData,
+        })
+        .returning();
+
+      if (!localSub) throw new Error("Failed to create subscription");
+
+      // Lock the row and re-read to check for asaasSubscriptionId
+      const [lockedSub] = await tx
+        .select()
+        .from(subscription)
+        .where(eq(subscription.id, localSub.id))
+        .for("update");
+
+      if (!lockedSub) throw new Error("Failed to lock subscription");
+
+      let asaasSubscriptionId = lockedSub.asaasSubscriptionId;
+
+      // Create Asaas subscription if needed (while holding lock)
+      if (!asaasSubscriptionId) {
+        const asaasSub = await createSubscription({
+          customer: asaasCustomerId,
+          billingType: "BOLETO",
+          value: price / 100,
+          nextDueDate: formatAsaasDate(dueDate),
+          cycle: input.cycle,
+          description: `CalibraFacil - ${plan.name}`,
+          externalReference: member.organizationId,
+        });
+
+        asaasSubscriptionId = asaasSub.id;
+
+        await tx
+          .update(subscription)
+          .set({ asaasSubscriptionId })
+          .where(eq(subscription.id, localSub.id));
+      }
+
+      // Fetch payment info (while holding lock)
+      const payments = await getSubscriptionPayments(asaasSubscriptionId, {
+        limit: 1,
+      });
+      const payment = payments.data?.[0];
+
+      let boleto = null;
+
+      if (payment) {
+        const line = await getPaymentBoletoLine(payment.id);
+        boleto = {
+          bankSlipUrl: payment.bankSlipUrl,
+          barCode: line.barCode,
+          identificationField: line.identificationField,
+          dueDate: payment.dueDate,
+        };
+
+        // Insert payment history
+        await tx
+          .insert(paymentHistory)
+          .values({
+            subscriptionId: localSub.id,
+            organizationId: member.organizationId,
+            asaasPaymentId: payment.id,
+            amount: price,
+            currency: "BRL",
+            paymentMethod: "BOLETO",
+            status: "PENDING",
+            source: "CHECKOUT",
+            dueDate: new Date(payment.dueDate),
+            asaasBankSlipUrl: payment.bankSlipUrl,
+          })
+          .onConflictDoNothing({ target: paymentHistory.asaasPaymentId });
+      }
+
+      return {
+        subscriptionId: localSub.id,
+        boleto,
+        paymentId: payment?.id,
+      };
+    });
+
+    return c.json(
+      {
+        ...result,
+        status: "PENDING",
+      },
+      201,
+    );
+  },
+);
+
+/* =============================================================================
+ * STATUS - Poll for payment confirmation
+ * ========================================================================== */
+
+checkoutRouter.get(
+  "/status/:subscriptionId",
+  ...withLabPermission({ billing: ["read"] }),
+  async (c) => {
+    const subscriptionId = parseInt(c.req.param("subscriptionId"), 10);
+    const member = c.get("member");
+
+    if (isNaN(subscriptionId)) {
+      return c.json({ error: "Invalid subscription ID" }, 400);
+    }
+
+    // Get subscription
+    const sub = await db.query.subscription.findFirst({
+      where: eq(subscription.id, subscriptionId),
+    });
+
+    if (!sub) {
+      return c.json({ error: "Subscription not found" }, 404);
+    }
+
+    // Verify ownership
+    if (sub.organizationId !== member.organizationId) {
+      return c.json({ error: "Unauthorized" }, 403);
+    }
+
+    // Get latest payment for this subscription
+    const latestPayment = await db.query.paymentHistory.findFirst({
+      where: eq(paymentHistory.subscriptionId, subscriptionId),
+      orderBy: (p, { desc }) => [desc(p.createdAt)],
+    });
+
+    return c.json({
+      subscription: {
+        id: sub.id,
+        status: sub.status,
+        planId: sub.planId,
+        billingCycle: sub.billingCycle,
+      },
+      payment: latestPayment
+        ? {
+            id: latestPayment.id,
+            status: latestPayment.status,
+            source: latestPayment.source,
+            paidAt: latestPayment.paidAt,
+          }
+        : null,
+      // Convenience flags for frontend
+      isActive: sub.status === "ACTIVE",
+      isPaid: latestPayment?.status === "RECEIVED",
+      isConfirmedByWebhook: latestPayment?.source === "WEBHOOK",
+    });
+  },
+);
+
+/* =============================================================================
+ * HELPERS
+ * ========================================================================== */
+
+async function ensureAsaasCustomer(
+  orgId: string,
+  customer: {
+    name: string;
+    cpfCnpj: string;
+    email?: string;
+    phone?: string;
+  },
+): Promise<string> {
+  // Use SELECT FOR UPDATE to lock the organization row and prevent race conditions.
+  // This ensures only one request at a time can create a customer for this org.
+  return await db.transaction(async (tx) => {
+    // Lock the row - other requests will wait here
+    const [lockedOrg] = await tx
+      .select({ asaasCustomerId: organization.asaasCustomerId })
+      .from(organization)
+      .where(eq(organization.id, orgId))
+      .for("update");
+
+    // Fast path: another request already created the customer
+    if (lockedOrg?.asaasCustomerId) {
+      return lockedOrg.asaasCustomerId;
+    }
+
+    // Check if customer exists in Asaas by external reference
+    const existing = await findCustomerByExternalReference(orgId);
+    if (existing) {
+      await tx
+        .update(organization)
+        .set({ asaasCustomerId: existing.id })
+        .where(eq(organization.id, orgId));
+      return existing.id;
+    }
+
+    // No customer exists - create one
+    const created = await createCustomer({
+      name: customer.name,
+      cpfCnpj: customer.cpfCnpj.replace(/\D/g, ""),
+      email: customer.email,
+      phone: customer.phone,
+      externalReference: orgId,
+    });
+
+    // Save to org
+    await tx
+      .update(organization)
+      .set({ asaasCustomerId: created.id })
+      .where(eq(organization.id, orgId));
+
+    return created.id;
+  });
+}
