@@ -9,6 +9,37 @@ const ASAAS_URLS: Record<AsaasEnvironment, string> = {
   production: "https://api.asaas.com/v3",
 };
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const INITIAL_DELAY_MS = 500;
+const MAX_DELAY_MS = 5000;
+
+// HTTP status codes that should trigger a retry
+const RETRYABLE_STATUS_CODES = new Set([
+  408, // Request Timeout
+  429, // Too Many Requests
+  500, // Internal Server Error
+  502, // Bad Gateway
+  503, // Service Unavailable
+  504, // Gateway Timeout
+]);
+
+/**
+ * Sleep for a given number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Calculate delay with exponential backoff and jitter
+ */
+function calculateBackoff(attempt: number): number {
+  const exponentialDelay = INITIAL_DELAY_MS * Math.pow(2, attempt);
+  const jitter = Math.random() * 0.3 * exponentialDelay; // 0-30% jitter
+  return Math.min(exponentialDelay + jitter, MAX_DELAY_MS);
+}
+
 /**
  * Custom error class for Asaas API errors
  */
@@ -42,7 +73,7 @@ export class AsaasClient {
   }
 
   /**
-   * Make an HTTP request to the Asaas API
+   * Make an HTTP request to the Asaas API with automatic retry on transient failures
    */
   async request<T>(
     method: "GET" | "POST" | "PUT" | "DELETE",
@@ -65,41 +96,84 @@ export class AsaasClient {
       }
     }
 
-    const response = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "CalibraFacil/1.0 (+https://calibrafacil.com)",
-        access_token: this.apiKey,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    let lastError: Error | null = null;
 
-    // Handle non-OK responses
-    if (!response.ok) {
-      let errorData: AsaasErrorResponse;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        errorData = await response.json();
-      } catch {
-        errorData = {
-          errors: [
-            {
-              code: `HTTP_${response.status}`,
-              description: response.statusText || "Erro de conexão com Asaas",
-            },
-          ],
-        };
+        const response = await fetch(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": "CalibraFacil/1.0 (+https://calibrafacil.com)",
+            access_token: this.apiKey,
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+
+        // Handle non-OK responses
+        if (!response.ok) {
+          // Check if this is a retryable error
+          if (
+            RETRYABLE_STATUS_CODES.has(response.status) &&
+            attempt < MAX_RETRIES
+          ) {
+            const delay = calculateBackoff(attempt);
+            console.warn(
+              `Asaas API returned ${response.status}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+            );
+            await sleep(delay);
+            continue;
+          }
+
+          let errorData: AsaasErrorResponse;
+          try {
+            errorData = await response.json();
+          } catch {
+            errorData = {
+              errors: [
+                {
+                  code: `HTTP_${response.status}`,
+                  description:
+                    response.statusText || "Erro de conexão com Asaas",
+                },
+              ],
+            };
+          }
+          throw new AsaasError(errorData);
+        }
+
+        // Handle empty responses (e.g., DELETE)
+        const text = await response.text();
+        if (!text) {
+          return {} as T;
+        }
+
+        return JSON.parse(text) as T;
+      } catch (error) {
+        lastError = error as Error;
+
+        // Don't retry AsaasError (non-retryable API errors like validation)
+        if (error instanceof AsaasError) {
+          throw error;
+        }
+
+        // Retry on network errors (TypeError from fetch)
+        if (attempt < MAX_RETRIES) {
+          const delay = calculateBackoff(attempt);
+          console.warn(
+            `Asaas API request failed: ${(error as Error).message}, retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+          );
+          await sleep(delay);
+          continue;
+        }
       }
-      throw new AsaasError(errorData);
     }
 
-    // Handle empty responses (e.g., DELETE)
-    const text = await response.text();
-    if (!text) {
-      return {} as T;
-    }
-
-    return JSON.parse(text) as T;
+    // All retries exhausted
+    throw (
+      lastError ||
+      new Error("Asaas API request failed after maximum retries")
+    );
   }
 
   /**

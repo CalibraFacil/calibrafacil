@@ -367,16 +367,27 @@ checkoutRouter.post(
       const payment = payments.data?.[0];
 
       let pix = null;
+      let qrCodeError = false;
 
       if (payment) {
-        const qr = await getPaymentPixQrCode(payment.id);
-        pix = {
-          qrCodeImage: `data:image/png;base64,${qr.encodedImage}`,
-          payload: qr.payload,
-          expirationDate: qr.expirationDate,
-        };
+        // Try to fetch QR code, but don't fail the transaction if it fails
+        try {
+          const qr = await getPaymentPixQrCode(payment.id);
+          pix = {
+            qrCodeImage: `data:image/png;base64,${qr.encodedImage}`,
+            payload: qr.payload,
+            expirationDate: qr.expirationDate,
+          };
+        } catch (error) {
+          console.error(
+            `Failed to fetch PIX QR code for payment ${payment.id}:`,
+            error,
+          );
+          qrCodeError = true;
+          // Continue without QR code - user can refresh to get it
+        }
 
-        // Insert payment history
+        // Insert payment history (with or without QR code data)
         await tx
           .insert(paymentHistory)
           .values({
@@ -400,6 +411,7 @@ checkoutRouter.post(
         asaasSubscriptionId,
         pix,
         paymentId: payment?.id,
+        qrCodeError,
       };
     });
 
@@ -407,6 +419,10 @@ checkoutRouter.post(
       {
         ...result,
         status: "PENDING",
+        // Let frontend know if QR code needs to be fetched again
+        ...(result.qrCodeError && {
+          warning: "QR Code indisponível no momento. Atualize a página para tentar novamente.",
+        }),
       },
       201,
     );
@@ -526,17 +542,36 @@ checkoutRouter.post(
       const payment = payments.data?.[0];
 
       let boleto = null;
+      let boletoError = false;
 
       if (payment) {
-        const line = await getPaymentBoletoLine(payment.id);
-        boleto = {
-          bankSlipUrl: payment.bankSlipUrl,
-          barCode: line.barCode,
-          identificationField: line.identificationField,
-          dueDate: payment.dueDate,
-        };
+        // Try to fetch boleto line, but don't fail the transaction if it fails
+        try {
+          const line = await getPaymentBoletoLine(payment.id);
+          boleto = {
+            bankSlipUrl: payment.bankSlipUrl,
+            barCode: line.barCode,
+            identificationField: line.identificationField,
+            dueDate: payment.dueDate,
+          };
+        } catch (error) {
+          console.error(
+            `Failed to fetch boleto line for payment ${payment.id}:`,
+            error,
+          );
+          boletoError = true;
+          // Still include bankSlipUrl if available
+          if (payment.bankSlipUrl) {
+            boleto = {
+              bankSlipUrl: payment.bankSlipUrl,
+              barCode: null,
+              identificationField: null,
+              dueDate: payment.dueDate,
+            };
+          }
+        }
 
-        // Insert payment history
+        // Insert payment history (with or without boleto line data)
         await tx
           .insert(paymentHistory)
           .values({
@@ -558,6 +593,7 @@ checkoutRouter.post(
         subscriptionId: localSub.id,
         boleto,
         paymentId: payment?.id,
+        boletoError,
       };
     });
 
@@ -565,6 +601,10 @@ checkoutRouter.post(
       {
         ...result,
         status: "PENDING",
+        // Let frontend know if boleto line needs to be fetched again
+        ...(result.boletoError && {
+          warning: "Linha digitável indisponível no momento. O boleto ainda pode ser acessado pelo link.",
+        }),
       },
       201,
     );

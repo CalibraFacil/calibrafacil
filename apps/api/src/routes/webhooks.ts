@@ -18,11 +18,54 @@ import { calculatePeriodEnd } from "../services/asaas";
 // WEBHOOK ROUTES - Handle Asaas webhook events
 // =============================================================================
 
+/**
+ * Verify the webhook request is from Asaas using the access token.
+ * The token is configured in Asaas webhook settings and sent in the
+ * `asaas-access-token` header.
+ */
+function verifyWebhookToken(request: Request): boolean {
+  const webhookToken = process.env.ASAAS_WEBHOOK_TOKEN;
+
+  // If no token configured, skip verification (not recommended for production)
+  if (!webhookToken) {
+    console.warn(
+      "ASAAS_WEBHOOK_TOKEN not configured - webhook verification disabled",
+    );
+    return true;
+  }
+
+  const receivedToken = request.headers.get("asaas-access-token");
+  if (!receivedToken) {
+    console.error("Webhook request missing asaas-access-token header");
+    return false;
+  }
+
+  // Constant-time comparison to prevent timing attacks
+  if (webhookToken.length !== receivedToken.length) {
+    return false;
+  }
+
+  let result = 0;
+  for (let i = 0; i < webhookToken.length; i++) {
+    result |= webhookToken.charCodeAt(i) ^ receivedToken.charCodeAt(i);
+  }
+
+  return result === 0;
+}
+
 export const webhooksRouter = new Hono()
   // =========================================================================
   // POST /asaas - Handle Asaas webhook events
   // =========================================================================
   .post("/asaas", async (c) => {
+    // =======================================================================
+    // STEP 0: Verify webhook authenticity
+    // =======================================================================
+    if (!verifyWebhookToken(c.req.raw)) {
+      console.error("Webhook authentication failed");
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
     let payload: AsaasWebhookPayload;
 
     try {
