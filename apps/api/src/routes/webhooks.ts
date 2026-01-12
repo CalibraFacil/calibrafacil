@@ -32,8 +32,7 @@ export const webhooksRouter = new Hono()
     }
 
     // Generate event ID (Asaas sends id in payload, or we generate one)
-    const eventId =
-      payload.id || `${payload.event}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const eventId = payload.id || crypto.randomUUID();
 
     // =======================================================================
     // STEP 1: Idempotency check - Store event first
@@ -149,15 +148,20 @@ async function handlePaymentCreated(payment: AsaasPayment) {
   });
 
   if (existingPayment) {
-    // Update existing payment (mark as WEBHOOK-confirmed)
+    // Update existing payment with authoritative webhook data
     await db
       .update(paymentHistory)
       .set({
         status: mapPaymentStatus(payment.status),
-        source: "WEBHOOK", // Overwrite CHECKOUT source with canonical WEBHOOK
+        source: "WEBHOOK",
+        amount: Math.round(payment.value * 100),
+        netAmount: payment.netValue ? Math.round(payment.netValue * 100) : null,
+        paymentMethod: mapBillingType(payment.billingType),
         dueDate: payment.dueDate ? new Date(payment.dueDate) : null,
         asaasInvoiceUrl: payment.invoiceUrl,
         asaasBankSlipUrl: payment.bankSlipUrl,
+        cardLast4: payment.creditCard?.creditCardNumber?.slice(-4),
+        cardBrand: payment.creditCard?.creditCardBrand,
       })
       .where(eq(paymentHistory.id, existingPayment.id));
   } else {
@@ -202,9 +206,13 @@ async function handlePaymentConfirmed(payment: AsaasPayment) {
 
   // If subscription was pending/trial, activate it
   if (sub.status === "TRIAL" || sub.status === "PAST_DUE") {
+    // Use existing period dates (set at creation) to stay in sync with Asaas
+    const periodStart =
+      sub.currentPeriodStart ||
+      new Date(payment.dueDate || payment.confirmedDate || Date.now());
     const cycle = sub.billingCycle || "MONTHLY";
-    const periodStart = new Date();
-    const periodEnd = calculatePeriodEnd(periodStart, cycle);
+    const periodEnd =
+      sub.currentPeriodEnd || calculatePeriodEnd(periodStart, cycle);
 
     await db
       .update(subscription)
@@ -316,9 +324,7 @@ function isUniqueConstraintError(error: unknown): boolean {
 /**
  * Map Asaas billing type to our PaymentMethod
  */
-function mapBillingType(
-  billingType: string
-): "CREDIT_CARD" | "PIX" | "BOLETO" {
+function mapBillingType(billingType: string): "CREDIT_CARD" | "PIX" | "BOLETO" {
   switch (billingType) {
     case "CREDIT_CARD":
       return "CREDIT_CARD";

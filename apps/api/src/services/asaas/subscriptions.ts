@@ -6,6 +6,8 @@ import type {
   AsaasPixQrCode,
   CreateSubscriptionInput,
   CreateCreditCardSubscriptionInput,
+  TokenizeCreditCardInput,
+  TokenizeCreditCardResponse,
 } from "./types";
 
 // =============================================================================
@@ -33,6 +35,19 @@ export async function createCreditCardSubscription(
 ): Promise<AsaasSubscription> {
   const client = getAsaasClient();
   return client.post<AsaasSubscription>("/subscriptions", input);
+}
+
+/**
+ * Tokenize a credit card for PCI-DSS compliance.
+ *
+ * This should be called from a dedicated endpoint that handles card data
+ * transiently. The returned token can then be used for subscriptions/payments.
+ */
+export async function tokenizeCreditCard(
+  input: TokenizeCreditCardInput
+): Promise<TokenizeCreditCardResponse> {
+  const client = getAsaasClient();
+  return client.post<TokenizeCreditCardResponse>("/creditCard/tokenize", input);
 }
 
 /**

@@ -325,11 +325,14 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-export const organizationRelations = relations(organization, ({ one, many }) => ({
-  members: many(member),
-  invitations: many(invitation),
-  subscription: one(subscription),
-}));
+export const organizationRelations = relations(
+  organization,
+  ({ one, many }) => ({
+    members: many(member),
+    invitations: many(invitation),
+    subscription: one(subscription),
+  }),
+);
 
 export const memberRelations = relations(member, ({ one }) => ({
   organization: one(organization, {
@@ -1023,7 +1026,6 @@ export type StandardSnapshot = {
   certifiedValues: CertifiedValue[] | null;
 };
 
-
 /**
  * Calibration Job table - The Work Order / Operational Record
  * ISO 17025:2017 Clause 7.7 - Ensuring Validity of Results
@@ -1351,7 +1353,7 @@ export const paymentHistory = pgTable(
     index("payment_subscription_id_idx").on(table.subscriptionId),
     index("payment_org_id_idx").on(table.organizationId),
     index("payment_status_idx").on(table.status),
-    index("payment_asaas_id_idx").on(table.asaasPaymentId),
+    uniqueIndex("payment_asaas_id_idx").on(table.asaasPaymentId),
   ],
 );
 

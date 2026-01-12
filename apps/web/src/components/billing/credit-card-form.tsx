@@ -52,10 +52,18 @@ export function CreditCardForm({
 
   const checkoutMutation = useMutation({
     mutationFn: async (data: CardFormData) => {
-      const response = await api.api.billing.checkout['credit-card'].$post({
+      const cardHolder = {
+        name: data.holderName,
+        cpfCnpj: data.cpfCnpj.replace(/\D/g, ''),
+        email: data.email,
+        phone: data.phone.replace(/\D/g, ''),
+        postalCode: data.postalCode.replace(/\D/g, ''),
+        addressNumber: data.addressNumber,
+      }
+
+      // Step 1: Tokenize card data (PCI-DSS compliant)
+      const tokenizeResponse = await api.api.billing.checkout.tokenize.$post({
         json: {
-          planId: planId as Exclude<PlanId, 'FREE'>,
-          cycle,
           creditCard: {
             holderName: data.holderName,
             number: data.number.replace(/\s/g, ''),
@@ -63,21 +71,34 @@ export function CreditCardForm({
             expiryYear: data.expiryYear,
             ccv: data.ccv,
           },
-          cardHolder: {
-            name: data.holderName,
-            cpfCnpj: data.cpfCnpj.replace(/\D/g, ''),
-            email: data.email,
-            phone: data.phone.replace(/\D/g, ''),
-            postalCode: data.postalCode.replace(/\D/g, ''),
-            addressNumber: data.addressNumber,
-          },
+          cardHolder,
+        },
+      })
+
+      if (!tokenizeResponse.ok) {
+        const error = await tokenizeResponse.json()
+        throw new Error(
+          (error as { error?: string }).error ||
+            'Erro ao processar cartão',
+        )
+      }
+
+      const tokenData = await tokenizeResponse.json()
+
+      // Step 2: Create subscription using token (no raw card data)
+      const response = await api.api.billing.checkout['credit-card'].$post({
+        json: {
+          planId: planId as Exclude<PlanId, 'FREE'>,
+          cycle,
+          creditCardToken: tokenData.creditCardToken,
+          cardHolder,
         },
       })
 
       if (!response.ok) {
         const error = await response.json()
         throw new Error(
-          (error as { message?: string }).message ||
+          (error as { error?: string }).error ||
             'Erro ao processar pagamento',
         )
       }

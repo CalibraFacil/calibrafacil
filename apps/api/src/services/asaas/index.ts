@@ -30,6 +30,7 @@ export {
   formatAsaasDate,
   calculateNextBillingDate,
   calculatePeriodEnd,
+  tokenizeCreditCard,
 } from "./subscriptions";
 
 // Types
@@ -53,4 +54,6 @@ export type {
   AsaasErrorDetail,
   AsaasErrorResponse,
   AsaasPixQrCode,
+  TokenizeCreditCardInput,
+  TokenizeCreditCardResponse,
 } from "./types";

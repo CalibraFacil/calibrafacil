@@ -27,6 +27,7 @@ import {
   getPaymentBoletoLine,
   formatAsaasDate,
   calculatePeriodEnd,
+  tokenizeCreditCard,
 } from "../../services/asaas";
 
 /* =============================================================================
@@ -52,10 +53,15 @@ const CardHolderInfoSchema = z.object({
   mobilePhone: z.string().optional(),
 });
 
+const TokenizeSchema = z.object({
+  creditCard: CreditCardSchema,
+  cardHolder: CardHolderInfoSchema,
+});
+
 const CreditCardCheckoutSchema = z.object({
   planId: z.enum(["STANDARD", "PROFESSIONAL", "ENTERPRISE"]),
   cycle: z.enum(["MONTHLY", "YEARLY"]),
-  creditCard: CreditCardSchema,
+  creditCardToken: z.string().min(1),
   cardHolder: CardHolderInfoSchema,
 });
 
@@ -79,7 +85,60 @@ const PixBoletoCheckoutSchema = z.object({
 export const checkoutRouter = new Hono<{ Variables: AuthVariables }>();
 
 /* =============================================================================
- * CREDIT CARD
+ * TOKENIZE (PCI-DSS compliant - card data handled transiently)
+ * ========================================================================== */
+
+checkoutRouter.post(
+  "/tokenize",
+  ...withLabPermission({ billing: ["update"] }),
+  zValidator("json", TokenizeSchema),
+  async (c) => {
+    const input = c.req.valid("json");
+    const member = c.get("member");
+
+    const org = await db.query.organization.findFirst({
+      where: eq(organization.id, member.organizationId),
+    });
+    if (!org) return c.json({ error: "Organização não encontrada" }, 404);
+
+    if (!org.cnpj) {
+      return c.json(
+        {
+          error:
+            "CNPJ da organização não configurado. Configure nas configurações antes de assinar.",
+        },
+        400,
+      );
+    }
+
+    const asaasCustomerId = await ensureAsaasCustomer(org.id, {
+      name: org.name,
+      cpfCnpj: org.cnpj,
+      email: org.email ?? input.cardHolder.email,
+      phone: org.phone ?? input.cardHolder.mobilePhone,
+    });
+
+    const remoteIp =
+      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+      c.req.header("x-real-ip");
+
+    const result = await tokenizeCreditCard({
+      customer: asaasCustomerId,
+      creditCard: input.creditCard,
+      creditCardHolderInfo: input.cardHolder,
+      remoteIp,
+    });
+
+    return c.json({
+      creditCardToken: result.creditCardToken,
+      creditCardBrand: result.creditCardBrand,
+      creditCardNumber: result.creditCardNumber,
+    });
+  },
+);
+
+/* =============================================================================
+ * CREDIT CARD (uses token from /tokenize)
  * ========================================================================== */
 
 checkoutRouter.post(
@@ -103,6 +162,16 @@ checkoutRouter.post(
       return c.json({ error: "Já existe assinatura ativa" }, 400);
     }
 
+    if (!org.cnpj) {
+      return c.json(
+        {
+          error:
+            "CNPJ da organização não configurado. Configure nas configurações antes de assinar.",
+        },
+        400,
+      );
+    }
+
     const asaasCustomerId = await ensureAsaasCustomer(org.id, {
       name: org.name,
       cpfCnpj: org.cnpj!,
@@ -116,34 +185,21 @@ checkoutRouter.post(
     const now = new Date();
     const plan = getPlan(input.planId);
 
-    /* ASAAS API (creates subscription + charges CC) */
-    const asaasSub = await createCreditCardSubscription({
-      customer: asaasCustomerId,
-      billingType: "CREDIT_CARD",
-      value: price / 100,
-      nextDueDate: formatAsaasDate(now),
-      cycle: input.cycle,
-      description: `CalibraFacil - ${plan.name}`,
-      externalReference: member.organizationId,
-      creditCard: input.creditCard,
-      creditCardHolderInfo: input.cardHolder,
-    });
-
-    /* TRANSACTION: Save subscription + update organization */
-    const subData = {
-      organizationId: member.organizationId,
-      planId: input.planId,
-      billingCycle: input.cycle as BillingCycle,
-      status: "TRIAL" as const, // Will be promoted to ACTIVE by webhook on payment confirmation
-      asaasSubscriptionId: asaasSub.id,
-      asaasCustomerId,
-      currentPeriodStart: now,
-      currentPeriodEnd: calculatePeriodEnd(now, input.cycle),
-      nextBillingDate: calculatePeriodEnd(now, input.cycle),
-    };
-
+    // Use SELECT FOR UPDATE to prevent duplicate Asaas subscriptions
     const newSub = await db.transaction(async (tx) => {
-      const [sub] = await tx
+      // Upsert local subscription first (without asaasSubscriptionId)
+      const subData = {
+        organizationId: member.organizationId,
+        planId: input.planId,
+        billingCycle: input.cycle as BillingCycle,
+        status: "TRIAL" as const,
+        asaasCustomerId,
+        currentPeriodStart: now,
+        currentPeriodEnd: calculatePeriodEnd(now, input.cycle),
+        nextBillingDate: calculatePeriodEnd(now, input.cycle),
+      };
+
+      const [localSub] = await tx
         .insert(subscription)
         .values(subData)
         .onConflictDoUpdate({
@@ -152,14 +208,46 @@ checkoutRouter.post(
         })
         .returning();
 
-      if (!sub) throw new Error("Failed to create subscription");
+      if (!localSub) throw new Error("Failed to create subscription");
+
+      // Lock the row and re-read to check for asaasSubscriptionId
+      const [lockedSub] = await tx
+        .select()
+        .from(subscription)
+        .where(eq(subscription.id, localSub.id))
+        .for("update");
+
+      if (!lockedSub) throw new Error("Failed to lock subscription");
+
+      let asaasSubscriptionId = lockedSub.asaasSubscriptionId;
+
+      // Create Asaas subscription if needed (while holding lock)
+      if (!asaasSubscriptionId) {
+        const asaasSub = await createCreditCardSubscription({
+          customer: asaasCustomerId,
+          billingType: "CREDIT_CARD",
+          value: price / 100,
+          nextDueDate: formatAsaasDate(now),
+          cycle: input.cycle,
+          description: `CalibraFacil - ${plan.name}`,
+          externalReference: member.organizationId,
+          creditCardToken: input.creditCardToken,
+        });
+
+        asaasSubscriptionId = asaasSub.id;
+
+        await tx
+          .update(subscription)
+          .set({ asaasSubscriptionId })
+          .where(eq(subscription.id, localSub.id));
+      }
 
       await tx
         .update(organization)
         .set({ asaasCustomerId })
         .where(eq(organization.id, member.organizationId));
 
-      return sub;
+      return { ...localSub, asaasSubscriptionId };
     });
 
     return c.json({ subscription: newSub }, 201);
@@ -189,6 +277,16 @@ checkoutRouter.post(
 
     if (existingSub?.status === "ACTIVE") {
       return c.json({ error: "Já existe assinatura ativa" }, 400);
+    }
+
+    if (!org.cnpj) {
+      return c.json(
+        {
+          error:
+            "CNPJ da organização não configurado. Configure nas configurações antes de assinar.",
+        },
+        400,
+      );
     }
 
     const customerInfo = input.customerInfo ?? {
@@ -271,14 +369,12 @@ checkoutRouter.post(
       let pix = null;
 
       if (payment) {
-        try {
-          const qr = await getPaymentPixQrCode(payment.id);
-          pix = {
-            qrCodeImage: `data:image/png;base64,${qr.encodedImage}`,
-            payload: qr.payload,
-            expirationDate: qr.expirationDate,
-          };
-        } catch {}
+        const qr = await getPaymentPixQrCode(payment.id);
+        pix = {
+          qrCodeImage: `data:image/png;base64,${qr.encodedImage}`,
+          payload: qr.payload,
+          expirationDate: qr.expirationDate,
+        };
 
         // Insert payment history
         await tx
@@ -344,6 +440,16 @@ checkoutRouter.post(
 
     const price = getPlanPrice(input.planId, input.cycle);
     if (!price) return c.json({ error: "Plano inválido" }, 400);
+
+    if (!org.cnpj) {
+      return c.json(
+        {
+          error:
+            "CNPJ da organização não configurado. Configure nas configurações antes de assinar.",
+        },
+        400,
+      );
+    }
 
     const asaasCustomerId = await ensureAsaasCustomer(org.id, {
       name: org.name,

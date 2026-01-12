@@ -148,9 +148,27 @@ export interface CreditCardHolderInfo {
 
 export interface CreateCreditCardSubscriptionInput extends CreateSubscriptionInput {
   billingType: "CREDIT_CARD";
+  creditCard?: CreditCardInput;
+  creditCardHolderInfo?: CreditCardHolderInfo;
+  creditCardToken?: string;
+  remoteIp?: string;
+}
+
+// =============================================================================
+// TOKENIZATION TYPES
+// =============================================================================
+
+export interface TokenizeCreditCardInput {
+  customer: string;
   creditCard: CreditCardInput;
   creditCardHolderInfo: CreditCardHolderInfo;
   remoteIp?: string;
+}
+
+export interface TokenizeCreditCardResponse {
+  creditCardNumber: string;
+  creditCardBrand: string;
+  creditCardToken: string;
 }
 
 // =============================================================================
