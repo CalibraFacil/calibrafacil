@@ -7,7 +7,10 @@
     "dev": "wrangler dev --port 3000 --local-protocol https",
     "build": "echo 'API build handled by Wrangler'",
     "typecheck": "tsc --noEmit",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.958.0",
@@ -25,7 +28,9 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251230.0",
     "@repo/typescript-config": "workspace:^",
+    "@vitest/coverage-v8": "^4.0.17",
     "typescript": "^5.9.3",
+    "vitest": "^4.0.17",
     "wrangler": "^4.54.0"
   }
 }
