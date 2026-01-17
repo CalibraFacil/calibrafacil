@@ -1,6 +1,6 @@
 'use client'
 
-import { useLocation } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   CheckmarkCircle02Icon,
@@ -12,9 +12,11 @@ import {
   FileSearchIcon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { CommandGroup, CommandItem, CommandShortcut } from '@/components/ui/command'
 import { useCommandPalette } from '../command-context'
+import { api } from '@/utils/api'
 
 type ContextAction = {
   id: string
@@ -22,22 +24,59 @@ type ContextAction = {
   icon: React.ReactNode
   shortcut?: string
   onSelect: () => void
+  disabled?: boolean
 }
 
-function getContextActions(pathname: string, setOpen: (open: boolean) => void): ContextAction[] {
+/**
+ * Extract job ID from pathname like /dashboard/jobs/123
+ */
+function extractJobId(pathname: string): string | null {
+  const match = pathname.match(/^\/dashboard\/jobs\/([\w-]+)$/)
+  return match ? match[1] : null
+}
+
+type ActionContext = {
+  pathname: string
+  setOpen: (open: boolean) => void
+  queryClient: ReturnType<typeof useQueryClient>
+  navigate: ReturnType<typeof useNavigate>
+}
+
+function getContextActions(ctx: ActionContext): ContextAction[] {
+  const { pathname, setOpen, queryClient, navigate } = ctx
+
   // Job page context actions
   if (/^\/dashboard\/jobs\/[\w-]+$/.test(pathname)) {
+    const jobId = extractJobId(pathname)
+
     return [
       {
         id: 'approve-job',
         label: 'Aprovar Ordem de Serviço',
         icon: <HugeiconsIcon icon={CheckmarkCircle02Icon} className="text-green-500" />,
         shortcut: '⌘⏎',
-        onSelect: () => {
-          toast.success('Ordem de serviço aprovada', {
-            description: 'A ordem foi aprovada e está pronta para execução.',
-          })
-          setOpen(false)
+        onSelect: async () => {
+          if (!jobId) return
+
+          try {
+            const res = await api.api.jobs[':id'].approve.$post({
+              param: { id: jobId },
+              json: { reason: 'Aprovado via comando rápido' },
+            })
+
+            if (!res.ok) {
+              const error = await res.json()
+              throw new Error((error as { error?: string }).error || 'Erro ao aprovar')
+            }
+
+            queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
+            toast.success('Job aprovado com sucesso!', {
+              description: 'O certificado está sendo gerado.',
+            })
+            setOpen(false)
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Erro ao aprovar job')
+          }
         },
       },
       {
@@ -45,8 +84,12 @@ function getContextActions(pathname: string, setOpen: (open: boolean) => void): 
         label: 'Rejeitar / Devolver',
         icon: <HugeiconsIcon icon={Cancel01Icon} className="text-red-500" />,
         onSelect: () => {
-          toast.info('Abrindo diálogo de rejeição...', {
-            description: 'Informe o motivo da rejeição.',
+          // Navigate to job page to use the reject dialog (requires reason input)
+          if (jobId) {
+            navigate({ to: '/dashboard/jobs/$id', params: { id: jobId } })
+          }
+          toast.info('Use o botão "Rejeitar" na página do job', {
+            description: 'É necessário informar o motivo da rejeição.',
           })
           setOpen(false)
         },
@@ -56,11 +99,27 @@ function getContextActions(pathname: string, setOpen: (open: boolean) => void): 
         label: 'Imprimir Etiqueta',
         icon: <HugeiconsIcon icon={PrinterIcon} />,
         shortcut: '⌘P',
-        onSelect: () => {
-          toast.success('Etiqueta enviada para impressão', {
-            description: 'Verifique a impressora de etiquetas.',
-          })
-          setOpen(false)
+        onSelect: async () => {
+          if (!jobId) return
+
+          try {
+            const res = await api.api.jobs[':id']['generate-label'].$post({
+              param: { id: jobId },
+            })
+
+            if (!res.ok) {
+              const error = await res.json()
+              throw new Error((error as { error?: string }).error || 'Erro ao gerar etiqueta')
+            }
+
+            queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
+            toast.success('Gerando etiqueta...', {
+              description: 'A etiqueta estará disponível em instantes.',
+            })
+            setOpen(false)
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Erro ao gerar etiqueta')
+          }
         },
       },
       {
@@ -68,8 +127,8 @@ function getContextActions(pathname: string, setOpen: (open: boolean) => void): 
         label: 'Ver Histórico de Auditoria',
         icon: <HugeiconsIcon icon={Clock01Icon} />,
         onSelect: () => {
-          toast.info('Abrindo histórico de auditoria...', {
-            description: 'Carregando registros de alterações.',
+          toast.info('Funcionalidade em desenvolvimento', {
+            description: 'O histórico de auditoria estará disponível em breve.',
           })
           setOpen(false)
         },
@@ -85,8 +144,8 @@ function getContextActions(pathname: string, setOpen: (open: boolean) => void): 
         label: 'Marcar Fora de Serviço',
         icon: <HugeiconsIcon icon={AlertCircleIcon} className="text-yellow-500" />,
         onSelect: () => {
-          toast.warning('Ativo marcado como fora de serviço', {
-            description: 'Um relatório de não conformidade foi criado.',
+          toast.info('Funcionalidade em desenvolvimento', {
+            description: 'Esta ação estará disponível em breve.',
           })
           setOpen(false)
         },
@@ -96,8 +155,8 @@ function getContextActions(pathname: string, setOpen: (open: boolean) => void): 
         label: 'Ver Histórico de Calibração',
         icon: <HugeiconsIcon icon={FileSearchIcon} />,
         onSelect: () => {
-          toast.info('Carregando histórico de calibração...', {
-            description: 'Exibindo últimas calibrações do ativo.',
+          toast.info('Funcionalidade em desenvolvimento', {
+            description: 'Esta ação estará disponível em breve.',
           })
           setOpen(false)
         },
@@ -108,8 +167,8 @@ function getContextActions(pathname: string, setOpen: (open: boolean) => void): 
         icon: <HugeiconsIcon icon={Download01Icon} />,
         shortcut: '⌘D',
         onSelect: () => {
-          toast.success('Download iniciado', {
-            description: 'O certificado será baixado em instantes.',
+          toast.info('Funcionalidade em desenvolvimento', {
+            description: 'Esta ação estará disponível em breve.',
           })
           setOpen(false)
         },
@@ -125,8 +184,8 @@ function getContextActions(pathname: string, setOpen: (open: boolean) => void): 
         label: 'Marcar Padrão Fora de Serviço',
         icon: <HugeiconsIcon icon={AlertCircleIcon} className="text-yellow-500" />,
         onSelect: () => {
-          toast.warning('Padrão marcado como fora de serviço', {
-            description: 'Um relatório de não conformidade foi criado.',
+          toast.info('Funcionalidade em desenvolvimento', {
+            description: 'Esta ação estará disponível em breve.',
           })
           setOpen(false)
         },
@@ -136,8 +195,8 @@ function getContextActions(pathname: string, setOpen: (open: boolean) => void): 
         label: 'Ver Histórico de Calibração',
         icon: <HugeiconsIcon icon={FileSearchIcon} />,
         onSelect: () => {
-          toast.info('Carregando histórico de calibração...', {
-            description: 'Exibindo últimas calibrações do padrão.',
+          toast.info('Funcionalidade em desenvolvimento', {
+            description: 'Esta ação estará disponível em breve.',
           })
           setOpen(false)
         },
@@ -148,8 +207,8 @@ function getContextActions(pathname: string, setOpen: (open: boolean) => void): 
         icon: <HugeiconsIcon icon={Download01Icon} />,
         shortcut: '⌘D',
         onSelect: () => {
-          toast.success('Download iniciado', {
-            description: 'O certificado será baixado em instantes.',
+          toast.info('Funcionalidade em desenvolvimento', {
+            description: 'Esta ação estará disponível em breve.',
           })
           setOpen(false)
         },
@@ -162,8 +221,16 @@ function getContextActions(pathname: string, setOpen: (open: boolean) => void): 
 
 export function ContextGroup() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { setOpen } = useCommandPalette()
-  const actions = getContextActions(location.pathname, setOpen)
+
+  const actions = getContextActions({
+    pathname: location.pathname,
+    setOpen,
+    queryClient,
+    navigate,
+  })
 
   if (actions.length === 0) {
     return null
@@ -172,7 +239,11 @@ export function ContextGroup() {
   return (
     <CommandGroup heading="Ações do Contexto Atual">
       {actions.map((action) => (
-        <CommandItem key={action.id} onSelect={action.onSelect}>
+        <CommandItem
+          key={action.id}
+          onSelect={action.onSelect}
+          disabled={action.disabled}
+        >
           {action.icon}
           <span>{action.label}</span>
           {action.shortcut && <CommandShortcut>{action.shortcut}</CommandShortcut>}
