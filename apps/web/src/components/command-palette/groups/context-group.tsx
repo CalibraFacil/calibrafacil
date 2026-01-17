@@ -69,7 +69,7 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
               throw new Error((error as { error?: string }).error || 'Erro ao aprovar')
             }
 
-            queryClient.invalidateQueries({ queryKey: ['jobs'] })
+            queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
             toast.success('Job aprovado com sucesso!', {
               description: 'O certificado está sendo gerado.',
             })
