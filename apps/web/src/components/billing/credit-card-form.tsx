@@ -1,15 +1,14 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { Loading03Icon } from '@hugeicons/core-free-icons'
 import type { BillingCycle, PlanId } from '@calibra-facil/shared'
 import { formatPrice, PLAN_PRICES } from '@calibra-facil/shared'
 import type { CheckoutState } from './checkout-dialog'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { api } from '@/utils/api'
+import { CreditCardDisplay, type CardBrand } from './credit-card-display'
+import { SlideToPayButton } from './slide-to-pay-button'
 
 interface CreditCardFormProps {
   planId: PlanId
@@ -34,9 +33,7 @@ interface CardFormData {
 }
 
 // Card brand detection
-function detectCardBrand(
-  number: string,
-): 'visa' | 'mastercard' | 'amex' | 'elo' | 'unknown' {
+function detectCardBrand(number: string): CardBrand {
   const cleanNumber = number.replace(/\s/g, '')
   if (/^4/.test(cleanNumber)) return 'visa'
   if (/^5[1-5]/.test(cleanNumber)) return 'mastercard'
@@ -131,6 +128,7 @@ export function CreditCardForm({
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isCardFlipped, setIsCardFlipped] = useState(false)
 
   const prices = PLAN_PRICES[planId as Exclude<PlanId, 'FREE'>]
   const price = cycle === 'MONTHLY' ? prices?.monthly : prices?.yearly
@@ -295,29 +293,31 @@ export function CreditCardForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      {/* Credit Card Display */}
+      <CreditCardDisplay
+        cardNumber={formData.number}
+        cardHolder={formData.holderName}
+        expiryDate={formData.expiry}
+        cvv={formData.ccv}
+        cardBrand={cardBrand}
+        isFlipped={isCardFlipped}
+      />
+
       {/* Card Number */}
       <div className="space-y-2">
         <Label htmlFor="number">Número do Cartão</Label>
-        <div className="relative">
-          <Input
-            id="number"
-            type="text"
-            inputMode="numeric"
-            placeholder="0000 0000 0000 0000"
-            value={formData.number}
-            onChange={handleChange('number')}
-            maxLength={19}
-            className={cn(errors.number && 'border-destructive')}
-            disabled={checkoutMutation.isPending}
-          />
-          {cardBrand !== 'unknown' && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <span className="text-xs font-medium uppercase text-muted-foreground">
-                {cardBrand}
-              </span>
-            </div>
-          )}
-        </div>
+        <Input
+          id="number"
+          type="text"
+          inputMode="numeric"
+          placeholder="0000 0000 0000 0000"
+          value={formData.number}
+          onChange={handleChange('number')}
+          onFocus={() => setIsCardFlipped(false)}
+          maxLength={19}
+          className={cn(errors.number && 'border-destructive')}
+          disabled={checkoutMutation.isPending}
+        />
         {errors.number && (
           <p className="text-xs text-destructive">{errors.number}</p>
         )}
@@ -334,6 +334,7 @@ export function CreditCardForm({
             placeholder="MM/AA"
             value={formData.expiry}
             onChange={handleChange('expiry')}
+            onFocus={() => setIsCardFlipped(false)}
             maxLength={5}
             className={cn(errors.expiry && 'border-destructive')}
             disabled={checkoutMutation.isPending}
@@ -351,6 +352,8 @@ export function CreditCardForm({
             placeholder="000"
             value={formData.ccv}
             onChange={handleChange('ccv')}
+            onFocus={() => setIsCardFlipped(true)}
+            onBlur={() => setIsCardFlipped(false)}
             maxLength={4}
             className={cn(errors.ccv && 'border-destructive')}
             disabled={checkoutMutation.isPending}
@@ -370,6 +373,7 @@ export function CreditCardForm({
           placeholder="NOME COMO NO CARTÃO"
           value={formData.holderName}
           onChange={handleChange('holderName')}
+          onFocus={() => setIsCardFlipped(false)}
           className={cn(errors.holderName && 'border-destructive')}
           disabled={checkoutMutation.isPending}
         />
@@ -478,25 +482,17 @@ export function CreditCardForm({
         </div>
       )}
 
-      {/* Submit Button */}
-      <Button
-        type="submit"
+      {/* Slide to Pay Button */}
+      <SlideToPayButton
+        onComplete={() => {
+          if (validate()) {
+            checkoutMutation.mutate(formData)
+          }
+        }}
         disabled={checkoutMutation.isPending}
-        className="w-full gap-2"
-        size="lg"
-      >
-        {checkoutMutation.isPending ? (
-          <>
-            <HugeiconsIcon
-              icon={Loading03Icon}
-              className="size-4 animate-spin"
-            />
-            Processando...
-          </>
-        ) : (
-          `Pagar ${formatPrice(price || 0)}`
-        )}
-      </Button>
+        isLoading={checkoutMutation.isPending}
+        price={formatPrice(price || 0)}
+      />
 
       {/* Security Note */}
       <p className="text-center text-xs text-muted-foreground">
