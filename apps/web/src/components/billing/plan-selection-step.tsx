@@ -1,21 +1,20 @@
 import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Tick02Icon } from '@hugeicons/core-free-icons'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  Tick02Icon,
+  Cancel01Icon,
+  SparklesIcon,
+} from '@hugeicons/core-free-icons'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
   PLANS,
   PLAN_PRICES,
   formatPrice,
+  hasFeature,
   type PlanId,
   type BillingCycle,
+  type FeatureFlag,
 } from '@calibra-facil/shared'
 
 interface PlanSelectionStepProps {
@@ -26,13 +25,37 @@ interface PlanSelectionStepProps {
 }
 
 // Feature descriptions for display
-const FEATURE_DESCRIPTIONS: Record<string, string> = {
-  math_engine: 'Cálculo avançado de incerteza',
-  portal: 'Portal do cliente',
-  financial: 'Módulo financeiro',
-  api: 'Acesso via API',
-  custom_domain: 'Domínio personalizado',
+const FEATURE_LABELS: Record<string, { name: string; description: string }> = {
+  math_engine: {
+    name: 'Motor Matemático',
+    description: 'Cálculos de incerteza de medição',
+  },
+  portal: {
+    name: 'Portal do Cliente',
+    description: 'Acesso externo para seus clientes',
+  },
+  financial: {
+    name: 'Módulo Financeiro',
+    description: 'Faturamento e gestão de pagamentos',
+  },
+  api: {
+    name: 'Acesso à API',
+    description: 'Integração com sistemas externos',
+  },
+  custom_domain: {
+    name: 'Domínio Personalizado',
+    description: 'portal.suaempresa.com.br',
+  },
 }
+
+// All features in display order
+const ALL_FEATURES: FeatureFlag[] = [
+  'math_engine',
+  'portal',
+  'financial',
+  'api',
+  'custom_domain',
+]
 
 // Plans to show in checkout (excludes FREE)
 type CheckoutPlanId = Exclude<PlanId, 'FREE'>
@@ -42,9 +65,18 @@ const CHECKOUT_PLANS: Array<CheckoutPlanId> = [
   'ENTERPRISE',
 ]
 
+// Plan order for upgrade comparison
+const PLAN_ORDER: PlanId[] = ['FREE', 'STANDARD', 'PROFESSIONAL', 'ENTERPRISE']
+
+// Plan descriptions for UI display
+const PLAN_DESCRIPTIONS: Record<CheckoutPlanId, string> = {
+  STANDARD: 'Para pequenas empresas',
+  PROFESSIONAL: 'Para empresas em crescimento',
+  ENTERPRISE: 'Para grandes operações',
+}
+
 export function PlanSelectionStep({
   currentPlanId,
-  selectedPlan,
   billingCycle,
   onSelect,
 }: PlanSelectionStepProps) {
@@ -54,129 +86,191 @@ export function PlanSelectionStep({
     onSelect(planId, cycle)
   }
 
+  const canUpgrade = (planId: PlanId) => {
+    if (!currentPlanId) return true
+    return PLAN_ORDER.indexOf(planId) > PLAN_ORDER.indexOf(currentPlanId)
+  }
+
+  const getMonthlyEquivalent = (planId: CheckoutPlanId) => {
+    const prices = PLAN_PRICES[planId]
+    if (cycle === 'YEARLY') {
+      return Math.round(prices.yearly / 12)
+    }
+    return prices.monthly
+  }
+
+  const getPrice = (planId: CheckoutPlanId) => {
+    const prices = PLAN_PRICES[planId]
+    return cycle === 'YEARLY' ? prices.yearly : prices.monthly
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Billing cycle toggle */}
-      <div className="flex justify-center gap-2">
-        <Button
-          variant={cycle === 'MONTHLY' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setCycle('MONTHLY')}
-        >
-          Mensal
-        </Button>
-        <Button
-          variant={cycle === 'YEARLY' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setCycle('YEARLY')}
-        >
-          Anual
-          <Badge variant="secondary" className="ml-2 text-xs">
-            -17%
-          </Badge>
-        </Button>
+    <div className="flex flex-col gap-6">
+      {/* Billing Cycle Toggle - Pill design */}
+      <div className="flex justify-center">
+        <div className="inline-flex rounded-lg bg-muted p-1">
+          <button
+            type="button"
+            onClick={() => setCycle('MONTHLY')}
+            className={cn(
+              'rounded-md px-4 py-2 text-sm font-medium transition-all',
+              cycle === 'MONTHLY'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Mensal
+          </button>
+          <button
+            type="button"
+            onClick={() => setCycle('YEARLY')}
+            className={cn(
+              'rounded-md px-4 py-2 text-sm font-medium transition-all',
+              cycle === 'YEARLY'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Anual
+            <span className="ml-1.5 text-xs text-green-600">-17%</span>
+          </button>
+        </div>
       </div>
 
-      {/* Plan cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Plan Cards Grid */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {CHECKOUT_PLANS.map((planId) => {
           const plan = PLANS[planId]
-          const prices = PLAN_PRICES[planId]
-          const price = cycle === 'MONTHLY' ? prices.monthly : prices.yearly
-          const isCurrentPlan = planId === currentPlanId
+          const isCurrent = currentPlanId === planId
           const isPopular = planId === 'PROFESSIONAL'
+          const canSelect = canUpgrade(planId)
 
           return (
-            <Card
+            <div
               key={planId}
-              className={`relative flex flex-col ${
-                isPopular
-                  ? 'border-primary shadow-lg scale-[1.02] z-10'
-                  : 'border-border'
-              } ${selectedPlan === planId ? 'ring-2 ring-primary' : ''}`}
+              className={cn(
+                'relative flex flex-col rounded-xl border p-4 transition-all',
+                isCurrent
+                  ? 'cursor-not-allowed border-muted bg-muted/30'
+                  : canSelect
+                    ? 'cursor-pointer border-border hover:border-primary/50'
+                    : 'cursor-not-allowed border-muted bg-muted/30',
+                isPopular && !isCurrent && 'border-primary/30',
+              )}
             >
-              {isPopular && (
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <Badge className="bg-primary text-primary-foreground font-semibold">
+              {/* Popular Badge */}
+              {isPopular && !isCurrent && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
+                    <HugeiconsIcon icon={SparklesIcon} className="size-3" />
                     Mais Popular
-                  </Badge>
+                  </span>
                 </div>
               )}
 
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg">{plan.name}</CardTitle>
-                <div className="flex items-baseline gap-1">
+              {/* Current Plan Badge */}
+              {isCurrent && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <span className="inline-flex items-center rounded-full bg-muted-foreground px-3 py-1 text-xs font-medium text-background">
+                    Plano Atual
+                  </span>
+                </div>
+              )}
+
+              {/* Plan Header */}
+              <div
+                className={cn('text-center', (isPopular || isCurrent) && 'mt-2')}
+              >
+                <h3 className="text-lg font-semibold">{plan.name}</h3>
+                <p className="text-xs text-muted-foreground">
+                  {PLAN_DESCRIPTIONS[planId]}
+                </p>
+              </div>
+
+              {/* Price */}
+              <div className="mt-4 text-center">
+                <div className="flex items-baseline justify-center gap-1">
                   <span className="text-3xl font-bold">
-                    {formatPrice(price)}
+                    {formatPrice(getMonthlyEquivalent(planId))}
                   </span>
-                  <span className="text-muted-foreground text-sm">
-                    /{cycle === 'MONTHLY' ? 'mes' : 'ano'}
-                  </span>
+                  <span className="text-sm text-muted-foreground">/mês</span>
                 </div>
                 {cycle === 'YEARLY' && (
-                  <p className="text-xs text-muted-foreground">
-                    Equivale a {formatPrice(Math.round(price / 12))}/mês
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    cobrado {formatPrice(getPrice(planId))}/ano
                   </p>
                 )}
-              </CardHeader>
+              </div>
 
-              <CardContent className="flex-1 space-y-3">
-                {/* Limits */}
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <HugeiconsIcon
-                      icon={Tick02Icon}
-                      className="text-primary shrink-0"
-                      size={16}
-                    />
-                    <span>
-                      {plan.limits.certificates === 999999
-                        ? 'Certificados ilimitados'
-                        : `${plan.limits.certificates} certificados/mês`}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <HugeiconsIcon
-                      icon={Tick02Icon}
-                      className="text-primary shrink-0"
-                      size={16}
-                    />
-                    <span>
-                      {plan.limits.users === 999
-                        ? 'Usuários ilimitados'
-                        : `${plan.limits.users} usuários`}
-                    </span>
-                  </div>
+              {/* Limits */}
+              <div className="mt-4 space-y-2 border-t pt-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Certificados/mês</span>
+                  <span className="font-medium">
+                    {plan.limits.certificates === 999999
+                      ? 'Ilimitados'
+                      : plan.limits.certificates}
+                  </span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Usuários</span>
+                  <span className="font-medium">
+                    {plan.limits.users === 999
+                      ? 'Ilimitados'
+                      : plan.limits.users}
+                  </span>
+                </div>
+              </div>
 
-                {/* Features */}
-                {plan.features.length > 0 && (
-                  <div className="pt-2 border-t space-y-2 text-sm">
-                    {plan.features.map((feature) => (
-                      <div key={feature} className="flex items-center gap-2">
-                        <HugeiconsIcon
-                          icon={Tick02Icon}
-                          className="text-primary shrink-0"
-                          size={16}
-                        />
-                        <span>{FEATURE_DESCRIPTIONS[feature] || feature}</span>
-                      </div>
-                    ))}
-                  </div>
+              {/* Features */}
+              <div className="mt-4 flex-1 space-y-2 border-t pt-4">
+                {ALL_FEATURES.map((feature) => {
+                  const has = hasFeature(planId, feature)
+                  const label = FEATURE_LABELS[feature]
+                  return (
+                    <div
+                      key={feature}
+                      className={cn(
+                        'flex items-center gap-2 text-sm',
+                        !has && 'text-muted-foreground/50',
+                      )}
+                    >
+                      <HugeiconsIcon
+                        icon={has ? Tick02Icon : Cancel01Icon}
+                        className={cn(
+                          'size-4 shrink-0',
+                          has ? 'text-green-600' : 'text-muted-foreground/30',
+                        )}
+                      />
+                      <span className={cn(!has && 'line-through')}>
+                        {label?.name || feature}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Select Button */}
+              <div className="mt-4 border-t pt-4">
+                {isCurrent ? (
+                  <Button variant="outline" disabled className="w-full">
+                    Plano Atual
+                  </Button>
+                ) : !canSelect ? (
+                  <Button variant="outline" disabled className="w-full">
+                    Indisponível
+                  </Button>
+                ) : (
+                  <Button
+                    variant={isPopular ? 'default' : 'outline'}
+                    className="w-full"
+                    onClick={() => handleSelect(planId)}
+                  >
+                    Selecionar
+                  </Button>
                 )}
-              </CardContent>
-
-              <CardFooter>
-                <Button
-                  className="w-full"
-                  variant={isPopular ? 'default' : 'outline'}
-                  disabled={isCurrentPlan}
-                  onClick={() => handleSelect(planId)}
-                >
-                  {isCurrentPlan ? 'Plano atual' : `Escolher ${plan.name}`}
-                </Button>
-              </CardFooter>
-            </Card>
+              </div>
+            </div>
           )
         })}
       </div>

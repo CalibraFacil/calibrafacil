@@ -1,93 +1,79 @@
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   CreditCardIcon,
-  Invoice02Icon,
+  Invoice01Icon,
   QrCodeIcon,
 } from '@hugeicons/core-free-icons'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import type { PaymentMethodType } from './checkout-dialog'
 
-interface PaymentMethodStepProps {
-  onSelect: (method: PaymentMethodType) => void
-  onBack: () => void
+interface PaymentMethodOption {
+  id: PaymentMethodType
+  name: string
+  description: string
+  icon: typeof CreditCardIcon
 }
 
-const PAYMENT_METHODS = [
+const PAYMENT_METHODS: PaymentMethodOption[] = [
   {
-    id: 'CREDIT_CARD' as const,
+    id: 'CREDIT_CARD',
     name: 'Cartão de Crédito',
-    description: 'Pagamento instantâneo com parcelamento',
+    description: 'Pagamento imediato',
     icon: CreditCardIcon,
   },
   {
-    id: 'PIX' as const,
+    id: 'PIX',
     name: 'PIX',
-    description: 'Pagamento instantâneo via QR Code',
+    description: 'Aprovação instantânea',
     icon: QrCodeIcon,
   },
   {
-    id: 'BOLETO' as const,
-    name: 'Boleto Bancario',
-    description: 'Pagamento em até 3 dias úteis',
-    icon: Invoice02Icon,
+    id: 'BOLETO',
+    name: 'Boleto',
+    description: 'Vencimento em 3 dias',
+    icon: Invoice01Icon,
   },
 ]
 
-export function PaymentMethodStep({
-  onSelect,
-  onBack,
-}: PaymentMethodStepProps) {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-3">
-        {PAYMENT_METHODS.map((method) => (
-          <Card
-            key={method.id}
-            className="cursor-pointer transition-all hover:border-primary hover:shadow-sm"
-            onClick={() => onSelect(method.id)}
-          >
-            <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted">
-                <HugeiconsIcon
-                  icon={method.icon}
-                  className="text-foreground"
-                  size={24}
-                />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-medium">{method.name}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {method.description}
-                </p>
-              </div>
-              <div className="text-muted-foreground">
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M7.5 15L12.5 10L7.5 5"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+interface PaymentMethodStepProps {
+  onSelect: (method: PaymentMethodType) => void
+}
 
-      <div className="flex justify-start">
-        <Button variant="ghost" onClick={onBack}>
-          Voltar
-        </Button>
-      </div>
+export function PaymentMethodStep({ onSelect }: PaymentMethodStepProps) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {PAYMENT_METHODS.map((method) => (
+        <button
+          key={method.id}
+          type="button"
+          onClick={() => onSelect(method.id)}
+          className={cn(
+            'group flex flex-col items-center gap-3 rounded-xl border p-6 text-center transition-all',
+            'hover:border-primary/50 hover:shadow-sm',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+            'border-border',
+          )}
+        >
+          <div
+            className={cn(
+              'flex size-12 items-center justify-center rounded-full transition-colors',
+              'bg-muted group-hover:bg-primary/10',
+            )}
+          >
+            <HugeiconsIcon
+              icon={method.icon}
+              className={cn(
+                'size-6 transition-colors',
+                'text-muted-foreground group-hover:text-primary',
+              )}
+            />
+          </div>
+          <div>
+            <p className="font-medium">{method.name}</p>
+            <p className="text-sm text-muted-foreground">{method.description}</p>
+          </div>
+        </button>
+      ))}
     </div>
   )
 }

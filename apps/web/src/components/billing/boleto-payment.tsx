@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { HugeiconsIcon } from '@hugeicons/react'
+import {
+  Copy01Icon,
+  Tick02Icon,
+  Download01Icon,
+  Calendar03Icon,
+  Loading03Icon,
+} from '@hugeicons/core-free-icons'
 import { PLAN_PRICES, formatPrice } from '@calibra-facil/shared'
-
 import type { BillingCycle, PlanId } from '@calibra-facil/shared'
-
 import type { CheckoutState } from './checkout-dialog'
-
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { toast } from 'sonner'
 import { api } from '@/utils/api'
 
 interface BoletoPaymentProps {
@@ -20,12 +26,22 @@ interface BoletoPaymentProps {
   onBack: () => void
 }
 
-// Type for boleto data from API (can have identificationField or not)
+// Type for boleto data from API
 interface BoletoData {
   bankSlipUrl?: string
   barCode?: string
   identificationField?: string
   dueDate?: string
+}
+
+// Format linha digitável for display
+function formatLinhaDigitavel(value: string): string {
+  if (!value) return ''
+  // Format: XXXXX.XXXXX XXXXX.XXXXXX XXXXX.XXXXXX X XXXXXXXXXXXXXX
+  const clean = value.replace(/\D/g, '')
+  if (clean.length !== 47) return value
+
+  return `${clean.slice(0, 5)}.${clean.slice(5, 10)} ${clean.slice(10, 15)}.${clean.slice(15, 21)} ${clean.slice(21, 26)}.${clean.slice(26, 32)} ${clean.slice(32, 33)} ${clean.slice(33)}`
 }
 
 export function BoletoPayment({
@@ -102,6 +118,7 @@ export function BoletoPayment({
     if (!subscriptionId && !checkoutMutation.isPending) {
       checkoutMutation.mutate()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Get boleto data with proper typing
@@ -110,20 +127,42 @@ export function BoletoPayment({
     | null
     | undefined
 
-  const handleCopyBarcode = async () => {
+  const handleCopy = async () => {
     const barcode = boletoData?.identificationField
     if (barcode) {
-      await navigator.clipboard.writeText(barcode)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      try {
+        await navigator.clipboard.writeText(barcode)
+        setCopied(true)
+        toast.success('Linha digitável copiada!')
+        setTimeout(() => setCopied(false), 2000)
+      } catch {
+        toast.error('Erro ao copiar')
+      }
     }
   }
+
+  const handleDownload = () => {
+    if (boletoData?.bankSlipUrl) {
+      window.open(boletoData.bankSlipUrl, '_blank')
+    }
+  }
+
+  const formattedDueDate = boletoData?.dueDate
+    ? new Date(boletoData.dueDate + 'T12:00:00').toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      })
+    : null
 
   // Loading state
   if (checkoutMutation.isPending) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="flex flex-col items-center justify-center gap-4 py-12">
+        <HugeiconsIcon
+          icon={Loading03Icon}
+          className="size-10 animate-spin text-primary"
+        />
         <p className="text-muted-foreground">Gerando boleto...</p>
       </div>
     )
@@ -153,105 +192,77 @@ export function BoletoPayment({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Boleto Info */}
-      <div className="flex flex-col items-center space-y-4">
-        <div className="text-center">
-          <p className="text-lg font-medium">Boleto gerado com sucesso</p>
-          <p className="text-2xl font-bold text-primary">
-            {formatPrice(price || 0)}
+    <div className="flex flex-col items-center gap-6">
+      {/* Header */}
+      <div className="text-center">
+        <h3 className="text-lg font-semibold">Boleto Gerado</h3>
+        <p className="text-sm text-muted-foreground">
+          Pague pelo app do banco ou em qualquer lotérica
+        </p>
+      </div>
+
+      {/* Value */}
+      <div className="text-center">
+        <p className="text-3xl font-semibold">{formatPrice(price || 0)}</p>
+      </div>
+
+      {/* Linha Digitável */}
+      {boletoData?.identificationField && (
+        <div className="w-full space-y-2">
+          <p className="text-center text-sm text-muted-foreground">
+            Linha digitável
           </p>
-        </div>
-
-        {/* Barcode Image - placeholder visual */}
-        <div className="w-full rounded-lg border bg-white p-6">
-          <div className="flex flex-col items-center space-y-4">
-            {/* Barcode visual representation */}
-            <div className="flex h-16 w-full items-center justify-center space-x-0.5">
-              {Array.from({ length: 50 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-full bg-black"
-                  style={{
-                    width: Math.random() > 0.5 ? '2px' : '1px',
-                    marginRight: Math.random() > 0.7 ? '2px' : '1px',
-                  }}
-                />
-              ))}
+          <div className="flex gap-2">
+            <div className="flex-1 break-all rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed">
+              {formatLinhaDigitavel(boletoData.identificationField)}
             </div>
-
-            {/* Linha digitavel */}
-            {boletoData?.identificationField && (
-              <p className="text-center font-mono text-sm">
-                {boletoData.identificationField}
-              </p>
-            )}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleCopy}
+              className="shrink-0 self-start"
+            >
+              <HugeiconsIcon
+                icon={copied ? Tick02Icon : Copy01Icon}
+                className="size-4"
+              />
+            </Button>
           </div>
         </div>
+      )}
 
-        {/* Copy barcode */}
-        {boletoData?.identificationField && (
-          <Button
-            variant="outline"
-            onClick={handleCopyBarcode}
-            className="w-full"
-          >
-            {copied ? 'Copiado!' : 'Copiar linha digitavel'}
-          </Button>
-        )}
+      {/* Due Date */}
+      {formattedDueDate && (
+        <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-4 py-3 text-sm">
+          <HugeiconsIcon
+            icon={Calendar03Icon}
+            className="size-4 text-amber-600"
+          />
+          <span className="text-amber-700 dark:text-amber-400">
+            Vencimento: <strong>{formattedDueDate}</strong>
+          </span>
+        </div>
+      )}
 
-        {/* Download PDF */}
+      {/* Actions */}
+      <div className="flex w-full flex-col gap-3">
         {boletoData?.bankSlipUrl && (
-          <Button
-            variant="default"
-            className="w-full"
-            onClick={() => window.open(boletoData.bankSlipUrl, '_blank')}
-          >
+          <Button variant="outline" onClick={handleDownload} className="gap-2">
+            <HugeiconsIcon icon={Download01Icon} className="size-4" />
             Baixar PDF do Boleto
           </Button>
         )}
-
-        {/* Due date */}
-        {boletoData?.dueDate && (
-          <p className="text-sm text-muted-foreground">
-            Vencimento:{' '}
-            {new Date(boletoData.dueDate).toLocaleDateString('pt-BR')}
-          </p>
-        )}
       </div>
 
-      {/* Instructions */}
-      <div className="rounded-lg bg-muted p-4 text-sm">
-        <p className="font-medium mb-2">Instrucoes:</p>
-        <ul className="space-y-1 text-muted-foreground">
-          <li>1. Copie a linha digitavel ou baixe o PDF</li>
-          <li>2. Pague em qualquer banco ou app de pagamentos</li>
-          <li>
-            3. O pagamento pode levar ate 3 dias uteis para ser confirmado
-          </li>
-          <li>4. Voce recebera um email quando o pagamento for confirmado</li>
-        </ul>
-      </div>
-
-      {/* Status */}
-      <div className="flex items-center justify-center gap-2 text-sm">
-        <div className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
-        <span className="text-muted-foreground">Aguardando pagamento...</span>
-      </div>
-
-      {/* Actions */}
-      <div className="flex justify-between pt-2">
-        <Button variant="ghost" onClick={onBack}>
-          Voltar
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() =>
-            onSuccess(subscriptionId!, { boleto: boletoData ?? undefined })
-          }
-        >
-          Concluir
-        </Button>
+      {/* Waiting Status */}
+      <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin" />
+          <span>Aguardando pagamento...</span>
+        </div>
+        <p className="text-center text-xs">
+          A confirmação pode levar de 1 a 3 dias úteis após o pagamento
+        </p>
       </div>
     </div>
   )
