@@ -23,6 +23,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { requireFeature } from "../middleware/tier-guard";
 
 /**
  * Generate a URL-friendly slug from a string
@@ -452,6 +453,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/invitations",
     ...withLabPermission({ client: ["manage_portal"] }),
+    requireFeature("portal"), // Requires PROFESSIONAL+ plan
     zValidator("json", CreatePortalInvitationSchema),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);

@@ -1,0 +1,17 @@
+{
+  "name": "@calibra-facil/shared",
+  "version": "1.0.0",
+  "description": "Shared types, configuration, and utilities for CalibraFacil",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./plans": "./src/plans.ts"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

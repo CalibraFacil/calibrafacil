@@ -128,6 +128,8 @@ export const organization = pgTable(
     website: text("website"),
     technicalManagerName: text("technical_manager_name"),
     technicalManagerTitle: text("technical_manager_title"),
+    // Billing / Asaas integration
+    asaasCustomerId: text("asaas_customer_id"),
   },
   (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
 );
@@ -323,10 +325,14 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-export const organizationRelations = relations(organization, ({ many }) => ({
-  members: many(member),
-  invitations: many(invitation),
-}));
+export const organizationRelations = relations(
+  organization,
+  ({ one, many }) => ({
+    members: many(member),
+    invitations: many(invitation),
+    subscription: one(subscription),
+  }),
+);
 
 export const memberRelations = relations(member, ({ one }) => ({
   organization: one(organization, {
@@ -1020,7 +1026,6 @@ export type StandardSnapshot = {
   certifiedValues: CertifiedValue[] | null;
 };
 
-
 /**
  * Calibration Job table - The Work Order / Operational Record
  * ISO 17025:2017 Clause 7.7 - Ensuring Validity of Results
@@ -1202,5 +1207,205 @@ export const jobAuditLogRelations = relations(jobAuditLog, ({ one }) => ({
   performedByUser: one(user, {
     fields: [jobAuditLog.performedBy],
     references: [user.id],
+  }),
+}));
+
+// =============================================================================
+// SUBSCRIPTION - Organization Billing (SaaS Tiering)
+// =============================================================================
+
+/**
+ * Plan identifiers - matches shared/plans.ts
+ */
+export type PlanId = "FREE" | "STANDARD" | "PROFESSIONAL" | "ENTERPRISE";
+
+/**
+ * Subscription status
+ */
+export type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "CANCELED" | "TRIAL";
+
+/**
+ * Billing cycle
+ */
+export type BillingCycle = "MONTHLY" | "YEARLY";
+
+/**
+ * Subscription table - Links organizations to their billing plan.
+ * Each organization can have at most one active subscription.
+ */
+export const subscription = pgTable(
+  "subscription",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // Plan from shared config (FREE, STANDARD, PROFESSIONAL, ENTERPRISE)
+    planId: text("plan_id").$type<PlanId>().notNull(),
+    // Asaas integration (nullable for FREE plan)
+    asaasSubscriptionId: text("asaas_subscription_id").unique(),
+    asaasCustomerId: text("asaas_customer_id"),
+    // Billing details
+    billingCycle: text("billing_cycle").$type<BillingCycle>(),
+    status: text("status")
+      .$type<SubscriptionStatus>()
+      .default("TRIAL")
+      .notNull(),
+    // Trial period
+    trialEndsAt: timestamp("trial_ends_at"),
+    // Current billing period
+    currentPeriodStart: timestamp("current_period_start"),
+    currentPeriodEnd: timestamp("current_period_end"),
+    nextBillingDate: timestamp("next_billing_date"),
+    // Cancellation tracking
+    canceledAt: timestamp("canceled_at"),
+    cancelReason: text("cancel_reason"),
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("subscription_org_id_idx").on(table.organizationId),
+    index("subscription_status_idx").on(table.status),
+    index("subscription_asaas_sub_id_idx").on(table.asaasSubscriptionId),
+  ],
+);
+
+// =============================================================================
+// PAYMENT HISTORY - Payment Records from Asaas
+// =============================================================================
+
+/**
+ * Payment status matching Asaas webhook events
+ */
+export type PaymentStatus =
+  | "PENDING"
+  | "AWAITING_RISK_ANALYSIS"
+  | "CONFIRMED"
+  | "RECEIVED"
+  | "OVERDUE"
+  | "REFUNDED"
+  | "REFUND_REQUESTED"
+  | "CHARGEBACK_REQUESTED"
+  | "CHARGEBACK_DISPUTE"
+  | "AWAITING_CHARGEBACK_REVERSAL"
+  | "DUNNING_REQUESTED"
+  | "DUNNING_RECEIVED"
+  | "DELETED";
+
+/**
+ * Payment method types
+ */
+export type PaymentMethod = "CREDIT_CARD" | "PIX" | "BOLETO";
+
+/**
+ * Payment source - where the payment record originated from.
+ * CHECKOUT: Created during checkout flow (provisional, for UX)
+ * WEBHOOK: Created/confirmed by Asaas webhook (canonical source)
+ */
+export type PaymentSource = "CHECKOUT" | "WEBHOOK";
+
+/**
+ * Payment History table - Records all payments for subscriptions.
+ * Populated via Asaas webhooks for accurate tracking.
+ */
+export const paymentHistory = pgTable(
+  "payment_history",
+  {
+    id: serial("id").primaryKey(),
+    subscriptionId: integer("subscription_id")
+      .notNull()
+      .references(() => subscription.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // Asaas references
+    asaasPaymentId: text("asaas_payment_id").unique(),
+    asaasInvoiceUrl: text("asaas_invoice_url"),
+    asaasBankSlipUrl: text("asaas_bank_slip_url"), // Boleto PDF
+    asaasPixQrCodeUrl: text("asaas_pix_qr_code_url"),
+    asaasPixPayload: text("asaas_pix_payload"), // Copia e Cola
+    // Payment details
+    amount: integer("amount").notNull(), // In centavos
+    netAmount: integer("net_amount"), // After fees
+    currency: text("currency").default("BRL").notNull(),
+    paymentMethod: text("payment_method").$type<PaymentMethod>().notNull(),
+    status: text("status").$type<PaymentStatus>().notNull(),
+    source: text("source").$type<PaymentSource>().default("WEBHOOK").notNull(),
+    // Dates
+    dueDate: timestamp("due_date"),
+    paidAt: timestamp("paid_at"),
+    // Card info (last 4 digits only for display)
+    cardLast4: text("card_last4"),
+    cardBrand: text("card_brand"),
+    // Timestamps
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("payment_subscription_id_idx").on(table.subscriptionId),
+    index("payment_org_id_idx").on(table.organizationId),
+    index("payment_status_idx").on(table.status),
+    uniqueIndex("payment_asaas_id_idx").on(table.asaasPaymentId),
+  ],
+);
+
+// =============================================================================
+// WEBHOOK EVENT LOG - Idempotency for Asaas Webhooks
+// =============================================================================
+
+/**
+ * Webhook Event Log table - Ensures idempotent webhook processing.
+ * Stores all received webhook events with their processing status.
+ * Uses UNIQUE constraint on eventId for "at least once" delivery handling.
+ */
+export const webhookEventLog = pgTable(
+  "webhook_event_log",
+  {
+    id: serial("id").primaryKey(),
+    eventId: text("event_id").notNull().unique(), // Asaas event ID
+    eventType: text("event_type").notNull(), // PAYMENT_RECEIVED, etc.
+    payload: jsonb("payload").notNull(), // Full webhook payload
+    processedAt: timestamp("processed_at"), // When processing completed
+    processingError: text("processing_error"), // Error message if failed
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("webhook_event_id_uidx").on(table.eventId),
+    index("webhook_event_type_idx").on(table.eventType),
+    index("webhook_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// =============================================================================
+// BILLING RELATIONS
+// =============================================================================
+
+export const subscriptionRelations = relations(
+  subscription,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [subscription.organizationId],
+      references: [organization.id],
+    }),
+    payments: many(paymentHistory),
+  }),
+);
+
+export const paymentHistoryRelations = relations(paymentHistory, ({ one }) => ({
+  subscription: one(subscription, {
+    fields: [paymentHistory.subscriptionId],
+    references: [subscription.id],
+  }),
+  organization: one(organization, {
+    fields: [paymentHistory.organizationId],
+    references: [organization.id],
   }),
 }));
