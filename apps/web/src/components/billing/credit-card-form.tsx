@@ -487,7 +487,9 @@ export function CreditCardForm({
         onComplete={() => {
           if (validate()) {
             checkoutMutation.mutate(formData)
+            return true
           }
+          return false
         }}
         disabled={checkoutMutation.isPending}
         isLoading={checkoutMutation.isPending}

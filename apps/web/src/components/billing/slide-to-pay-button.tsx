@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 
 interface SlideToPayButtonProps {
-  onComplete: () => void
+  /** Called when slide completes. Return true if action succeeded, false to reset button. */
+  onComplete: () => boolean
   disabled?: boolean
   isLoading?: boolean
   price?: string
@@ -57,10 +58,15 @@ export function SlideToPayButton({
 
     if (progress >= COMPLETE_THRESHOLD) {
       setPosition(maxPos)
-      setIsCompleted(true)
       setTimeout(() => {
-        onComplete()
-      }, 200)
+        const success = onComplete()
+        if (success) {
+          setIsCompleted(true)
+        } else {
+          // Validation failed, reset button
+          setPosition(0)
+        }
+      }, 100)
     } else {
       setPosition(0)
     }
