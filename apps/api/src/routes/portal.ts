@@ -119,7 +119,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         });
       }
 
-      const customerIds = customers.map((c) => c.id);
+      const customerIds = customers.map((cust) => cust.id);
 
       // Count total certificates
       const [totalResult] = await db
@@ -223,7 +223,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Certificado nao encontrado" }, 404);
       }
 
-      const customerIds = customers.map((c) => c.id);
+      const customerIds = customers.map((cust) => cust.id);
 
       // Get certificate with all details
       const [certificate] = await db
@@ -312,7 +312,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Certificado nao encontrado" }, 404);
       }
 
-      const customerIds = customers.map((c) => c.id);
+      const customerIds = customers.map((cust) => cust.id);
 
       // Get certificate
       const [certificate] = await db

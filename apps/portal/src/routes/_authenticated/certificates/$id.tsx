@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -376,7 +377,7 @@ function DetailItem({
   return (
     <div className="flex items-baseline justify-between gap-4">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className={`text-sm font-medium text-right ${mono ? "font-mono" : ""}`}>
+      <dd className={cn("text-sm font-medium text-right", mono && "font-mono")}>
         {value}
       </dd>
     </div>
