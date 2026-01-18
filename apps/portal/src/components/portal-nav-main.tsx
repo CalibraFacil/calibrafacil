@@ -38,8 +38,6 @@ const navItems: Array<NavItem> = [
     title: "Certificados",
     url: "/certificates",
     icon: <HugeiconsIcon icon={File01Icon} />,
-    badge: "em breve",
-    disabled: true,
   },
 ];
 

@@ -60,26 +60,30 @@ function PortalHome() {
         </Card>
 
         {/* Certificates Card */}
-        <Card className="opacity-60">
+        <Card className="hover:bg-muted/50 transition-colors">
           <CardHeader>
             <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
                 <HugeiconsIcon
                   icon={File01Icon}
-                  className="size-5 text-muted-foreground"
+                  className="size-5 text-primary"
                 />
               </div>
               <div>
                 <CardTitle className="text-lg">Certificados</CardTitle>
                 <CardDescription>
-                  Acesse certificados de calibração
+                  Acesse certificados de calibracao
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" className="w-full" disabled>
-              Em breve
+            <Button
+              variant="outline"
+              className="w-full"
+              render={<Link to="/certificates" />}
+            >
+              Ver Certificados
             </Button>
           </CardContent>
         </Card>
