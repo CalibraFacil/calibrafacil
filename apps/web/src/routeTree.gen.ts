@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermosDeUsoRouteImport } from './routes/termos-de-uso'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignUpIndexRouteImport } from './routes/sign-up/index'
@@ -61,6 +62,11 @@ import { Route as DashboardClientsIdCalibrationsRouteImport } from './routes/das
 import { Route as DashboardClientsIdAssetsRouteImport } from './routes/dashboard/clients/$id/assets'
 import { Route as DashboardAssetsIdEditRouteImport } from './routes/dashboard/assets/$id/edit'
 
+const TermosDeUsoRoute = TermosDeUsoRouteImport.update({
+  id: '/termos-de-uso',
+  path: '/termos-de-uso',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRouteRoute = DashboardRouteRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -333,6 +339,7 @@ const DashboardAssetsIdEditRoute = DashboardAssetsIdEditRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
   '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
   '/dashboard/jobs': typeof DashboardJobsRouteRouteWithChildren
@@ -385,6 +392,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/dashboard': typeof DashboardIndexRoute
@@ -431,6 +439,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
   '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
   '/dashboard/jobs': typeof DashboardJobsRouteRouteWithChildren
@@ -486,6 +495,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/termos-de-uso'
     | '/dashboard/assets'
     | '/dashboard/clients'
     | '/dashboard/jobs'
@@ -538,6 +548,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/termos-de-uso'
     | '/dashboard/settings'
     | '/accept-invitation/$id'
     | '/dashboard'
@@ -583,6 +594,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/termos-de-uso'
     | '/dashboard/assets'
     | '/dashboard/clients'
     | '/dashboard/jobs'
@@ -637,6 +649,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
+  TermosDeUsoRoute: typeof TermosDeUsoRoute
   AcceptInvitationIdRoute: typeof AcceptInvitationIdRoute
   SignInIndexRoute: typeof SignInIndexRoute
   SignUpIndexRoute: typeof SignUpIndexRoute
@@ -644,6 +657,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/termos-de-uso': {
+      id: '/termos-de-uso'
+      path: '/termos-de-uso'
+      fullPath: '/termos-de-uso'
+      preLoaderRoute: typeof TermosDeUsoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -1209,6 +1229,7 @@ const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRouteRoute: DashboardRouteRouteWithChildren,
+  TermosDeUsoRoute: TermosDeUsoRoute,
   AcceptInvitationIdRoute: AcceptInvitationIdRoute,
   SignInIndexRoute: SignInIndexRoute,
   SignUpIndexRoute: SignUpIndexRoute,

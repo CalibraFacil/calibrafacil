@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from '@tanstack/react-router';
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   InstagramIcon,
@@ -55,7 +56,7 @@ const Footer: React.FC = () => {
             <h4 className="font-bold text-slate-900 dark:text-white mb-4">Legal</h4>
             <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
               <li><a href="#" className="hover:text-sky-500">Privacidade</a></li>
-              <li><a href="#" className="hover:text-sky-500">Termos de Uso</a></li>
+              <li><Link to="/termos-de-uso" className="hover:text-sky-500">Termos de Uso</Link></li>
               <li><a href="#" className="hover:text-sky-500">Segurança</a></li>
             </ul>
           </div>
