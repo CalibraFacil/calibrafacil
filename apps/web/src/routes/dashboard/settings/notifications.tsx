@@ -139,7 +139,7 @@ function NotificationsSettingsPage() {
     },
   })
 
-  // Update preferences mutation
+  // Update preferences mutation with optimistic updates
   const updateMutation = useMutation({
     mutationFn: async (data: {
       preferences?: NotificationPreferencesMap
@@ -151,12 +151,37 @@ function NotificationsSettingsPage() {
       if (!res.ok) throw new Error('Failed to update preferences')
       return res.json()
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] })
-      toast.success('Preferências atualizadas')
+    onMutate: async (newData) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['notification-preferences'] })
+
+      // Snapshot previous value
+      const previousData = queryClient.getQueryData(['notification-preferences'])
+
+      // Optimistically update
+      queryClient.setQueryData(['notification-preferences'], (old: typeof prefsData) => {
+        if (!old) return old
+        return {
+          ...old,
+          ...(newData.emailEnabled !== undefined && { emailEnabled: newData.emailEnabled }),
+          ...(newData.preferences && {
+            preferences: { ...old.preferences, ...newData.preferences },
+          }),
+        }
+      })
+
+      return { previousData }
     },
-    onError: () => {
+    onError: (_err, _newData, context) => {
+      // Rollback on error
+      if (context?.previousData) {
+        queryClient.setQueryData(['notification-preferences'], context.previousData)
+      }
       toast.error('Erro ao atualizar preferências')
+    },
+    onSettled: () => {
+      // Refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] })
     },
   })
 
@@ -247,7 +272,6 @@ function NotificationsSettingsPage() {
               id="global-email"
               checked={emailEnabled}
               onCheckedChange={toggleGlobalEmail}
-              disabled={updateMutation.isPending}
             />
           </div>
         </CardContent>
@@ -287,7 +311,6 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'inApp')
                           }
-                          disabled={updateMutation.isPending}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -299,7 +322,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'email')
                           }
-                          disabled={updateMutation.isPending || !emailEnabled}
+                          disabled={!emailEnabled}
                         />
                       </div>
                     </div>
@@ -345,7 +368,6 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'inApp')
                           }
-                          disabled={updateMutation.isPending}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -357,7 +379,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'email')
                           }
-                          disabled={updateMutation.isPending || !emailEnabled}
+                          disabled={!emailEnabled}
                         />
                       </div>
                     </div>
@@ -403,7 +425,6 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'inApp')
                           }
-                          disabled={updateMutation.isPending}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -415,7 +436,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'email')
                           }
-                          disabled={updateMutation.isPending || !emailEnabled}
+                          disabled={!emailEnabled}
                         />
                       </div>
                     </div>
