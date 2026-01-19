@@ -1,17 +1,5 @@
 /** @jsxImportSource react */
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Link,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
+import { EmailLayout, StatusBox, styles, theme } from "./components/email-layout";
 
 interface CertificateReadyEmailProps {
   recipientName: string;
@@ -22,124 +10,172 @@ interface CertificateReadyEmailProps {
 }
 
 export function CertificateReadyEmail({
-  recipientName = "Usuário",
+  recipientName = "Usuario",
   jobId = "CAL-2024-0001",
   assetName = "Instrumento",
   customerName,
   portalUrl = "https://portal.calibrafacil.com/certificates",
 }: CertificateReadyEmailProps) {
-  const previewText = `Certificado de calibração ${jobId} disponível para download`;
+  const previewText = `Certificado de calibracao ${jobId} disponivel para download`;
 
   return (
-    <Html>
-      <Head />
-      <Preview>{previewText}</Preview>
-      <Body style={main}>
-        <Container style={container}>
-          <Heading style={heading}>Certificado Disponível</Heading>
-          <Text style={paragraph}>Olá {recipientName},</Text>
-          <Text style={paragraph}>
-            O certificado de calibração da ordem de serviço{" "}
-            <strong>{jobId}</strong> está pronto para download.
-          </Text>
+    <EmailLayout
+      previewText={previewText}
+      footerNote="Este certificado foi gerado em conformidade com a ISO/IEC 17025:2017."
+    >
+      <div style={styles.body}>
+        {/* Success Icon Circle */}
+        <div
+          style={{
+            width: "64px",
+            height: "64px",
+            backgroundColor: theme.colors.successBg,
+            borderRadius: "50%",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: "24px",
+          }}
+        >
+          <span style={{ fontSize: "32px" }}>{"\u2713"}</span>
+        </div>
+
+        <h1 style={styles.title}>Certificado Disponivel</h1>
+
+        <p style={styles.paragraph}>Ola {recipientName},</p>
+
+        <p style={styles.paragraph}>
+          O certificado de calibracao esta pronto para download no Portal do
+          Cliente.
+        </p>
+
+        {/* Job Details Box */}
+        <div
+          style={{
+            backgroundColor: theme.colors.codeBg,
+            border: `1px solid ${theme.colors.border}`,
+            borderRadius: "8px",
+            padding: "24px",
+            marginBottom: "24px",
+            textAlign: "left" as const,
+          }}
+        >
+          <div style={{ marginBottom: "16px" }}>
+            <span
+              style={{
+                display: "block",
+                fontSize: "12px",
+                color: theme.colors.secondaryText,
+                fontWeight: "600",
+                textTransform: "uppercase" as const,
+                letterSpacing: "0.05em",
+                marginBottom: "4px",
+              }}
+            >
+              Ordem de Servico
+            </span>
+            <span
+              style={{
+                fontFamily: theme.fontFamily.mono,
+                fontSize: "18px",
+                color: theme.colors.codeText,
+                fontWeight: "700",
+              }}
+            >
+              {jobId}
+            </span>
+          </div>
+
           {assetName && (
-            <Text style={paragraph}>
-              <strong>Instrumento:</strong> {assetName}
-            </Text>
+            <div style={{ marginBottom: customerName ? "16px" : "0" }}>
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  color: theme.colors.secondaryText,
+                  fontWeight: "600",
+                  textTransform: "uppercase" as const,
+                  letterSpacing: "0.05em",
+                  marginBottom: "4px",
+                }}
+              >
+                Instrumento
+              </span>
+              <span
+                style={{
+                  fontSize: "16px",
+                  color: theme.colors.primaryText,
+                  fontWeight: "500",
+                }}
+              >
+                {assetName}
+              </span>
+            </div>
           )}
+
           {customerName && (
-            <Text style={paragraph}>
-              <strong>Cliente:</strong> {customerName}
-            </Text>
+            <div>
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  color: theme.colors.secondaryText,
+                  fontWeight: "600",
+                  textTransform: "uppercase" as const,
+                  letterSpacing: "0.05em",
+                  marginBottom: "4px",
+                }}
+              >
+                Cliente
+              </span>
+              <span
+                style={{
+                  fontSize: "16px",
+                  color: theme.colors.primaryText,
+                  fontWeight: "500",
+                }}
+              >
+                {customerName}
+              </span>
+            </div>
           )}
-          <Section style={buttonContainer}>
-            <Button style={button} href={portalUrl}>
-              Acessar Portal
-            </Button>
-          </Section>
-          <Text style={paragraph}>
-            Você pode baixar o certificado acessando o Portal do Cliente em:{" "}
-            <Link href={portalUrl} style={link}>
-              {portalUrl}
-            </Link>
-          </Text>
-          <Hr style={hr} />
-          <Text style={footerStyle}>
-            Este certificado foi gerado em conformidade com a ISO/IEC 17025:2017.
-          </Text>
-          <Text style={footerStyle}>
-            Em caso de dúvidas, entre em contato com o laboratório responsável.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+        </div>
+
+        {/* Success Box */}
+        <StatusBox variant="success">
+          O certificado esta disponivel para download no Portal do Cliente. Voce
+          pode verificar sua autenticidade atraves do QR Code presente no
+          documento.
+        </StatusBox>
+
+        {/* Action Button */}
+        <a href={portalUrl} style={styles.button}>
+          Acessar Portal
+        </a>
+
+        <p
+          style={{
+            ...styles.paragraph,
+            marginTop: "24px",
+            marginBottom: "0",
+            fontSize: "13px",
+          }}
+        >
+          Caso o botao nao funcione, copie e cole o link abaixo no navegador:
+        </p>
+        <p
+          style={{
+            fontSize: "11px",
+            color: "#94a3b8",
+            wordBreak: "break-all" as const,
+            margin: "8px 0 0",
+          }}
+        >
+          {portalUrl}
+        </p>
+      </div>
+    </EmailLayout>
   );
 }
 
 export default CertificateReadyEmail;
-
-const main = {
-  backgroundColor: "#f6f9fc",
-  fontFamily:
-    '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Ubuntu,sans-serif',
-};
-
-const container = {
-  backgroundColor: "#ffffff",
-  margin: "0 auto",
-  padding: "20px 0 48px",
-  marginBottom: "64px",
-  borderRadius: "5px",
-};
-
-const heading = {
-  fontSize: "24px",
-  letterSpacing: "-0.5px",
-  lineHeight: "1.3",
-  fontWeight: "400",
-  color: "#484848",
-  padding: "17px 0 0",
-  textAlign: "center" as const,
-};
-
-const paragraph = {
-  margin: "0 0 15px",
-  fontSize: "15px",
-  lineHeight: "1.4",
-  color: "#3c4149",
-  padding: "0 40px",
-};
-
-const buttonContainer = {
-  padding: "27px 0 27px",
-  textAlign: "center" as const,
-};
-
-const button = {
-  backgroundColor: "#18181b",
-  borderRadius: "6px",
-  fontWeight: "600",
-  color: "#fff",
-  fontSize: "15px",
-  textDecoration: "none",
-  textAlign: "center" as const,
-  display: "inline-block",
-  padding: "12px 24px",
-};
-
-const link = {
-  color: "#2754C5",
-  textDecoration: "underline",
-};
-
-const hr = {
-  borderColor: "#dfe1e4",
-  margin: "42px 40px 26px",
-};
-
-const footerStyle = {
-  fontSize: "13px",
-  lineHeight: "1.4",
-  color: "#898989",
-  padding: "0 40px",
-};

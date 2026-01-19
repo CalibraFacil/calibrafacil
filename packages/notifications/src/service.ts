@@ -7,16 +7,24 @@ import {
   calibrationJob,
   customer,
   asset,
+  referenceStandard,
+  paymentHistory,
   type NotificationType,
   type NotificationPriority,
   type NotificationChannel,
   type NotificationRelatedEntity,
   type NotificationPreferenceMap,
 } from "@calibra-facil/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, lt, isNull, notInArray } from "drizzle-orm";
 import { Resend } from "resend";
 import { render } from "@react-email/components";
-import { NotificationEmail } from "@calibra-facil/email";
+import {
+  NotificationEmail,
+  JobNotificationEmail,
+  CertificateReadyEmail,
+  ComplianceAlertEmail,
+  PaymentNotificationEmail,
+} from "@calibra-facil/email";
 
 // Track if email misconfiguration warning has been logged this session
 let emailMisconfigWarningLogged = false;
@@ -24,6 +32,42 @@ let emailMisconfigWarningLogged = false;
 // =============================================================================
 // TYPES
 // =============================================================================
+
+/** Context for job-related email templates */
+export interface JobEmailContext {
+  jobId: string;
+  jobInternalId: number;
+  actorName?: string;
+  reason?: string;
+}
+
+/** Context for certificate ready email templates */
+export interface CertificateEmailContext {
+  jobId: string;
+  assetName?: string;
+  customerName?: string;
+  portalUrl: string;
+}
+
+/** Context for compliance alert email templates */
+export interface ComplianceEmailContext {
+  itemName: string;
+  dueDate: string;
+  daysRemaining: number;
+}
+
+/** Context for payment email templates */
+export interface PaymentEmailContext {
+  amount?: string;
+  description?: string;
+}
+
+/** Union type for all email contexts */
+export type EmailContext =
+  | { type: "job"; data: JobEmailContext }
+  | { type: "certificate"; data: CertificateEmailContext }
+  | { type: "compliance"; data: ComplianceEmailContext }
+  | { type: "payment"; data: PaymentEmailContext };
 
 export interface SendNotificationOptions {
   recipientUserId: string;
@@ -34,6 +78,8 @@ export interface SendNotificationOptions {
   message: string;
   relatedEntity?: NotificationRelatedEntity;
   actionUrl?: string;
+  /** Optional context for specialized email templates */
+  emailContext?: EmailContext;
 }
 
 export interface NotificationResult {
@@ -101,6 +147,7 @@ export async function sendNotification(
     message,
     relatedEntity,
     actionUrl,
+    emailContext,
   } = options;
 
   // Get user preferences
@@ -143,6 +190,7 @@ export async function sendNotification(
       title,
       message,
       actionUrl,
+      emailContext,
     });
 
     if (emailResult) {
@@ -163,6 +211,115 @@ export async function sendNotification(
 }
 
 /**
+ * Map notification type to job notification email type
+ */
+function getJobEmailType(
+  type: NotificationType,
+): "submitted" | "approved" | "rejected" | "assigned" | "overdue" {
+  switch (type) {
+    case "JOB_SUBMITTED_FOR_REVIEW":
+      return "submitted";
+    case "JOB_APPROVED":
+      return "approved";
+    case "JOB_REJECTED":
+      return "rejected";
+    case "JOB_ASSIGNED":
+      return "assigned";
+    case "JOB_OVERDUE":
+      return "overdue";
+    default:
+      return "submitted";
+  }
+}
+
+/**
+ * Render the appropriate email template based on notification type
+ */
+function renderEmailTemplate(
+  type: NotificationType,
+  recipientName: string,
+  title: string,
+  message: string,
+  actionUrl: string | undefined,
+  emailContext: EmailContext | undefined,
+): React.ReactElement {
+  // Job notifications
+  if (
+    emailContext?.type === "job" &&
+    [
+      "JOB_SUBMITTED_FOR_REVIEW",
+      "JOB_APPROVED",
+      "JOB_REJECTED",
+      "JOB_ASSIGNED",
+      "JOB_OVERDUE",
+    ].includes(type)
+  ) {
+    const { jobId, actorName, reason } = emailContext.data;
+    return JobNotificationEmail({
+      recipientName,
+      type: getJobEmailType(type),
+      jobId,
+      message,
+      actorName,
+      reason,
+      actionUrl: actionUrl ?? "#",
+    });
+  }
+
+  // Certificate ready notification
+  if (emailContext?.type === "certificate" && type === "CERTIFICATE_READY") {
+    const { jobId, assetName, customerName, portalUrl } = emailContext.data;
+    return CertificateReadyEmail({
+      recipientName,
+      jobId,
+      assetName,
+      customerName,
+      portalUrl,
+    });
+  }
+
+  // Compliance alerts
+  if (
+    emailContext?.type === "compliance" &&
+    ["ASSET_DUE_FOR_RECALIBRATION", "STANDARD_EXPIRING"].includes(type)
+  ) {
+    const { itemName, dueDate, daysRemaining } = emailContext.data;
+    return ComplianceAlertEmail({
+      recipientName,
+      type: type === "ASSET_DUE_FOR_RECALIBRATION" ? "asset" : "standard",
+      itemName,
+      dueDate,
+      daysRemaining,
+      actionUrl: actionUrl ?? "#",
+    });
+  }
+
+  // Payment notifications
+  if (
+    emailContext?.type === "payment" &&
+    ["PAYMENT_RECEIVED", "PAYMENT_FAILED"].includes(type)
+  ) {
+    const { amount, description } = emailContext.data;
+    return PaymentNotificationEmail({
+      recipientName,
+      type: type === "PAYMENT_RECEIVED" ? "received" : "failed",
+      amount,
+      description,
+      actionUrl,
+    });
+  }
+
+  // Fallback to generic notification email
+  return NotificationEmail({
+    recipientName,
+    title,
+    message,
+    actionUrl,
+    actionLabel: "Ver Detalhes",
+  });
+}
+
+/**
  * Send notification email using Resend and React Email templates
  */
 async function sendNotificationEmail(options: {
@@ -171,8 +328,9 @@ async function sendNotificationEmail(options: {
   title: string;
   message: string;
   actionUrl?: string;
+  emailContext?: EmailContext;
 }): Promise<boolean> {
-  const { recipientUserId, title, message, actionUrl } = options;
+  const { recipientUserId, type, title, message, actionUrl, emailContext } = options;
 
   // Check if Resend is configured - log warning once per session
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -203,17 +361,19 @@ async function sendNotificationEmail(options: {
 
   try {
     const resend = new Resend(resendApiKey);
+    const recipientName = userData.name ?? "Usuario";
 
-    // Render email using React Email template
-    const html = await render(
-      NotificationEmail({
-        recipientName: userData.name ?? "Usuário",
-        title,
-        message,
-        actionUrl,
-        actionLabel: "Ver Detalhes",
-      }),
+    // Render the appropriate email template
+    const emailElement = renderEmailTemplate(
+      type,
+      recipientName,
+      title,
+      message,
+      actionUrl,
+      emailContext,
     );
+
+    const html = await render(emailElement);
 
     await resend.emails.send({
       from: fromEmail,
@@ -280,6 +440,27 @@ async function getJobDetails(jobId: number): Promise<{
   return job ?? null;
 }
 
+/**
+ * Get asset details for notification context
+ */
+async function getAssetDetails(assetId: number): Promise<{
+  name: string;
+  manufacturer: string | null;
+  model: string | null;
+} | null> {
+  const [assetData] = await db
+    .select({
+      name: asset.name,
+      manufacturer: asset.manufacturer,
+      model: asset.model,
+    })
+    .from(asset)
+    .where(eq(asset.id, assetId))
+    .limit(1);
+
+  return assetData ?? null;
+}
+
 // =============================================================================
 // NOTIFICATION TRIGGERS - Called from job routes
 // =============================================================================
@@ -301,7 +482,7 @@ export async function notifyJobSubmittedForReview(
     .where(eq(user.id, submittedByUserId))
     .limit(1);
 
-  const submitterName = submitter?.name ?? "Um técnico";
+  const submitterName = submitter?.name ?? "Um tecnico";
 
   // Get admins and owners
   const recipients = await getRecipientsByRole(job.organizationId, ["admin", "owner"]);
@@ -315,14 +496,22 @@ export async function notifyJobSubmittedForReview(
       organizationId: job.organizationId,
       type: "JOB_SUBMITTED_FOR_REVIEW",
       priority: "HIGH",
-      title: "Calibração aguardando revisão",
-      message: `${submitterName} submeteu a OS ${job.jobIdentifier} para revisão.`,
+      title: "Calibracao aguardando revisao",
+      message: `${submitterName} submeteu a OS ${job.jobIdentifier} para revisao.`,
       relatedEntity: {
         entityType: "job",
         entityId: jobId,
         jobId: job.jobIdentifier,
       },
       actionUrl: `/dashboard/jobs/${jobId}`,
+      emailContext: {
+        type: "job",
+        data: {
+          jobId: job.jobIdentifier,
+          jobInternalId: jobId,
+          actorName: submitterName,
+        },
+      },
     });
   }
 }
@@ -357,14 +546,22 @@ export async function notifyJobApproved(
     organizationId: job.organizationId,
     type: "JOB_APPROVED",
     priority: "HIGH",
-    title: "Calibração aprovada",
-    message: `${approverName} aprovou a OS ${job.jobIdentifier}. O certificado está sendo gerado.`,
+    title: "Calibracao aprovada",
+    message: `${approverName} aprovou a OS ${job.jobIdentifier}. O certificado esta sendo gerado.`,
     relatedEntity: {
       entityType: "job",
       entityId: jobId,
       jobId: job.jobIdentifier,
     },
     actionUrl: `/dashboard/jobs/${jobId}`,
+    emailContext: {
+      type: "job",
+      data: {
+        jobId: job.jobIdentifier,
+        jobInternalId: jobId,
+        actorName: approverName,
+      },
+    },
   });
 }
 
@@ -399,7 +596,7 @@ export async function notifyJobRejected(
     organizationId: job.organizationId,
     type: "JOB_REJECTED",
     priority: "HIGH",
-    title: "Calibração rejeitada",
+    title: "Calibracao rejeitada",
     message: `${rejectorName} rejeitou a OS ${job.jobIdentifier}. Motivo: ${reason}`,
     relatedEntity: {
       entityType: "job",
@@ -407,6 +604,15 @@ export async function notifyJobRejected(
       jobId: job.jobIdentifier,
     },
     actionUrl: `/dashboard/jobs/${jobId}`,
+    emailContext: {
+      type: "job",
+      data: {
+        jobId: job.jobIdentifier,
+        jobInternalId: jobId,
+        actorName: rejectorName,
+        reason,
+      },
+    },
   });
 }
 
@@ -438,14 +644,22 @@ export async function notifyJobAssigned(
     organizationId: job.organizationId,
     type: "JOB_ASSIGNED",
     priority: "MEDIUM",
-    title: "Nova calibração atribuída",
-    message: `${assignerName} atribuiu a OS ${job.jobIdentifier} para você.`,
+    title: "Nova calibracao atribuida",
+    message: `${assignerName} atribuiu a OS ${job.jobIdentifier} para voce.`,
     relatedEntity: {
       entityType: "job",
       entityId: jobId,
       jobId: job.jobIdentifier,
     },
     actionUrl: `/dashboard/jobs/${jobId}`,
+    emailContext: {
+      type: "job",
+      data: {
+        jobId: job.jobIdentifier,
+        jobInternalId: jobId,
+        actorName: assignerName,
+      },
+    },
   });
 }
 
@@ -456,7 +670,7 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
   const job = await getJobDetails(jobId);
   if (!job) return;
 
-  // Get the customer's organization ID
+  // Get the customer's organization ID and name
   const [customerData] = await db
     .select({
       authOrganizationId: customer.authOrganizationId,
@@ -468,11 +682,18 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
 
   if (!customerData?.authOrganizationId) return;
 
+  // Get asset details
+  const assetData = await getAssetDetails(job.assetId);
+
   // Get all portal users in the customer organization
   const portalUsers = await db
     .select({ userId: member.userId })
     .from(member)
     .where(eq(member.organizationId, customerData.authOrganizationId));
+
+  // Determine the portal URL (could be configurable)
+  const portalUrl =
+    process.env.PORTAL_URL ?? "https://app.calibrafacil.com/portal/certificates";
 
   // Send email notifications to all portal users
   for (const portalUser of portalUsers) {
@@ -481,14 +702,365 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
       organizationId: customerData.authOrganizationId,
       type: "CERTIFICATE_READY",
       priority: "HIGH",
-      title: "Certificado de calibração disponível",
-      message: `O certificado da OS ${job.jobIdentifier} está pronto para download no portal.`,
+      title: "Certificado de calibracao disponivel",
+      message: `O certificado da OS ${job.jobIdentifier} esta pronto para download no portal.`,
       relatedEntity: {
         entityType: "job",
         entityId: jobId,
         jobId: job.jobIdentifier,
       },
       actionUrl: `/portal/certificates`,
+      emailContext: {
+        type: "certificate",
+        data: {
+          jobId: job.jobIdentifier,
+          assetName: assetData?.name,
+          customerName: customerData.name,
+          portalUrl,
+        },
+      },
+    });
+  }
+}
+
+// =============================================================================
+// COMPLIANCE NOTIFICATION TRIGGERS
+// =============================================================================
+
+/**
+ * Format a date to Brazilian format (DD/MM/YYYY)
+ */
+function formatDateBR(date: Date): string {
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+/**
+ * Calculate days remaining until a date
+ */
+function getDaysRemaining(dueDate: Date): number {
+  const now = new Date();
+  const diffTime = dueDate.getTime() - now.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Notify lab members when a customer's asset is due for recalibration
+ * Called by a scheduled job that checks asset.nextCalibrationDate
+ */
+export async function notifyAssetDueForRecalibration(
+  assetId: number,
+  organizationId: string,
+): Promise<void> {
+  // Get asset details with customer info
+  const [assetData] = await db
+    .select({
+      name: asset.name,
+      serialNumber: asset.serialNumber,
+      tag: asset.tag,
+      nextCalibrationDate: asset.nextCalibrationDate,
+      customerId: asset.customerId,
+    })
+    .from(asset)
+    .where(eq(asset.id, assetId))
+    .limit(1);
+
+  if (!assetData?.nextCalibrationDate) return;
+
+  // Get customer name
+  const [customerData] = await db
+    .select({ name: customer.name })
+    .from(customer)
+    .where(eq(customer.id, assetData.customerId))
+    .limit(1);
+
+  const daysRemaining = getDaysRemaining(assetData.nextCalibrationDate);
+  const dueDate = formatDateBR(assetData.nextCalibrationDate);
+  const assetIdentifier = assetData.tag || assetData.serialNumber || assetData.name;
+  const itemName = customerData
+    ? `${assetData.name} (${customerData.name})`
+    : assetData.name;
+
+  // Notify admins and owners of the lab
+  const recipients = await getRecipientsByRole(organizationId, ["admin", "owner"]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "ASSET_DUE_FOR_RECALIBRATION",
+      priority: daysRemaining <= 3 ? "HIGH" : "MEDIUM",
+      title: "Ativo vencendo calibracao",
+      message: `O instrumento ${assetIdentifier} esta com calibracao vencendo em ${daysRemaining} dias (${dueDate}).`,
+      relatedEntity: {
+        entityType: "asset",
+        entityId: assetId,
+      },
+      actionUrl: `/dashboard/assets/${assetId}`,
+      emailContext: {
+        type: "compliance",
+        data: {
+          itemName,
+          dueDate,
+          daysRemaining,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Notify lab members when a reference standard is expiring
+ * Called by a scheduled job that checks referenceStandard.nextCalibrationDate
+ */
+export async function notifyStandardExpiring(
+  standardId: number,
+  organizationId: string,
+): Promise<void> {
+  // Get reference standard details
+  const [standardData] = await db
+    .select({
+      name: referenceStandard.name,
+      serialNumber: referenceStandard.serialNumber,
+      certificateNumber: referenceStandard.certificateNumber,
+      nextCalibrationDate: referenceStandard.nextCalibrationDate,
+    })
+    .from(referenceStandard)
+    .where(eq(referenceStandard.id, standardId))
+    .limit(1);
+
+  if (!standardData?.nextCalibrationDate) return;
+
+  const daysRemaining = getDaysRemaining(standardData.nextCalibrationDate);
+  const dueDate = formatDateBR(standardData.nextCalibrationDate);
+  const standardIdentifier =
+    standardData.certificateNumber ||
+    standardData.serialNumber ||
+    standardData.name;
+  const itemName = `${standardData.name} (${standardIdentifier})`;
+
+  // Notify admins and owners of the lab
+  const recipients = await getRecipientsByRole(organizationId, ["admin", "owner"]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "STANDARD_EXPIRING",
+      priority: daysRemaining <= 3 ? "HIGH" : "MEDIUM",
+      title: "Padrao de referencia vencendo",
+      message: `O padrao ${standardIdentifier} esta com calibracao vencendo em ${daysRemaining} dias (${dueDate}).`,
+      relatedEntity: {
+        entityType: "standard",
+        entityId: standardId,
+      },
+      actionUrl: `/dashboard/standards/${standardId}`,
+      emailContext: {
+        type: "compliance",
+        data: {
+          itemName,
+          dueDate,
+          daysRemaining,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Notify relevant users when a calibration job is overdue
+ * Called by a scheduled job that checks calibrationJob.dueDate
+ */
+export async function notifyJobOverdue(jobId: number): Promise<void> {
+  // Get job details with extended info
+  const [jobData] = await db
+    .select({
+      jobIdentifier: calibrationJob.jobId,
+      organizationId: calibrationJob.organizationId,
+      technicianId: calibrationJob.technicianId,
+      createdBy: calibrationJob.createdBy,
+      dueDate: calibrationJob.dueDate,
+      status: calibrationJob.status,
+    })
+    .from(calibrationJob)
+    .where(eq(calibrationJob.id, jobId))
+    .limit(1);
+
+  if (!jobData?.dueDate) return;
+
+  // Only notify for jobs that are still in progress
+  const activeStatuses = ["DRAFT", "IN_PROGRESS", "REVIEW"];
+  if (!activeStatuses.includes(jobData.status)) return;
+
+  const daysOverdue = Math.abs(getDaysRemaining(jobData.dueDate));
+  const dueDate = formatDateBR(jobData.dueDate);
+
+  // Notify the technician (if assigned) and admins/owners
+  const recipientIds = new Set<string>();
+
+  if (jobData.technicianId) {
+    recipientIds.add(jobData.technicianId);
+  }
+  recipientIds.add(jobData.createdBy);
+
+  // Also notify admins/owners
+  const admins = await getRecipientsByRole(jobData.organizationId, ["admin", "owner"]);
+  admins.forEach((id) => recipientIds.add(id));
+
+  for (const recipientId of recipientIds) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId: jobData.organizationId,
+      type: "JOB_OVERDUE",
+      priority: "HIGH",
+      title: "Calibracao atrasada",
+      message: `A OS ${jobData.jobIdentifier} esta atrasada ha ${daysOverdue} ${daysOverdue === 1 ? "dia" : "dias"} (vencimento: ${dueDate}).`,
+      relatedEntity: {
+        entityType: "job",
+        entityId: jobId,
+        jobId: jobData.jobIdentifier,
+      },
+      actionUrl: `/dashboard/jobs/${jobId}`,
+      emailContext: {
+        type: "job",
+        data: {
+          jobId: jobData.jobIdentifier,
+          jobInternalId: jobId,
+        },
+      },
+    });
+  }
+}
+
+// =============================================================================
+// PAYMENT NOTIFICATION TRIGGERS
+// =============================================================================
+
+/**
+ * Format currency to Brazilian Real
+ */
+function formatCurrencyBRL(amount: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(amount / 100); // Assuming amount is in cents
+}
+
+/**
+ * Notify organization when a payment is received
+ * Called from payment webhook handler
+ */
+export async function notifyPaymentReceived(
+  paymentId: number,
+  organizationId: string,
+): Promise<void> {
+  // Get payment details
+  const [payment] = await db
+    .select({
+      amount: paymentHistory.amount,
+      paymentMethod: paymentHistory.paymentMethod,
+      paidAt: paymentHistory.paidAt,
+    })
+    .from(paymentHistory)
+    .where(eq(paymentHistory.id, paymentId))
+    .limit(1);
+
+  if (!payment) return;
+
+  const amount = payment.amount ? formatCurrencyBRL(payment.amount) : undefined;
+  const paidDate = payment.paidAt ? formatDateBR(payment.paidAt) : "hoje";
+
+  // Notify admins and owners
+  const recipients = await getRecipientsByRole(organizationId, ["admin", "owner"]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "PAYMENT_RECEIVED",
+      priority: "MEDIUM",
+      title: "Pagamento recebido",
+      message: amount
+        ? `Pagamento de ${amount} confirmado em ${paidDate}.`
+        : `Pagamento confirmado em ${paidDate}.`,
+      relatedEntity: {
+        entityType: "payment",
+        entityId: paymentId,
+      },
+      actionUrl: `/dashboard/settings/billing`,
+      emailContext: {
+        type: "payment",
+        data: {
+          amount,
+          description: payment.paymentMethod ?? undefined,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Notify organization when a payment fails
+ * Called from payment webhook handler
+ */
+export async function notifyPaymentFailed(
+  paymentId: number,
+  organizationId: string,
+  failureReason?: string,
+): Promise<void> {
+  // Get payment details
+  const [payment] = await db
+    .select({
+      amount: paymentHistory.amount,
+      paymentMethod: paymentHistory.paymentMethod,
+      dueDate: paymentHistory.dueDate,
+    })
+    .from(paymentHistory)
+    .where(eq(paymentHistory.id, paymentId))
+    .limit(1);
+
+  if (!payment) return;
+
+  const amount = payment.amount ? formatCurrencyBRL(payment.amount) : undefined;
+  const dueDate = payment.dueDate ? formatDateBR(payment.dueDate) : undefined;
+
+  let message = "Nao foi possivel processar seu pagamento.";
+  if (amount && dueDate) {
+    message = `O pagamento de ${amount} com vencimento em ${dueDate} nao foi processado.`;
+  } else if (amount) {
+    message = `O pagamento de ${amount} nao foi processado.`;
+  }
+
+  if (failureReason) {
+    message += ` Motivo: ${failureReason}`;
+  }
+
+  // Notify admins and owners
+  const recipients = await getRecipientsByRole(organizationId, ["admin", "owner"]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "PAYMENT_FAILED",
+      priority: "HIGH",
+      title: "Pagamento nao processado",
+      message,
+      relatedEntity: {
+        entityType: "payment",
+        entityId: paymentId,
+      },
+      actionUrl: `/dashboard/settings/billing`,
+      emailContext: {
+        type: "payment",
+        data: {
+          amount,
+          description: failureReason ?? undefined,
+        },
+      },
     });
   }
 }
