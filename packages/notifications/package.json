@@ -9,7 +9,7 @@
   "description": "Notification service for CalibraFacil - handles in-app and email notifications",
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "keywords": ["notifications", "calibration", "iso17025"],
   "author": "",
