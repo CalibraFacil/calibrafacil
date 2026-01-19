@@ -47,18 +47,18 @@ interface NotificationItemProps {
   onClick?: () => void
 }
 
-const notificationIcons: Record<NotificationType, React.ElementType> = {
-  JOB_SUBMITTED_FOR_REVIEW: <HugeiconsIcon icon={File02Icon} />,
-  JOB_APPROVED: <HugeiconsIcon icon={CheckmarkCircle02Icon} />,
-  JOB_REJECTED: <HugeiconsIcon icon={CancelCircleIcon} />,
-  JOB_ASSIGNED: <HugeiconsIcon icon={UserAdd02Icon} />,
-  CERTIFICATE_READY: <HugeiconsIcon icon={File02Icon} />,
-  ASSET_DUE_FOR_RECALIBRATION: <HugeiconsIcon icon={Calendar03Icon} />,
-  STANDARD_EXPIRING: <HugeiconsIcon icon={Alert02Icon} />,
-  JOB_OVERDUE: <HugeiconsIcon icon={Alert02Icon} />,
-  PAYMENT_RECEIVED: <HugeiconsIcon icon={CreditCardValidationIcon} />,
-  PAYMENT_FAILED: <HugeiconsIcon icon={CancelCircleIcon} />,
-}
+const notificationIcons = {
+  JOB_SUBMITTED_FOR_REVIEW: File02Icon,
+  JOB_APPROVED: CheckmarkCircle02Icon,
+  JOB_REJECTED: CancelCircleIcon,
+  JOB_ASSIGNED: UserAdd02Icon,
+  CERTIFICATE_READY: File02Icon,
+  ASSET_DUE_FOR_RECALIBRATION: Calendar03Icon,
+  STANDARD_EXPIRING: Alert02Icon,
+  JOB_OVERDUE: Alert02Icon,
+  PAYMENT_RECEIVED: CreditCardValidationIcon,
+  PAYMENT_FAILED: CancelCircleIcon,
+} as const
 
 const notificationColors: Record<NotificationType, string> = {
   JOB_SUBMITTED_FOR_REVIEW: 'text-blue-500',
@@ -77,9 +77,7 @@ export function NotificationItem({
   notification,
   onClick,
 }: NotificationItemProps) {
-  const Icon = notificationIcons[notification.type] ?? (
-    <HugeiconsIcon icon={Notification01Icon} />
-  )
+  const icon = notificationIcons[notification.type] ?? Notification01Icon
   const iconColor =
     notificationColors[notification.type] ?? 'text-muted-foreground'
   const isUnread = notification.status === 'UNREAD'
@@ -98,7 +96,7 @@ export function NotificationItem({
       onClick={onClick}
     >
       <div className={cn('mt-0.5', iconColor)}>
-        <Icon className="h-4 w-4" />
+        <HugeiconsIcon icon={icon} className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-start justify-between gap-2">
