@@ -860,9 +860,11 @@ export type NotificationChannelPreference = z.infer<typeof NotificationChannelPr
 
 /**
  * Full notification preferences map
+ * Note: Using z.string() for keys to avoid z.record(enum, ...) validation issues
+ * The application layer handles unknown keys gracefully
  */
 export const NotificationPreferencesMapSchema = z.record(
-  NotificationTypeSchema,
+  z.string(),
   NotificationChannelPreferenceSchema,
 );
 
