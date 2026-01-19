@@ -17,6 +17,7 @@
   "dependencies": {
     "@calibra-facil/db": "workspace:*",
     "@calibra-facil/email": "workspace:*",
+    "@react-email/components": "^1.0.2",
     "drizzle-orm": "^0.45.1",
     "resend": "^4.5.0"
   },

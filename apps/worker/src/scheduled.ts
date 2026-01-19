@@ -65,10 +65,16 @@ async function withDbClient<T>(
 }
 
 /**
- * Check for assets due for recalibration within 7 days
+ * Check for assets due for recalibration within 7 days.
+ *
+ * Duplicate prevention: Assets are notified once per 7-day window.
+ * This is intentional - we alert once when entering the window, not daily spam.
+ * The asset should be recalibrated or the alert will fire again next week.
  */
 async function checkAssetsDueForRecalibration(
   client: Client,
+  offset = 0,
+  batchSize = 100,
 ): Promise<AssetDueRow[]> {
   const result = await client.query<AssetDueRow>(
     `
@@ -93,21 +99,27 @@ async function checkAssetsDueForRecalibration(
           AND sn.type = 'ASSET_DUE_FOR_RECALIBRATION'
           AND sn.lead_time_days = 7
           AND sn.sent_at IS NOT NULL
-          AND sn.sent_at > CURRENT_DATE - INTERVAL '1 day'
+          AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
     ORDER BY a.next_calibration_date ASC
-    LIMIT 100
+    LIMIT $1 OFFSET $2
     `,
+    [batchSize, offset],
   );
 
   return result.rows;
 }
 
 /**
- * Check for reference standards expiring within 30 days
+ * Check for reference standards expiring within 30 days.
+ *
+ * Duplicate prevention: Standards are notified once per 7-day window.
+ * With 30-day lead time, this means up to ~4 weekly reminders before expiry.
  */
 async function checkStandardsExpiring(
   client: Client,
+  offset = 0,
+  batchSize = 100,
 ): Promise<StandardExpiringRow[]> {
   const result = await client.query<StandardExpiringRow>(
     `
@@ -132,17 +144,25 @@ async function checkStandardsExpiring(
           AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
     ORDER BY rs.next_calibration_date ASC
-    LIMIT 100
+    LIMIT $1 OFFSET $2
     `,
+    [batchSize, offset],
   );
 
   return result.rows;
 }
 
 /**
- * Check for overdue calibration jobs
+ * Check for overdue calibration jobs.
+ *
+ * Duplicate prevention: Overdue jobs are notified daily until resolved.
+ * This ensures visibility for time-sensitive compliance issues.
  */
-async function checkOverdueJobs(client: Client): Promise<OverdueJobRow[]> {
+async function checkOverdueJobs(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<OverdueJobRow[]> {
   const result = await client.query<OverdueJobRow>(
     `
     SELECT
@@ -167,8 +187,9 @@ async function checkOverdueJobs(client: Client): Promise<OverdueJobRow[]> {
           AND sn.sent_at > CURRENT_DATE - INTERVAL '1 day'
       )
     ORDER BY cj.due_date ASC
-    LIMIT 100
+    LIMIT $1 OFFSET $2
     `,
+    [batchSize, offset],
   );
 
   return result.rows;
@@ -277,8 +298,10 @@ async function recordScheduledNotification(
   );
 }
 
+const BATCH_SIZE = 100;
+
 /**
- * Process all scheduled compliance notifications
+ * Process all scheduled compliance notifications with pagination
  */
 export async function processScheduledNotifications(
   env: ScheduledEnv,
@@ -292,118 +315,122 @@ export async function processScheduledNotifications(
   let jobsProcessed = 0;
 
   await withDbClient(env, async (client) => {
-    // 1. Process assets due for recalibration
-    const assetsDue = await checkAssetsDueForRecalibration(client);
-    console.log(`[Scheduled] Found ${assetsDue.length} assets due for recalibration`);
+    // 1. Process assets due for recalibration (with pagination)
+    let assetOffset = 0;
+    let assetBatch: AssetDueRow[];
 
-    for (const asset of assetsDue) {
-      try {
-        const admins = await getOrgAdmins(client, asset.organization_id);
+    do {
+      assetBatch = await checkAssetsDueForRecalibration(client, assetOffset, BATCH_SIZE);
+      if (assetBatch.length > 0) {
+        console.log(`[Scheduled] Processing ${assetBatch.length} assets (offset ${assetOffset})`);
+      }
 
-        for (const adminId of admins) {
-          await createNotification(client, {
-            recipientUserId: adminId,
+      for (const asset of assetBatch) {
+        try {
+          const admins = await getOrgAdmins(client, asset.organization_id);
+
+          for (const adminId of admins) {
+            await createNotification(client, {
+              recipientUserId: adminId,
+              organizationId: asset.organization_id,
+              type: "ASSET_DUE_FOR_RECALIBRATION",
+              priority: "MEDIUM",
+              title: "Ativo vencendo calibração",
+              message: `O ativo "${asset.name}" (${asset.tag}) do cliente ${asset.customer_name} vence em ${asset.days_until_due} dia(s).`,
+              relatedEntity: {
+                entityType: "asset",
+                entityId: asset.id,
+              },
+              actionUrl: `/dashboard/assets/${asset.id}`,
+            });
+          }
+
+          await recordScheduledNotification(client, {
             organizationId: asset.organization_id,
             type: "ASSET_DUE_FOR_RECALIBRATION",
-            priority: "MEDIUM",
-            title: "Ativo vencendo calibração",
-            message: `O ativo "${asset.name}" (${asset.tag}) do cliente ${asset.customer_name} vence em ${asset.days_until_due} dia(s).`,
-            relatedEntity: {
-              entityType: "asset",
-              entityId: asset.id,
-            },
-            actionUrl: `/dashboard/assets/${asset.id}`,
+            entityType: "asset",
+            entityId: asset.id,
+            scheduledFor: asset.next_calibration_date,
+            leadTimeDays: 7,
           });
+
+          assetsProcessed++;
+        } catch (error) {
+          console.error(`[Scheduled] Error processing asset ${asset.id}:`, error);
         }
-
-        await recordScheduledNotification(client, {
-          organizationId: asset.organization_id,
-          type: "ASSET_DUE_FOR_RECALIBRATION",
-          entityType: "asset",
-          entityId: asset.id,
-          scheduledFor: asset.next_calibration_date,
-          leadTimeDays: 7,
-        });
-
-        assetsProcessed++;
-      } catch (error) {
-        console.error(`[Scheduled] Error processing asset ${asset.id}:`, error);
       }
-    }
 
-    // 2. Process expiring reference standards
-    const standardsExpiring = await checkStandardsExpiring(client);
-    console.log(`[Scheduled] Found ${standardsExpiring.length} standards expiring`);
+      assetOffset += BATCH_SIZE;
+    } while (assetBatch.length === BATCH_SIZE);
 
-    for (const standard of standardsExpiring) {
-      try {
-        const admins = await getOrgAdmins(client, standard.organization_id);
+    // 2. Process expiring reference standards (with pagination)
+    let standardOffset = 0;
+    let standardBatch: StandardExpiringRow[];
 
-        for (const adminId of admins) {
-          await createNotification(client, {
-            recipientUserId: adminId,
+    do {
+      standardBatch = await checkStandardsExpiring(client, standardOffset, BATCH_SIZE);
+      if (standardBatch.length > 0) {
+        console.log(`[Scheduled] Processing ${standardBatch.length} standards (offset ${standardOffset})`);
+      }
+
+      for (const standard of standardBatch) {
+        try {
+          const admins = await getOrgAdmins(client, standard.organization_id);
+
+          for (const adminId of admins) {
+            await createNotification(client, {
+              recipientUserId: adminId,
+              organizationId: standard.organization_id,
+              type: "STANDARD_EXPIRING",
+              priority: "HIGH",
+              title: "Padrão de referência vencendo",
+              message: `O padrão "${standard.name}" (${standard.serial_number}) vence em ${standard.days_until_expiry} dia(s). Providencie a recalibração.`,
+              relatedEntity: {
+                entityType: "standard",
+                entityId: standard.id,
+              },
+              actionUrl: `/dashboard/standards/${standard.id}`,
+            });
+          }
+
+          await recordScheduledNotification(client, {
             organizationId: standard.organization_id,
             type: "STANDARD_EXPIRING",
-            priority: "HIGH",
-            title: "Padrão de referência vencendo",
-            message: `O padrão "${standard.name}" (${standard.serial_number}) vence em ${standard.days_until_expiry} dia(s). Providencie a recalibração.`,
-            relatedEntity: {
-              entityType: "standard",
-              entityId: standard.id,
-            },
-            actionUrl: `/dashboard/standards/${standard.id}`,
+            entityType: "standard",
+            entityId: standard.id,
+            scheduledFor: standard.next_calibration_date,
+            leadTimeDays: 30,
           });
+
+          standardsProcessed++;
+        } catch (error) {
+          console.error(
+            `[Scheduled] Error processing standard ${standard.id}:`,
+            error,
+          );
         }
-
-        await recordScheduledNotification(client, {
-          organizationId: standard.organization_id,
-          type: "STANDARD_EXPIRING",
-          entityType: "standard",
-          entityId: standard.id,
-          scheduledFor: standard.next_calibration_date,
-          leadTimeDays: 30,
-        });
-
-        standardsProcessed++;
-      } catch (error) {
-        console.error(
-          `[Scheduled] Error processing standard ${standard.id}:`,
-          error,
-        );
       }
-    }
 
-    // 3. Process overdue jobs
-    const overdueJobs = await checkOverdueJobs(client);
-    console.log(`[Scheduled] Found ${overdueJobs.length} overdue jobs`);
+      standardOffset += BATCH_SIZE;
+    } while (standardBatch.length === BATCH_SIZE);
 
-    for (const job of overdueJobs) {
-      try {
-        // Notify the technician (or creator if no technician)
-        const recipientId = job.technician_id ?? job.created_by;
+    // 3. Process overdue jobs (with pagination)
+    let jobOffset = 0;
+    let jobBatch: OverdueJobRow[];
 
-        await createNotification(client, {
-          recipientUserId: recipientId,
-          organizationId: job.organization_id,
-          type: "JOB_OVERDUE",
-          priority: "HIGH",
-          title: "Calibração atrasada",
-          message: `A OS ${job.job_id} está ${job.days_overdue} dia(s) atrasada.`,
-          relatedEntity: {
-            entityType: "job",
-            entityId: job.id,
-            jobId: job.job_id,
-          },
-          actionUrl: `/dashboard/jobs/${job.id}`,
-        });
+    do {
+      jobBatch = await checkOverdueJobs(client, jobOffset, BATCH_SIZE);
+      if (jobBatch.length > 0) {
+        console.log(`[Scheduled] Processing ${jobBatch.length} overdue jobs (offset ${jobOffset})`);
+      }
 
-        // Also notify admins
-        const admins = await getOrgAdmins(client, job.organization_id);
-        for (const adminId of admins) {
-          if (adminId === recipientId) continue; // Don't duplicate
+      for (const job of jobBatch) {
+        try {
+          // Notify the technician (or creator if no technician)
+          const recipientId = job.technician_id ?? job.created_by;
 
           await createNotification(client, {
-            recipientUserId: adminId,
+            recipientUserId: recipientId,
             organizationId: job.organization_id,
             type: "JOB_OVERDUE",
             priority: "HIGH",
@@ -416,22 +443,45 @@ export async function processScheduledNotifications(
             },
             actionUrl: `/dashboard/jobs/${job.id}`,
           });
+
+          // Also notify admins
+          const admins = await getOrgAdmins(client, job.organization_id);
+          for (const adminId of admins) {
+            if (adminId === recipientId) continue; // Don't duplicate
+
+            await createNotification(client, {
+              recipientUserId: adminId,
+              organizationId: job.organization_id,
+              type: "JOB_OVERDUE",
+              priority: "HIGH",
+              title: "Calibração atrasada",
+              message: `A OS ${job.job_id} está ${job.days_overdue} dia(s) atrasada.`,
+              relatedEntity: {
+                entityType: "job",
+                entityId: job.id,
+                jobId: job.job_id,
+              },
+              actionUrl: `/dashboard/jobs/${job.id}`,
+            });
+          }
+
+          await recordScheduledNotification(client, {
+            organizationId: job.organization_id,
+            type: "JOB_OVERDUE",
+            entityType: "job",
+            entityId: job.id,
+            scheduledFor: job.due_date,
+            leadTimeDays: 0,
+          });
+
+          jobsProcessed++;
+        } catch (error) {
+          console.error(`[Scheduled] Error processing job ${job.id}:`, error);
         }
-
-        await recordScheduledNotification(client, {
-          organizationId: job.organization_id,
-          type: "JOB_OVERDUE",
-          entityType: "job",
-          entityId: job.id,
-          scheduledFor: job.due_date,
-          leadTimeDays: 0,
-        });
-
-        jobsProcessed++;
-      } catch (error) {
-        console.error(`[Scheduled] Error processing job ${job.id}:`, error);
       }
-    }
+
+      jobOffset += BATCH_SIZE;
+    } while (jobBatch.length === BATCH_SIZE);
   });
 
   return { assetsProcessed, standardsProcessed, jobsProcessed };

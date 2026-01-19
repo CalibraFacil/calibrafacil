@@ -15,6 +15,11 @@ import {
 } from "@calibra-facil/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { Resend } from "resend";
+import { render } from "@react-email/components";
+import { NotificationEmail } from "@calibra-facil/email";
+
+// Track if email misconfiguration warning has been logged this session
+let emailMisconfigWarningLogged = false;
 
 // =============================================================================
 // TYPES
@@ -158,7 +163,7 @@ export async function sendNotification(
 }
 
 /**
- * Send notification email using Resend
+ * Send notification email using Resend and React Email templates
  */
 async function sendNotificationEmail(options: {
   recipientUserId: string;
@@ -167,7 +172,22 @@ async function sendNotificationEmail(options: {
   message: string;
   actionUrl?: string;
 }): Promise<boolean> {
-  const { recipientUserId, type, title, message, actionUrl } = options;
+  const { recipientUserId, title, message, actionUrl } = options;
+
+  // Check if Resend is configured - log warning once per session
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const fromEmail = process.env.RESEND_FROM_EMAIL;
+
+  if (!resendApiKey || !fromEmail) {
+    if (!emailMisconfigWarningLogged) {
+      console.error(
+        "[Notifications] EMAIL MISCONFIGURED: RESEND_API_KEY or RESEND_FROM_EMAIL not set. " +
+        "Users will only receive in-app notifications, no emails will be sent."
+      );
+      emailMisconfigWarningLogged = true;
+    }
+    return false;
+  }
 
   // Get user email
   const [userData] = await db
@@ -181,26 +201,25 @@ async function sendNotificationEmail(options: {
     return false;
   }
 
-  // Check if Resend is configured
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
-
-  if (!resendApiKey || !fromEmail) {
-    console.warn("[Notifications] Resend not configured, skipping email");
-    return false;
-  }
-
   try {
     const resend = new Resend(resendApiKey);
 
-    // Build email content
-    const emailContent = buildEmailContent(type, title, message, actionUrl, userData.name);
+    // Render email using React Email template
+    const html = await render(
+      NotificationEmail({
+        recipientName: userData.name ?? "Usuário",
+        title,
+        message,
+        actionUrl,
+        actionLabel: "Ver Detalhes",
+      }),
+    );
 
     await resend.emails.send({
       from: fromEmail,
       to: userData.email,
       subject: title,
-      html: emailContent,
+      html,
     });
 
     return true;
@@ -208,42 +227,6 @@ async function sendNotificationEmail(options: {
     console.error("[Notifications] Failed to send email:", error);
     return false;
   }
-}
-
-/**
- * Build HTML email content
- */
-function buildEmailContent(
-  type: NotificationType,
-  title: string,
-  message: string,
-  actionUrl?: string,
-  userName?: string,
-): string {
-  const greeting = userName ? `Olá ${userName},` : "Olá,";
-  const actionButton = actionUrl
-    ? `<p style="margin: 24px 0;"><a href="${actionUrl}" style="background-color: #18181b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Ver Detalhes</a></p>`
-    : "";
-
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    </head>
-    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; background-color: #f6f9fc; padding: 20px;">
-      <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 8px; padding: 40px;">
-        <h1 style="font-size: 24px; color: #18181b; margin-bottom: 24px;">${title}</h1>
-        <p style="color: #3c4149; font-size: 15px; line-height: 1.6;">${greeting}</p>
-        <p style="color: #3c4149; font-size: 15px; line-height: 1.6;">${message}</p>
-        ${actionButton}
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
-        <p style="color: #898989; font-size: 13px;">Esta é uma notificação automática do CalibraFácil.</p>
-      </div>
-    </body>
-    </html>
-  `;
 }
 
 // =============================================================================
