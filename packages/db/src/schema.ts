@@ -1409,3 +1409,214 @@ export const paymentHistoryRelations = relations(paymentHistory, ({ one }) => ({
     references: [organization.id],
   }),
 }));
+
+// =============================================================================
+// NOTIFICATION SYSTEM - ISO 17025 Compliance Alerts & Operational Notifications
+// =============================================================================
+
+/**
+ * Notification type enum - categorizes notification events
+ */
+export type NotificationType =
+  | "JOB_SUBMITTED_FOR_REVIEW"
+  | "JOB_APPROVED"
+  | "JOB_REJECTED"
+  | "JOB_ASSIGNED"
+  | "CERTIFICATE_READY"
+  | "ASSET_DUE_FOR_RECALIBRATION"
+  | "STANDARD_EXPIRING"
+  | "JOB_OVERDUE"
+  | "PAYMENT_RECEIVED"
+  | "PAYMENT_FAILED";
+
+/**
+ * Notification priority levels
+ */
+export type NotificationPriority = "HIGH" | "MEDIUM" | "LOW";
+
+/**
+ * Notification status values
+ */
+export type NotificationStatus = "UNREAD" | "READ" | "ARCHIVED";
+
+/**
+ * Notification delivery channel
+ */
+export type NotificationChannel = "IN_APP" | "EMAIL";
+
+/**
+ * Related entity reference for deep linking
+ */
+export type NotificationRelatedEntity = {
+  entityType: "job" | "asset" | "standard" | "payment" | "customer";
+  entityId: number | string;
+  jobId?: string; // Human-readable job ID for display
+};
+
+/**
+ * Notification table - Stores all notifications for users.
+ * Never hard-delete for ISO 17025 audit compliance - use ARCHIVED status.
+ */
+export const notification = pgTable(
+  "notification",
+  {
+    id: serial("id").primaryKey(),
+    recipientUserId: text("recipient_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    type: text("type").$type<NotificationType>().notNull(),
+    priority: text("priority")
+      .$type<NotificationPriority>()
+      .default("MEDIUM")
+      .notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    relatedEntity: jsonb("related_entity").$type<NotificationRelatedEntity>(),
+    actionUrl: text("action_url"),
+    channelsSent: jsonb("channels_sent")
+      .$type<NotificationChannel[]>()
+      .default([])
+      .notNull(),
+    status: text("status")
+      .$type<NotificationStatus>()
+      .default("UNREAD")
+      .notNull(),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at"),
+  },
+  (table) => [
+    index("notification_recipient_user_id_idx").on(table.recipientUserId),
+    index("notification_organization_id_idx").on(table.organizationId),
+    index("notification_status_idx").on(table.status),
+    index("notification_type_idx").on(table.type),
+    index("notification_created_at_idx").on(table.createdAt),
+  ],
+);
+
+/**
+ * Notification preference per notification type
+ */
+export type NotificationPreferenceMap = {
+  [K in NotificationType]?: {
+    inApp: boolean;
+    email: boolean;
+  };
+};
+
+/**
+ * Digest frequency for email notifications
+ */
+export type DigestFrequency = "NONE" | "DAILY" | "WEEKLY";
+
+/**
+ * Notification Preference table - User preferences for notification delivery.
+ * One record per user with JSONB preferences map.
+ */
+export const notificationPreference = pgTable(
+  "notification_preference",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .unique()
+      .references(() => user.id, { onDelete: "cascade" }),
+    preferences: jsonb("preferences")
+      .$type<NotificationPreferenceMap>()
+      .notNull(),
+    emailEnabled: boolean("email_enabled").default(true).notNull(),
+    digestFrequency: text("digest_frequency")
+      .$type<DigestFrequency>()
+      .default("NONE")
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [uniqueIndex("notification_preference_user_id_uidx").on(table.userId)],
+);
+
+/**
+ * Scheduled notification entity type
+ */
+export type ScheduledNotificationEntityType = "asset" | "standard" | "job";
+
+/**
+ * Scheduled Notification table - Tracks scheduled compliance alerts.
+ * Prevents duplicate alerts by using unique constraint on entity + type + lead time.
+ */
+export const scheduledNotification = pgTable(
+  "scheduled_notification",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    type: text("type").$type<NotificationType>().notNull(),
+    entityType: text("entity_type")
+      .$type<ScheduledNotificationEntityType>()
+      .notNull(),
+    entityId: integer("entity_id").notNull(),
+    scheduledFor: timestamp("scheduled_for").notNull(),
+    leadTimeDays: integer("lead_time_days").default(7).notNull(),
+    sentAt: timestamp("sent_at"),
+    canceled: boolean("canceled").default(false).notNull(),
+    canceledReason: text("canceled_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("scheduled_notification_organization_id_idx").on(table.organizationId),
+    index("scheduled_notification_scheduled_for_idx").on(table.scheduledFor),
+    index("scheduled_notification_entity_idx").on(
+      table.entityType,
+      table.entityId,
+    ),
+    uniqueIndex("scheduled_notification_unique_idx").on(
+      table.organizationId,
+      table.type,
+      table.entityType,
+      table.entityId,
+      table.leadTimeDays,
+    ),
+  ],
+);
+
+// =============================================================================
+// NOTIFICATION RELATIONS
+// =============================================================================
+
+export const notificationRelations = relations(notification, ({ one }) => ({
+  recipient: one(user, {
+    fields: [notification.recipientUserId],
+    references: [user.id],
+  }),
+  organization: one(organization, {
+    fields: [notification.organizationId],
+    references: [organization.id],
+  }),
+}));
+
+export const notificationPreferenceRelations = relations(
+  notificationPreference,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [notificationPreference.userId],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const scheduledNotificationRelations = relations(
+  scheduledNotification,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [scheduledNotification.organizationId],
+      references: [organization.id],
+    }),
+  }),
+);

@@ -4,6 +4,7 @@ import { renderToString } from "react-dom/server";
 import { CertificateHtml, type JobData, LabelHtml, type LabelData } from "@calibra-facil/documents";
 import React from "react";
 import QRCode from "qrcode";
+import { processScheduledNotifications } from "./scheduled.js";
 
 interface Env {
     BROWSER: Fetcher;
@@ -582,5 +583,30 @@ export default {
         }), {
             headers: { "Content-Type": "application/json" },
         });
+    },
+
+    // Scheduled handler for compliance notifications (runs daily at 08:00 UTC)
+    async scheduled(
+        _event: ScheduledEvent,
+        env: Env,
+        ctx: ExecutionContext
+    ): Promise<void> {
+        console.log("[Scheduled] Starting daily compliance notification check");
+        const start = performance.now();
+
+        try {
+            const result = await processScheduledNotifications(env);
+            const duration = Math.round(performance.now() - start);
+
+            console.log(
+                `[Scheduled] Completed in ${duration}ms: ` +
+                `${result.assetsProcessed} assets, ` +
+                `${result.standardsProcessed} standards, ` +
+                `${result.jobsProcessed} jobs`
+            );
+        } catch (error) {
+            console.error("[Scheduled] Error processing notifications:", error);
+            throw error;
+        }
     },
 };
