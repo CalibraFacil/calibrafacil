@@ -6,7 +6,7 @@
     "dev": "vite dev --port 5174 --host",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint",
+    "lint": "oxlint",
     "check-types": "tsc --noEmit",
     "deploy": "wrangler pages deploy dist --project-name=calibra-facil-portal"
   },
@@ -33,7 +33,6 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.0",
