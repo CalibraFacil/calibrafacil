@@ -144,6 +144,7 @@ function NotificationsSettingsPage() {
     mutationFn: async (data: {
       preferences?: NotificationPreferencesMap
       emailEnabled?: boolean
+      notifySelfActions?: boolean
     }) => {
       const res = await api.api.notifications.preferences.$put({
         json: data,
@@ -162,6 +163,7 @@ function NotificationsSettingsPage() {
 
   const preferences = prefsData?.preferences ?? defaultPreferences
   const emailEnabled = prefsData?.emailEnabled ?? true
+  const notifySelfActions = prefsData?.notifySelfActions ?? false
 
   const togglePreference = (
     notificationType: NotificationType,
@@ -183,6 +185,12 @@ function NotificationsSettingsPage() {
   const toggleGlobalEmail = () => {
     updateMutation.mutate({
       emailEnabled: !emailEnabled,
+    })
+  }
+
+  const toggleSelfNotifications = () => {
+    updateMutation.mutate({
+      notifySelfActions: !notifySelfActions,
     })
   }
 
@@ -230,7 +238,7 @@ function NotificationsSettingsPage() {
             Controle geral de notificações por email
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5 pr-4">
               <label
@@ -247,6 +255,26 @@ function NotificationsSettingsPage() {
               id="global-email"
               checked={emailEnabled}
               onCheckedChange={toggleGlobalEmail}
+              disabled={updateMutation.isPending}
+            />
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5 pr-4">
+              <label
+                htmlFor="self-notifications"
+                className="text-sm font-medium cursor-pointer"
+              >
+                Notificar minhas próprias ações
+              </label>
+              <p className="text-sm text-muted-foreground">
+                Receber notificações quando você atribui uma calibração para si mesmo
+              </p>
+            </div>
+            <Switch
+              id="self-notifications"
+              checked={notifySelfActions}
+              onCheckedChange={toggleSelfNotifications}
               disabled={updateMutation.isPending}
             />
           </div>

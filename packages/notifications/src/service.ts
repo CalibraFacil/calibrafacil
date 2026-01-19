@@ -112,6 +112,7 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
 async function getUserPreferences(userId: string): Promise<{
   preferences: NotificationPreferenceMap;
   emailEnabled: boolean;
+  notifySelfActions: boolean;
 }> {
   const [prefs] = await db
     .select()
@@ -123,12 +124,14 @@ async function getUserPreferences(userId: string): Promise<{
     return {
       preferences: DEFAULT_PREFERENCES,
       emailEnabled: true,
+      notifySelfActions: false,
     };
   }
 
   return {
     preferences: prefs.preferences,
     emailEnabled: prefs.emailEnabled,
+    notifySelfActions: prefs.notifySelfActions,
   };
 }
 
@@ -627,8 +630,14 @@ export async function notifyJobAssigned(
   const job = await getJobDetails(jobId);
   if (!job) return;
 
-  // Don't notify if assigning to self
-  if (technicianId === assignedByUserId) return;
+  // Check if this is a self-assignment
+  const isSelfAssignment = technicianId === assignedByUserId;
+
+  if (isSelfAssignment) {
+    // Check user's preference for self-action notifications
+    const { notifySelfActions } = await getUserPreferences(technicianId);
+    if (!notifySelfActions) return;
+  }
 
   // Get assigner name
   const [assigner] = await db
@@ -637,7 +646,9 @@ export async function notifyJobAssigned(
     .where(eq(user.id, assignedByUserId))
     .limit(1);
 
-  const assignerName = assigner?.name ?? "Um gestor";
+  const assignerName = isSelfAssignment
+    ? "Voce"
+    : (assigner?.name ?? "Um gestor");
 
   await sendNotification({
     recipientUserId: technicianId,
@@ -645,7 +656,9 @@ export async function notifyJobAssigned(
     type: "JOB_ASSIGNED",
     priority: "MEDIUM",
     title: "Nova calibracao atribuida",
-    message: `${assignerName} atribuiu a OS ${job.jobIdentifier} para voce.`,
+    message: isSelfAssignment
+      ? `Voce atribuiu a OS ${job.jobIdentifier} para si mesmo.`
+      : `${assignerName} atribuiu a OS ${job.jobIdentifier} para voce.`,
     relatedEntity: {
       entityType: "job",
       entityId: jobId,

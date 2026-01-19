@@ -536,6 +536,15 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
 
+        // 11. Notify technician if assigned during creation
+        if (input.technicianId) {
+          try {
+            await notifyJobAssigned(newJob.id, input.technicianId, session.user.id);
+          } catch (err) {
+            console.error("[Jobs] Failed to send assignment notification:", err);
+          }
+        }
+
         return c.json(newJob, 201);
       } catch (error) {
         console.error("Error creating job:", error);
@@ -656,6 +665,15 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
 
+      // Notify technician if changed
+      if (changes.technicianId && input.technicianId) {
+        try {
+          await notifyJobAssigned(id, input.technicianId, session.user.id);
+        } catch (err) {
+          console.error("[Jobs] Failed to send assignment notification:", err);
+        }
+      }
+
       return c.json(updated);
     },
   )
@@ -733,12 +751,12 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
 
-      // Send notification to assigned technician (fire and forget)
-      notifyJobAssigned(id, input.technicianId, session.user.id).catch(
-        (err) => {
-          console.error("[Jobs] Failed to send assignment notification:", err);
-        },
-      );
+      // Send notification to assigned technician
+      try {
+        await notifyJobAssigned(id, input.technicianId, session.user.id);
+      } catch (err) {
+        console.error("[Jobs] Failed to send assignment notification:", err);
+      }
 
       return c.json({
         message: `Job atribuido a ${techMember.userName}`,

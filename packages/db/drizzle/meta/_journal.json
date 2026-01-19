@@ -120,6 +120,13 @@
       "when": 1768781807633,
       "tag": "0016_hard_jazinda",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1768844476620,
+      "tag": "0017_steady_baron_strucker",
+      "breakpoints": true
     }
   ]
 }

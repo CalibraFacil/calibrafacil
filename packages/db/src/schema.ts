@@ -1528,6 +1528,7 @@ export const notificationPreference = pgTable(
       .$type<NotificationPreferenceMap>()
       .notNull(),
     emailEnabled: boolean("email_enabled").default(true).notNull(),
+    notifySelfActions: boolean("notify_self_actions").default(false).notNull(),
     digestFrequency: text("digest_frequency")
       .$type<DigestFrequency>()
       .default("NONE")

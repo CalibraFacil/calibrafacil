@@ -241,6 +241,7 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({
         preferences: DEFAULT_PREFERENCES,
         emailEnabled: true,
+        notifySelfActions: false,
         digestFrequency: "NONE",
       });
     }
@@ -248,6 +249,7 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
     return c.json({
       preferences: prefs.preferences,
       emailEnabled: prefs.emailEnabled,
+      notifySelfActions: prefs.notifySelfActions,
       digestFrequency: prefs.digestFrequency,
     });
   })
@@ -286,6 +288,10 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
           updateData.emailEnabled = input.emailEnabled;
         }
 
+        if (input.notifySelfActions !== undefined) {
+          updateData.notifySelfActions = input.notifySelfActions;
+        }
+
         if (input.digestFrequency !== undefined) {
           updateData.digestFrequency = input.digestFrequency;
         }
@@ -304,6 +310,7 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
           message: "Preferencias atualizadas",
           preferences: updated.preferences,
           emailEnabled: updated.emailEnabled,
+          notifySelfActions: updated.notifySelfActions,
           digestFrequency: updated.digestFrequency,
         });
       } else {
@@ -314,6 +321,7 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
             userId: session.user.id,
             preferences: input.preferences ?? DEFAULT_PREFERENCES,
             emailEnabled: input.emailEnabled ?? true,
+            notifySelfActions: input.notifySelfActions ?? false,
             digestFrequency: input.digestFrequency ?? "NONE",
           })
           .returning();
@@ -326,6 +334,7 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
           message: "Preferencias criadas",
           preferences: created.preferences,
           emailEnabled: created.emailEnabled,
+          notifySelfActions: created.notifySelfActions,
           digestFrequency: created.digestFrequency,
         });
       }
