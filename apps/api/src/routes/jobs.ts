@@ -15,6 +15,12 @@ import {
   type StandardSnapshot,
 } from "@calibra-facil/db/schema";
 import {
+  notifyJobSubmittedForReview,
+  notifyJobApproved,
+  notifyJobRejected,
+  notifyJobAssigned,
+} from "@calibra-facil/notifications";
+import {
   CreateJobSchema,
   UpdateJobSchema,
   ListJobsQuerySchema,
@@ -230,8 +236,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
         daysUntilDue: job.dueDate
           ? Math.ceil(
-            (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-          )
+              (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+            )
           : null,
         // Extract method name from snapshot for display
         methodName: (job.methodSnapshot as MethodSnapshot)?.methodName,
@@ -330,8 +336,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
       daysUntilDue: job.dueDate
         ? Math.ceil(
-          (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-        )
+            (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+          )
         : null,
     };
 
@@ -727,6 +733,13 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
 
+      // Send notification to assigned technician (fire and forget)
+      notifyJobAssigned(id, input.technicianId, session.user.id).catch(
+        (err) => {
+          console.error("[Jobs] Failed to send assignment notification:", err);
+        },
+      );
+
       return c.json({
         message: `Job atribuido a ${techMember.userName}`,
         data: updated,
@@ -798,6 +811,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
+      });
+
+      // Send notifications to admins/owners (fire and forget)
+      notifyJobSubmittedForReview(id, session.user.id).catch((err) => {
+        console.error("[Jobs] Failed to send submit notification:", err);
       });
 
       return c.json({
@@ -906,7 +924,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       // Determine new status
-      const newStatus = existing.status === "DRAFT" ? "IN_PROGRESS" : existing.status;
+      const newStatus =
+        existing.status === "DRAFT" ? "IN_PROGRESS" : existing.status;
 
       // Update job with execution data
       const [updated] = await db
@@ -925,7 +944,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         jobId: id,
         action: "execute",
         changes: {
-          status: existing.status !== newStatus ? { old: existing.status, new: newStatus } : undefined,
+          status:
+            existing.status !== newStatus
+              ? { old: existing.status, new: newStatus }
+              : undefined,
           data: { old: existing.data, new: input.data },
           standardsSnapshot: standardsSnapshot
             ? { old: existing.standardsSnapshot, new: standardsSnapshot }
@@ -1026,6 +1048,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
+      // Send notification to technician (fire and forget)
+      notifyJobApproved(id, session.user.id).catch((err) => {
+        console.error("[Jobs] Failed to send approval notification:", err);
+      });
+
       return c.json({
         message: "Gerando certificado...",
         data: updated,
@@ -1098,6 +1125,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
         reason: input.reason,
+      });
+
+      // Send notification to technician (fire and forget)
+      notifyJobRejected(id, session.user.id, input.reason).catch((err) => {
+        console.error("[Jobs] Failed to send rejection notification:", err);
       });
 
       return c.json({

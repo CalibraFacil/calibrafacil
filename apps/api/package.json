@@ -19,6 +19,7 @@
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
+    "@calibra-facil/notifications": "workspace:^",
     "@hono/zod-validator": "^0.7.6",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.1",

@@ -789,3 +789,99 @@ export const ListJobsQuerySchema = z.object({
 });
 
 export type ListJobsQuery = z.infer<typeof ListJobsQuerySchema>;
+
+// =============================================================================
+// NOTIFICATION SCHEMAS - In-App & Email Notifications (ISO 17025 Compliance)
+// =============================================================================
+
+/**
+ * Notification type enum
+ */
+export const NotificationTypeSchema = z.enum([
+  "JOB_SUBMITTED_FOR_REVIEW",
+  "JOB_APPROVED",
+  "JOB_REJECTED",
+  "JOB_ASSIGNED",
+  "CERTIFICATE_READY",
+  "ASSET_DUE_FOR_RECALIBRATION",
+  "STANDARD_EXPIRING",
+  "JOB_OVERDUE",
+  "PAYMENT_RECEIVED",
+  "PAYMENT_FAILED",
+]);
+
+export type NotificationType = z.infer<typeof NotificationTypeSchema>;
+
+/**
+ * Notification status values
+ */
+export const NotificationStatusSchema = z.enum(["UNREAD", "READ", "ARCHIVED"]);
+
+export type NotificationStatus = z.infer<typeof NotificationStatusSchema>;
+
+/**
+ * Notification priority levels
+ */
+export const NotificationPrioritySchema = z.enum(["HIGH", "MEDIUM", "LOW"]);
+
+export type NotificationPriority = z.infer<typeof NotificationPrioritySchema>;
+
+/**
+ * Schema for listing notifications with pagination and filters
+ */
+export const ListNotificationsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  status: NotificationStatusSchema.optional(),
+  type: NotificationTypeSchema.optional(),
+  priority: NotificationPrioritySchema.optional(),
+});
+
+export type ListNotificationsQuery = z.infer<typeof ListNotificationsQuerySchema>;
+
+/**
+ * Schema for marking notifications as read
+ */
+export const MarkNotificationsReadSchema = z.object({
+  notificationIds: z.array(z.number()).min(1, "Selecione ao menos uma notificacao"),
+});
+
+export type MarkNotificationsReadInput = z.infer<typeof MarkNotificationsReadSchema>;
+
+/**
+ * Individual notification channel preference
+ */
+export const NotificationChannelPreferenceSchema = z.object({
+  inApp: z.boolean().default(true),
+  email: z.boolean().default(true),
+});
+
+export type NotificationChannelPreference = z.infer<typeof NotificationChannelPreferenceSchema>;
+
+/**
+ * Full notification preferences map
+ */
+export const NotificationPreferencesMapSchema = z.record(
+  NotificationTypeSchema,
+  NotificationChannelPreferenceSchema,
+);
+
+export type NotificationPreferencesMap = z.infer<typeof NotificationPreferencesMapSchema>;
+
+/**
+ * Digest frequency options
+ */
+export const DigestFrequencySchema = z.enum(["NONE", "DAILY", "WEEKLY"]);
+
+export type DigestFrequency = z.infer<typeof DigestFrequencySchema>;
+
+/**
+ * Schema for updating notification preferences
+ */
+export const UpdateNotificationPreferencesSchema = z.object({
+  preferences: NotificationPreferencesMapSchema.optional(),
+  emailEnabled: z.boolean().optional(),
+  digestFrequency: DigestFrequencySchema.optional(),
+});
+
+export type UpdateNotificationPreferencesInput = z.infer<typeof UpdateNotificationPreferencesSchema>;

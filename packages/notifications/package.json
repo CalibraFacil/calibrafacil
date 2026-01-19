@@ -1,0 +1,28 @@
+{
+  "name": "@calibra-facil/notifications",
+  "type": "module",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./service": "./src/service.ts"
+  },
+  "description": "Notification service for CalibraFacil - handles in-app and email notifications",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["notifications", "calibration", "iso17025"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@calibra-facil/db": "workspace:*",
+    "@calibra-facil/email": "workspace:*",
+    "drizzle-orm": "^0.45.1",
+    "resend": "^4.5.0"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.9.3"
+  }
+}
