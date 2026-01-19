@@ -131,16 +131,16 @@ export function NotificationBell() {
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              asChild
-            >
-              <Link to="/dashboard/settings/notifications">
-                <HugeiconsIcon
-                  icon={Settings01Icon}
-                  className="h-3.5 w-3.5"
-                />
-                <span className="sr-only">Configurações</span>
-              </Link>
-            </Button>
+              render={() => (
+                <Link to="/dashboard/settings/notifications">
+                  <HugeiconsIcon
+                    icon={Settings01Icon}
+                    className="h-3.5 w-3.5"
+                  />
+                  <span className="sr-only">Configurações</span>
+                </Link>
+              )}
+            />
           </div>
         </div>
 
@@ -187,12 +187,12 @@ export function NotificationBell() {
               <Button
                 variant="ghost"
                 className="w-full h-8 text-xs"
-                asChild
-              >
-                <Link to="/dashboard/settings/notifications">
-                  Ver todas as notificações
-                </Link>
-              </Button>
+                render={() => (
+                  <Link to="/dashboard/settings/notifications">
+                    Ver todas as notificações
+                  </Link>
+                )}
+              ></Button>
             </div>
           </>
         )}
