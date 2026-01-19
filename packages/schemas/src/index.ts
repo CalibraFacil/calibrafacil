@@ -883,6 +883,7 @@ export type DigestFrequency = z.infer<typeof DigestFrequencySchema>;
 export const UpdateNotificationPreferencesSchema = z.object({
   preferences: NotificationPreferencesMapSchema.optional(),
   emailEnabled: z.boolean().optional(),
+  notifySelfActions: z.boolean().optional(),
   digestFrequency: DigestFrequencySchema.optional(),
 });
 
