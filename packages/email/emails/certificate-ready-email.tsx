@@ -1,3 +1,4 @@
+/** @jsxRuntime automatic */
 /** @jsxImportSource react */
 import { EmailLayout, StatusBox, styles, theme } from "./components/email-layout";
 
