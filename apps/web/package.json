@@ -6,7 +6,7 @@
     "dev": "vite --port 5173 --host",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "lint": "oxlint",
     "format": "prettier",
     "check": "prettier --write . && oxlint --fix"

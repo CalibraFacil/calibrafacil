@@ -1,0 +1,7 @@
+# Local development variables for Worker
+# Copy this file to .dev.vars and fill in the values
+# .dev.vars is gitignored and will be used by wrangler dev
+
+# Local database connection string for Hyperdrive
+# This overrides the Hyperdrive binding in local development
+# HYPERDRIVE_LOCAL_CONNECTION_STRING=postgresql://user:pass@host/db
