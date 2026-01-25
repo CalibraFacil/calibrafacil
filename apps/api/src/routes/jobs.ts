@@ -1440,12 +1440,15 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         isCurrent: boolean;
       }> = [];
 
+      // Safety limit to prevent infinite loops from corrupted data
+      const MAX_CHAIN_LENGTH = 100;
+
       // Walk backwards to find the original
       let current = job;
-      const visited = new Set<number>();
+      let iterations = 0;
 
-      while (current.supersedesId && !visited.has(current.id)) {
-        visited.add(current.id);
+      while (current.supersedesId && iterations < MAX_CHAIN_LENGTH) {
+        iterations++;
         const [parent] = await db
           .select()
           .from(calibrationJob)
@@ -1460,9 +1463,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       // Now walk forward from the original, building the chain
-      visited.clear();
-      while (current && !visited.has(current.id)) {
-        visited.add(current.id);
+      // Use Set to detect cycles (corrupted data where A->B->A)
+      const chainIds = new Set<number>();
+      while (current && chainIds.size < MAX_CHAIN_LENGTH) {
+        if (chainIds.has(current.id)) break; // Cycle detected
+        chainIds.add(current.id);
         chain.push({
           id: current.id,
           jobId: current.jobId,
