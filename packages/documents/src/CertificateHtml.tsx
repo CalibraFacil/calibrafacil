@@ -101,6 +101,13 @@ export type JobData = {
     data: Record<string, unknown> | null;
     results: Record<string, unknown> | null;
     approverName: string | null;
+    // Amendment fields - ISO 17025 Clause 7.8.4.1
+    supersedesId?: number | null;
+    supersededById?: number | null;
+    amendmentNumber?: number | null;
+    amendmentReason?: string | null;
+    originalJobId?: string | null; // Human-readable ID of the superseded job
+    originalApprovedAt?: Date | null;
 };
 
 const styles = `
@@ -255,6 +262,60 @@ const styles = `
     color: #333;
     margin-bottom: 4px;
     font-size: 10pt;
+  }
+  /* Amendment notice styles - ISO 17025 Clause 7.8.4.1 */
+  .amendment-notice {
+    border: 2px solid #f97316;
+    background: #fff7ed;
+    padding: 12px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+  }
+  .amendment-notice h3 {
+    color: #c2410c;
+    font-size: 11pt;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .amendment-notice p {
+    color: #9a3412;
+    font-size: 9pt;
+    margin-bottom: 4px;
+  }
+  .amendment-notice strong {
+    color: #7c2d12;
+  }
+  /* Watermark container - covers entire page on every page */
+  .superseded-watermark {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  .superseded-watermark-text {
+    font-size: 72pt;
+    font-weight: bold;
+    color: rgba(239, 68, 68, 0.18);
+    transform: rotate(-45deg);
+    white-space: nowrap;
+    letter-spacing: 8px;
+  }
+  @media print {
+    .superseded-watermark {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
   }
 `;
 
@@ -444,6 +505,37 @@ export function CertificateHtml({ job }: { job: JobData }) {
                             <div className="number">{job.jobId}</div>
                         </div>
                     </div>
+
+                    {/* Amendment Notice - ISO 17025 Clause 7.8.4.1 */}
+                    {job.supersedesId && (
+                        <div className="amendment-notice">
+                            <h3>CERTIFICADO RETIFICADO</h3>
+                            <p>
+                                Este certificado <strong>substitui e cancela</strong> o certificado nº{" "}
+                                <strong>{job.originalJobId || `#${job.supersedesId}`}</strong>
+                            </p>
+                            <p>
+                                <strong>Retificação nº {job.amendmentNumber || 1}</strong>
+                            </p>
+                            {job.amendmentReason && (
+                                <p>
+                                    <strong>Motivo da retificação:</strong> {job.amendmentReason}
+                                </p>
+                            )}
+                            {job.originalApprovedAt && (
+                                <p>
+                                    Certificado original emitido em: {formatDate(job.originalApprovedAt)}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Superseded Watermark - appears on all pages */}
+                    {job.supersededById && (
+                        <div className="superseded-watermark">
+                            <span className="superseded-watermark-text">CANCELADO</span>
+                        </div>
+                    )}
 
                     {/* Customer Section */}
                     <div className="section">

@@ -981,6 +981,7 @@ export const referenceStandardAuditLogRelations = relations(
  * - APPROVED: Certificate generated and ready
  * - REJECTED: Manager rejected, needs rework
  * - CANCELED: Job was canceled (soft delete equivalent)
+ * - SUPERSEDED: Certificate was amended and replaced by a new version (ISO 17025 Clause 7.8.4.1)
  */
 export type JobStatus =
   | "DRAFT"
@@ -989,7 +990,8 @@ export type JobStatus =
   | "GENERATING_PDF"
   | "APPROVED"
   | "REJECTED"
-  | "CANCELED";
+  | "CANCELED"
+  | "SUPERSEDED";
 
 /**
  * Method Snapshot - Frozen copy of method at job creation time.
@@ -1107,6 +1109,39 @@ export const calibrationJob = pgTable(
     }),
     rejectedAt: timestamp("rejected_at"),
     rejectionReason: text("rejection_reason"),
+    // ==========================================================================
+    // AMENDMENT TRACKING - ISO 17025:2017 Clause 7.8.4.1
+    // "When a report or certificate needs to be revised after issue, each
+    // revision shall be uniquely identified and shall contain a reference
+    // to the original."
+    // ==========================================================================
+    /**
+     * References the job that this job supersedes (if this is a correction).
+     * NULL for original certificates.
+     * Example: Job #123 has error. Create Job #456 with supersedesId=123.
+     */
+    supersedesId: integer("supersedes_id"),
+    /**
+     * References the job that superseded this job (if this has been corrected).
+     * NULL for current valid certificates.
+     * Automatically set when another job is created to supersede this one.
+     */
+    supersededById: integer("superseded_by_id"),
+    /**
+     * Amendment number (1, 2, 3...) if this is a correction.
+     * NULL for original certificates.
+     * Used for display: "Retificação nº 2"
+     */
+    amendmentNumber: integer("amendment_number"),
+    /**
+     * Mandatory reason for amendment (ISO 17025 requirement).
+     * Example: "Erro de digitação no valor de incerteza"
+     */
+    amendmentReason: text("amendment_reason"),
+    /**
+     * Timestamp when this job was superseded by another.
+     */
+    supersededAt: timestamp("superseded_at"),
   },
   (table) => [
     index("job_organization_id_idx").on(table.organizationId),
@@ -1117,6 +1152,9 @@ export const calibrationJob = pgTable(
     index("job_status_idx").on(table.status),
     index("job_due_date_idx").on(table.dueDate),
     uniqueIndex("job_org_job_id_uidx").on(table.organizationId, table.jobId),
+    // Amendment tracking indexes for efficient chain lookups
+    index("job_supersedes_id_idx").on(table.supersedesId),
+    index("job_superseded_by_id_idx").on(table.supersededById),
   ],
 );
 
@@ -1196,6 +1234,19 @@ export const calibrationJobRelations = relations(
       relationName: "jobRejecter",
     }),
     auditLogs: many(jobAuditLog),
+    // Amendment tracking - ISO 17025:2017 Clause 7.8.4.1
+    // The job that this one supersedes (original certificate being corrected)
+    supersedes: one(calibrationJob, {
+      fields: [calibrationJob.supersedesId],
+      references: [calibrationJob.id],
+      relationName: "amendmentChain",
+    }),
+    // The job that superseded this one (the corrected certificate)
+    supersededBy: one(calibrationJob, {
+      fields: [calibrationJob.supersededById],
+      references: [calibrationJob.id],
+      relationName: "amendmentChainReverse",
+    }),
   }),
 );
 
@@ -1423,6 +1474,7 @@ export type NotificationType =
   | "JOB_REJECTED"
   | "JOB_ASSIGNED"
   | "CERTIFICATE_READY"
+  | "CERTIFICATE_AMENDED" // ISO 17025 Clause 7.8.4.1 - Certificate amendment notification
   | "ASSET_DUE_FOR_RECALIBRATION"
   | "STANDARD_EXPIRING"
   | "JOB_OVERDUE"

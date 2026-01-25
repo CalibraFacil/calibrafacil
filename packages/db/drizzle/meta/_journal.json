@@ -127,6 +127,13 @@
       "when": 1768844476620,
       "tag": "0017_steady_baron_strucker",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1769322035676,
+      "tag": "0018_sloppy_lady_ursula",
+      "breakpoints": true
     }
   ]
 }
