@@ -58,6 +58,7 @@ type JobStatus =
     | 'APPROVED'
     | 'REJECTED'
     | 'CANCELED'
+    | 'SUPERSEDED'
 
 const statusLabels: Record<JobStatus, string> = {
     DRAFT: 'Rascunho',
@@ -67,6 +68,7 @@ const statusLabels: Record<JobStatus, string> = {
     APPROVED: 'Aprovado',
     REJECTED: 'Rejeitado',
     CANCELED: 'Cancelado',
+    SUPERSEDED: 'Retificado',
 }
 
 const statusVariants: Record<
@@ -80,6 +82,7 @@ const statusVariants: Record<
     APPROVED: 'default',
     REJECTED: 'destructive',
     CANCELED: 'secondary',
+    SUPERSEDED: 'outline',
 }
 
 function formatDate(dateString: string | null | undefined): string {
@@ -292,8 +295,8 @@ function JobDetailPage() {
     const canCancel = ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'REJECTED'].includes(job.status)
     const canAssign = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
 
-    // APPROVED status: Show immutable Quality Record view
-    if (job.status === 'APPROVED') {
+    // APPROVED or SUPERSEDED status: Show immutable Quality Record view
+    if (job.status === 'APPROVED' || job.status === 'SUPERSEDED') {
         return (
             <ApprovedJobRecord
                 job={job as Parameters<typeof ApprovedJobRecord>[0]['job']}

@@ -119,6 +119,11 @@ interface ApprovedJob {
   createdAt: string
   certificateUrl?: string | null
   labelUrl?: string | null
+  // Amendment fields - ISO 17025 Clause 7.8.4.1
+  supersededById?: number | null
+  supersedesId?: number | null
+  amendmentNumber?: number | null
+  amendmentReason?: string | null
 }
 
 interface ApprovedJobRecordProps {
@@ -405,14 +410,18 @@ export function ApprovedJobRecord({
                 {job.jobId}
               </h1>
               <Badge
-                variant="default"
-                className="bg-green-600 text-white text-sm px-3 py-1 shrink-0"
+                variant={job.status === 'SUPERSEDED' ? 'outline' : 'default'}
+                className={
+                  job.status === 'SUPERSEDED'
+                    ? 'border-amber-500 text-amber-700 bg-amber-50 text-sm px-3 py-1 shrink-0'
+                    : 'bg-green-600 text-white text-sm px-3 py-1 shrink-0'
+                }
               >
                 <HugeiconsIcon
                   icon={CheckmarkCircle02Icon}
                   className="h-4 w-4 mr-1"
                 />
-                APROVADO
+                {job.status === 'SUPERSEDED' ? 'RETIFICADO' : 'APROVADO'}
               </Badge>
             </div>
             <p className="text-muted-foreground text-sm md:text-base truncate">
@@ -459,14 +468,16 @@ export function ApprovedJobRecord({
             <HugeiconsIcon icon={Mail01Icon} className="mr-2 h-4 w-4" />
             Enviar por Email
           </Button>
-          <Button
-            variant="ghost"
-            className="text-muted-foreground"
-            onClick={() => setIsAmendDialogOpen(true)}
-          >
-            <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
-            Retificar Certificado
-          </Button>
+          {job.status !== 'SUPERSEDED' && (
+            <Button
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={() => setIsAmendDialogOpen(true)}
+            >
+              <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
+              Retificar Certificado
+            </Button>
+          )}
         </div>
 
         {/* Mobile Actions - DropdownMenu */}
@@ -515,17 +526,21 @@ export function ApprovedJobRecord({
                   Enviar por Email
                 </DropdownMenuItem>
               </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Mais opções</DropdownMenuLabel>
-                <DropdownMenuItem
-                  className="text-muted-foreground"
-                  onClick={() => setIsAmendDialogOpen(true)}
-                >
-                  <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
-                  Retificar Certificado
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
+              {job.status !== 'SUPERSEDED' && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Mais opções</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      className="text-muted-foreground"
+                      onClick={() => setIsAmendDialogOpen(true)}
+                    >
+                      <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
+                      Retificar Certificado
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
