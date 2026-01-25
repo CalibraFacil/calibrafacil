@@ -156,18 +156,33 @@ async function updateJobWithCertificate(
 ): Promise<void> {
     const now = new Date();
 
-    // Only update status and certificate_url - approved_by/approved_at are already set by API
+    // Check if job is SUPERSEDED (being regenerated with watermark)
+    const statusResult = await client.query(
+        `SELECT status FROM calibration_job WHERE id = $1`,
+        [jobId]
+    );
+    const currentStatus = statusResult.rows[0]?.status;
+    const isSuperseded = currentStatus === "SUPERSEDED";
+
+    // Only update status to APPROVED if not already SUPERSEDED
+    // SUPERSEDED jobs are being regenerated with watermark and should keep their status
     await client.query(
         `
     UPDATE calibration_job
-    SET 
-      status = 'APPROVED',
+    SET
+      status = CASE WHEN status = 'SUPERSEDED' THEN 'SUPERSEDED' ELSE 'APPROVED' END,
       certificate_url = $2,
       updated_at = $3
     WHERE id = $1
     `,
         [jobId, certificateUrl, now]
     );
+
+    // Log appropriate action based on whether this is a watermark regeneration
+    const action = isSuperseded ? "certificate_watermarked" : "certificate_generated";
+    const statusChange = isSuperseded
+        ? { status: "SUPERSEDED (watermark added)" }
+        : { status: { old: "GENERATING_PDF", new: "APPROVED" } };
 
     await client.query(
         `
@@ -176,9 +191,9 @@ async function updateJobWithCertificate(
     `,
         [
             jobId,
-            "certificate_generated",
+            action,
             JSON.stringify({
-                status: { old: "GENERATING_PDF", new: "APPROVED" },
+                ...statusChange,
                 certificateUrl: { old: null, new: certificateUrl },
             }),
             userId,

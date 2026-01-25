@@ -1343,6 +1343,20 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .where(eq(calibrationJob.id, originalJob.id));
 
+      // Queue original job for PDF regeneration with CANCELADO watermark
+      type CloudflareQueue = { send: (body: unknown) => Promise<void> };
+      const env = c.env as { PDF_QUEUE?: CloudflareQueue };
+      if (env.PDF_QUEUE) {
+        await env.PDF_QUEUE.send({
+          jobId: originalJob.id,
+          userId: session.user.id,
+        });
+      } else {
+        console.warn(
+          `[Jobs] PDF_QUEUE not available. Superseded job ${originalJob.id} needs manual PDF regeneration.`,
+        );
+      }
+
       // Audit log for original job (superseded)
       await db.insert(jobAuditLog).values({
         jobId: originalJob.id,
