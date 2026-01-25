@@ -981,64 +981,6 @@ export async function notifyStandardExpiring(
 }
 
 /**
- * Notify lab members when a reference standard has EXPIRED (ISO 17025 Clause 6.4.6)
- * Jobs using this standard will be blocked until recalibration.
- * Called by a scheduled job that checks referenceStandard.nextCalibrationDate < today
- */
-export async function notifyStandardExpired(
-  standardId: number,
-  organizationId: string,
-): Promise<void> {
-  // Get reference standard details
-  const [standardData] = await db
-    .select({
-      name: referenceStandard.name,
-      serialNumber: referenceStandard.serialNumber,
-      certificateNumber: referenceStandard.certificateNumber,
-      nextCalibrationDate: referenceStandard.nextCalibrationDate,
-    })
-    .from(referenceStandard)
-    .where(eq(referenceStandard.id, standardId))
-    .limit(1);
-
-  if (!standardData?.nextCalibrationDate) return;
-
-  const expiredDate = formatDateBR(standardData.nextCalibrationDate);
-  const standardIdentifier =
-    standardData.certificateNumber ||
-    standardData.serialNumber ||
-    standardData.name;
-  const itemName = `${standardData.name} (${standardIdentifier})`;
-
-  // Notify admins and owners of the lab - HIGH priority as this blocks jobs
-  const recipients = await getRecipientsByRole(organizationId, ["admin", "owner"]);
-
-  for (const recipientId of recipients) {
-    await sendNotification({
-      recipientUserId: recipientId,
-      organizationId,
-      type: "STANDARD_EXPIRED",
-      priority: "HIGH",
-      title: "Padrao de referencia VENCIDO",
-      message: `O padrao ${standardIdentifier} venceu em ${expiredDate}. Jobs usando este padrao estao bloqueados ate a recalibracao.`,
-      relatedEntity: {
-        entityType: "standard",
-        entityId: standardId,
-      },
-      actionUrl: `/dashboard/standards/${standardId}`,
-      emailContext: {
-        type: "compliance",
-        data: {
-          itemName,
-          dueDate: expiredDate,
-          daysRemaining: 0,
-        },
-      },
-    });
-  }
-}
-
-/**
  * Notify relevant users when a calibration job is overdue
  * Called by a scheduled job that checks calibrationJob.dueDate
  */
