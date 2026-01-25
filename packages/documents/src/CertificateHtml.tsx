@@ -287,17 +287,35 @@ const styles = `
   .amendment-notice strong {
     color: #7c2d12;
   }
+  /* Watermark container - covers entire page on every page */
   .superseded-watermark {
     position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    font-size: 72pt;
-    color: rgba(239, 68, 68, 0.15);
-    font-weight: bold;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     pointer-events: none;
     z-index: 9999;
+  }
+  .superseded-watermark-text {
+    font-size: 72pt;
+    font-weight: bold;
+    color: rgba(239, 68, 68, 0.18);
+    transform: rotate(-45deg);
     white-space: nowrap;
+    letter-spacing: 8px;
+  }
+  @media print {
+    .superseded-watermark {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
   }
 `;
 
@@ -512,9 +530,11 @@ export function CertificateHtml({ job }: { job: JobData }) {
                         </div>
                     )}
 
-                    {/* Superseded Watermark */}
+                    {/* Superseded Watermark - appears on all pages */}
                     {job.supersededById && (
-                        <div className="superseded-watermark">CANCELADO</div>
+                        <div className="superseded-watermark">
+                            <span className="superseded-watermark-text">CANCELADO</span>
+                        </div>
                     )}
 
                     {/* Customer Section */}

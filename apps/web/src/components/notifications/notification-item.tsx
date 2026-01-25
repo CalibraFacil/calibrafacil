@@ -21,6 +21,7 @@ type NotificationType =
   | 'JOB_REJECTED'
   | 'JOB_ASSIGNED'
   | 'CERTIFICATE_READY'
+  | 'CERTIFICATE_AMENDED'
   | 'ASSET_DUE_FOR_RECALIBRATION'
   | 'STANDARD_EXPIRING'
   | 'JOB_OVERDUE'
@@ -53,6 +54,7 @@ const notificationIcons = {
   JOB_REJECTED: CancelCircleIcon,
   JOB_ASSIGNED: UserAdd02Icon,
   CERTIFICATE_READY: File02Icon,
+  CERTIFICATE_AMENDED: Alert02Icon,
   ASSET_DUE_FOR_RECALIBRATION: Calendar03Icon,
   STANDARD_EXPIRING: Alert02Icon,
   JOB_OVERDUE: Alert02Icon,
@@ -66,6 +68,7 @@ const notificationColors: Record<NotificationType, string> = {
   JOB_REJECTED: 'text-red-500',
   JOB_ASSIGNED: 'text-blue-500',
   CERTIFICATE_READY: 'text-green-500',
+  CERTIFICATE_AMENDED: 'text-amber-500',
   ASSET_DUE_FOR_RECALIBRATION: 'text-amber-500',
   STANDARD_EXPIRING: 'text-amber-500',
   JOB_OVERDUE: 'text-red-500',
