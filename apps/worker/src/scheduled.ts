@@ -4,7 +4,8 @@
  * Runs daily at 08:00 UTC to check for:
  * 1. Assets due for recalibration within 7 days
  * 2. Reference standards expiring within 30 days
- * 3. Overdue calibration jobs
+ * 3. Reference standards that have EXPIRED (ISO 17025 Clause 6.4.6)
+ * 4. Overdue calibration jobs
  */
 
 import { Client } from "pg";
@@ -32,6 +33,15 @@ interface StandardExpiringRow {
   organization_id: string;
   next_calibration_date: Date;
   days_until_expiry: number;
+}
+
+interface StandardExpiredRow {
+  id: number;
+  name: string;
+  serial_number: string;
+  organization_id: string;
+  next_calibration_date: Date;
+  days_expired: number;
 }
 
 interface OverdueJobRow {
@@ -140,6 +150,47 @@ async function checkStandardsExpiring(
           AND sn.entity_id = rs.id
           AND sn.type = 'STANDARD_EXPIRING'
           AND sn.lead_time_days = 30
+          AND sn.sent_at IS NOT NULL
+          AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
+      )
+    ORDER BY rs.next_calibration_date ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
+}
+
+/**
+ * Check for reference standards that have EXPIRED (ISO 17025 Clause 6.4.6).
+ *
+ * Expired standards block job execution - this notifies admins immediately.
+ * Duplicate prevention: Expired standards are notified weekly until renewed.
+ */
+async function checkStandardsExpired(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<StandardExpiredRow[]> {
+  const result = await client.query<StandardExpiredRow>(
+    `
+    SELECT
+      rs.id,
+      rs.name,
+      rs.serial_number,
+      rs.organization_id,
+      rs.next_calibration_date,
+      EXTRACT(DAY FROM CURRENT_DATE - rs.next_calibration_date)::int as days_expired
+    FROM reference_standard rs
+    WHERE rs.status = 'ACTIVE'
+      AND rs.next_calibration_date IS NOT NULL
+      AND rs.next_calibration_date < CURRENT_DATE
+      AND NOT EXISTS (
+        SELECT 1 FROM scheduled_notification sn
+        WHERE sn.entity_type = 'standard'
+          AND sn.entity_id = rs.id
+          AND sn.type = 'STANDARD_EXPIRED'
           AND sn.sent_at IS NOT NULL
           AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
@@ -308,10 +359,12 @@ export async function processScheduledNotifications(
 ): Promise<{
   assetsProcessed: number;
   standardsProcessed: number;
+  standardsExpiredProcessed: number;
   jobsProcessed: number;
 }> {
   let assetsProcessed = 0;
   let standardsProcessed = 0;
+  let standardsExpiredProcessed = 0;
   let jobsProcessed = 0;
 
   await withDbClient(env, async (client) => {
@@ -414,7 +467,58 @@ export async function processScheduledNotifications(
       standardOffset += BATCH_SIZE;
     } while (standardBatch.length === BATCH_SIZE);
 
-    // 3. Process overdue jobs (with pagination)
+    // 3. Process EXPIRED reference standards - ISO 17025 Clause 6.4.6 (with pagination)
+    let expiredOffset = 0;
+    let expiredBatch: StandardExpiredRow[];
+
+    do {
+      expiredBatch = await checkStandardsExpired(client, expiredOffset, BATCH_SIZE);
+      if (expiredBatch.length > 0) {
+        console.log(`[Scheduled] Processing ${expiredBatch.length} expired standards (offset ${expiredOffset})`);
+      }
+
+      for (const standard of expiredBatch) {
+        try {
+          const admins = await getOrgAdmins(client, standard.organization_id);
+
+          for (const adminId of admins) {
+            await createNotification(client, {
+              recipientUserId: adminId,
+              organizationId: standard.organization_id,
+              type: "STANDARD_EXPIRED",
+              priority: "HIGH",
+              title: "Padrão de referência VENCIDO",
+              message: `O padrão "${standard.name}" (${standard.serial_number}) venceu há ${standard.days_expired} dia(s). Jobs usando este padrão estão bloqueados até recalibração.`,
+              relatedEntity: {
+                entityType: "standard",
+                entityId: standard.id,
+              },
+              actionUrl: `/dashboard/standards/${standard.id}`,
+            });
+          }
+
+          await recordScheduledNotification(client, {
+            organizationId: standard.organization_id,
+            type: "STANDARD_EXPIRED",
+            entityType: "standard",
+            entityId: standard.id,
+            scheduledFor: standard.next_calibration_date,
+            leadTimeDays: 0,
+          });
+
+          standardsExpiredProcessed++;
+        } catch (error) {
+          console.error(
+            `[Scheduled] Error processing expired standard ${standard.id}:`,
+            error,
+          );
+        }
+      }
+
+      expiredOffset += BATCH_SIZE;
+    } while (expiredBatch.length === BATCH_SIZE);
+
+    // 4. Process overdue jobs (with pagination)
     let jobOffset = 0;
     let jobBatch: OverdueJobRow[];
 
@@ -484,5 +588,5 @@ export async function processScheduledNotifications(
     } while (jobBatch.length === BATCH_SIZE);
   });
 
-  return { assetsProcessed, standardsProcessed, jobsProcessed };
+  return { assetsProcessed, standardsProcessed, standardsExpiredProcessed, jobsProcessed };
 }

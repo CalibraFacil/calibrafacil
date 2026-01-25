@@ -1477,6 +1477,7 @@ export type NotificationType =
   | "CERTIFICATE_AMENDED" // ISO 17025 Clause 7.8.4.1 - Certificate amendment notification
   | "ASSET_DUE_FOR_RECALIBRATION"
   | "STANDARD_EXPIRING"
+  | "STANDARD_EXPIRED" // ISO 17025 Clause 6.4.6 - Standard expired, jobs blocked
   | "JOB_OVERDUE"
   | "PAYMENT_RECEIVED"
   | "PAYMENT_FAILED";

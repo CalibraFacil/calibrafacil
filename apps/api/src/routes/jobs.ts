@@ -907,6 +907,20 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             ),
           );
 
+        // Validate all requested standards were found
+        if (standards.length !== input.selectedStandardIds.length) {
+          const foundIds = new Set(standards.map((s) => s.id));
+          const missingIds = input.selectedStandardIds.filter(
+            (id) => !foundIds.has(id),
+          );
+          return c.json(
+            {
+              error: `Padroes nao encontrados ou nao pertencem a organizacao: ${missingIds.join(", ")}`,
+            },
+            400,
+          );
+        }
+
         // Validate all standards are ACTIVE
         const inactiveStandards = standards.filter(
           (s) => s.status !== "ACTIVE",
