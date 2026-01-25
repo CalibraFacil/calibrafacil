@@ -49,6 +49,8 @@ export interface TimelineEvent {
     | 'archived'
     | 'new_version'
     | 'deactivate'
+    | 'superseded'
+    | 'amendment_created'
     | 'custom'
     label: string
     timestamp: string | null
@@ -141,6 +143,16 @@ const eventConfig: Record<
         icon: Cancel01Icon,
         bgColor: 'bg-gray-100',
         iconColor: 'text-gray-600',
+    },
+    superseded: {
+        icon: RefreshIcon,
+        bgColor: 'bg-amber-100',
+        iconColor: 'text-amber-600',
+    },
+    amendment_created: {
+        icon: PlusSignIcon,
+        bgColor: 'bg-amber-100',
+        iconColor: 'text-amber-600',
     },
     custom: {
         icon: Clock01Icon,
@@ -243,19 +255,33 @@ export function buildJobTimelineEvents(job: {
     performedAt?: string | null
     approvedAt?: string | null
     rejectedAt?: string | null
+    supersededAt?: string | null
     technicianName?: string | null
     approverName?: string | null
     rejectorName?: string | null
     rejectionReason?: string | null
+    amendmentReason?: string | null
+    supersedesId?: number | null
 }): TimelineEvent[] {
     const events: TimelineEvent[] = []
 
-    events.push({
-        id: 'created',
-        type: 'created',
-        label: 'Criado',
-        timestamp: job.createdAt,
-    })
+    // For amendments, show that this is a correction
+    if (job.supersedesId) {
+        events.push({
+            id: 'amendment_created',
+            type: 'amendment_created',
+            label: 'Retificação criada',
+            timestamp: job.createdAt,
+            details: job.amendmentReason,
+        })
+    } else {
+        events.push({
+            id: 'created',
+            type: 'created',
+            label: 'Criado',
+            timestamp: job.createdAt,
+        })
+    }
 
     if (job.performedAt) {
         events.push({
@@ -288,6 +314,15 @@ export function buildJobTimelineEvents(job: {
         })
     }
 
+    if (job.supersededAt) {
+        events.push({
+            id: 'superseded',
+            type: 'superseded',
+            label: 'Certificado retificado',
+            timestamp: job.supersededAt,
+        })
+    }
+
     return events
 }
 
@@ -310,6 +345,8 @@ const actionLabels: Record<string, string> = {
     reject: 'Rejeitado',
     cancel: 'Cancelado',
     execute: 'Executado',
+    supersede: 'Certificado retificado',
+    create_amendment: 'Retificação criada',
 }
 
 /**
@@ -332,6 +369,8 @@ function mapActionToEventType(action: string): TimelineEvent['type'] {
         reject: 'rejected',
         cancel: 'canceled',
         execute: 'executed',
+        supersede: 'superseded',
+        create_amendment: 'amendment_created',
     }
     return actionMap[action] || 'custom'
 }

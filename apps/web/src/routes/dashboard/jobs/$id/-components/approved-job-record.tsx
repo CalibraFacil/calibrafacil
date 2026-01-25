@@ -124,6 +124,7 @@ interface ApprovedJob {
   supersedesId?: number | null
   amendmentNumber?: number | null
   amendmentReason?: string | null
+  supersededAt?: string | null
 }
 
 interface ApprovedJobRecordProps {
