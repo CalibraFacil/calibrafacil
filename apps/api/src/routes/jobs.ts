@@ -1334,12 +1334,14 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       // Update original job to SUPERSEDED
+      // Store the reason on the original job so it's visible when viewing the superseded certificate
       await db
         .update(calibrationJob)
         .set({
           status: "SUPERSEDED",
           supersededById: amendedJob.id,
           supersededAt: new Date(),
+          amendmentReason: input.reason, // Store reason on original job too
         })
         .where(eq(calibrationJob.id, originalJob.id));
 
