@@ -19,6 +19,7 @@ import {
   notifyJobApproved,
   notifyJobRejected,
   notifyJobAssigned,
+  notifyCertificateAmended,
 } from "@calibra-facil/notifications";
 import {
   CreateJobSchema,
@@ -30,6 +31,7 @@ import {
   RejectJobSchema,
   CancelJobSchema,
   ExecuteJobSchema,
+  AmendJobSchema,
 } from "@calibra-facil/schemas";
 import {
   withLabPermission,
@@ -288,6 +290,12 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         rejectedBy: calibrationJob.rejectedBy,
         rejectedAt: calibrationJob.rejectedAt,
         rejectionReason: calibrationJob.rejectionReason,
+        // Amendment fields - ISO 17025 Clause 7.8.4.1
+        supersedesId: calibrationJob.supersedesId,
+        supersededById: calibrationJob.supersededById,
+        amendmentNumber: calibrationJob.amendmentNumber,
+        amendmentReason: calibrationJob.amendmentReason,
+        supersededAt: calibrationJob.supersededAt,
         // Related entities
         customerId: calibrationJob.customerId,
         customerName: customer.name,
@@ -1228,6 +1236,266 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({
         message: "Job cancelado",
         data: updated,
+      });
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/amend - Create an amended version of an approved certificate
+  // ISO 17025:2017 Clause 7.8.4.1 - Amendments to reports and certificates
+  // =========================================================================
+  .post(
+    "/:id/amend",
+    ...withLabPermission({ calibration: ["approve"] }), // Only admin/owner can amend
+    zValidator("json", AmendJobSchema),
+    async (c) => {
+      const memberData = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      const input = c.req.valid("json");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      // Get existing job
+      const [originalJob] = await db
+        .select()
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!originalJob) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      // Can only amend APPROVED jobs
+      if (originalJob.status !== "APPROVED") {
+        return c.json(
+          {
+            error: `Apenas certificados aprovados podem ser retificados. Status atual: ${originalJob.status}`,
+          },
+          400,
+        );
+      }
+
+      // Check if already superseded
+      if (originalJob.supersededById) {
+        return c.json(
+          {
+            error: "Este certificado ja foi retificado",
+            supersededBy: originalJob.supersededById,
+          },
+          400,
+        );
+      }
+
+      // Calculate amendment number
+      let amendmentNumber = 1;
+      if (originalJob.supersedesId) {
+        // This is already an amendment, increment
+        amendmentNumber = (originalJob.amendmentNumber || 0) + 1;
+      }
+
+      // Generate new Job ID for the amended job
+      const year = new Date().getFullYear();
+      const newJobId = await generateJobId(memberData.organizationId, year);
+
+      // Create new job as a clone of the original
+      const [amendedJob] = await db
+        .insert(calibrationJob)
+        .values({
+          jobId: newJobId,
+          organizationId: originalJob.organizationId,
+          customerId: originalJob.customerId,
+          assetId: originalJob.assetId,
+          serviceId: originalJob.serviceId,
+          technicianId: originalJob.technicianId,
+          methodSnapshot: originalJob.methodSnapshot,
+          standardsSnapshot: originalJob.standardsSnapshot,
+          status: "DRAFT", // Start in DRAFT for corrections
+          dueDate: originalJob.dueDate,
+          data: originalJob.data, // Clone calibration data
+          results: originalJob.results, // Clone results
+          supersedesId: originalJob.id, // Link to original
+          amendmentNumber,
+          amendmentReason: input.reason,
+          createdBy: session.user.id,
+        })
+        .returning();
+
+      if (!amendedJob) {
+        return c.json({ error: "Falha ao criar retificacao" }, 500);
+      }
+
+      // Update original job to SUPERSEDED
+      await db
+        .update(calibrationJob)
+        .set({
+          status: "SUPERSEDED",
+          supersededById: amendedJob.id,
+          supersededAt: new Date(),
+        })
+        .where(eq(calibrationJob.id, originalJob.id));
+
+      // Audit log for original job (superseded)
+      await db.insert(jobAuditLog).values({
+        jobId: originalJob.id,
+        action: "supersede",
+        changes: {
+          status: { old: "APPROVED", new: "SUPERSEDED" },
+          supersededById: amendedJob.id,
+        },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+        reason: `Certificado retificado. Novo: ${amendedJob.jobId}. Motivo: ${input.reason}`,
+      });
+
+      // Audit log for amended job (created)
+      await db.insert(jobAuditLog).values({
+        jobId: amendedJob.id,
+        action: "create_amendment",
+        changes: {
+          supersedesId: originalJob.id,
+          amendmentNumber,
+          reason: input.reason,
+        },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+        reason: input.reason,
+      });
+
+      // Notify customer (async)
+      notifyCertificateAmended(originalJob.id, amendedJob.id, input.reason).catch(
+        (err) => {
+          console.error("[Jobs] Failed to send amendment notification:", err);
+        },
+      );
+
+      return c.json(
+        {
+          message: "Retificacao criada com sucesso",
+          originalJob: {
+            id: originalJob.id,
+            jobId: originalJob.jobId,
+            status: "SUPERSEDED",
+          },
+          amendedJob: {
+            id: amendedJob.id,
+            jobId: amendedJob.jobId,
+            status: "DRAFT",
+            amendmentNumber,
+          },
+        },
+        201,
+      );
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/amendment-chain - Get the full amendment history for a job
+  // ISO 17025:2017 Clause 7.8.4.1 - Traceability of amendments
+  // =========================================================================
+  .get(
+    "/:id/amendment-chain",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const memberData = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      // Get the job
+      const [job] = await db
+        .select()
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!job) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      // Build amendment chain by walking backwards to the original
+      const chain: Array<{
+        id: number;
+        jobId: string;
+        status: string;
+        amendmentNumber: number | null;
+        amendmentReason: string | null;
+        approvedAt: Date | null;
+        supersededAt: Date | null;
+        isCurrent: boolean;
+      }> = [];
+
+      // Walk backwards to find the original
+      let current = job;
+      const visited = new Set<number>();
+
+      while (current.supersedesId && !visited.has(current.id)) {
+        visited.add(current.id);
+        const [parent] = await db
+          .select()
+          .from(calibrationJob)
+          .where(eq(calibrationJob.id, current.supersedesId))
+          .limit(1);
+
+        if (parent) {
+          current = parent;
+        } else {
+          break;
+        }
+      }
+
+      // Now walk forward from the original, building the chain
+      visited.clear();
+      while (current && !visited.has(current.id)) {
+        visited.add(current.id);
+        chain.push({
+          id: current.id,
+          jobId: current.jobId,
+          status: current.status,
+          amendmentNumber: current.amendmentNumber,
+          amendmentReason: current.amendmentReason,
+          approvedAt: current.approvedAt,
+          supersededAt: current.supersededAt,
+          isCurrent: current.id === job.id,
+        });
+
+        if (current.supersededById) {
+          const [next] = await db
+            .select()
+            .from(calibrationJob)
+            .where(eq(calibrationJob.id, current.supersededById))
+            .limit(1);
+
+          if (next) {
+            current = next;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+
+      return c.json({
+        data: chain,
+        originalJobId: chain[0]?.id,
+        latestJobId: chain[chain.length - 1]?.id,
+        totalAmendments: chain.length - 1,
       });
     },
   )

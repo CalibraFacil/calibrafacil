@@ -630,6 +630,7 @@ export type ListReferenceStandardsQuery = z.infer<
 
 /**
  * Job status values for workflow tracking
+ * - SUPERSEDED: Certificate was amended and replaced (ISO 17025 Clause 7.8.4.1)
  */
 export const JobStatusSchema = z.enum([
   "DRAFT",
@@ -639,6 +640,7 @@ export const JobStatusSchema = z.enum([
   "APPROVED",
   "REJECTED",
   "CANCELED",
+  "SUPERSEDED",
 ]);
 
 export type JobStatus = z.infer<typeof JobStatusSchema>;
@@ -740,6 +742,18 @@ export const CancelJobSchema = z.object({
 export type CancelJobInput = z.infer<typeof CancelJobSchema>;
 
 /**
+ * Schema for amending a job (ISO 17025 Clause 7.8.4.1)
+ * Creates a corrected version of an approved certificate
+ */
+export const AmendJobSchema = z.object({
+  reason: z
+    .string()
+    .min(10, "Motivo da retificacao deve ter pelo menos 10 caracteres"),
+});
+
+export type AmendJobInput = z.infer<typeof AmendJobSchema>;
+
+/**
  * Standard Snapshot schema - Frozen copy of reference standard at execution
  * This is read-only after job execution (never modified)
  */
@@ -803,6 +817,7 @@ export const NotificationTypeSchema = z.enum([
   "JOB_REJECTED",
   "JOB_ASSIGNED",
   "CERTIFICATE_READY",
+  "CERTIFICATE_AMENDED", // ISO 17025 Clause 7.8.4.1 - Certificate amendment notification
   "ASSET_DUE_FOR_RECALIBRATION",
   "STANDARD_EXPIRING",
   "JOB_OVERDUE",

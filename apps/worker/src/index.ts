@@ -42,6 +42,11 @@ async function fetchJobData(
       cj.standards_snapshot,
       cj.results,
       cj.data,
+      -- Amendment fields - ISO 17025 Clause 7.8.4.1
+      cj.supersedes_id,
+      cj.superseded_by_id,
+      cj.amendment_number,
+      cj.amendment_reason,
       -- Organization (Lab) info
       o.name as lab_name,
       o.cnpj as lab_cnpj,
@@ -72,12 +77,16 @@ async function fetchJobData(
       a.model,
       a.manufacturer,
       -- Approver
-      u.name as approver_name
+      u.name as approver_name,
+      -- Original job info (if this is an amendment)
+      original.job_id as original_job_id,
+      original.approved_at as original_approved_at
     FROM calibration_job cj
     LEFT JOIN organization o ON cj.organization_id = o.id
     LEFT JOIN customer c ON cj.customer_id = c.id
     LEFT JOIN asset a ON cj.asset_id = a.id
     LEFT JOIN "user" u ON cj.approved_by = u.id
+    LEFT JOIN calibration_job original ON cj.supersedes_id = original.id
     WHERE cj.id = $1
     `,
         [jobId]
@@ -128,6 +137,13 @@ async function fetchJobData(
         data: row.data,
         results: row.results,
         approverName: row.approver_name,
+        // Amendment fields - ISO 17025 Clause 7.8.4.1
+        supersedesId: row.supersedes_id,
+        supersededById: row.superseded_by_id,
+        amendmentNumber: row.amendment_number,
+        amendmentReason: row.amendment_reason,
+        originalJobId: row.original_job_id,
+        originalApprovedAt: row.original_approved_at,
     };
 }
 

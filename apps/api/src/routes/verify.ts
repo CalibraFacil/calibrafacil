@@ -45,6 +45,12 @@ export const verifyRouter = new Hono()
         certificateUrl: calibrationJob.certificateUrl,
         performedAt: calibrationJob.performedAt,
         approvedAt: calibrationJob.approvedAt,
+        // Amendment fields - ISO 17025 Clause 7.8.4.1
+        supersedesId: calibrationJob.supersedesId,
+        supersededById: calibrationJob.supersededById,
+        amendmentNumber: calibrationJob.amendmentNumber,
+        amendmentReason: calibrationJob.amendmentReason,
+        supersededAt: calibrationJob.supersededAt,
         customerName: customer.name,
         assetName: asset.name,
         assetTag: asset.tag,
@@ -69,6 +75,50 @@ export const verifyRouter = new Hono()
       );
     }
 
+    // If superseded, get the replacement job info
+    let supersededByInfo = null;
+    if (job.supersededById) {
+      const [replacement] = await db
+        .select({
+          id: calibrationJob.id,
+          jobId: calibrationJob.jobId,
+          verificationToken: calibrationJob.verificationToken,
+        })
+        .from(calibrationJob)
+        .where(eq(calibrationJob.id, job.supersededById))
+        .limit(1);
+
+      if (replacement) {
+        supersededByInfo = {
+          id: replacement.id,
+          jobId: replacement.jobId,
+          verificationToken: replacement.verificationToken,
+        };
+      }
+    }
+
+    // If this is an amendment, get the original job info
+    let supersedesInfo = null;
+    if (job.supersedesId) {
+      const [original] = await db
+        .select({
+          id: calibrationJob.id,
+          jobId: calibrationJob.jobId,
+          verificationToken: calibrationJob.verificationToken,
+        })
+        .from(calibrationJob)
+        .where(eq(calibrationJob.id, job.supersedesId))
+        .limit(1);
+
+      if (original) {
+        supersedesInfo = {
+          id: original.id,
+          jobId: original.jobId,
+          verificationToken: original.verificationToken,
+        };
+      }
+    }
+
     return c.json({
       valid: true,
       jobId: job.jobId,
@@ -83,6 +133,14 @@ export const verifyRouter = new Hono()
       service: job.serviceName,
       performedAt: job.performedAt,
       approvedAt: job.approvedAt,
+      // Amendment information - ISO 17025 Clause 7.8.4.1
+      isSuperseded: !!job.supersededById,
+      isAmendment: !!job.supersedesId,
+      amendmentNumber: job.amendmentNumber,
+      amendmentReason: job.amendmentReason,
+      supersededAt: job.supersededAt,
+      supersededBy: supersededByInfo,
+      supersedes: supersedesInfo,
     });
   })
 

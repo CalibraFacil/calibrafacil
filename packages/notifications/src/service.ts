@@ -95,6 +95,7 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   JOB_REJECTED: { inApp: true, email: true },
   JOB_ASSIGNED: { inApp: true, email: false },
   CERTIFICATE_READY: { inApp: true, email: true },
+  CERTIFICATE_AMENDED: { inApp: true, email: true }, // ISO 17025 Clause 7.8.4.1
   ASSET_DUE_FOR_RECALIBRATION: { inApp: true, email: true },
   STANDARD_EXPIRING: { inApp: true, email: true },
   JOB_OVERDUE: { inApp: true, email: true },
@@ -730,6 +731,102 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
           assetName: assetData?.name,
           customerName: customerData.name,
           portalUrl,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Notify client portal users when a certificate is amended (ISO 17025 Clause 7.8.4.1)
+ */
+export async function notifyCertificateAmended(
+  originalJobId: number,
+  amendedJobId: number,
+  reason: string,
+): Promise<void> {
+  const originalJob = await getJobDetails(originalJobId);
+  const amendedJob = await getJobDetails(amendedJobId);
+  if (!originalJob || !amendedJob) return;
+
+  // Get the customer's organization ID and name
+  const [customerData] = await db
+    .select({
+      authOrganizationId: customer.authOrganizationId,
+      name: customer.name,
+    })
+    .from(customer)
+    .where(eq(customer.id, originalJob.customerId))
+    .limit(1);
+
+  if (!customerData?.authOrganizationId) return;
+
+  // Get asset details
+  const assetData = await getAssetDetails(originalJob.assetId);
+
+  // Get all portal users in the customer organization
+  const portalUsers = await db
+    .select({ userId: member.userId })
+    .from(member)
+    .where(eq(member.organizationId, customerData.authOrganizationId));
+
+  // Determine the portal URL
+  const portalUrl =
+    process.env.PORTAL_URL ?? "https://app.calibrafacil.com/portal/certificates";
+
+  // Send notifications to all portal users
+  for (const portalUser of portalUsers) {
+    await sendNotification({
+      recipientUserId: portalUser.userId,
+      organizationId: customerData.authOrganizationId,
+      type: "CERTIFICATE_AMENDED",
+      priority: "HIGH",
+      title: "Certificado de calibracao retificado",
+      message: `O certificado ${originalJob.jobIdentifier} foi retificado. Novo certificado: ${amendedJob.jobIdentifier}. Motivo: ${reason}`,
+      relatedEntity: {
+        entityType: "job",
+        entityId: amendedJobId,
+        jobId: amendedJob.jobIdentifier,
+      },
+      actionUrl: `/portal/certificates`,
+      emailContext: {
+        type: "certificate",
+        data: {
+          jobId: amendedJob.jobIdentifier,
+          assetName: assetData?.name,
+          customerName: customerData.name,
+          portalUrl,
+        },
+      },
+    });
+  }
+
+  // Also notify lab admins/owners
+  const labAdmins = await getRecipientsByRole(originalJob.organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const adminId of labAdmins) {
+    await sendNotification({
+      recipientUserId: adminId,
+      organizationId: originalJob.organizationId,
+      type: "CERTIFICATE_AMENDED",
+      priority: "HIGH",
+      title: "Certificado retificado",
+      message: `O certificado ${originalJob.jobIdentifier} foi retificado. Novo: ${amendedJob.jobIdentifier}. Motivo: ${reason}`,
+      relatedEntity: {
+        entityType: "job",
+        entityId: amendedJobId,
+        jobId: amendedJob.jobIdentifier,
+      },
+      actionUrl: `/dashboard/jobs/${amendedJobId}`,
+      emailContext: {
+        type: "job",
+        data: {
+          jobId: amendedJob.jobIdentifier,
+          jobInternalId: amendedJobId,
+          reason,
         },
       },
     });
