@@ -5,11 +5,13 @@ import { CertificateHtml, type JobData, LabelHtml, type LabelData } from "@calib
 import React from "react";
 import QRCode from "qrcode";
 import { processScheduledNotifications } from "./scheduled.js";
+import { signPdf, decryptPassword, type SignatureMetadata } from "@calibra-facil/signing";
 
 interface Env {
     BROWSER: Fetcher;
     CERTIFICATES_BUCKET: R2Bucket;
     HYPERDRIVE: Hyperdrive;
+    SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
 }
 
 // Discriminated union for queue messages - supports both certificate and label generation
@@ -30,7 +32,8 @@ interface MessageBatch<T> {
 
 async function fetchJobData(
     client: Client,
-    jobId: number
+    jobId: number,
+    env: Env
 ): Promise<JobData | null> {
     const result = await client.query(
         `
@@ -42,6 +45,8 @@ async function fetchJobData(
       cj.standards_snapshot,
       cj.results,
       cj.data,
+      cj.organization_id,
+      cj.approved_by,
       -- Amendment fields - ISO 17025 Clause 7.8.4.1
       cj.supersedes_id,
       cj.superseded_by_id,
@@ -96,6 +101,35 @@ async function fetchJobData(
 
     const row = result.rows[0];
 
+    // Fetch approver's visual signature if exists
+    let approverSignatureUrl: string | null = null;
+    if (row.approved_by && row.organization_id) {
+        const sigResult = await client.query(
+            `
+            SELECT mvs.r2_key, mvs.content_type
+            FROM member_visual_signature mvs
+            INNER JOIN member m ON mvs.member_id = m.id
+            WHERE m.user_id = $1 AND mvs.organization_id = $2
+            `,
+            [row.approved_by, row.organization_id]
+        );
+
+        if (sigResult.rows.length > 0) {
+            const sigRow = sigResult.rows[0];
+            // Fetch signature from R2 and convert to base64 data URL
+            try {
+                const signatureObject = await env.CERTIFICATES_BUCKET.get(sigRow.r2_key);
+                if (signatureObject) {
+                    const signatureBuffer = await signatureObject.arrayBuffer();
+                    const base64 = arrayBufferToBase64(signatureBuffer);
+                    approverSignatureUrl = `data:${sigRow.content_type};base64,${base64}`;
+                }
+            } catch (err) {
+                console.warn(`[JOB ${jobId}] Failed to fetch approver signature:`, err);
+            }
+        }
+    }
+
     return {
         jobId: row.job_id,
         performedAt: row.performed_at,
@@ -137,6 +171,7 @@ async function fetchJobData(
         data: row.data,
         results: row.results,
         approverName: row.approver_name,
+        approverSignatureUrl, // Visual signature as base64 data URL
         // Amendment fields - ISO 17025 Clause 7.8.4.1
         supersedesId: row.supersedes_id,
         supersededById: row.superseded_by_id,
@@ -147,12 +182,65 @@ async function fetchJobData(
     };
 }
 
+/**
+ * Convert ArrayBuffer to base64 string
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+}
+
+/**
+ * Signing certificate data fetched from database
+ */
+interface SigningCertificateData {
+    encryptedP12: string;
+    encryptedPassword: string;
+    passwordIv: string;
+    subjectCn: string;
+}
+
+/**
+ * Fetch organization's default signing certificate
+ */
+async function fetchSigningCertificate(
+    client: Client,
+    organizationId: string
+): Promise<SigningCertificateData | null> {
+    const result = await client.query(
+        `
+        SELECT encrypted_p12, encrypted_password, password_iv, subject_cn
+        FROM organization_signing_certificate
+        WHERE organization_id = $1
+          AND is_active = true
+          AND is_default = true
+          AND valid_until > NOW()
+        LIMIT 1
+        `,
+        [organizationId]
+    );
+
+    if (result.rows.length === 0) return null;
+
+    const row = result.rows[0];
+    return {
+        encryptedP12: row.encrypted_p12,
+        encryptedPassword: row.encrypted_password,
+        passwordIv: row.password_iv,
+        subjectCn: row.subject_cn,
+    };
+}
 
 async function updateJobWithCertificate(
     client: Client,
     jobId: number,
     certificateUrl: string,
-    userId: string
+    userId: string,
+    signatureMetadata?: SignatureMetadata
 ): Promise<void> {
     const now = new Date();
 
@@ -172,10 +260,11 @@ async function updateJobWithCertificate(
     SET
       status = CASE WHEN status = 'SUPERSEDED' THEN 'SUPERSEDED' ELSE 'APPROVED' END,
       certificate_url = $2,
-      updated_at = $3
+      signature_metadata = $3,
+      updated_at = $4
     WHERE id = $1
     `,
-        [jobId, certificateUrl, now]
+        [jobId, certificateUrl, signatureMetadata ? JSON.stringify(signatureMetadata) : null, now]
     );
 
     // Log appropriate action based on whether this is a watermark regeneration
@@ -195,6 +284,7 @@ async function updateJobWithCertificate(
             JSON.stringify({
                 ...statusChange,
                 certificateUrl: { old: null, new: certificateUrl },
+                signatureMetadata: signatureMetadata ? { signed: true, signerName: signatureMetadata.signerName } : { signed: false },
             }),
             userId,
             now,
@@ -486,7 +576,7 @@ async function processJob(
     try {
         // 1. Fetch job data
         const dbFetchStart = performance.now();
-        const job = await withDbClient(env, (client) => fetchJobData(client, jobId));
+        const job = await withDbClient(env, (client) => fetchJobData(client, jobId, env));
         console.log(`[JOB ${jobId}] fetchJobData: ${Math.round(performance.now() - dbFetchStart)}ms`);
 
         if (!job) {
@@ -500,10 +590,57 @@ async function processJob(
 
         // 3. Generate PDF (reusing existing page)
         const pdfStart = performance.now();
-        const pdfBuffer = await generatePdfFromHtml(page, html);
+        let pdfBuffer = await generatePdfFromHtml(page, html);
         console.log(`[JOB ${jobId}] generatePdf: ${Math.round(performance.now() - pdfStart)}ms (${pdfBuffer.length} bytes)`);
 
-        // 4. Upload to R2
+        // 4. Sign PDF with ICP-Brasil certificate (if available)
+        let signatureMetadata: SignatureMetadata | undefined;
+        if (env.SIGNING_MASTER_KEY) {
+            const signStart = performance.now();
+            const signingCert = await withDbClient(env, async (client) => {
+                // First get the organization_id from the job
+                const orgResult = await client.query(
+                    `SELECT organization_id FROM calibration_job WHERE id = $1`,
+                    [jobId]
+                );
+                if (orgResult.rows.length === 0) return null;
+                const organizationId = orgResult.rows[0].organization_id;
+
+                // Then fetch the signing certificate
+                return fetchSigningCertificate(client, organizationId);
+            });
+
+            if (signingCert) {
+                try {
+                    // Decrypt password
+                    const password = decryptPassword(
+                        signingCert.encryptedPassword,
+                        signingCert.passwordIv,
+                        env.SIGNING_MASTER_KEY
+                    );
+
+                    // Sign the PDF
+                    const result = await signPdf(pdfBuffer, {
+                        p12Buffer: Buffer.from(signingCert.encryptedP12, 'base64'),
+                        password,
+                        reason: 'Certificado de Calibracao - CalibraFacil',
+                        location: 'Brasil',
+                        enableLtv: false,
+                    });
+
+                    pdfBuffer = result.signedPdf;
+                    signatureMetadata = result.metadata;
+                    console.log(`[JOB ${jobId}] signPdf: ${Math.round(performance.now() - signStart)}ms (signed by ${signingCert.subjectCn})`);
+                } catch (signError) {
+                    console.error(`[JOB ${jobId}] PDF signing failed (continuing without signature):`, signError);
+                    // Continue without signature - don't fail the job
+                }
+            } else {
+                console.log(`[JOB ${jobId}] No signing certificate available`);
+            }
+        }
+
+        // 5. Upload to R2
         const r2Start = performance.now();
         const filename = `cert-${job.jobId}.pdf`;
         await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
@@ -511,13 +648,13 @@ async function processJob(
         });
         console.log(`[JOB ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`);
 
-        // 5. Build public URL
+        // 6. Build public URL
         const certificateUrl = `https://certificates.calibrafacil.com/${filename}`;
 
-        // 6. Update DB
+        // 7. Update DB with certificate URL and signature metadata
         const dbUpdateStart = performance.now();
         await withDbClient(env, (client) =>
-            updateJobWithCertificate(client, jobId, certificateUrl, userId)
+            updateJobWithCertificate(client, jobId, certificateUrl, userId, signatureMetadata)
         );
         console.log(`[JOB ${jobId}] updateDB: ${Math.round(performance.now() - dbUpdateStart)}ms`);
 

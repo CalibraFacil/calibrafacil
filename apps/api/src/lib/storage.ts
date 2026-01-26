@@ -1,4 +1,9 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  GetObjectCommand,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export interface R2Env {
@@ -36,4 +41,38 @@ export async function generatePresignedUrl(
 export function extractKeyFromUrl(certificateUrl: string): string {
   const url = new URL(certificateUrl);
   return url.pathname.slice(1); // Remove leading slash
+}
+
+/**
+ * Upload a file to R2 bucket
+ */
+export async function uploadToR2(
+  client: S3Client,
+  bucket: string,
+  key: string,
+  body: Buffer | Uint8Array | ArrayBuffer,
+  contentType: string
+): Promise<void> {
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: body instanceof ArrayBuffer ? new Uint8Array(body) : body,
+    ContentType: contentType,
+  });
+  await client.send(command);
+}
+
+/**
+ * Delete a file from R2 bucket
+ */
+export async function deleteFromR2(
+  client: S3Client,
+  bucket: string,
+  key: string
+): Promise<void> {
+  const command = new DeleteObjectCommand({
+    Bucket: bucket,
+    Key: key,
+  });
+  await client.send(command);
 }

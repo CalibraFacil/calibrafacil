@@ -7,6 +7,8 @@ import {
   PaintBoardIcon,
   ShieldKeyIcon,
   UserIcon,
+  PenTool01Icon,
+  Certificate01Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
@@ -34,6 +36,18 @@ const settingsNavItems: Array<SettingsNavItem> = [
     label: 'Organização',
     href: '/dashboard/settings/organization',
     icon: <HugeiconsIcon icon={Building06Icon} className="size-4" />,
+  },
+  {
+    value: 'signature',
+    label: 'Assinatura',
+    href: '/dashboard/settings/signature',
+    icon: <HugeiconsIcon icon={PenTool01Icon} className="size-4" />,
+  },
+  {
+    value: 'certificates',
+    label: 'Certificados ICP',
+    href: '/dashboard/settings/certificates',
+    icon: <HugeiconsIcon icon={Certificate01Icon} className="size-4" />,
   },
   {
     value: 'security',
