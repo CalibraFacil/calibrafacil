@@ -8,7 +8,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "keywords": ["icp-brasil", "pdf", "signing", "pades"],
   "author": "",
@@ -24,6 +26,7 @@
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^22.10.2",
     "@types/node-forge": "^1.3.11",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
   }
 }
