@@ -16,6 +16,8 @@ import { dashboardRouter } from "./routes/dashboard";
 import { billingRouter } from "./routes/billing";
 import { webhooksRouter } from "./routes/webhooks";
 import { notificationsRouter } from "./routes/notifications";
+import { signaturesRouter } from "./routes/signatures";
+import { signingRouter } from "./routes/signing";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -132,7 +134,9 @@ const routes = app
   .route("/api/dashboard", dashboardRouter)
   .route("/api/billing", billingRouter)
   .route("/api/webhooks", webhooksRouter)
-  .route("/api/notifications", notificationsRouter);
+  .route("/api/notifications", notificationsRouter)
+  .route("/api/signatures", signaturesRouter)
+  .route("/api/signing", signingRouter);
 
 export type AppType = typeof routes;
 

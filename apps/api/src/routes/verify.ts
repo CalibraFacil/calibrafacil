@@ -45,6 +45,8 @@ export const verifyRouter = new Hono()
         certificateUrl: calibrationJob.certificateUrl,
         performedAt: calibrationJob.performedAt,
         approvedAt: calibrationJob.approvedAt,
+        // Digital signature metadata - ISO 17025 Clause 7.8.2.1(q)
+        signatureMetadata: calibrationJob.signatureMetadata,
         // Amendment fields - ISO 17025 Clause 7.8.4.1
         supersedesId: calibrationJob.supersedesId,
         supersededById: calibrationJob.supersededById,
@@ -133,6 +135,18 @@ export const verifyRouter = new Hono()
       service: job.serviceName,
       performedAt: job.performedAt,
       approvedAt: job.approvedAt,
+      // Digital signature - ISO 17025 Clause 7.8.2.1(q)
+      digitalSignature: job.signatureMetadata
+        ? {
+            signed: true,
+            signedAt: job.signatureMetadata.signedAt,
+            signerName: job.signatureMetadata.signerName,
+            signerCpfCnpj: job.signatureMetadata.signerCpfCnpj,
+            certificateSerial: job.signatureMetadata.signerCertificateSerial,
+            pdfHash: job.signatureMetadata.pdfHash,
+            ltvEnabled: job.signatureMetadata.ltvEnabled,
+          }
+        : { signed: false },
       // Amendment information - ISO 17025 Clause 7.8.4.1
       isSuperseded: !!job.supersededById,
       isAmendment: !!job.supersedesId,

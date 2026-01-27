@@ -1142,6 +1142,22 @@ export const calibrationJob = pgTable(
      * Timestamp when this job was superseded by another.
      */
     supersededAt: timestamp("superseded_at"),
+    // ==========================================================================
+    // DIGITAL SIGNATURE - ISO 17025:2017 Clause 7.8.2.1(q)
+    // "Reports and certificates shall include... the signature..."
+    // ==========================================================================
+    /**
+     * Digital signature metadata from ICP-Brasil certificate.
+     * Populated after PDF signing. NULL if not signed.
+     */
+    signatureMetadata: jsonb("signature_metadata").$type<{
+      signedAt: string; // ISO timestamp
+      signerCertificateSerial: string;
+      signerName: string;
+      signerCpfCnpj: string | null;
+      pdfHash: string; // SHA-256 hash of signed PDF
+      ltvEnabled: boolean;
+    }>(),
   },
   (table) => [
     index("job_organization_id_idx").on(table.organizationId),
@@ -1670,6 +1686,133 @@ export const scheduledNotificationRelations = relations(
   ({ one }) => ({
     organization: one(organization, {
       fields: [scheduledNotification.organizationId],
+      references: [organization.id],
+    }),
+  }),
+);
+
+// =============================================================================
+// ORGANIZATION SIGNING CERTIFICATE - ICP-Brasil Digital Signature (ISO 7.8.2.1)
+// =============================================================================
+
+/**
+ * Stores ICP-Brasil A1 certificates (PKCS#12) per organization.
+ * Password is encrypted with AES-256-GCM using a master key from Cloudflare secrets.
+ * Enables PDF signing for calibration certificates per NIT-DICLA-083 requirements.
+ */
+export const organizationSigningCertificate = pgTable(
+  "organization_signing_certificate",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // Certificate identification
+    name: text("name").notNull(), // Display name, e.g., "Certificado Principal"
+    serialNumber: text("serial_number").notNull(), // Certificate serial from ICP-Brasil
+    issuerCn: text("issuer_cn").notNull(), // e.g., "AC SOLUTI Multipla v5"
+    subjectCn: text("subject_cn").notNull(), // Company name from certificate
+    subjectCpfCnpj: text("subject_cpf_cnpj"), // CPF/CNPJ extracted from certificate
+    // Validity period
+    validFrom: timestamp("valid_from").notNull(),
+    validUntil: timestamp("valid_until").notNull(),
+    // Encrypted storage
+    encryptedP12: text("encrypted_p12").notNull(), // Base64-encoded PKCS#12
+    encryptedPassword: text("encrypted_password").notNull(), // AES-256-GCM encrypted
+    passwordIv: text("password_iv").notNull(), // IV for AES decryption
+    // Status
+    isActive: boolean("is_active").default(true).notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    // Audit trail
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at"),
+    revokedBy: text("revoked_by").references(() => user.id),
+    revokedReason: text("revoked_reason"),
+  },
+  (table) => [
+    index("org_signing_cert_org_id_idx").on(table.organizationId),
+    index("org_signing_cert_valid_until_idx").on(table.validUntil),
+    index("org_signing_cert_is_default_idx").on(
+      table.organizationId,
+      table.isDefault,
+    ),
+  ],
+);
+
+export const organizationSigningCertificateRelations = relations(
+  organizationSigningCertificate,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [organizationSigningCertificate.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationSigningCertificate.createdBy],
+      references: [user.id],
+      relationName: "signingCertCreator",
+    }),
+    revokedByUser: one(user, {
+      fields: [organizationSigningCertificate.revokedBy],
+      references: [user.id],
+      relationName: "signingCertRevoker",
+    }),
+  }),
+);
+
+// =============================================================================
+// MEMBER VISUAL SIGNATURE - Handwritten signature images
+// =============================================================================
+
+/**
+ * Stores handwritten signature images for organization members.
+ * Images are stored in a private R2 bucket and accessed via presigned URLs.
+ * Used to display visual signatures on calibration certificates.
+ */
+export const memberVisualSignature = pgTable(
+  "member_visual_signature",
+  {
+    id: serial("id").primaryKey(),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // Storage location
+    r2Key: text("r2_key").notNull(), // "signatures/{org_id}/{member_id}.png"
+    contentType: text("content_type").notNull(), // "image/png"
+    // Image dimensions
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    fileSize: integer("file_size").notNull(), // In bytes
+    // Timestamps
+    uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("member_visual_sig_org_id_idx").on(table.organizationId),
+    uniqueIndex("member_visual_sig_unique_idx").on(
+      table.memberId,
+      table.organizationId,
+    ),
+  ],
+);
+
+export const memberVisualSignatureRelations = relations(
+  memberVisualSignature,
+  ({ one }) => ({
+    member: one(member, {
+      fields: [memberVisualSignature.memberId],
+      references: [member.id],
+    }),
+    organization: one(organization, {
+      fields: [memberVisualSignature.organizationId],
       references: [organization.id],
     }),
   }),

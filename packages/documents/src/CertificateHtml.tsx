@@ -101,6 +101,8 @@ export type JobData = {
     data: Record<string, unknown> | null;
     results: Record<string, unknown> | null;
     approverName: string | null;
+    // Visual signature image URL (presigned URL) - ISO 17025 Clause 7.8.2.1(q)
+    approverSignatureUrl?: string | null;
     // Amendment fields - ISO 17025 Clause 7.8.4.1
     supersedesId?: number | null;
     supersededById?: number | null;
@@ -775,9 +777,24 @@ export function CertificateHtml({ job }: { job: JobData }) {
                         </div>
                     )}
 
-                    {/* Signature */}
+                    {/* Signature - ISO 17025 Clause 7.8.2.1(q) */}
                     <div className="signature-section">
                         <div className="signature-box">
+                            {/* Visual signature image */}
+                            {job.approverSignatureUrl && (
+                                <img
+                                    src={job.approverSignatureUrl}
+                                    alt="Assinatura"
+                                    style={{
+                                        maxHeight: "60px",
+                                        maxWidth: "180px",
+                                        marginBottom: "4px",
+                                        display: "block",
+                                        marginLeft: "auto",
+                                        marginRight: "auto",
+                                    }}
+                                />
+                            )}
                             <div className="signature-line">
                                 {job.lab.technicalManagerName ||
                                     job.approverName ||
