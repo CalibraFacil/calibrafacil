@@ -177,44 +177,46 @@ export const signingRouter = new Hono<{
           env.SIGNING_MASTER_KEY
         );
 
-        // 5. If setting as default, unset current default
-        if (input.setAsDefault) {
-          await db
-            .update(organizationSigningCertificate)
-            .set({ isDefault: false })
-            .where(
-              and(
-                eq(
-                  organizationSigningCertificate.organizationId,
-                  memberData.organizationId
-                ),
-                eq(organizationSigningCertificate.isDefault, true)
-              )
-            );
-        }
+        // 5. Insert certificate (with transaction to prevent race condition on default)
+        const newCert = await db.transaction(async (tx) => {
+          // Unset current default if setting this as default
+          if (input.setAsDefault) {
+            await tx
+              .update(organizationSigningCertificate)
+              .set({ isDefault: false })
+              .where(
+                and(
+                  eq(
+                    organizationSigningCertificate.organizationId,
+                    memberData.organizationId
+                  ),
+                  eq(organizationSigningCertificate.isDefault, true)
+                )
+              );
+          }
 
-        // 6. Insert certificate
-        const insertedCerts = await db
-          .insert(organizationSigningCertificate)
-          .values({
-            organizationId: memberData.organizationId,
-            name: input.name,
-            serialNumber: certInfo.serialNumber,
-            issuerCn: certInfo.issuerCn,
-            subjectCn: certInfo.subjectCn,
-            subjectCpfCnpj: certInfo.subjectCpfCnpj,
-            validFrom: certInfo.validFrom,
-            validUntil: certInfo.validUntil,
-            encryptedP12: input.p12Base64, // Store original base64
-            encryptedPassword,
-            passwordIv: iv,
-            isActive: true,
-            isDefault: input.setAsDefault,
-            createdBy: session.user.id,
-          })
-          .returning();
+          const [inserted] = await tx
+            .insert(organizationSigningCertificate)
+            .values({
+              organizationId: memberData.organizationId,
+              name: input.name,
+              serialNumber: certInfo.serialNumber,
+              issuerCn: certInfo.issuerCn,
+              subjectCn: certInfo.subjectCn,
+              subjectCpfCnpj: certInfo.subjectCpfCnpj,
+              validFrom: certInfo.validFrom,
+              validUntil: certInfo.validUntil,
+              encryptedP12: input.p12Base64,
+              encryptedPassword,
+              passwordIv: iv,
+              isActive: true,
+              isDefault: input.setAsDefault,
+              createdBy: session.user.id,
+            })
+            .returning();
 
-        const newCert = insertedCerts[0];
+          return inserted;
+        });
         if (!newCert) {
           return c.json({ error: "Erro ao inserir certificado" }, 500);
         }
@@ -282,25 +284,26 @@ export const signingRouter = new Hono<{
         );
       }
 
-      // Unset current default
-      await db
-        .update(organizationSigningCertificate)
-        .set({ isDefault: false })
-        .where(
-          and(
-            eq(
-              organizationSigningCertificate.organizationId,
-              memberData.organizationId
-            ),
-            eq(organizationSigningCertificate.isDefault, true)
-          )
-        );
+      // Unset current default and set new default in transaction
+      await db.transaction(async (tx) => {
+        await tx
+          .update(organizationSigningCertificate)
+          .set({ isDefault: false })
+          .where(
+            and(
+              eq(
+                organizationSigningCertificate.organizationId,
+                memberData.organizationId
+              ),
+              eq(organizationSigningCertificate.isDefault, true)
+            )
+          );
 
-      // Set new default
-      await db
-        .update(organizationSigningCertificate)
-        .set({ isDefault: true })
-        .where(eq(organizationSigningCertificate.id, id));
+        await tx
+          .update(organizationSigningCertificate)
+          .set({ isDefault: true })
+          .where(eq(organizationSigningCertificate.id, id));
+      });
 
       return c.json({ message: "Certificado definido como padrão" });
     }
