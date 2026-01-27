@@ -28,6 +28,8 @@ const routeLabels: Record<string, string> = {
   '/dashboard/settings/security': 'Segurança',
   '/dashboard/settings/authentication': 'Autenticação',
   '/dashboard/settings/appearance': 'Aparência',
+  '/dashboard/settings/signature': 'Assinatura',
+  '/dashboard/settings/certificates': 'Certificados ICP',
   '/dashboard/settings/danger': 'Zona de Perigo',
 
   // Clients
