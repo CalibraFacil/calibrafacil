@@ -279,6 +279,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         performedAt: calibrationJob.performedAt,
         data: calibrationJob.data,
         results: calibrationJob.results,
+        standardsSnapshot: calibrationJob.standardsSnapshot,
         certificateUrl: calibrationJob.certificateUrl,
         labelUrl: calibrationJob.labelUrl,
         methodSnapshot: calibrationJob.methodSnapshot,

@@ -74,6 +74,24 @@ interface ReferenceStandard {
     daysUntilExpiry: number
 }
 
+interface StandardSnapshotItem {
+    id: number
+    name: string
+    certificateNumber: string
+    calibrationDate: string
+    uncertainty: number | null
+    uncertaintyUnit: string | null
+    coverageFactor: number
+    distribution: string
+    drift: number | null
+    certifiedValues: Array<{
+        nominal: string
+        value: number
+        uncertainty: number
+        unit: string
+    }> | null
+}
+
 interface JobData {
     id: number
     jobId: string
@@ -93,7 +111,7 @@ interface JobData {
     }
     data: Record<string, unknown> | null
     results: Record<string, unknown> | null
-    standardsSnapshot?: Array<unknown> | null
+    standardsSnapshot?: StandardSnapshotItem[] | null
 }
 
 const statusLabels: Record<string, string> = {
@@ -146,12 +164,17 @@ function ExecuteJobPage() {
         },
     })
 
-    // Initialize form data from job
+    // Initialize form data and selected standards from job
     useEffect(() => {
         if (job?.data) {
             setFormData(job.data)
         }
-    }, [job?.data])
+        // Restore selected standard IDs from snapshot
+        if (job?.standardsSnapshot && job.standardsSnapshot.length > 0) {
+            const snapshotIds = job.standardsSnapshot.map((s) => s.id)
+            setSelectedStandardIds(snapshotIds)
+        }
+    }, [job?.data, job?.standardsSnapshot])
 
     // Build context for math engine (including standard values)
     const context = useMemo(() => {
@@ -414,15 +437,27 @@ function ExecuteJobPage() {
                     </FieldLabel>
                     <div className="flex">
                         <Input
-                            type="number"
-                            step="any"
-                            value={(value as number) ?? ''}
+                            type="text"
+                            inputMode="decimal"
+                            value={value != null ? String(value) : ''}
                             onChange={(e) => {
                                 const val = e.target.value
-                                if (val === '') updateField(field.key, '')
-                                else {
+                                // Allow empty, numbers, decimal points, and negative sign
+                                // Keep as string to preserve trailing decimals during typing
+                                if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
+                                    // Normalize comma to period for consistency
+                                    const normalized = val.replace(',', '.')
+                                    updateField(field.key, normalized)
+                                }
+                            }}
+                            onBlur={(e) => {
+                                // Parse to number on blur if valid
+                                const val = e.target.value.replace(',', '.')
+                                if (val !== '' && val !== '-' && val !== '.') {
                                     const parsed = parseFloat(val)
-                                    updateField(field.key, isNaN(parsed) ? '' : parsed)
+                                    if (!isNaN(parsed)) {
+                                        updateField(field.key, parsed)
+                                    }
                                 }
                             }}
                             className={field.unit ? 'rounded-r-none' : ''}
