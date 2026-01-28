@@ -328,6 +328,33 @@ function ExecuteJobPage() {
         setFormData((prev) => ({ ...prev, [key]: value }))
     }, [])
 
+    // Normalize form data: convert string numbers to actual numbers before API calls
+    const normalizeFormData = useCallback((data: Record<string, unknown>): Record<string, unknown> => {
+        const normalized: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(data)) {
+            if (Array.isArray(value)) {
+                // Handle table data - normalize each row
+                normalized[key] = value.map((row) => {
+                    if (typeof row === 'object' && row !== null) {
+                        const normalizedRow: Record<string, unknown> = {}
+                        for (const [cellKey, cellValue] of Object.entries(row as Record<string, unknown>)) {
+                            normalizedRow[cellKey] = typeof cellValue === 'string' && /^-?\d*\.?\d+$/.test(cellValue)
+                                ? parseFloat(cellValue)
+                                : cellValue
+                        }
+                        return normalizedRow
+                    }
+                    return row
+                })
+            } else if (typeof value === 'string' && /^-?\d*\.?\d+$/.test(value)) {
+                normalized[key] = parseFloat(value)
+            } else {
+                normalized[key] = value
+            }
+        }
+        return normalized
+    }, [])
+
     // Save draft mutation
     const saveMutation = useMutation({
         mutationFn: async () => {
@@ -335,7 +362,7 @@ function ExecuteJobPage() {
                 param: { id },
                 json: {
                     selectedStandardIds,
-                    data: formData,
+                    data: normalizeFormData(formData),
                     results: Object.fromEntries(
                         Object.entries(formulaResults)
                             .filter(([, r]) => r.value !== undefined)
@@ -363,7 +390,7 @@ function ExecuteJobPage() {
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].submit.$post({
                 param: { id },
-                json: { data: formData },
+                json: { data: normalizeFormData(formData) },
             })
             if (!res.ok) {
                 const error = await res.json()
