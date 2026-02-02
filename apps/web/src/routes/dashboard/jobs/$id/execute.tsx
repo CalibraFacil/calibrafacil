@@ -74,6 +74,24 @@ interface ReferenceStandard {
     daysUntilExpiry: number
 }
 
+interface StandardSnapshotItem {
+    id: number
+    name: string
+    certificateNumber: string
+    calibrationDate: string
+    uncertainty: number | null
+    uncertaintyUnit: string | null
+    coverageFactor: number
+    distribution: string
+    drift: number | null
+    certifiedValues: Array<{
+        nominal: string
+        value: number
+        uncertainty: number
+        unit: string
+    }> | null
+}
+
 interface JobData {
     id: number
     jobId: string
@@ -93,7 +111,7 @@ interface JobData {
     }
     data: Record<string, unknown> | null
     results: Record<string, unknown> | null
-    standardsSnapshot?: Array<unknown> | null
+    standardsSnapshot?: StandardSnapshotItem[] | null
 }
 
 const statusLabels: Record<string, string> = {
@@ -146,12 +164,17 @@ function ExecuteJobPage() {
         },
     })
 
-    // Initialize form data from job
+    // Initialize form data and selected standards from job
     useEffect(() => {
         if (job?.data) {
             setFormData(job.data)
         }
-    }, [job?.data])
+        // Restore selected standard IDs from snapshot
+        if (job?.standardsSnapshot && job.standardsSnapshot.length > 0) {
+            const snapshotIds = job.standardsSnapshot.map((s) => s.id)
+            setSelectedStandardIds(snapshotIds)
+        }
+    }, [job?.data, job?.standardsSnapshot])
 
     // Build context for math engine (including standard values)
     const context = useMemo(() => {
@@ -305,6 +328,33 @@ function ExecuteJobPage() {
         setFormData((prev) => ({ ...prev, [key]: value }))
     }, [])
 
+    // Normalize form data: convert string numbers to actual numbers before API calls
+    const normalizeFormData = useCallback((data: Record<string, unknown>): Record<string, unknown> => {
+        const normalized: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(data)) {
+            if (Array.isArray(value)) {
+                // Handle table data - normalize each row
+                normalized[key] = value.map((row) => {
+                    if (typeof row === 'object' && row !== null) {
+                        const normalizedRow: Record<string, unknown> = {}
+                        for (const [cellKey, cellValue] of Object.entries(row as Record<string, unknown>)) {
+                            normalizedRow[cellKey] = typeof cellValue === 'string' && /^-?\d*\.?\d+$/.test(cellValue)
+                                ? parseFloat(cellValue)
+                                : cellValue
+                        }
+                        return normalizedRow
+                    }
+                    return row
+                })
+            } else if (typeof value === 'string' && /^-?\d*\.?\d+$/.test(value)) {
+                normalized[key] = parseFloat(value)
+            } else {
+                normalized[key] = value
+            }
+        }
+        return normalized
+    }, [])
+
     // Save draft mutation
     const saveMutation = useMutation({
         mutationFn: async () => {
@@ -312,7 +362,7 @@ function ExecuteJobPage() {
                 param: { id },
                 json: {
                     selectedStandardIds,
-                    data: formData,
+                    data: normalizeFormData(formData),
                     results: Object.fromEntries(
                         Object.entries(formulaResults)
                             .filter(([, r]) => r.value !== undefined)
@@ -340,7 +390,7 @@ function ExecuteJobPage() {
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].submit.$post({
                 param: { id },
-                json: { data: formData },
+                json: { data: normalizeFormData(formData) },
             })
             if (!res.ok) {
                 const error = await res.json()
@@ -414,15 +464,27 @@ function ExecuteJobPage() {
                     </FieldLabel>
                     <div className="flex">
                         <Input
-                            type="number"
-                            step="any"
-                            value={(value as number) ?? ''}
+                            type="text"
+                            inputMode="decimal"
+                            value={value != null ? String(value) : ''}
                             onChange={(e) => {
                                 const val = e.target.value
-                                if (val === '') updateField(field.key, '')
-                                else {
+                                // Allow empty, numbers, decimal points, and negative sign
+                                // Keep as string to preserve trailing decimals during typing
+                                if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
+                                    // Normalize comma to period for consistency
+                                    const normalized = val.replace(',', '.')
+                                    updateField(field.key, normalized)
+                                }
+                            }}
+                            onBlur={(e) => {
+                                // Parse to number on blur if valid
+                                const val = e.target.value.replace(',', '.')
+                                if (val !== '' && val !== '-' && val !== '.') {
                                     const parsed = parseFloat(val)
-                                    updateField(field.key, isNaN(parsed) ? '' : parsed)
+                                    if (!isNaN(parsed)) {
+                                        updateField(field.key, parsed)
+                                    }
                                 }
                             }}
                             className={field.unit ? 'rounded-r-none' : ''}
