@@ -32,6 +32,30 @@ export type TypeAResult = z.infer<typeof TypeAResultSchema>;
 // ============================================
 // Type B Uncertainty Input (Systematic)
 // ============================================
+/**
+ * Type B uncertainty component schema
+ *
+ * Represents a systematic uncertainty source evaluated by non-statistical methods
+ * (e.g., manufacturer specifications, calibration certificates, engineering judgment).
+ *
+ * @property name - Identifier for this uncertainty component
+ * @property value - The uncertainty value (half-width for rectangular, full value for normal)
+ * @property distribution - Probability distribution assumption (default: "rectangular")
+ * @property coverageFactor - If provided, value is treated as expanded uncertainty U = k * u
+ * @property divisor - Custom divisor (overrides distribution-based divisor)
+ * @property degreesOfFreedom - DOF for Welch-Satterthwaite calculation (default: 50)
+ *
+ * DEFAULT DOF RATIONALE (50):
+ * GUM Section G.4.2 recommends that for Type B estimates where the uncertainty
+ * is considered "reliable" (e.g., based on well-documented specifications or
+ * calibration certificates), a large DOF (≥50) can be assumed. This results in
+ * k ≈ 2.05, which has negligible impact on the combined coverage factor.
+ *
+ * For less reliable estimates (e.g., rough engineering judgment), use a smaller
+ * DOF (e.g., 10-30) to account for the additional uncertainty in the estimate.
+ *
+ * Reference: GUM Section 4.3.5, Section G.4.2, Table G.2
+ */
 export const TypeBComponentSchema = z.object({
   name: z.string(),
   value: z.number().positive("Uncertainty value must be positive"),
@@ -58,6 +82,34 @@ export type TypeBResult = z.infer<typeof TypeBResultSchema>;
 // ============================================
 // Combined Uncertainty
 // ============================================
+/**
+ * Combined uncertainty input schema
+ *
+ * IMPORTANT LIMITATION: CORRELATION ASSUMPTION
+ *
+ * The combined uncertainty calculation uses the simplified GUM formula
+ * (GUM Equation 10):
+ *
+ *   u_c = √(∑ cᵢ²uᵢ²)
+ *
+ * This formula ASSUMES all input quantities are UNCORRELATED (r = 0).
+ *
+ * For correlated inputs, the full formula (GUM Equation 13) requires:
+ *
+ *   u_c² = ∑∑ cᵢcⱼu(xᵢ)u(xⱼ)r(xᵢ,xⱼ)
+ *
+ * Common sources of correlation in calibration:
+ * - Multiple measurements using the same reference standard
+ * - Temperature affecting multiple components
+ * - Readings from instruments calibrated against the same reference
+ *
+ * If your calibration involves correlated quantities, you should:
+ * 1. Use a Monte Carlo method (GUM Supplement 1), OR
+ * 2. Document the correlation assumption in your uncertainty budget, OR
+ * 3. Use a conservative estimate by assuming full correlation (r = 1)
+ *
+ * Reference: GUM Section 5.2, Equations 10-16
+ */
 export const CombinedUncertaintyInputSchema = z.object({
   typeA: TypeAResultSchema.optional(),
   typeB: TypeBResultSchema.optional(),
@@ -150,6 +202,27 @@ export const CalibrationDataSchema = z.object({
 export type CalibrationData = z.infer<typeof CalibrationDataSchema>;
 
 // ============================================
+// Calculation Trace (for audit trails and debugging)
+// ============================================
+/**
+ * Calculation trace entry for audit trails
+ *
+ * When verbose mode is enabled, the engine logs each calculation step
+ * with inputs, outputs, and timing information. This supports:
+ * - ISO 17025 audit trails
+ * - Debugging uncertainty calculations
+ * - Validation of intermediate results
+ */
+export const CalculationTraceSchema = z.object({
+  step: z.string(), // e.g., "TypeA.mean", "TypeB.resolution"
+  operation: z.string(), // e.g., "sum(readings) / n"
+  inputs: z.record(z.string(), z.unknown()),
+  output: z.unknown(),
+  timestamp: z.number(), // Unix timestamp in ms
+});
+export type CalculationTrace = z.infer<typeof CalculationTraceSchema>;
+
+// ============================================
 // Full Calibration Result with ISO 17025 Traceability
 // ============================================
 export const CalibrationResultSchema = z.object({
@@ -162,6 +235,7 @@ export const CalibrationResultSchema = z.object({
     timestamp: z.string(),
     inputsUsed: z.array(z.string()),
   }),
+  trace: z.array(CalculationTraceSchema).optional(),
 });
 export type CalibrationResult = z.infer<typeof CalibrationResultSchema>;
 

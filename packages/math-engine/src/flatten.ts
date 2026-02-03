@@ -197,12 +197,25 @@ export function flattenForExecution(
 // ============================================
 // Extract numeric readings from nested data
 // ============================================
+/**
+ * Extract numeric readings from nested data structure
+ *
+ * Traverses the data object to find numeric values associated with reading keys
+ * (e.g., "reading", "value", "leitura", "measured").
+ *
+ * IMPORTANT: All readings are preserved, including duplicates.
+ * In metrology, repeated identical readings are valid and statistically
+ * significant (e.g., [10, 10, 10, 10] represents 4 independent measurements).
+ *
+ * @param data - The data object to extract readings from
+ * @param readingKeys - Keys that indicate a value is a reading (default: common terms)
+ * @returns Array of numeric readings in the order they were found
+ */
 export function extractReadings(
   data: Record<string, unknown>,
   readingKeys: string[] = ["reading", "value", "leitura", "measured"],
 ): number[] {
   const readings: number[] = [];
-  const seen = new Set<number>();
 
   function extract(obj: unknown, parentKey: string = ""): void {
     if (obj === null || obj === undefined) return;
@@ -214,18 +227,16 @@ export function extractReadings(
           parentKey.toLowerCase().includes(rk.toLowerCase()) ||
           parentKey === "",
       );
-      if (isReadingKey && !seen.has(obj)) {
+      if (isReadingKey) {
         readings.push(obj);
-        seen.add(obj);
       }
       return;
     }
 
     if (Array.isArray(obj)) {
       for (const item of obj) {
-        if (typeof item === "number" && !seen.has(item)) {
+        if (typeof item === "number") {
           readings.push(item);
-          seen.add(item);
         } else {
           extract(item, parentKey);
         }
@@ -240,18 +251,31 @@ export function extractReadings(
         );
 
         if (isReadingKey) {
-          if (typeof value === "number" && !seen.has(value)) {
+          if (typeof value === "number") {
             readings.push(value);
-            seen.add(value);
+            // Don't recurse - we've already captured the value
+            continue;
           } else if (Array.isArray(value)) {
+            // Check if array contains numbers directly or objects
+            let hasNumericItems = false;
             for (const item of value) {
-              if (typeof item === "number" && !seen.has(item)) {
+              if (typeof item === "number") {
                 readings.push(item);
-                seen.add(item);
+                hasNumericItems = true;
+              } else if (typeof item === "object" && item !== null) {
+                // Array contains objects - need to recurse into each
+                extract(item, key);
               }
             }
+            // If we found numeric items, don't recurse further
+            if (hasNumericItems) {
+              continue;
+            }
+            // If array had objects, we already recursed into them
+            continue;
           }
         }
+        // Only recurse for non-reading keys or non-numeric/non-array values
         extract(value, key);
       }
     }

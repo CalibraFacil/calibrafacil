@@ -30,6 +30,7 @@ import {
   type FormulaContext,
   type MathEngineError,
   type MathEngineErrorCode,
+  type CalculationTrace,
 } from "./types";
 
 // ============================================
@@ -50,8 +51,30 @@ export class CalibrationEngine {
     this.config = {
       precision: config.precision ?? 32,
       predictable: config.predictable ?? true,
+      verbose: config.verbose ?? false,
     };
     this.secureMath = createSecureMath(this.config);
+  }
+
+  /**
+   * Add a trace entry when verbose mode is enabled
+   */
+  private addTrace(
+    trace: CalculationTrace[] | undefined,
+    step: string,
+    operation: string,
+    inputs: Record<string, unknown>,
+    output: unknown
+  ): void {
+    if (trace) {
+      trace.push({
+        step,
+        operation,
+        inputs,
+        output,
+        timestamp: Date.now(),
+      });
+    }
   }
 
   // ============================================
@@ -232,14 +255,27 @@ export class CalibrationEngine {
     try {
       const validated = CalibrationDataSchema.parse(data);
 
+      // Initialize trace array if verbose mode is enabled
+      const trace: CalculationTrace[] | undefined = this.config.verbose
+        ? []
+        : undefined;
+
       // Extract readings for Type A
       const readings = extractReadings(validated as Record<string, unknown>);
       let typeAResult: TypeAResult | undefined;
+
+      this.addTrace(trace, "extractReadings", "extractReadings(data)", {
+        dataKeys: Object.keys(validated),
+      }, { readingsCount: readings.length, readings });
 
       if (readings.length >= 2) {
         const typeACalc = this.calculateTypeA({ readings });
         if (typeACalc.success) {
           typeAResult = typeACalc.data;
+          this.addTrace(trace, "TypeA", "u_A = s / sqrt(n)", {
+            readings,
+            n: readings.length,
+          }, typeAResult);
         }
       }
 
@@ -249,6 +285,9 @@ export class CalibrationEngine {
         const typeBCalc = this.calculateTypeB(typeBComponents);
         if (typeBCalc.success) {
           typeBResult = typeBCalc.data;
+          this.addTrace(trace, "TypeB", "u_B = sqrt(sum(u_i^2))", {
+            components: typeBComponents.map((c) => c.name),
+          }, typeBResult);
         }
       }
 
@@ -257,6 +296,11 @@ export class CalibrationEngine {
       if (!combinedCalc.success) {
         return combinedCalc;
       }
+
+      this.addTrace(trace, "Combined", "u_c = sqrt(u_A^2 + u_B^2), U = k * u_c", {
+        hasTypeA: !!typeAResult,
+        hasTypeB: !!typeBResult,
+      }, combinedCalc.data);
 
       // Prepare context for formula execution
       let context = flattenForExecution(validated as Record<string, unknown>);
@@ -270,25 +314,28 @@ export class CalibrationEngine {
       }
 
       // Add uncertainty values to context
-      // Round to 14 significant digits to avoid BigNumber conversion errors
-      const round = (n: number) => Number(n.toPrecision(14));
+      // JavaScript numbers have ~15-17 significant digits of precision (IEEE 754 double).
+      // We use 15 digits to stay within the safe precision range.
+      // Note: GUM calculations use native Math (~15 digits), so this preserves
+      // all meaningful precision from the uncertainty calculations.
+      const toContextValue = (n: number) => Number(n.toPrecision(15));
 
       if (typeAResult) {
-        context["u_typeA"] = round(typeAResult.standardUncertainty);
-        context["mean"] = round(typeAResult.mean);
-        context["std_dev"] = round(typeAResult.standardDeviation);
+        context["u_typeA"] = toContextValue(typeAResult.standardUncertainty);
+        context["mean"] = toContextValue(typeAResult.mean);
+        context["std_dev"] = toContextValue(typeAResult.standardDeviation);
         context["n"] = typeAResult.sampleSize;
       }
 
       if (typeBResult) {
-        context["u_typeB"] = round(typeBResult.totalTypeB);
+        context["u_typeB"] = toContextValue(typeBResult.totalTypeB);
       }
 
-      context["u_combined"] = round(
+      context["u_combined"] = toContextValue(
         combinedCalc.data.combinedStandardUncertainty,
       );
-      context["U_expanded"] = round(combinedCalc.data.expandedUncertainty);
-      context["k"] = round(combinedCalc.data.coverageFactor);
+      context["U_expanded"] = toContextValue(combinedCalc.data.expandedUncertainty);
+      context["k"] = toContextValue(combinedCalc.data.coverageFactor);
 
       // Execute formulas if provided
       const formulaResults: FormulaExecutionResult[] = [];
@@ -300,6 +347,9 @@ export class CalibrationEngine {
         });
         if (result.success) {
           formulaResults.push(result.data);
+          this.addTrace(trace, `Formula: ${formula}`, formula, {
+            contextKeys: Object.keys(context),
+          }, result.data.result);
         }
       }
 
@@ -319,6 +369,7 @@ export class CalibrationEngine {
             timestamp: new Date().toISOString(),
             inputsUsed,
           },
+          trace,
         },
       };
     } catch (error) {

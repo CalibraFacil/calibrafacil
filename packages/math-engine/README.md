@@ -212,3 +212,60 @@ type EngineResult<T> =
 *   `FORMULA_ERROR`: Syntax error in the math expression.
 *   `INVALID_INPUT`: Zod validation failure.
 *   `PRECISION_ERROR`: BigNumber conversion failure.
+
+---
+
+## ⚠️ Known Limitations
+
+### Correlation Assumption
+
+The combined uncertainty calculation uses the simplified GUM formula (Equation 10):
+
+$$u_c = \sqrt{\sum c_i^2 u_i^2}$$
+
+This formula **assumes all input quantities are uncorrelated** ($r = 0$).
+
+For correlated inputs, the full formula (GUM Equation 13) should be used:
+
+$$u_c^2 = \sum\sum c_i c_j u(x_i) u(x_j) r(x_i, x_j)$$
+
+**Common sources of correlation in calibration:**
+- Multiple measurements using the same reference standard
+- Temperature affecting multiple components
+- Readings from instruments calibrated against the same reference
+
+If your calibration involves correlated quantities, you should:
+1. Use a Monte Carlo method (GUM Supplement 1), OR
+2. Document the correlation assumption in your uncertainty budget, OR
+3. Use a conservative estimate by assuming full correlation
+
+**Reference:** GUM Section 5.2, Equations 10-16
+
+### Precision Architecture
+
+- **GUM calculations** (Type A, Type B, Combined) use native JavaScript Math functions (~15 significant digits)
+- **Formula execution** uses mathjs BigNumber with configurable precision (default 32 digits)
+
+This is intentional because:
+1. Input measurement values rarely exceed 6-8 significant figures
+2. GUM uncertainty results are typically reported to 2-3 significant figures
+3. The coverage factor lookup has only 2 decimal places
+
+The BigNumber precision is preserved for user-defined formulas where arbitrary precision may be needed.
+
+### Supported Confidence Levels
+
+The t-distribution tables support the following confidence levels:
+- 0.95 (95%)
+- 0.9545 (95.45%, default)
+- 0.99 (99%)
+
+For other confidence levels, the closest supported level will be used with a console warning.
+
+---
+
+## 📄 References
+
+- **JCGM 100:2008** - Guide to the Expression of Uncertainty in Measurement (GUM)
+- **ISO/IEC Guide 98-3:2008** - Uncertainty of measurement
+- **NIST/SEMATECH e-Handbook** - t-distribution tables
