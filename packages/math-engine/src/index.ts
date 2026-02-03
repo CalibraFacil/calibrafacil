@@ -31,11 +31,17 @@ export {
   DISTRIBUTION_DIVISORS,
   COVERAGE_FACTORS,
   T_TABLE,
+  T_TABLE_95,
+  T_TABLE_95_45,
+  T_TABLE_99,
+  T_TABLES,
   T_INFINITY,
+  SUPPORTED_CONFIDENCE_LEVELS,
   INCLUDE_KEYS,
   EXCLUDE_KEYS,
   UNIT_TO_SI,
 } from "./constants";
+export type { SupportedConfidenceLevel } from "./constants";
 
 // Types and schemas
 export {
@@ -70,6 +76,7 @@ export type {
   FormulaExecutionResult,
   CalibrationData,
   CalibrationResult,
+  CalculationTrace,
   MathEngineError,
   MathEngineErrorCode,
   UnitValue,
