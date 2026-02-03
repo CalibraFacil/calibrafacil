@@ -131,7 +131,7 @@ export function calculateTypeB(components: TypeBComponent[]): TypeBResult {
  * @returns Coverage factor k = t(dof, p)
  *
  * Supported confidence levels: 0.95, 0.9545, 0.99
- * For unsupported levels, uses the closest available table with a warning.
+ * For unsupported levels, uses the closest available table.
  */
 function getCoverageFactor(
   dof: number,
@@ -144,15 +144,11 @@ function getCoverageFactor(
   let table = T_TABLES[levelKey];
 
   if (!table) {
-    // Find closest supported confidence level
+    // Find closest supported confidence level (silent fallback)
     const closest = SUPPORTED_CONFIDENCE_LEVELS.reduce((prev, curr) =>
       Math.abs(curr - confidenceLevel) < Math.abs(prev - confidenceLevel)
         ? curr
         : prev
-    );
-    console.warn(
-      `[math-engine] Confidence level ${confidenceLevel} not in pre-computed tables. ` +
-        `Using closest match: ${closest}. Supported levels: ${SUPPORTED_CONFIDENCE_LEVELS.join(", ")}`
     );
     table = T_TABLES[closest.toFixed(4)]!;
   }
