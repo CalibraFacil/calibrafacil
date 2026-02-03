@@ -128,7 +128,7 @@ export function calculateTypeB(components: TypeBComponent[]): TypeBResult {
  *
  * @param dof - Effective degrees of freedom
  * @param confidenceLevel - Coverage probability (default: 0.9545)
- * @returns Coverage factor k = t(dof, p)
+ * @returns Object with coverage factor and actual confidence level used
  *
  * Supported confidence levels: 0.95, 0.9545, 0.99
  * For unsupported levels, uses the closest available table.
@@ -136,8 +136,12 @@ export function calculateTypeB(components: TypeBComponent[]): TypeBResult {
 function getCoverageFactor(
   dof: number,
   confidenceLevel: number = 0.9545
-): number {
-  if (dof >= 500) return T_INFINITY;
+): { factor: number; actualLevel: number } {
+  let actualLevel = confidenceLevel;
+
+  if (dof >= 500) {
+    return { factor: T_INFINITY, actualLevel };
+  }
 
   // Select the appropriate t-table for the confidence level
   const levelKey = confidenceLevel.toFixed(4);
@@ -145,12 +149,12 @@ function getCoverageFactor(
 
   if (!table) {
     // Find closest supported confidence level (silent fallback)
-    const closest = SUPPORTED_CONFIDENCE_LEVELS.reduce((prev, curr) =>
+    actualLevel = SUPPORTED_CONFIDENCE_LEVELS.reduce((prev, curr) =>
       Math.abs(curr - confidenceLevel) < Math.abs(prev - confidenceLevel)
         ? curr
         : prev
     );
-    table = T_TABLES[closest.toFixed(4)]!;
+    table = T_TABLES[actualLevel.toFixed(4)]!;
   }
 
   // Find the closest DOF in the table (ceiling lookup)
@@ -160,11 +164,11 @@ function getCoverageFactor(
 
   for (const key of keys) {
     if (dof <= key) {
-      return table[key]!;
+      return { factor: table[key]!, actualLevel };
     }
   }
 
-  return T_INFINITY;
+  return { factor: T_INFINITY, actualLevel };
 }
 
 // ============================================
@@ -261,10 +265,8 @@ export function calculateCombinedUncertainty(
   const effectiveDegreesOfFreedom = calculateEffectiveDOF(uncertainties);
 
   // Get coverage factor from t-table for the specified confidence level
-  const coverageFactor = getCoverageFactor(
-    effectiveDegreesOfFreedom,
-    confidenceLevel
-  );
+  const { factor: coverageFactor, actualLevel: actualConfidenceLevel } =
+    getCoverageFactor(effectiveDegreesOfFreedom, confidenceLevel);
 
   // Expanded uncertainty: U = k × u_c
   const expandedUncertainty = coverageFactor * combinedStandardUncertainty;
@@ -275,5 +277,6 @@ export function calculateCombinedUncertainty(
     coverageFactor,
     expandedUncertainty,
     confidenceLevel,
+    actualConfidenceLevel,
   };
 }

@@ -251,6 +251,7 @@ export class CalibrationEngine {
     data: CalibrationData,
     typeBComponents: TypeBComponent[] = [],
     formulas: string[] = [],
+    confidenceLevel: number = 0.9545,
   ): EngineResult<CalibrationResult> {
     try {
       const validated = CalibrationDataSchema.parse(data);
@@ -292,7 +293,7 @@ export class CalibrationEngine {
       }
 
       // Calculate combined uncertainty
-      const combinedCalc = this.calculateCombined(typeAResult, typeBResult);
+      const combinedCalc = this.calculateCombined(typeAResult, typeBResult, confidenceLevel);
       if (!combinedCalc.success) {
         return combinedCalc;
       }
@@ -337,9 +338,10 @@ export class CalibrationEngine {
       context["U_expanded"] = toContextValue(combinedCalc.data.expandedUncertainty);
       context["k"] = toContextValue(combinedCalc.data.coverageFactor);
 
-      // Execute formulas if provided
+      // Execute formulas if provided (results are chained into context)
       const formulaResults: FormulaExecutionResult[] = [];
-      for (const formula of formulas) {
+      for (let i = 0; i < formulas.length; i++) {
+        const formula = formulas[i]!;
         const result = this.evaluateFormula({
           formula,
           context,
@@ -347,6 +349,8 @@ export class CalibrationEngine {
         });
         if (result.success) {
           formulaResults.push(result.data);
+          // Chain result into context for subsequent formulas
+          context[`formula_${i}`] = result.data.resultAsNumber ?? result.data.result;
           this.addTrace(trace, `Formula: ${formula}`, formula, {
             contextKeys: Object.keys(context),
           }, result.data.result);

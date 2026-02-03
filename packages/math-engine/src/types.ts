@@ -124,7 +124,10 @@ export const CombinedUncertaintyResultSchema = z.object({
   effectiveDegreesOfFreedom: z.number(),
   coverageFactor: z.number(),
   expandedUncertainty: z.number(),
+  /** The requested confidence level */
   confidenceLevel: z.number(),
+  /** The actual confidence level used (may differ if requested level not in t-tables) */
+  actualConfidenceLevel: z.number(),
 });
 export type CombinedUncertaintyResult = z.infer<
   typeof CombinedUncertaintyResultSchema
