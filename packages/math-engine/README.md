@@ -15,7 +15,7 @@ This package provides the core mathematical logic for the Calibra Fácil platfor
 
 1.  **Safety First:** No `eval()`, no `new Function()`, and no `isolated-vm`. Security is enforced via a strict `mathjs` allow-list and Regex pre-validation.
 2.  **Absolute Determinism:** Inputs produce the exact same output, bit-for-bit, every time.
-3.  **BigNumber Precision:** All internal calculations use 64-digit floating point precision (IEEE 754 bypass) to prevent rounding errors (e.g., `0.1 + 0.2 === 0.3`).
+3.  **BigNumber Precision:** Formula execution uses configurable BigNumber precision (default 32 digits) to prevent rounding errors (e.g., `0.1 + 0.2 === 0.3`). Note: GUM uncertainty calculations use native JavaScript math (~15 digits) - see [Known Limitations](#️-known-limitations).
 4.  **Traceability:** Every execution returns metadata regarding the engine version and exact inputs used, satisfying ISO 17025 Clause 7.11.
 
 ---
@@ -190,7 +190,7 @@ The main class.
 ### `flattenForExecution(data, options)`
 Utility to convert nested objects into flat math scopes.
 *   `options.normalizeUnits`: (default: `true`) Converts "10 mm" to `0.01`.
-*   `options.excludeKeys`: (default: `['nominal', 'reference', 'target']`) Prevents metadata from polluting math scope.
+*   `options.excludeKeys`: (default: `[]`) Keys to exclude from the math scope.
 
 ### `calculateCombinedUncertainty(input)`
 Performs RSS (Root Sum Squares) combination and Welch-Satterthwaite effective degrees of freedom calculation.

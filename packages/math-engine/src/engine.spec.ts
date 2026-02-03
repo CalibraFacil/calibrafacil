@@ -111,8 +111,8 @@ describe("CalibrationEngine", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        // Result is now a number (not string) for scalar values
-        expect(result.data.result).toBeCloseTo(0.3, 15);
+        // result is stored as string for precision; use resultAsNumber for numeric checks
+        expect(result.data.result).toBe("0.3");
         expect(result.data.resultAsNumber).toBeCloseTo(0.3, 15);
       }
     });
