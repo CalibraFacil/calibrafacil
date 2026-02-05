@@ -652,6 +652,11 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
             .values({
               capaNumber,
               organizationId: member.organizationId,
+              title: `CAPA originada da ${existing.ncNumber}`,
+              description: existing.description,
+              source: "nc_detection",
+              sourceReference: existing.ncNumber,
+              detectionDate: existing.detectedAt,
               rootCauseAnalysis: input.rootCauseAnalysis || null,
               actionPlan: input.actionPlan || null,
               responsibleId: input.responsibleId || null,
