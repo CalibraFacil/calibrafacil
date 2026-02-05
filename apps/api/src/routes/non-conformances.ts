@@ -21,6 +21,17 @@ import {
 } from "../middleware/permission";
 import { eq, and, or, ilike, desc, count, gte, lte, sql } from "drizzle-orm";
 
+const MAX_SEQ_RETRIES = 3;
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.message.includes("unique") ||
+      err.message.includes("duplicate") ||
+      err.message.includes("23505"))
+  );
+}
+
 /**
  * Non-Conformance Router - ISO 17025:2017 Clause 8.7 (Control of Nonconforming Work)
  *
@@ -339,43 +350,50 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         }
       }
 
-      // Generate NC number: NC-YYYY-NNNN
-      const year = new Date().getFullYear();
-      const [lastNc] = await db
-        .select({ ncNumber: nonConformance.ncNumber })
-        .from(nonConformance)
-        .where(
-          and(
-            eq(nonConformance.organizationId, member.organizationId),
-            ilike(nonConformance.ncNumber, `NC-${year}-%`),
-          ),
-        )
-        .orderBy(desc(nonConformance.ncNumber))
-        .limit(1);
+      // Generate NC number with retry on unique constraint violation
+      let newNc: typeof nonConformance.$inferSelect | null = null;
+      for (let attempt = 0; attempt < MAX_SEQ_RETRIES; attempt++) {
+        const year = new Date().getFullYear();
+        const [lastNc] = await db
+          .select({ ncNumber: nonConformance.ncNumber })
+          .from(nonConformance)
+          .where(
+            and(
+              eq(nonConformance.organizationId, member.organizationId),
+              ilike(nonConformance.ncNumber, `NC-${year}-%`),
+            ),
+          )
+          .orderBy(desc(nonConformance.ncNumber))
+          .limit(1);
 
-      let nextSeq = 1;
-      if (lastNc) {
-        const parts = lastNc.ncNumber.split("-");
-        const lastSeq = parseInt(parts[2] ?? "0", 10);
-        nextSeq = lastSeq + 1;
+        let nextSeq = 1;
+        if (lastNc) {
+          const parts = lastNc.ncNumber.split("-");
+          nextSeq = parseInt(parts[2] ?? "0", 10) + 1;
+        }
+        const ncNumber = `NC-${year}-${String(nextSeq).padStart(4, "0")}`;
+
+        try {
+          const [inserted] = await db
+            .insert(nonConformance)
+            .values({
+              ncNumber,
+              organizationId: member.organizationId,
+              jobId: input.jobId ?? null,
+              type: input.type,
+              description: input.description,
+              detectedBy: session.user.id,
+              detectedAt: new Date(input.detectedAt),
+              status: "open",
+              createdBy: session.user.id,
+            })
+            .returning();
+          newNc = inserted ?? null;
+          break;
+        } catch (err) {
+          if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1) throw err;
+        }
       }
-      const ncNumber = `NC-${year}-${String(nextSeq).padStart(4, "0")}`;
-
-      // Create the NC
-      const [newNc] = await db
-        .insert(nonConformance)
-        .values({
-          ncNumber,
-          organizationId: member.organizationId,
-          jobId: input.jobId ?? null,
-          type: input.type,
-          description: input.description,
-          detectedBy: session.user.id,
-          detectedAt: new Date(input.detectedAt),
-          status: "open",
-          createdBy: session.user.id,
-        })
-        .returning();
 
       if (!newNc) {
         return c.json({ error: "Falha ao criar nao conformidade" }, 500);
@@ -605,42 +623,49 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      // Generate CAPA number: CAPA-YYYY-NNNN
-      const year = new Date().getFullYear();
-      const [lastCapa] = await db
-        .select({ capaNumber: correctiveAction.capaNumber })
-        .from(correctiveAction)
-        .where(
-          and(
-            eq(correctiveAction.organizationId, member.organizationId),
-            ilike(correctiveAction.capaNumber, `CAPA-${year}-%`),
-          ),
-        )
-        .orderBy(desc(correctiveAction.capaNumber))
-        .limit(1);
+      // Generate CAPA number with retry on unique constraint violation
+      let newCapa: typeof correctiveAction.$inferSelect | null = null;
+      for (let attempt = 0; attempt < MAX_SEQ_RETRIES; attempt++) {
+        const year = new Date().getFullYear();
+        const [lastCapa] = await db
+          .select({ capaNumber: correctiveAction.capaNumber })
+          .from(correctiveAction)
+          .where(
+            and(
+              eq(correctiveAction.organizationId, member.organizationId),
+              ilike(correctiveAction.capaNumber, `CAPA-${year}-%`),
+            ),
+          )
+          .orderBy(desc(correctiveAction.capaNumber))
+          .limit(1);
 
-      let nextSeq = 1;
-      if (lastCapa) {
-        const parts = lastCapa.capaNumber.split("-");
-        const lastSeq = parseInt(parts[2] ?? "0", 10);
-        nextSeq = lastSeq + 1;
+        let nextSeq = 1;
+        if (lastCapa) {
+          const parts = lastCapa.capaNumber.split("-");
+          nextSeq = parseInt(parts[2] ?? "0", 10) + 1;
+        }
+        const capaNumber = `CAPA-${year}-${String(nextSeq).padStart(4, "0")}`;
+
+        try {
+          const [inserted] = await db
+            .insert(correctiveAction)
+            .values({
+              capaNumber,
+              organizationId: member.organizationId,
+              rootCauseAnalysis: input.rootCauseAnalysis || null,
+              actionPlan: input.actionPlan || null,
+              responsibleId: input.responsibleId || null,
+              dueDate: input.dueDate ? new Date(input.dueDate) : null,
+              status: "OPEN",
+              createdBy: session.user.id,
+            })
+            .returning();
+          newCapa = inserted ?? null;
+          break;
+        } catch (err) {
+          if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1) throw err;
+        }
       }
-      const capaNumber = `CAPA-${year}-${String(nextSeq).padStart(4, "0")}`;
-
-      // Create CAPA
-      const [newCapa] = await db
-        .insert(correctiveAction)
-        .values({
-          capaNumber,
-          organizationId: member.organizationId,
-          rootCauseAnalysis: input.rootCauseAnalysis || null,
-          actionPlan: input.actionPlan || null,
-          responsibleId: input.responsibleId || null,
-          dueDate: input.dueDate ? new Date(input.dueDate) : null,
-          status: "OPEN",
-          createdBy: session.user.id,
-        })
-        .returning();
 
       if (!newCapa) {
         return c.json({ error: "Falha ao criar CAPA" }, 500);
