@@ -823,6 +823,8 @@ export const NotificationTypeSchema = z.enum([
   "JOB_OVERDUE",
   "PAYMENT_RECEIVED",
   "PAYMENT_FAILED",
+  "NC_CREATED", // ISO 17025 Clause 8.7 - New non-conformance registered
+  "NC_ESCALATED_TO_CAPA", // ISO 17025 Clause 8.7 - NC escalated to CAPA
 ]);
 
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
@@ -903,3 +905,134 @@ export const UpdateNotificationPreferencesSchema = z.object({
 });
 
 export type UpdateNotificationPreferencesInput = z.infer<typeof UpdateNotificationPreferencesSchema>;
+
+// =============================================================================
+// NON-CONFORMANCE SCHEMAS - ISO 17025:2017 Clause 8.7
+// =============================================================================
+
+/**
+ * NC type values
+ */
+export const NonConformanceTypeSchema = z.enum([
+  "work",
+  "equipment",
+  "documentation",
+]);
+
+export type NonConformanceType = z.infer<typeof NonConformanceTypeSchema>;
+
+/**
+ * NC disposition values
+ */
+export const NonConformanceDispositionSchema = z.enum([
+  "rework",
+  "scrap",
+  "use_as_is",
+  "concession",
+]);
+
+export type NonConformanceDisposition = z.infer<typeof NonConformanceDispositionSchema>;
+
+/**
+ * NC status values
+ */
+export const NonConformanceStatusSchema = z.enum([
+  "open",
+  "under_review",
+  "resolved",
+]);
+
+export type NonConformanceStatus = z.infer<typeof NonConformanceStatusSchema>;
+
+/**
+ * Schema for creating a new non-conformance
+ */
+export const CreateNonConformanceSchema = z.object({
+  jobId: z.coerce.number().optional().nullable(),
+  type: NonConformanceTypeSchema,
+  description: z.string().min(10, "Descricao deve ter pelo menos 10 caracteres"),
+  detectedAt: z.string().min(1, "Data de deteccao e obrigatoria"),
+});
+
+export type CreateNonConformanceInput = z.infer<typeof CreateNonConformanceSchema>;
+
+/**
+ * Schema for setting disposition on an NC
+ * "use_as_is" and "concession" require justification
+ */
+export const SetDispositionSchema = z
+  .object({
+    disposition: NonConformanceDispositionSchema,
+    justification: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (
+        (data.disposition === "use_as_is" || data.disposition === "concession") &&
+        (!data.justification || data.justification.length < 10)
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message:
+        "Justificativa com pelo menos 10 caracteres e obrigatoria para disposicao 'uso como esta' ou 'concessao'",
+    },
+  );
+
+export type SetDispositionInput = z.infer<typeof SetDispositionSchema>;
+
+/**
+ * Schema for resolving an NC
+ */
+export const ResolveNonConformanceSchema = z.object({
+  correctionTaken: z.string().min(10, "Correcao tomada deve ter pelo menos 10 caracteres"),
+});
+
+export type ResolveNonConformanceInput = z.infer<typeof ResolveNonConformanceSchema>;
+
+/**
+ * Schema for escalating NC to CAPA
+ */
+export const EscalateToCapaSchema = z.object({
+  rootCauseAnalysis: z.string().optional(),
+  actionPlan: z.string().optional(),
+  dueDate: z.string().optional().nullable(),
+  responsibleId: z.string().optional().nullable(),
+});
+
+export type EscalateToCapaInput = z.infer<typeof EscalateToCapaSchema>;
+
+/**
+ * Schema for listing NCs with pagination and filtering
+ */
+export const ListNonConformancesQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  query: z.string().optional(),
+  status: NonConformanceStatusSchema.optional(),
+  type: NonConformanceTypeSchema.optional(),
+  jobId: z.coerce.number().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+});
+
+export type ListNonConformancesQuery = z.infer<typeof ListNonConformancesQuerySchema>;
+
+// =============================================================================
+// CORRECTIVE ACTION (CAPA) SCHEMAS - ISO 17025:2017 Clause 8.7 / 8.9
+// =============================================================================
+
+/**
+ * CAPA status values
+ */
+export const CorrectiveActionStatusSchema = z.enum([
+  "OPEN",
+  "INVESTIGATION",
+  "IMPLEMENTATION",
+  "VERIFICATION",
+  "CLOSED",
+]);
+
+export type CorrectiveActionStatus = z.infer<typeof CorrectiveActionStatusSchema>;
