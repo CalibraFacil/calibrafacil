@@ -18,15 +18,19 @@ import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitati
 import { Route as DashboardStandardsRouteRouteImport } from './routes/dashboard/standards/route'
 import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
 import { Route as DashboardServicesRouteRouteImport } from './routes/dashboard/services/route'
+import { Route as DashboardNcRouteRouteImport } from './routes/dashboard/nc/route'
 import { Route as DashboardMethodsRouteRouteImport } from './routes/dashboard/methods/route'
 import { Route as DashboardJobsRouteRouteImport } from './routes/dashboard/jobs/route'
 import { Route as DashboardClientsRouteRouteImport } from './routes/dashboard/clients/route'
+import { Route as DashboardCapaRouteRouteImport } from './routes/dashboard/capa/route'
 import { Route as DashboardAssetsRouteRouteImport } from './routes/dashboard/assets/route'
 import { Route as DashboardStandardsIndexRouteImport } from './routes/dashboard/standards/index'
 import { Route as DashboardServicesIndexRouteImport } from './routes/dashboard/services/index'
+import { Route as DashboardNcIndexRouteImport } from './routes/dashboard/nc/index'
 import { Route as DashboardMethodsIndexRouteImport } from './routes/dashboard/methods/index'
 import { Route as DashboardJobsIndexRouteImport } from './routes/dashboard/jobs/index'
 import { Route as DashboardClientsIndexRouteImport } from './routes/dashboard/clients/index'
+import { Route as DashboardCapaIndexRouteImport } from './routes/dashboard/capa/index'
 import { Route as DashboardAssetsIndexRouteImport } from './routes/dashboard/assets/index'
 import { Route as DashboardStandardsNewRouteImport } from './routes/dashboard/standards/new'
 import { Route as DashboardSettingsSignatureRouteImport } from './routes/dashboard/settings/signature'
@@ -40,17 +44,21 @@ import { Route as DashboardSettingsBillingRouteImport } from './routes/dashboard
 import { Route as DashboardSettingsAuthenticationRouteImport } from './routes/dashboard/settings/authentication'
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
 import { Route as DashboardServicesNewRouteImport } from './routes/dashboard/services/new'
+import { Route as DashboardNcNewRouteImport } from './routes/dashboard/nc/new'
 import { Route as DashboardMethodsNewRouteImport } from './routes/dashboard/methods/new'
 import { Route as DashboardJobsNewRouteImport } from './routes/dashboard/jobs/new'
 import { Route as DashboardClientsNewRouteImport } from './routes/dashboard/clients/new'
+import { Route as DashboardCapaNewRouteImport } from './routes/dashboard/capa/new'
 import { Route as DashboardAssetsNewRouteImport } from './routes/dashboard/assets/new'
 import { Route as DashboardClientsIdRouteRouteImport } from './routes/dashboard/clients/$id/route'
 import { Route as DashboardAssetsIdRouteRouteImport } from './routes/dashboard/assets/$id/route'
 import { Route as DashboardStandardsIdIndexRouteImport } from './routes/dashboard/standards/$id/index'
 import { Route as DashboardServicesIdIndexRouteImport } from './routes/dashboard/services/$id/index'
+import { Route as DashboardNcIdIndexRouteImport } from './routes/dashboard/nc/$id/index'
 import { Route as DashboardMethodsIdIndexRouteImport } from './routes/dashboard/methods/$id/index'
 import { Route as DashboardJobsIdIndexRouteImport } from './routes/dashboard/jobs/$id/index'
 import { Route as DashboardClientsIdIndexRouteImport } from './routes/dashboard/clients/$id/index'
+import { Route as DashboardCapaIdIndexRouteImport } from './routes/dashboard/capa/$id/index'
 import { Route as DashboardAssetsIdIndexRouteImport } from './routes/dashboard/assets/$id/index'
 import { Route as DashboardStandardsIdEditRouteImport } from './routes/dashboard/standards/$id/edit'
 import { Route as DashboardServicesIdEditRouteImport } from './routes/dashboard/services/$id/edit'
@@ -108,6 +116,11 @@ const DashboardServicesRouteRoute = DashboardServicesRouteRouteImport.update({
   path: '/services',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardNcRouteRoute = DashboardNcRouteRouteImport.update({
+  id: '/nc',
+  path: '/nc',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardMethodsRouteRoute = DashboardMethodsRouteRouteImport.update({
   id: '/methods',
   path: '/methods',
@@ -121,6 +134,11 @@ const DashboardJobsRouteRoute = DashboardJobsRouteRouteImport.update({
 const DashboardClientsRouteRoute = DashboardClientsRouteRouteImport.update({
   id: '/clients',
   path: '/clients',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardCapaRouteRoute = DashboardCapaRouteRouteImport.update({
+  id: '/capa',
+  path: '/capa',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardAssetsRouteRoute = DashboardAssetsRouteRouteImport.update({
@@ -138,6 +156,11 @@ const DashboardServicesIndexRoute = DashboardServicesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardServicesRouteRoute,
 } as any)
+const DashboardNcIndexRoute = DashboardNcIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardNcRouteRoute,
+} as any)
 const DashboardMethodsIndexRoute = DashboardMethodsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -152,6 +175,11 @@ const DashboardClientsIndexRoute = DashboardClientsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DashboardClientsRouteRoute,
+} as any)
+const DashboardCapaIndexRoute = DashboardCapaIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardCapaRouteRoute,
 } as any)
 const DashboardAssetsIndexRoute = DashboardAssetsIndexRouteImport.update({
   id: '/',
@@ -227,6 +255,11 @@ const DashboardServicesNewRoute = DashboardServicesNewRouteImport.update({
   path: '/new',
   getParentRoute: () => DashboardServicesRouteRoute,
 } as any)
+const DashboardNcNewRoute = DashboardNcNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => DashboardNcRouteRoute,
+} as any)
 const DashboardMethodsNewRoute = DashboardMethodsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -241,6 +274,11 @@ const DashboardClientsNewRoute = DashboardClientsNewRouteImport.update({
   id: '/new',
   path: '/new',
   getParentRoute: () => DashboardClientsRouteRoute,
+} as any)
+const DashboardCapaNewRoute = DashboardCapaNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => DashboardCapaRouteRoute,
 } as any)
 const DashboardAssetsNewRoute = DashboardAssetsNewRouteImport.update({
   id: '/new',
@@ -269,6 +307,11 @@ const DashboardServicesIdIndexRoute =
     path: '/$id/',
     getParentRoute: () => DashboardServicesRouteRoute,
   } as any)
+const DashboardNcIdIndexRoute = DashboardNcIdIndexRouteImport.update({
+  id: '/$id/',
+  path: '/$id/',
+  getParentRoute: () => DashboardNcRouteRoute,
+} as any)
 const DashboardMethodsIdIndexRoute = DashboardMethodsIdIndexRouteImport.update({
   id: '/$id/',
   path: '/$id/',
@@ -283,6 +326,11 @@ const DashboardClientsIdIndexRoute = DashboardClientsIdIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DashboardClientsIdRouteRoute,
+} as any)
+const DashboardCapaIdIndexRoute = DashboardCapaIdIndexRouteImport.update({
+  id: '/$id/',
+  path: '/$id/',
+  getParentRoute: () => DashboardCapaRouteRoute,
 } as any)
 const DashboardAssetsIdIndexRoute = DashboardAssetsIdIndexRouteImport.update({
   id: '/',
@@ -348,9 +396,11 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
+  '/dashboard/capa': typeof DashboardCapaRouteRouteWithChildren
   '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
   '/dashboard/jobs': typeof DashboardJobsRouteRouteWithChildren
   '/dashboard/methods': typeof DashboardMethodsRouteRouteWithChildren
+  '/dashboard/nc': typeof DashboardNcRouteRouteWithChildren
   '/dashboard/services': typeof DashboardServicesRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
@@ -361,9 +411,11 @@ export interface FileRoutesByFullPath {
   '/dashboard/assets/$id': typeof DashboardAssetsIdRouteRouteWithChildren
   '/dashboard/clients/$id': typeof DashboardClientsIdRouteRouteWithChildren
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
+  '/dashboard/capa/new': typeof DashboardCapaNewRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
+  '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
@@ -377,9 +429,11 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
+  '/dashboard/capa/': typeof DashboardCapaIndexRoute
   '/dashboard/clients/': typeof DashboardClientsIndexRoute
   '/dashboard/jobs/': typeof DashboardJobsIndexRoute
   '/dashboard/methods/': typeof DashboardMethodsIndexRoute
+  '/dashboard/nc/': typeof DashboardNcIndexRoute
   '/dashboard/services/': typeof DashboardServicesIndexRoute
   '/dashboard/standards/': typeof DashboardStandardsIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
@@ -393,9 +447,11 @@ export interface FileRoutesByFullPath {
   '/dashboard/services/$id/edit': typeof DashboardServicesIdEditRoute
   '/dashboard/standards/$id/edit': typeof DashboardStandardsIdEditRoute
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
+  '/dashboard/capa/$id': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
   '/dashboard/jobs/$id': typeof DashboardJobsIdIndexRoute
   '/dashboard/methods/$id': typeof DashboardMethodsIdIndexRoute
+  '/dashboard/nc/$id': typeof DashboardNcIdIndexRoute
   '/dashboard/services/$id': typeof DashboardServicesIdIndexRoute
   '/dashboard/standards/$id': typeof DashboardStandardsIdIndexRoute
 }
@@ -407,9 +463,11 @@ export interface FileRoutesByTo {
   '/sign-in': typeof SignInIndexRoute
   '/sign-up': typeof SignUpIndexRoute
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
+  '/dashboard/capa/new': typeof DashboardCapaNewRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
+  '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
@@ -423,9 +481,11 @@ export interface FileRoutesByTo {
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/assets': typeof DashboardAssetsIndexRoute
+  '/dashboard/capa': typeof DashboardCapaIndexRoute
   '/dashboard/clients': typeof DashboardClientsIndexRoute
   '/dashboard/jobs': typeof DashboardJobsIndexRoute
   '/dashboard/methods': typeof DashboardMethodsIndexRoute
+  '/dashboard/nc': typeof DashboardNcIndexRoute
   '/dashboard/services': typeof DashboardServicesIndexRoute
   '/dashboard/standards': typeof DashboardStandardsIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
@@ -439,9 +499,11 @@ export interface FileRoutesByTo {
   '/dashboard/services/$id/edit': typeof DashboardServicesIdEditRoute
   '/dashboard/standards/$id/edit': typeof DashboardStandardsIdEditRoute
   '/dashboard/assets/$id': typeof DashboardAssetsIdIndexRoute
+  '/dashboard/capa/$id': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id': typeof DashboardClientsIdIndexRoute
   '/dashboard/jobs/$id': typeof DashboardJobsIdIndexRoute
   '/dashboard/methods/$id': typeof DashboardMethodsIdIndexRoute
+  '/dashboard/nc/$id': typeof DashboardNcIdIndexRoute
   '/dashboard/services/$id': typeof DashboardServicesIdIndexRoute
   '/dashboard/standards/$id': typeof DashboardStandardsIdIndexRoute
 }
@@ -450,9 +512,11 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
+  '/dashboard/capa': typeof DashboardCapaRouteRouteWithChildren
   '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
   '/dashboard/jobs': typeof DashboardJobsRouteRouteWithChildren
   '/dashboard/methods': typeof DashboardMethodsRouteRouteWithChildren
+  '/dashboard/nc': typeof DashboardNcRouteRouteWithChildren
   '/dashboard/services': typeof DashboardServicesRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
@@ -463,9 +527,11 @@ export interface FileRoutesById {
   '/dashboard/assets/$id': typeof DashboardAssetsIdRouteRouteWithChildren
   '/dashboard/clients/$id': typeof DashboardClientsIdRouteRouteWithChildren
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
+  '/dashboard/capa/new': typeof DashboardCapaNewRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
+  '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
@@ -479,9 +545,11 @@ export interface FileRoutesById {
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
+  '/dashboard/capa/': typeof DashboardCapaIndexRoute
   '/dashboard/clients/': typeof DashboardClientsIndexRoute
   '/dashboard/jobs/': typeof DashboardJobsIndexRoute
   '/dashboard/methods/': typeof DashboardMethodsIndexRoute
+  '/dashboard/nc/': typeof DashboardNcIndexRoute
   '/dashboard/services/': typeof DashboardServicesIndexRoute
   '/dashboard/standards/': typeof DashboardStandardsIndexRoute
   '/dashboard/assets/$id/edit': typeof DashboardAssetsIdEditRoute
@@ -495,9 +563,11 @@ export interface FileRoutesById {
   '/dashboard/services/$id/edit': typeof DashboardServicesIdEditRoute
   '/dashboard/standards/$id/edit': typeof DashboardStandardsIdEditRoute
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
+  '/dashboard/capa/$id/': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
   '/dashboard/jobs/$id/': typeof DashboardJobsIdIndexRoute
   '/dashboard/methods/$id/': typeof DashboardMethodsIdIndexRoute
+  '/dashboard/nc/$id/': typeof DashboardNcIdIndexRoute
   '/dashboard/services/$id/': typeof DashboardServicesIdIndexRoute
   '/dashboard/standards/$id/': typeof DashboardStandardsIdIndexRoute
 }
@@ -507,9 +577,11 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/dashboard/assets'
+    | '/dashboard/capa'
     | '/dashboard/clients'
     | '/dashboard/jobs'
     | '/dashboard/methods'
+    | '/dashboard/nc'
     | '/dashboard/services'
     | '/dashboard/settings'
     | '/dashboard/standards'
@@ -520,9 +592,11 @@ export interface FileRouteTypes {
     | '/dashboard/assets/$id'
     | '/dashboard/clients/$id'
     | '/dashboard/assets/new'
+    | '/dashboard/capa/new'
     | '/dashboard/clients/new'
     | '/dashboard/jobs/new'
     | '/dashboard/methods/new'
+    | '/dashboard/nc/new'
     | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
@@ -536,9 +610,11 @@ export interface FileRouteTypes {
     | '/dashboard/settings/signature'
     | '/dashboard/standards/new'
     | '/dashboard/assets/'
+    | '/dashboard/capa/'
     | '/dashboard/clients/'
     | '/dashboard/jobs/'
     | '/dashboard/methods/'
+    | '/dashboard/nc/'
     | '/dashboard/services/'
     | '/dashboard/standards/'
     | '/dashboard/assets/$id/edit'
@@ -552,9 +628,11 @@ export interface FileRouteTypes {
     | '/dashboard/services/$id/edit'
     | '/dashboard/standards/$id/edit'
     | '/dashboard/assets/$id/'
+    | '/dashboard/capa/$id'
     | '/dashboard/clients/$id/'
     | '/dashboard/jobs/$id'
     | '/dashboard/methods/$id'
+    | '/dashboard/nc/$id'
     | '/dashboard/services/$id'
     | '/dashboard/standards/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -566,9 +644,11 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/dashboard/assets/new'
+    | '/dashboard/capa/new'
     | '/dashboard/clients/new'
     | '/dashboard/jobs/new'
     | '/dashboard/methods/new'
+    | '/dashboard/nc/new'
     | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
@@ -582,9 +662,11 @@ export interface FileRouteTypes {
     | '/dashboard/settings/signature'
     | '/dashboard/standards/new'
     | '/dashboard/assets'
+    | '/dashboard/capa'
     | '/dashboard/clients'
     | '/dashboard/jobs'
     | '/dashboard/methods'
+    | '/dashboard/nc'
     | '/dashboard/services'
     | '/dashboard/standards'
     | '/dashboard/assets/$id/edit'
@@ -598,9 +680,11 @@ export interface FileRouteTypes {
     | '/dashboard/services/$id/edit'
     | '/dashboard/standards/$id/edit'
     | '/dashboard/assets/$id'
+    | '/dashboard/capa/$id'
     | '/dashboard/clients/$id'
     | '/dashboard/jobs/$id'
     | '/dashboard/methods/$id'
+    | '/dashboard/nc/$id'
     | '/dashboard/services/$id'
     | '/dashboard/standards/$id'
   id:
@@ -608,9 +692,11 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard'
     | '/dashboard/assets'
+    | '/dashboard/capa'
     | '/dashboard/clients'
     | '/dashboard/jobs'
     | '/dashboard/methods'
+    | '/dashboard/nc'
     | '/dashboard/services'
     | '/dashboard/settings'
     | '/dashboard/standards'
@@ -621,9 +707,11 @@ export interface FileRouteTypes {
     | '/dashboard/assets/$id'
     | '/dashboard/clients/$id'
     | '/dashboard/assets/new'
+    | '/dashboard/capa/new'
     | '/dashboard/clients/new'
     | '/dashboard/jobs/new'
     | '/dashboard/methods/new'
+    | '/dashboard/nc/new'
     | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
@@ -637,9 +725,11 @@ export interface FileRouteTypes {
     | '/dashboard/settings/signature'
     | '/dashboard/standards/new'
     | '/dashboard/assets/'
+    | '/dashboard/capa/'
     | '/dashboard/clients/'
     | '/dashboard/jobs/'
     | '/dashboard/methods/'
+    | '/dashboard/nc/'
     | '/dashboard/services/'
     | '/dashboard/standards/'
     | '/dashboard/assets/$id/edit'
@@ -653,9 +743,11 @@ export interface FileRouteTypes {
     | '/dashboard/services/$id/edit'
     | '/dashboard/standards/$id/edit'
     | '/dashboard/assets/$id/'
+    | '/dashboard/capa/$id/'
     | '/dashboard/clients/$id/'
     | '/dashboard/jobs/$id/'
     | '/dashboard/methods/$id/'
+    | '/dashboard/nc/$id/'
     | '/dashboard/services/$id/'
     | '/dashboard/standards/$id/'
   fileRoutesById: FileRoutesById
@@ -733,6 +825,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardServicesRouteRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/nc': {
+      id: '/dashboard/nc'
+      path: '/nc'
+      fullPath: '/dashboard/nc'
+      preLoaderRoute: typeof DashboardNcRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/methods': {
       id: '/dashboard/methods'
       path: '/methods'
@@ -752,6 +851,13 @@ declare module '@tanstack/react-router' {
       path: '/clients'
       fullPath: '/dashboard/clients'
       preLoaderRoute: typeof DashboardClientsRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/capa': {
+      id: '/dashboard/capa'
+      path: '/capa'
+      fullPath: '/dashboard/capa'
+      preLoaderRoute: typeof DashboardCapaRouteRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/assets': {
@@ -775,6 +881,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardServicesIndexRouteImport
       parentRoute: typeof DashboardServicesRouteRoute
     }
+    '/dashboard/nc/': {
+      id: '/dashboard/nc/'
+      path: '/'
+      fullPath: '/dashboard/nc/'
+      preLoaderRoute: typeof DashboardNcIndexRouteImport
+      parentRoute: typeof DashboardNcRouteRoute
+    }
     '/dashboard/methods/': {
       id: '/dashboard/methods/'
       path: '/'
@@ -795,6 +908,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/clients/'
       preLoaderRoute: typeof DashboardClientsIndexRouteImport
       parentRoute: typeof DashboardClientsRouteRoute
+    }
+    '/dashboard/capa/': {
+      id: '/dashboard/capa/'
+      path: '/'
+      fullPath: '/dashboard/capa/'
+      preLoaderRoute: typeof DashboardCapaIndexRouteImport
+      parentRoute: typeof DashboardCapaRouteRoute
     }
     '/dashboard/assets/': {
       id: '/dashboard/assets/'
@@ -887,6 +1007,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardServicesNewRouteImport
       parentRoute: typeof DashboardServicesRouteRoute
     }
+    '/dashboard/nc/new': {
+      id: '/dashboard/nc/new'
+      path: '/new'
+      fullPath: '/dashboard/nc/new'
+      preLoaderRoute: typeof DashboardNcNewRouteImport
+      parentRoute: typeof DashboardNcRouteRoute
+    }
     '/dashboard/methods/new': {
       id: '/dashboard/methods/new'
       path: '/new'
@@ -907,6 +1034,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/clients/new'
       preLoaderRoute: typeof DashboardClientsNewRouteImport
       parentRoute: typeof DashboardClientsRouteRoute
+    }
+    '/dashboard/capa/new': {
+      id: '/dashboard/capa/new'
+      path: '/new'
+      fullPath: '/dashboard/capa/new'
+      preLoaderRoute: typeof DashboardCapaNewRouteImport
+      parentRoute: typeof DashboardCapaRouteRoute
     }
     '/dashboard/assets/new': {
       id: '/dashboard/assets/new'
@@ -943,6 +1077,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardServicesIdIndexRouteImport
       parentRoute: typeof DashboardServicesRouteRoute
     }
+    '/dashboard/nc/$id/': {
+      id: '/dashboard/nc/$id/'
+      path: '/$id'
+      fullPath: '/dashboard/nc/$id'
+      preLoaderRoute: typeof DashboardNcIdIndexRouteImport
+      parentRoute: typeof DashboardNcRouteRoute
+    }
     '/dashboard/methods/$id/': {
       id: '/dashboard/methods/$id/'
       path: '/$id'
@@ -963,6 +1104,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/clients/$id/'
       preLoaderRoute: typeof DashboardClientsIdIndexRouteImport
       parentRoute: typeof DashboardClientsIdRouteRoute
+    }
+    '/dashboard/capa/$id/': {
+      id: '/dashboard/capa/$id/'
+      path: '/$id'
+      fullPath: '/dashboard/capa/$id'
+      preLoaderRoute: typeof DashboardCapaIdIndexRouteImport
+      parentRoute: typeof DashboardCapaRouteRoute
     }
     '/dashboard/assets/$id/': {
       id: '/dashboard/assets/$id/'
@@ -1075,6 +1223,21 @@ const DashboardAssetsRouteRouteChildren: DashboardAssetsRouteRouteChildren = {
 const DashboardAssetsRouteRouteWithChildren =
   DashboardAssetsRouteRoute._addFileChildren(DashboardAssetsRouteRouteChildren)
 
+interface DashboardCapaRouteRouteChildren {
+  DashboardCapaNewRoute: typeof DashboardCapaNewRoute
+  DashboardCapaIndexRoute: typeof DashboardCapaIndexRoute
+  DashboardCapaIdIndexRoute: typeof DashboardCapaIdIndexRoute
+}
+
+const DashboardCapaRouteRouteChildren: DashboardCapaRouteRouteChildren = {
+  DashboardCapaNewRoute: DashboardCapaNewRoute,
+  DashboardCapaIndexRoute: DashboardCapaIndexRoute,
+  DashboardCapaIdIndexRoute: DashboardCapaIdIndexRoute,
+}
+
+const DashboardCapaRouteRouteWithChildren =
+  DashboardCapaRouteRoute._addFileChildren(DashboardCapaRouteRouteChildren)
+
 interface DashboardClientsIdRouteRouteChildren {
   DashboardClientsIdAssetsRoute: typeof DashboardClientsIdAssetsRoute
   DashboardClientsIdCalibrationsRoute: typeof DashboardClientsIdCalibrationsRoute
@@ -1152,6 +1315,21 @@ const DashboardMethodsRouteRouteWithChildren =
     DashboardMethodsRouteRouteChildren,
   )
 
+interface DashboardNcRouteRouteChildren {
+  DashboardNcNewRoute: typeof DashboardNcNewRoute
+  DashboardNcIndexRoute: typeof DashboardNcIndexRoute
+  DashboardNcIdIndexRoute: typeof DashboardNcIdIndexRoute
+}
+
+const DashboardNcRouteRouteChildren: DashboardNcRouteRouteChildren = {
+  DashboardNcNewRoute: DashboardNcNewRoute,
+  DashboardNcIndexRoute: DashboardNcIndexRoute,
+  DashboardNcIdIndexRoute: DashboardNcIdIndexRoute,
+}
+
+const DashboardNcRouteRouteWithChildren =
+  DashboardNcRouteRoute._addFileChildren(DashboardNcRouteRouteChildren)
+
 interface DashboardServicesRouteRouteChildren {
   DashboardServicesNewRoute: typeof DashboardServicesNewRoute
   DashboardServicesIndexRoute: typeof DashboardServicesIndexRoute
@@ -1226,9 +1404,11 @@ const DashboardStandardsRouteRouteWithChildren =
 
 interface DashboardRouteRouteChildren {
   DashboardAssetsRouteRoute: typeof DashboardAssetsRouteRouteWithChildren
+  DashboardCapaRouteRoute: typeof DashboardCapaRouteRouteWithChildren
   DashboardClientsRouteRoute: typeof DashboardClientsRouteRouteWithChildren
   DashboardJobsRouteRoute: typeof DashboardJobsRouteRouteWithChildren
   DashboardMethodsRouteRoute: typeof DashboardMethodsRouteRouteWithChildren
+  DashboardNcRouteRoute: typeof DashboardNcRouteRouteWithChildren
   DashboardServicesRouteRoute: typeof DashboardServicesRouteRouteWithChildren
   DashboardSettingsRouteRoute: typeof DashboardSettingsRouteRouteWithChildren
   DashboardStandardsRouteRoute: typeof DashboardStandardsRouteRouteWithChildren
@@ -1237,9 +1417,11 @@ interface DashboardRouteRouteChildren {
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardAssetsRouteRoute: DashboardAssetsRouteRouteWithChildren,
+  DashboardCapaRouteRoute: DashboardCapaRouteRouteWithChildren,
   DashboardClientsRouteRoute: DashboardClientsRouteRouteWithChildren,
   DashboardJobsRouteRoute: DashboardJobsRouteRouteWithChildren,
   DashboardMethodsRouteRoute: DashboardMethodsRouteRouteWithChildren,
+  DashboardNcRouteRoute: DashboardNcRouteRouteWithChildren,
   DashboardServicesRouteRoute: DashboardServicesRouteRouteWithChildren,
   DashboardSettingsRouteRoute: DashboardSettingsRouteRouteWithChildren,
   DashboardStandardsRouteRoute: DashboardStandardsRouteRouteWithChildren,

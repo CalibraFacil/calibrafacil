@@ -1,4 +1,5 @@
 import {
+  AlertCircleIcon,
   Book02Icon,
   Building02Icon,
   ClipboardIcon,
@@ -70,6 +71,15 @@ const data = {
       title: 'Ordens de Serviço',
       url: '/dashboard/jobs',
       icon: <HugeiconsIcon icon={ClipboardIcon} />,
+    },
+    {
+      title: 'Qualidade',
+      url: '#',
+      icon: <HugeiconsIcon icon={AlertCircleIcon} />,
+      items: [
+        { title: 'Nao Conformidades', url: '/dashboard/nc' },
+        { title: 'Acoes Corretivas (CAPA)', url: '/dashboard/capa' },
+      ],
     },
   ],
   navSecondary: [

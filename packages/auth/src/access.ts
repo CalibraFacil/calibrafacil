@@ -197,6 +197,20 @@ export const statements = {
    * - escalate: Escalate NC to CAPA
    */
   non_conformance: ["create", "read", "update", "approve_disposition", "escalate"],
+
+  // ---------------------------------------------------------------------------
+  // CAPA - ISO 17025:2017 Clause 8.2 (Corrective Actions)
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Create a new CAPA
+   * - read: View CAPA details and history
+   * - update: Update CAPA information
+   * - implement: Mark a CAPA as implemented
+   * - verify: Verify CAPA effectiveness
+   * - close: Close a verified CAPA
+   */
+  capa: ["create", "read", "update", "implement", "verify", "close"],
 } as const;
 
 // =============================================================================
@@ -237,6 +251,8 @@ export const member = ac.newRole({
   service: ["read"],
   // Read-only access to non-conformances
   non_conformance: ["read"],
+  // Read-only access to CAPAs
+  capa: ["read"],
 });
 
 /**
@@ -288,6 +304,9 @@ export const technician = ac.newRole({
 
   // NC: can create and update (set disposition for rework/scrap), cannot approve use_as_is/concession
   non_conformance: ["create", "read", "update"],
+
+  // CAPA: can create, update, and implement (cannot verify/close - requires admin/owner)
+  capa: ["create", "read", "update", "implement"],
 });
 
 /**
@@ -346,6 +365,9 @@ export const admin = ac.newRole({
 
   // Full NC management including disposition approval and CAPA escalation
   non_conformance: ["create", "read", "update", "approve_disposition", "escalate"],
+
+  // Full CAPA management
+  capa: ["create", "read", "update", "implement", "verify", "close"],
 });
 
 /**
@@ -403,6 +425,9 @@ export const owner = ac.newRole({
 
   // Full NC management
   non_conformance: ["create", "read", "update", "approve_disposition", "escalate"],
+
+  // Full CAPA management
+  capa: ["create", "read", "update", "implement", "verify", "close"],
 });
 
 /**

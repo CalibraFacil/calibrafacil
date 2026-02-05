@@ -1036,3 +1036,145 @@ export const CorrectiveActionStatusSchema = z.enum([
 ]);
 
 export type CorrectiveActionStatus = z.infer<typeof CorrectiveActionStatusSchema>;
+
+/**
+ * CAPA source - where the CAPA originated from
+ */
+export const CorrectiveActionSourceSchema = z.enum([
+  "internal_audit",
+  "customer_complaint",
+  "nc_detection",
+  "external_audit",
+  "management_review",
+]);
+
+export type CorrectiveActionSource = z.infer<typeof CorrectiveActionSourceSchema>;
+
+/**
+ * CAPA type - corrective vs preventive
+ */
+export const CorrectiveActionTypeSchema = z.enum(["corrective", "preventive"]);
+
+export type CorrectiveActionType = z.infer<typeof CorrectiveActionTypeSchema>;
+
+/**
+ * CAPA severity classification
+ */
+export const CorrectiveActionSeveritySchema = z.enum(["minor", "major", "critical"]);
+
+export type CorrectiveActionSeverity = z.infer<typeof CorrectiveActionSeveritySchema>;
+
+/**
+ * CAPA category - affected area
+ */
+export const CorrectiveActionCategorySchema = z.enum([
+  "method",
+  "equipment",
+  "personnel",
+  "procedure",
+  "environment",
+  "other",
+]);
+
+export type CorrectiveActionCategory = z.infer<typeof CorrectiveActionCategorySchema>;
+
+/**
+ * Root cause analysis method
+ */
+export const RootCauseAnalysisMethodSchema = z.enum([
+  "5_whys",
+  "fishbone",
+  "pareto",
+  "other",
+]);
+
+export type RootCauseAnalysisMethod = z.infer<typeof RootCauseAnalysisMethodSchema>;
+
+/**
+ * Schema for creating a new CAPA
+ */
+export const CreateCorrectiveActionSchema = z.object({
+  title: z.string().min(5, "Titulo deve ter pelo menos 5 caracteres"),
+  description: z.string().min(10, "Descricao deve ter pelo menos 10 caracteres"),
+  source: CorrectiveActionSourceSchema,
+  sourceReference: z.string().optional().nullable(),
+  detectionDate: z.string().min(1, "Data de deteccao e obrigatoria"),
+  type: CorrectiveActionTypeSchema,
+  severity: CorrectiveActionSeveritySchema,
+  category: CorrectiveActionCategorySchema,
+  actionPlan: z.string().min(10, "Plano de acao deve ter pelo menos 10 caracteres"),
+  responsibleId: z.string().min(1, "Responsavel e obrigatorio"),
+  dueDate: z.string().min(1, "Data alvo e obrigatoria"),
+  rootCauseAnalysis: z.string().optional().nullable(),
+  rootCauseAnalysisMethod: RootCauseAnalysisMethodSchema.optional().nullable(),
+  preventiveMeasures: z.string().optional().nullable(),
+});
+
+export type CreateCorrectiveActionInput = z.infer<typeof CreateCorrectiveActionSchema>;
+
+/**
+ * Schema for updating a CAPA
+ */
+export const UpdateCorrectiveActionSchema = z.object({
+  title: z.string().min(5).optional(),
+  description: z.string().min(10).optional(),
+  source: CorrectiveActionSourceSchema.optional(),
+  sourceReference: z.string().optional().nullable(),
+  type: CorrectiveActionTypeSchema.optional(),
+  severity: CorrectiveActionSeveritySchema.optional(),
+  category: CorrectiveActionCategorySchema.optional(),
+  actionPlan: z.string().min(10).optional(),
+  responsibleId: z.string().min(1).optional(),
+  dueDate: z.string().optional().nullable(),
+  rootCauseAnalysis: z.string().optional().nullable(),
+  rootCauseAnalysisMethod: RootCauseAnalysisMethodSchema.optional().nullable(),
+  preventiveMeasures: z.string().optional().nullable(),
+});
+
+export type UpdateCorrectiveActionInput = z.infer<typeof UpdateCorrectiveActionSchema>;
+
+/**
+ * Schema for marking a CAPA as implemented
+ */
+export const ImplementCorrectiveActionSchema = z.object({
+  implementationEvidence: z.string().min(10, "Evidencia de implementacao deve ter pelo menos 10 caracteres"),
+});
+
+export type ImplementCorrectiveActionInput = z.infer<typeof ImplementCorrectiveActionSchema>;
+
+/**
+ * Schema for verifying CAPA effectiveness
+ */
+export const VerifyCorrectiveActionSchema = z.object({
+  effectivenessConfirmed: z.boolean(),
+  verificationNotes: z.string().min(10, "Notas de verificacao devem ter pelo menos 10 caracteres"),
+});
+
+export type VerifyCorrectiveActionInput = z.infer<typeof VerifyCorrectiveActionSchema>;
+
+/**
+ * Schema for closing a CAPA
+ */
+export const CloseCorrectiveActionSchema = z.object({
+  reason: z.string().optional(),
+});
+
+export type CloseCorrectiveActionInput = z.infer<typeof CloseCorrectiveActionSchema>;
+
+/**
+ * Schema for listing CAPAs with pagination and filtering
+ */
+export const ListCorrectiveActionsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  query: z.string().optional(),
+  status: CorrectiveActionStatusSchema.optional(),
+  severity: CorrectiveActionSeveritySchema.optional(),
+  category: CorrectiveActionCategorySchema.optional(),
+  source: CorrectiveActionSourceSchema.optional(),
+  type: CorrectiveActionTypeSchema.optional(),
+  responsibleId: z.string().optional(),
+  overdue: z.coerce.boolean().optional(),
+});
+
+export type ListCorrectiveActionsQuery = z.infer<typeof ListCorrectiveActionsQuerySchema>;

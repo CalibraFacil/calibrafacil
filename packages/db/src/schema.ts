@@ -1821,7 +1821,7 @@ export const memberVisualSignatureRelations = relations(
 );
 
 // =============================================================================
-// CORRECTIVE ACTION (CAPA) - ISO 17025:2017 Clause 8.7 / 8.9
+// CORRECTIVE ACTION (CAPA) - ISO 17025:2017 Clause 8.2 / 8.7 / 8.9
 // =============================================================================
 
 /**
@@ -1835,12 +1835,53 @@ export type CorrectiveActionStatus =
   | "CLOSED";
 
 /**
+ * CAPA source - where the CAPA originated from
+ */
+export type CorrectiveActionSource =
+  | "internal_audit"
+  | "customer_complaint"
+  | "nc_detection"
+  | "external_audit"
+  | "management_review";
+
+/**
+ * CAPA type - corrective vs preventive
+ */
+export type CorrectiveActionType = "corrective" | "preventive";
+
+/**
+ * CAPA severity classification
+ */
+export type CorrectiveActionSeverity = "minor" | "major" | "critical";
+
+/**
+ * CAPA category - affected area
+ */
+export type CorrectiveActionCategory =
+  | "method"
+  | "equipment"
+  | "personnel"
+  | "procedure"
+  | "environment"
+  | "other";
+
+/**
+ * Root cause analysis method used
+ */
+export type RootCauseAnalysisMethod =
+  | "5_whys"
+  | "fishbone"
+  | "pareto"
+  | "other";
+
+/**
  * Corrective Action table - Root Cause Analysis & Corrective/Preventive Actions
- * ISO 17025:2017 Clause 8.7 (Corrective Actions) / Clause 8.9 (Improvement)
+ * ISO 17025:2017 Clause 8.2 (Corrective Actions) / Clause 8.7 / Clause 8.9 (Improvement)
  *
  * Key concepts:
- * - Linked to one or more Non-Conformances
- * - Tracks root cause analysis, corrective action plan, and verification
+ * - Can be linked to one or more Non-Conformances (nc_detection source)
+ * - Can also originate from audits, complaints, or management reviews
+ * - Tracks root cause analysis, corrective action plan, and effectiveness verification
  * - Requires approval from technical manager for closure
  */
 export const correctiveAction = pgTable(
@@ -1851,29 +1892,70 @@ export const correctiveAction = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+
+    // Source
+    source: text("source")
+      .$type<CorrectiveActionSource>()
+      .default("nc_detection")
+      .notNull(),
+    sourceReference: text("source_reference"), // Job ID, complaint ID, NC number, etc.
+
+    // Description
+    title: text("title").notNull().default(""),
+    description: text("description").notNull().default(""),
+    detectionDate: timestamp("detection_date"),
+
+    // Classification
+    type: text("type")
+      .$type<CorrectiveActionType>()
+      .default("corrective")
+      .notNull(),
+    severity: text("severity")
+      .$type<CorrectiveActionSeverity>()
+      .default("minor")
+      .notNull(),
+    category: text("category")
+      .$type<CorrectiveActionCategory>()
+      .default("procedure")
+      .notNull(),
+
     // Root cause analysis
     rootCauseAnalysis: text("root_cause_analysis"),
+    rootCauseAnalysisMethod: text("rca_method").$type<RootCauseAnalysisMethod>(),
+
     // Corrective action plan
     actionPlan: text("action_plan"),
     // Preventive measures
     preventiveMeasures: text("preventive_measures"),
+
     // Responsible person
     responsibleId: text("responsible_id").references(() => user.id),
+    // Target date for completion
+    dueDate: timestamp("due_date"),
+
+    // Implementation tracking
+    implementationEvidence: text("implementation_evidence"),
+    implementedAt: timestamp("implemented_at"),
+
+    // Investigation
+    investigationCompletedAt: timestamp("investigation_completed_at"),
+
+    // Effectiveness verification
+    verifiedAt: timestamp("verified_at"),
+    verifiedBy: text("verified_by").references(() => user.id),
+    verificationNotes: text("verification_notes"),
+    effectivenessConfirmed: boolean("effectiveness_confirmed"),
+
     // Status tracking
     status: text("status")
       .$type<CorrectiveActionStatus>()
       .default("OPEN")
       .notNull(),
-    // Dates
-    dueDate: timestamp("due_date"),
-    investigationCompletedAt: timestamp("investigation_completed_at"),
-    implementedAt: timestamp("implemented_at"),
-    verifiedAt: timestamp("verified_at"),
+
+    // Closure
     closedAt: timestamp("closed_at"),
-    // Verification
-    verifiedBy: text("verified_by").references(() => user.id),
-    verificationNotes: text("verification_notes"),
-    effectivenessConfirmed: boolean("effectiveness_confirmed"),
+    closedBy: text("closed_by").references(() => user.id),
+
     // Audit
     createdBy: text("created_by")
       .notNull()
@@ -1888,7 +1970,40 @@ export const correctiveAction = pgTable(
     index("capa_organization_id_idx").on(table.organizationId),
     index("capa_status_idx").on(table.status),
     index("capa_responsible_id_idx").on(table.responsibleId),
+    index("capa_severity_idx").on(table.severity),
+    index("capa_category_idx").on(table.category),
+    index("capa_source_idx").on(table.source),
     uniqueIndex("capa_number_uidx").on(table.capaNumber),
+  ],
+);
+
+// =============================================================================
+// CORRECTIVE ACTION AUDIT LOG - ISO 17025:2017 Clause 8.4 (Control of records)
+// =============================================================================
+
+/**
+ * Audit log for CAPA changes.
+ * Tracks all modifications for compliance and traceability.
+ */
+export const correctiveActionAuditLog = pgTable(
+  "corrective_action_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    capaId: integer("capa_id")
+      .notNull()
+      .references(() => correctiveAction.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // 'create', 'update', 'investigate', 'implement', 'verify', 'close'
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("capa_audit_log_capa_id_idx").on(table.capaId),
+    index("capa_audit_log_performed_at_idx").on(table.performedAt),
   ],
 );
 
@@ -2033,12 +2148,32 @@ export const correctiveActionRelations = relations(
       references: [user.id],
       relationName: "capaVerifier",
     }),
+    closedByUser: one(user, {
+      fields: [correctiveAction.closedBy],
+      references: [user.id],
+      relationName: "capaCloser",
+    }),
     createdByUser: one(user, {
       fields: [correctiveAction.createdBy],
       references: [user.id],
       relationName: "capaCreator",
     }),
     nonConformances: many(nonConformance),
+    auditLogs: many(correctiveActionAuditLog),
+  }),
+);
+
+export const correctiveActionAuditLogRelations = relations(
+  correctiveActionAuditLog,
+  ({ one }) => ({
+    correctiveAction: one(correctiveAction, {
+      fields: [correctiveActionAuditLog.capaId],
+      references: [correctiveAction.id],
+    }),
+    performedByUser: one(user, {
+      fields: [correctiveActionAuditLog.performedBy],
+      references: [user.id],
+    }),
   }),
 );
 
