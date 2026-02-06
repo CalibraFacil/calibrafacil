@@ -59,11 +59,10 @@ A página de detalhes da OS em status **EM REVISÃO** exibe:
 Após a aprovação, o sistema gera automaticamente o certificado de calibração em PDF:
 
 1. A OS entra no status **GERANDO PDF**
-2. Um processo em segundo plano (Cloudflare Worker) renderiza o certificado HTML
-3. O HTML é convertido em PDF via Puppeteer
-4. O PDF é armazenado no Cloudflare R2
-5. A OS passa para o status **APROVADO**
-6. O cliente recebe uma notificação de **CERTIFICATE_READY**
+2. O sistema renderiza o certificado automaticamente em segundo plano
+3. O certificado é convertido em PDF e armazenado com segurança
+4. A OS passa para o status **APROVADO**
+5. O cliente recebe uma notificação de que o certificado está disponível
 
 O certificado inclui:
 - Identificação do laboratório e acreditação

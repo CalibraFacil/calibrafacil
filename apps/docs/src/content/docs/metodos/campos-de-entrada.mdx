@@ -1,6 +1,6 @@
 ---
 title: Campos de Entrada
-description: Tipos de campos disponíveis no Construtor de Métodos — texto, número, seleção e tabela — com regras de nomenclatura e exemplos.
+description: Tipos de campos disponíveis no Construtor de Métodos — número, texto, seleção e tabela — com exemplos práticos.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -54,7 +54,7 @@ Lista suspensa com opções predefinidas. Útil para parâmetros discretos como 
 
 ### Tabela
 
-Permite múltiplas linhas de dados — ideal para séries de leituras. Cada coluna da tabela é configurada individualmente.
+Permite múltiplas linhas de dados — ideal para séries de leituras repetidas. Cada coluna da tabela é configurada individualmente.
 
 | Propriedade | Obrigatório | Descrição |
 | :--- | :--- | :--- |
@@ -88,37 +88,18 @@ leituras_valor_1         // Segundo valor (índice 1)
 ```
 
 <Aside type="tip">
-  Tabelas são a forma recomendada para séries de leituras repetidas. O motor matemático automaticamente disponibiliza funções vetoriais (mean, std, etc.) para colunas numéricas.
+  Tabelas são a forma recomendada para séries de leituras repetidas. Funções estatísticas como `mean` e `std` ficam disponíveis automaticamente para colunas numéricas.
 </Aside>
 
-## Regras de Nomenclatura
+## Regras para Chaves de Campo
 
 A **chave** (variável) de cada campo deve seguir estas regras:
 
 1. **Começar com uma letra** — não pode iniciar com número ou caractere especial
-2. **Conter apenas letras, números e underscore** (`_`) — regex: `^[a-zA-Z][a-zA-Z0-9_]*$`
+2. **Conter apenas letras, números e underscore** (`_`)
 3. **Ser única** dentro do método — não pode repetir chaves de outros campos ou fórmulas
-4. **Não usar palavras reservadas** do motor de cálculo
+4. **Não usar nomes reservados** — funções matemáticas (`abs`, `sqrt`, `mean`, `std`, etc.), constantes (`pi`, `e`) e variáveis do sistema de incerteza (`u_typeA`, `u_typeB`, `u_combined`, `U_expanded`, `k`, `n`) não podem ser usadas como chave
 
 <Aside type="caution">
   O rótulo é convertido automaticamente em chave (slugificado). Exemplo: "Leitura do Padrão" → `leitura_do_padrao`. Você pode editar a chave manualmente a qualquer momento.
 </Aside>
-
-## Palavras Reservadas
-
-As seguintes palavras **não podem** ser usadas como chave de campo:
-
-**Funções matemáticas:**
-`abs`, `sqrt`, `pow`, `exp`, `log`, `log10`, `log2`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `ceil`, `floor`, `round`, `trunc`, `sign`
-
-**Funções estatísticas:**
-`min`, `max`, `mean`, `median`, `std`, `variance`, `sum`, `prod`, `gcd`, `lcm`, `mod`, `factorial`
-
-**Constantes:**
-`pi`, `e`, `i`, `Infinity`, `NaN`, `true`, `false`, `null`
-
-**Variáveis do motor de cálculo:**
-`u_typeA`, `u_typeB`, `u_combined`, `U_expanded`, `k`, `mean`, `std_dev`, `n`
-
-**Funções bloqueadas (segurança):**
-`import`, `createUnit`, `reviver`, `evaluate`, `parse`, `simplify`, `derivative`, `resolve`, `compile`, `chain`
