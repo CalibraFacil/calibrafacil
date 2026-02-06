@@ -36,7 +36,7 @@ export type Address = z.infer<typeof AddressSchema>;
 export const CreateCustomerSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   taxId: z.string().optional(),
-  email: z.string().email("Email invalido").optional().or(z.literal("")),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
   phone: z.string().optional(),
   address: AddressSchema.optional(),
 });
@@ -275,9 +275,9 @@ export const MethodTableColumnSchema = z.object({
     .min(1, "Chave é obrigatória")
     .regex(
       /^[a-zA-Z][a-zA-Z0-9_]*$/,
-      "Chave deve comecar com letra e conter apenas letras, numeros e underscore",
+      "Chave deve começar com letra e conter apenas letras, números e underscore",
     ),
-  label: z.string().min(1, "Rotulo é obrigatório"),
+  label: z.string().min(1, "Rótulo é obrigatório"),
   type: z.enum(["text", "number"]),
   unit: z.string().optional(),
 });
@@ -294,7 +294,7 @@ export const MethodInputFieldSchema = z
       .min(1, "Chave é obrigatória")
       .regex(
         /^[a-zA-Z][a-zA-Z0-9_]*$/,
-        "Chave deve comecar com letra e conter apenas letras, numeros e underscore",
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
       ),
     label: z.string().min(1, "Rótulo é obrigatório"),
     type: z.enum(["text", "number", "select", "table"]),
@@ -315,7 +315,7 @@ export const MethodInputFieldSchema = z
       }
       return true;
     },
-    { message: "Opcoes sao obrigatorias para campos do tipo 'select'" },
+    { message: "Opções são obrigatórias para campos do tipo 'select'" },
   )
   .refine(
     (data) => {
@@ -328,7 +328,7 @@ export const MethodInputFieldSchema = z
       }
       return true;
     },
-    { message: "Colunas sao obrigatorias para campos do tipo 'table'" },
+    { message: "Colunas são obrigatórias para campos do tipo 'table'" },
   );
 
 export type MethodInputField = z.infer<typeof MethodInputFieldSchema>;
@@ -342,7 +342,7 @@ export const MethodFormulaSchema = z.object({
     .min(1, "Chave de saida é obrigatória")
     .regex(
       /^[a-zA-Z][a-zA-Z0-9_]*$/,
-      "Chave deve comecar com letra e conter apenas letras, numeros e underscore",
+      "Chave deve começar com letra e conter apenas letras, números e underscore",
     ),
   expression: z.string().min(1, "Expressão é obrigatória"),
   label: z.string().optional(),
@@ -366,7 +366,7 @@ export type MethodValidation = z.infer<typeof MethodValidationSchema>;
  * Type B uncertainty component for method defaults
  */
 export const MethodTypeBComponentSchema = z.object({
-  name: z.string().min(1, "Nome e obrigatorio"),
+  name: z.string().min(1, "Nome é obrigatório"),
   value: z.number().positive("Valor deve ser positivo"),
   distribution: z.enum(["normal", "rectangular", "triangular", "u-shaped"]),
   coverageFactor: z.number().positive().optional(),
@@ -553,7 +553,7 @@ export const CreateReferenceStandardSchema = z
     },
     {
       message:
-        "Informe o valor de referencia e incerteza, ou os valores certificados do conjunto",
+        "Informe o valor de referência e incerteza, ou os valores certificados do conjunto",
     },
   );
 
@@ -604,7 +604,7 @@ export const RenewCertificateSchema = z.object({
   coverageFactor: z.coerce.number().positive().optional(),
   certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
   // Required for audit trail (ISO 17025)
-  reason: z.string().min(1, "Motivo da renovacao e obrigatorio"),
+  reason: z.string().min(1, "Motivo da renovação é obrigatório"),
 });
 
 export type RenewCertificateInput = z.infer<typeof RenewCertificateSchema>;
@@ -666,8 +666,8 @@ export type MethodSnapshot = z.infer<typeof MethodSnapshotSchema>;
  * The method snapshot is created server-side from the service's linked method
  */
 export const CreateJobSchema = z.object({
-  assetId: z.coerce.number().min(1, "Ativo e obrigatorio"),
-  serviceId: z.coerce.number().min(1, "Servico e obrigatorio"),
+  assetId: z.coerce.number().min(1, "Ativo é obrigatório"),
+  serviceId: z.coerce.number().min(1, "Serviço é obrigatório"),
   technicianId: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(), // ISO date string
 });
@@ -727,7 +727,7 @@ export type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
  * Schema for rejecting a job
  */
 export const RejectJobSchema = z.object({
-  reason: z.string().min(1, "Motivo da rejeicao e obrigatorio"),
+  reason: z.string().min(1, "Motivo da rejeição é obrigatório"),
 });
 
 export type RejectJobInput = z.infer<typeof RejectJobSchema>;
@@ -736,7 +736,7 @@ export type RejectJobInput = z.infer<typeof RejectJobSchema>;
  * Schema for canceling a job
  */
 export const CancelJobSchema = z.object({
-  reason: z.string().min(1, "Motivo do cancelamento e obrigatorio"),
+  reason: z.string().min(1, "Motivo do cancelamento é obrigatório"),
 });
 
 export type CancelJobInput = z.infer<typeof CancelJobSchema>;
@@ -748,7 +748,7 @@ export type CancelJobInput = z.infer<typeof CancelJobSchema>;
 export const AmendJobSchema = z.object({
   reason: z
     .string()
-    .min(10, "Motivo da retificacao deve ter pelo menos 10 caracteres"),
+    .min(10, "Motivo da retificação deve ter pelo menos 10 caracteres"),
 });
 
 export type AmendJobInput = z.infer<typeof AmendJobSchema>;
@@ -854,16 +854,22 @@ export const ListNotificationsQuerySchema = z.object({
   priority: NotificationPrioritySchema.optional(),
 });
 
-export type ListNotificationsQuery = z.infer<typeof ListNotificationsQuerySchema>;
+export type ListNotificationsQuery = z.infer<
+  typeof ListNotificationsQuerySchema
+>;
 
 /**
  * Schema for marking notifications as read
  */
 export const MarkNotificationsReadSchema = z.object({
-  notificationIds: z.array(z.number()).min(1, "Selecione ao menos uma notificacao"),
+  notificationIds: z
+    .array(z.number())
+    .min(1, "Selecione ao menos uma notificação"),
 });
 
-export type MarkNotificationsReadInput = z.infer<typeof MarkNotificationsReadSchema>;
+export type MarkNotificationsReadInput = z.infer<
+  typeof MarkNotificationsReadSchema
+>;
 
 /**
  * Individual notification channel preference
@@ -873,7 +879,9 @@ export const NotificationChannelPreferenceSchema = z.object({
   email: z.boolean().default(true),
 });
 
-export type NotificationChannelPreference = z.infer<typeof NotificationChannelPreferenceSchema>;
+export type NotificationChannelPreference = z.infer<
+  typeof NotificationChannelPreferenceSchema
+>;
 
 /**
  * Full notification preferences map
@@ -885,7 +893,9 @@ export const NotificationPreferencesMapSchema = z.record(
   NotificationChannelPreferenceSchema,
 );
 
-export type NotificationPreferencesMap = z.infer<typeof NotificationPreferencesMapSchema>;
+export type NotificationPreferencesMap = z.infer<
+  typeof NotificationPreferencesMapSchema
+>;
 
 /**
  * Digest frequency options
@@ -904,7 +914,9 @@ export const UpdateNotificationPreferencesSchema = z.object({
   digestFrequency: DigestFrequencySchema.optional(),
 });
 
-export type UpdateNotificationPreferencesInput = z.infer<typeof UpdateNotificationPreferencesSchema>;
+export type UpdateNotificationPreferencesInput = z.infer<
+  typeof UpdateNotificationPreferencesSchema
+>;
 
 // =============================================================================
 // NON-CONFORMANCE SCHEMAS - ISO 17025:2017 Clause 8.7
@@ -931,7 +943,9 @@ export const NonConformanceDispositionSchema = z.enum([
   "concession",
 ]);
 
-export type NonConformanceDisposition = z.infer<typeof NonConformanceDispositionSchema>;
+export type NonConformanceDisposition = z.infer<
+  typeof NonConformanceDispositionSchema
+>;
 
 /**
  * NC status values
@@ -950,11 +964,15 @@ export type NonConformanceStatus = z.infer<typeof NonConformanceStatusSchema>;
 export const CreateNonConformanceSchema = z.object({
   jobId: z.coerce.number().optional().nullable(),
   type: NonConformanceTypeSchema,
-  description: z.string().min(10, "Descricao deve ter pelo menos 10 caracteres"),
-  detectedAt: z.string().min(1, "Data de deteccao e obrigatoria"),
+  description: z
+    .string()
+    .min(10, "Descrição deve ter pelo menos 10 caracteres"),
+  detectedAt: z.string().min(1, "Data de detecção é obrigatória"),
 });
 
-export type CreateNonConformanceInput = z.infer<typeof CreateNonConformanceSchema>;
+export type CreateNonConformanceInput = z.infer<
+  typeof CreateNonConformanceSchema
+>;
 
 /**
  * Schema for setting disposition on an NC
@@ -968,7 +986,8 @@ export const SetDispositionSchema = z
   .refine(
     (data) => {
       if (
-        (data.disposition === "use_as_is" || data.disposition === "concession") &&
+        (data.disposition === "use_as_is" ||
+          data.disposition === "concession") &&
         (!data.justification || data.justification.length < 10)
       ) {
         return false;
@@ -977,7 +996,7 @@ export const SetDispositionSchema = z
     },
     {
       message:
-        "Justificativa com pelo menos 10 caracteres e obrigatoria para disposicao 'uso como esta' ou 'concessao'",
+        "Justificativa com pelo menos 10 caracteres é obrigatória para disposição 'uso como esta' ou 'concessão'",
     },
   );
 
@@ -987,10 +1006,14 @@ export type SetDispositionInput = z.infer<typeof SetDispositionSchema>;
  * Schema for resolving an NC
  */
 export const ResolveNonConformanceSchema = z.object({
-  correctionTaken: z.string().min(10, "Correcao tomada deve ter pelo menos 10 caracteres"),
+  correctionTaken: z
+    .string()
+    .min(10, "Correção tomada deve ter pelo menos 10 caracteres"),
 });
 
-export type ResolveNonConformanceInput = z.infer<typeof ResolveNonConformanceSchema>;
+export type ResolveNonConformanceInput = z.infer<
+  typeof ResolveNonConformanceSchema
+>;
 
 /**
  * Schema for escalating NC to CAPA
@@ -1018,7 +1041,9 @@ export const ListNonConformancesQuerySchema = z.object({
   dateTo: z.string().optional(),
 });
 
-export type ListNonConformancesQuery = z.infer<typeof ListNonConformancesQuerySchema>;
+export type ListNonConformancesQuery = z.infer<
+  typeof ListNonConformancesQuerySchema
+>;
 
 // =============================================================================
 // CORRECTIVE ACTION (CAPA) SCHEMAS - ISO 17025:2017 Clause 8.7 / 8.9
@@ -1035,7 +1060,9 @@ export const CorrectiveActionStatusSchema = z.enum([
   "CLOSED",
 ]);
 
-export type CorrectiveActionStatus = z.infer<typeof CorrectiveActionStatusSchema>;
+export type CorrectiveActionStatus = z.infer<
+  typeof CorrectiveActionStatusSchema
+>;
 
 /**
  * CAPA source - where the CAPA originated from
@@ -1048,7 +1075,9 @@ export const CorrectiveActionSourceSchema = z.enum([
   "management_review",
 ]);
 
-export type CorrectiveActionSource = z.infer<typeof CorrectiveActionSourceSchema>;
+export type CorrectiveActionSource = z.infer<
+  typeof CorrectiveActionSourceSchema
+>;
 
 /**
  * CAPA type - corrective vs preventive
@@ -1060,9 +1089,15 @@ export type CorrectiveActionType = z.infer<typeof CorrectiveActionTypeSchema>;
 /**
  * CAPA severity classification
  */
-export const CorrectiveActionSeveritySchema = z.enum(["minor", "major", "critical"]);
+export const CorrectiveActionSeveritySchema = z.enum([
+  "minor",
+  "major",
+  "critical",
+]);
 
-export type CorrectiveActionSeverity = z.infer<typeof CorrectiveActionSeveritySchema>;
+export type CorrectiveActionSeverity = z.infer<
+  typeof CorrectiveActionSeveritySchema
+>;
 
 /**
  * CAPA category - affected area
@@ -1076,7 +1111,9 @@ export const CorrectiveActionCategorySchema = z.enum([
   "other",
 ]);
 
-export type CorrectiveActionCategory = z.infer<typeof CorrectiveActionCategorySchema>;
+export type CorrectiveActionCategory = z.infer<
+  typeof CorrectiveActionCategorySchema
+>;
 
 /**
  * Root cause analysis method
@@ -1088,29 +1125,37 @@ export const RootCauseAnalysisMethodSchema = z.enum([
   "other",
 ]);
 
-export type RootCauseAnalysisMethod = z.infer<typeof RootCauseAnalysisMethodSchema>;
+export type RootCauseAnalysisMethod = z.infer<
+  typeof RootCauseAnalysisMethodSchema
+>;
 
 /**
  * Schema for creating a new CAPA
  */
 export const CreateCorrectiveActionSchema = z.object({
-  title: z.string().min(5, "Titulo deve ter pelo menos 5 caracteres"),
-  description: z.string().min(10, "Descricao deve ter pelo menos 10 caracteres"),
+  title: z.string().min(5, "Título deve ter pelo menos 5 caracteres"),
+  description: z
+    .string()
+    .min(10, "Descrição deve ter pelo menos 10 caracteres"),
   source: CorrectiveActionSourceSchema,
   sourceReference: z.string().optional().nullable(),
-  detectionDate: z.string().min(1, "Data de deteccao e obrigatoria"),
+  detectionDate: z.string().min(1, "Data de detecção é obrigatória"),
   type: CorrectiveActionTypeSchema,
   severity: CorrectiveActionSeveritySchema,
   category: CorrectiveActionCategorySchema,
-  actionPlan: z.string().min(10, "Plano de acao deve ter pelo menos 10 caracteres"),
-  responsibleId: z.string().min(1, "Responsavel e obrigatorio"),
-  dueDate: z.string().min(1, "Data alvo e obrigatoria"),
+  actionPlan: z
+    .string()
+    .min(10, "Plano de acão deve ter pelo menos 10 caracteres"),
+  responsibleId: z.string().min(1, "Responsavel é obrigatório"),
+  dueDate: z.string().min(1, "Data alvo é obrigatória"),
   rootCauseAnalysis: z.string().optional().nullable(),
   rootCauseAnalysisMethod: RootCauseAnalysisMethodSchema.optional().nullable(),
   preventiveMeasures: z.string().optional().nullable(),
 });
 
-export type CreateCorrectiveActionInput = z.infer<typeof CreateCorrectiveActionSchema>;
+export type CreateCorrectiveActionInput = z.infer<
+  typeof CreateCorrectiveActionSchema
+>;
 
 /**
  * Schema for updating a CAPA
@@ -1131,26 +1176,36 @@ export const UpdateCorrectiveActionSchema = z.object({
   preventiveMeasures: z.string().optional().nullable(),
 });
 
-export type UpdateCorrectiveActionInput = z.infer<typeof UpdateCorrectiveActionSchema>;
+export type UpdateCorrectiveActionInput = z.infer<
+  typeof UpdateCorrectiveActionSchema
+>;
 
 /**
  * Schema for marking a CAPA as implemented
  */
 export const ImplementCorrectiveActionSchema = z.object({
-  implementationEvidence: z.string().min(10, "Evidencia de implementacao deve ter pelo menos 10 caracteres"),
+  implementationEvidence: z
+    .string()
+    .min(10, "Evidencia de implementação deve ter pelo menos 10 caracteres"),
 });
 
-export type ImplementCorrectiveActionInput = z.infer<typeof ImplementCorrectiveActionSchema>;
+export type ImplementCorrectiveActionInput = z.infer<
+  typeof ImplementCorrectiveActionSchema
+>;
 
 /**
  * Schema for verifying CAPA effectiveness
  */
 export const VerifyCorrectiveActionSchema = z.object({
   effectivenessConfirmed: z.boolean(),
-  verificationNotes: z.string().min(10, "Notas de verificacao devem ter pelo menos 10 caracteres"),
+  verificationNotes: z
+    .string()
+    .min(10, "Notas de verificação devem ter pelo menos 10 caracteres"),
 });
 
-export type VerifyCorrectiveActionInput = z.infer<typeof VerifyCorrectiveActionSchema>;
+export type VerifyCorrectiveActionInput = z.infer<
+  typeof VerifyCorrectiveActionSchema
+>;
 
 /**
  * Schema for closing a CAPA
@@ -1159,7 +1214,9 @@ export const CloseCorrectiveActionSchema = z.object({
   reason: z.string().optional(),
 });
 
-export type CloseCorrectiveActionInput = z.infer<typeof CloseCorrectiveActionSchema>;
+export type CloseCorrectiveActionInput = z.infer<
+  typeof CloseCorrectiveActionSchema
+>;
 
 /**
  * Schema for listing CAPAs with pagination and filtering
@@ -1177,4 +1234,6 @@ export const ListCorrectiveActionsQuerySchema = z.object({
   overdue: z.coerce.boolean().optional(),
 });
 
-export type ListCorrectiveActionsQuery = z.infer<typeof ListCorrectiveActionsQuerySchema>;
+export type ListCorrectiveActionsQuery = z.infer<
+  typeof ListCorrectiveActionsQuerySchema
+>;

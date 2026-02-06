@@ -77,8 +77,8 @@ const data = {
       url: '#',
       icon: <HugeiconsIcon icon={AlertCircleIcon} />,
       items: [
-        { title: 'Nao Conformidades', url: '/dashboard/nc' },
-        { title: 'Acoes Corretivas (CAPA)', url: '/dashboard/capa' },
+        { title: 'Não Conformidades', url: '/dashboard/nc' },
+        { title: 'Ações Corretivas (CAPA)', url: '/dashboard/capa' },
       ],
     },
   ],

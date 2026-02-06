@@ -20,16 +20,16 @@ import { Switch } from '@/components/ui/switch'
 
 export const Route = createFileRoute('/dashboard/capa/$id/')({
   head: () => ({
-    meta: [{ title: 'Detalhes CAPA | CalibraFacil' }],
+    meta: [{ title: 'Detalhes CAPA | CalibraFácil' }],
   }),
   component: CAPADetailPage,
 })
 
 const statusLabels: Record<string, string> = {
   OPEN: 'Aberta',
-  INVESTIGATION: 'Investigacao',
-  IMPLEMENTATION: 'Implementacao',
-  VERIFICATION: 'Verificacao',
+  INVESTIGATION: 'Investigação',
+  IMPLEMENTATION: 'Implementação',
+  VERIFICATION: 'Verificação',
   CLOSED: 'Fechada',
 }
 
@@ -41,26 +41,25 @@ const statusVariants: Record<string, string> = {
     'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   VERIFICATION:
     'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  CLOSED:
-    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  CLOSED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
 }
 
 const severityLabels: Record<string, string> = {
   minor: 'Menor',
   major: 'Maior',
-  critical: 'Critica',
+  critical: 'Crítica',
 }
 
 const sourceLabels: Record<string, string> = {
   internal_audit: 'Auditoria Interna',
-  customer_complaint: 'Reclamacao de Cliente',
-  nc_detection: 'Deteccao de NC',
+  customer_complaint: 'Reclamação de Cliente',
+  nc_detection: 'Detecção de NC',
   external_audit: 'Auditoria Externa',
-  management_review: 'Revisao Gerencial',
+  management_review: 'Revisão Gerencial',
 }
 
 const categoryLabels: Record<string, string> = {
-  method: 'Metodo',
+  method: 'Método',
   equipment: 'Equipamento',
   personnel: 'Pessoal',
   procedure: 'Procedimento',
@@ -69,9 +68,9 @@ const categoryLabels: Record<string, string> = {
 }
 
 const rcaMethodLabels: Record<string, string> = {
-  '5_whys': '5 Porques',
+  '5_whys': '5 Porquês',
   fishbone: 'Diagrama de Ishikawa',
-  pareto: 'Analise de Pareto',
+  pareto: 'Análise de Pareto',
   other: 'Outro',
 }
 
@@ -149,7 +148,7 @@ function CAPADetailPage() {
       const res = await api.api.capa[':id'].$get({
         param: { id },
       })
-      if (!res.ok) throw new Error('CAPA nao encontrada')
+      if (!res.ok) throw new Error('CAPA não encontrada')
       return res.json() as Promise<CAPADetail>
     },
   })
@@ -209,7 +208,7 @@ function CAPADetailPage() {
       return res.json()
     },
     onSuccess: () => {
-      toast.success('Verificacao de eficacia registrada')
+      toast.success('Verificação de eficácia registrada')
       setVerificationNotes('')
       setEffectivenessConfirmed(false)
       invalidate()
@@ -250,7 +249,7 @@ function CAPADetailPage() {
   if (!capa) {
     return (
       <div className="py-10 text-center text-muted-foreground">
-        CAPA nao encontrada
+        CAPA não encontrada
       </div>
     )
   }
@@ -261,10 +260,10 @@ function CAPADetailPage() {
   }
 
   const actionLabels: Record<string, string> = {
-    create: 'Criacao',
-    update: 'Atualizacao',
-    implement: 'Implementacao',
-    verify: 'Verificacao',
+    create: 'Criação',
+    update: 'Atualização',
+    implement: 'Implementação',
+    verify: 'Verificação',
     close: 'Fechamento',
   }
 
@@ -281,16 +280,11 @@ function CAPADetailPage() {
             >
               {statusLabels[capa.status] ?? capa.status}
             </Badge>
-            {capa.isOverdue && (
-              <Badge variant="destructive">Atrasada</Badge>
-            )}
+            {capa.isOverdue && <Badge variant="destructive">Atrasada</Badge>}
           </div>
           <p className="text-muted-foreground mt-1">{capa.title}</p>
         </div>
-        <Button
-          variant="outline"
-          render={<Link to="/dashboard/capa" />}
-        >
+        <Button variant="outline" render={<Link to="/dashboard/capa" />}>
           Voltar
         </Button>
       </div>
@@ -300,7 +294,7 @@ function CAPADetailPage() {
         {/* Description Card */}
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle>Descricao</CardTitle>
+            <CardTitle>Descrição</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="whitespace-pre-wrap">{capa.description}</p>
@@ -310,7 +304,7 @@ function CAPADetailPage() {
         {/* Classification */}
         <Card>
           <CardHeader>
-            <CardTitle>Classificacao</CardTitle>
+            <CardTitle>Classificação</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between">
@@ -327,19 +321,15 @@ function CAPADetailPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Categoria</span>
-              <span>
-                {categoryLabels[capa.category] ?? capa.category}
-              </span>
+              <span>{categoryLabels[capa.category] ?? capa.category}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Origem</span>
-              <span>
-                {sourceLabels[capa.source] ?? capa.source}
-              </span>
+              <span>{sourceLabels[capa.source] ?? capa.source}</span>
             </div>
             {capa.sourceReference && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Referencia</span>
+                <span className="text-muted-foreground">Referência</span>
                 <span>{capa.sourceReference}</span>
               </div>
             )}
@@ -353,7 +343,7 @@ function CAPADetailPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Deteccao</span>
+              <span className="text-muted-foreground">Detecção</span>
               <span>{formatDate(capa.detectionDate)}</span>
             </div>
             <div className="flex justify-between">
@@ -365,7 +355,7 @@ function CAPADetailPage() {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Responsavel</span>
+              <span className="text-muted-foreground">Responsável</span>
               <span>{capa.responsibleName ?? '-'}</span>
             </div>
             <div className="flex justify-between">
@@ -383,7 +373,7 @@ function CAPADetailPage() {
         {capa.rootCauseAnalysis && (
           <Card className="md:col-span-2">
             <CardHeader>
-              <CardTitle>Analise de Causa Raiz</CardTitle>
+              <CardTitle>Análise de Causa Raiz</CardTitle>
               {capa.rootCauseAnalysisMethod && (
                 <CardDescription>
                   Metodo:{' '}
@@ -393,9 +383,7 @@ function CAPADetailPage() {
               )}
             </CardHeader>
             <CardContent>
-              <p className="whitespace-pre-wrap">
-                {capa.rootCauseAnalysis}
-              </p>
+              <p className="whitespace-pre-wrap">{capa.rootCauseAnalysis}</p>
             </CardContent>
           </Card>
         )}
@@ -404,7 +392,7 @@ function CAPADetailPage() {
         {capa.actionPlan && (
           <Card className="md:col-span-2">
             <CardHeader>
-              <CardTitle>Plano de Acao</CardTitle>
+              <CardTitle>Plano de Ação</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="whitespace-pre-wrap">{capa.actionPlan}</p>
@@ -412,9 +400,7 @@ function CAPADetailPage() {
                 <>
                   <Separator />
                   <div>
-                    <h4 className="font-medium mb-2">
-                      Medidas Preventivas
-                    </h4>
+                    <h4 className="font-medium mb-2">Medidas Preventivas</h4>
                     <p className="whitespace-pre-wrap">
                       {capa.preventiveMeasures}
                     </p>
@@ -429,7 +415,7 @@ function CAPADetailPage() {
         {capa.implementationEvidence && (
           <Card className="md:col-span-2">
             <CardHeader>
-              <CardTitle>Evidencia de Implementacao</CardTitle>
+              <CardTitle>Evidência de Implementação</CardTitle>
               <CardDescription>
                 Implementado em {formatDate(capa.implementedAt)}
               </CardDescription>
@@ -446,7 +432,7 @@ function CAPADetailPage() {
         {capa.verifiedAt && (
           <Card className="md:col-span-2">
             <CardHeader>
-              <CardTitle>Verificacao de Eficacia</CardTitle>
+              <CardTitle>Verificação de Eficácia</CardTitle>
               <CardDescription>
                 Verificado em {formatDate(capa.verifiedAt)} por{' '}
                 {capa.verifiedByName ?? '-'}
@@ -469,9 +455,7 @@ function CAPADetailPage() {
                 </Badge>
               </div>
               {capa.verificationNotes && (
-                <p className="whitespace-pre-wrap">
-                  {capa.verificationNotes}
-                </p>
+                <p className="whitespace-pre-wrap">{capa.verificationNotes}</p>
               )}
             </CardContent>
           </Card>
@@ -481,7 +465,7 @@ function CAPADetailPage() {
         {capa.linkedNCs && capa.linkedNCs.length > 0 && (
           <Card className="md:col-span-2">
             <CardHeader>
-              <CardTitle>Nao Conformidades Vinculadas</CardTitle>
+              <CardTitle>Não Conformidades Vinculadas</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -515,13 +499,13 @@ function CAPADetailPage() {
       {capa.status !== 'CLOSED' && (
         <Card>
           <CardHeader>
-            <CardTitle>Acoes do Fluxo de Trabalho</CardTitle>
+            <CardTitle>Ações do Fluxo de Trabalho</CardTitle>
             <CardDescription>
               {capa.status === 'OPEN' || capa.status === 'INVESTIGATION'
-                ? 'Registre a evidencia de implementacao das acoes corretivas'
+                ? 'Registre a evidência de implementação das ações corretivas'
                 : capa.status === 'IMPLEMENTATION'
-                  ? 'Verifique a eficacia das acoes implementadas'
-                  : 'Feche a CAPA apos verificacao de eficacia'}
+                  ? 'Verifique a eficácia das ações implementadas'
+                  : 'Feche a CAPA após verificação de eficácia'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -532,13 +516,13 @@ function CAPADetailPage() {
               !capa.implementedAt && (
                 <>
                   <div className="space-y-2">
-                    <Label>Evidencia de Implementacao</Label>
+                    <Label>Evidência de Implementação</Label>
                     <Textarea
                       value={implementationEvidence}
                       onChange={(e) =>
                         setImplementationEvidence(e.target.value)
                       }
-                      placeholder="Descreva o que foi feito para implementar as acoes corretivas, incluindo evidencias..."
+                      placeholder="Descreva o que foi feito para implementar as ações corretivas, incluindo evidências..."
                       rows={4}
                     />
                   </div>
@@ -551,7 +535,7 @@ function CAPADetailPage() {
                   >
                     {implementMutation.isPending
                       ? 'Registrando...'
-                      : 'Registrar Implementacao'}
+                      : 'Registrar Implementação'}
                   </Button>
                 </>
               )}
@@ -573,21 +557,20 @@ function CAPADetailPage() {
                     <Textarea
                       value={verificationNotes}
                       onChange={(e) => setVerificationNotes(e.target.value)}
-                      placeholder="Descreva como a eficacia foi verificada e os resultados observados..."
+                      placeholder="Descreva como a eficácia foi verificada e os resultados observados..."
                       rows={4}
                     />
                   </div>
                   <Button
                     onClick={() => verifyMutation.mutate()}
                     disabled={
-                      verifyMutation.isPending ||
-                      verificationNotes.length < 10
+                      verifyMutation.isPending || verificationNotes.length < 10
                     }
                     variant="secondary"
                   >
                     {verifyMutation.isPending
                       ? 'Verificando...'
-                      : 'Registrar Verificacao de Eficacia'}
+                      : 'Registrar Verificação de Eficácia'}
                   </Button>
                 </div>
               </>
@@ -603,7 +586,7 @@ function CAPADetailPage() {
                     <Textarea
                       value={closeReason}
                       onChange={(e) => setCloseReason(e.target.value)}
-                      placeholder="Observacoes finais sobre o fechamento da CAPA..."
+                      placeholder="Observações finais sobre o fechamento da CAPA..."
                       rows={3}
                     />
                   </div>
@@ -612,9 +595,7 @@ function CAPADetailPage() {
                     disabled={closeMutation.isPending}
                     variant="default"
                   >
-                    {closeMutation.isPending
-                      ? 'Fechando...'
-                      : 'Fechar CAPA'}
+                    {closeMutation.isPending ? 'Fechando...' : 'Fechar CAPA'}
                   </Button>
                 </div>
               </>
@@ -643,9 +624,7 @@ function CAPADetailPage() {
                     <p className="text-sm text-muted-foreground">
                       por {log.performedByName ?? log.performedBy}
                     </p>
-                    {log.reason && (
-                      <p className="text-sm mt-1">{log.reason}</p>
-                    )}
+                    {log.reason && <p className="text-sm mt-1">{log.reason}</p>}
                   </div>
                   <span className="text-sm text-muted-foreground">
                     {new Date(log.performedAt).toLocaleString('pt-BR')}

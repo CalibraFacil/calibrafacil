@@ -99,7 +99,11 @@ function NCDetailPage() {
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
   const [capaDialogOpen, setCapaDialogOpen] = useState(false)
 
-  const { data: nc, isLoading, error } = useQuery({
+  const {
+    data: nc,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['non-conformance', id],
     queryFn: async () => {
       const res = await api.api.nc[':id'].$get({
@@ -138,11 +142,16 @@ function NCDetailPage() {
     }) => {
       const res = await api.api.nc[':id'].disposition.$put({
         param: { id },
-        json: data as { disposition: 'rework' | 'scrap' | 'use_as_is' | 'concession'; justification?: string },
+        json: data as {
+          disposition: 'rework' | 'scrap' | 'use_as_is' | 'concession'
+          justification?: string
+        },
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error((err as { error?: string }).error || 'Erro ao definir disposicao')
+        throw new Error(
+          (err as { error?: string }).error || 'Erro ao definir disposicao',
+        )
       }
       return res.json()
     },
@@ -191,7 +200,9 @@ function NCDetailPage() {
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error((err as { error?: string }).error || 'Erro ao escalar para CAPA')
+        throw new Error(
+          (err as { error?: string }).error || 'Erro ao escalar para CAPA',
+        )
       }
       return res.json()
     },
@@ -220,7 +231,8 @@ function NCDetailPage() {
       <Card>
         <CardContent className="pt-6">
           <p className="text-red-500">
-            Erro ao carregar nao conformidade: {error?.message || 'NC nao encontrada'}
+            Erro ao carregar nao conformidade:{' '}
+            {error?.message || 'NC nao encontrada'}
           </p>
         </CardContent>
       </Card>
@@ -268,7 +280,9 @@ function NCDetailPage() {
               </div>
               <div>
                 <Label className="text-muted-foreground">Detectada por</Label>
-                <p className="font-medium">{nc.detectedByName || nc.detectedBy}</p>
+                <p className="font-medium">
+                  {nc.detectedByName || nc.detectedBy}
+                </p>
               </div>
               <div>
                 <Label className="text-muted-foreground">Idade</Label>
@@ -276,7 +290,9 @@ function NCDetailPage() {
               </div>
               {nc.job && (
                 <div className="col-span-2">
-                  <Label className="text-muted-foreground">Ordem de Servico</Label>
+                  <Label className="text-muted-foreground">
+                    Ordem de Servico
+                  </Label>
                   <p>
                     <Link
                       to="/dashboard/jobs/$id"
@@ -293,7 +309,7 @@ function NCDetailPage() {
               )}
             </div>
             <div>
-              <Label className="text-muted-foreground">Descricao</Label>
+              <Label className="text-muted-foreground">Descrição</Label>
               <p className="mt-1 whitespace-pre-wrap">{nc.description}</p>
             </div>
           </CardContent>
@@ -310,18 +326,25 @@ function NCDetailPage() {
           <CardContent className="space-y-4">
             <div>
               <Label className="text-muted-foreground">Disposicao</Label>
-              <p className="font-medium">{getDispositionLabel(nc.disposition)}</p>
+              <p className="font-medium">
+                {getDispositionLabel(nc.disposition)}
+              </p>
             </div>
             {nc.dispositionJustification && (
               <div>
                 <Label className="text-muted-foreground">Justificativa</Label>
-                <p className="whitespace-pre-wrap">{nc.dispositionJustification}</p>
+                <p className="whitespace-pre-wrap">
+                  {nc.dispositionJustification}
+                </p>
               </div>
             )}
             {nc.dispositionApproverName && (
               <div>
                 <Label className="text-muted-foreground">Aprovada por</Label>
-                <p>{nc.dispositionApproverName} em {formatDate(nc.dispositionApprovedAt)}</p>
+                <p>
+                  {nc.dispositionApproverName} em{' '}
+                  {formatDate(nc.dispositionApprovedAt)}
+                </p>
               </div>
             )}
             {nc.correctionTaken && (
@@ -333,7 +356,9 @@ function NCDetailPage() {
             {nc.resolverName && (
               <div>
                 <Label className="text-muted-foreground">Resolvida por</Label>
-                <p>{nc.resolverName} em {formatDate(nc.resolvedAt)}</p>
+                <p>
+                  {nc.resolverName} em {formatDate(nc.resolvedAt)}
+                </p>
               </div>
             )}
 
@@ -341,13 +366,20 @@ function NCDetailPage() {
             {!isResolved && (
               <div className="flex flex-wrap gap-2 pt-4 border-t">
                 {!nc.disposition && (
-                  <Dialog open={dispositionDialogOpen} onOpenChange={setDispositionDialogOpen}>
-                    <DialogTrigger render={<Button>Definir Disposicao</Button>} />
+                  <Dialog
+                    open={dispositionDialogOpen}
+                    onOpenChange={setDispositionDialogOpen}
+                  >
+                    <DialogTrigger
+                      render={<Button>Definir Disposicao</Button>}
+                    />
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>Definir Disposicao</DialogTitle>
                         <DialogDescription>
-                          Escolha como tratar esta nao conformidade. Disposicoes &quot;uso como esta&quot; e &quot;concessao&quot; requerem aprovacao do gerente tecnico.
+                          Escolha como tratar esta nao conformidade. Disposicoes
+                          &quot;uso como esta&quot; e &quot;concessao&quot;
+                          requerem aprovacao do gerente tecnico.
                         </DialogDescription>
                       </DialogHeader>
                       <DispositionForm
@@ -359,7 +391,10 @@ function NCDetailPage() {
                 )}
 
                 {nc.disposition && (
-                  <Dialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
+                  <Dialog
+                    open={resolveDialogOpen}
+                    onOpenChange={setResolveDialogOpen}
+                  >
                     <DialogTrigger render={<Button>Resolver NC</Button>} />
                     <DialogContent>
                       <DialogHeader>
@@ -377,15 +412,21 @@ function NCDetailPage() {
                 )}
 
                 {!nc.capaId && (
-                  <Dialog open={capaDialogOpen} onOpenChange={setCapaDialogOpen}>
+                  <Dialog
+                    open={capaDialogOpen}
+                    onOpenChange={setCapaDialogOpen}
+                  >
                     <DialogTrigger
-                      render={<Button variant="outline">Escalar para CAPA</Button>}
+                      render={
+                        <Button variant="outline">Escalar para CAPA</Button>
+                      }
                     />
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>Criar CAPA</DialogTitle>
                         <DialogDescription>
-                          Crie uma acao corretiva/preventiva a partir desta NC para analise de causa raiz.
+                          Crie uma acao corretiva/preventiva a partir desta NC
+                          para analise de causa raiz.
                         </DialogDescription>
                       </DialogHeader>
                       <CapaForm
@@ -427,8 +468,12 @@ function NCDetailPage() {
             </div>
             {nc.capa.rootCauseAnalysis && (
               <div>
-                <Label className="text-muted-foreground">Analise de Causa Raiz</Label>
-                <p className="whitespace-pre-wrap">{nc.capa.rootCauseAnalysis}</p>
+                <Label className="text-muted-foreground">
+                  Analise de Causa Raiz
+                </Label>
+                <p className="whitespace-pre-wrap">
+                  {nc.capa.rootCauseAnalysis}
+                </p>
               </div>
             )}
             {nc.capa.actionPlan && (
@@ -470,7 +515,9 @@ function NCDetailPage() {
                               : log.action}
                     </p>
                     {log.reason && (
-                      <p className="text-sm text-muted-foreground">{log.reason}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {log.reason}
+                      </p>
                     )}
                   </div>
                   <span className="text-xs text-muted-foreground">
@@ -514,8 +561,12 @@ function DispositionForm({
           <SelectContent>
             <SelectItem value="rework">Retrabalho</SelectItem>
             <SelectItem value="scrap">Sucata</SelectItem>
-            <SelectItem value="use_as_is">Uso como esta (requer aprovacao)</SelectItem>
-            <SelectItem value="concession">Concessao (requer aprovacao)</SelectItem>
+            <SelectItem value="use_as_is">
+              Uso como esta (requer aprovacao)
+            </SelectItem>
+            <SelectItem value="concession">
+              Concessao (requer aprovacao)
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -587,10 +638,7 @@ function CapaForm({
   onSubmit,
   isLoading,
 }: {
-  onSubmit: (data: {
-    rootCauseAnalysis?: string
-    actionPlan?: string
-  }) => void
+  onSubmit: (data: { rootCauseAnalysis?: string; actionPlan?: string }) => void
   isLoading: boolean
 }) {
   const [rootCause, setRootCause] = useState('')
