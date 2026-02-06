@@ -15,6 +15,7 @@ pnpm check-types     # TypeScript type checking
 # Run specific app
 pnpm turbo dev --filter=@calibra-facil/api
 pnpm turbo dev --filter=@calibra-facil/web
+pnpm turbo dev --filter=@calibra-facil/docs
 
 # Database (from packages/db)
 pnpm db:generate     # Generate migration from schema changes
@@ -43,6 +44,7 @@ cd apps/worker && pnpm exec wrangler deploy
 | API | `@calibra-facil/api` | 3000 | Cloudflare Workers | api.calibrafacil.com |
 | Web | `@calibra-facil/web` | 5173 | Cloudflare Pages | calibrafacil.com |
 | Portal | `@calibra-facil/portal` | 5174 | Cloudflare Pages | portal.calibrafacil.com |
+| Docs | `@calibra-facil/docs` | 4321 | Cloudflare Pages | docs.calibrafacil.com |
 | Worker | `@calibra-facil/worker` | - | Cloudflare Workers | (background jobs) |
 
 ### Shared Packages

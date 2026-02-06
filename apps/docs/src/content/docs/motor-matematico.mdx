@@ -1,0 +1,294 @@
+---
+title: Motor Matemático (Math Engine)
+description: Documentação técnica do @calibra-facil/math-engine — cálculos de incerteza conforme GUM (JCGM 100:2008) e ISO/IEC 17025.
+---
+
+import { Aside, Badge } from '@astrojs/starlight/components';
+
+O **@calibra-facil/math-engine** é o núcleo de processamento metrológico da plataforma. Ele foi projetado para garantir cálculos de incerteza rigorosos, determinísticos e auditáveis, em estrita conformidade com o **GUM (JCGM 100:2008)** e a norma **ISO/IEC 17025:2017**.
+
+Este documento detalha a arquitetura, as decisões de design e as fórmulas matemáticas implementadas, permitindo que gerentes técnicos e auditores validem a integridade dos cálculos realizados pela plataforma.
+
+---
+
+## 1. Filosofia de Design e Conformidade
+
+Ao desenvolvermos o motor matemático, priorizamos três pilares fundamentais exigidos em ambientes regulados:
+
+1. **Segurança e Determinismo:** O motor não utiliza funções inseguras como `eval()` ou `Function()`. A execução é isolada e "pura" — os mesmos dados de entrada produzirão sempre o mesmo resultado de saída.
+
+2. **Precisão Numérica:** Resolvemos os problemas clássicos de ponto flutuante (ex: `0.1 + 0.2` resultando em `0.30000000000000004`) utilizando aritmética de precisão arbitrária (`BigNumber`) para a execução de fórmulas do usuário.
+
+3. **Rastreabilidade (ISO 17025:2017, Cláusula 7.11):** Cada cálculo gera metadados contendo a versão exata do motor (`engineVersion`), carimbo de tempo ISO 8601 (`timestamp`) e a lista de todas as variáveis utilizadas (`inputsUsed`), garantindo a rastreabilidade completa do dado processado.
+
+---
+
+## 2. Metodologia de Cálculo (GUM)
+
+O motor implementa o método de **Propagação de Incertezas** conforme descrito no *Guia para a Expressão de Incerteza de Medição* (GUM, JCGM 100:2008).
+
+### 2.1. Incerteza do Tipo A (Avaliação Estatística)
+
+Para avaliações baseadas na distribuição estatística de uma série de medições, o motor calcula a média aritmética, o desvio padrão experimental e a incerteza padrão da média.
+
+**Média aritmética:**
+
+$$
+\bar{x} = \frac{1}{n} \sum_{i=1}^{n} x_i
+$$
+
+**Desvio padrão experimental (amostral):**
+
+$$
+s = \sqrt{\frac{1}{n-1} \sum_{i=1}^{n} (x_i - \bar{x})^2}
+$$
+
+**Incerteza padrão da média:**
+
+$$
+u_A = \frac{s}{\sqrt{n}}
+$$
+
+**Graus de liberdade:**
+
+$$
+\nu_A = n - 1
+$$
+
+<Aside type="caution">
+O motor exige no mínimo **2 leituras** para realizar a avaliação do Tipo A. Os graus de liberdade podem ser sobrescritos manualmente quando necessário.
+</Aside>
+
+### 2.2. Incerteza do Tipo B (Avaliação Sistemática)
+
+Para componentes avaliados por meios não estatísticos — certificados de calibração, especificações do fabricante, resolução do instrumento — o motor converte o valor informado em incerteza padrão utilizando o divisor da distribuição de probabilidade correspondente.
+
+**Fórmula geral:**
+
+$$
+u_B = \frac{a}{d}
+$$
+
+Onde $a$ é o valor da semi-amplitude (ou incerteza informada) e $d$ é o divisor da distribuição.
+
+| Distribuição | Divisor ($d$) | Valor Numérico | Aplicação Típica |
+| :--- | :--- | :--- | :--- |
+| **Normal** ($k$ informado) | $k$ | variável | Certificados de calibração (incerteza expandida $U$) |
+| **Retangular** | $\sqrt{3}$ | $\approx 1{,}732$ | Resolução, deriva, especificações sem nível de confiança |
+| **Triangular** | $\sqrt{6}$ | $\approx 2{,}449$ | Distribuição onde valores centrais são mais prováveis |
+| **U-Shaped** | $\sqrt{2}$ | $\approx 1{,}414$ | Histerese, controle de temperatura cíclico |
+
+Quando um **fator de abrangência** ($k$) é fornecido junto ao valor, o motor interpreta o valor como uma incerteza expandida e converte:
+
+$$
+u_B = \frac{U}{k}
+$$
+
+**Graus de liberdade padrão para Tipo B:** $\nu = 50$, conforme recomendação do GUM (Seção G.4.2) para estimativas consideradas confiáveis. Este valor é configurável por componente.
+
+**Combinação dos componentes Tipo B (RSS):**
+
+$$
+u_B^{\text{total}} = \sqrt{\sum_{j=1}^{m} u_{B_j}^2}
+$$
+
+### 2.3. Incerteza Combinada ($u_c$)
+
+A combinação das incertezas é realizada através da **Raiz da Soma dos Quadrados** (RSS — *Root Sum of Squares*), conforme a **Equação 10 do GUM** (Seção 5.2):
+
+$$
+u_c(y) = \sqrt{\sum_{i=1}^{N} \left[ c_i \cdot u(x_i) \right]^2}
+$$
+
+Onde $c_i$ são os **coeficientes de sensibilidade** para cada componente. Se não especificados, o sistema assume $c_i = 1$.
+
+<Aside type="danger" title="Assunção de Correlação Zero">
+A implementação atual assume que as grandezas de entrada são **não correlacionadas** ($r = 0$). A fórmula completa do GUM (Equação 13) para entradas correlacionadas é:
+
+$$
+u_c^2(y) = \sum_{i} \sum_{j} c_i \, c_j \, u(x_i) \, u(x_j) \, r(x_i, x_j)
+$$
+
+Para casos com correlação significativa, recomenda-se o método de Monte Carlo (GUM Suplemento 1) ou a documentação explícita da assunção de correlação no orçamento de incerteza. Veja a seção [Limitações Conhecidas](#5-limitações-conhecidas).
+</Aside>
+
+### 2.4. Graus de Liberdade Efetivos ($\nu_{\text{eff}}$)
+
+Para garantir a cobertura correta — especialmente com distribuições não normais ou amostras pequenas — o motor calcula os graus de liberdade efetivos utilizando a fórmula de **Welch-Satterthwaite** (GUM Anexo G, Equação G.2b):
+
+$$
+\nu_{\text{eff}} = \frac{u_c^4(y)}{\displaystyle\sum_{i=1}^{N} \frac{\left[ c_i \cdot u_i(y) \right]^4}{\nu_i}}
+$$
+
+O resultado é arredondado para baixo (`floor`) para o inteiro mais próximo, conforme prática metrológica conservadora.
+
+### 2.5. Incerteza Expandida ($U$) e Fator de Abrangência ($k$)
+
+A incerteza expandida é calculada como:
+
+$$
+U = k \times u_c
+$$
+
+O fator $k$ **não é fixo em 2,0**. O motor determina $k$ dinamicamente consultando a **tabela t-Student** com base:
+
+1. Na probabilidade de abrangência desejada (padrão: **95,45%**, mas suporta 95% e 99%).
+2. Nos graus de liberdade efetivos ($\nu_{\text{eff}}$) calculados por Welch-Satterthwaite.
+
+**Níveis de confiança suportados:**
+
+| Probabilidade | $k$ para $\nu \to \infty$ | Uso |
+| :--- | :--- | :--- |
+| 95,00% | $1{,}96$ | Comum fora da metrologia |
+| **95,45%** (padrão) | $2{,}00$ | **Padrão em laboratórios de calibração** |
+| 99,00% | $2{,}576$ | Alta confiança |
+
+Para $\nu_{\text{eff}} \geq 500$, o motor utiliza $k = 2{,}0$ (constante `T_INFINITY`) pois a distribuição $t$ converge para a normal.
+
+<Aside type="tip" title="Exemplo Prático">
+Se você realizou poucas medições e seus graus de liberdade efetivos forem baixos (ex: $\nu_{\text{eff}} = 4$), o motor utilizará automaticamente $k = 2{,}87$ (para 95,45%) em vez de $2{,}00$, garantindo que a incerteza não seja subestimada.
+</Aside>
+
+**Extrato da tabela t-Student implementada (95,45%):**
+
+| $\nu_{\text{eff}}$ | $k$ |
+| :--- | :--- |
+| 1 | 13,97 |
+| 2 | 4,53 |
+| 3 | 3,31 |
+| 4 | 2,87 |
+| 5 | 2,65 |
+| 10 | 2,28 |
+| 20 | 2,13 |
+| 50 | 2,05 |
+| 100 | 2,03 |
+| $\geq 500$ | 2,00 |
+
+---
+
+## 3. Arquitetura de Precisão
+
+O motor utiliza uma abordagem híbrida de duas camadas para garantir tanto a exatidão metrológica quanto a precisão matemática nas fórmulas do usuário.
+
+### 3.1. Cálculos de Incerteza (GUM)
+
+Os cálculos internos de incerteza ($u_A$, $u_B$, Welch-Satterthwaite) utilizam a aritmética de ponto flutuante padrão **IEEE 754** (~15-17 dígitos significativos).
+
+**Justificativa:** Dados de entrada de calibração raramente excedem 6-8 algarismos significativos. A precisão nativa é ordens de magnitude superior ao necessário para a estimativa de incertezas, onde o resultado final é tipicamente arredondado para 2-3 algarismos significativos.
+
+### 3.2. Execução de Fórmulas do Usuário
+
+Para fórmulas personalizadas (ex: cálculo de erro, interpolação, médias vetoriais), o motor utiliza a biblioteca `mathjs` configurada com **BigNumber**.
+
+- **Precisão Padrão:** 32 dígitos significativos (configurável até 128).
+- **Modo Determinístico:** Ativado (`predictable: true`) para garantir resultados reproduzíveis.
+- **Resultados como String:** Valores são armazenados como strings para preservar a precisão total entre encadeamentos de fórmulas.
+
+**Comparação de precisão:**
+
+| Operação | JavaScript Nativo | CalibraFácil Engine |
+| :--- | :--- | :--- |
+| `0.1 + 0.2` | `0.30000000000000004` | `0.3` |
+
+### 3.3. Operações Vetoriais
+
+O motor suporta operações vetoriais nativas. Se um array de leituras é fornecido, operações são aplicadas elemento a elemento:
+
+- `mean(leituras)` — média aritmética
+- `std(leituras)` — desvio padrão
+- `min(leituras)`, `max(leituras)`, `sum(leituras)` — agregações
+- `leituras - referencia` — subtrai o valor de referência de cada elemento individualmente
+
+---
+
+## 4. Tratamento de Dados e Unidades
+
+Antes de qualquer cálculo, o motor realiza um processo de "achatamento" (*flattening*) e normalização dos dados de entrada.
+
+### 4.1. Achatamento de Dados
+
+Objetos JSON aninhados são convertidos em um escopo plano com chaves delimitadas por underscores:
+
+```
+{ calibracao: { leituras: [10.1, 10.2] } }
+→ { calibracao_leituras_0: 10.1, calibracao_leituras_1: 10.2, calibracao_leituras_count: 2 }
+```
+
+- **Profundidade máxima:** 5 níveis (configurável)
+- **Arrays:** Acesso indexado (`leituras_0`, `leituras_1`) + contagem (`leituras_count`)
+- **Dados ambientais:** Prefixo `env_` (ex: `env_temperature`, `env_humidity`)
+- **Especificações do instrumento:** Prefixo `inst_` (ex: `inst_resolution`)
+
+### 4.2. Normalização SI
+
+O sistema identifica e converte automaticamente unidades para as unidades base do Sistema Internacional (SI), reduzindo erros de conversão manual.
+
+| Entrada | Conversão | Base SI |
+| :--- | :--- | :--- |
+| `500 g` | `0,5` | `kg` |
+| `10 mm` | `0,01` | `m` |
+| `200 mbar` | `20000` | `Pa` |
+| `10 mL` | `0,00001` | `m³` |
+
+**Grandezas suportadas:** Massa (kg, g, mg, lb, oz), comprimento (m, cm, mm, µm, nm, km, in, ft), temperatura (K, °C, °F), pressão (Pa, kPa, MPa, bar, mbar, psi, atm, mmHg), volume (L, mL, µL, m³), elétricas (V, mV, A, mA, µA, ohm, kohm, Mohm).
+
+---
+
+## 5. Limitações Conhecidas
+
+Em conformidade com a ética metrológica, declaramos explicitamente as limitações do modelo matemático atual.
+
+### 5.1. Assunção de Correlação Zero ($r = 0$)
+
+O cálculo da incerteza combinada utiliza a soma quadrática simples (GUM Equação 10). Isso assume que **todas as fontes de incerteza são independentes** estatisticamente.
+
+- **Impacto:** Se houver forte correlação positiva entre fontes (ex: uso do mesmo padrão para calibrar o instrumento e medir o erro), a incerteza pode ser subestimada.
+- **Recomendação:** Para casos de alta correlação, somar as incertezas aritmeticamente antes de combiná-las, ajustar os coeficientes de sensibilidade, ou utilizar o método de Monte Carlo (GUM Suplemento 1).
+
+### 5.2. Níveis de Confiança
+
+Apenas três níveis de confiança são suportados: **95%**, **95,45%** e **99%**. Para níveis não suportados, o motor utiliza o mais próximo disponível (fallback silencioso).
+
+### 5.3. Graus de Liberdade
+
+Para $\nu_{\text{eff}} \geq 500$, a distribuição $t$ é tratada como normal ($k = 2{,}0$ para 95,45%).
+
+### 5.4. Precisão IEEE 754
+
+Embora as fórmulas usem BigNumber, o cálculo estatístico (média, desvio padrão) das incertezas utiliza aritmética nativa IEEE 754. Testes exaustivos — incluindo validação contra o **GUM Anexo H.1** — demonstram que isso não introduz erros perceptíveis na escala de incertezas metrológicas.
+
+---
+
+## 6. Segurança
+
+O motor executa em um ambiente *sandbox* restrito, compatível com runtimes de borda (Cloudflare Workers).
+
+**Funções bloqueadas:** `import`, `evaluate`, `parse`, `simplify`, `derivative`, `resolve`, `compile`, `chain`, `createUnit`, `reviver`.
+
+**Padrões perigosos detectados via regex:** `__proto__`, `.constructor`, `Object.defineProperty`, `Object.getOwnPropertyDescriptor`, `Function(`, `eval(`, `require(`, `import(`, `process.*`, `global.*`, `globalThis.*`, `window.*`.
+
+**Operações permitidas:** Aritmética (+, -, *, /, ^, %), trigonometria (sin, cos, tan, asin, acos, atan), estatística (mean, std, min, max, sum), logaritmos (log, log10, exp), arredondamento (round, floor, ceil, abs) e comparações.
+
+Isso permite que laboratórios escrevam fórmulas complexas sem risco de comprometer a segurança da plataforma ou dos dados.
+
+---
+
+## 7. Validação Formal
+
+O motor possui um protocolo de validação formal (**VAL-MATH-001**) com os seguintes resultados:
+
+- **177 testes automatizados**, 100% de aprovação
+- **Validação contra GUM Anexo H.1** — caso de referência para calibração de bloco-padrão
+- **Verificação da tabela t-Student** contra NIST/SEMATECH para os 3 níveis de confiança
+- **Verificação exata dos divisores de distribuição** contra GUM Tabela F.1
+- **Tolerâncias:** Cálculos GUM com 5 casas decimais; BigNumber com 14 casas; valores de referência com 3 casas (precisão de reporte do GUM)
+
+---
+
+## 8. Referências Normativas
+
+1. **JCGM 100:2008 (GUM):** *Evaluation of measurement data — Guide to the expression of uncertainty in measurement.*
+2. **JCGM 101:2008 (GUM Suplemento 1):** *Propagation of distributions using a Monte Carlo method.*
+3. **JCGM 200:2012 (VIM):** *International vocabulary of metrology — Basic and general concepts and associated terms.*
+4. **ISO/IEC 17025:2017:** *General requirements for the competence of testing and calibration laboratories.*
+5. **NIST/SEMATECH:** *e-Handbook of Statistical Methods* — tabelas t-Student e validação cruzada.

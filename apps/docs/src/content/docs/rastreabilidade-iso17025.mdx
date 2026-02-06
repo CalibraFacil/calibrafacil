@@ -1,0 +1,78 @@
+---
+title: Rastreabilidade ISO/IEC 17025
+description: Mapeamento entre cláusulas da ISO/IEC 17025:2017 e funcionalidades implementadas no CalibraFácil.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Esta seção mapeia os requisitos da **ISO/IEC 17025:2017** para as funcionalidades e evidências implementadas na plataforma CalibraFácil.
+
+## Mapeamento de Cláusulas
+
+### 7.2.1.3 — Validação de Métodos
+
+> O laboratório deve validar métodos não normalizados, métodos desenvolvidos pelo laboratório e métodos normalizados utilizados fora do escopo pretendido ou de outra forma modificados.
+
+**Implementação:**
+
+- Protocolo de validação formal **VAL-MATH-001** documenta a validação do motor matemático.
+- **177 testes automatizados** executados em integração contínua (CI) a cada alteração de código.
+- Validação contra o **GUM Anexo H.1** (caso de referência: calibração de bloco-padrão com 5 leituras).
+- Verificação cruzada das tabelas t-Student contra **NIST/SEMATECH**.
+
+### 7.6 — Avaliação da Incerteza de Medição
+
+> O laboratório deve identificar as contribuições para a incerteza de medição. [...] O laboratório deve levar em conta todas as contribuições significativas, inclusive aquelas provenientes da amostragem.
+
+**Implementação:**
+
+- O motor implementa o **método de propagação de incertezas** conforme GUM (JCGM 100:2008).
+- **Tipo A:** Avaliação estatística com $u_A = s / \sqrt{n}$.
+- **Tipo B:** Suporte a 4 distribuições de probabilidade (Normal, Retangular, Triangular, U-shaped).
+- **Incerteza combinada** via RSS (GUM Equação 10) com coeficientes de sensibilidade configuráveis.
+- **Welch-Satterthwaite** para graus de liberdade efetivos.
+- **Fator $k$ dinâmico** via tabela t-Student (não fixo em 2,0).
+- Limitação documentada: assunção de correlação zero ($r = 0$).
+
+### 7.7 — Garantia da Validade dos Resultados
+
+> O laboratório deve ter um procedimento para monitorar a validade dos resultados.
+
+**Implementação:**
+
+- **177 testes automatizados** incluindo validação contra referências GUM e NIST.
+- Testes executados em **integração contínua** (GitHub Actions) a cada push no branch principal.
+- **Cobertura de testes** abrangendo cálculos GUM, segurança do sandbox, achatamento de dados e fluxo completo do motor.
+- Modo determinístico (`predictable: true`) garante reprodutibilidade bit-a-bit dos resultados.
+
+### 7.11 — Controle de Dados e Gestão da Informação
+
+> O laboratório deve ter acesso a dados e informações necessários para realizar atividades laboratoriais. [...] O sistema de gestão da informação laboratorial deve ser protegido contra acesso ou alteração não autorizados.
+
+**Implementação:**
+
+- **Metadados de rastreabilidade** em cada cálculo: `engineVersion`, `timestamp` (ISO 8601), `inputsUsed`.
+- **Rastro de auditoria** opcional (`trace`) com cada etapa intermediária do cálculo.
+- **Sandbox de segurança** no motor de fórmulas — funções perigosas bloqueadas, proteção contra *Prototype Pollution*.
+- **Resultados imutáveis** armazenados como strings para preservar precisão numérica.
+- Banco de dados PostgreSQL com controle de acesso por laboratório.
+
+### 8.4 — Trabalho Não Conforme
+
+> O laboratório deve ter um procedimento a ser implementado quando qualquer aspecto de suas atividades laboratoriais [...] não estiver em conformidade com seus próprios procedimentos ou com os requisitos acordados do cliente.
+
+**Implementação:**
+
+- Sistema de **Não Conformidades (NC)** com fluxo completo de registro, investigação e resolução.
+- **Escalonamento automático** para CAPA (*Corrective and Preventive Action*) quando aplicável.
+- **Notificações por e-mail** para responsáveis técnicos em eventos NC_CREATED e NC_ESCALATED_TO_CAPA.
+- Histórico completo de ações e resoluções com rastreabilidade.
+
+<Aside type="tip" title="Evidência para Auditoria">
+Para auditorias, os seguintes artefatos podem ser apresentados como evidência:
+
+1. **Protocolo de Validação:** `VAL-MATH-001-Protocol.md`
+2. **Relatório de Validação:** `VAL-MATH-001-Report.md`
+3. **Resultados de CI:** Logs de execução dos 177 testes automatizados
+4. **Metadados de Cálculo:** Campos `meta` e `trace` nos registros de calibração
+</Aside>

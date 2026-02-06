@@ -1,0 +1,193 @@
+---
+title: Fórmulas
+description: Referência da linguagem de expressões do Construtor de Métodos — sintaxe, funções disponíveis, operações vetoriais e encadeamento.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+As **fórmulas** calculam resultados a partir dos dados coletados nos campos de entrada. Cada fórmula possui uma **expressão** (o cálculo), uma **chave de saída** (variável que armazena o resultado) e opcionalmente um **rótulo** e **unidade**.
+
+## Anatomia de uma Fórmula
+
+| Propriedade | Obrigatório | Descrição |
+| :--- | :--- | :--- |
+| Rótulo | Não | Nome descritivo exibido no resultado (ex: "Erro de Medição") |
+| Chave de saída | Sim | Variável que armazena o resultado (ex: `erro`) |
+| Expressão | Sim | Cálculo matemático (ex: `leitura - padrao`) |
+| Unidade | Não | Unidade exibida junto ao resultado (ex: mm) |
+
+A chave de saída segue as mesmas [regras de nomenclatura](/metodos/campos-de-entrada#regras-de-nomenclatura) dos campos de entrada.
+
+## Sintaxe de Expressões
+
+As expressões utilizam sintaxe matemática padrão, avaliada pelo motor de cálculo (mathjs com precisão BigNumber de 32 dígitos).
+
+### Operadores Aritméticos
+
+| Operador | Descrição | Exemplo |
+| :--- | :--- | :--- |
+| `+` | Adição | `a + b` |
+| `-` | Subtração | `a - b` |
+| `*` | Multiplicação | `a * b` |
+| `/` | Divisão | `a / b` |
+| `^` | Potenciação | `a ^ 2` |
+| `%` | Módulo | `a % 2` |
+
+### Funções Disponíveis
+
+**Gerais:**
+
+| Função | Descrição | Exemplo |
+| :--- | :--- | :--- |
+| `abs(x)` | Valor absoluto | `abs(erro)` |
+| `sqrt(x)` | Raiz quadrada | `sqrt(variancia)` |
+| `pow(x, n)` | Potenciação | `pow(desvio, 2)` |
+| `round(x)` | Arredondamento | `round(resultado)` |
+| `ceil(x)` | Arredonda para cima | `ceil(valor)` |
+| `floor(x)` | Arredonda para baixo | `floor(valor)` |
+| `sign(x)` | Sinal (-1, 0 ou 1) | `sign(erro)` |
+
+**Exponenciais e Logarítmicas:**
+
+| Função | Descrição |
+| :--- | :--- |
+| `exp(x)` | $e^x$ |
+| `log(x)` | Logaritmo natural ($\ln$) |
+| `log10(x)` | Logaritmo base 10 |
+| `log2(x)` | Logaritmo base 2 |
+
+**Trigonométricas:**
+
+| Função | Descrição |
+| :--- | :--- |
+| `sin(x)`, `cos(x)`, `tan(x)` | Seno, cosseno, tangente |
+| `asin(x)`, `acos(x)`, `atan(x)` | Inversas |
+| `atan2(y, x)` | Arco tangente de y/x |
+| `sinh(x)`, `cosh(x)`, `tanh(x)` | Hiperbólicas |
+
+**Estatísticas (vetoriais):**
+
+| Função | Descrição | Exemplo |
+| :--- | :--- | :--- |
+| `mean(v)` | Média aritmética | `mean(leituras_valor)` |
+| `std(v)` | Desvio padrão | `std(leituras_valor)` |
+| `variance(v)` | Variância | `variance(leituras_valor)` |
+| `sum(v)` | Soma | `sum(leituras_valor)` |
+| `min(v)` | Menor valor | `min(leituras_valor)` |
+| `max(v)` | Maior valor | `max(leituras_valor)` |
+| `median(v)` | Mediana | `median(leituras_valor)` |
+
+**Constantes:**
+
+| Constante | Valor |
+| :--- | :--- |
+| `pi` | $\pi \approx 3{,}14159$ |
+| `e` | $e \approx 2{,}71828$ |
+
+### Referenciando Variáveis
+
+Nas expressões, use diretamente a **chave** definida nos campos ou em fórmulas anteriores:
+
+```
+// Campos de entrada
+temp_instrumento - temp_padrao
+
+// Coluna de tabela (formato: nomeTabela_nomeColuna)
+mean(leituras_valor)
+
+// Resultado de fórmula anterior
+abs(erro) / tolerancia
+
+// Acesso indexado a tabela
+leituras_valor_0 - leituras_valor_1
+```
+
+## Encadeamento de Fórmulas
+
+As fórmulas são executadas **na ordem em que foram adicionadas**. Cada fórmula pode referenciar:
+
+1. Variáveis dos campos de entrada
+2. Resultados de fórmulas **anteriores** (pela chave de saída)
+
+<Aside type="caution">
+  A ordem importa. Uma fórmula **não pode** referenciar o resultado de uma fórmula que aparece depois dela na lista. Reordene as fórmulas se necessário.
+</Aside>
+
+**Exemplo de encadeamento:**
+
+| Ordem | Rótulo | Chave | Expressão |
+| :--- | :--- | :--- | :--- |
+| 1 | Média das Leituras | `media` | `mean(leituras_valor)` |
+| 2 | Erro | `erro` | `media - padrao` |
+| 3 | Erro Relativo | `erro_relativo` | `abs(erro) / padrao * 100` |
+
+A fórmula 2 usa `media` (resultado da fórmula 1). A fórmula 3 usa `erro` (resultado da fórmula 2) e `padrao` (campo de entrada).
+
+## Operações Vetoriais em Tabelas
+
+Quando um campo do tipo **tabela** possui uma coluna numérica, o motor de cálculo disponibiliza automaticamente um vetor para aquela coluna, permitindo o uso de funções estatísticas.
+
+Para uma tabela com chave `medicoes` e coluna `valor`, as seguintes variáveis ficam disponíveis:
+
+| Variável | Tipo | Descrição |
+| :--- | :--- | :--- |
+| `medicoes_valor` | Vetor | Todos os valores da coluna (para funções vetoriais) |
+| `medicoes_valor_0` | Número | Primeiro valor (índice 0) |
+| `medicoes_valor_1` | Número | Segundo valor |
+| `medicoes_valor_count` | Número | Quantidade de linhas |
+
+<Aside type="note">
+  Variáveis vetoriais (como `medicoes_valor`) só podem ser usadas dentro de funções estatísticas (`mean`, `std`, `sum`, etc.). Para operações com valores individuais, use o acesso indexado (`medicoes_valor_0`).
+</Aside>
+
+## Exemplo Completo: Micrômetro
+
+Cenário: calibração de micrômetro com 5 leituras repetidas em um bloco padrão.
+
+### Campos de Entrada
+
+| Rótulo | Chave | Tipo |
+| :--- | :--- | :--- |
+| Valor Nominal do Padrão | `padrao` | Número (mm) |
+| Tolerância | `tolerancia` | Número (mm) |
+| Leituras | `leituras` | Tabela |
+
+A tabela `leituras` possui uma coluna:
+
+| Rótulo | Chave | Tipo | Unidade |
+| :--- | :--- | :--- | :--- |
+| Valor Medido | `valor` | Número | mm |
+
+### Fórmulas (em ordem)
+
+| # | Rótulo | Chave | Expressão |
+| :--- | :--- | :--- | :--- |
+| 1 | Média | `media` | `mean(leituras_valor)` |
+| 2 | Desvio Padrão | `desvio` | `std(leituras_valor)` |
+| 3 | Incerteza Tipo A | `u_a` | `desvio / sqrt(leituras_valor_count)` |
+| 4 | Erro | `erro` | `media - padrao` |
+
+### Fluxo de Cálculo
+
+Com dados de exemplo (padrão = 10,000 mm, leituras = [10,002, 10,001, 10,003, 10,001, 10,002]):
+
+1. `media` = `mean([10.002, 10.001, 10.003, 10.001, 10.002])` = **10,0018**
+2. `desvio` = `std([10.002, 10.001, 10.003, 10.001, 10.002])` = **0,000837**
+3. `u_a` = `0.000837 / sqrt(5)` = **0,000374**
+4. `erro` = `10.0018 - 10.000` = **0,0018 mm**
+
+## Precisão dos Cálculos
+
+O motor de cálculo utiliza **BigNumber com 32 dígitos** de precisão para todas as avaliações de fórmula. Isso garante que erros de arredondamento não se acumulem em cadeias longas de cálculos.
+
+<Aside type="tip">
+  Resultados intermediários preservam toda a precisão. O arredondamento para exibição é aplicado apenas no final, conforme as casas decimais configuradas na fórmula ou no certificado.
+</Aside>
+
+## Segurança
+
+As fórmulas são executadas em um ambiente seguro (sandbox). As seguintes restrições se aplicam:
+
+- Funções de sistema (`import`, `evaluate`, `parse`, `compile`, `chain`) estão **bloqueadas**
+- Padrões perigosos como `__proto__`, `constructor`, `eval()`, `Function()` são detectados e rejeitados
+- Não é possível acessar variáveis globais, sistema de arquivos ou rede

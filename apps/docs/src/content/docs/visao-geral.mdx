@@ -1,0 +1,99 @@
+---
+title: Visão Geral do Sistema
+description: Arquitetura, tecnologias e fluxo de dados da plataforma CalibraFácil.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Arquitetura
+
+O CalibraFácil é estruturado como um **monorepo** utilizando Turborepo e pnpm workspaces. Cada componente é um pacote independente com responsabilidades bem definidas.
+
+### Aplicações
+
+| Aplicação | Descrição | Plataforma |
+| :--- | :--- | :--- |
+| **API** | Backend REST (Hono) — autenticação, CRUD, lógica de negócios | Cloudflare Workers |
+| **Web** | Dashboard principal para o laboratório — ordens de serviço, calibrações, relatórios | Cloudflare Pages |
+| **Portal** | Portal do cliente — acompanhamento de serviços e download de certificados | Cloudflare Pages |
+| **Worker** | Processamento em segundo plano — geração de PDFs, assinatura digital, verificações de conformidade | Cloudflare Workers |
+| **Docs** | Documentação técnica (este site) | Cloudflare Pages |
+
+### Pacotes Compartilhados
+
+| Pacote | Propósito |
+| :--- | :--- |
+| `@calibra-facil/math-engine` | Cálculos de incerteza conforme GUM (detalhado em [Motor Matemático](/motor-matematico)) |
+| `@calibra-facil/db` | Camada de acesso a dados (Drizzle ORM + Neon PostgreSQL) |
+| `@calibra-facil/auth` | Autenticação e controle de acesso (Better-Auth) |
+| `@calibra-facil/schemas` | Esquemas de validação compartilhados (Zod) |
+| `@calibra-facil/documents` | Geração de HTML para certificados de calibração |
+| `@calibra-facil/signing` | Assinatura digital ICP-Brasil para PDFs |
+| `@calibra-facil/notifications` | Serviço de notificações (NC, CAPA, lembretes) |
+| `@calibra-facil/email` | Templates de e-mail (React Email) |
+| `@calibra-facil/shared` | Planos, configurações e tipos compartilhados |
+
+## Stack Tecnológico
+
+| Camada | Tecnologia |
+| :--- | :--- |
+| Frontend | React 19, TanStack Router/Query, TailwindCSS 4 |
+| Backend | Hono (Cloudflare Workers) |
+| Banco de Dados | Drizzle ORM → Neon PostgreSQL (via Hyperdrive) |
+| Autenticação | Better-Auth |
+| Armazenamento | Cloudflare R2 (compatível S3) |
+| Filas | Cloudflare Queue |
+| PDF | Puppeteer (Cloudflare Browser API) |
+| Testes | Vitest |
+| Motor Matemático | mathjs (BigNumber) + GUM nativo |
+
+## Fluxo de Dados — Cálculo de Incerteza
+
+```
+┌─────────────┐     ┌──────────────┐     ┌───────────────────┐     ┌────────────┐
+│  Leituras   │────▶│  Achatamento │────▶│   Math Engine     │────▶│ Resultado  │
+│  (entrada)  │     │  (flatten)   │     │  (GUM + fórmulas) │     │ + metadados│
+└─────────────┘     └──────────────┘     └───────────────────┘     └────────────┘
+                                                                         │
+                                                                         ▼
+                                                                  ┌────────────┐
+                                                                  │ Certificado│
+                                                                  │   (PDF)    │
+                                                                  └────────────┘
+```
+
+1. **Entrada:** Leituras de calibração, especificações do instrumento e dados ambientais são inseridos pelo técnico.
+2. **Achatamento:** O módulo `flatten` normaliza os dados — converte unidades para SI, achata objetos aninhados em escopo plano.
+3. **Motor Matemático:** Executa avaliações Tipo A e Tipo B, calcula incerteza combinada (Welch-Satterthwaite) e expandida.
+4. **Resultado:** Retorna o cálculo completo com metadados de rastreabilidade (`engineVersion`, `timestamp`, `inputsUsed`).
+5. **Certificado:** O Worker gera o PDF do certificado com assinatura digital ICP-Brasil e armazena no R2.
+
+## Padrão de Resultado
+
+Todos os métodos do motor matemático retornam uma **união discriminada** (*discriminated union*) para tratamento seguro de erros:
+
+```typescript
+// Sucesso
+{ success: true, data: { /* resultado do cálculo */ } }
+
+// Erro
+{ success: false, error: { code: "INVALID_INPUT", message: "..." } }
+```
+
+<Aside>
+Os códigos de erro possíveis são: `INVALID_INPUT`, `FORMULA_ERROR`, `SECURITY_VIOLATION`, `PRECISION_ERROR` e `CALCULATION_ERROR`.
+</Aside>
+
+## Rastreabilidade
+
+Cada cálculo realizado pelo motor gera metadados que permitem a reconstrução completa do resultado:
+
+```typescript
+meta: {
+  engineVersion: "1.0.0",        // Versão exata do motor
+  timestamp: "2026-02-06T...",   // Momento do cálculo (ISO 8601)
+  inputsUsed: ["leituras_0", "leituras_1", "env_temperature", "inst_resolution"]
+}
+```
+
+Opcionalmente, o modo *verbose* gera um rastro detalhado de cada etapa do cálculo (`trace`), útil para auditorias e depuração.

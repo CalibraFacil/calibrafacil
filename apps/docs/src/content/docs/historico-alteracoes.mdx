@@ -1,0 +1,26 @@
+---
+title: Histórico de Alterações
+description: Registro de versões e modificações da documentação técnica e do motor matemático do CalibraFácil.
+---
+
+## Motor Matemático (`@calibra-facil/math-engine`)
+
+| Versão | Data | Descrição |
+| :--- | :--- | :--- |
+| **1.0.0** | 2026-02-06 | Versão inicial do motor matemático com validação GUM formal. Inclui: Tipo A, Tipo B (4 distribuições), incerteza combinada (RSS), Welch-Satterthwaite, fator $k$ dinâmico via tabela t-Student, BigNumber para fórmulas (32 dígitos), sandbox de segurança, normalização SI, 177 testes automatizados. |
+
+## Documentação Técnica
+
+| Versão | Data | Descrição |
+| :--- | :--- | :--- |
+| **1.2.0** | 2026-02-06 | Adição do Guia do Usuário (11 páginas) e Portal do Cliente (1 página): painel, clientes, ativos, padrões de referência, catálogo de serviços, ordens de serviço (visão geral, execução, aprovação), não conformidades, ações corretivas (CAPA), configurações e permissões, portal do cliente. |
+| **1.1.0** | 2026-02-06 | Adição da seção Métodos de Calibração com 5 páginas: visão geral, campos de entrada, fórmulas, critérios de aceitação/incerteza e ciclo de vida. |
+| **1.0.0** | 2026-02-06 | Publicação inicial da documentação técnica. Inclui: introdução, referências normativas, definições, visão geral do sistema, documentação completa do motor matemático, mapeamento ISO 17025 e histórico de alterações. |
+
+## Convenções de Versionamento
+
+- O motor matemático segue **versionamento semântico** (SemVer): `MAJOR.MINOR.PATCH`.
+- **MAJOR:** Alterações incompatíveis na API ou no modelo de cálculo.
+- **MINOR:** Novas funcionalidades retrocompatíveis (ex: nova distribuição, novo nível de confiança).
+- **PATCH:** Correções de bugs que não alteram resultados de cálculos existentes.
+- Qualquer alteração no modelo de cálculo que afete resultados numéricos requer nova validação formal (VAL-MATH).
