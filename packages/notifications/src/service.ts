@@ -24,6 +24,7 @@ import {
   CertificateReadyEmail,
   ComplianceAlertEmail,
   PaymentNotificationEmail,
+  NCNotificationEmail,
 } from "@calibra-facil/email";
 
 // Track if email misconfiguration warning has been logged this session
@@ -62,12 +63,22 @@ export interface PaymentEmailContext {
   description?: string;
 }
 
+/** Context for NC email templates */
+export interface NCEmailContext {
+  ncNumber: string;
+  ncType?: "work" | "equipment" | "documentation";
+  description?: string;
+  capaNumber?: string;
+  actorName?: string;
+}
+
 /** Union type for all email contexts */
 export type EmailContext =
   | { type: "job"; data: JobEmailContext }
   | { type: "certificate"; data: CertificateEmailContext }
   | { type: "compliance"; data: ComplianceEmailContext }
-  | { type: "payment"; data: PaymentEmailContext };
+  | { type: "payment"; data: PaymentEmailContext }
+  | { type: "nc"; data: NCEmailContext };
 
 export interface SendNotificationOptions {
   recipientUserId: string;
@@ -101,7 +112,7 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   JOB_OVERDUE: { inApp: true, email: true },
   PAYMENT_RECEIVED: { inApp: true, email: true },
   PAYMENT_FAILED: { inApp: true, email: true },
-  NC_CREATED: { inApp: true, email: false }, // ISO 17025 Clause 8.7
+  NC_CREATED: { inApp: true, email: true }, // ISO 17025 Clause 8.7
   NC_ESCALATED_TO_CAPA: { inApp: true, email: true }, // ISO 17025 Clause 8.7
 };
 
@@ -313,6 +324,25 @@ function renderEmailTemplate(
       amount,
       description,
       actionUrl,
+    });
+  }
+
+  // NC notifications
+  if (
+    emailContext?.type === "nc" &&
+    ["NC_CREATED", "NC_ESCALATED_TO_CAPA"].includes(type)
+  ) {
+    const { ncNumber, ncType, description, capaNumber, actorName } =
+      emailContext.data;
+    return NCNotificationEmail({
+      recipientName,
+      type: type === "NC_CREATED" ? "created" : "escalated",
+      ncNumber,
+      ncType,
+      description,
+      capaNumber,
+      actorName,
+      actionUrl: actionUrl ?? "#",
     });
   }
 
@@ -1211,7 +1241,8 @@ export async function notifyPaymentFailed(
 export async function notifyNCCreated(
   ncId: number,
   ncNumber: string,
-  ncType: string,
+  ncType: "work" | "equipment" | "documentation",
+  description: string,
   organizationId: string,
   createdByUserId: string,
 ): Promise<void> {
@@ -1222,13 +1253,13 @@ export async function notifyNCCreated(
     .where(eq(user.id, createdByUserId))
     .limit(1);
 
-  const creatorName = creator?.name ?? "Um usuário";
+  const creatorName = creator?.name ?? "Um usuario";
   const typeLabel =
     ncType === "work"
       ? "trabalho"
       : ncType === "equipment"
         ? "equipamento"
-        : "documentação";
+        : "documentacao";
 
   // Notify admins and owners
   const recipients = await getRecipientsByRole(organizationId, [
@@ -1252,6 +1283,15 @@ export async function notifyNCCreated(
         entityId: ncId,
       },
       actionUrl: `/dashboard/nc/${ncId}`,
+      emailContext: {
+        type: "nc",
+        data: {
+          ncNumber,
+          ncType,
+          description,
+          actorName: creatorName,
+        },
+      },
     });
   }
 }
@@ -1265,6 +1305,7 @@ export async function notifyNCEscalatedToCapa(
   ncNumber: string,
   capaId: number,
   capaNumber: string,
+  description: string,
   organizationId: string,
   escalatedByUserId: string,
 ): Promise<void> {
@@ -1299,6 +1340,15 @@ export async function notifyNCEscalatedToCapa(
         entityId: capaId,
       },
       actionUrl: `/dashboard/capa/${capaId}`,
+      emailContext: {
+        type: "nc",
+        data: {
+          ncNumber,
+          description,
+          capaNumber,
+          actorName: escalatorName,
+        },
+      },
     });
   }
 }

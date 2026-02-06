@@ -427,6 +427,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         newNc.id,
         newNc.ncNumber,
         newNc.type,
+        newNc.description,
         member.organizationId,
         session.user.id,
       ).catch((err) => console.error("[NC] Failed to send notification:", err));
@@ -723,6 +724,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         existing.ncNumber,
         newCapa.id,
         newCapa.capaNumber,
+        existing.description,
         member.organizationId,
         session.user.id,
       ).catch((err) => console.error("[NC] Failed to send escalation notification:", err));

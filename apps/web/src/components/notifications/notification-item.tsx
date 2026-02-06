@@ -24,9 +24,12 @@ type NotificationType =
   | 'CERTIFICATE_AMENDED'
   | 'ASSET_DUE_FOR_RECALIBRATION'
   | 'STANDARD_EXPIRING'
+  | 'STANDARD_EXPIRED'
   | 'JOB_OVERDUE'
   | 'PAYMENT_RECEIVED'
   | 'PAYMENT_FAILED'
+  | 'NC_CREATED'
+  | 'NC_ESCALATED_TO_CAPA'
 
 type NotificationPriority = 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -57,9 +60,12 @@ const notificationIcons = {
   CERTIFICATE_AMENDED: Alert02Icon,
   ASSET_DUE_FOR_RECALIBRATION: Calendar03Icon,
   STANDARD_EXPIRING: Alert02Icon,
+  STANDARD_EXPIRED: Alert02Icon,
   JOB_OVERDUE: Alert02Icon,
   PAYMENT_RECEIVED: CreditCardValidationIcon,
   PAYMENT_FAILED: CancelCircleIcon,
+  NC_CREATED: Alert02Icon,
+  NC_ESCALATED_TO_CAPA: Alert02Icon,
 } as const
 
 const notificationColors: Record<NotificationType, string> = {
@@ -71,9 +77,12 @@ const notificationColors: Record<NotificationType, string> = {
   CERTIFICATE_AMENDED: 'text-amber-500',
   ASSET_DUE_FOR_RECALIBRATION: 'text-amber-500',
   STANDARD_EXPIRING: 'text-amber-500',
+  STANDARD_EXPIRED: 'text-red-500',
   JOB_OVERDUE: 'text-red-500',
   PAYMENT_RECEIVED: 'text-green-500',
   PAYMENT_FAILED: 'text-red-500',
+  NC_CREATED: 'text-amber-500',
+  NC_ESCALATED_TO_CAPA: 'text-red-500',
 }
 
 export function NotificationItem({
