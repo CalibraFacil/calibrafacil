@@ -184,6 +184,33 @@ export const statements = {
    * - delete: Deactivate a service (soft delete)
    */
   service: ["create", "read", "update", "delete"],
+
+  // ---------------------------------------------------------------------------
+  // NON-CONFORMANCE - ISO 17025:2017 Clause 8.7 (Control of nonconforming work)
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Register a new non-conformance
+   * - read: View NC details and history
+   * - update: Update NC information (disposition, resolution)
+   * - approve_disposition: Approve "use as is" / "concession" dispositions
+   * - escalate: Escalate NC to CAPA
+   */
+  non_conformance: ["create", "read", "update", "approve_disposition", "escalate"],
+
+  // ---------------------------------------------------------------------------
+  // CAPA - ISO 17025:2017 Clause 8.2 (Corrective Actions)
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Create a new CAPA
+   * - read: View CAPA details and history
+   * - update: Update CAPA information
+   * - implement: Mark a CAPA as implemented
+   * - verify: Verify CAPA effectiveness
+   * - close: Close a verified CAPA
+   */
+  capa: ["create", "read", "update", "implement", "verify", "close"],
 } as const;
 
 // =============================================================================
@@ -222,6 +249,10 @@ export const member = ac.newRole({
   settings: ["read"],
   // Read-only access to service catalog
   service: ["read"],
+  // Read-only access to non-conformances
+  non_conformance: ["read"],
+  // Read-only access to CAPAs
+  capa: ["read"],
 });
 
 /**
@@ -270,6 +301,12 @@ export const technician = ac.newRole({
 
   // Read-only access to service catalog (needs to see services to create jobs)
   service: ["read"],
+
+  // NC: can create and update (set disposition for rework/scrap), cannot approve use_as_is/concession
+  non_conformance: ["create", "read", "update"],
+
+  // CAPA: can create, update, and implement (cannot verify/close - requires admin/owner)
+  capa: ["create", "read", "update", "implement"],
 });
 
 /**
@@ -325,6 +362,12 @@ export const admin = ac.newRole({
 
   // Full service catalog management
   service: ["create", "read", "update", "delete"],
+
+  // Full NC management including disposition approval and CAPA escalation
+  non_conformance: ["create", "read", "update", "approve_disposition", "escalate"],
+
+  // Full CAPA management
+  capa: ["create", "read", "update", "implement", "verify", "close"],
 });
 
 /**
@@ -379,6 +422,12 @@ export const owner = ac.newRole({
 
   // Full service catalog management
   service: ["create", "read", "update", "delete"],
+
+  // Full NC management
+  non_conformance: ["create", "read", "update", "approve_disposition", "escalate"],
+
+  // Full CAPA management
+  capa: ["create", "read", "update", "implement", "verify", "close"],
 });
 
 /**

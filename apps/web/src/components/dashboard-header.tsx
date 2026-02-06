@@ -71,6 +71,16 @@ const routeLabels: Record<string, string> = {
   '/dashboard/standards/new': 'Novo Padrão',
   '/dashboard/standards/$id': 'Padrão',
   '/dashboard/standards/$id/edit': 'Editar Padrão',
+
+  // Non-Conformances
+  '/dashboard/nc': 'Não Conformidades',
+  '/dashboard/nc/new': 'Registrar NC',
+  '/dashboard/nc/$id': 'Não Conformidade',
+
+  // CAPA
+  '/dashboard/capa': 'Ações Corretivas (CAPA)',
+  '/dashboard/capa/new': 'Nova CAPA',
+  '/dashboard/capa/$id': 'CAPA',
 }
 
 // Extract entity IDs from pathname
@@ -81,6 +91,8 @@ function extractEntityIds(pathname: string): {
   jobId?: string
   serviceId?: string
   standardId?: string
+  ncId?: string
+  capaId?: string
 } {
   const parts = pathname.split('/')
   const result: {
@@ -90,6 +102,8 @@ function extractEntityIds(pathname: string): {
     jobId?: string
     serviceId?: string
     standardId?: string
+    ncId?: string
+    capaId?: string
   } = {}
 
   // /dashboard/clients/:id/...
@@ -134,6 +148,20 @@ function extractEntityIds(pathname: string): {
     if (id !== 'new') result.standardId = id
   }
 
+  // /dashboard/nc/:id/...
+  const ncIndex = parts.indexOf('nc')
+  if (ncIndex !== -1 && parts[ncIndex + 1]) {
+    const id = parts[ncIndex + 1]
+    if (id !== 'new') result.ncId = id
+  }
+
+  // /dashboard/capa/:id/...
+  const capaIndex = parts.indexOf('capa')
+  if (capaIndex !== -1 && parts[capaIndex + 1]) {
+    const id = parts[capaIndex + 1]
+    if (id !== 'new') result.capaId = id
+  }
+
   return result
 }
 
@@ -142,8 +170,16 @@ export function DashboardHeader() {
 
   // Extract IDs from current pathname
   const pathname = matches[matches.length - 1]?.pathname ?? ''
-  const { customerId, assetId, methodId, jobId, serviceId, standardId } =
-    extractEntityIds(pathname)
+  const {
+    customerId,
+    assetId,
+    methodId,
+    jobId,
+    serviceId,
+    standardId,
+    ncId,
+    capaId,
+  } = extractEntityIds(pathname)
 
   // Reactive queries for entity names
   const { data: customer } = useQuery({
@@ -224,6 +260,32 @@ export function DashboardHeader() {
     staleTime: 5 * 60 * 1000,
   })
 
+  const { data: nc } = useQuery({
+    queryKey: ['nc', ncId],
+    queryFn: async () => {
+      const res = await api.api.nc[':id'].$get({
+        param: { id: ncId! },
+      })
+      if (!res.ok) throw new Error('Failed to fetch NC')
+      return res.json()
+    },
+    enabled: !!ncId,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: capa } = useQuery({
+    queryKey: ['capa', capaId],
+    queryFn: async () => {
+      const res = await api.api.capa[':id'].$get({
+        param: { id: capaId! },
+      })
+      if (!res.ok) throw new Error('Failed to fetch CAPA')
+      return res.json()
+    },
+    enabled: !!capaId,
+    staleTime: 5 * 60 * 1000,
+  })
+
   // Build entity name lookup
   const entityNames: Record<string, string> = useMemo(() => {
     const names: Record<string, string> = {}
@@ -233,6 +295,8 @@ export function DashboardHeader() {
     if (jobId && job?.jobId) names[jobId] = job.jobId
     if (serviceId && service?.name) names[serviceId] = service.name
     if (standardId && standard?.name) names[standardId] = standard.name
+    if (ncId && nc?.ncNumber) names[ncId] = nc.ncNumber
+    if (capaId && capa?.capaNumber) names[capaId] = capa.capaNumber
     return names
   }, [
     customerId,
@@ -247,6 +311,10 @@ export function DashboardHeader() {
     service,
     standardId,
     standard,
+    ncId,
+    nc,
+    capaId,
+    capa,
   ])
 
   const breadcrumbs = useMemo(() => {

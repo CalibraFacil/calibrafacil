@@ -24,6 +24,7 @@ import {
   CertificateReadyEmail,
   ComplianceAlertEmail,
   PaymentNotificationEmail,
+  NCNotificationEmail,
 } from "@calibra-facil/email";
 
 // Track if email misconfiguration warning has been logged this session
@@ -62,12 +63,22 @@ export interface PaymentEmailContext {
   description?: string;
 }
 
+/** Context for NC email templates */
+export interface NCEmailContext {
+  ncNumber: string;
+  ncType?: "work" | "equipment" | "documentation";
+  description?: string;
+  capaNumber?: string;
+  actorName?: string;
+}
+
 /** Union type for all email contexts */
 export type EmailContext =
   | { type: "job"; data: JobEmailContext }
   | { type: "certificate"; data: CertificateEmailContext }
   | { type: "compliance"; data: ComplianceEmailContext }
-  | { type: "payment"; data: PaymentEmailContext };
+  | { type: "payment"; data: PaymentEmailContext }
+  | { type: "nc"; data: NCEmailContext };
 
 export interface SendNotificationOptions {
   recipientUserId: string;
@@ -101,6 +112,8 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   JOB_OVERDUE: { inApp: true, email: true },
   PAYMENT_RECEIVED: { inApp: true, email: true },
   PAYMENT_FAILED: { inApp: true, email: true },
+  NC_CREATED: { inApp: true, email: true }, // ISO 17025 Clause 8.7
+  NC_ESCALATED_TO_CAPA: { inApp: true, email: true }, // ISO 17025 Clause 8.7
 };
 
 // =============================================================================
@@ -155,7 +168,8 @@ export async function sendNotification(
   } = options;
 
   // Get user preferences
-  const { preferences, emailEnabled } = await getUserPreferences(recipientUserId);
+  const { preferences, emailEnabled } =
+    await getUserPreferences(recipientUserId);
   const typePrefs = preferences[type] ?? { inApp: true, email: true };
 
   const channelsSent: NotificationChannel[] = [];
@@ -313,6 +327,25 @@ function renderEmailTemplate(
     });
   }
 
+  // NC notifications
+  if (
+    emailContext?.type === "nc" &&
+    ["NC_CREATED", "NC_ESCALATED_TO_CAPA"].includes(type)
+  ) {
+    const { ncNumber, ncType, description, capaNumber, actorName } =
+      emailContext.data;
+    return NCNotificationEmail({
+      recipientName,
+      type: type === "NC_CREATED" ? "created" : "escalated",
+      ncNumber,
+      ncType,
+      description,
+      capaNumber,
+      actorName,
+      actionUrl: actionUrl ?? "#",
+    });
+  }
+
   // Fallback to generic notification email
   return NotificationEmail({
     recipientName,
@@ -334,7 +367,8 @@ async function sendNotificationEmail(options: {
   actionUrl?: string;
   emailContext?: EmailContext;
 }): Promise<boolean> {
-  const { recipientUserId, type, title, message, actionUrl, emailContext } = options;
+  const { recipientUserId, type, title, message, actionUrl, emailContext } =
+    options;
 
   // Check if Resend is configured - log warning once per session
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -344,7 +378,7 @@ async function sendNotificationEmail(options: {
     if (!emailMisconfigWarningLogged) {
       console.error(
         "[Notifications] EMAIL MISCONFIGURED: RESEND_API_KEY or RESEND_FROM_EMAIL not set. " +
-        "Users will only receive in-app notifications, no emails will be sent."
+          "Users will only receive in-app notifications, no emails will be sent.",
       );
       emailMisconfigWarningLogged = true;
     }
@@ -489,7 +523,10 @@ export async function notifyJobSubmittedForReview(
   const submitterName = submitter?.name ?? "Um tecnico";
 
   // Get admins and owners
-  const recipients = await getRecipientsByRole(job.organizationId, ["admin", "owner"]);
+  const recipients = await getRecipientsByRole(job.organizationId, [
+    "admin",
+    "owner",
+  ]);
 
   // Send to each recipient (except the submitter)
   for (const recipientId of recipients) {
@@ -707,7 +744,8 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
 
   // Determine the portal URL (could be configurable)
   const portalUrl =
-    process.env.PORTAL_URL ?? "https://app.calibrafacil.com/portal/certificates";
+    process.env.PORTAL_URL ??
+    "https://app.calibrafacil.com/portal/certificates";
 
   // Send email notifications to all portal users
   for (const portalUser of portalUsers) {
@@ -772,7 +810,8 @@ export async function notifyCertificateAmended(
 
   // Determine the portal URL
   const portalUrl =
-    process.env.PORTAL_URL ?? "https://app.calibrafacil.com/portal/certificates";
+    process.env.PORTAL_URL ??
+    "https://app.calibrafacil.com/portal/certificates";
 
   // Send notifications to all portal users
   for (const portalUser of portalUsers) {
@@ -889,13 +928,17 @@ export async function notifyAssetDueForRecalibration(
 
   const daysRemaining = getDaysRemaining(assetData.nextCalibrationDate);
   const dueDate = formatDateBR(assetData.nextCalibrationDate);
-  const assetIdentifier = assetData.tag || assetData.serialNumber || assetData.name;
+  const assetIdentifier =
+    assetData.tag || assetData.serialNumber || assetData.name;
   const itemName = customerData
     ? `${assetData.name} (${customerData.name})`
     : assetData.name;
 
   // Notify admins and owners of the lab
-  const recipients = await getRecipientsByRole(organizationId, ["admin", "owner"]);
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
 
   for (const recipientId of recipients) {
     await sendNotification({
@@ -953,7 +996,10 @@ export async function notifyStandardExpiring(
   const itemName = `${standardData.name} (${standardIdentifier})`;
 
   // Notify admins and owners of the lab
-  const recipients = await getRecipientsByRole(organizationId, ["admin", "owner"]);
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
 
   for (const recipientId of recipients) {
     await sendNotification({
@@ -1017,7 +1063,10 @@ export async function notifyJobOverdue(jobId: number): Promise<void> {
   recipientIds.add(jobData.createdBy);
 
   // Also notify admins/owners
-  const admins = await getRecipientsByRole(jobData.organizationId, ["admin", "owner"]);
+  const admins = await getRecipientsByRole(jobData.organizationId, [
+    "admin",
+    "owner",
+  ]);
   admins.forEach((id) => recipientIds.add(id));
 
   for (const recipientId of recipientIds) {
@@ -1084,7 +1133,10 @@ export async function notifyPaymentReceived(
   const paidDate = payment.paidAt ? formatDateBR(payment.paidAt) : "hoje";
 
   // Notify admins and owners
-  const recipients = await getRecipientsByRole(organizationId, ["admin", "owner"]);
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
 
   for (const recipientId of recipients) {
     await sendNotification({
@@ -1149,7 +1201,10 @@ export async function notifyPaymentFailed(
   }
 
   // Notify admins and owners
-  const recipients = await getRecipientsByRole(organizationId, ["admin", "owner"]);
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
 
   for (const recipientId of recipients) {
     await sendNotification({
@@ -1169,6 +1224,129 @@ export async function notifyPaymentFailed(
         data: {
           amount,
           description: failureReason ?? undefined,
+        },
+      },
+    });
+  }
+}
+
+// =============================================================================
+// NON-CONFORMANCE NOTIFICATION TRIGGERS - ISO 17025 Clause 8.7
+// =============================================================================
+
+/**
+ * Notify admins/owners when a new non-conformance is created
+ * Called from POST /api/nc
+ */
+export async function notifyNCCreated(
+  ncId: number,
+  ncNumber: string,
+  ncType: "work" | "equipment" | "documentation",
+  description: string,
+  organizationId: string,
+  createdByUserId: string,
+): Promise<void> {
+  // Get creator name
+  const [creator] = await db
+    .select({ name: user.name })
+    .from(user)
+    .where(eq(user.id, createdByUserId))
+    .limit(1);
+
+  const creatorName = creator?.name ?? "Um usuario";
+  const typeLabel =
+    ncType === "work"
+      ? "trabalho"
+      : ncType === "equipment"
+        ? "equipamento"
+        : "documentacao";
+
+  // Notify admins and owners
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    // Don't notify the creator
+    if (recipientId === createdByUserId) continue;
+
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "NC_CREATED",
+      priority: "HIGH",
+      title: "Nova nao conformidade registrada",
+      message: `${creatorName} registrou a ${ncNumber} (${typeLabel}).`,
+      relatedEntity: {
+        entityType: "nc",
+        entityId: ncId,
+      },
+      actionUrl: `/dashboard/nc/${ncId}`,
+      emailContext: {
+        type: "nc",
+        data: {
+          ncNumber,
+          ncType,
+          description,
+          actorName: creatorName,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Notify admins/owners when an NC is escalated to CAPA
+ * Called from POST /api/nc/:id/escalate-to-capa
+ */
+export async function notifyNCEscalatedToCapa(
+  ncId: number,
+  ncNumber: string,
+  capaId: number,
+  capaNumber: string,
+  description: string,
+  organizationId: string,
+  escalatedByUserId: string,
+): Promise<void> {
+  // Get escalator name
+  const [escalator] = await db
+    .select({ name: user.name })
+    .from(user)
+    .where(eq(user.id, escalatedByUserId))
+    .limit(1);
+
+  const escalatorName = escalator?.name ?? "Um usuario";
+
+  // Notify admins and owners
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    // Don't notify the person who escalated
+    if (recipientId === escalatedByUserId) continue;
+
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "NC_ESCALATED_TO_CAPA",
+      priority: "HIGH",
+      title: "NC escalada para CAPA",
+      message: `${escalatorName} escalou a ${ncNumber} para ${capaNumber}.`,
+      relatedEntity: {
+        entityType: "capa",
+        entityId: capaId,
+      },
+      actionUrl: `/dashboard/capa/${capaId}`,
+      emailContext: {
+        type: "nc",
+        data: {
+          ncNumber,
+          description,
+          capaNumber,
+          actorName: escalatorName,
         },
       },
     });

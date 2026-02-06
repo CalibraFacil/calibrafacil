@@ -32,6 +32,8 @@ type NotificationType =
   | 'JOB_OVERDUE'
   | 'PAYMENT_RECEIVED'
   | 'PAYMENT_FAILED'
+  | 'NC_CREATED'
+  | 'NC_ESCALATED_TO_CAPA'
 
 type NotificationPreference = {
   inApp: boolean
@@ -44,7 +46,7 @@ interface NotificationSetting {
   id: NotificationType
   title: string
   description: string
-  category: 'operational' | 'compliance' | 'billing'
+  category: 'operational' | 'compliance' | 'quality' | 'billing'
 }
 
 const notificationSettings: NotificationSetting[] = [
@@ -98,6 +100,19 @@ const notificationSettings: NotificationSetting[] = [
     description: 'Quando uma calibração passa da data de entrega',
     category: 'compliance',
   },
+  // Quality notifications (ISO 17025 Clause 8.7)
+  {
+    id: 'NC_CREATED',
+    title: 'Não conformidade registrada',
+    description: 'Quando uma nova NC é registrada no sistema',
+    category: 'quality',
+  },
+  {
+    id: 'NC_ESCALATED_TO_CAPA',
+    title: 'NC escalada para CAPA',
+    description: 'Quando uma NC é escalada para ação corretiva',
+    category: 'quality',
+  },
   // Billing notifications
   {
     id: 'PAYMENT_RECEIVED',
@@ -122,6 +137,8 @@ const defaultPreferences: NotificationPreferencesMap = {
   ASSET_DUE_FOR_RECALIBRATION: { inApp: true, email: true },
   STANDARD_EXPIRING: { inApp: true, email: true },
   JOB_OVERDUE: { inApp: true, email: true },
+  NC_CREATED: { inApp: true, email: true },
+  NC_ESCALATED_TO_CAPA: { inApp: true, email: true },
   PAYMENT_RECEIVED: { inApp: true, email: true },
   PAYMENT_FAILED: { inApp: true, email: true },
 }
@@ -224,6 +241,9 @@ function NotificationsSettingsPage() {
   )
   const complianceSettings = notificationSettings.filter(
     (s) => s.category === 'compliance',
+  )
+  const qualitySettings = notificationSettings.filter(
+    (s) => s.category === 'quality',
   )
   const billingSettings = notificationSettings.filter(
     (s) => s.category === 'billing',
@@ -373,6 +393,63 @@ function NotificationsSettingsPage() {
         <CardContent>
           <div className="space-y-4">
             {complianceSettings.map((setting, index) => {
+              const pref = preferences[setting.id] ?? { inApp: true, email: true }
+              return (
+                <div key={setting.id}>
+                  {index > 0 && <Separator className="my-4" />}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5 flex-1">
+                      <label className="text-sm font-medium">
+                        {setting.title}
+                      </label>
+                      <p className="text-sm text-muted-foreground">
+                        {setting.description}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          App
+                        </span>
+                        <Switch
+                          checked={pref.inApp}
+                          onCheckedChange={() =>
+                            togglePreference(setting.id, 'inApp')
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          Email
+                        </span>
+                        <Switch
+                          checked={pref.email && emailEnabled}
+                          onCheckedChange={() =>
+                            togglePreference(setting.id, 'email')
+                          }
+                          disabled={!emailEnabled}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quality Notifications */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Qualidade</CardTitle>
+          <CardDescription>
+            Notificações de não conformidades e ações corretivas (ISO 17025 Cláusula 8.7)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {qualitySettings.map((setting, index) => {
               const pref = preferences[setting.id] ?? { inApp: true, email: true }
               return (
                 <div key={setting.id}>

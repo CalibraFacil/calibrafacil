@@ -259,6 +259,9 @@ importers:
       react-dom:
         specifier: ^19.2.0
         version: 19.2.3(react@19.2.3)
+      react-hook-form:
+        specifier: ^7.71.1
+        version: 7.71.1(react@19.2.3)
       recharts:
         specifier: 2.15.4
         version: 2.15.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -5786,6 +5789,12 @@ packages:
     resolution: {integrity: sha512-uVvtKcea0kd+QRwH5/Cw/znnijIge+Jog0IFagi0JiZgQ/GrDQ/qD98AwGVV1vM3hGbSugOvmcMayamFc4Zz1g==}
     engines: {node: '>=20.0.0'}
     hasBin: true
+
+  react-hook-form@7.71.1:
+    resolution: {integrity: sha512-9SUJKCGKo8HUSsCO+y0CtqkqI5nNuaDqTxyqPsZPqIwudpj4rCrAz/jZV+jn57bx5gtZKOh3neQu94DXMc+w5w==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      react: ^16.8.0 || ^17 || ^18 || ^19
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
@@ -12170,6 +12179,10 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
+
+  react-hook-form@7.71.1(react@19.2.3):
+    dependencies:
+      react: 19.2.3
 
   react-is@16.13.1: {}
 
