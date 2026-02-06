@@ -504,36 +504,36 @@ describe("GUM H.1 Complete Validation - End-Gauge Calibration", () => {
     });
 
     /**
-     * Verify that the calculation handles sensitivity coefficients correctly.
-     * In H.1, all sensitivity coefficients are 1 (direct contributions).
+     * Verify that sensitivity coefficients scale uncertainty contributions.
+     * u_c = sqrt((c_A * u_A)^2 + (c_B * u_B)^2)
      */
-    it("should apply unit sensitivity coefficients correctly", () => {
-      const typeA = calculateTypeA({
-        readings: [0.215, 0.19, 0.205, 0.195, 0.18],
-      });
-
+    it("should scale uncertainties by sensitivity coefficients", () => {
       const typeB = calculateTypeB([
         {
           name: "ref",
-          value: 0.05,
+          value: 0.1,
           distribution: "normal",
           coverageFactor: 2,
           degreesOfFreedom: 50,
         },
       ]);
+      // u_ref = 0.1 / 2 = 0.05
 
-      // With sensitivity coefficients = 1 (default)
-      const result1 = calculateCombinedUncertainty({ typeA, typeB });
+      // With default coefficient = 1: u_c = 0.05
+      const result1 = calculateCombinedUncertainty({ typeB });
 
-      // Explicitly passing coefficients = 1
-      const result2 = calculateCombinedUncertainty(
-        { typeA, typeB, sensitivityCoefficients: { typeA: 1, ref: 1 } }
-      );
+      // With coefficient = 2: u_c = 2 * 0.05 = 0.10
+      const result2 = calculateCombinedUncertainty({
+        typeB,
+        sensitivityCoefficients: { ref: 2 },
+      });
 
-      // Results should be identical
-      expect(result1.combinedStandardUncertainty).toBeCloseTo(
-        result2.combinedStandardUncertainty,
-        10
+      // Combined uncertainty should double when coefficient doubles
+      expect(result1.combinedStandardUncertainty).toBeCloseTo(0.05, 5);
+      expect(result2.combinedStandardUncertainty).toBeCloseTo(0.10, 5);
+      expect(result2.combinedStandardUncertainty).toBeCloseTo(
+        result1.combinedStandardUncertainty * 2,
+        5
       );
     });
   });
