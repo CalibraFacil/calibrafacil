@@ -16,6 +16,10 @@ import {
   ListNonConformancesQuerySchema,
 } from "@calibra-facil/schemas";
 import {
+  notifyNCCreated,
+  notifyNCEscalatedToCapa,
+} from "@calibra-facil/notifications";
+import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
@@ -418,6 +422,15 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
 
+      // Notify admins/owners of new NC (fire-and-forget)
+      notifyNCCreated(
+        newNc.id,
+        newNc.ncNumber,
+        newNc.type,
+        member.organizationId,
+        session.user.id,
+      ).catch((err) => console.error("[NC] Failed to send notification:", err));
+
       return c.json(newNc, 201);
     },
   )
@@ -703,6 +716,16 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
+
+      // Notify admins/owners of escalation (fire-and-forget)
+      notifyNCEscalatedToCapa(
+        id,
+        existing.ncNumber,
+        newCapa.id,
+        newCapa.capaNumber,
+        member.organizationId,
+        session.user.id,
+      ).catch((err) => console.error("[NC] Failed to send escalation notification:", err));
 
       return c.json(
         {

@@ -1519,7 +1519,7 @@ export type NotificationChannel = "IN_APP" | "EMAIL";
  * Related entity reference for deep linking
  */
 export type NotificationRelatedEntity = {
-  entityType: "job" | "asset" | "standard" | "payment" | "customer";
+  entityType: "job" | "asset" | "standard" | "payment" | "customer" | "nc" | "capa";
   entityId: number | string;
   jobId?: string; // Human-readable job ID for display
 };
