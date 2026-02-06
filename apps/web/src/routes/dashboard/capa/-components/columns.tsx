@@ -20,9 +20,9 @@ export type CAPARow = {
 
 const statusLabels: Record<string, string> = {
   OPEN: 'Aberta',
-  INVESTIGATION: 'Investigacao',
-  IMPLEMENTATION: 'Implementacao',
-  VERIFICATION: 'Verificacao',
+  INVESTIGATION: 'Investigação',
+  IMPLEMENTATION: 'Implementação',
+  VERIFICATION: 'Verificação',
   CLOSED: 'Fechada',
 }
 
@@ -34,14 +34,13 @@ const statusVariants: Record<string, string> = {
     'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   VERIFICATION:
     'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  CLOSED:
-    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  CLOSED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
 }
 
 const severityLabels: Record<string, string> = {
   minor: 'Menor',
   major: 'Maior',
-  critical: 'Critica',
+  critical: 'Crítica',
 }
 
 const severityVariants: Record<string, string> = {
@@ -53,14 +52,14 @@ const severityVariants: Record<string, string> = {
 
 const sourceLabels: Record<string, string> = {
   internal_audit: 'Auditoria Interna',
-  customer_complaint: 'Reclamacao Cliente',
-  nc_detection: 'Deteccao NC',
+  customer_complaint: 'Reclamação Cliente',
+  nc_detection: 'Detecção NC',
   external_audit: 'Auditoria Externa',
-  management_review: 'Revisao Gerencial',
+  management_review: 'Revisão Gerencial',
 }
 
 const categoryLabels: Record<string, string> = {
-  method: 'Metodo',
+  method: 'Método',
   equipment: 'Equipamento',
   personnel: 'Pessoal',
   procedure: 'Procedimento',
@@ -84,7 +83,7 @@ export const capaColumns: ColumnDef<CAPARow>[] = [
   },
   {
     accessorKey: 'title',
-    header: 'Titulo',
+    header: 'Título',
     cell: ({ row }) => (
       <div className="max-w-[200px] truncate" title={row.original.title}>
         {row.original.title}
@@ -124,12 +123,11 @@ export const capaColumns: ColumnDef<CAPARow>[] = [
   {
     accessorKey: 'source',
     header: 'Origem',
-    cell: ({ row }) =>
-      sourceLabels[row.original.source] ?? row.original.source,
+    cell: ({ row }) => sourceLabels[row.original.source] ?? row.original.source,
   },
   {
     accessorKey: 'responsibleName',
-    header: 'Responsavel',
+    header: 'Responsável',
     cell: ({ row }) => row.original.responsibleName ?? '-',
   },
   {

@@ -1,10 +1,7 @@
 import { type ColumnDef } from '@tanstack/react-table'
 import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
-import {
-  MoreHorizontalIcon,
-  ViewIcon,
-} from '@hugeicons/core-free-icons'
+import { MoreHorizontalIcon, ViewIcon } from '@hugeicons/core-free-icons'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,7 +15,12 @@ import { cn } from '@/lib/utils'
 
 export type NCType = 'work' | 'equipment' | 'documentation'
 export type NCStatus = 'open' | 'under_review' | 'resolved'
-export type NCDisposition = 'rework' | 'scrap' | 'use_as_is' | 'concession' | null
+export type NCDisposition =
+  | 'rework'
+  | 'scrap'
+  | 'use_as_is'
+  | 'concession'
+  | null
 
 export interface NonConformanceRow {
   id: number
@@ -41,7 +43,11 @@ function getStatusBadge(status: NCStatus) {
     case 'open':
       return { variant: 'destructive' as const, label: 'Aberta' }
     case 'under_review':
-      return { variant: 'outline' as const, label: 'Em Analise', className: 'border-orange-500 text-orange-600' }
+      return {
+        variant: 'outline' as const,
+        label: 'Em Análise',
+        className: 'border-orange-500 text-orange-600',
+      }
     case 'resolved':
       return { variant: 'default' as const, label: 'Resolvida' }
     default:
@@ -56,7 +62,7 @@ function getTypeBadge(type: NCType) {
     case 'equipment':
       return { variant: 'outline' as const, label: 'Equipamento' }
     case 'documentation':
-      return { variant: 'outline' as const, label: 'Documentacao' }
+      return { variant: 'outline' as const, label: 'Documentação' }
     default:
       return { variant: 'secondary' as const, label: type }
   }
@@ -70,9 +76,9 @@ function getDispositionLabel(disposition: NCDisposition): string {
     case 'scrap':
       return 'Sucata'
     case 'use_as_is':
-      return 'Uso como esta'
+      return 'Uso como está'
     case 'concession':
-      return 'Concessao'
+      return 'Concessão'
     default:
       return disposition
   }
@@ -106,7 +112,7 @@ export const ncColumns: ColumnDef<NonConformanceRow>[] = [
   },
   {
     accessorKey: 'description',
-    header: 'Descricao',
+    header: 'Descrição',
     cell: ({ row }) => (
       <span className="max-w-[300px] truncate block text-sm">
         {row.original.description}
@@ -129,9 +135,11 @@ export const ncColumns: ColumnDef<NonConformanceRow>[] = [
   },
   {
     accessorKey: 'disposition',
-    header: 'Disposicao',
+    header: 'Disposição',
     cell: ({ row }) => (
-      <span className="text-sm">{getDispositionLabel(row.original.disposition)}</span>
+      <span className="text-sm">
+        {getDispositionLabel(row.original.disposition)}
+      </span>
     ),
   },
   {
@@ -141,7 +149,9 @@ export const ncColumns: ColumnDef<NonConformanceRow>[] = [
       const days = row.original.ageDays
       const isOld = days > 30 && row.original.status !== 'resolved'
       return (
-        <span className={cn('text-sm', isOld && 'text-destructive font-medium')}>
+        <span
+          className={cn('text-sm', isOld && 'text-destructive font-medium')}
+        >
           {days}d
         </span>
       )

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -12,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,7 +22,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 
@@ -36,20 +37,58 @@ type CAPAFormData = {
   description: string
   source: string
   sourceReference: string
-  detectionDate: string
   type: string
   severity: string
   category: string
   actionPlan: string
   responsibleId: string
-  dueDate: string
   rootCauseAnalysis: string
   rootCauseAnalysisMethod: string
   preventiveMeasures: string
 }
 
+const SOURCE_LABELS: Record<string, string> = {
+  nc_detection: 'Detecção de NC',
+  internal_audit: 'Auditoria Interna',
+  external_audit: 'Auditoria Externa',
+  customer_complaint: 'Reclamação de Cliente',
+  management_review: 'Revisão Gerencial',
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  corrective: 'Corretiva',
+  preventive: 'Preventiva',
+}
+
+const SEVERITY_LABELS: Record<string, string> = {
+  minor: 'Menor',
+  major: 'Maior',
+  critical: 'Crítica',
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  method: 'Método',
+  equipment: 'Equipamento',
+  personnel: 'Pessoal',
+  procedure: 'Procedimento',
+  environment: 'Ambiente',
+  other: 'Outro',
+}
+
+const RCA_METHOD_LABELS: Record<string, string> = {
+  '': 'Nenhum',
+  '5_whys': '5 Porquês (5 Whys)',
+  fishbone: 'Diagrama de Ishikawa (Fishbone)',
+  pareto: 'Análise de Pareto',
+  other: 'Outro',
+}
+
 function NewCAPAPage() {
   const navigate = useNavigate()
+  const [detectionDate, setDetectionDate] = useState<Date | undefined>(
+    new Date(),
+  )
+  const [dueDate, setDueDate] = useState<Date | undefined>(undefined)
 
   const {
     register,
@@ -63,13 +102,11 @@ function NewCAPAPage() {
       description: '',
       source: 'nc_detection',
       sourceReference: '',
-      detectionDate: new Date().toISOString().slice(0, 10),
       type: 'corrective',
       severity: 'minor',
       category: 'procedure',
       actionPlan: '',
       responsibleId: '',
-      dueDate: '',
       rootCauseAnalysis: '',
       rootCauseAnalysisMethod: '',
       preventiveMeasures: '',
@@ -81,6 +118,7 @@ function NewCAPAPage() {
   const severityValue = watch('severity')
   const categoryValue = watch('category')
   const rcaMethodValue = watch('rootCauseAnalysisMethod')
+  const responsibleIdValue = watch('responsibleId')
 
   // Fetch organization members (technicians) for responsible selection
   const { data: membersData } = useQuery({
@@ -94,43 +132,39 @@ function NewCAPAPage() {
     },
   })
 
+  const selectedMember = membersData?.data?.find(
+    (m) => m.id === responsibleIdValue,
+  )
+
   const createMutation = useMutation({
-    mutationFn: async (data: CAPAFormData) => {
-      const res = await api.api.capa.$post({
-        json: {
-          title: data.title,
-          description: data.description,
-          source: data.source as
-            | 'internal_audit'
-            | 'customer_complaint'
-            | 'nc_detection'
-            | 'external_audit'
-            | 'management_review',
-          sourceReference: data.sourceReference || undefined,
-          detectionDate: new Date(data.detectionDate).toISOString(),
-          type: data.type as 'corrective' | 'preventive',
-          severity: data.severity as 'minor' | 'major' | 'critical',
-          category: data.category as
-            | 'method'
-            | 'equipment'
-            | 'personnel'
-            | 'procedure'
-            | 'environment'
-            | 'other',
-          actionPlan: data.actionPlan,
-          responsibleId: data.responsibleId,
-          dueDate: new Date(data.dueDate).toISOString(),
-          rootCauseAnalysis: data.rootCauseAnalysis || undefined,
-          rootCauseAnalysisMethod: data.rootCauseAnalysisMethod
-            ? (data.rootCauseAnalysisMethod as
-                | '5_whys'
-                | 'fishbone'
-                | 'pareto'
-                | 'other')
-            : undefined,
-          preventiveMeasures: data.preventiveMeasures || undefined,
-        },
-      })
+    mutationFn: async (payload: {
+      title: string
+      description: string
+      source:
+        | 'internal_audit'
+        | 'customer_complaint'
+        | 'nc_detection'
+        | 'external_audit'
+        | 'management_review'
+      sourceReference?: string
+      detectionDate: string
+      type: 'corrective' | 'preventive'
+      severity: 'minor' | 'major' | 'critical'
+      category:
+        | 'method'
+        | 'equipment'
+        | 'personnel'
+        | 'procedure'
+        | 'environment'
+        | 'other'
+      actionPlan: string
+      responsibleId: string
+      dueDate: string
+      rootCauseAnalysis?: string
+      rootCauseAnalysisMethod?: '5_whys' | 'fishbone' | 'pareto' | 'other'
+      preventiveMeasures?: string
+    }) => {
+      const res = await api.api.capa.$post({ json: payload })
 
       if (!res.ok) {
         const err = await res.json()
@@ -154,7 +188,48 @@ function NewCAPAPage() {
   })
 
   const onSubmit = (data: CAPAFormData) => {
-    createMutation.mutate(data)
+    if (!detectionDate) {
+      toast.error('Data de detecção é obrigatória')
+      return
+    }
+    if (!dueDate) {
+      toast.error('Data alvo é obrigatória')
+      return
+    }
+
+    createMutation.mutate({
+      title: data.title,
+      description: data.description,
+      source: data.source as
+        | 'internal_audit'
+        | 'customer_complaint'
+        | 'nc_detection'
+        | 'external_audit'
+        | 'management_review',
+      sourceReference: data.sourceReference || undefined,
+      detectionDate: detectionDate.toISOString(),
+      type: data.type as 'corrective' | 'preventive',
+      severity: data.severity as 'minor' | 'major' | 'critical',
+      category: data.category as
+        | 'method'
+        | 'equipment'
+        | 'personnel'
+        | 'procedure'
+        | 'environment'
+        | 'other',
+      actionPlan: data.actionPlan,
+      responsibleId: data.responsibleId,
+      dueDate: dueDate.toISOString(),
+      rootCauseAnalysis: data.rootCauseAnalysis || undefined,
+      rootCauseAnalysisMethod: data.rootCauseAnalysisMethod
+        ? (data.rootCauseAnalysisMethod as
+            | '5_whys'
+            | 'fishbone'
+            | 'pareto'
+            | 'other')
+        : undefined,
+      preventiveMeasures: data.preventiveMeasures || undefined,
+    })
   }
 
   return (
@@ -163,24 +238,24 @@ function NewCAPAPage() {
         {/* Basic Information */}
         <Card>
           <CardHeader>
-            <CardTitle>Nova Acao Corretiva (CAPA)</CardTitle>
+            <CardTitle>Nova Ação Corretiva (CAPA)</CardTitle>
             <CardDescription>
-              ISO 17025 Clausula 8.2 - Registre a acao corretiva ou preventiva
+              ISO 17025 Cláusula 8.2 - Registre a ação corretiva ou preventiva
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Title */}
             <div className="space-y-2">
-              <Label htmlFor="title">Titulo</Label>
+              <Label htmlFor="title">Título</Label>
               <Input
                 {...register('title', {
-                  required: 'Titulo e obrigatorio',
+                  required: 'Título é obrigatório',
                   minLength: {
                     value: 5,
-                    message: 'Titulo deve ter pelo menos 5 caracteres',
+                    message: 'Título deve ter pelo menos 5 caracteres',
                   },
                 })}
-                placeholder="Titulo resumido da acao corretiva"
+                placeholder="Título resumido da ação corretiva"
               />
               {errors.title && (
                 <p className="text-sm text-destructive">
@@ -191,16 +266,16 @@ function NewCAPAPage() {
 
             {/* Description */}
             <div className="space-y-2">
-              <Label htmlFor="description">Descricao</Label>
+              <Label htmlFor="description">Descrição</Label>
               <Textarea
                 {...register('description', {
-                  required: 'Descricao e obrigatoria',
+                  required: 'Descrição é obrigatória',
                   minLength: {
                     value: 10,
-                    message: 'Descricao deve ter pelo menos 10 caracteres',
+                    message: 'Descrição deve ter pelo menos 10 caracteres',
                   },
                 })}
-                placeholder="Descreva detalhadamente o problema encontrado, incluindo evidencias e impacto..."
+                placeholder="Descreva detalhadamente o problema encontrado, incluindo evidências e impacto..."
                 rows={4}
               />
               {errors.description && (
@@ -213,18 +288,12 @@ function NewCAPAPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {/* Detection Date */}
               <div className="space-y-2">
-                <Label htmlFor="detectionDate">Data de Deteccao</Label>
-                <Input
-                  type="date"
-                  {...register('detectionDate', {
-                    required: 'Data de deteccao e obrigatoria',
-                  })}
+                <Label>Data de Detecção</Label>
+                <DatePicker
+                  value={detectionDate}
+                  onChange={setDetectionDate}
+                  placeholder="Selecione a data"
                 />
-                {errors.detectionDate && (
-                  <p className="text-sm text-destructive">
-                    {errors.detectionDate.message}
-                  </p>
-                )}
               </div>
 
               {/* Source */}
@@ -235,11 +304,16 @@ function NewCAPAPage() {
                   onValueChange={(v) => setValue('source', v ?? '')}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <span
+                      className="flex flex-1 text-left line-clamp-1"
+                      data-slot="select-value"
+                    >
+                      {SOURCE_LABELS[sourceValue] ?? 'Selecione a origem'}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="nc_detection">
-                      Deteccao de NC
+                      Detecção de NC
                     </SelectItem>
                     <SelectItem value="internal_audit">
                       Auditoria Interna
@@ -248,10 +322,10 @@ function NewCAPAPage() {
                       Auditoria Externa
                     </SelectItem>
                     <SelectItem value="customer_complaint">
-                      Reclamacao de Cliente
+                      Reclamação de Cliente
                     </SelectItem>
                     <SelectItem value="management_review">
-                      Revisao Gerencial
+                      Revisão Gerencial
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -261,14 +335,14 @@ function NewCAPAPage() {
             {/* Source Reference */}
             <div className="space-y-2">
               <Label htmlFor="sourceReference">
-                Referencia da Origem (opcional)
+                Referência da Origem (opcional)
               </Label>
               <Input
                 {...register('sourceReference')}
-                placeholder="Ex: NC-2024-0001, OS-2024-001, Reclamacao #123"
+                placeholder="Ex: NC-2024-0001, OS-2024-001, Reclamação #123"
               />
               <p className="text-xs text-muted-foreground">
-                Numero da NC, OS, reclamacao ou auditoria que originou esta
+                Número da NC, OS, reclamação ou auditoria que originou esta
                 CAPA.
               </p>
             </div>
@@ -278,7 +352,7 @@ function NewCAPAPage() {
         {/* Classification */}
         <Card>
           <CardHeader>
-            <CardTitle>Classificacao</CardTitle>
+            <CardTitle>Classificação</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -290,7 +364,12 @@ function NewCAPAPage() {
                   onValueChange={(v) => setValue('type', v ?? '')}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <span
+                      className="flex flex-1 text-left line-clamp-1"
+                      data-slot="select-value"
+                    >
+                      {TYPE_LABELS[typeValue] ?? 'Selecione o tipo'}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="corrective">Corretiva</SelectItem>
@@ -307,12 +386,18 @@ function NewCAPAPage() {
                   onValueChange={(v) => setValue('severity', v ?? '')}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <span
+                      className="flex flex-1 text-left line-clamp-1"
+                      data-slot="select-value"
+                    >
+                      {SEVERITY_LABELS[severityValue] ??
+                        'Selecione a severidade'}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="minor">Menor</SelectItem>
                     <SelectItem value="major">Maior</SelectItem>
-                    <SelectItem value="critical">Critica</SelectItem>
+                    <SelectItem value="critical">Crítica</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -325,10 +410,16 @@ function NewCAPAPage() {
                   onValueChange={(v) => setValue('category', v ?? '')}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <span
+                      className="flex flex-1 text-left line-clamp-1"
+                      data-slot="select-value"
+                    >
+                      {CATEGORY_LABELS[categoryValue] ??
+                        'Selecione a categoria'}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="method">Metodo</SelectItem>
+                    <SelectItem value="method">Método</SelectItem>
                     <SelectItem value="equipment">Equipamento</SelectItem>
                     <SelectItem value="personnel">Pessoal</SelectItem>
                     <SelectItem value="procedure">Procedimento</SelectItem>
@@ -344,29 +435,36 @@ function NewCAPAPage() {
         {/* Root Cause Analysis */}
         <Card>
           <CardHeader>
-            <CardTitle>Analise de Causa Raiz (opcional)</CardTitle>
+            <CardTitle>Análise de Causa Raiz (opcional)</CardTitle>
             <CardDescription>
-              Pode ser preenchido posteriormente durante a investigacao
+              Pode ser preenchido posteriormente durante a investigação
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* RCA Method */}
             <div className="space-y-2">
-              <Label>Metodo de Analise</Label>
+              <Label>Método de Análise</Label>
               <Select
                 value={rcaMethodValue}
-                onValueChange={(v) => setValue('rootCauseAnalysisMethod', v ?? '')}
+                onValueChange={(v) =>
+                  setValue('rootCauseAnalysisMethod', v ?? '')
+                }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <span
+                    className="flex flex-1 text-left line-clamp-1"
+                    data-slot="select-value"
+                  >
+                    {RCA_METHOD_LABELS[rcaMethodValue] ?? 'Nenhum'}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Nenhum</SelectItem>
-                  <SelectItem value="5_whys">5 Porques (5 Whys)</SelectItem>
+                  <SelectItem value="5_whys">5 Porquês (5 Whys)</SelectItem>
                   <SelectItem value="fishbone">
                     Diagrama de Ishikawa (Fishbone)
                   </SelectItem>
-                  <SelectItem value="pareto">Analise de Pareto</SelectItem>
+                  <SelectItem value="pareto">Análise de Pareto</SelectItem>
                   <SelectItem value="other">Outro</SelectItem>
                 </SelectContent>
               </Select>
@@ -374,15 +472,15 @@ function NewCAPAPage() {
 
             {/* RCA Text */}
             <div className="space-y-2">
-              <Label htmlFor="rootCauseAnalysis">Analise de Causa Raiz</Label>
+              <Label htmlFor="rootCauseAnalysis">Análise de Causa Raiz</Label>
               <Textarea
                 {...register('rootCauseAnalysis')}
                 placeholder={
                   rcaMethodValue === '5_whys'
-                    ? '1. Por que? ...\n2. Por que? ...\n3. Por que? ...\n4. Por que? ...\n5. Por que? (causa raiz) ...'
+                    ? '1. Por quê? ...\n2. Por quê? ...\n3. Por quê? ...\n4. Por quê? ...\n5. Por quê? (causa raiz) ...'
                     : rcaMethodValue === 'fishbone'
-                      ? 'Mao de Obra:\nMetodo:\nMaquina:\nMaterial:\nMeio Ambiente:\nMedicao:'
-                      : 'Descreva a analise de causa raiz...'
+                      ? 'Mão de Obra:\nMétodo:\nMáquina:\nMaterial:\nMeio Ambiente:\nMedição:'
+                      : 'Descreva a análise de causa raiz...'
                 }
                 rows={6}
               />
@@ -393,22 +491,22 @@ function NewCAPAPage() {
         {/* Action Plan */}
         <Card>
           <CardHeader>
-            <CardTitle>Plano de Acao</CardTitle>
+            <CardTitle>Plano de Ação</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Action Plan */}
             <div className="space-y-2">
-              <Label htmlFor="actionPlan">Plano de Acao Corretiva</Label>
+              <Label htmlFor="actionPlan">Plano de Ação Corretiva</Label>
               <Textarea
                 {...register('actionPlan', {
-                  required: 'Plano de acao e obrigatorio',
+                  required: 'Plano de ação é obrigatório',
                   minLength: {
                     value: 10,
                     message:
-                      'Plano de acao deve ter pelo menos 10 caracteres',
+                      'Plano de ação deve ter pelo menos 10 caracteres',
                   },
                 })}
-                placeholder="Descreva as acoes a serem tomadas para corrigir o problema e prevenir recorrencia..."
+                placeholder="Descreva as ações a serem tomadas para corrigir o problema e prevenir recorrência..."
                 rows={4}
               />
               {errors.actionPlan && (
@@ -435,13 +533,20 @@ function NewCAPAPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {/* Responsible */}
               <div className="space-y-2">
-                <Label>Responsavel</Label>
+                <Label>Responsável</Label>
                 <Select
-                  value={watch('responsibleId')}
+                  value={responsibleIdValue}
                   onValueChange={(v) => setValue('responsibleId', v ?? '')}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <span
+                      className="flex flex-1 text-left line-clamp-1"
+                      data-slot="select-value"
+                    >
+                      {selectedMember
+                        ? `${selectedMember.name} (${selectedMember.role})`
+                        : 'Selecione o responsável'}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     {membersData?.data?.map((m) => (
@@ -453,25 +558,19 @@ function NewCAPAPage() {
                 </Select>
                 {errors.responsibleId && (
                   <p className="text-sm text-destructive">
-                    Responsavel e obrigatorio
+                    Responsável é obrigatório
                   </p>
                 )}
               </div>
 
               {/* Due Date */}
               <div className="space-y-2">
-                <Label htmlFor="dueDate">Data Alvo</Label>
-                <Input
-                  type="date"
-                  {...register('dueDate', {
-                    required: 'Data alvo e obrigatoria',
-                  })}
+                <Label>Data Alvo</Label>
+                <DatePicker
+                  value={dueDate}
+                  onChange={setDueDate}
+                  placeholder="Selecione a data alvo"
                 />
-                {errors.dueDate && (
-                  <p className="text-sm text-destructive">
-                    {errors.dueDate.message}
-                  </p>
-                )}
               </div>
             </div>
           </CardContent>

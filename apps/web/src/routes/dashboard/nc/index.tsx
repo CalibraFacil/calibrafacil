@@ -34,7 +34,7 @@ import { type NonConformanceRow, ncColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/nc/')({
   head: () => ({
-    meta: [{ title: 'Nao Conformidades | CalibraFacil' }],
+    meta: [{ title: 'Não Conformidades | CalibraFacil' }],
   }),
   component: NCListPage,
 })
@@ -64,7 +64,7 @@ function NCListPage() {
       })
 
       if (!res.ok) {
-        throw new Error('Falha ao carregar nao conformidades')
+        throw new Error('Falha ao carregar não conformidades')
       }
 
       return res.json() as Promise<{
@@ -107,7 +107,7 @@ function NCListPage() {
       <Card>
         <CardContent className="pt-6">
           <p className="text-red-500">
-            Erro ao carregar nao conformidades: {error.message}
+            Erro ao carregar não conformidades: {error.message}
           </p>
         </CardContent>
       </Card>
@@ -129,7 +129,7 @@ function NCListPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Em Analise</CardDescription>
+              <CardDescription>Em Análise</CardDescription>
               <CardTitle className="text-2xl text-orange-600">
                 {reviewCount}
               </CardTitle>
@@ -169,9 +169,9 @@ function NCListPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Nao Conformidades</CardTitle>
+            <CardTitle>Não Conformidades</CardTitle>
             <CardDescription>
-              Controle de trabalhos nao conformes - ISO 17025 Clausula 8.7
+              Controle de trabalhos não conformes - ISO 17025 Cláusula 8.7
             </CardDescription>
           </div>
           <Button
@@ -187,7 +187,7 @@ function NCListPage() {
           {/* Filters */}
           <form onSubmit={handleSearch} className="flex gap-4 mb-6">
             <Input
-              placeholder="Buscar por numero ou descricao..."
+              placeholder="Buscar por número ou descrição..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-sm"
@@ -204,7 +204,7 @@ function NCListPage() {
                   {statusFilter === 'open'
                     ? 'Abertas'
                     : statusFilter === 'under_review'
-                      ? 'Em Analise'
+                      ? 'Em Análise'
                       : statusFilter === 'resolved'
                         ? 'Resolvidas'
                         : 'Todos os Status'}
@@ -213,7 +213,7 @@ function NCListPage() {
               <SelectContent>
                 <SelectItem value="">Todos os Status</SelectItem>
                 <SelectItem value="open">Abertas</SelectItem>
-                <SelectItem value="under_review">Em Analise</SelectItem>
+                <SelectItem value="under_review">Em Análise</SelectItem>
                 <SelectItem value="resolved">Resolvidas</SelectItem>
               </SelectContent>
             </Select>
@@ -231,7 +231,7 @@ function NCListPage() {
                     : typeFilter === 'equipment'
                       ? 'Equipamento'
                       : typeFilter === 'documentation'
-                        ? 'Documentacao'
+                        ? 'Documentação'
                         : 'Todos os Tipos'}
                 </span>
               </SelectTrigger>
@@ -239,7 +239,7 @@ function NCListPage() {
                 <SelectItem value="">Todos os Tipos</SelectItem>
                 <SelectItem value="work">Trabalho</SelectItem>
                 <SelectItem value="equipment">Equipamento</SelectItem>
-                <SelectItem value="documentation">Documentacao</SelectItem>
+                <SelectItem value="documentation">Documentação</SelectItem>
               </SelectContent>
             </Select>
             <Button type="submit" variant="secondary">
@@ -254,11 +254,11 @@ function NCListPage() {
                 <EmptyMedia variant="icon">
                   <HugeiconsIcon icon={AlertCircleIcon} />
                 </EmptyMedia>
-                <EmptyTitle>Nenhuma nao conformidade encontrada</EmptyTitle>
+                <EmptyTitle>Nenhuma não conformidade encontrada</EmptyTitle>
                 <EmptyDescription>
                   {search || statusFilter || typeFilter
                     ? 'Nenhuma NC encontrada para os filtros aplicados.'
-                    : 'Nenhuma nao conformidade registrada ainda.'}
+                    : 'Nenhuma não conformidade registrada ainda.'}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>

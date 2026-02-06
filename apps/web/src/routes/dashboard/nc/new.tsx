@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -12,6 +13,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { DatePicker } from '@/components/ui/date-picker'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,12 +23,11 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
 
 export const Route = createFileRoute('/dashboard/nc/new')({
   head: () => ({
-    meta: [{ title: 'Registrar Nao Conformidade | CalibraFacil' }],
+    meta: [{ title: 'Registrar Não Conformidade | CalibraFacil' }],
   }),
   component: NewNCPage,
 })
@@ -33,12 +35,22 @@ export const Route = createFileRoute('/dashboard/nc/new')({
 type NCFormData = {
   type: 'work' | 'equipment' | 'documentation'
   description: string
-  detectedAt: string
   jobId?: string
+}
+
+const NC_TYPE_LABELS: Record<NCFormData['type'], string> = {
+  work: 'Trabalho',
+  equipment: 'Equipamento',
+  documentation: 'Documentação',
 }
 
 function NewNCPage() {
   const navigate = useNavigate()
+  const now = new Date()
+  const [detectedDate, setDetectedDate] = useState<Date | undefined>(now)
+  const [detectedTime, setDetectedTime] = useState(
+    `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+  )
 
   const {
     register,
@@ -50,12 +62,12 @@ function NewNCPage() {
     defaultValues: {
       type: 'work',
       description: '',
-      detectedAt: new Date().toISOString().slice(0, 16),
       jobId: '',
     },
   })
 
   const typeValue = watch('type')
+  const jobIdValue = watch('jobId')
 
   // Fetch jobs for linking
   const { data: jobsData } = useQuery({
@@ -72,16 +84,16 @@ function NewNCPage() {
     },
   })
 
+  const selectedJob = jobsData?.data.find((j) => String(j.id) === jobIdValue)
+
   const createMutation = useMutation({
-    mutationFn: async (data: NCFormData) => {
-      const res = await api.api.nc.$post({
-        json: {
-          type: data.type,
-          description: data.description,
-          detectedAt: new Date(data.detectedAt).toISOString(),
-          jobId: data.jobId ? Number(data.jobId) : undefined,
-        },
-      })
+    mutationFn: async (payload: {
+      type: NCFormData['type']
+      description: string
+      detectedAt: string
+      jobId?: number
+    }) => {
+      const res = await api.api.nc.$post({ json: payload })
 
       if (!res.ok) {
         const err = await res.json()
@@ -102,23 +114,36 @@ function NewNCPage() {
   })
 
   const onSubmit = (data: NCFormData) => {
-    createMutation.mutate(data)
+    if (!detectedDate) {
+      toast.error('Data de detecção é obrigatória')
+      return
+    }
+    const [hours, minutes] = detectedTime.split(':').map(Number)
+    const combined = new Date(detectedDate)
+    combined.setHours(hours ?? 0, minutes ?? 0, 0, 0)
+
+    createMutation.mutate({
+      type: data.type,
+      description: data.description,
+      detectedAt: combined.toISOString(),
+      jobId: data.jobId ? Number(data.jobId) : undefined,
+    })
   }
 
   return (
     <div className="max-w-2xl mx-auto">
       <Card>
         <CardHeader>
-          <CardTitle>Registrar Nao Conformidade</CardTitle>
+          <CardTitle>Registrar Não Conformidade</CardTitle>
           <CardDescription>
-            ISO 17025 Clausula 8.7 - Controle de trabalho nao conforme
+            ISO 17025 Cláusula 8.7 - Controle de trabalho não conforme
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* Type */}
             <div className="space-y-2">
-              <Label htmlFor="type">Tipo de Nao Conformidade</Label>
+              <Label htmlFor="type">Tipo de Não Conformidade</Label>
               <Select
                 value={typeValue}
                 onValueChange={(v) =>
@@ -126,51 +151,63 @@ function NewNCPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo" />
+                  <span className="flex flex-1 text-left line-clamp-1" data-slot="select-value">
+                    {NC_TYPE_LABELS[typeValue] ?? 'Selecione o tipo'}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="work">
-                    Trabalho - Leitura fora de range, padrao inadequado, etc.
+                    Trabalho - Leitura fora de faixa, padrão inadequado, etc.
                   </SelectItem>
                   <SelectItem value="equipment">
-                    Equipamento - Falha de equipamento, fora de tolerancia
+                    Equipamento - Falha de equipamento, fora de tolerância
                   </SelectItem>
                   <SelectItem value="documentation">
-                    Documentacao - Erro em documento, certificado, registro
+                    Documentação - Erro em documento, certificado, registro
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* Detected At */}
-            <div className="space-y-2">
-              <Label htmlFor="detectedAt">Data/Hora da Deteccao</Label>
-              <Input
-                type="datetime-local"
-                {...register('detectedAt', {
-                  required: 'Data de deteccao e obrigatoria',
-                })}
-              />
-              {errors.detectedAt && (
-                <p className="text-sm text-destructive">
-                  {errors.detectedAt.message}
-                </p>
-              )}
-            </div>
+            <FieldGroup className="flex-row">
+              <Field>
+                <FieldLabel>Data da Detecção</FieldLabel>
+                <DatePicker
+                  value={detectedDate}
+                  onChange={setDetectedDate}
+                  placeholder="Selecione a data"
+                />
+              </Field>
+              <Field className="w-32">
+                <FieldLabel htmlFor="detected-time">Hora</FieldLabel>
+                <Input
+                  type="time"
+                  id="detected-time"
+                  value={detectedTime}
+                  onChange={(e) => setDetectedTime(e.target.value)}
+                  className="bg-background appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                />
+              </Field>
+            </FieldGroup>
 
             {/* Job Link (optional) */}
             <div className="space-y-2">
               <Label htmlFor="jobId">
-                Ordem de Servico (opcional)
+                Ordem de Serviço (opcional)
               </Label>
               <Select
-                value={watch('jobId') || ''}
-                onValueChange={(v) => setValue('jobId', v)}
+                value={jobIdValue || ''}
+                onValueChange={(v) => setValue('jobId', v ?? '')}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Nenhuma OS vinculada" />
+                  <span className="flex flex-1 text-left line-clamp-1" data-slot="select-value">
+                    {selectedJob
+                      ? `${selectedJob.jobId} (${selectedJob.status})`
+                      : 'Nenhuma OS vinculada'}
+                  </span>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="min-w-[280px]">
                   <SelectItem value="">Nenhuma</SelectItem>
                   {jobsData?.data.map((job) => (
                     <SelectItem key={job.id} value={String(job.id)}>
@@ -180,23 +217,23 @@ function NewNCPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Vincule a uma ordem de servico se a NC estiver relacionada a um
-                trabalho especifico.
+                Vincule a uma ordem de serviço se a NC estiver relacionada a um
+                trabalho específico.
               </p>
             </div>
 
             {/* Description */}
             <div className="space-y-2">
-              <Label htmlFor="description">Descricao da Nao Conformidade</Label>
+              <Label htmlFor="description">Descrição da Não Conformidade</Label>
               <Textarea
                 {...register('description', {
-                  required: 'Descricao e obrigatoria',
+                  required: 'Descrição é obrigatória',
                   minLength: {
                     value: 10,
-                    message: 'Descricao deve ter pelo menos 10 caracteres',
+                    message: 'Descrição deve ter pelo menos 10 caracteres',
                   },
                 })}
-                placeholder="Descreva detalhadamente a nao conformidade detectada, incluindo: o que foi observado, onde, como foi detectado e potencial impacto..."
+                placeholder="Descreva detalhadamente a não conformidade detectada, incluindo: o que foi observado, onde, como foi detectado e potencial impacto..."
                 rows={6}
               />
               {errors.description && (

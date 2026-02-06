@@ -34,7 +34,7 @@ import { type CAPARow, capaColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/capa/')({
   head: () => ({
-    meta: [{ title: 'Acoes Corretivas (CAPA) | CalibraFacil' }],
+    meta: [{ title: 'Ações Corretivas (CAPA) | CalibraFacil' }],
   }),
   component: CAPAListPage,
 })
@@ -127,10 +127,10 @@ function CAPAListPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Acoes Corretivas (CAPA)
+            Ações Corretivas (CAPA)
           </h1>
           <p className="text-muted-foreground">
-            ISO 17025 Clausula 8.2 - Acoes corretivas e preventivas
+            ISO 17025 Cláusula 8.2 - Ações corretivas e preventivas
           </p>
         </div>
         <Button render={<Link to="/dashboard/capa/new" />}>
@@ -152,7 +152,7 @@ function CAPAListPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Em Investigacao</CardDescription>
+              <CardDescription>Em Investigação</CardDescription>
               <CardTitle className="text-2xl text-yellow-600">
                 {getStatusCount('INVESTIGATION')}
               </CardTitle>
@@ -160,7 +160,7 @@ function CAPAListPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Implementacao</CardDescription>
+              <CardDescription>Implementação</CardDescription>
               <CardTitle className="text-2xl text-blue-600">
                 {getStatusCount('IMPLEMENTATION')}
               </CardTitle>
@@ -176,7 +176,7 @@ function CAPAListPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardDescription>Taxa Eficacia</CardDescription>
+              <CardDescription>Taxa Eficácia</CardDescription>
               <CardTitle className="text-2xl text-green-600">
                 {summary.effectivenessRate}%
               </CardTitle>
@@ -188,7 +188,7 @@ function CAPAListPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <Input
-          placeholder="Buscar por numero ou titulo..."
+          placeholder="Buscar por número ou título..."
           value={search}
           onChange={(e) => {
             setSearch(e.target.value)
@@ -207,9 +207,9 @@ function CAPAListPage() {
             {statusFilter
               ? {
                   OPEN: 'Aberta',
-                  INVESTIGATION: 'Investigacao',
-                  IMPLEMENTATION: 'Implementacao',
-                  VERIFICATION: 'Verificacao',
+                  INVESTIGATION: 'Investigação',
+                  IMPLEMENTATION: 'Implementação',
+                  VERIFICATION: 'Verificação',
                   CLOSED: 'Fechada',
                 }[statusFilter]
               : 'Todos os status'}
@@ -217,9 +217,9 @@ function CAPAListPage() {
           <SelectContent>
             <SelectItem value="">Todos os status</SelectItem>
             <SelectItem value="OPEN">Aberta</SelectItem>
-            <SelectItem value="INVESTIGATION">Investigacao</SelectItem>
-            <SelectItem value="IMPLEMENTATION">Implementacao</SelectItem>
-            <SelectItem value="VERIFICATION">Verificacao</SelectItem>
+            <SelectItem value="INVESTIGATION">Investigação</SelectItem>
+            <SelectItem value="IMPLEMENTATION">Implementação</SelectItem>
+            <SelectItem value="VERIFICATION">Verificação</SelectItem>
             <SelectItem value="CLOSED">Fechada</SelectItem>
           </SelectContent>
         </Select>
@@ -232,7 +232,7 @@ function CAPAListPage() {
         >
           <SelectTrigger className="w-[160px]">
             {severityFilter
-              ? { minor: 'Menor', major: 'Maior', critical: 'Critica' }[
+              ? { minor: 'Menor', major: 'Maior', critical: 'Crítica' }[
                   severityFilter
                 ]
               : 'Severidade'}
@@ -241,7 +241,7 @@ function CAPAListPage() {
             <SelectItem value="">Todas</SelectItem>
             <SelectItem value="minor">Menor</SelectItem>
             <SelectItem value="major">Maior</SelectItem>
-            <SelectItem value="critical">Critica</SelectItem>
+            <SelectItem value="critical">Crítica</SelectItem>
           </SelectContent>
         </Select>
         <Select
@@ -254,7 +254,7 @@ function CAPAListPage() {
           <SelectTrigger className="w-[160px]">
             {categoryFilter
               ? {
-                  method: 'Metodo',
+                  method: 'Método',
                   equipment: 'Equipamento',
                   personnel: 'Pessoal',
                   procedure: 'Procedimento',
@@ -265,7 +265,7 @@ function CAPAListPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="">Todas</SelectItem>
-            <SelectItem value="method">Metodo</SelectItem>
+            <SelectItem value="method">Método</SelectItem>
             <SelectItem value="equipment">Equipamento</SelectItem>
             <SelectItem value="personnel">Pessoal</SelectItem>
             <SelectItem value="procedure">Procedimento</SelectItem>
@@ -303,15 +303,12 @@ function CAPAListPage() {
               <EmptyDescription>
                 {search || statusFilter || severityFilter || categoryFilter
                   ? 'Nenhum resultado para os filtros selecionados.'
-                  : 'Comece registrando sua primeira acao corretiva para atender a ISO 17025 Clausula 8.2.'}
+                  : 'Comece registrando sua primeira ação corretiva para atender a ISO 17025 Cláusula 8.2.'}
               </EmptyDescription>
             </EmptyHeader>
             {!search && !statusFilter && !severityFilter && !categoryFilter && (
               <Button render={<Link to="/dashboard/capa/new" />}>
-                <HugeiconsIcon
-                  icon={PlusSignIcon}
-                  className="mr-2 h-4 w-4"
-                />
+                <HugeiconsIcon icon={PlusSignIcon} className="mr-2 h-4 w-4" />
                 Nova CAPA
               </Button>
             )}
