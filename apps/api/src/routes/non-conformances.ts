@@ -258,7 +258,12 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
       const [capaResult] = await db
         .select()
         .from(correctiveAction)
-        .where(eq(correctiveAction.id, nc.capaId))
+        .where(
+          and(
+            eq(correctiveAction.id, nc.capaId),
+            eq(correctiveAction.organizationId, member.organizationId),
+          ),
+        )
         .limit(1);
       capa = capaResult ?? null;
     }
@@ -697,7 +702,10 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json(
         {
           message: "CAPA criada com sucesso",
-          data: { nc: existing, capa: newCapa },
+          data: {
+            nc: { ...existing, capaId: newCapa.id },
+            capa: newCapa,
+          },
         },
         201,
       );
