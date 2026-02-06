@@ -1028,6 +1028,23 @@ export type StandardSnapshot = {
   certifiedValues: CertifiedValue[] | null;
 };
 
+export type EnvironmentalLimitsSnapshot = {
+  temperature?: { min: number; max: number };
+  humidity?: { min: number; max: number };
+  pressure?: { min: number; max: number };
+};
+
+export type EnvironmentalSnapshot = {
+  temperature: number | null;
+  humidity: number | null;
+  pressure: number | null;
+  recordedAt: string;
+  recordedBy: string;
+  limits: EnvironmentalLimitsSnapshot | null;
+  withinLimits: boolean;
+  outOfLimitsJustification: string | null;
+};
+
 /**
  * Calibration Job table - The Work Order / Operational Record
  * ISO 17025:2017 Clause 7.7 - Ensuring Validity of Results
@@ -1079,6 +1096,11 @@ export const calibrationJob = pgTable(
     // Frozen copy of reference standards used during execution
     // This ensures traceability per ISO 17025 requirements
     standardsSnapshot: jsonb("standards_snapshot").$type<StandardSnapshot[]>(),
+    // Frozen copy of environmental conditions at execution time
+    // ISO 17025:2017 Clause 7.1.2 - Environmental conditions monitoring
+    environmentalSnapshot: jsonb(
+      "environmental_snapshot",
+    ).$type<EnvironmentalSnapshot>(),
     // Certificate URL (populated after approval and PDF generation)
     certificateUrl: text("certificate_url"),
     // Label URL for thermal printer sticker (populated after label generation)
@@ -1276,6 +1298,62 @@ export const jobAuditLogRelations = relations(jobAuditLog, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+// =============================================================================
+// ENVIRONMENTAL LIMITS - ISO 17025:2017 Clause 7.1.2
+// Configurable environmental condition limits per organization/asset type
+// =============================================================================
+
+export const environmentalLimits = pgTable(
+  "environmental_limits",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // NULL = org-wide default; specific assetTypeId = override for that instrument type
+    assetTypeId: integer("asset_type_id").references(() => assetType.id, {
+      onDelete: "cascade",
+    }),
+    // Temperature limits (°C)
+    temperatureMin: real("temperature_min"),
+    temperatureMax: real("temperature_max"),
+    // Humidity limits (%RH)
+    humidityMin: real("humidity_min"),
+    humidityMax: real("humidity_max"),
+    // Pressure limits (hPa)
+    pressureMin: real("pressure_min"),
+    pressureMax: real("pressure_max"),
+    // Audit
+    updatedBy: text("updated_by").references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("env_limits_organization_id_idx").on(table.organizationId),
+    uniqueIndex("env_limits_org_asset_type_uidx").on(
+      table.organizationId,
+      table.assetTypeId,
+    ),
+  ],
+);
+
+export const environmentalLimitsRelations = relations(
+  environmentalLimits,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [environmentalLimits.organizationId],
+      references: [organization.id],
+    }),
+    assetType: one(assetType, {
+      fields: [environmentalLimits.assetTypeId],
+      references: [assetType.id],
+    }),
+  }),
+);
 
 // =============================================================================
 // SUBSCRIPTION - Organization Billing (SaaS Tiering)

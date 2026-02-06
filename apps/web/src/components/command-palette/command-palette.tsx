@@ -5,8 +5,6 @@ import { ContextGroup } from './groups/context-group'
 import { QuickCreateGroup } from './groups/quick-create'
 import { GlobalSearchGroup } from './groups/global-search'
 import { NavigationGroup } from './groups/navigation-group'
-import { LogEnvironmentalDialog } from './dialogs/log-environmental'
-
 import {
   Command,
   CommandDialog,
@@ -93,9 +91,6 @@ export function CommandPalette() {
           </CommandList>
         </Command>
       </CommandDialog>
-
-      {/* Dialogs that can be opened from command palette */}
-      <LogEnvironmentalDialog />
     </>
   )
 }

@@ -20,6 +20,7 @@ import { signaturesRouter } from "./routes/signatures";
 import { signingRouter } from "./routes/signing";
 import { nonConformancesRouter } from "./routes/non-conformances";
 import { capaRouter } from "./routes/capa";
+import { environmentalLimitsRouter } from "./routes/environmental-limits";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -140,7 +141,8 @@ const routes = app
   .route("/api/signatures", signaturesRouter)
   .route("/api/signing", signingRouter)
   .route("/api/nc", nonConformancesRouter)
-  .route("/api/capa", capaRouter);
+  .route("/api/capa", capaRouter)
+  .route("/api/environmental-limits", environmentalLimitsRouter);
 
 export type AppType = typeof routes;
 
