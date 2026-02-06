@@ -268,7 +268,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
       capa = capaResult ?? null;
     }
 
-    // Get related job info if exists
+    // Get related job info if exists (scoped to org for defense-in-depth)
     let job = null;
     if (nc.jobId) {
       const [jobResult] = await db
@@ -278,7 +278,12 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
           status: calibrationJob.status,
         })
         .from(calibrationJob)
-        .where(eq(calibrationJob.id, nc.jobId))
+        .where(
+          and(
+            eq(calibrationJob.id, nc.jobId),
+            eq(calibrationJob.organizationId, member.organizationId),
+          ),
+        )
         .limit(1);
       job = jobResult ?? null;
     }

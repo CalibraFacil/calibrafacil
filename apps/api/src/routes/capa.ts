@@ -436,7 +436,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
               capaNumber,
               organizationId: member.organizationId,
               source: input.source,
-              sourceReference: input.sourceReference ?? null,
+              sourceReference: input.sourceReference || null,
               title: input.title,
               description: input.description,
               detectionDate: new Date(input.detectionDate),
@@ -521,7 +521,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
         updateData.description = input.description;
       if (input.source !== undefined) updateData.source = input.source;
       if (input.sourceReference !== undefined)
-        updateData.sourceReference = input.sourceReference;
+        updateData.sourceReference = input.sourceReference || null;
       if (input.type !== undefined) updateData.type = input.type;
       if (input.severity !== undefined) updateData.severity = input.severity;
       if (input.category !== undefined) updateData.category = input.category;
