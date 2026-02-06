@@ -1,0 +1,100 @@
+---
+title: Não Conformidades
+description: Gestão de não conformidades — registro, disposição, resolução e escalonamento para CAPA conforme ISO 17025.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## O Que é uma Não Conformidade
+
+Uma **Não Conformidade (NC)** é qualquer desvio dos procedimentos estabelecidos, requisitos do cliente ou do sistema de gestão. O registro e tratamento de NCs é obrigatório conforme **ISO/IEC 17025:2017, Cláusula 8.7** (Controle de trabalho não conforme).
+
+Acesse em **Painel → Qualidade → Não Conformidades** (`/dashboard/nc`).
+
+## Painel Resumo
+
+A página inicial exibe cartões com indicadores:
+
+| Indicador | Descrição |
+| :--- | :--- |
+| **Abertas** | NCs com status OPEN |
+| **Em Análise** | NCs com disposição em revisão |
+| **Abertas > 30 dias** | NCs sem resolução há mais de 30 dias |
+| **Por Tipo** | Distribuição entre Trabalho, Equipamento e Documentação |
+
+## Registro de NC
+
+<Steps>
+
+1. **Classificação**
+
+   Selecione o tipo de não conformidade:
+
+   | Tipo | Quando usar | Exemplos |
+   | :--- | :--- | :--- |
+   | **Trabalho** | Erro na execução de calibração | Dados incorretos, procedimento não seguido |
+   | **Equipamento** | Problema com instrumento ou padrão | Padrão fora de tolerância, instrumento danificado |
+   | **Documentação** | Erro em documentos ou registros | Certificado com erro, registro incompleto |
+
+2. **Descrição**
+
+   Descreva detalhadamente a não conformidade encontrada.
+
+3. **Vínculo com OS (opcional)**
+
+   Se a NC está relacionada a uma ordem de serviço específica, vincule-a para rastreabilidade.
+
+4. **Salvar**
+
+   O sistema gera automaticamente um número único (ex: NC-2026-0001) e registra quem detectou e quando.
+
+</Steps>
+
+## Fluxo de Status
+
+| Status | Descrição | Próximo passo |
+| :--- | :--- | :--- |
+| **OPEN** (Aberta) | NC registrada, aguardando disposição | Definir disposição |
+| **UNDER_REVIEW** (Em Análise) | Disposição definida, aguardando aprovação (para concessão/uso como está) | Resolver |
+| **RESOLVED** (Resolvida) | NC tratada e encerrada | — |
+
+## Disposição
+
+A disposição define o que será feito com o trabalho não conforme:
+
+| Disposição | Descrição | Aprovação necessária |
+| :--- | :--- | :--- |
+| **Retrabalho** | Refazer o trabalho conforme procedimento | Não |
+| **Descarte** | Descartar os resultados não conformes | Não |
+| **Usar como está** | Aceitar os resultados com a não conformidade | **Sim** — requer aprovação do responsável técnico |
+| **Concessão** | Aceitar com condições especiais | **Sim** — requer aprovação do responsável técnico |
+
+<Aside type="caution">
+  As disposições **"Usar como está"** e **"Concessão"** exigem justificativa técnica documentada e aprovação do responsável técnico (admin ou owner). A justificativa é registrada na trilha de auditoria.
+</Aside>
+
+## Resolução
+
+Após o tratamento da NC:
+
+<Steps>
+
+1. Registre a **correção realizada** (descrição do que foi feito)
+2. Clique em **Resolver**
+3. O status muda para **RESOLVED**
+4. Data e responsável pela resolução são registrados
+
+</Steps>
+
+## Escalonamento para CAPA
+
+Quando uma NC indica um problema sistemático que requer análise de causa raiz, ela pode ser escalada para uma [Ação Corretiva (CAPA)](/guia/qualidade/capa):
+
+1. Na página da NC, clique em **Escalonar para CAPA**
+2. Uma nova CAPA é criada automaticamente com referência à NC
+3. A NC é vinculada à CAPA para rastreabilidade
+4. Notificação **NC_ESCALATED_TO_CAPA** enviada aos administradores
+
+<Aside type="tip">
+  Considere escalonar para CAPA quando: a mesma NC ocorre repetidamente, a NC afeta múltiplas calibrações, ou a causa raiz não é evidente.
+</Aside>

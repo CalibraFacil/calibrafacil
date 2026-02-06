@@ -1,0 +1,124 @@
+---
+title: Campos de Entrada
+description: Tipos de campos disponíveis no Construtor de Métodos — texto, número, seleção e tabela — com regras de nomenclatura e exemplos.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Os **campos de entrada** definem quais dados o técnico coletará durante a calibração. Cada campo possui um **rótulo** (exibido no formulário) e uma **chave** (variável usada nas fórmulas).
+
+## Tipos de Campo
+
+### Número
+
+O tipo mais comum. Aceita valores numéricos com unidade e casas decimais opcionais.
+
+| Propriedade | Obrigatório | Descrição |
+| :--- | :--- | :--- |
+| Rótulo | Sim | Nome exibido no formulário (ex: "Leitura do Padrão") |
+| Chave | Sim | Nome da variável nas fórmulas (ex: `leitura_padrao`) |
+| Unidade | Não | Unidade de medida (ex: mm, °C, kg, Pa) |
+| Obrigatório | Não | Se o campo deve ser preenchido |
+| Valor padrão | Não | Valor pré-preenchido |
+
+**Exemplo de uso em fórmula:** `leitura_padrao - leitura_instrumento`
+
+### Texto
+
+Aceita texto livre. Útil para observações, identificação de instrumentos ou condições não numéricas.
+
+| Propriedade | Obrigatório | Descrição |
+| :--- | :--- | :--- |
+| Rótulo | Sim | Nome exibido no formulário |
+| Chave | Sim | Nome da variável |
+| Unidade | Não | Unidade exibida ao lado do campo |
+| Obrigatório | Não | Se o campo deve ser preenchido |
+| Valor padrão | Não | Texto pré-preenchido |
+
+<Aside type="note">
+  Campos de texto não podem ser usados em fórmulas matemáticas. Use-os apenas para informações descritivas.
+</Aside>
+
+### Seleção
+
+Lista suspensa com opções predefinidas. Útil para parâmetros discretos como faixas de medição ou tipos de instrumento.
+
+| Propriedade | Obrigatório | Descrição |
+| :--- | :--- | :--- |
+| Rótulo | Sim | Nome exibido no formulário |
+| Chave | Sim | Nome da variável |
+| Opções | Sim | Lista de valores possíveis (mínimo 1) |
+| Obrigatório | Não | Se o campo deve ser preenchido |
+
+**Exemplo:** Um campo "Faixa" com opções: `0-100`, `100-500`, `500-1000`.
+
+### Tabela
+
+Permite múltiplas linhas de dados — ideal para séries de leituras. Cada coluna da tabela é configurada individualmente.
+
+| Propriedade | Obrigatório | Descrição |
+| :--- | :--- | :--- |
+| Rótulo | Sim | Nome da tabela no formulário |
+| Chave | Sim | Nome da variável da tabela |
+| Colunas | Sim | Definição das colunas (mínimo 1) |
+| Obrigatório | Não | Se a tabela deve conter dados |
+
+Cada **coluna** possui:
+
+| Propriedade | Descrição |
+| :--- | :--- |
+| Rótulo | Nome exibido no cabeçalho |
+| Chave | Identificador da coluna |
+| Tipo | `number` (numérico) ou `text` (texto) |
+| Unidade | Unidade exibida no cabeçalho (opcional) |
+
+**Acesso aos dados da tabela em fórmulas:**
+
+Para uma tabela com chave `leituras` e coluna com chave `valor`:
+
+```
+mean(leituras_valor)     // Média dos valores da coluna
+std(leituras_valor)      // Desvio padrão da coluna
+sum(leituras_valor)      // Soma dos valores da coluna
+min(leituras_valor)      // Menor valor da coluna
+max(leituras_valor)      // Maior valor da coluna
+leituras_valor_count     // Quantidade de linhas
+leituras_valor_0         // Primeiro valor (índice 0)
+leituras_valor_1         // Segundo valor (índice 1)
+```
+
+<Aside type="tip">
+  Tabelas são a forma recomendada para séries de leituras repetidas. O motor matemático automaticamente disponibiliza funções vetoriais (mean, std, etc.) para colunas numéricas.
+</Aside>
+
+## Regras de Nomenclatura
+
+A **chave** (variável) de cada campo deve seguir estas regras:
+
+1. **Começar com uma letra** — não pode iniciar com número ou caractere especial
+2. **Conter apenas letras, números e underscore** (`_`) — regex: `^[a-zA-Z][a-zA-Z0-9_]*$`
+3. **Ser única** dentro do método — não pode repetir chaves de outros campos ou fórmulas
+4. **Não usar palavras reservadas** do motor de cálculo
+
+<Aside type="caution">
+  O rótulo é convertido automaticamente em chave (slugificado). Exemplo: "Leitura do Padrão" → `leitura_do_padrao`. Você pode editar a chave manualmente a qualquer momento.
+</Aside>
+
+## Palavras Reservadas
+
+As seguintes palavras **não podem** ser usadas como chave de campo:
+
+**Funções matemáticas:**
+`abs`, `sqrt`, `pow`, `exp`, `log`, `log10`, `log2`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `ceil`, `floor`, `round`, `trunc`, `sign`
+
+**Funções estatísticas:**
+`min`, `max`, `mean`, `median`, `std`, `variance`, `sum`, `prod`, `gcd`, `lcm`, `mod`, `factorial`
+
+**Constantes:**
+`pi`, `e`, `i`, `Infinity`, `NaN`, `true`, `false`, `null`
+
+**Variáveis do motor de cálculo:**
+`u_typeA`, `u_typeB`, `u_combined`, `U_expanded`, `k`, `mean`, `std_dev`, `n`
+
+**Funções bloqueadas (segurança):**
+`import`, `createUnit`, `reviver`, `evaluate`, `parse`, `simplify`, `derivative`, `resolve`, `compile`, `chain`

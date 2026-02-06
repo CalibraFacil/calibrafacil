@@ -1,0 +1,78 @@
+---
+title: Portal do Cliente
+description: Guia do portal de acesso para clientes — visualização de ativos, acompanhamento de calibrações e download de certificados.
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+## O Que é o Portal
+
+O **Portal do Cliente** é uma aplicação separada em `portal.calibrafacil.com` que permite aos clientes do laboratório acompanhar suas calibrações de forma autônoma, sem necessidade de contato direto com a equipe.
+
+<Aside type="note">
+  O Portal do Cliente está disponível nos planos **Professional** e **Enterprise**. Laboratórios nos planos Free e Standard não têm acesso a esta funcionalidade.
+</Aside>
+
+## Acesso ao Portal
+
+O acesso é gerenciado pelo laboratório:
+
+1. O administrador do laboratório acessa o cadastro do cliente em `/dashboard/clients/:id`
+2. Na aba **Usuários**, clica em **Convidar Usuário**
+3. Informa o email do colaborador do cliente
+4. O colaborador recebe um convite por email
+5. Ao aceitar, cria uma conta e acessa o portal
+
+O portal utiliza autenticação independente do painel do laboratório.
+
+## Funcionalidades
+
+<CardGrid>
+  <Card title="Dashboard" icon="open-book">
+    Visão geral com indicadores do cliente: calibrações recentes, instrumentos ativos, certificados disponíveis.
+  </Card>
+  <Card title="Ativos" icon="setting">
+    Lista completa dos instrumentos do cliente. Visualização de tag, número de série, tipo, status e datas de calibração.
+  </Card>
+  <Card title="Certificados" icon="document">
+    Acesso direto aos certificados de calibração aprovados. Download do PDF com um clique.
+  </Card>
+  <Card title="Configurações" icon="pencil">
+    Preferências de aparência (tema claro/escuro).
+  </Card>
+</CardGrid>
+
+## O Que o Cliente Pode Fazer
+
+| Ação | Disponível |
+| :--- | :--- |
+| Visualizar seus ativos/instrumentos | Sim |
+| Visualizar status de calibrações | Sim |
+| Fazer download de certificados | Sim |
+| Editar dados de ativos | Não |
+| Criar ordens de serviço | Não |
+| Acessar dados de outros clientes | Não |
+
+O portal é **somente leitura** — o cliente não pode modificar dados, apenas consultar e baixar certificados.
+
+## Notificações
+
+Usuários do portal recebem notificações por email nos seguintes eventos:
+
+| Evento | Descrição |
+| :--- | :--- |
+| **CERTIFICATE_READY** | Certificado de calibração disponível para download |
+| **CERTIFICATE_AMENDED** | Certificado foi retificado (nova versão disponível) |
+
+## Verificação de Certificados
+
+Cada certificado emitido pelo CalibraFácil possui um **token de verificação** único. Qualquer pessoa (cliente, auditor, terceiros) pode verificar a autenticidade de um certificado:
+
+1. Acesse o link de verificação impresso no certificado (ou escaneie o QR code)
+2. A página pública exibe os dados do certificado e confirma sua autenticidade
+3. Não é necessário login para verificação
+
+A verificação confirma:
+- Que o certificado foi emitido pelo laboratório
+- Data de emissão e status (válido ou retificado)
+- Metadados da assinatura digital (se assinado)
