@@ -25,20 +25,15 @@ export default defineConfig({
 
       sidebar: [
         {
-          label: "Documentação Técnica",
+          label: "Início",
           items: [
-            { label: "Introdução e Escopo", slug: "index" },
-            {
-              label: "Referências Normativas",
-              slug: "referencias-normativas",
-            },
-            { label: "Definições e Terminologia", slug: "definicoes" },
-            { label: "Visão Geral do Sistema", slug: "visao-geral" },
+            { label: "Bem-vindo", slug: "index" },
+            { label: "Visão Geral da Plataforma", slug: "visao-geral" },
+            { label: "Glossário", slug: "definicoes" },
           ],
         },
         {
           label: "Guia do Usuário",
-          badge: { text: "Novo", variant: "success" },
           items: [
             { label: "Painel e Dashboard", slug: "guia/painel" },
             { label: "Clientes", slug: "guia/clientes" },
@@ -80,14 +75,12 @@ export default defineConfig({
         },
         {
           label: "Portal do Cliente",
-          badge: { text: "Portal", variant: "caution" },
           items: [
             { label: "Guia do Portal", slug: "portal" },
           ],
         },
         {
           label: "Métodos de Calibração",
-          badge: { text: "Guia", variant: "note" },
           items: [
             { label: "Visão Geral dos Métodos", slug: "metodos" },
             {
@@ -103,19 +96,22 @@ export default defineConfig({
           ],
         },
         {
-          label: "Referência Técnica",
+          label: "Conformidade e Incerteza",
           items: [
             {
-              label: "Motor Matemático",
-              slug: "motor-matematico",
-              badge: { text: "GUM", variant: "tip" },
-            },
-            {
-              label: "Rastreabilidade ISO/IEC 17025",
+              label: "Conformidade ISO 17025",
               slug: "rastreabilidade-iso17025",
             },
             {
-              label: "Histórico de Alterações",
+              label: "Cálculos de Incerteza",
+              slug: "motor-matematico",
+            },
+            {
+              label: "Referências Normativas",
+              slug: "referencias-normativas",
+            },
+            {
+              label: "Novidades",
               slug: "historico-alteracoes",
             },
           ],

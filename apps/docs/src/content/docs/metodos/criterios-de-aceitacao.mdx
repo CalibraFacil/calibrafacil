@@ -1,13 +1,13 @@
 ---
 title: Critérios de Aceitação e Incerteza
-description: Configuração de critérios de aprovação/reprovação e componentes de incerteza Tipo B no Construtor de Métodos.
+description: Como configurar critérios de aprovação/reprovação e componentes de incerteza Tipo B no Construtor de Métodos.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 ## Critérios de Aceitação
 
-Os **critérios de aceitação** definem regras de aprovação ou reprovação para os resultados da calibração. Cada critério é uma expressão booleana que é avaliada após o cálculo de todas as fórmulas.
+Os **critérios de aceitação** definem regras de aprovação ou reprovação para os resultados da calibração. Cada critério é uma expressão booleana avaliada após o cálculo de todas as fórmulas.
 
 ### Configuração
 
@@ -81,10 +81,10 @@ Mensagem: "Repetitividade insuficiente — desvio padrão acima do limite"
 
 ## Componentes de Incerteza Tipo B
 
-Os **componentes de incerteza Tipo B** representam contribuições de incerteza obtidas por outros meios que não a análise estatística de séries de observações — como certificados de calibração de padrões, especificações do fabricante ou resolução do instrumento.
+Os **componentes de incerteza Tipo B** representam contribuições de incerteza obtidas por meios não estatísticos — como certificados de calibração de padrões, especificações do fabricante ou resolução do instrumento.
 
 <Aside type="note">
-  A incerteza **Tipo A** (desvio padrão da média) é calculada automaticamente pelo motor matemático a partir das leituras. A Tipo B deve ser configurada manualmente no método.
+  A incerteza **Tipo A** (desvio padrão da média) é calculada automaticamente a partir das leituras. A Tipo B deve ser configurada manualmente no método.
 </Aside>
 
 ### Configuração
@@ -113,9 +113,9 @@ A incerteza padrão do componente é calculada como:
 
 $$u_B = \frac{\text{valor}}{\text{divisor}}$$
 
-### Como o Motor Calcula a Incerteza Combinada
+### Como o Sistema Calcula a Incerteza Final
 
-Após a avaliação das fórmulas, o motor matemático:
+Após a avaliação das fórmulas, o sistema:
 
 1. Calcula a **incerteza Tipo A** ($u_A$) automaticamente a partir das leituras repetidas:
 
@@ -127,15 +127,15 @@ $$u_A = \frac{s}{\sqrt{n}}$$
 
 $$u_c = \sqrt{u_A^2 + \sum_{i} u_{B,i}^2}$$
 
-4. Calcula os **graus de liberdade efetivos** via Welch-Satterthwaite:
-
-$$\nu_{eff} = \frac{u_c^4}{\sum \frac{u_i^4}{\nu_i}}$$
+4. Calcula os **graus de liberdade efetivos** via Welch-Satterthwaite
 
 5. Determina o **fator de abrangência** $k$ pela tabela t-Student (tipicamente 95,45% de confiança)
 
 6. Calcula a **incerteza expandida**:
 
 $$U = k \times u_c$$
+
+Para mais detalhes sobre a metodologia, consulte [Cálculos de Incerteza](/motor-matematico).
 
 ### Exemplos Comuns de Tipo B
 

@@ -1,18 +1,18 @@
 ---
-title: Definições e Terminologia
-description: Termos técnicos, símbolos e convenções utilizados na documentação do CalibraFácil.
+title: Glossário
+description: Termos técnicos, símbolos e abreviações utilizados na plataforma CalibraFácil.
 ---
 
-Esta seção define os termos e símbolos utilizados ao longo da documentação. As definições estão alinhadas com o **VIM (JCGM 200:2012)** e o **GUM (JCGM 100:2008)**.
+Esta seção define os termos e símbolos utilizados na plataforma e nesta documentação. As definições estão alinhadas com o **VIM (JCGM 200:2012)** e o **GUM (JCGM 100:2008)**.
 
 ## Termos de Incerteza
 
 | Termo | Símbolo | Definição |
 | :--- | :--- | :--- |
 | **Incerteza padrão** | $u(x_i)$ | Incerteza do resultado de uma medição expressa como um desvio padrão. |
-| **Incerteza padrão combinada** | $u_c(y)$ | Incerteza padrão do resultado de uma medição quando esse resultado é obtido a partir dos valores de várias outras grandezas, calculada pela raiz da soma dos quadrados (RSS). |
-| **Incerteza expandida** | $U$ | Grandeza que define um intervalo em torno do resultado de uma medição com o qual se espera abranger uma fração significativa da distribuição de valores. $U = k \cdot u_c$. |
-| **Fator de abrangência** | $k$ | Fator numérico utilizado como multiplicador da incerteza padrão combinada para obter a incerteza expandida. Determinado pela distribuição $t$-Student em função de $\nu_{\text{eff}}$ e do nível de confiança. |
+| **Incerteza padrão combinada** | $u_c(y)$ | Incerteza padrão do resultado obtido a partir de várias grandezas, calculada pela raiz da soma dos quadrados (RSS). |
+| **Incerteza expandida** | $U$ | Grandeza que define um intervalo em torno do resultado com o qual se espera abranger uma fração significativa da distribuição de valores. $U = k \cdot u_c$. |
+| **Fator de abrangência** | $k$ | Fator numérico multiplicador da incerteza padrão combinada para obter a incerteza expandida. Determinado pela distribuição $t$-Student em função de $\nu_{\text{eff}}$ e do nível de confiança. |
 | **Graus de liberdade** | $\nu$ | Número de termos independentes em uma soma de quadrados. Para Tipo A: $\nu = n - 1$. |
 | **Graus de liberdade efetivos** | $\nu_{\text{eff}}$ | Graus de liberdade da incerteza combinada, calculados pela fórmula de Welch-Satterthwaite. |
 
@@ -20,8 +20,8 @@ Esta seção define os termos e símbolos utilizados ao longo da documentação.
 
 | Termo | Definição |
 | :--- | :--- |
-| **Avaliação Tipo A** | Método de avaliação da incerteza pela análise estatística de uma série de observações. Baseada no desvio padrão experimental da média: $u_A = s / \sqrt{n}$. |
-| **Avaliação Tipo B** | Método de avaliação da incerteza por meios não estatísticos — certificados de calibração, especificações do fabricante, resolução do instrumento, experiência prévia. |
+| **Avaliação Tipo A** | Avaliação da incerteza pela análise estatística de uma série de observações. Baseada no desvio padrão experimental da média: $u_A = s / \sqrt{n}$. |
+| **Avaliação Tipo B** | Avaliação da incerteza por meios não estatísticos — certificados de calibração, especificações do fabricante, resolução do instrumento, experiência prévia. |
 
 ## Distribuições de Probabilidade
 
@@ -31,14 +31,6 @@ Esta seção define os termos e símbolos utilizados ao longo da documentação.
 | **Retangular** | $\sqrt{3}$ | Todos os valores dentro do intervalo são igualmente prováveis. Típica para resolução e especificações. |
 | **Triangular** | $\sqrt{6}$ | Valores centrais são mais prováveis que os extremos. |
 | **U-shaped** | $\sqrt{2}$ | Valores nos extremos são mais prováveis. Típica para histerese e variações cíclicas. |
-
-## Termos de Precisão Numérica
-
-| Termo | Definição |
-| :--- | :--- |
-| **IEEE 754** | Padrão para aritmética de ponto flutuante. Precisão dupla (~15-17 dígitos significativos). Utilizado nos cálculos de incerteza GUM. |
-| **BigNumber** | Aritmética de precisão arbitrária (padrão: 32 dígitos, configurável até 128). Utilizada na execução de fórmulas do usuário via `mathjs`. |
-| **RSS** | *Root Sum of Squares* — raiz da soma dos quadrados. Método de combinação de incertezas independentes. |
 
 ## Abreviações
 
@@ -51,4 +43,5 @@ Esta seção define os termos e símbolos utilizados ao longo da documentação.
 | **LIMS** | *Laboratory Information Management System* |
 | **NC** | Não Conformidade |
 | **CAPA** | *Corrective and Preventive Action* — Ação Corretiva e Preventiva |
-| **DOF** | *Degrees of Freedom* — Graus de Liberdade |
+| **RSS** | *Root Sum of Squares* — raiz da soma dos quadrados. Método de combinação de incertezas independentes. |
+| **OS** | Ordem de Serviço |

@@ -1,58 +1,48 @@
 ---
-title: Introdução e Escopo
-description: Documentação técnica da plataforma CalibraFácil — sistema de gestão laboratorial conforme ISO/IEC 17025.
+title: Bem-vindo ao CalibraFácil
+description: Documentação da plataforma CalibraFácil — sistema de gestão laboratorial (LIMS) para laboratórios de calibração conforme ISO/IEC 17025.
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Objetivo
+## O que é o CalibraFácil?
 
-Esta documentação técnica descreve os fundamentos matemáticos, a arquitetura de software e os mecanismos de conformidade da plataforma **CalibraFácil** — um sistema de gestão laboratorial (LIMS) projetado para laboratórios de calibração acreditados conforme a **ISO/IEC 17025:2017** e requisitos da **RBC/Inmetro**.
+O **CalibraFácil** é uma plataforma de gestão laboratorial (LIMS) desenvolvida para laboratórios de calibração que buscam conformidade com a **ISO/IEC 17025:2017** e os requisitos da **RBC/Inmetro**.
 
-O objetivo principal é fornecer evidência documentada, auditável e rastreável de que os cálculos de incerteza realizados pela plataforma estão em conformidade com o **GUM (JCGM 100:2008)**.
+Com o CalibraFácil, seu laboratório gerencia todo o ciclo de calibração — desde o recebimento do instrumento até a emissão do certificado com assinatura digital — em uma única plataforma.
 
-## Público-Alvo
-
-- **Responsáveis técnicos** de laboratórios de calibração
-- **Gerentes da qualidade** responsáveis pelo sistema de gestão
-- **Auditores** internos e externos (Inmetro, CGCRE, organismos de acreditação)
-- **Desenvolvedores** que mantêm ou estendem a plataforma
-
-## Escopo do Sistema
-
-O CalibraFácil abrange o ciclo completo de gestão laboratorial:
+## O que você pode fazer
 
 <CardGrid>
   <Card title="Ordens de Serviço" icon="document">
-    Recebimento, triagem e acompanhamento de instrumentos para calibração.
+    Receba, acompanhe e gerencie instrumentos para calibração com rastreabilidade completa em cada etapa.
   </Card>
-  <Card title="Cálculos de Incerteza" icon="approve-check">
-    Motor matemático conforme GUM com rastreabilidade completa de cada cálculo.
+  <Card title="Calibração com Incerteza" icon="approve-check">
+    Execute calibrações com cálculos de incerteza automáticos conforme o GUM (JCGM 100:2008).
   </Card>
-  <Card title="Certificados" icon="star">
-    Geração automática de certificados de calibração com assinatura digital ICP-Brasil.
+  <Card title="Certificados Digitais" icon="star">
+    Gere certificados de calibração em PDF com assinatura digital ICP-Brasil e verificação pública por QR code.
   </Card>
-  <Card title="Conformidade" icon="warning">
-    Gestão de não conformidades (NC) e ações corretivas (CAPA) conforme ISO 17025.
+  <Card title="Gestão da Qualidade" icon="warning">
+    Registre não conformidades (NC) e ações corretivas (CAPA) com fluxos de trabalho integrados.
   </Card>
 </CardGrid>
 
-## Estrutura deste Documento
+## Para quem é esta documentação?
+
+- **Técnicos de calibração** que executam medições e preenchem ordens de serviço
+- **Responsáveis técnicos** que aprovam certificados e configuram métodos de calibração
+- **Gerentes da qualidade** que acompanham NCs, CAPAs e indicadores
+- **Clientes** que acessam o portal para consultar certificados e acompanhar serviços
+
+## Por onde começar
 
 | Seção | Conteúdo |
 | :--- | :--- |
-| [Referências Normativas](/referencias-normativas) | Documentos normativos referenciados |
-| [Definições e Terminologia](/definicoes) | Termos técnicos e símbolos utilizados |
-| [Visão Geral do Sistema](/visao-geral) | Arquitetura, tecnologias e fluxo de dados |
+| [Visão Geral da Plataforma](/visao-geral) | Conheça os módulos e funcionalidades do CalibraFácil |
 | [Guia do Usuário](/guia/painel) | Painel, clientes, ativos, padrões, serviços, ordens de serviço, qualidade e configurações |
-| [Portal do Cliente](/portal) | Guia do portal de acesso para clientes |
-| [Métodos de Calibração](/metodos) | Guia para criação de métodos: campos, fórmulas, critérios e ciclo de vida |
-| [Motor Matemático](/motor-matematico) | Fórmulas, metodologia GUM e validação |
-| [Rastreabilidade ISO 17025](/rastreabilidade-iso17025) | Mapeamento de cláusulas e evidências |
-| [Histórico de Alterações](/historico-alteracoes) | Registro de versões e modificações |
-
-## Convenções
-
-- Fórmulas matemáticas são apresentadas em notação LaTeX e correspondem à implementação no código-fonte do pacote `@calibra-facil/math-engine`.
-- Referências a cláusulas normativas seguem o formato **ISO 17025:2017, Cláusula X.Y**.
-- Valores numéricos utilizam vírgula como separador decimal no texto e ponto no código-fonte, conforme convenção brasileira e de programação, respectivamente.
+| [Portal do Cliente](/portal) | Guia de acesso para clientes do laboratório |
+| [Métodos de Calibração](/metodos) | Como criar e gerenciar métodos: campos, fórmulas, critérios e incerteza |
+| [Conformidade ISO 17025](/rastreabilidade-iso17025) | Como o CalibraFácil apoia a conformidade com a norma |
+| [Cálculos de Incerteza](/motor-matematico) | Entenda como a incerteza de medição é calculada |
+| [Glossário](/definicoes) | Termos e definições utilizados na plataforma |
