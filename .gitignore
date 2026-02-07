@@ -27,6 +27,7 @@ coverage
 
 # Build Outputs
 .next/
+.astro/
 out/
 build
 dist

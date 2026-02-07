@@ -17,6 +17,8 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { withCache, withInvalidation } from "../middleware/cache";
+import { CACHE_TTL } from "../lib/cache";
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
 
 /**
@@ -40,6 +42,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...withLabPermission({ service: ["read"] }),
+    withCache("services", CACHE_TTL.referenceData),
     zValidator("query", ListServicesQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -166,6 +169,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ service: ["create"] }),
+    withInvalidation("services"),
     zValidator("json", CreateServiceSchema),
     async (c) => {
       const member = c.get("member");
@@ -257,6 +261,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ service: ["update"] }),
+    withInvalidation("services"),
     zValidator("json", UpdateServiceSchema),
     async (c) => {
       const member = c.get("member");
@@ -417,7 +422,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Deactivate service (soft delete)
   // =========================================================================
-  .delete("/:id", ...withLabPermission({ service: ["delete"] }), async (c) => {
+  .delete("/:id", ...withLabPermission({ service: ["delete"] }), withInvalidation("services"), async (c) => {
     const member = c.get("member");
     const session = c.get("session");
     const id = parseInt(c.req.param("id"), 10);

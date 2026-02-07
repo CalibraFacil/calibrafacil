@@ -1,0 +1,106 @@
+---
+title: Execução e Medição
+description: Como executar uma calibração — seleção de padrões, preenchimento de dados, cálculos em tempo real e validação de critérios.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## Interface de Execução
+
+A tela de execução (`/dashboard/jobs/:id/execute`) é dividida em dois painéis:
+
+| Painel | Posição | Conteúdo |
+| :--- | :--- | :--- |
+| **Entrada de Dados** | Esquerda | Seleção de padrões + formulário de medição |
+| **Resultados** | Direita | Fórmulas calculadas + critérios de aceitação |
+
+Os resultados atualizam **em tempo real** conforme os dados são preenchidos — sem necessidade de clicar em botões para calcular.
+
+## Fluxo de Execução
+
+<Steps>
+
+1. **Selecionar padrões de referência**
+
+   A primeira seção lista os padrões de referência do laboratório. Marque os padrões utilizados nesta calibração.
+
+   Cada padrão mostra:
+   - Nome e número do certificado
+   - Incerteza e fator de abrangência
+   - Data de validade (com indicadores visuais de vencimento)
+
+   Os valores dos padrões selecionados são **congelados (snapshot)** neste momento, garantindo rastreabilidade.
+
+2. **Preencher os dados de medição**
+
+   O formulário é gerado automaticamente a partir do método de calibração vinculado à OS. Os tipos de campo possíveis são:
+
+   | Tipo | Descrição | Exemplo |
+   | :--- | :--- | :--- |
+   | **Número** | Valor numérico com unidade | Leitura: 10,005 mm |
+   | **Texto** | Texto livre | Observação: "Condição normal" |
+   | **Seleção** | Lista suspensa | Faixa: 0-100 g |
+   | **Tabela** | Múltiplas linhas de leituras | 5 repetições de medição |
+
+   Para campos do tipo **tabela**, adicione linhas conforme o número de leituras realizadas. Cada coluna pode ter tipo e unidade próprios.
+
+3. **Verificar resultados em tempo real**
+
+   No painel direito, acompanhe:
+
+   **Resultados das fórmulas:**
+   - Cada fórmula configurada no método é calculada automaticamente
+   - Exibe o rótulo, valor calculado e unidade
+   - Erros de cálculo são sinalizados (ex: divisão por zero, variável indefinida)
+
+   **Critérios de aceitação:**
+   - Cada critério é avaliado em tempo real
+   - Resultados codificados por cor:
+
+   | Cor | Significado |
+   | :--- | :--- |
+   | Verde | Critério atendido (aprovado) |
+   | Vermelho | Critério não atendido — **Erro** (reprova) |
+   | Amarelo | Critério não atendido — **Aviso** (apenas alerta) |
+
+4. **Salvar ou submeter**
+
+   Duas ações disponíveis:
+
+   | Ação | Efeito |
+   | :--- | :--- |
+   | **Salvar Rascunho** | Preserva os dados preenchidos. A OS permanece em **EM EXECUÇÃO**. Você pode continuar depois. |
+   | **Submeter para Revisão** | Envia a OS para aprovação. Status muda para **EM REVISÃO**. A edição é bloqueada. |
+
+</Steps>
+
+<Aside type="tip">
+  Salve rascunhos frequentemente durante calibrações longas. Todos os dados são preservados e você pode retomar de onde parou.
+</Aside>
+
+## Padrões de Referência e Rastreabilidade
+
+Ao selecionar padrões, o sistema cria um **snapshot** com os dados do momento:
+- Valor de referência e incerteza
+- Número do certificado e laboratório calibrador
+- Data de calibração e validade
+
+Esse snapshot é armazenado junto à OS e **não é afetado** por atualizações posteriores nos padrões (renovação de certificado, atualização de incerteza).
+
+<Aside type="caution">
+  Padrões **vencidos** ou com status **OUT_OF_TOLERANCE** são sinalizados com indicadores visuais na lista. O uso de padrões vencidos pode comprometer a validade da calibração.
+</Aside>
+
+## Cálculos e Motor Matemático
+
+As fórmulas são avaliadas pelo [motor matemático](/motor-matematico) com precisão BigNumber de 32 dígitos. O encadeamento funciona como descrito em [Fórmulas](/metodos/formulas):
+
+1. Campos de entrada são convertidos em variáveis
+2. Colunas de tabela são disponibilizadas como vetores (para `mean()`, `std()`, etc.)
+3. Fórmulas são executadas **na ordem definida no método**
+4. Cada fórmula pode referenciar campos de entrada e resultados de fórmulas anteriores
+5. Critérios de aceitação são avaliados com todas as variáveis disponíveis
+
+## Preenchimento Rápido com Valores Certificados
+
+Para padrões com **múltiplos valores certificados** (como jogos de pesos ou blocos padrão), o sistema oferece opções de preenchimento rápido. Ao selecionar um valor nominal na tabela, o campo correspondente pode ser preenchido automaticamente com o valor certificado do padrão.

@@ -1,0 +1,50 @@
+/*
+ * KaTeX SVG Fix for Starlight
+ *
+ * Starlight applies `height: auto` to all SVGs via:
+ *   .sl-markdown-content svg { height: auto; }
+ *
+ * KaTeX uses inline SVGs for square root symbols, and `height: auto`
+ * collapses them to invisible. This override restores correct rendering.
+ *
+ * Reference: https://github.com/withastro/starlight/issues/2511
+ */
+.katex-html svg {
+  height: inherit;
+}
+
+/*
+ * Print-friendly styles
+ *
+ * Hides navigation chrome and expands content area for print/PDF output.
+ * Triggered by browser Print or Ctrl+P.
+ */
+@media print {
+  nav,
+  header,
+  .right-sidebar,
+  starlight-toc,
+  .pagination-links {
+    display: none !important;
+  }
+
+  .main-pane {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 1rem !important;
+  }
+
+  /* Prevent math formulas from breaking across pages */
+  .katex-display {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Show link URLs in print */
+  .sl-markdown-content a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: #666;
+  }
+}

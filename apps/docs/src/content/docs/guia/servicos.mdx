@@ -1,0 +1,74 @@
+---
+title: Catálogo de Serviços
+description: Gestão do catálogo de serviços — configuração de preços, prazos e vinculação com métodos de calibração.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## O Que é um Serviço
+
+Um **serviço** é a oferta comercial do laboratório — o que o cliente contrata. Ele vincula três elementos:
+
+```
+Serviço → Método de Calibração (publicado) → Tipo de Ativo
+```
+
+Exemplo: o serviço "Calibração de Balança Analítica 0-220g" vincula o método "Calibração de Balança por Comparação" ao tipo de ativo "Balança Analítica", com preço de R$ 150,00 e prazo de 5 dias úteis.
+
+Acesse em **Painel → Serviços** (`/dashboard/services`).
+
+## Cadastro de Serviço
+
+<Steps>
+
+1. **Informações básicas**
+
+   - **Nome:** Nome do serviço (ex: "Calibração de Termômetro Digital -20 a 150°C")
+   - **Descrição:** Detalhamento opcional do serviço
+
+2. **Vinculações**
+
+   - **Método de calibração:** Selecione um método com status **PUBLISHED**
+   - **Tipo de ativo:** Preenchido automaticamente com base no método (se o método tiver tipo de ativo associado)
+
+3. **Condições comerciais**
+
+   - **Preço:** Valor em reais (R$). Deixe em branco para "Sob consulta"
+   - **Prazo (TAT):** Tempo de retorno em dias úteis
+
+4. **Salvar**
+
+</Steps>
+
+<Aside type="note">
+  Apenas métodos com status **PUBLISHED** podem ser vinculados a serviços. Se o método ainda está em rascunho, publique-o primeiro em [Métodos de Calibração](/metodos/ciclo-de-vida).
+</Aside>
+
+## Ativo e Inativo
+
+Serviços possuem um controle de ativação:
+
+| Estado | Efeito |
+| :--- | :--- |
+| **Ativo** | Aparece na lista ao criar ordens de serviço |
+| **Inativo** | Não aparece na criação de OS, mas OS existentes não são afetadas |
+
+<Aside type="caution">
+  Serviços **nunca são excluídos permanentemente** para preservar o histórico financeiro e a rastreabilidade de OS já emitidas. Use a desativação para remover da lista.
+</Aside>
+
+## Relação com Ordens de Serviço
+
+Ao criar uma [Ordem de Serviço](/guia/ordens), o técnico ou admin seleciona um serviço. A partir dessa seleção:
+
+1. O **método de calibração** vinculado define os campos, fórmulas e critérios
+2. O **tipo de ativo** filtra quais instrumentos do cliente podem ser selecionados
+3. O **prazo (TAT)** sugere automaticamente a data de vencimento da OS
+4. O **preço** é registrado para fins de cobrança
+
+## Filtros e Busca
+
+| Filtro | Descrição |
+| :--- | :--- |
+| **Busca** | Por nome do serviço |
+| **Status** | Ativo, Inativo ou Todos |

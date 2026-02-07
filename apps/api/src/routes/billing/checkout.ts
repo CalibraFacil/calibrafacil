@@ -12,6 +12,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
+import { withInvalidation } from "../../middleware/cache";
 import {
   getPlan,
   getPlanPrice,
@@ -144,6 +145,7 @@ checkoutRouter.post(
 checkoutRouter.post(
   "/credit-card",
   ...withLabPermission({ billing: ["update"] }),
+  withInvalidation("subscription"),
   zValidator("json", CreditCardCheckoutSchema),
   async (c) => {
     const input = c.req.valid("json");
@@ -261,6 +263,7 @@ checkoutRouter.post(
 checkoutRouter.post(
   "/pix",
   ...withLabPermission({ billing: ["update"] }),
+  withInvalidation("subscription"),
   zValidator("json", PixBoletoCheckoutSchema),
   async (c) => {
     const input = c.req.valid("json");
@@ -436,6 +439,7 @@ checkoutRouter.post(
 checkoutRouter.post(
   "/boleto",
   ...withLabPermission({ billing: ["update"] }),
+  withInvalidation("subscription"),
   zValidator("json", PixBoletoCheckoutSchema),
   async (c) => {
     const input = c.req.valid("json");
