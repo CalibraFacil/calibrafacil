@@ -654,7 +654,7 @@ function ExecuteJobPage() {
                 return val !== undefined && val !== ''
             })
         const hasNoErrors = validationResults.every(
-            (v) => v.passed || v.severity !== 'error' || v.error,
+            (v) => v.severity !== 'error' || v.passed === true,
         )
         return hasRequiredFields && hasNoErrors
     }, [job, formData, validationResults])
