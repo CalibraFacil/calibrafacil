@@ -11,6 +11,7 @@ import {
   type AuthVariables,
 } from "../../middleware/permission";
 import { getPlan, type PlanId } from "@calibra-facil/shared";
+import { withInvalidation } from "../../middleware/cache";
 
 // =============================================================================
 // SUBSCRIPTION ROUTES - Organization subscription management
@@ -67,7 +68,7 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE / - Cancel subscription
   // =========================================================================
-  .delete("/", ...withLabPermission({ billing: ["update"] }), async (c) => {
+  .delete("/", ...withLabPermission({ billing: ["update"] }), withInvalidation("subscription"), async (c) => {
     const memberData = c.get("member");
 
     const sub = await db.query.subscription.findFirst({

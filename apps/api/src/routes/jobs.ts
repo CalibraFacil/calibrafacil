@@ -38,6 +38,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { requirePlanLimit } from "../middleware/tier-guard";
+import { withInvalidation } from "../middleware/cache";
 import { eq, and, ilike, desc, count, lte, gte, inArray } from "drizzle-orm";
 import {
   createR2Client,
@@ -360,6 +361,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     "/",
     ...withLabPermission({ calibration: ["create"] }),
     requirePlanLimit("certificates"), // Check plan limit before creating job
+    withInvalidation("jobs"),
     zValidator("json", CreateJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -568,6 +570,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ calibration: ["update"] }),
+    withInvalidation("jobs"),
     zValidator("json", UpdateJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -693,6 +696,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/assign",
     ...withLabPermission({ calibration: ["update"] }),
+    withInvalidation("jobs"),
     zValidator("json", AssignTechnicianSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -780,6 +784,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/submit",
     ...withLabPermission({ calibration: ["submit"] }),
+    withInvalidation("jobs"),
     zValidator("json", SubmitForReviewSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -858,6 +863,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/execute",
     ...withLabPermission({ calibration: ["update"] }),
+    withInvalidation("jobs"),
     zValidator("json", ExecuteJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -1012,6 +1018,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/approve",
     ...withLabPermission({ calibration: ["approve"] }),
+    withInvalidation("jobs"),
     zValidator("json", ApproveJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -1107,6 +1114,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/reject",
     ...withLabPermission({ calibration: ["reject"] }),
+    withInvalidation("jobs"),
     zValidator("json", RejectJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -1186,6 +1194,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .delete(
     "/:id",
     ...withLabPermission({ calibration: ["delete"] }),
+    withInvalidation("jobs"),
     zValidator("json", CancelJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -1262,6 +1271,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/amend",
     ...withLabPermission({ calibration: ["approve"] }), // Only admin/owner can amend
+    withInvalidation("jobs"),
     zValidator("json", AmendJobSchema),
     async (c) => {
       const memberData = c.get("member");

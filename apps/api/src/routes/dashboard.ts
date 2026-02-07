@@ -13,6 +13,8 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { eq, and, count, sql, gte, lte, inArray, desc } from "drizzle-orm";
+import { withCache } from "../middleware/cache";
+import { CACHE_TTL } from "../lib/cache";
 
 /**
  * Dashboard Router - Aggregated metrics for ISO 17025 lab dashboard
@@ -29,7 +31,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /stats - Get all dashboard statistics
   // =========================================================================
-  .get("/stats", ...withLabPermission({ calibration: ["read"] }), async (c) => {
+  .get("/stats", ...withLabPermission({ calibration: ["read"] }), withCache("dashboard", CACHE_TTL.dashboard), async (c) => {
     const memberData = c.get("member");
     const now = new Date();
 

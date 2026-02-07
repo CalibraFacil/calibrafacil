@@ -30,6 +30,7 @@ interface Env {
   RESEND_FROM_EMAIL: string;
   RESEND_API_KEY: string;
   DATABASE_URL: string;
+  CACHE: KVNamespace;
   [key: string]: unknown;
 }
 

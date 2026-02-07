@@ -17,6 +17,8 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { withCache, withInvalidation } from "../middleware/cache";
+import { CACHE_TTL } from "../lib/cache";
 
 export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -25,6 +27,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...withLabPermission({ template: ["read"] }),
+    withCache("methods", CACHE_TTL.referenceData),
     zValidator("query", ListMethodsQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -167,6 +170,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ template: ["create"] }),
+    withInvalidation("methods"),
     zValidator("json", CreateMethodSchema),
     async (c) => {
       const member = c.get("member");
@@ -236,6 +240,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ template: ["update"] }),
+    withInvalidation("methods"),
     zValidator("json", UpdateMethodSchema),
     async (c) => {
       const member = c.get("member");
@@ -374,6 +379,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/publish",
     ...withLabPermission({ template: ["publish"] }),
+    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -464,6 +470,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/archive",
     ...withLabPermission({ template: ["update"] }),
+    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -528,6 +535,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/new-version",
     ...withLabPermission({ template: ["create"] }),
+    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -649,7 +657,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Delete a DRAFT method only
   // =========================================================================
-  .delete("/:id", ...withLabPermission({ template: ["delete"] }), async (c) => {
+  .delete("/:id", ...withLabPermission({ template: ["delete"] }), withInvalidation("methods"), async (c) => {
     const member = c.get("member");
     const id = parseInt(c.req.param("id"), 10);
 
