@@ -25,9 +25,6 @@ type CommandPaletteContextType = {
   pages: Array<string>
   setPages: React.Dispatch<React.SetStateAction<Array<string>>>
   activePage: string
-  // Dialog states for nested dialogs
-  environmentalDialogOpen: boolean
-  setEnvironmentalDialogOpen: (open: boolean) => void
 }
 
 const CommandPaletteContext =
@@ -53,8 +50,6 @@ export function CommandPaletteProvider({
   const [contextActionsRegistry, setContextActionsRegistry] = React.useState<
     Array<ContextActionsConfig>
   >([])
-  const [environmentalDialogOpen, setEnvironmentalDialogOpen] =
-    React.useState(false)
   const location = useLocation()
 
   const activePage = pages[pages.length - 1] ?? 'root'
@@ -110,8 +105,6 @@ export function CommandPaletteProvider({
         pages,
         setPages,
         activePage,
-        environmentalDialogOpen,
-        setEnvironmentalDialogOpen,
       }}
     >
       {children}

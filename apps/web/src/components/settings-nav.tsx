@@ -9,6 +9,7 @@ import {
   UserIcon,
   PenTool01Icon,
   Certificate01Icon,
+  ThermometerIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
@@ -48,6 +49,12 @@ const settingsNavItems: Array<SettingsNavItem> = [
     label: 'Certificados ICP',
     href: '/dashboard/settings/certificates',
     icon: <HugeiconsIcon icon={Certificate01Icon} className="size-4" />,
+  },
+  {
+    value: 'environment',
+    label: 'Ambiente',
+    href: '/dashboard/settings/environment',
+    icon: <HugeiconsIcon icon={ThermometerIcon} className="size-4" />,
   },
   {
     value: 'security',

@@ -719,6 +719,7 @@ export type SubmitForReviewInput = z.infer<typeof SubmitForReviewSchema>;
  */
 export const ApproveJobSchema = z.object({
   reason: z.string().optional(), // Optional approval notes
+  environmentalJustification: z.string().optional(), // Required if env conditions out of limits
 });
 
 export type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
@@ -773,6 +774,35 @@ export const StandardSnapshotSchema = z.object({
 export type StandardSnapshot = z.infer<typeof StandardSnapshotSchema>;
 
 /**
+ * Environmental data input - ISO 17025:2017 Clause 7.1.2
+ * Captured during job execution for environmental conditions monitoring
+ */
+export const EnvironmentalDataSchema = z.object({
+  temperature: z.number().nullable(),
+  humidity: z.number().nullable(),
+  pressure: z.number().nullable(),
+});
+
+export type EnvironmentalDataInput = z.infer<typeof EnvironmentalDataSchema>;
+
+/**
+ * Environmental limits configuration - per org or per asset type
+ */
+export const EnvironmentalLimitsSchema = z.object({
+  assetTypeId: z.number().nullable(),
+  temperatureMin: z.number().nullable(),
+  temperatureMax: z.number().nullable(),
+  humidityMin: z.number().nullable(),
+  humidityMax: z.number().nullable(),
+  pressureMin: z.number().nullable(),
+  pressureMax: z.number().nullable(),
+});
+
+export type EnvironmentalLimitsInput = z.infer<
+  typeof EnvironmentalLimitsSchema
+>;
+
+/**
  * Schema for executing a job (saving worksheet data)
  * Includes selected reference standards for ISO 17025 traceability
  */
@@ -780,6 +810,7 @@ export const ExecuteJobSchema = z.object({
   selectedStandardIds: z.array(z.number()).optional(),
   data: z.record(z.string(), z.unknown()),
   results: z.record(z.string(), z.unknown()).optional(),
+  environment: EnvironmentalDataSchema.optional(),
 });
 
 export type ExecuteJobInput = z.infer<typeof ExecuteJobSchema>;

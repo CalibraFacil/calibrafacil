@@ -11,8 +11,11 @@ import {
   referenceStandard,
   user,
   member,
+  environmentalLimits,
   type MethodSnapshot,
   type StandardSnapshot,
+  type EnvironmentalSnapshot,
+  type EnvironmentalLimitsSnapshot,
 } from "@calibra-facil/db/schema";
 import {
   notifyJobSubmittedForReview,
@@ -39,7 +42,7 @@ import {
 } from "../middleware/permission";
 import { requirePlanLimit } from "../middleware/tier-guard";
 import { withInvalidation } from "../middleware/cache";
-import { eq, and, ilike, desc, count, lte, gte, inArray } from "drizzle-orm";
+import { eq, and, ilike, desc, count, lte, gte, inArray, isNull, or } from "drizzle-orm";
 import {
   createR2Client,
   generatePresignedUrl,
@@ -51,6 +54,41 @@ import { alias } from "drizzle-orm/pg-core";
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
+
+/**
+ * Check if environmental readings are within configured limits.
+ */
+function checkEnvironmentWithinLimits(
+  env: { temperature: number | null; humidity: number | null; pressure: number | null },
+  limits: EnvironmentalLimitsSnapshot | null,
+): boolean {
+  if (!limits) return true; // No limits configured = always within
+  if (
+    limits.temperature &&
+    env.temperature != null &&
+    (env.temperature < limits.temperature.min ||
+      env.temperature > limits.temperature.max)
+  ) {
+    return false;
+  }
+  if (
+    limits.humidity &&
+    env.humidity != null &&
+    (env.humidity < limits.humidity.min ||
+      env.humidity > limits.humidity.max)
+  ) {
+    return false;
+  }
+  if (
+    limits.pressure &&
+    env.pressure != null &&
+    (env.pressure < limits.pressure.min ||
+      env.pressure > limits.pressure.max)
+  ) {
+    return false;
+  }
+  return true;
+}
 
 /**
  * Generates a unique job ID for the organization.
@@ -281,6 +319,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         data: calibrationJob.data,
         results: calibrationJob.results,
         standardsSnapshot: calibrationJob.standardsSnapshot,
+        environmentalSnapshot: calibrationJob.environmentalSnapshot,
         certificateUrl: calibrationJob.certificateUrl,
         labelUrl: calibrationJob.labelUrl,
         methodSnapshot: calibrationJob.methodSnapshot,
@@ -305,6 +344,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         assetId: calibrationJob.assetId,
         assetName: asset.name,
         assetTag: asset.tag,
+        assetTypeId: asset.assetTypeId,
         assetSerialNumber: asset.serialNumber,
         assetManufacturer: asset.manufacturer,
         assetModel: asset.model,
@@ -843,6 +883,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
+        reason: existing.environmentalSnapshot &&
+          !existing.environmentalSnapshot.withinLimits
+          ? "Submetido com condições ambientais fora dos limites"
+          : undefined,
       });
 
       // Send notifications to admins/owners (fire and forget)
@@ -970,6 +1014,89 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         }));
       }
 
+      // Build environmental snapshot if environment data was provided
+      let environmentalSnapshot: EnvironmentalSnapshot | null =
+        existing.environmentalSnapshot;
+      if (input.environment) {
+        // Look up the asset's assetTypeId
+        const [jobAsset] = await db
+          .select({ assetTypeId: asset.assetTypeId })
+          .from(asset)
+          .where(eq(asset.id, existing.assetId))
+          .limit(1);
+
+        // Fetch limits: asset-type-specific first, then org default
+        let frozenLimits: EnvironmentalLimitsSnapshot | null = null;
+        if (jobAsset) {
+          const limits = await db
+            .select()
+            .from(environmentalLimits)
+            .where(
+              and(
+                eq(
+                  environmentalLimits.organizationId,
+                  memberData.organizationId,
+                ),
+                or(
+                  eq(environmentalLimits.assetTypeId, jobAsset.assetTypeId),
+                  isNull(environmentalLimits.assetTypeId),
+                ),
+              ),
+            )
+            .orderBy(desc(environmentalLimits.assetTypeId)); // non-null first
+
+          const effectiveLimits = limits[0] ?? null;
+          if (effectiveLimits) {
+            frozenLimits = {
+              ...(effectiveLimits.temperatureMin != null &&
+              effectiveLimits.temperatureMax != null
+                ? {
+                    temperature: {
+                      min: effectiveLimits.temperatureMin,
+                      max: effectiveLimits.temperatureMax,
+                    },
+                  }
+                : {}),
+              ...(effectiveLimits.humidityMin != null &&
+              effectiveLimits.humidityMax != null
+                ? {
+                    humidity: {
+                      min: effectiveLimits.humidityMin,
+                      max: effectiveLimits.humidityMax,
+                    },
+                  }
+                : {}),
+              ...(effectiveLimits.pressureMin != null &&
+              effectiveLimits.pressureMax != null
+                ? {
+                    pressure: {
+                      min: effectiveLimits.pressureMin,
+                      max: effectiveLimits.pressureMax,
+                    },
+                  }
+                : {}),
+            };
+          }
+        }
+
+        // Check if within limits
+        const withinLimits = checkEnvironmentWithinLimits(
+          input.environment,
+          frozenLimits,
+        );
+
+        environmentalSnapshot = {
+          temperature: input.environment.temperature,
+          humidity: input.environment.humidity,
+          pressure: input.environment.pressure,
+          recordedAt: new Date().toISOString(),
+          recordedBy: session.user.id,
+          limits: frozenLimits,
+          withinLimits,
+          outOfLimitsJustification: null,
+        };
+      }
+
       // Determine new status
       const newStatus =
         existing.status === "DRAFT" ? "IN_PROGRESS" : existing.status;
@@ -981,6 +1108,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           data: input.data,
           results: input.results || null,
           standardsSnapshot: standardsSnapshot || existing.standardsSnapshot,
+          environmentalSnapshot:
+            environmentalSnapshot || existing.environmentalSnapshot,
           status: newStatus,
         })
         .where(eq(calibrationJob.id, id))
@@ -998,6 +1127,12 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           data: { old: existing.data, new: input.data },
           standardsSnapshot: standardsSnapshot
             ? { old: existing.standardsSnapshot, new: standardsSnapshot }
+            : undefined,
+          environmentalSnapshot: environmentalSnapshot
+            ? {
+                old: existing.environmentalSnapshot,
+                new: environmentalSnapshot,
+              }
             : undefined,
         },
         performedBy: session.user.id,
@@ -1054,6 +1189,40 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           },
           400,
         );
+      }
+
+      // Check environmental conditions - block approval if out of limits without justification
+      if (
+        existing.environmentalSnapshot &&
+        !existing.environmentalSnapshot.withinLimits &&
+        !existing.environmentalSnapshot.outOfLimitsJustification &&
+        !input.environmentalJustification
+      ) {
+        return c.json(
+          {
+            error:
+              "Condições ambientais fora dos limites. Forneça uma justificativa para aprovar.",
+            environmentalSnapshot: existing.environmentalSnapshot,
+          },
+          400,
+        );
+      }
+
+      // Save environmental justification if provided
+      if (
+        input.environmentalJustification &&
+        existing.environmentalSnapshot &&
+        !existing.environmentalSnapshot.withinLimits
+      ) {
+        await db
+          .update(calibrationJob)
+          .set({
+            environmentalSnapshot: {
+              ...existing.environmentalSnapshot,
+              outOfLimitsJustification: input.environmentalJustification,
+            },
+          })
+          .where(eq(calibrationJob.id, id));
       }
 
       // Update job status to GENERATING_PDF and set approver info

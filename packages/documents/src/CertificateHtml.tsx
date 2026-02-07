@@ -60,10 +60,26 @@ export type StandardSnapshot = {
     certifiedValues?: CertifiedValue[] | null;
 };
 
+export type EnvironmentalSnapshot = {
+    temperature: number | null;
+    humidity: number | null;
+    pressure: number | null;
+    recordedAt: string;
+    recordedBy: string;
+    limits: {
+        temperature?: { min: number; max: number };
+        humidity?: { min: number; max: number };
+        pressure?: { min: number; max: number };
+    } | null;
+    withinLimits: boolean;
+    outOfLimitsJustification: string | null;
+};
+
 export type JobData = {
     jobId: string;
     performedAt: Date | null;
     approvedAt: Date | null;
+    environmentalSnapshot?: EnvironmentalSnapshot | null;
     lab: {
         name: string;
         cnpj?: string | null;
@@ -443,13 +459,10 @@ export function CertificateHtml({ job }: { job: JobData }) {
     const tableFields = dataFields.filter((f) => f.type === "table");
     const scalarFields = dataFields.filter((f) => f.type !== "table");
 
-    // Get environment data (look for common keys)
-    const envTemperature =
-        (job.data?.temp_start as number) ??
-        (job.data?.temperature as number) ??
-        (job.data?.temperatura as number);
-    const envHumidity =
-        (job.data?.humidity as number) ?? (job.data?.umidade as number);
+    // Get environment data from structured snapshot
+    const envTemperature = job.environmentalSnapshot?.temperature ?? null;
+    const envHumidity = job.environmentalSnapshot?.humidity ?? null;
+    const envPressure = job.environmentalSnapshot?.pressure ?? null;
 
     // Build results with labels from formulas
     const resultEntries: Array<{ key: string; label: string; value: unknown; unit?: string }> = [];
@@ -618,11 +631,11 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     </div>
 
                     {/* Environment */}
-                    {(envTemperature !== undefined || envHumidity !== undefined) && (
+                    {(envTemperature != null || envHumidity != null || envPressure != null) && (
                         <div className="section">
                             <div className="section-title">Condições Ambientais</div>
                             <div className="info-grid">
-                                {envTemperature !== undefined && (
+                                {envTemperature != null && (
                                     <div className="info-row">
                                         <span className="info-label">Temperatura:</span>
                                         <span className="info-value">
@@ -630,11 +643,19 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                         </span>
                                     </div>
                                 )}
-                                {envHumidity !== undefined && (
+                                {envHumidity != null && (
                                     <div className="info-row">
                                         <span className="info-label">Umidade:</span>
                                         <span className="info-value">
                                             {formatNumber(envHumidity, 1)} %
+                                        </span>
+                                    </div>
+                                )}
+                                {envPressure != null && (
+                                    <div className="info-row">
+                                        <span className="info-label">Pressão:</span>
+                                        <span className="info-value">
+                                            {formatNumber(envPressure, 1)} hPa
                                         </span>
                                     </div>
                                 )}
