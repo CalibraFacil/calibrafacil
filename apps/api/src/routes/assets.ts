@@ -18,6 +18,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { withInvalidation } from "../middleware/cache";
 
 export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -26,6 +27,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ equipment: ["create"] }),
+    withInvalidation("assets"),
     zValidator("json", CreateAssetSchema),
     async (c) => {
       const input = c.req.valid("json");
@@ -330,6 +332,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ equipment: ["update"] }),
+    withInvalidation("assets"),
     zValidator("json", UpdateAssetSchema),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
@@ -458,6 +461,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   .delete(
     "/:id",
     ...withLabPermission({ equipment: ["delete"] }),
+    withInvalidation("assets"),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
       const session = c.get("session");

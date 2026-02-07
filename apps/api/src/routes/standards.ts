@@ -15,6 +15,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { withInvalidation } from "../middleware/cache";
 import { eq, and, or, ilike, desc, count, isNull, lte, gte } from "drizzle-orm";
 
 /**
@@ -185,6 +186,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ standard: ["create"] }),
+    withInvalidation("standards"),
     zValidator("json", CreateReferenceStandardSchema),
     async (c) => {
       const member = c.get("member");
@@ -240,6 +242,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ standard: ["update"] }),
+    withInvalidation("standards"),
     zValidator("json", UpdateReferenceStandardSchema),
     async (c) => {
       const member = c.get("member");
@@ -444,7 +447,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Soft delete reference standard
   // =========================================================================
-  .delete("/:id", ...withLabPermission({ standard: ["delete"] }), async (c) => {
+  .delete("/:id", ...withLabPermission({ standard: ["delete"] }), withInvalidation("standards"), async (c) => {
     const member = c.get("member");
     const session = c.get("session");
     const id = parseInt(c.req.param("id"), 10);
@@ -498,6 +501,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/renew",
     ...withLabPermission({ standard: ["renew"] }),
+    withInvalidation("standards"),
     zValidator("json", RenewCertificateSchema),
     async (c) => {
       const member = c.get("member");

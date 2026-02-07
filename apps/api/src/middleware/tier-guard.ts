@@ -15,8 +15,16 @@ import {
   type PlanId,
   type FeatureFlag,
   type PlanLimits,
+  type SubscriptionStatus,
 } from "@calibra-facil/shared";
 import type { AuthVariables } from "./permission";
+import {
+  kvGet,
+  kvPut,
+  subscriptionCacheKey,
+  usageCacheKey,
+  CACHE_TTL,
+} from "../lib/cache";
 
 // =============================================================================
 // TIER GUARD MIDDLEWARE
@@ -41,11 +49,10 @@ export type LimitResource = keyof PlanLimits;
 export function requirePlanLimit(resource: LimitResource) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
     const memberData = c.get("member");
+    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
 
-    // Get subscription
-    const sub = await db.query.subscription.findFirst({
-      where: eq(subscription.organizationId, memberData.organizationId),
-    });
+    // Get subscription (cached)
+    const sub = await getCachedSubscription(kv, memberData.organizationId);
 
     // Determine effective plan (FREE if no subscription)
     const planId: PlanId = sub?.planId as PlanId || "FREE";
@@ -68,8 +75,8 @@ export function requirePlanLimit(resource: LimitResource) {
     // Get plan limits
     const limit = getLimit(planId, resource);
 
-    // Get current usage
-    const usage = await getResourceUsage(memberData.organizationId, resource);
+    // Get current usage (cached)
+    const usage = await getCachedResourceUsage(kv, memberData.organizationId, resource);
 
     // Check if limit exceeded
     if (usage >= limit) {
@@ -109,11 +116,10 @@ export function requirePlanLimit(resource: LimitResource) {
 export function requireFeature(feature: FeatureFlag) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
     const memberData = c.get("member");
+    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
 
-    // Get subscription
-    const sub = await db.query.subscription.findFirst({
-      where: eq(subscription.organizationId, memberData.organizationId),
-    });
+    // Get subscription (cached)
+    const sub = await getCachedSubscription(kv, memberData.organizationId);
 
     // Determine effective plan (FREE if no subscription)
     const planId: PlanId = sub?.planId as PlanId || "FREE";
@@ -147,6 +153,71 @@ export function requireFeature(feature: FeatureFlag) {
 
     await next();
   });
+}
+
+// =============================================================================
+// CACHED LOOKUPS
+// =============================================================================
+
+interface CachedSubscription {
+  planId: string;
+  status: SubscriptionStatus;
+}
+
+/**
+ * Get subscription data with KV caching.
+ * Falls back to DB on cache miss or KV unavailability.
+ */
+async function getCachedSubscription(
+  kv: KVNamespace | undefined,
+  organizationId: string,
+): Promise<CachedSubscription | null> {
+  const cacheKey = subscriptionCacheKey(organizationId);
+
+  // Try cache first
+  const cached = await kvGet<CachedSubscription>(kv, cacheKey);
+  if (cached !== null) return cached;
+
+  // Cache miss — query DB
+  const sub = await db.query.subscription.findFirst({
+    where: eq(subscription.organizationId, organizationId),
+  });
+
+  if (!sub) {
+    // Cache the "no subscription" state too (avoids repeated DB misses)
+    await kvPut(kv, cacheKey, null, { ttl: CACHE_TTL.subscription });
+    return null;
+  }
+
+  const result: CachedSubscription = {
+    planId: sub.planId,
+    status: sub.status as SubscriptionStatus,
+  };
+
+  await kvPut(kv, cacheKey, result, { ttl: CACHE_TTL.subscription });
+  return result;
+}
+
+/**
+ * Get resource usage with KV caching.
+ * Falls back to DB on cache miss.
+ */
+async function getCachedResourceUsage(
+  kv: KVNamespace | undefined,
+  organizationId: string,
+  resource: LimitResource,
+): Promise<number> {
+  const cacheKey = usageCacheKey(organizationId, resource);
+
+  // Try cache first
+  const cached = await kvGet<number>(kv, cacheKey);
+  if (cached !== null) return cached;
+
+  // Cache miss — query DB
+  const usage = await getResourceUsage(organizationId, resource);
+
+  await kvPut(kv, cacheKey, usage, { ttl: CACHE_TTL.usage });
+  return usage;
 }
 
 // =============================================================================

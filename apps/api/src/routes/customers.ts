@@ -24,6 +24,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
+import { withInvalidation } from "../middleware/cache";
 
 /**
  * Generate a URL-friendly slug from a string
@@ -54,6 +55,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ client: ["create"] }),
+    withInvalidation("customers"),
     zValidator("json", CreateCustomerSchema),
     async (c) => {
       const input = c.req.valid("json");
@@ -233,6 +235,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ client: ["update"] }),
+    withInvalidation("customers"),
     zValidator("json", UpdateCustomerSchema),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
@@ -300,7 +303,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Delete customer
   // =========================================================================
-  .delete("/:id", ...withLabPermission({ client: ["delete"] }), async (c) => {
+  .delete("/:id", ...withLabPermission({ client: ["delete"] }), withInvalidation("customers"), async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     const session = c.get("session");
 

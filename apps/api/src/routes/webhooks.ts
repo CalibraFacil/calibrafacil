@@ -13,6 +13,7 @@ import type {
   AsaasSubscription,
 } from "../services/asaas/types";
 import { calculatePeriodEnd } from "../services/asaas";
+import { invalidateOnMutation } from "../lib/cache";
 
 // =============================================================================
 // WEBHOOK ROUTES - Handle Asaas webhook events
