@@ -1,5 +1,5 @@
 {
-  "id": "a19f0c16-725c-4f8e-b029-d2f2a38c9b21",
+  "id": "9b3bfbce-ecb1-4b00-9c53-84a519822a19",
   "prevId": "cc7a0928-a86e-48b9-b95f-82c92f025513",
   "version": "7",
   "dialect": "postgresql",
@@ -2137,27 +2137,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "env_limits_org_asset_type_uidx": {
-          "name": "env_limits_org_asset_type_uidx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "asset_type_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -2202,7 +2181,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "env_limits_org_asset_type_uidx": {
+          "name": "env_limits_org_asset_type_uidx",
+          "nullsNotDistinct": true,
+          "columns": [
+            "organization_id",
+            "asset_type_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

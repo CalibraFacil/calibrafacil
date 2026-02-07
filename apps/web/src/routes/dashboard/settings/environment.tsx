@@ -99,6 +99,7 @@ function EnvironmentSettingsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState<LimitFormState>(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [dialogMode, setDialogMode] = useState<'default' | 'override'>('default')
 
   // Fetch all limits
   const { data: limitsData, isLoading } = useQuery({
@@ -186,12 +187,14 @@ function EnvironmentSettingsPage() {
       pressureMax: limit.pressureMax?.toString() ?? '',
     })
     setEditingId(limit.id)
+    setDialogMode(limit.assetTypeId == null ? 'default' : 'override')
     setDialogOpen(true)
   }
 
   function openNewOverrideDialog() {
     setForm(emptyForm)
     setEditingId(null)
+    setDialogMode('override')
     setDialogOpen(true)
   }
 
@@ -201,6 +204,7 @@ function EnvironmentSettingsPage() {
     } else {
       setForm(emptyForm)
       setEditingId(null)
+      setDialogMode('default')
       setDialogOpen(true)
     }
   }
@@ -406,9 +410,8 @@ function EnvironmentSettingsPage() {
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* Asset type selector (only for new overrides, not for default) */}
-            {!editingId && !orgDefault && form.assetTypeId == null ? null : null}
-            {!editingId && (
+            {/* Asset type selector (only for new overrides, not for editing or defaults) */}
+            {dialogMode === 'override' && !editingId && (
               <Field>
                 <FieldLabel>Tipo de Equipamento</FieldLabel>
                 <Select

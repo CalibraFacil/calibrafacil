@@ -5,6 +5,7 @@ import {
   timestamp,
   boolean,
   index,
+  unique,
   uniqueIndex,
   serial,
   jsonb,
@@ -1334,10 +1335,9 @@ export const environmentalLimits = pgTable(
   },
   (table) => [
     index("env_limits_organization_id_idx").on(table.organizationId),
-    uniqueIndex("env_limits_org_asset_type_uidx").on(
-      table.organizationId,
-      table.assetTypeId,
-    ),
+    unique("env_limits_org_asset_type_uidx")
+      .on(table.organizationId, table.assetTypeId)
+      .nullsNotDistinct(),
   ],
 );
 
