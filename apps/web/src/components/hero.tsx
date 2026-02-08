@@ -1,120 +1,111 @@
-"use client";
+import { HugeiconsIcon } from '@hugeicons/react'
+import {
+  ArrowRight01Icon,
+  SecurityCheckIcon,
+  BookOpen01Icon,
+} from '@hugeicons/core-free-icons'
+import { motion } from 'motion/react'
 
-import React from 'react';
-import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight01Icon, CheckmarkCircle02Icon, FileIcon } from '@hugeicons/core-free-icons';
-import { motion } from 'motion/react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import FloatingLines from './floating-lines';
-import { Link } from '@tanstack/react-router';
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
-const Hero: React.FC = () => {
+export function Hero() {
+  return (
+    <section className="relative overflow-hidden pt-32 pb-16 md:pt-40 md:pb-24">
+      {/* Background grid */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 [mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_70%)]" />
+      </div>
 
-    return (
-        <section className="relative pt-32 pb-10 lg:pt-48 lg:pb-20 overflow-hidden min-h-[80vh] bg-white dark:bg-transparent">
-            {/* FloatingLines - only in dark mode */}
-            <div
-                className="absolute top-0 left-0 w-full pointer-events-none hidden dark:block"
-                style={{ height: '100%', minHeight: '600px', zIndex: 0 }}
+      {/* Gradient orbs */}
+      <div className="pointer-events-none absolute -top-40 left-1/2 size-[600px] -translate-x-1/2 rounded-full bg-primary/8 blur-[120px]" />
+      <div className="pointer-events-none absolute -right-20 top-20 size-[300px] rounded-full bg-chart-1/10 blur-[80px]" />
+
+      <div className="relative mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-3xl text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Badge variant="outline" className="mb-6 gap-2 px-3 py-1.5">
+              <HugeiconsIcon icon={SecurityCheckIcon} className="size-3.5 text-primary" />
+              <span className="text-xs">Projetado para conformidade ISO/IEC 17025</span>
+            </Badge>
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl"
+          >
+            Gestão de calibração{' '}
+            <span className="bg-gradient-to-r from-primary to-chart-1 bg-clip-text text-transparent">
+              simplificada
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg"
+          >
+            Plataforma completa para laboratórios de calibração. Gerencie ordens de
+            serviço, emita certificados com cálculo de incerteza conforme o GUM e
+            mantenha a rastreabilidade metrológica — tudo em um só lugar.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center"
+          >
+            <a
+              href="https://cal.com/calibrafacil/30min?user=calibrafacil"
+              target="_blank"
+              rel="noopener noreferrer"
             >
-                <FloatingLines
-                    linesGradient={['#3b82f6', '#06b6d4', '#8b5cf6']}
-                    enabledWaves={['top', 'middle', 'bottom']}
-                    lineCount={[10, 15, 20]}
-                    lineDistance={[8, 6, 4]}
-                    bendRadius={5.0}
-                    bendStrength={-0.5}
-                    interactive={true}
-                    parallax={true}
-                    mixBlendMode="normal"
-                />
+              <Button size="lg" className="text-sm">
+                Agendar Demonstração
+                <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
+              </Button>
+            </a>
+            <a
+              href="https://docs.calibrafacil.com"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="outline" size="lg" className="text-sm">
+                <HugeiconsIcon icon={BookOpen01Icon} data-icon="inline-start" />
+                Ver Documentação
+              </Button>
+            </a>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.5 }}
+            className="mt-12 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-muted-foreground"
+          >
+            <div className="flex items-center gap-2">
+              <div className="size-1.5 rounded-full bg-emerald-500" />
+              <span>Certificados digitais</span>
             </div>
-
-            {/* Dark mode vignette for text readability */}
-            <div
-                className="absolute inset-0 pointer-events-none hidden dark:block"
-                style={{
-                    zIndex: 1,
-                    background: 'radial-gradient(ellipse at center, rgba(2, 6, 23, 0.7) 0%, rgba(2, 6, 23, 0.4) 50%, transparent 80%)'
-                }}
-            />
-
-            {/* Bottom gradient fade */}
-            <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-white dark:from-slate-950 to-transparent" style={{ zIndex: 2 }} />
-
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative" style={{ zIndex: 10 }}>
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                    className="mb-6"
-                >
-                    <Badge variant="outline" className="gap-2 px-3 py-1 text-sm font-medium border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400">
-                        <span className="flex h-2 w-2 rounded-full bg-sky-500 animate-pulse"></span>
-                        Em conformidade com a ISO/IEC 17025:2017
-                    </Badge>
-                </motion.div>
-
-                <motion.h1
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.1 }}
-                    className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 dark:text-white mb-6"
-                >
-                    Gestão de Calibração <br className="hidden md:block" />
-                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-sky-600 via-cyan-500 to-indigo-600 dark:from-sky-300 dark:via-cyan-300 dark:to-indigo-300">Sem Complicações</span>
-                </motion.h1>
-
-                <motion.p
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                    className="max-w-3xl mx-auto text-lg md:text-xl text-slate-600 dark:text-slate-300 mb-10 leading-relaxed"
-                >
-                    O dashboard definitivo para laboratórios acreditados RBC/Inmetro.
-                    Automatize certificados, gerencie equipamentos e ofereça um portal
-                    premium para seus clientes.
-                </motion.p>
-
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    className="flex flex-col sm:flex-row items-center justify-center gap-4"
-                >
-                    <Button size="lg" className="h-14 px-8 text-base font-bold rounded-full hover:scale-105 transition-transform bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-slate-200" render={<Link to="/sign-in" className='inline-flex items-center' />}>
-                        Começar Agora
-                        <HugeiconsIcon icon={ArrowRight01Icon} className="ml-2" size={20} />
-                    </Button>
-                    <Button size="lg" variant="outline" className="text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 rounded-full h-14 px-8 text-base font-bold" render={<a href="https://docs.calibrafacil.com" className="inline-flex items-center" />}>
-                        <HugeiconsIcon icon={FileIcon} size={20} className="mr-2" />
-                        Ver Documentação
-                    </Button>
-                </motion.div>
-
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 1, delay: 0.5 }}
-                    className="mt-10 flex items-center justify-center gap-6 text-sm"
-                >
-                    <div className="flex items-center gap-2">
-                        <HugeiconsIcon icon={CheckmarkCircle02Icon} size={16} className="text-sky-500" />
-                        <span className="text-slate-600 dark:text-slate-300">Certificados Digitais</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <HugeiconsIcon icon={CheckmarkCircle02Icon} size={16} className="text-sky-500" />
-                        <span className="text-slate-600 dark:text-slate-300">Backup Automático</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <HugeiconsIcon icon={CheckmarkCircle02Icon} size={16} className="text-sky-500" />
-                        <span className="text-slate-600 dark:text-slate-300">Setup Rápido</span>
-                    </div>
-                </motion.div>
+            <div className="flex items-center gap-2">
+              <div className="size-1.5 rounded-full bg-emerald-500" />
+              <span>Cálculo GUM automático</span>
             </div>
-        </section>
-    );
-};
-
-export default Hero;
+            <div className="flex items-center gap-2">
+              <div className="size-1.5 rounded-full bg-emerald-500" />
+              <span>Portal do cliente</span>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  )
+}
