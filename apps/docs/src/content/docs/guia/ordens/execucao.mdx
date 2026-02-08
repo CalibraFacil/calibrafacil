@@ -20,7 +20,15 @@ Os resultados atualizam **em tempo real** conforme os dados são preenchidos —
 
 <Steps>
 
-1. **Selecionar padrões de referência**
+1. **Registrar condições ambientais**
+
+   A primeira seção permite registrar as condições ambientais no momento da calibração: **temperatura** (°C), **umidade relativa** (%RH) e **pressão atmosférica** (hPa).
+
+   Se houver [limites ambientais configurados](/guia/monitoramento-ambiental), o sistema valida os valores em tempo real e exibe alertas caso estejam fora da faixa aceitável.
+
+   Os valores registrados ficam disponíveis como variáveis nas fórmulas (`env_temperature`, `env_humidity`, `env_pressure`) e são congelados em um snapshot imutável ao submeter a OS.
+
+2. **Selecionar padrões de referência**
 
    A primeira seção lista os padrões de referência do laboratório. Marque os padrões utilizados nesta calibração.
 
@@ -91,15 +99,28 @@ Esse snapshot é armazenado junto à OS e **não é afetado** por atualizações
   Padrões **vencidos** ou com status **OUT_OF_TOLERANCE** são sinalizados com indicadores visuais na lista. O uso de padrões vencidos pode comprometer a validade da calibração.
 </Aside>
 
+## Condições Ambientais e Rastreabilidade
+
+Ao submeter a OS, o sistema cria um **snapshot ambiental** contendo:
+- Valores registrados (temperatura, umidade, pressão)
+- Limites efetivos no momento do registro (padrão da organização ou específicos do tipo de equipamento)
+- Indicação se as condições estavam dentro dos limites
+- Identificação do técnico e data/hora
+
+Se os valores estiverem fora dos limites, a [aprovação da OS](/guia/ordens/aprovacao) exigirá uma justificativa técnica obrigatória.
+
+Para detalhes sobre configuração de limites, consulte [Monitoramento Ambiental](/guia/monitoramento-ambiental).
+
 ## Cálculos e Motor Matemático
 
 As fórmulas são avaliadas pelo [motor matemático](/motor-matematico) com precisão BigNumber de 32 dígitos. O encadeamento funciona como descrito em [Fórmulas](/metodos/formulas):
 
 1. Campos de entrada são convertidos em variáveis
-2. Colunas de tabela são disponibilizadas como vetores (para `mean()`, `std()`, etc.)
-3. Fórmulas são executadas **na ordem definida no método**
-4. Cada fórmula pode referenciar campos de entrada e resultados de fórmulas anteriores
-5. Critérios de aceitação são avaliados com todas as variáveis disponíveis
+2. Variáveis ambientais (`env_temperature`, `env_humidity`, `env_pressure`) são injetadas automaticamente
+3. Colunas de tabela são disponibilizadas como vetores (para `mean()`, `std()`, etc.)
+4. Fórmulas são executadas **na ordem definida no método**
+5. Cada fórmula pode referenciar campos de entrada, variáveis ambientais e resultados de fórmulas anteriores
+6. Critérios de aceitação são avaliados com todas as variáveis disponíveis
 
 ## Preenchimento Rápido com Valores Certificados
 

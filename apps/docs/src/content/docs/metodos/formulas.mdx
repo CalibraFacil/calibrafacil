@@ -82,6 +82,20 @@ A chave de saída segue as mesmas [regras de nomenclatura](/metodos/campos-de-en
 | `pi` | $\pi \approx 3{,}14159$ |
 | `e` | $e \approx 2{,}71828$ |
 
+### Variáveis Ambientais
+
+Quando o técnico registra as condições ambientais durante a execução, três variáveis são injetadas automaticamente no contexto de cálculo:
+
+| Variável | Descrição | Unidade |
+| :--- | :--- | :--- |
+| `env_temperature` | Temperatura ambiente registrada | °C |
+| `env_humidity` | Umidade relativa registrada | %RH |
+| `env_pressure` | Pressão atmosférica registrada | hPa |
+
+Essas variáveis podem ser usadas em qualquer expressão de fórmula para incorporar as condições ambientais nos cálculos de incerteza ou correção. Se o técnico não preencher um campo ambiental, a variável correspondente não estará disponível.
+
+Para mais detalhes sobre configuração de limites, consulte [Monitoramento Ambiental](/guia/monitoramento-ambiental).
+
 ### Referenciando Variáveis
 
 Nas expressões, use diretamente a **chave** definida nos campos ou em fórmulas anteriores:
@@ -89,6 +103,9 @@ Nas expressões, use diretamente a **chave** definida nos campos ou em fórmulas
 ```
 // Campos de entrada
 temp_instrumento - temp_padrao
+
+// Variáveis ambientais
+env_temperature - 20
 
 // Coluna de tabela (formato: nomeTabela_nomeColuna)
 mean(leituras_valor)

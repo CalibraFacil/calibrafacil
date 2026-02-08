@@ -18,6 +18,7 @@ Quando o técnico submete a OS para revisão, o responsável técnico (admin ou 
 A página de detalhes da OS em status **EM REVISÃO** exibe:
 
 - Informações do cliente e do instrumento
+- **Condições ambientais** registradas (temperatura, umidade, pressão) com indicação se estavam dentro dos limites
 - Padrões de referência utilizados (snapshot)
 - Dados de medição preenchidos pelo técnico
 - Resultados de todas as fórmulas calculadas
@@ -29,13 +30,19 @@ A página de detalhes da OS em status **EM REVISÃO** exibe:
 <Steps>
 
 1. Revise todos os dados e resultados
-2. Clique em **Aprovar**
-3. Confirme a aprovação no diálogo
-4. O status muda para **GERANDO PDF**
-5. O certificado é gerado automaticamente em segundo plano
-6. Após a geração, o status muda para **APROVADO**
+2. Verifique as **condições ambientais** — se estiverem fora dos limites, será necessário fornecer uma justificativa técnica
+3. Clique em **Aprovar**
+4. Se houver alerta ambiental, preencha a **justificativa obrigatória** explicando por que o resultado é válido apesar das condições
+5. Confirme a aprovação no diálogo
+6. O status muda para **GERANDO PDF**
+7. O certificado é gerado automaticamente em segundo plano
+8. Após a geração, o status muda para **APROVADO**
 
 </Steps>
+
+<Aside type="caution">
+  Se as condições ambientais estiverem fora dos limites configurados, a aprovação é **bloqueada** até que uma justificativa técnica seja preenchida. A justificativa é registrada no snapshot ambiental para fins de auditoria. Para mais detalhes, consulte [Monitoramento Ambiental](/guia/monitoramento-ambiental).
+</Aside>
 
 ### Rejeitar
 

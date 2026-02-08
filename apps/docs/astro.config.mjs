@@ -68,6 +68,10 @@ export default defineConfig({
               ],
             },
             {
+              label: "Monitoramento Ambiental",
+              slug: "guia/monitoramento-ambiental",
+            },
+            {
               label: "Configurações e Permissões",
               slug: "guia/configuracoes",
             },
