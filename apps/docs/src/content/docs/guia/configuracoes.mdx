@@ -17,6 +17,7 @@ Acesse em **Painel → Configurações** (`/dashboard/settings`). As configuraç
 | **Organização** | Nome, CNPJ, endereço, dados de acreditação | Admin, Owner |
 | **Certificados** | Templates de certificado, logo, marca | Admin, Owner |
 | **Assinatura** | Imagem da assinatura manuscrita | Admin, Owner |
+| **Condições Ambientais** | Limites de temperatura, umidade e pressão | Admin, Owner |
 | **Notificações** | Preferências de email e notificações in-app | Todos |
 | **Cobrança** | Plano de assinatura, pagamentos, faturas | Owner |
 | **Zona de Perigo** | Exportação de dados, exclusão da conta/organização | Owner |
@@ -87,6 +88,17 @@ O certificado digital é usado na [aprovação de ordens de serviço](/guia/orde
 Na aba **Assinatura**, faça upload da imagem da assinatura manuscrita:
 - Formato: PNG com fundo transparente (recomendado)
 - A imagem aparece no certificado PDF junto à assinatura digital
+
+## Condições Ambientais
+
+Na aba **Condições Ambientais**, configure os limites aceitáveis de temperatura, umidade e pressão para as calibrações:
+
+- **Limites padrão:** Aplicados a todas as calibrações da organização
+- **Limites por tipo de equipamento:** Exceções que sobrescrevem os limites padrão para tipos de instrumentos com requisitos específicos
+
+Os limites configurados são validados automaticamente durante a execução das calibrações e registrados em um snapshot imutável para rastreabilidade.
+
+Para detalhes completos sobre configuração, registro e fluxo de aprovação, consulte [Monitoramento Ambiental](/guia/monitoramento-ambiental).
 
 ## Notificações
 
