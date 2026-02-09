@@ -111,6 +111,10 @@ export default defineConfig({
               slug: "rastreabilidade-iso17025",
             },
             {
+              label: "Validação do Motor Matemático",
+              slug: "validacao-motor-matematico",
+            },
+            {
               label: "Cálculos de Incerteza",
               slug: "motor-matematico",
             },
