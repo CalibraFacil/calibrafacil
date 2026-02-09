@@ -263,7 +263,13 @@ export type ListAssetsQuery = z.infer<typeof ListAssetsQuerySchema>;
 /**
  * Method status values
  */
-export const MethodStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]);
+export const MethodStatusSchema = z.enum([
+  "DRAFT",
+  "PENDING_APPROVAL",
+  "TECHNICAL_REVIEWED",
+  "PUBLISHED",
+  "ARCHIVED",
+]);
 export type MethodStatus = z.infer<typeof MethodStatusSchema>;
 
 /**
@@ -413,6 +419,17 @@ export const ListMethodsQuerySchema = z.object({
 });
 
 export type ListMethodsQuery = z.infer<typeof ListMethodsQuerySchema>;
+
+/**
+ * Schema for returning a method to draft with optional reason
+ */
+export const ReturnMethodToDraftSchema = z.object({
+  reason: z.string().optional(),
+});
+
+export type ReturnMethodToDraftInput = z.infer<
+  typeof ReturnMethodToDraftSchema
+>;
 
 // =============================================================================
 // SERVICE SCHEMAS - Commercial Service Catalog (Product Registry)

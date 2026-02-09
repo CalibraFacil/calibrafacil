@@ -20,6 +20,8 @@ interface MethodBuilderProps {
 
 const statusLabels: Record<MethodData['status'], string> = {
   DRAFT: 'Rascunho',
+  PENDING_APPROVAL: 'Em aprovação',
+  TECHNICAL_REVIEWED: 'Revisão técnica',
   PUBLISHED: 'Publicado',
   ARCHIVED: 'Arquivado',
 }
@@ -29,6 +31,8 @@ const statusVariants: Record<
   'default' | 'secondary' | 'outline'
 > = {
   DRAFT: 'secondary',
+  PENDING_APPROVAL: 'outline',
+  TECHNICAL_REVIEWED: 'outline',
   PUBLISHED: 'default',
   ARCHIVED: 'outline',
 }
@@ -113,7 +117,7 @@ export function MethodBuilder({
                   onClick={handlePublish}
                   disabled={isPublishing || !canPublish}
                 >
-                  {isPublishing ? 'Publicando...' : 'Publicar'}
+                  {isPublishing ? 'Enviando...' : 'Solicitar aprovação'}
                 </Button>
               )}
             </>

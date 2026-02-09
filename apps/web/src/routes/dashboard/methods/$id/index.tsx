@@ -1,7 +1,13 @@
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowLeft01Icon, Edit02Icon } from '@hugeicons/core-free-icons'
+import {
+  ArrowLeft01Icon,
+  CheckmarkCircle02Icon,
+  Edit02Icon,
+  RefreshIcon,
+} from '@hugeicons/core-free-icons'
+import { toast } from 'sonner'
 import type { MethodData } from '@/components/method-builder'
 
 import { api } from '@/utils/api'
@@ -13,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { RoleGate } from '@/components/permission-gate'
 import {
   Card,
   CardContent,
@@ -30,12 +37,16 @@ export const Route = createFileRoute('/dashboard/methods/$id/')({
 
 const statusLabels: Record<string, string> = {
   DRAFT: 'Rascunho',
+  PENDING_APPROVAL: 'Em aprovação',
+  TECHNICAL_REVIEWED: 'Revisão técnica',
   PUBLISHED: 'Publicado',
   ARCHIVED: 'Arquivado',
 }
 
 const statusVariants: Record<string, 'default' | 'secondary' | 'outline'> = {
   DRAFT: 'secondary',
+  PENDING_APPROVAL: 'outline',
+  TECHNICAL_REVIEWED: 'outline',
   PUBLISHED: 'default',
   ARCHIVED: 'outline',
 }
@@ -43,6 +54,7 @@ const statusVariants: Record<string, 'default' | 'secondary' | 'outline'> = {
 function MethodDetailPage() {
   const { id } = Route.useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const {
     data: method,
@@ -64,6 +76,8 @@ function MethodDetailPage() {
           assetTypeName?: string
           createdByName?: string
           createdAt: string
+          technicalReviewedByName?: string | null
+          approvedByName?: string | null
           publishedAt?: string
           archivedAt?: string
         }
@@ -84,6 +98,82 @@ function MethodDetailPage() {
       }
 
       return res.json() as Promise<{ data: AuditLogRecord[] }>
+    },
+  })
+
+  const technicalReviewMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.api.methods[':id']['technical-review'].$post({
+        param: { id },
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(
+          (error as { error?: string }).error || 'Erro ao revisar tecnicamente',
+        )
+      }
+
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['methods', id] })
+      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      toast.success('Revisão técnica registrada')
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const qualityApproveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.api.methods[':id']['quality-approve'].$post({
+        param: { id },
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(
+          (error as { error?: string }).error || 'Erro ao aprovar qualidade',
+        )
+      }
+
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['methods', id] })
+      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      toast.success('Método aprovado e publicado')
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const returnToDraftMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.api.methods[':id']['return-to-draft'].$post({
+        param: { id },
+        json: {},
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(
+          (error as { error?: string }).error || 'Erro ao retornar para rascunho',
+        )
+      }
+
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['methods', id] })
+      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      toast.success('Método retornou para rascunho')
+    },
+    onError: (error) => {
+      toast.error(error.message)
     },
   })
 
@@ -136,14 +226,75 @@ function MethodDetailPage() {
           Voltar
         </Button>
 
-        {method.status === 'DRAFT' && (
-          <Button
-            render={<Link to="/dashboard/methods/$id/edit" params={{ id }} />}
-          >
-            <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
-            Editar
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {method.status === 'DRAFT' && (
+            <Button
+              render={<Link to="/dashboard/methods/$id/edit" params={{ id }} />}
+            >
+              <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
+              Editar
+            </Button>
+          )}
+
+          <RoleGate roles={['admin']}>
+            {method.status === 'PENDING_APPROVAL' && (
+              <Button
+                onClick={() => technicalReviewMutation.mutate()}
+                disabled={technicalReviewMutation.isPending}
+              >
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  className="mr-2 h-4 w-4"
+                />
+                {technicalReviewMutation.isPending
+                  ? 'Revisando...'
+                  : 'Revisar tecnicamente'}
+              </Button>
+            )}
+          </RoleGate>
+
+          <RoleGate roles={['owner']}>
+            {method.status === 'TECHNICAL_REVIEWED' && (
+              <Button
+                onClick={() => qualityApproveMutation.mutate()}
+                disabled={qualityApproveMutation.isPending}
+              >
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  className="mr-2 h-4 w-4"
+                />
+                {qualityApproveMutation.isPending
+                  ? 'Aprovando...'
+                  : 'Aprovar qualidade'}
+              </Button>
+            )}
+          </RoleGate>
+
+          <RoleGate roles={['admin', 'owner']}>
+            {(method.status === 'PENDING_APPROVAL' ||
+              method.status === 'TECHNICAL_REVIEWED') && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      'Deseja retornar este método para rascunho?',
+                    )
+                  ) {
+                    return
+                  }
+                  returnToDraftMutation.mutate()
+                }}
+                disabled={returnToDraftMutation.isPending}
+              >
+                <HugeiconsIcon icon={RefreshIcon} className="mr-2 h-4 w-4" />
+                {returnToDraftMutation.isPending
+                  ? 'Retornando...'
+                  : 'Retornar para rascunho'}
+              </Button>
+            )}
+          </RoleGate>
+        </div>
       </div>
 
       <Card>
@@ -179,6 +330,18 @@ function MethodDetailPage() {
                 Criado por
               </p>
               <p>{method.createdByName || '-'}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                Revisado tecnicamente por
+              </p>
+              <p>{method.technicalReviewedByName || '-'}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                Aprovado por (Qualidade)
+              </p>
+              <p>{method.approvedByName || '-'}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">
