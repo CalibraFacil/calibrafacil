@@ -417,6 +417,7 @@ export interface AuditLogRecord {
     performedAt: string
     performedBy?: string | null
     performerName?: string | null
+    performedByName?: string | null
     ipAddress?: string | null
     reason?: string | null
 }
@@ -433,7 +434,7 @@ export function buildAuditTimelineEvents(
         type: mapActionToEventType(log.action),
         label: actionLabels[log.action] || log.action,
         timestamp: log.performedAt,
-        actor: log.performerName,
+        actor: log.performerName ?? log.performedByName ?? log.performedBy,
         details: log.reason || undefined,
     }))
 }
