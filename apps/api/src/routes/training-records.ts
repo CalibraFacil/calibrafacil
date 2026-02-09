@@ -303,6 +303,13 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
         updateData.passingScore = input.passingScore;
       if (input.passed !== undefined) updateData.passed = input.passed;
 
+      if (Object.keys(updateData).length === 0) {
+        return c.json(
+          { error: "Nenhum campo para atualizar fornecido" },
+          400,
+        );
+      }
+
       const [updated] = await db
         .update(trainingRecord)
         .set(updateData)
@@ -400,6 +407,22 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
       if (!existing) {
         return c.json({ error: "Registro de treinamento não encontrado" }, 404);
       }
+
+      const session = c.get("session");
+
+      await db.insert(trainingRecordAuditLog).values({
+        trainingRecordId: id,
+        action: "delete",
+        changes: {
+          title: existing.title,
+          type: existing.type,
+          status: existing.status,
+          userId: existing.userId,
+          competenceId: existing.competenceId,
+        },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
 
       await db.delete(trainingRecord).where(eq(trainingRecord.id, id));
 

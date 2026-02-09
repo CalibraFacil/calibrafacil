@@ -2486,9 +2486,10 @@ export const trainingRecordAuditLog = pgTable(
   "training_record_audit_log",
   {
     id: serial("id").primaryKey(),
-    trainingRecordId: integer("training_record_id")
-      .notNull()
-      .references(() => trainingRecord.id, { onDelete: "cascade" }),
+    trainingRecordId: integer("training_record_id").references(
+      () => trainingRecord.id,
+      { onDelete: "set null" },
+    ),
     action: text("action").notNull(),
     changes: jsonb("changes"),
     performedBy: text("performed_by").notNull(),
