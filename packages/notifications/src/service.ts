@@ -1378,7 +1378,12 @@ export async function notifyCompetenceExpiring(
       assetTypeId: personnelCompetence.assetTypeId,
     })
     .from(personnelCompetence)
-    .where(eq(personnelCompetence.id, competenceId))
+    .where(
+      and(
+        eq(personnelCompetence.id, competenceId),
+        eq(personnelCompetence.organizationId, organizationId),
+      ),
+    )
     .limit(1);
 
   if (!comp?.expiresAt) return;
@@ -1430,7 +1435,12 @@ export async function notifyCompetenceExpired(
       expiresAt: personnelCompetence.expiresAt,
     })
     .from(personnelCompetence)
-    .where(eq(personnelCompetence.id, competenceId))
+    .where(
+      and(
+        eq(personnelCompetence.id, competenceId),
+        eq(personnelCompetence.organizationId, organizationId),
+      ),
+    )
     .limit(1);
 
   if (!comp) return;
@@ -1480,7 +1490,12 @@ export async function notifyCompetenceRequested(
       scopeDescription: personnelCompetence.scopeDescription,
     })
     .from(personnelCompetence)
-    .where(eq(personnelCompetence.id, competenceId))
+    .where(
+      and(
+        eq(personnelCompetence.id, competenceId),
+        eq(personnelCompetence.organizationId, organizationId),
+      ),
+    )
     .limit(1);
 
   if (!comp) return;
@@ -1539,7 +1554,12 @@ export async function notifyCompetenceApproved(
       scopeDescription: personnelCompetence.scopeDescription,
     })
     .from(personnelCompetence)
-    .where(eq(personnelCompetence.id, competenceId))
+    .where(
+      and(
+        eq(personnelCompetence.id, competenceId),
+        eq(personnelCompetence.organizationId, organizationId),
+      ),
+    )
     .limit(1);
 
   if (!comp) return;
