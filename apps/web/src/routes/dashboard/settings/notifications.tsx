@@ -340,6 +340,7 @@ function NotificationsSettingsPage() {
               id="global-email"
               checked={emailEnabled}
               onCheckedChange={toggleGlobalEmail}
+              disabled={updateMutation.isPending}
             />
           </div>
           <Separator />
@@ -399,6 +400,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'inApp')
                           }
+                          disabled={updateMutation.isPending}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -410,7 +412,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'email')
                           }
-                          disabled={!emailEnabled}
+                          disabled={!emailEnabled || updateMutation.isPending}
                         />
                       </div>
                     </div>
@@ -456,6 +458,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'inApp')
                           }
+                          disabled={updateMutation.isPending}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -467,7 +470,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'email')
                           }
-                          disabled={!emailEnabled}
+                          disabled={!emailEnabled || updateMutation.isPending}
                         />
                       </div>
                     </div>
@@ -513,6 +516,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'inApp')
                           }
+                          disabled={updateMutation.isPending}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -524,7 +528,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'email')
                           }
-                          disabled={!emailEnabled}
+                          disabled={!emailEnabled || updateMutation.isPending}
                         />
                       </div>
                     </div>
@@ -570,6 +574,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'inApp')
                           }
+                          disabled={updateMutation.isPending}
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -581,7 +586,7 @@ function NotificationsSettingsPage() {
                           onCheckedChange={() =>
                             togglePreference(setting.id, 'email')
                           }
-                          disabled={!emailEnabled}
+                          disabled={!emailEnabled || updateMutation.isPending}
                         />
                       </div>
                     </div>
