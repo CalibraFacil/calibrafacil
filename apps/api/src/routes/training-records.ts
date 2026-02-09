@@ -4,9 +4,11 @@ import { db } from "@calibra-facil/db";
 import {
   trainingRecord,
   trainingRecordAuditLog,
+  personnelCompetence,
   member,
   user,
 } from "@calibra-facil/db/schema";
+import { isNull } from "drizzle-orm";
 import {
   CreateTrainingRecordSchema,
   UpdateTrainingRecordSchema,
@@ -180,6 +182,31 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
           { error: "Usuário não é membro desta organização" },
           400,
         );
+      }
+
+      // Validate competenceId belongs to the same org if provided
+      if (input.competenceId) {
+        const [comp] = await db
+          .select({ id: personnelCompetence.id })
+          .from(personnelCompetence)
+          .where(
+            and(
+              eq(personnelCompetence.id, input.competenceId),
+              eq(
+                personnelCompetence.organizationId,
+                memberData.organizationId,
+              ),
+              isNull(personnelCompetence.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!comp) {
+          return c.json(
+            { error: "Competência não encontrada nesta organização" },
+            400,
+          );
+        }
       }
 
       const [created] = await db

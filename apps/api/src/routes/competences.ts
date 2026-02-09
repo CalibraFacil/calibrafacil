@@ -239,11 +239,16 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         assetTypeName = at?.name ?? null;
       }
 
-      // Get related training records
+      // Get related training records (scoped to same org)
       const trainings = await db
         .select()
         .from(trainingRecord)
-        .where(eq(trainingRecord.competenceId, id))
+        .where(
+          and(
+            eq(trainingRecord.competenceId, id),
+            eq(trainingRecord.organizationId, memberData.organizationId),
+          ),
+        )
         .orderBy(desc(trainingRecord.startDate));
 
       // Get requestedBy, evaluatedBy, approvedBy names
@@ -473,9 +478,9 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      // Link training records to this competence
+      // Link training records to this competence (must be same org + same user)
       for (const trId of input.trainingRecordIds) {
-        await db
+        const result = await db
           .update(trainingRecord)
           .set({ competenceId: id })
           .where(
@@ -485,8 +490,19 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
                 trainingRecord.organizationId,
                 memberData.organizationId,
               ),
+              eq(trainingRecord.userId, existing.userId),
             ),
+          )
+          .returning();
+
+        if (result.length === 0) {
+          return c.json(
+            {
+              error: `Registro de treinamento ${trId} não encontrado ou não pertence ao mesmo técnico`,
+            },
+            400,
           );
+        }
       }
 
       const [updated] = await db

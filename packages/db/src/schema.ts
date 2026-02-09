@@ -2467,9 +2467,7 @@ export const personnelCompetenceAuditLog = pgTable(
       .references(() => personnelCompetence.id, { onDelete: "cascade" }),
     action: text("action").notNull(),
     changes: jsonb("changes"),
-    performedBy: text("performed_by")
-      .notNull()
-      .references(() => user.id),
+    performedBy: text("performed_by").notNull(),
     performedAt: timestamp("performed_at").defaultNow().notNull(),
     ipAddress: text("ip_address"),
     reason: text("reason"),
