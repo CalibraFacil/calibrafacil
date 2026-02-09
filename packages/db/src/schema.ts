@@ -2444,6 +2444,7 @@ export const trainingRecord = pgTable(
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
+    deletedAt: timestamp("deleted_at"),
   },
   (table) => [
     index("training_organization_id_idx").on(table.organizationId),
@@ -2486,10 +2487,9 @@ export const trainingRecordAuditLog = pgTable(
   "training_record_audit_log",
   {
     id: serial("id").primaryKey(),
-    trainingRecordId: integer("training_record_id").references(
-      () => trainingRecord.id,
-      { onDelete: "set null" },
-    ),
+    trainingRecordId: integer("training_record_id")
+      .notNull()
+      .references(() => trainingRecord.id, { onDelete: "cascade" }),
     action: text("action").notNull(),
     changes: jsonb("changes"),
     performedBy: text("performed_by").notNull(),

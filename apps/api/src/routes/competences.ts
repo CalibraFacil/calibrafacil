@@ -247,6 +247,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(trainingRecord.competenceId, id),
             eq(trainingRecord.organizationId, memberData.organizationId),
+            isNull(trainingRecord.deletedAt),
           ),
         )
         .orderBy(desc(trainingRecord.startDate));
@@ -491,6 +492,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
                 memberData.organizationId,
               ),
               eq(trainingRecord.userId, existing.userId),
+              isNull(trainingRecord.deletedAt),
             ),
           )
           .returning();

@@ -39,6 +39,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const conditions = [
         eq(trainingRecord.organizationId, memberData.organizationId),
+        isNull(trainingRecord.deletedAt),
       ];
 
       if (userId) {
@@ -141,6 +142,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(trainingRecord.id, id),
             eq(trainingRecord.organizationId, memberData.organizationId),
+            isNull(trainingRecord.deletedAt),
           ),
         )
         .limit(1);
@@ -277,6 +279,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(trainingRecord.id, id),
             eq(trainingRecord.organizationId, memberData.organizationId),
+            isNull(trainingRecord.deletedAt),
           ),
         )
         .limit(1);
@@ -350,6 +353,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(trainingRecord.id, id),
             eq(trainingRecord.organizationId, memberData.organizationId),
+            isNull(trainingRecord.deletedAt),
           ),
         )
         .limit(1);
@@ -400,6 +404,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(trainingRecord.id, id),
             eq(trainingRecord.organizationId, memberData.organizationId),
+            isNull(trainingRecord.deletedAt),
           ),
         )
         .limit(1);
@@ -410,21 +415,18 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const session = c.get("session");
 
+      await db
+        .update(trainingRecord)
+        .set({ deletedAt: new Date() })
+        .where(eq(trainingRecord.id, id));
+
       await db.insert(trainingRecordAuditLog).values({
         trainingRecordId: id,
         action: "delete",
-        changes: {
-          title: existing.title,
-          type: existing.type,
-          status: existing.status,
-          userId: existing.userId,
-          competenceId: existing.competenceId,
-        },
+        changes: { deletedAt: new Date().toISOString() },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
-
-      await db.delete(trainingRecord).where(eq(trainingRecord.id, id));
 
       return c.json({ message: "Registro de treinamento removido" });
     },
