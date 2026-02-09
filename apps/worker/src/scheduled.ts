@@ -54,6 +54,26 @@ interface OverdueJobRow {
   days_overdue: number;
 }
 
+interface CompetenceExpiringRow {
+  id: number;
+  user_id: string;
+  user_name: string;
+  scope_description: string;
+  organization_id: string;
+  expires_at: Date;
+  days_until_expiry: number;
+}
+
+interface CompetenceExpiredRow {
+  id: number;
+  user_id: string;
+  user_name: string;
+  scope_description: string;
+  organization_id: string;
+  expires_at: Date;
+  days_expired: number;
+}
+
 interface AdminRecipient {
   user_id: string;
 }
@@ -349,6 +369,95 @@ async function recordScheduledNotification(
   );
 }
 
+/**
+ * Check for personnel competences expiring within 30 days.
+ * ISO 17025 Clause 6.2.3 - Personnel competence tracking.
+ *
+ * Duplicate prevention: Competences are notified once per 7-day window.
+ */
+async function checkCompetencesExpiring(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<CompetenceExpiringRow[]> {
+  const result = await client.query<CompetenceExpiringRow>(
+    `
+    SELECT
+      pc.id,
+      pc.user_id,
+      u.name as user_name,
+      pc.scope_description,
+      pc.organization_id,
+      pc.expires_at,
+      EXTRACT(DAY FROM pc.expires_at - CURRENT_DATE)::int as days_until_expiry
+    FROM personnel_competence pc
+    JOIN "user" u ON pc.user_id = u.id
+    WHERE pc.status = 'ACTIVE'
+      AND pc.deleted_at IS NULL
+      AND pc.expires_at IS NOT NULL
+      AND pc.expires_at BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+      AND NOT EXISTS (
+        SELECT 1 FROM scheduled_notification sn
+        WHERE sn.entity_type = 'competence'
+          AND sn.entity_id = pc.id
+          AND sn.type = 'COMPETENCE_EXPIRING'
+          AND sn.lead_time_days = 30
+          AND sn.sent_at IS NOT NULL
+          AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
+      )
+    ORDER BY pc.expires_at ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
+}
+
+/**
+ * Check for personnel competences that have EXPIRED.
+ * Auto-expire: update status to EXPIRED.
+ *
+ * Duplicate prevention: Expired competences are notified weekly until renewed.
+ */
+async function checkCompetencesExpired(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<CompetenceExpiredRow[]> {
+  const result = await client.query<CompetenceExpiredRow>(
+    `
+    SELECT
+      pc.id,
+      pc.user_id,
+      u.name as user_name,
+      pc.scope_description,
+      pc.organization_id,
+      pc.expires_at,
+      EXTRACT(DAY FROM CURRENT_DATE - pc.expires_at)::int as days_expired
+    FROM personnel_competence pc
+    JOIN "user" u ON pc.user_id = u.id
+    WHERE pc.status = 'ACTIVE'
+      AND pc.deleted_at IS NULL
+      AND pc.expires_at IS NOT NULL
+      AND pc.expires_at < CURRENT_DATE
+      AND NOT EXISTS (
+        SELECT 1 FROM scheduled_notification sn
+        WHERE sn.entity_type = 'competence'
+          AND sn.entity_id = pc.id
+          AND sn.type = 'COMPETENCE_EXPIRED'
+          AND sn.sent_at IS NOT NULL
+          AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
+      )
+    ORDER BY pc.expires_at ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
+}
+
 const BATCH_SIZE = 100;
 
 /**
@@ -361,11 +470,15 @@ export async function processScheduledNotifications(
   standardsProcessed: number;
   standardsExpiredProcessed: number;
   jobsProcessed: number;
+  competencesExpiringProcessed: number;
+  competencesExpiredProcessed: number;
 }> {
   let assetsProcessed = 0;
   let standardsProcessed = 0;
   let standardsExpiredProcessed = 0;
   let jobsProcessed = 0;
+  let competencesExpiringProcessed = 0;
+  let competencesExpiredProcessed = 0;
 
   await withDbClient(env, async (client) => {
     // 1. Process assets due for recalibration (with pagination)
@@ -586,7 +699,123 @@ export async function processScheduledNotifications(
 
       jobOffset += BATCH_SIZE;
     } while (jobBatch.length === BATCH_SIZE);
+
+    // 5. Process competences expiring within 30 days - ISO 17025 Clause 6.2.3 (with pagination)
+    let compExpiringOffset = 0;
+    let compExpiringBatch: CompetenceExpiringRow[];
+
+    do {
+      compExpiringBatch = await checkCompetencesExpiring(client, compExpiringOffset, BATCH_SIZE);
+      if (compExpiringBatch.length > 0) {
+        console.log(`[Scheduled] Processing ${compExpiringBatch.length} expiring competences (offset ${compExpiringOffset})`);
+      }
+
+      for (const comp of compExpiringBatch) {
+        try {
+          const admins = await getOrgAdmins(client, comp.organization_id);
+
+          for (const adminId of admins) {
+            await createNotification(client, {
+              recipientUserId: adminId,
+              organizationId: comp.organization_id,
+              type: "COMPETENCE_EXPIRING",
+              priority: "MEDIUM",
+              title: "Competência vencendo",
+              message: `A competência de ${comp.user_name} (${comp.scope_description}) vence em ${comp.days_until_expiry} dia(s).`,
+              relatedEntity: {
+                entityType: "competence",
+                entityId: comp.id,
+              },
+              actionUrl: `/dashboard/personnel/${comp.id}`,
+            });
+          }
+
+          await recordScheduledNotification(client, {
+            organizationId: comp.organization_id,
+            type: "COMPETENCE_EXPIRING",
+            entityType: "competence",
+            entityId: comp.id,
+            scheduledFor: comp.expires_at,
+            leadTimeDays: 30,
+          });
+
+          competencesExpiringProcessed++;
+        } catch (error) {
+          console.error(`[Scheduled] Error processing expiring competence ${comp.id}:`, error);
+        }
+      }
+
+      compExpiringOffset += BATCH_SIZE;
+    } while (compExpiringBatch.length === BATCH_SIZE);
+
+    // 6. Process EXPIRED competences - auto-expire and notify (with pagination)
+    let compExpiredOffset = 0;
+    let compExpiredBatch: CompetenceExpiredRow[];
+
+    do {
+      compExpiredBatch = await checkCompetencesExpired(client, compExpiredOffset, BATCH_SIZE);
+      if (compExpiredBatch.length > 0) {
+        console.log(`[Scheduled] Processing ${compExpiredBatch.length} expired competences (offset ${compExpiredOffset})`);
+      }
+
+      for (const comp of compExpiredBatch) {
+        try {
+          // Auto-expire: update status to EXPIRED
+          await client.query(
+            `UPDATE personnel_competence SET status = 'EXPIRED' WHERE id = $1 AND status = 'ACTIVE'`,
+            [comp.id],
+          );
+
+          // Log the auto-expiration in audit log
+          await client.query(
+            `INSERT INTO personnel_competence_audit_log (competence_id, action, changes, performed_by)
+             VALUES ($1, 'expire', $2, 'system')`,
+            [comp.id, JSON.stringify({ status: { old: "ACTIVE", new: "EXPIRED" }, autoExpired: true })],
+          );
+
+          const admins = await getOrgAdmins(client, comp.organization_id);
+
+          for (const adminId of admins) {
+            await createNotification(client, {
+              recipientUserId: adminId,
+              organizationId: comp.organization_id,
+              type: "COMPETENCE_EXPIRED",
+              priority: "HIGH",
+              title: "Competência EXPIRADA",
+              message: `A competência de ${comp.user_name} (${comp.scope_description}) expirou há ${comp.days_expired} dia(s). O técnico não pode executar calibrações neste escopo.`,
+              relatedEntity: {
+                entityType: "competence",
+                entityId: comp.id,
+              },
+              actionUrl: `/dashboard/personnel/${comp.id}`,
+            });
+          }
+
+          await recordScheduledNotification(client, {
+            organizationId: comp.organization_id,
+            type: "COMPETENCE_EXPIRED",
+            entityType: "competence",
+            entityId: comp.id,
+            scheduledFor: comp.expires_at,
+            leadTimeDays: 0,
+          });
+
+          competencesExpiredProcessed++;
+        } catch (error) {
+          console.error(`[Scheduled] Error processing expired competence ${comp.id}:`, error);
+        }
+      }
+
+      compExpiredOffset += BATCH_SIZE;
+    } while (compExpiredBatch.length === BATCH_SIZE);
   });
 
-  return { assetsProcessed, standardsProcessed, standardsExpiredProcessed, jobsProcessed };
+  return {
+    assetsProcessed,
+    standardsProcessed,
+    standardsExpiredProcessed,
+    jobsProcessed,
+    competencesExpiringProcessed,
+    competencesExpiredProcessed,
+  };
 }

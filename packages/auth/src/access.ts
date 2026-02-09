@@ -211,6 +211,20 @@ export const statements = {
    * - close: Close a verified CAPA
    */
   capa: ["create", "read", "update", "implement", "verify", "close"],
+
+  // ---------------------------------------------------------------------------
+  // COMPETENCE - ISO 17025:2017 Clause 6.2.3 (Personnel competence tracking)
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Request a new qualification
+   * - read: View competence records and training history
+   * - update: Update competence details, assign training, manage workflow
+   * - delete: Soft delete a competence record
+   * - evaluate: Evaluate a technician's competence after training
+   * - approve: Approve a qualification (final step)
+   */
+  competence: ["create", "read", "update", "delete", "evaluate", "approve"],
 } as const;
 
 // =============================================================================
@@ -253,6 +267,8 @@ export const member = ac.newRole({
   non_conformance: ["read"],
   // Read-only access to CAPAs
   capa: ["read"],
+  // Read-only access to competence records
+  competence: ["read"],
 });
 
 /**
@@ -307,6 +323,8 @@ export const technician = ac.newRole({
 
   // CAPA: can create, update, and implement (cannot verify/close - requires admin/owner)
   capa: ["create", "read", "update", "implement"],
+  // Competence: can request qualifications and view
+  competence: ["create", "read"],
 });
 
 /**
@@ -368,6 +386,8 @@ export const admin = ac.newRole({
 
   // Full CAPA management
   capa: ["create", "read", "update", "implement", "verify", "close"],
+  // Full competence management
+  competence: ["create", "read", "update", "delete", "evaluate", "approve"],
 });
 
 /**
@@ -428,6 +448,8 @@ export const owner = ac.newRole({
 
   // Full CAPA management
   capa: ["create", "read", "update", "implement", "verify", "close"],
+  // Full competence management
+  competence: ["create", "read", "update", "delete", "evaluate", "approve"],
 });
 
 /**

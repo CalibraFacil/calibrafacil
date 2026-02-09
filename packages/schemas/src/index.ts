@@ -856,6 +856,10 @@ export const NotificationTypeSchema = z.enum([
   "PAYMENT_FAILED",
   "NC_CREATED", // ISO 17025 Clause 8.7 - New non-conformance registered
   "NC_ESCALATED_TO_CAPA", // ISO 17025 Clause 8.7 - NC escalated to CAPA
+  "COMPETENCE_EXPIRING", // ISO 17025 Clause 6.2.3
+  "COMPETENCE_EXPIRED", // ISO 17025 Clause 6.2.3
+  "COMPETENCE_REQUESTED", // ISO 17025 Clause 6.2.3
+  "COMPETENCE_APPROVED", // ISO 17025 Clause 6.2.3
 ]);
 
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
@@ -1268,3 +1272,172 @@ export const ListCorrectiveActionsQuerySchema = z.object({
 export type ListCorrectiveActionsQuery = z.infer<
   typeof ListCorrectiveActionsQuerySchema
 >;
+
+// =============================================================================
+// PERSONNEL COMPETENCE SCHEMAS - ISO 17025:2017 Clause 6.2.3
+// =============================================================================
+
+/**
+ * Competence workflow status values
+ */
+export const CompetenceStatusSchema = z.enum([
+  "REQUESTED",
+  "TRAINING_ASSIGNED",
+  "IN_TRAINING",
+  "PENDING_EVALUATION",
+  "ACTIVE",
+  "SUSPENDED",
+  "EXPIRED",
+]);
+
+export type CompetenceStatus = z.infer<typeof CompetenceStatusSchema>;
+
+/**
+ * Training type values
+ */
+export const TrainingTypeSchema = z.enum([
+  "internal",
+  "external",
+  "ojt",
+  "proficiency_test",
+]);
+
+export type TrainingType = z.infer<typeof TrainingTypeSchema>;
+
+/**
+ * Training status values
+ */
+export const TrainingStatusSchema = z.enum([
+  "planned",
+  "in_progress",
+  "completed",
+  "failed",
+]);
+
+export type TrainingStatus = z.infer<typeof TrainingStatusSchema>;
+
+/**
+ * Schema for creating a new competence request
+ */
+export const CreateCompetenceRequestSchema = z.object({
+  userId: z.string().min(1, "Técnico é obrigatório"),
+  assetTypeId: z.coerce.number().optional().nullable(),
+  scopeDescription: z
+    .string()
+    .min(5, "Descrição do escopo deve ter pelo menos 5 caracteres"),
+});
+
+export type CreateCompetenceRequestInput = z.infer<
+  typeof CreateCompetenceRequestSchema
+>;
+
+/**
+ * Schema for updating a personnel competence record
+ */
+export const UpdatePersonnelCompetenceSchema = z.object({
+  scopeDescription: z.string().min(5).optional(),
+  notes: z.string().optional().nullable(),
+  expiresAt: z.string().optional().nullable(),
+});
+
+export type UpdatePersonnelCompetenceInput = z.infer<
+  typeof UpdatePersonnelCompetenceSchema
+>;
+
+/**
+ * Schema for assigning training to a competence record
+ */
+export const AssignTrainingSchema = z.object({
+  trainingRecordIds: z
+    .array(z.number())
+    .min(1, "Selecione pelo menos um treinamento"),
+});
+
+export type AssignTrainingInput = z.infer<typeof AssignTrainingSchema>;
+
+/**
+ * Schema for evaluating a competence
+ */
+export const EvaluateCompetenceSchema = z.object({
+  passed: z.boolean(),
+  notes: z.string().optional().nullable(),
+  qualifiedAt: z.string().optional().nullable(),
+  expiresAt: z.string().optional().nullable(),
+});
+
+export type EvaluateCompetenceInput = z.infer<typeof EvaluateCompetenceSchema>;
+
+/**
+ * Schema for listing personnel competences with filters
+ */
+export const ListPersonnelCompetenceQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  userId: z.string().optional(),
+  assetTypeId: z.coerce.number().optional(),
+  status: CompetenceStatusSchema.optional(),
+  expiringWithinDays: z.coerce.number().optional(),
+});
+
+export type ListPersonnelCompetenceQuery = z.infer<
+  typeof ListPersonnelCompetenceQuerySchema
+>;
+
+// =============================================================================
+// TRAINING RECORD SCHEMAS - ISO 17025:2017 Clause 6.2.3
+// =============================================================================
+
+/**
+ * Schema for creating a new training record
+ */
+export const CreateTrainingRecordSchema = z.object({
+  userId: z.string().min(1, "Técnico é obrigatório"),
+  competenceId: z.coerce.number().optional().nullable(),
+  title: z.string().min(3, "Título deve ter pelo menos 3 caracteres"),
+  type: TrainingTypeSchema,
+  provider: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  startDate: z.string().min(1, "Data de início é obrigatória"),
+  endDate: z.string().optional().nullable(),
+  hoursCompleted: z.coerce.number().int().min(0).optional().nullable(),
+  score: z.coerce.number().optional().nullable(),
+  passingScore: z.coerce.number().optional().nullable(),
+  passed: z.boolean().optional().nullable(),
+});
+
+export type CreateTrainingRecordInput = z.infer<
+  typeof CreateTrainingRecordSchema
+>;
+
+/**
+ * Schema for updating a training record
+ */
+export const UpdateTrainingRecordSchema = z.object({
+  title: z.string().min(3).optional(),
+  type: TrainingTypeSchema.optional(),
+  status: TrainingStatusSchema.optional(),
+  provider: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional().nullable(),
+  hoursCompleted: z.coerce.number().int().min(0).optional().nullable(),
+  score: z.coerce.number().optional().nullable(),
+  passingScore: z.coerce.number().optional().nullable(),
+  passed: z.boolean().optional().nullable(),
+});
+
+export type UpdateTrainingRecordInput = z.infer<
+  typeof UpdateTrainingRecordSchema
+>;
+
+/**
+ * Schema for listing training records with filters
+ */
+export const ListTrainingRecordsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  userId: z.string().optional(),
+  competenceId: z.coerce.number().optional(),
+  status: TrainingStatusSchema.optional(),
+  type: TrainingTypeSchema.optional(),
+});

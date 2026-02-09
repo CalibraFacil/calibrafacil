@@ -12,6 +12,7 @@ import {
   user,
   member,
   environmentalLimits,
+  personnelCompetence,
   type MethodSnapshot,
   type StandardSnapshot,
   type EnvironmentalSnapshot,
@@ -518,6 +519,66 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
               400,
             );
           }
+
+          // 5b. Validate technician competence (auto-detect enforcement)
+          const [competenceCount] = await db
+            .select({ total: count() })
+            .from(personnelCompetence)
+            .where(
+              and(
+                eq(personnelCompetence.organizationId, memberData.organizationId),
+                isNull(personnelCompetence.deletedAt),
+              ),
+            );
+
+          if (
+            (competenceCount?.total ?? 0) > 0 &&
+            assetData.assetTypeId
+          ) {
+            const [activeCompetence] = await db
+              .select({ id: personnelCompetence.id })
+              .from(personnelCompetence)
+              .where(
+                and(
+                  eq(personnelCompetence.userId, input.technicianId),
+                  eq(personnelCompetence.organizationId, memberData.organizationId),
+                  eq(personnelCompetence.assetTypeId, assetData.assetTypeId),
+                  eq(personnelCompetence.status, "ACTIVE"),
+                  isNull(personnelCompetence.deletedAt),
+                ),
+              )
+              .limit(1);
+
+            if (!activeCompetence) {
+              return c.json(
+                {
+                  error:
+                    "Técnico não possui competência ativa para este tipo de instrumento",
+                },
+                400,
+              );
+            }
+
+            // Check not expired
+            const [competenceData] = await db
+              .select({ expiresAt: personnelCompetence.expiresAt })
+              .from(personnelCompetence)
+              .where(eq(personnelCompetence.id, activeCompetence.id))
+              .limit(1);
+
+            if (
+              competenceData?.expiresAt &&
+              competenceData.expiresAt < new Date()
+            ) {
+              return c.json(
+                {
+                  error:
+                    "Técnico não possui competência ativa para este tipo de instrumento",
+                },
+                400,
+              );
+            }
+          }
         }
 
         // 6. Generate Job ID (per organization per year)
@@ -783,6 +844,58 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           { error: "Tecnico nao encontrado ou sem permissao" },
           400,
         );
+      }
+
+      // Validate competence (auto-detect enforcement)
+      // Get asset type from the job's service
+      const [jobService] = await db
+        .select({ assetTypeId: service.assetTypeId })
+        .from(service)
+        .where(eq(service.id, existing.serviceId))
+        .limit(1);
+
+      if (jobService?.assetTypeId) {
+        const [competenceCount] = await db
+          .select({ total: count() })
+          .from(personnelCompetence)
+          .where(
+            and(
+              eq(personnelCompetence.organizationId, memberData.organizationId),
+              isNull(personnelCompetence.deletedAt),
+            ),
+          );
+
+        if ((competenceCount?.total ?? 0) > 0) {
+          const [activeCompetence] = await db
+            .select({
+              id: personnelCompetence.id,
+              expiresAt: personnelCompetence.expiresAt,
+            })
+            .from(personnelCompetence)
+            .where(
+              and(
+                eq(personnelCompetence.userId, input.technicianId),
+                eq(personnelCompetence.organizationId, memberData.organizationId),
+                eq(personnelCompetence.assetTypeId, jobService.assetTypeId),
+                eq(personnelCompetence.status, "ACTIVE"),
+                isNull(personnelCompetence.deletedAt),
+              ),
+            )
+            .limit(1);
+
+          if (
+            !activeCompetence ||
+            (activeCompetence.expiresAt && activeCompetence.expiresAt < new Date())
+          ) {
+            return c.json(
+              {
+                error:
+                  "Técnico não possui competência ativa para este tipo de instrumento",
+              },
+              400,
+            );
+          }
+        }
       }
 
       // Update job
