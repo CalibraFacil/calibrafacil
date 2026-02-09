@@ -27,6 +27,7 @@ type NotificationType =
   | 'JOB_REJECTED'
   | 'JOB_ASSIGNED'
   | 'CERTIFICATE_READY'
+  | 'CERTIFICATE_AMENDED'
   | 'ASSET_DUE_FOR_RECALIBRATION'
   | 'STANDARD_EXPIRING'
   | 'JOB_OVERDUE'
@@ -34,6 +35,10 @@ type NotificationType =
   | 'PAYMENT_FAILED'
   | 'NC_CREATED'
   | 'NC_ESCALATED_TO_CAPA'
+  | 'COMPETENCE_EXPIRING'
+  | 'COMPETENCE_EXPIRED'
+  | 'COMPETENCE_REQUESTED'
+  | 'COMPETENCE_APPROVED'
 
 type NotificationPreference = {
   inApp: boolean
@@ -81,6 +86,12 @@ const notificationSettings: NotificationSetting[] = [
     description: 'Quando um certificado está pronto para download',
     category: 'operational',
   },
+  {
+    id: 'CERTIFICATE_AMENDED',
+    title: 'Certificado retificado',
+    description: 'Quando um certificado é retificado',
+    category: 'operational',
+  },
   // Compliance notifications
   {
     id: 'ASSET_DUE_FOR_RECALIBRATION',
@@ -98,6 +109,30 @@ const notificationSettings: NotificationSetting[] = [
     id: 'JOB_OVERDUE',
     title: 'Calibração atrasada',
     description: 'Quando uma calibração passa da data de entrega',
+    category: 'compliance',
+  },
+  {
+    id: 'COMPETENCE_REQUESTED',
+    title: 'Competência solicitada',
+    description: 'Quando uma nova solicitação de competência é criada',
+    category: 'compliance',
+  },
+  {
+    id: 'COMPETENCE_APPROVED',
+    title: 'Competência aprovada',
+    description: 'Quando uma competência é aprovada',
+    category: 'compliance',
+  },
+  {
+    id: 'COMPETENCE_EXPIRING',
+    title: 'Competência expirando',
+    description: 'Quando uma competência está próxima da expiração',
+    category: 'compliance',
+  },
+  {
+    id: 'COMPETENCE_EXPIRED',
+    title: 'Competência expirada',
+    description: 'Quando uma competência expira',
     category: 'compliance',
   },
   // Quality notifications (ISO 17025 Clause 8.7)
@@ -134,11 +169,16 @@ const defaultPreferences: NotificationPreferencesMap = {
   JOB_REJECTED: { inApp: true, email: true },
   JOB_ASSIGNED: { inApp: true, email: false },
   CERTIFICATE_READY: { inApp: true, email: true },
+  CERTIFICATE_AMENDED: { inApp: true, email: true },
   ASSET_DUE_FOR_RECALIBRATION: { inApp: true, email: true },
   STANDARD_EXPIRING: { inApp: true, email: true },
   JOB_OVERDUE: { inApp: true, email: true },
   NC_CREATED: { inApp: true, email: true },
   NC_ESCALATED_TO_CAPA: { inApp: true, email: true },
+  COMPETENCE_EXPIRING: { inApp: true, email: true },
+  COMPETENCE_EXPIRED: { inApp: true, email: true },
+  COMPETENCE_REQUESTED: { inApp: true, email: true },
+  COMPETENCE_APPROVED: { inApp: true, email: true },
   PAYMENT_RECEIVED: { inApp: true, email: true },
   PAYMENT_FAILED: { inApp: true, email: true },
 }
