@@ -12,6 +12,8 @@ export {
   notifyNCEscalatedToCapa, // ISO 17025 Clause 8.7
   notifyCompetenceApproved,
   notifyCompetenceRequested,
+  notifyCompetenceExpiring,
+  notifyCompetenceExpired,
   type SendNotificationOptions,
   type NotificationResult,
 } from "./service";

@@ -31,24 +31,24 @@ function formatDate(dateString: string | null | undefined): string {
 }
 
 const typeLabels: Record<string, string> = {
-  INTERNAL: 'Interno',
-  EXTERNAL: 'Externo',
-  ON_THE_JOB: 'Em Serviço',
-  SELF_STUDY: 'Autoestudo',
+  internal: 'Interno',
+  external: 'Externo',
+  ojt: 'Em Serviço',
+  proficiency_test: 'Teste de Proficiência',
 }
 
 const statusLabels: Record<string, string> = {
-  PLANNED: 'Planejado',
-  IN_PROGRESS: 'Em Andamento',
-  COMPLETED: 'Concluído',
-  CANCELLED: 'Cancelado',
+  planned: 'Planejado',
+  in_progress: 'Em Andamento',
+  completed: 'Concluído',
+  failed: 'Reprovado',
 }
 
 const statusVariants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  PLANNED: 'outline',
-  IN_PROGRESS: 'secondary',
-  COMPLETED: 'default',
-  CANCELLED: 'destructive',
+  planned: 'outline',
+  in_progress: 'secondary',
+  completed: 'default',
+  failed: 'destructive',
 }
 
 function TrainingTab() {
