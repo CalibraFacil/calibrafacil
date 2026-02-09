@@ -7,22 +7,24 @@ import { Aside } from '@astrojs/starlight/components';
 
 ## Status do Método
 
-Cada método de calibração possui um dos três status a seguir:
+Cada método de calibração possui um dos cinco status a seguir:
 
 | Status | Editável | Disponível para calibrações | Descrição |
 | :--- | :--- | :--- | :--- |
 | **DRAFT** (Rascunho) | Sim | Não | Método em construção. Pode ser livremente editado. |
+| **PENDING_APPROVAL** (Em aprovação) | Não | Não | Método enviado para revisão. Edição bloqueada. |
+| **TECHNICAL_REVIEWED** (Revisão técnica) | Não | Não | Revisado tecnicamente e aguardando aprovação da qualidade. |
 | **PUBLISHED** (Publicado) | Não | Sim | Método aprovado e disponível para uso em calibrações. |
 | **ARCHIVED** (Arquivado) | Não | Não | Versão anterior, substituída por uma nova publicação. |
 
 ## Fluxo de Status
 
 ```
-DRAFT ──────→ PUBLISHED ──────→ ARCHIVED
-  ↑               │
-  │               │ (nova versão)
-  │               ▼
-  └────────── DRAFT (v2)
+DRAFT → PENDING_APPROVAL → TECHNICAL_REVIEWED → PUBLISHED → ARCHIVED
+  ↑            │                   │
+  └────────────┴─────────────── (retornar com motivo)
+                   │
+                   └── (nova versão) → DRAFT (v2)
 ```
 
 ### Criação
@@ -34,18 +36,44 @@ Todo método começa no status **DRAFT** (versão 1). Nesse estado, todos os asp
 - Componentes de incerteza Tipo B
 - Nome, descrição e tipo de ativo
 
-### Publicação
+### Solicitação de aprovação
 
-Quando o método está pronto para uso, o responsável técnico clica em **Publicar**. A publicação:
+Quando o método está pronto para uso, o responsável técnico clica em **Solicitar aprovação**. A solicitação:
+
+1. Altera o status para **PENDING_APPROVAL**
+2. **Bloqueia a edição** — o método não pode mais ser modificado
+3. Envia o método para revisão técnica
+
+### Revisão técnica
+
+Um **Admin** realiza a revisão técnica. Ao aprovar:
+
+1. O status passa para **TECHNICAL_REVIEWED**
+2. O método fica aguardando aprovação da qualidade
+
+### Aprovação da qualidade (publicação)
+
+Um **Owner** realiza a aprovação da qualidade. A publicação:
 
 1. Altera o status para **PUBLISHED**
-2. **Bloqueia a edição** — o método não pode mais ser modificado
-3. Torna o método disponível para novas calibrações
-4. Se existir uma versão publicada anterior, ela é automaticamente **arquivada**
+2. Torna o método disponível para novas calibrações
+3. Se existir uma versão publicada anterior, ela é automaticamente **arquivada**
+
+<Aside type="note">
+  Por conformidade e separação de responsabilidades, a revisão técnica e a aprovação da qualidade devem ser realizadas por usuários diferentes.
+</Aside>
 
 <Aside type="caution">
-  A publicação é uma ação irreversível. Revise cuidadosamente o método na pré-visualização antes de publicar. Para corrigir um método publicado, será necessário criar uma nova versão.
+  A publicação é uma ação irreversível. Revise cuidadosamente o método na pré-visualização antes de solicitar aprovação. Para corrigir um método publicado, será necessário criar uma nova versão.
 </Aside>
+
+### Retorno a rascunho
+
+Se houver ajustes necessários durante a aprovação, um **Admin** ou **Owner** pode retornar o método para **DRAFT**. Essa ação:
+
+- Reabre a edição do método
+- Requer **motivo obrigatório**
+- Fica registrada na trilha de auditoria
 
 ### Versionamento
 
@@ -93,7 +121,10 @@ O sistema registra automaticamente:
 | :--- | :--- |
 | Criação | Usuário, data/hora, versão |
 | Modificação | Usuário, data/hora, campos alterados |
-| Publicação | Usuário, data/hora, versão publicada |
+| Solicitação de aprovação | Usuário, data/hora |
+| Revisão técnica | Usuário, data/hora |
+| Aprovação da qualidade | Usuário, data/hora, versão publicada |
+| Retorno a rascunho | Usuário, data/hora, **motivo** |
 | Arquivamento | Data/hora, motivo (nova versão ou manual) |
 
 Esse registro atende aos requisitos de rastreabilidade da **ISO/IEC 17025:2017, Cláusula 8.4** (Controle de registros) e **Cláusula 7.11** (Controle de dados e gestão de informações).
