@@ -705,7 +705,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           changes: { status: { old: existing.status, new: "DRAFT" } },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
-          reason: reason || null,
+          reason,
         });
 
         return c.json(updated);

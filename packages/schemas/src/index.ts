@@ -424,7 +424,10 @@ export type ListMethodsQuery = z.infer<typeof ListMethodsQuerySchema>;
  * Schema for returning a method to draft with optional reason
  */
 export const ReturnMethodToDraftSchema = z.object({
-  reason: z.string().optional(),
+  reason: z
+    .string()
+    .trim()
+    .min(3, "Motivo é obrigatório"),
 });
 
 export type ReturnMethodToDraftInput = z.infer<
