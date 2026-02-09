@@ -1013,13 +1013,18 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           reason: personnelCompetenceAuditLog.reason,
         })
         .from(personnelCompetenceAuditLog)
-        .innerJoin(
+        .leftJoin(
           user,
           eq(personnelCompetenceAuditLog.performedBy, user.id),
         )
         .where(eq(personnelCompetenceAuditLog.competenceId, id))
         .orderBy(desc(personnelCompetenceAuditLog.performedAt));
 
-      return c.json(logs);
+      return c.json(
+        logs.map((log) => ({
+          ...log,
+          performedByName: log.performedByName ?? log.performedBy,
+        })),
+      );
     },
   );
