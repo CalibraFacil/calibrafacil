@@ -77,6 +77,7 @@ export type EnvironmentalSnapshot = {
 
 export type JobData = {
     jobId: string;
+    organizationId?: string | null;
     performedAt: Date | null;
     approvedAt: Date | null;
     environmentalSnapshot?: EnvironmentalSnapshot | null;

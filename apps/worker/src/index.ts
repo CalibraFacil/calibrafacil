@@ -30,6 +30,32 @@ interface MessageBatch<T> {
     }[];
 }
 
+type Dateish = Date | string | null | undefined;
+
+function sanitizeKeyPart(value: string): string {
+    return value.trim().replace(/[\\/]/g, "_");
+}
+
+function getYearFromDateish(value: Dateish): number {
+    const fallbackYear = new Date().getUTCFullYear();
+    if (!value) return fallbackYear;
+    const date = value instanceof Date ? value : new Date(value);
+    const year = date.getUTCFullYear();
+    return Number.isNaN(year) ? fallbackYear : year;
+}
+
+function buildR2Key(params: {
+    orgId: string;
+    jobId: string;
+    year: number;
+    type: "CERTIFICATE" | "LABEL";
+}): string {
+    const orgId = sanitizeKeyPart(params.orgId);
+    const jobId = sanitizeKeyPart(params.jobId);
+    const filename = params.type === "CERTIFICATE" ? "cert.pdf" : "label.pdf";
+    return `org/${orgId}/${params.year}/jobs/${jobId}/${filename}`;
+}
+
 async function fetchJobData(
     client: Client,
     jobId: number,
@@ -133,6 +159,7 @@ async function fetchJobData(
 
     return {
         jobId: row.job_id,
+        organizationId: row.organization_id,
         performedAt: row.performed_at,
         approvedAt: row.approved_at,
         lab: {
@@ -339,12 +366,14 @@ async function setJobError(
 async function fetchLabelData(
     client: Client,
     jobId: number
-): Promise<{ label: LabelData; verificationToken: string } | null> {
+): Promise<{ label: LabelData; verificationToken: string; organizationId: string | null; approvedAt: Date | string | null } | null> {
     const result = await client.query(
         `
     SELECT
       cj.job_id,
       cj.performed_at,
+      cj.approved_at,
+      cj.organization_id,
       cj.verification_token,
       o.name as lab_name,
       a.tag as asset_tag
@@ -369,6 +398,8 @@ async function fetchLabelData(
             qrCodeDataUrl: "", // Will be filled after QR generation
         },
         verificationToken: row.verification_token,
+        organizationId: row.organization_id,
+        approvedAt: row.approved_at,
     };
 }
 
@@ -473,14 +504,21 @@ async function processLabelJob(
 
         // 5. Upload to R2
         const r2Start = performance.now();
-        const filename = `label-${data.label.jobId}.pdf`;
-        await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
+        const orgId = data.organizationId ?? "unknown";
+        const year = getYearFromDateish(data.approvedAt ?? data.label.calibrationDate);
+        const key = buildR2Key({
+            orgId,
+            jobId: data.label.jobId,
+            year,
+            type: "LABEL",
+        });
+        await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
             httpMetadata: { contentType: "application/pdf" },
         });
         console.log(`[LABEL ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`);
 
         // 6. Build public URL
-        const labelUrl = `https://certificates.calibrafacil.com/${filename}`;
+        const labelUrl = `https://certificates.calibrafacil.com/${key}`;
 
         // 7. Update DB
         const dbUpdateStart = performance.now();
@@ -644,14 +682,21 @@ async function processJob(
 
         // 5. Upload to R2
         const r2Start = performance.now();
-        const filename = `cert-${job.jobId}.pdf`;
-        await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
+        const orgId = job.organizationId ?? "unknown";
+        const year = getYearFromDateish(job.approvedAt ?? job.performedAt);
+        const key = buildR2Key({
+            orgId,
+            jobId: job.jobId,
+            year,
+            type: "CERTIFICATE",
+        });
+        await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
             httpMetadata: { contentType: "application/pdf" },
         });
         console.log(`[JOB ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`);
 
         // 6. Build public URL
-        const certificateUrl = `https://certificates.calibrafacil.com/${filename}`;
+        const certificateUrl = `https://certificates.calibrafacil.com/${key}`;
 
         // 7. Update DB with certificate URL and signature metadata
         const dbUpdateStart = performance.now();

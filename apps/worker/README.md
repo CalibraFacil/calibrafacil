@@ -24,7 +24,7 @@ interface QueueMessage {
 1. Fetches calibration job data from database
 2. Renders `CertificateHtml` component to HTML string
 3. Generates PDF using Cloudflare Puppeteer
-4. Uploads to R2 bucket
+4. Uploads to R2 bucket using scoped keys (`org/{orgId}/{YYYY}/jobs/{jobId}/cert.pdf`)
 5. Updates job status to APPROVED with `certificate_url`
 6. Records audit log entry
 
@@ -33,7 +33,7 @@ interface QueueMessage {
 2. Generates QR code (verification URL) as SVG
 3. Renders `LabelHtml` component (50mm × 30mm format)
 4. Generates PDF for thermal printer
-5. Uploads to R2 and updates job with `label_url`
+5. Uploads to R2 using scoped keys (`org/{orgId}/{YYYY}/jobs/{jobId}/label.pdf`) and updates job with `label_url`
 
 ### Scheduled Tasks
 
@@ -90,6 +90,6 @@ src/
 ## Cloudflare Resources
 
 - **Queue:** `calibration-pdf-queue` - Receives PDF generation requests
-- **R2 Bucket:** `calibrafacil-certificates` - Stores generated PDFs
+- **R2 Bucket:** `calibrafacil-certificates` - Stores generated PDFs using `org/{orgId}/{YYYY}/jobs/{jobId}/...` keys
 - **Browser:** Puppeteer service for PDF rendering
 - **Hyperdrive:** Database connection proxy
