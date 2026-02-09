@@ -44,7 +44,12 @@ export interface MethodTypeBComponent {
   degreesOfFreedom?: number
 }
 
-export type MethodStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+export type MethodStatus =
+  | 'DRAFT'
+  | 'PENDING_APPROVAL'
+  | 'TECHNICAL_REVIEWED'
+  | 'PUBLISHED'
+  | 'ARCHIVED'
 
 export interface MethodData {
   id?: number
@@ -53,6 +58,8 @@ export interface MethodData {
   assetTypeId?: number
   version: number
   status: MethodStatus
+  technicalReviewedBy?: string | null
+  approvedBy?: string | null
   dataFields: Array<MethodInputField>
   formulas: Array<MethodFormula>
   validations: Array<MethodValidation>

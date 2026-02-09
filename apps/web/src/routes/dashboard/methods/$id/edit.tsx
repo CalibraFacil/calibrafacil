@@ -77,14 +77,15 @@ function EditMethodPage() {
 
   const publishMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.methods[':id'].publish.$post({
+      const res = await api.api.methods[':id']['request-approval'].$post({
         param: { id },
       })
 
       if (!res.ok) {
         const error = await res.json()
         throw new Error(
-          (error as { error?: string }).error || 'Erro ao publicar método',
+          (error as { error?: string }).error ||
+            'Erro ao solicitar aprovação',
         )
       }
 
@@ -92,7 +93,7 @@ function EditMethodPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })
-      toast.success('Método publicado com sucesso!')
+      toast.success('Método enviado para aprovação')
       navigate({ to: '/dashboard/methods' })
     },
     onError: (error) => {
@@ -124,8 +125,8 @@ function EditMethodPage() {
     return (
       <div className="p-6">
         <p>
-          Este método está publicado e não pode ser editado diretamente. Crie
-          uma nova versão para fazer alterações.
+          Este método não está em rascunho e não pode ser editado diretamente.
+          Crie uma nova versão para fazer alterações.
         </p>
         <Button
           variant="outline"

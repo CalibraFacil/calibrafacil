@@ -48,10 +48,17 @@ export const Route = createFileRoute('/dashboard/methods/')({
   component: MethodsListPage,
 })
 
-type MethodStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+type MethodStatus =
+  | 'DRAFT'
+  | 'PENDING_APPROVAL'
+  | 'TECHNICAL_REVIEWED'
+  | 'PUBLISHED'
+  | 'ARCHIVED'
 
 const statusLabels: Record<MethodStatus, string> = {
   DRAFT: 'Rascunho',
+  PENDING_APPROVAL: 'Em aprovação',
+  TECHNICAL_REVIEWED: 'Revisão técnica',
   PUBLISHED: 'Publicado',
   ARCHIVED: 'Arquivado',
 }
@@ -207,6 +214,10 @@ function MethodsListPage() {
               <SelectContent>
                 <SelectItem value="">Todos os status</SelectItem>
                 <SelectItem value="DRAFT">Rascunho</SelectItem>
+                <SelectItem value="PENDING_APPROVAL">Em aprovação</SelectItem>
+                <SelectItem value="TECHNICAL_REVIEWED">
+                  Revisão técnica
+                </SelectItem>
                 <SelectItem value="PUBLISHED">Publicado</SelectItem>
                 <SelectItem value="ARCHIVED">Arquivado</SelectItem>
               </SelectContent>

@@ -498,10 +498,17 @@ export const assetAuditLogRelations = relations(assetAuditLog, ({ one }) => ({
 /**
  * Method status values for versioning workflow
  * - DRAFT: Work in progress, can be edited
+ * - PENDING_APPROVAL: Submitted for review, locked for edits
+ * - TECHNICAL_REVIEWED: Approved by technical reviewer, pending quality approval
  * - PUBLISHED: Active and immutable, used for calibrations
  * - ARCHIVED: No longer active, kept for historical reference
  */
-export type MethodStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+export type MethodStatus =
+  | "DRAFT"
+  | "PENDING_APPROVAL"
+  | "TECHNICAL_REVIEWED"
+  | "PUBLISHED"
+  | "ARCHIVED";
 
 /**
  * Input field definition for method data collection.
@@ -598,8 +605,14 @@ export const calibrationMethod = pgTable(
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
+    technicalReviewedBy: text("technical_reviewed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
     publishedAt: timestamp("published_at"),
     publishedBy: text("published_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    approvedBy: text("approved_by").references(() => user.id, {
       onDelete: "set null",
     }),
     archivedAt: timestamp("archived_at"),
@@ -633,7 +646,7 @@ export const methodAuditLog = pgTable(
     methodId: integer("method_id")
       .notNull()
       .references(() => calibrationMethod.id, { onDelete: "cascade" }),
-    action: text("action").notNull(), // 'create', 'update', 'publish', 'archive', 'new_version'
+    action: text("action").notNull(), // 'create', 'update', 'request_approval', 'technical_review', 'quality_approve', 'return_to_draft', 'publish', 'archive', 'new_version'
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")
       .notNull()
@@ -674,10 +687,20 @@ export const calibrationMethodRelations = relations(
       references: [user.id],
       relationName: "methodCreator",
     }),
+    technicalReviewedByUser: one(user, {
+      fields: [calibrationMethod.technicalReviewedBy],
+      references: [user.id],
+      relationName: "methodTechnicalReviewer",
+    }),
     publishedByUser: one(user, {
       fields: [calibrationMethod.publishedBy],
       references: [user.id],
       relationName: "methodPublisher",
+    }),
+    approvedByUser: one(user, {
+      fields: [calibrationMethod.approvedBy],
+      references: [user.id],
+      relationName: "methodQualityApprover",
     }),
     auditLogs: many(methodAuditLog),
   }),

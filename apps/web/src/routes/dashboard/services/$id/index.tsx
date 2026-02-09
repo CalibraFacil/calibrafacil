@@ -286,7 +286,9 @@ function ServiceDetailPage() {
                         variant={
                           service.methodStatus === 'PUBLISHED'
                             ? 'default'
-                            : 'secondary'
+                            : service.methodStatus === 'DRAFT'
+                              ? 'secondary'
+                              : 'outline'
                         }
                         className="text-xs"
                       >
@@ -294,7 +296,11 @@ function ServiceDetailPage() {
                           ? 'Publicado'
                           : service.methodStatus === 'DRAFT'
                             ? 'Rascunho'
-                            : 'Arquivado'}
+                            : service.methodStatus === 'PENDING_APPROVAL'
+                              ? 'Em aprovação'
+                              : service.methodStatus === 'TECHNICAL_REVIEWED'
+                                ? 'Revisão técnica'
+                                : 'Arquivado'}
                       </Badge>
                     )}
                   </div>

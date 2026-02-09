@@ -51,6 +51,10 @@ export interface TimelineEvent {
     | 'deactivate'
     | 'superseded'
     | 'amendment_created'
+    | 'request_approval'
+    | 'technical_review'
+    | 'quality_approve'
+    | 'return_to_draft'
     | 'custom'
     label: string
     timestamp: string | null
@@ -153,6 +157,26 @@ const eventConfig: Record<
         icon: PlusSignIcon,
         bgColor: 'bg-amber-100',
         iconColor: 'text-amber-600',
+    },
+    request_approval: {
+        icon: SentIcon,
+        bgColor: 'bg-amber-100',
+        iconColor: 'text-amber-600',
+    },
+    technical_review: {
+        icon: Settings02Icon,
+        bgColor: 'bg-blue-100',
+        iconColor: 'text-blue-600',
+    },
+    quality_approve: {
+        icon: CheckmarkCircle02Icon,
+        bgColor: 'bg-green-100',
+        iconColor: 'text-green-600',
+    },
+    return_to_draft: {
+        icon: RefreshIcon,
+        bgColor: 'bg-gray-100',
+        iconColor: 'text-gray-600',
     },
     custom: {
         icon: Clock01Icon,
@@ -336,6 +360,10 @@ const actionLabels: Record<string, string> = {
     status_change: 'Status alterado',
     renew: 'Certificado renovado',
     publish: 'Publicado',
+    request_approval: 'Solicitou aprovação',
+    technical_review: 'Revisão técnica',
+    quality_approve: 'Aprovado (Qualidade)',
+    return_to_draft: 'Retornou para rascunho',
     archive: 'Arquivado',
     new_version: 'Nova versão criada',
     deactivate: 'Desativado',
@@ -360,6 +388,10 @@ function mapActionToEventType(action: string): TimelineEvent['type'] {
         status_change: 'status_change',
         renew: 'renewed',
         publish: 'published',
+        request_approval: 'request_approval',
+        technical_review: 'technical_review',
+        quality_approve: 'quality_approve',
+        return_to_draft: 'return_to_draft',
         archive: 'archived',
         new_version: 'new_version',
         deactivate: 'deactivate',
@@ -385,6 +417,7 @@ export interface AuditLogRecord {
     performedAt: string
     performedBy?: string | null
     performerName?: string | null
+    performedByName?: string | null
     ipAddress?: string | null
     reason?: string | null
 }
@@ -401,7 +434,7 @@ export function buildAuditTimelineEvents(
         type: mapActionToEventType(log.action),
         label: actionLabels[log.action] || log.action,
         timestamp: log.performedAt,
-        actor: log.performerName,
+        actor: log.performerName ?? log.performedByName ?? log.performedBy,
         details: log.reason || undefined,
     }))
 }
