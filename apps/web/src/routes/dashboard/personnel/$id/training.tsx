@@ -1,0 +1,185 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+
+import { api } from '@/utils/api'
+import { Badge } from '@/components/ui/badge'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@/components/ui/empty'
+
+export const Route = createFileRoute('/dashboard/personnel/$id/training')({
+  head: () => ({
+    meta: [{ title: 'Treinamentos | CalibraFacil' }],
+  }),
+  component: TrainingTab,
+})
+
+function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return '-'
+  return new Date(dateString).toLocaleDateString('pt-BR')
+}
+
+const typeLabels: Record<string, string> = {
+  INTERNAL: 'Interno',
+  EXTERNAL: 'Externo',
+  ON_THE_JOB: 'Em Serviço',
+  SELF_STUDY: 'Autoestudo',
+}
+
+const statusLabels: Record<string, string> = {
+  PLANNED: 'Planejado',
+  IN_PROGRESS: 'Em Andamento',
+  COMPLETED: 'Concluído',
+  CANCELLED: 'Cancelado',
+}
+
+const statusVariants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  PLANNED: 'outline',
+  IN_PROGRESS: 'secondary',
+  COMPLETED: 'default',
+  CANCELLED: 'destructive',
+}
+
+function TrainingTab() {
+  const { id } = Route.useParams()
+
+  const { data: comp, isLoading } = useQuery({
+    queryKey: ['competence', id],
+    queryFn: async () => {
+      const res = await api.api.competences[':id'].$get({ param: { id } })
+      if (!res.ok) throw new Error('Falha ao carregar')
+      return res.json()
+    },
+  })
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-muted-foreground">Carregando...</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const trainings = comp?.trainingRecords ?? []
+
+  if (trainings.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Registros de Treinamento</CardTitle>
+          <CardDescription>
+            Treinamentos vinculados a esta competência
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyTitle>Nenhum treinamento registrado</EmptyTitle>
+              <EmptyDescription>
+                Registros de treinamento podem ser adicionados e vinculados a
+                esta competência.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Registros de Treinamento</CardTitle>
+        <CardDescription>
+          {trainings.length} treinamento{trainings.length !== 1 ? 's' : ''}{' '}
+          vinculado{trainings.length !== 1 ? 's' : ''}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {trainings.map((tr) => (
+          <div
+            key={tr.id}
+            className="rounded-lg border p-4 space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium">{tr.title}</h4>
+              <Badge variant={statusVariants[tr.status] ?? 'secondary'}>
+                {statusLabels[tr.status] ?? tr.status}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div>
+                <Label className="text-muted-foreground text-xs">Tipo</Label>
+                <p className="text-sm">{typeLabels[tr.type] ?? tr.type}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-xs">Início</Label>
+                <p className="text-sm">{formatDate(tr.startDate)}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-xs">
+                  Término
+                </Label>
+                <p className="text-sm">{formatDate(tr.endDate)}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-xs">Horas</Label>
+                <p className="text-sm">
+                  {tr.hoursCompleted ?? 0}h
+                </p>
+              </div>
+            </div>
+            {tr.provider && (
+              <div>
+                <Label className="text-muted-foreground text-xs">
+                  Provedor
+                </Label>
+                <p className="text-sm">{tr.provider}</p>
+              </div>
+            )}
+            {tr.score != null && (
+              <div>
+                <Label className="text-muted-foreground text-xs">
+                  Nota
+                </Label>
+                <p className="text-sm">
+                  {tr.score}
+                  {tr.passingScore != null ? ` (mínimo: ${tr.passingScore})` : ''}
+                  {tr.passed != null && (
+                    <Badge
+                      variant={tr.passed ? 'default' : 'destructive'}
+                      className="ml-2"
+                    >
+                      {tr.passed ? 'Aprovado' : 'Reprovado'}
+                    </Badge>
+                  )}
+                </p>
+              </div>
+            )}
+            {tr.description && (
+              <div>
+                <Label className="text-muted-foreground text-xs">
+                  Descrição
+                </Label>
+                <p className="text-sm whitespace-pre-wrap">{tr.description}</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}

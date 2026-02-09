@@ -60,6 +60,7 @@ const data = {
       items: [
         { title: 'Métodos de Calibração', url: '/dashboard/methods' },
         { title: 'Padrões de Referência', url: '/dashboard/standards' },
+        { title: 'Competências do Pessoal', url: '/dashboard/personnel' },
       ],
     },
     {

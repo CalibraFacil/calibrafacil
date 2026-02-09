@@ -54,6 +54,26 @@ interface OverdueJobRow {
   days_overdue: number;
 }
 
+interface CompetenceExpiringRow {
+  id: number;
+  user_id: string;
+  user_name: string;
+  scope_description: string;
+  organization_id: string;
+  expires_at: Date;
+  days_until_expiry: number;
+}
+
+interface CompetenceExpiredRow {
+  id: number;
+  user_id: string;
+  user_name: string;
+  scope_description: string;
+  organization_id: string;
+  expires_at: Date;
+  days_expired: number;
+}
+
 interface AdminRecipient {
   user_id: string;
 }
@@ -347,6 +367,95 @@ async function recordScheduledNotification(
       params.leadTimeDays,
     ],
   );
+}
+
+/**
+ * Check for personnel competences expiring within 30 days.
+ * ISO 17025 Clause 6.2.3 - Personnel competence tracking.
+ *
+ * Duplicate prevention: Competences are notified once per 7-day window.
+ */
+async function checkCompetencesExpiring(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<CompetenceExpiringRow[]> {
+  const result = await client.query<CompetenceExpiringRow>(
+    `
+    SELECT
+      pc.id,
+      pc.user_id,
+      u.name as user_name,
+      pc.scope_description,
+      pc.organization_id,
+      pc.expires_at,
+      EXTRACT(DAY FROM pc.expires_at - CURRENT_DATE)::int as days_until_expiry
+    FROM personnel_competence pc
+    JOIN "user" u ON pc.user_id = u.id
+    WHERE pc.status = 'ACTIVE'
+      AND pc.deleted_at IS NULL
+      AND pc.expires_at IS NOT NULL
+      AND pc.expires_at BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+      AND NOT EXISTS (
+        SELECT 1 FROM scheduled_notification sn
+        WHERE sn.entity_type = 'competence'
+          AND sn.entity_id = pc.id
+          AND sn.type = 'COMPETENCE_EXPIRING'
+          AND sn.lead_time_days = 30
+          AND sn.sent_at IS NOT NULL
+          AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
+      )
+    ORDER BY pc.expires_at ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
+}
+
+/**
+ * Check for personnel competences that have EXPIRED.
+ * Auto-expire: update status to EXPIRED.
+ *
+ * Duplicate prevention: Expired competences are notified weekly until renewed.
+ */
+async function checkCompetencesExpired(
+  client: Client,
+  offset = 0,
+  batchSize = 100,
+): Promise<CompetenceExpiredRow[]> {
+  const result = await client.query<CompetenceExpiredRow>(
+    `
+    SELECT
+      pc.id,
+      pc.user_id,
+      u.name as user_name,
+      pc.scope_description,
+      pc.organization_id,
+      pc.expires_at,
+      EXTRACT(DAY FROM CURRENT_DATE - pc.expires_at)::int as days_expired
+    FROM personnel_competence pc
+    JOIN "user" u ON pc.user_id = u.id
+    WHERE pc.status = 'ACTIVE'
+      AND pc.deleted_at IS NULL
+      AND pc.expires_at IS NOT NULL
+      AND pc.expires_at < CURRENT_DATE
+      AND NOT EXISTS (
+        SELECT 1 FROM scheduled_notification sn
+        WHERE sn.entity_type = 'competence'
+          AND sn.entity_id = pc.id
+          AND sn.type = 'COMPETENCE_EXPIRED'
+          AND sn.sent_at IS NOT NULL
+          AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
+      )
+    ORDER BY pc.expires_at ASC
+    LIMIT $1 OFFSET $2
+    `,
+    [batchSize, offset],
+  );
+
+  return result.rows;
 }
 
 const BATCH_SIZE = 100;

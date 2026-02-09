@@ -1576,7 +1576,11 @@ export type NotificationType =
   | "PAYMENT_RECEIVED"
   | "PAYMENT_FAILED"
   | "NC_CREATED" // ISO 17025 Clause 8.7 - New non-conformance registered
-  | "NC_ESCALATED_TO_CAPA"; // ISO 17025 Clause 8.7 - NC escalated to CAPA
+  | "NC_ESCALATED_TO_CAPA" // ISO 17025 Clause 8.7 - NC escalated to CAPA
+  | "COMPETENCE_EXPIRING" // ISO 17025 Clause 6.2.3 - Competence expiring soon
+  | "COMPETENCE_EXPIRED" // ISO 17025 Clause 6.2.3 - Competence expired, blocks assignment
+  | "COMPETENCE_REQUESTED" // ISO 17025 Clause 6.2.3 - New qualification request
+  | "COMPETENCE_APPROVED"; // ISO 17025 Clause 6.2.3 - Qualification approved
 
 /**
  * Notification priority levels
@@ -1597,7 +1601,7 @@ export type NotificationChannel = "IN_APP" | "EMAIL";
  * Related entity reference for deep linking
  */
 export type NotificationRelatedEntity = {
-  entityType: "job" | "asset" | "standard" | "payment" | "customer" | "nc" | "capa";
+  entityType: "job" | "asset" | "standard" | "payment" | "customer" | "nc" | "capa" | "competence";
   entityId: number | string;
   jobId?: string; // Human-readable job ID for display
 };
@@ -1694,7 +1698,7 @@ export const notificationPreference = pgTable(
 /**
  * Scheduled notification entity type
  */
-export type ScheduledNotificationEntityType = "asset" | "standard" | "job";
+export type ScheduledNotificationEntityType = "asset" | "standard" | "job" | "competence";
 
 /**
  * Scheduled Notification table - Tracks scheduled compliance alerts.
@@ -2303,6 +2307,298 @@ export const nonConformanceAuditLogRelations = relations(
     }),
     performedByUser: one(user, {
       fields: [nonConformanceAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+// =============================================================================
+// PERSONNEL COMPETENCE - ISO 17025:2017 Clause 6.2.3 (Personnel Competence)
+// =============================================================================
+
+/**
+ * Competence workflow status values
+ */
+export type CompetenceStatus =
+  | "REQUESTED"
+  | "TRAINING_ASSIGNED"
+  | "IN_TRAINING"
+  | "PENDING_EVALUATION"
+  | "ACTIVE"
+  | "SUSPENDED"
+  | "EXPIRED";
+
+/**
+ * Training type values
+ */
+export type TrainingType = "internal" | "external" | "ojt" | "proficiency_test";
+
+/**
+ * Training status values
+ */
+export type TrainingStatus = "planned" | "in_progress" | "completed" | "failed";
+
+/**
+ * Personnel Competence table - Tracks technician qualifications per asset type
+ * ISO 17025:2017 Clause 6.2.3 - Personnel competence requirements
+ *
+ * Key concepts:
+ * - Tracks qualifications per user per asset type
+ * - Full workflow: REQUESTED → TRAINING_ASSIGNED → IN_TRAINING → PENDING_EVALUATION → ACTIVE
+ * - Auto-detect enforcement: skip if org has zero records, enforce once populated
+ * - Supports expiration and renewal
+ */
+export const personnelCompetence = pgTable(
+  "personnel_competence",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    assetTypeId: integer("asset_type_id").references(() => assetType.id, {
+      onDelete: "set null",
+    }),
+    scopeDescription: text("scope_description").notNull(),
+    status: text("status")
+      .$type<CompetenceStatus>()
+      .default("REQUESTED")
+      .notNull(),
+    qualifiedAt: timestamp("qualified_at"),
+    expiresAt: timestamp("expires_at"),
+    certificateR2Key: text("certificate_r2_key"),
+    certificateFileName: text("certificate_file_name"),
+    notes: text("notes"),
+    requestedBy: text("requested_by")
+      .notNull()
+      .references(() => user.id),
+    evaluatedBy: text("evaluated_by").references(() => user.id),
+    approvedBy: text("approved_by").references(() => user.id),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [
+    index("competence_organization_id_idx").on(table.organizationId),
+    index("competence_user_id_idx").on(table.userId),
+    index("competence_asset_type_id_idx").on(table.assetTypeId),
+    index("competence_status_idx").on(table.status),
+    index("competence_expires_at_idx").on(table.expiresAt),
+    unique("competence_org_user_asset_type_uidx")
+      .on(table.organizationId, table.userId, table.assetTypeId)
+      .nullsNotDistinct(),
+  ],
+);
+
+// =============================================================================
+// TRAINING RECORD - ISO 17025:2017 Clause 6.2.3 (Training Evidence)
+// =============================================================================
+
+/**
+ * Training Record table - Stores training history for personnel
+ * Links to personnel competence for qualification tracking
+ */
+export const trainingRecord = pgTable(
+  "training_record",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    competenceId: integer("competence_id").references(
+      () => personnelCompetence.id,
+      { onDelete: "set null" },
+    ),
+    title: text("title").notNull(),
+    type: text("type").$type<TrainingType>().notNull(),
+    status: text("status")
+      .$type<TrainingStatus>()
+      .default("planned")
+      .notNull(),
+    provider: text("provider"),
+    description: text("description"),
+    startDate: timestamp("start_date").notNull(),
+    endDate: timestamp("end_date"),
+    hoursCompleted: integer("hours_completed"),
+    certificateR2Key: text("certificate_r2_key"),
+    certificateFileName: text("certificate_file_name"),
+    score: real("score"),
+    passingScore: real("passing_score"),
+    passed: boolean("passed"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("training_organization_id_idx").on(table.organizationId),
+    index("training_user_id_idx").on(table.userId),
+    index("training_competence_id_idx").on(table.competenceId),
+    index("training_status_idx").on(table.status),
+    index("training_start_date_idx").on(table.startDate),
+  ],
+);
+
+// =============================================================================
+// PERSONNEL COMPETENCE AUDIT LOG - ISO 17025:2017 Clause 8.4
+// =============================================================================
+
+export const personnelCompetenceAuditLog = pgTable(
+  "personnel_competence_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    competenceId: integer("competence_id")
+      .notNull()
+      .references(() => personnelCompetence.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("competence_audit_log_competence_id_idx").on(table.competenceId),
+    index("competence_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// TRAINING RECORD AUDIT LOG - ISO 17025:2017 Clause 8.4
+// =============================================================================
+
+export const trainingRecordAuditLog = pgTable(
+  "training_record_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    trainingRecordId: integer("training_record_id")
+      .notNull()
+      .references(() => trainingRecord.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("training_audit_log_training_id_idx").on(table.trainingRecordId),
+    index("training_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// PERSONNEL COMPETENCE & TRAINING RELATIONS
+// =============================================================================
+
+export const personnelCompetenceRelations = relations(
+  personnelCompetence,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [personnelCompetence.organizationId],
+      references: [organization.id],
+    }),
+    user: one(user, {
+      fields: [personnelCompetence.userId],
+      references: [user.id],
+      relationName: "competenceUser",
+    }),
+    assetType: one(assetType, {
+      fields: [personnelCompetence.assetTypeId],
+      references: [assetType.id],
+    }),
+    requestedByUser: one(user, {
+      fields: [personnelCompetence.requestedBy],
+      references: [user.id],
+      relationName: "competenceRequester",
+    }),
+    evaluatedByUser: one(user, {
+      fields: [personnelCompetence.evaluatedBy],
+      references: [user.id],
+      relationName: "competenceEvaluator",
+    }),
+    approvedByUser: one(user, {
+      fields: [personnelCompetence.approvedBy],
+      references: [user.id],
+      relationName: "competenceApprover",
+    }),
+    createdByUser: one(user, {
+      fields: [personnelCompetence.createdBy],
+      references: [user.id],
+      relationName: "competenceCreator",
+    }),
+    trainingRecords: many(trainingRecord),
+    auditLogs: many(personnelCompetenceAuditLog),
+  }),
+);
+
+export const trainingRecordRelations = relations(
+  trainingRecord,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [trainingRecord.organizationId],
+      references: [organization.id],
+    }),
+    user: one(user, {
+      fields: [trainingRecord.userId],
+      references: [user.id],
+      relationName: "trainingUser",
+    }),
+    competence: one(personnelCompetence, {
+      fields: [trainingRecord.competenceId],
+      references: [personnelCompetence.id],
+    }),
+    createdByUser: one(user, {
+      fields: [trainingRecord.createdBy],
+      references: [user.id],
+      relationName: "trainingCreator",
+    }),
+    auditLogs: many(trainingRecordAuditLog),
+  }),
+);
+
+export const personnelCompetenceAuditLogRelations = relations(
+  personnelCompetenceAuditLog,
+  ({ one }) => ({
+    competence: one(personnelCompetence, {
+      fields: [personnelCompetenceAuditLog.competenceId],
+      references: [personnelCompetence.id],
+    }),
+    performedByUser: one(user, {
+      fields: [personnelCompetenceAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const trainingRecordAuditLogRelations = relations(
+  trainingRecordAuditLog,
+  ({ one }) => ({
+    trainingRecord: one(trainingRecord, {
+      fields: [trainingRecordAuditLog.trainingRecordId],
+      references: [trainingRecord.id],
+    }),
+    performedByUser: one(user, {
+      fields: [trainingRecordAuditLog.performedBy],
       references: [user.id],
     }),
   }),

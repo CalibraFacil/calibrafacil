@@ -9,13 +9,14 @@ import {
   asset,
   referenceStandard,
   paymentHistory,
+  personnelCompetence,
   type NotificationType,
   type NotificationPriority,
   type NotificationChannel,
   type NotificationRelatedEntity,
   type NotificationPreferenceMap,
 } from "@calibra-facil/db/schema";
-import { eq, and, inArray, lt, isNull, notInArray } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { Resend } from "resend";
 import { render } from "@react-email/components";
 import {
@@ -114,6 +115,10 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   PAYMENT_FAILED: { inApp: true, email: true },
   NC_CREATED: { inApp: true, email: true }, // ISO 17025 Clause 8.7
   NC_ESCALATED_TO_CAPA: { inApp: true, email: true }, // ISO 17025 Clause 8.7
+  COMPETENCE_EXPIRING: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
+  COMPETENCE_EXPIRED: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
+  COMPETENCE_REQUESTED: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
+  COMPETENCE_APPROVED: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
 };
 
 // =============================================================================
@@ -1301,7 +1306,7 @@ export async function notifyNCCreated(
  * Called from POST /api/nc/:id/escalate-to-capa
  */
 export async function notifyNCEscalatedToCapa(
-  ncId: number,
+  _ncId: number,
   ncNumber: string,
   capaId: number,
   capaNumber: string,
@@ -1351,4 +1356,215 @@ export async function notifyNCEscalatedToCapa(
       },
     });
   }
+}
+
+// =============================================================================
+// COMPETENCE NOTIFICATION TRIGGERS - ISO 17025 Clause 6.2.3
+// =============================================================================
+
+/**
+ * Notify admins when a competence is expiring
+ * Called by scheduled worker
+ */
+export async function notifyCompetenceExpiring(
+  competenceId: number,
+  organizationId: string,
+): Promise<void> {
+  const [comp] = await db
+    .select({
+      userId: personnelCompetence.userId,
+      scopeDescription: personnelCompetence.scopeDescription,
+      expiresAt: personnelCompetence.expiresAt,
+      assetTypeId: personnelCompetence.assetTypeId,
+    })
+    .from(personnelCompetence)
+    .where(eq(personnelCompetence.id, competenceId))
+    .limit(1);
+
+  if (!comp?.expiresAt) return;
+
+  const [userData] = await db
+    .select({ name: user.name })
+    .from(user)
+    .where(eq(user.id, comp.userId))
+    .limit(1);
+
+  const techName = userData?.name ?? "Um técnico";
+  const daysRemaining = getDaysRemaining(comp.expiresAt);
+  const dueDate = formatDateBR(comp.expiresAt);
+
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "COMPETENCE_EXPIRING",
+      priority: daysRemaining <= 7 ? "HIGH" : "MEDIUM",
+      title: "Competência vencendo",
+      message: `A competência de ${techName} (${comp.scopeDescription}) vence em ${daysRemaining} dias (${dueDate}).`,
+      relatedEntity: {
+        entityType: "competence",
+        entityId: competenceId,
+      },
+      actionUrl: `/dashboard/personnel/${competenceId}`,
+    });
+  }
+}
+
+/**
+ * Notify admins when a competence has expired
+ * Called by scheduled worker
+ */
+export async function notifyCompetenceExpired(
+  competenceId: number,
+  organizationId: string,
+): Promise<void> {
+  const [comp] = await db
+    .select({
+      userId: personnelCompetence.userId,
+      scopeDescription: personnelCompetence.scopeDescription,
+      expiresAt: personnelCompetence.expiresAt,
+    })
+    .from(personnelCompetence)
+    .where(eq(personnelCompetence.id, competenceId))
+    .limit(1);
+
+  if (!comp) return;
+
+  const [userData] = await db
+    .select({ name: user.name })
+    .from(user)
+    .where(eq(user.id, comp.userId))
+    .limit(1);
+
+  const techName = userData?.name ?? "Um técnico";
+
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "COMPETENCE_EXPIRED",
+      priority: "HIGH",
+      title: "Competência EXPIRADA",
+      message: `A competência de ${techName} (${comp.scopeDescription}) expirou. Atribuições com este escopo estão bloqueadas.`,
+      relatedEntity: {
+        entityType: "competence",
+        entityId: competenceId,
+      },
+      actionUrl: `/dashboard/personnel/${competenceId}`,
+    });
+  }
+}
+
+/**
+ * Notify admins when a new competence request is submitted
+ * Called from POST /api/competences
+ */
+export async function notifyCompetenceRequested(
+  competenceId: number,
+  organizationId: string,
+  requestedByUserId: string,
+): Promise<void> {
+  const [comp] = await db
+    .select({
+      userId: personnelCompetence.userId,
+      scopeDescription: personnelCompetence.scopeDescription,
+    })
+    .from(personnelCompetence)
+    .where(eq(personnelCompetence.id, competenceId))
+    .limit(1);
+
+  if (!comp) return;
+
+  const [requester] = await db
+    .select({ name: user.name })
+    .from(user)
+    .where(eq(user.id, requestedByUserId))
+    .limit(1);
+
+  const [technician] = await db
+    .select({ name: user.name })
+    .from(user)
+    .where(eq(user.id, comp.userId))
+    .limit(1);
+
+  const requesterName = requester?.name ?? "Um usuário";
+  const techName = technician?.name ?? "um técnico";
+
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    if (recipientId === requestedByUserId) continue;
+
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "COMPETENCE_REQUESTED",
+      priority: "MEDIUM",
+      title: "Nova solicitação de competência",
+      message: `${requesterName} solicitou qualificação para ${techName}: ${comp.scopeDescription}.`,
+      relatedEntity: {
+        entityType: "competence",
+        entityId: competenceId,
+      },
+      actionUrl: `/dashboard/personnel/${competenceId}`,
+    });
+  }
+}
+
+/**
+ * Notify technician when their competence is approved
+ * Called from POST /api/competences/:id/evaluate (when passed)
+ */
+export async function notifyCompetenceApproved(
+  competenceId: number,
+  organizationId: string,
+  approvedByUserId: string,
+): Promise<void> {
+  const [comp] = await db
+    .select({
+      userId: personnelCompetence.userId,
+      scopeDescription: personnelCompetence.scopeDescription,
+    })
+    .from(personnelCompetence)
+    .where(eq(personnelCompetence.id, competenceId))
+    .limit(1);
+
+  if (!comp) return;
+
+  const [approver] = await db
+    .select({ name: user.name })
+    .from(user)
+    .where(eq(user.id, approvedByUserId))
+    .limit(1);
+
+  const approverName = approver?.name ?? "Um gestor";
+
+  if (comp.userId === approvedByUserId) return;
+
+  await sendNotification({
+    recipientUserId: comp.userId,
+    organizationId,
+    type: "COMPETENCE_APPROVED",
+    priority: "MEDIUM",
+    title: "Competência aprovada",
+    message: `${approverName} aprovou sua qualificação: ${comp.scopeDescription}.`,
+    relatedEntity: {
+      entityType: "competence",
+      entityId: competenceId,
+    },
+    actionUrl: `/dashboard/personnel/${competenceId}`,
+  });
 }
