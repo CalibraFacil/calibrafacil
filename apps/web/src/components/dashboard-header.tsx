@@ -81,6 +81,13 @@ const routeLabels: Record<string, string> = {
   '/dashboard/capa': 'Ações Corretivas (CAPA)',
   '/dashboard/capa/new': 'Nova CAPA',
   '/dashboard/capa/$id': 'CAPA',
+
+  // Personnel Competences
+  '/dashboard/personnel': 'Competências do Pessoal',
+  '/dashboard/personnel/new': 'Nova Solicitação',
+  '/dashboard/personnel/$id': 'Competência',
+  '/dashboard/personnel/$id/training': 'Treinamentos',
+  '/dashboard/personnel/$id/audit': 'Histórico',
 }
 
 // Extract entity IDs from pathname
@@ -93,6 +100,7 @@ function extractEntityIds(pathname: string): {
   standardId?: string
   ncId?: string
   capaId?: string
+  competenceId?: string
 } {
   const parts = pathname.split('/')
   const result: {
@@ -104,6 +112,7 @@ function extractEntityIds(pathname: string): {
     standardId?: string
     ncId?: string
     capaId?: string
+    competenceId?: string
   } = {}
 
   // /dashboard/clients/:id/...
@@ -162,6 +171,13 @@ function extractEntityIds(pathname: string): {
     if (id !== 'new') result.capaId = id
   }
 
+  // /dashboard/personnel/:id/...
+  const personnelIndex = parts.indexOf('personnel')
+  if (personnelIndex !== -1 && parts[personnelIndex + 1]) {
+    const id = parts[personnelIndex + 1]
+    if (id !== 'new') result.competenceId = id
+  }
+
   return result
 }
 
@@ -179,6 +195,7 @@ export function DashboardHeader() {
     standardId,
     ncId,
     capaId,
+    competenceId,
   } = extractEntityIds(pathname)
 
   // Reactive queries for entity names
@@ -286,6 +303,19 @@ export function DashboardHeader() {
     staleTime: 5 * 60 * 1000,
   })
 
+  const { data: competence } = useQuery({
+    queryKey: ['competence', competenceId],
+    queryFn: async () => {
+      const res = await api.api.competences[':id'].$get({
+        param: { id: competenceId! },
+      })
+      if (!res.ok) throw new Error('Failed to fetch competence')
+      return res.json()
+    },
+    enabled: !!competenceId,
+    staleTime: 5 * 60 * 1000,
+  })
+
   // Build entity name lookup
   const entityNames: Record<string, string> = useMemo(() => {
     const names: Record<string, string> = {}
@@ -297,6 +327,8 @@ export function DashboardHeader() {
     if (standardId && standard?.name) names[standardId] = standard.name
     if (ncId && nc?.ncNumber) names[ncId] = nc.ncNumber
     if (capaId && capa?.capaNumber) names[capaId] = capa.capaNumber
+    if (competenceId && competence?.userName)
+      names[competenceId] = competence.userName
     return names
   }, [
     customerId,
@@ -315,6 +347,8 @@ export function DashboardHeader() {
     nc,
     capaId,
     capa,
+    competenceId,
+    competence,
   ])
 
   const breadcrumbs = useMemo(() => {
