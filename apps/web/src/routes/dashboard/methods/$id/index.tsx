@@ -152,10 +152,10 @@ function MethodDetailPage() {
   })
 
   const returnToDraftMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (reason: string) => {
       const res = await api.api.methods[':id']['return-to-draft'].$post({
         param: { id },
-        json: {},
+        json: { reason },
       })
 
       if (!res.ok) {
@@ -283,7 +283,14 @@ function MethodDetailPage() {
                   ) {
                     return
                   }
-                  returnToDraftMutation.mutate()
+                  const reason = window.prompt(
+                    'Informe o motivo para retornar ao rascunho',
+                  )
+                  if (!reason || reason.trim().length < 3) {
+                    toast.error('Motivo obrigatório (mín. 3 caracteres)')
+                    return
+                  }
+                  returnToDraftMutation.mutate(reason.trim())
                 }}
                 disabled={returnToDraftMutation.isPending}
               >
