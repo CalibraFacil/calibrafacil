@@ -41,6 +41,10 @@ export default defineConfig({
             { label: "Padrões de Referência", slug: "guia/padroes" },
             { label: "Catálogo de Serviços", slug: "guia/servicos" },
             {
+              label: "Competências do Pessoal",
+              slug: "guia/competencias-pessoal",
+            },
+            {
               label: "Ordens de Serviço",
               items: [
                 { label: "Visão Geral", slug: "guia/ordens" },
