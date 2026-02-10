@@ -23,6 +23,7 @@ import { capaRouter } from "./routes/capa";
 import { environmentalLimitsRouter } from "./routes/environmental-limits";
 import { competencesRouter } from "./routes/competences";
 import { trainingRecordsRouter } from "./routes/training-records";
+import { sessionsRouter } from "./routes/sessions";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -147,7 +148,8 @@ const routes = app
   .route("/api/capa", capaRouter)
   .route("/api/environmental-limits", environmentalLimitsRouter)
   .route("/api/competences", competencesRouter)
-  .route("/api/training-records", trainingRecordsRouter);
+  .route("/api/training-records", trainingRecordsRouter)
+  .route("/api/sessions", sessionsRouter);
 
 export type AppType = typeof routes;
 

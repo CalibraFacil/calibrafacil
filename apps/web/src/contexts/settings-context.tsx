@@ -1,6 +1,8 @@
 import * as React from 'react'
 import { authClient, useSession } from '@calibra-facil/auth/client'
 
+import { api } from '@/utils/api'
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -52,7 +54,7 @@ interface SettingsContextValue {
   sessions: Array<SessionInfo>
   sessionsLoading: boolean
   refreshSessions: () => Promise<void>
-  revokeSession: (token: string) => Promise<void>
+  revokeSession: (sessionId: string) => Promise<void>
   revokeOtherSessions: () => Promise<void>
   revokeAllSessions: () => Promise<void>
 
@@ -175,16 +177,27 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   )
 
   const revokeSession = React.useCallback(
-    async (token: string) => {
+    async (sessionId: string) => {
       setIsUpdating(true)
       setError(null)
+      // Remove from local state immediately (optimistic update)
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
       try {
-        const result = await authClient.revokeSession({ token })
-        if (result.error) {
-          throw new Error(result.error.message ?? 'Falha ao encerrar sessão')
+        const res = await api.api.sessions.revoke.$post({
+          json: { sessionId },
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => null)
+          const message =
+            data &&
+            typeof data === 'object' &&
+            'error' in data &&
+            typeof data.error === 'string'
+              ? data.error
+              : 'Falha ao encerrar sessão'
+          throw new Error(message)
         }
-        // Remove from local state immediately (optimistic update)
-        setSessions((prev) => prev.filter((s) => s.token !== token))
+        await refreshSessions()
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Falha ao encerrar sessão'

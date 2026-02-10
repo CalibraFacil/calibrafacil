@@ -194,7 +194,7 @@ function SecuritySettingsPage() {
                         <span className="font-medium">
                           {parseUserAgent(s.userAgent)}
                         </span>
-                        {s.token === session?.token && (
+                        {s.id === session?.id && (
                           <Badge variant="secondary">Atual</Badge>
                         )}
                       </div>
@@ -207,11 +207,11 @@ function SecuritySettingsPage() {
                         </p>
                       )}
                     </div>
-                    {s.token !== session?.token && (
+                    {s.id !== session?.id && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => revokeSession(s.token)}
+                        onClick={() => revokeSession(s.id)}
                         disabled={isUpdating}
                       >
                         Encerrar
