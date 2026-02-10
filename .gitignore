@@ -41,3 +41,13 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# LaTeX build artifacts (math-engine validation)
+packages/math-engine/docs/validation/latex/*.pdf
+packages/math-engine/docs/validation/latex/*.aux
+packages/math-engine/docs/validation/latex/*.fdb_latexmk
+packages/math-engine/docs/validation/latex/*.fls
+packages/math-engine/docs/validation/latex/*.log
+packages/math-engine/docs/validation/latex/*.out
+packages/math-engine/docs/validation/latex/*.synctex.gz
+packages/math-engine/docs/validation/latex/*.jpg
