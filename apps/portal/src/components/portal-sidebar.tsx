@@ -1,6 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Settings05Icon } from "@hugeicons/core-free-icons";
+import {
+  Book02Icon,
+  Settings05Icon,
+} from "@hugeicons/core-free-icons";
 
 import { PortalOrgSwitcher } from "./portal-org-switcher";
 import { PortalNavMain } from "./portal-nav-main";
@@ -25,6 +28,11 @@ const navSecondary = [
     url: "/settings",
     icon: <HugeiconsIcon icon={Settings05Icon} />,
   },
+  {
+    title: "Documentação",
+    url: "https://docs.calibrafacil.com",
+    icon: <HugeiconsIcon icon={Book02Icon} />,
+  },
 ];
 
 export function PortalSidebar() {
@@ -40,7 +48,20 @@ export function PortalSidebar() {
             <SidebarMenu>
               {navSecondary.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton render={<Link to={item.url} />} size="sm">
+                  <SidebarMenuButton
+                    render={
+                      item.url.startsWith("http") ? (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        />
+                      ) : (
+                        <Link to={item.url} />
+                      )
+                    }
+                    size="sm"
+                  >
                     {item.icon}
                     <span>{item.title}</span>
                   </SidebarMenuButton>
