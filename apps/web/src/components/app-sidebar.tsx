@@ -96,7 +96,7 @@ const data = {
     },
     {
       title: 'Documentação',
-      url: '/documentation',
+      url: 'https://docs.calibrafacil.com',
       icon: <HugeiconsIcon icon={Book02Icon} />,
     },
   ],
@@ -136,7 +136,13 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     render={
-                      item.url.startsWith('#') ? (
+                      item.url.startsWith('http') ? (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        />
+                      ) : item.url.startsWith('#') ? (
                         <a href={item.url} />
                       ) : (
                         <Link to={item.url} />
