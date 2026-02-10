@@ -644,18 +644,15 @@ async function processJob(
         let signatureMetadata: SignatureMetadata | undefined;
         if (env.SIGNING_MASTER_KEY) {
             const signStart = performance.now();
-            const signingCert = await withDbClient(env, async (client) => {
-                // First get the organization_id from the job
-                const orgResult = await client.query(
-                    `SELECT organization_id FROM calibration_job WHERE id = $1`,
-                    [jobId]
-                );
-                if (orgResult.rows.length === 0) return null;
-                const organizationId = orgResult.rows[0].organization_id;
-
-                // Then fetch the signing certificate
-                return fetchSigningCertificate(client, organizationId);
-            });
+            const organizationId = job.organizationId;
+            if (!organizationId) {
+                console.warn(`[JOB ${jobId}] Missing organization_id for signing`);
+            }
+            const signingCert = organizationId
+                ? await withDbClient(env, (client) =>
+                      fetchSigningCertificate(client, organizationId)
+                  )
+                : null;
 
             if (signingCert) {
                 try {
