@@ -44,12 +44,24 @@ function getYearFromDateish(value: Dateish, label: string): number {
     if (!value) {
         throw new Error(`Missing ${label} for R2 key year`);
     }
-    const date = value instanceof Date ? value : new Date(value);
-    const year = date.getUTCFullYear();
-    if (Number.isNaN(year)) {
-        throw new Error(`Invalid ${label} for R2 key year`);
+    if (value instanceof Date) {
+        if (Number.isNaN(value.getTime())) {
+            throw new Error(`Invalid ${label} for R2 key year`);
+        }
+        return value.getUTCFullYear();
     }
-    return year;
+    if (typeof value === "string") {
+        const match = value.trim().match(/^(\d{4})-/);
+        if (!match) {
+            throw new Error(`Invalid ${label} for R2 key year`);
+        }
+        const year = Number(match[1]);
+        if (!Number.isFinite(year)) {
+            throw new Error(`Invalid ${label} for R2 key year`);
+        }
+        return year;
+    }
+    throw new Error(`Invalid ${label} for R2 key year`);
 }
 
 function buildR2Key(params: {
