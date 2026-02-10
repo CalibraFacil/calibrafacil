@@ -32,8 +32,12 @@ interface MessageBatch<T> {
 
 type Dateish = Date | string | null | undefined;
 
-function sanitizeKeyPart(value: string): string {
-    return value.trim().replace(/[\\/]/g, "_");
+function encodeKeyPart(label: string, value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        throw new Error(`R2 key part "${label}" is empty`);
+    }
+    return encodeURIComponent(trimmed);
 }
 
 function getYearFromDateish(value: Dateish): number {
@@ -50,8 +54,8 @@ function buildR2Key(params: {
     year: number;
     type: "CERTIFICATE" | "LABEL";
 }): string {
-    const orgId = sanitizeKeyPart(params.orgId);
-    const jobId = sanitizeKeyPart(params.jobId);
+    const orgId = encodeKeyPart("orgId", params.orgId);
+    const jobId = encodeKeyPart("jobId", params.jobId);
     const filename = params.type === "CERTIFICATE" ? "cert.pdf" : "label.pdf";
     return `org/${orgId}/${params.year}/jobs/${jobId}/${filename}`;
 }
@@ -504,7 +508,10 @@ async function processLabelJob(
 
         // 5. Upload to R2
         const r2Start = performance.now();
-        const orgId = data.organizationId ?? "unknown";
+        const orgId = data.organizationId;
+        if (!orgId) {
+            throw new Error("Missing organization_id for label generation");
+        }
         const year = getYearFromDateish(data.approvedAt ?? data.label.calibrationDate);
         const key = buildR2Key({
             orgId,
@@ -682,7 +689,10 @@ async function processJob(
 
         // 5. Upload to R2
         const r2Start = performance.now();
-        const orgId = job.organizationId ?? "unknown";
+        const orgId = job.organizationId;
+        if (!orgId) {
+            throw new Error("Missing organization_id for certificate generation");
+        }
         const year = getYearFromDateish(job.approvedAt ?? job.performedAt);
         const key = buildR2Key({
             orgId,
