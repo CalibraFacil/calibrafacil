@@ -40,12 +40,16 @@ function encodeKeyPart(label: string, value: string): string {
     return encodeURIComponent(trimmed);
 }
 
-function getYearFromDateish(value: Dateish): number {
-    const fallbackYear = new Date().getUTCFullYear();
-    if (!value) return fallbackYear;
+function getYearFromDateish(value: Dateish, label: string): number {
+    if (!value) {
+        throw new Error(`Missing ${label} for R2 key year`);
+    }
     const date = value instanceof Date ? value : new Date(value);
     const year = date.getUTCFullYear();
-    return Number.isNaN(year) ? fallbackYear : year;
+    if (Number.isNaN(year)) {
+        throw new Error(`Invalid ${label} for R2 key year`);
+    }
+    return year;
 }
 
 function buildR2Key(params: {
@@ -512,7 +516,10 @@ async function processLabelJob(
         if (!orgId) {
             throw new Error("Missing organization_id for label generation");
         }
-        const year = getYearFromDateish(data.approvedAt ?? data.label.calibrationDate);
+        const year = getYearFromDateish(
+            data.approvedAt ?? data.label.calibrationDate,
+            "approvedAt/performedAt"
+        );
         const key = buildR2Key({
             orgId,
             jobId: data.label.jobId,
@@ -690,7 +697,10 @@ async function processJob(
         if (!orgId) {
             throw new Error("Missing organization_id for certificate generation");
         }
-        const year = getYearFromDateish(job.approvedAt ?? job.performedAt);
+        const year = getYearFromDateish(
+            job.approvedAt ?? job.performedAt,
+            "approvedAt/performedAt"
+        );
         const key = buildR2Key({
             orgId,
             jobId: job.jobId,
