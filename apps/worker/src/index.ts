@@ -51,15 +51,16 @@ function getYearFromDateish(value: Dateish, label: string): number {
         return value.getUTCFullYear();
     }
     if (typeof value === "string") {
-        const match = value.trim().match(/^(\d{4})-/);
-        if (!match) {
+        const trimmed = value.trim();
+        if (!trimmed) {
             throw new Error(`Invalid ${label} for R2 key year`);
         }
-        const year = Number(match[1]);
-        if (!Number.isFinite(year)) {
+        const normalized = trimmed.replace(/^(\d{4}-\d{2}-\d{2})\s+/, "$1T");
+        const parsed = new Date(normalized);
+        if (Number.isNaN(parsed.getTime())) {
             throw new Error(`Invalid ${label} for R2 key year`);
         }
-        return year;
+        return parsed.getUTCFullYear();
     }
     throw new Error(`Invalid ${label} for R2 key year`);
 }
