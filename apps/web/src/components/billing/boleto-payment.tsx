@@ -81,7 +81,7 @@ export function BoletoPayment({
   })
 
   // Poll for payment status (optional - boleto takes days)
-  useQuery({
+  const statusQuery = useQuery({
     queryKey: ['checkout-status', subscriptionId],
     queryFn: async () => {
       if (!subscriptionId) return null
@@ -98,11 +98,6 @@ export function BoletoPayment({
 
       return response.json()
     },
-    onSuccess: (data) => {
-      if (data?.status === 'ACTIVE' && subscriptionId) {
-        onSuccess(subscriptionId)
-      }
-    },
     enabled: !!subscriptionId,
     refetchInterval: (query) => {
       const data = query.state.data
@@ -110,6 +105,15 @@ export function BoletoPayment({
       return 30000 // Poll every 30 seconds (boleto is slow)
     },
   })
+
+  const isActive = statusQuery.data?.status === 'ACTIVE'
+
+  // Handle payment confirmation
+  useEffect(() => {
+    if (isActive && subscriptionId) {
+      onSuccess(subscriptionId)
+    }
+  }, [isActive, subscriptionId, onSuccess])
 
   // Auto-initiate checkout
   useEffect(() => {
