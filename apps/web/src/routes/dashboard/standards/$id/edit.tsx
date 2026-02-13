@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -99,23 +99,8 @@ interface RenewFormData {
 }
 
 function EditStandardPage() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const { id } = Route.useParams()
   const standardId = parseInt(id, 10)
-
-  const [formData, setFormData] = useState<FormData | null>(null)
-  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
-    {},
-  )
-  const [isMultiValue, setIsMultiValue] = useState(false)
-
-  // Renew dialog state
-  const [showRenewDialog, setShowRenewDialog] = useState(false)
-  const [renewFormData, setRenewFormData] = useState<RenewFormData | null>(null)
-  const [renewErrors, setRenewErrors] = useState<
-    Partial<Record<keyof RenewFormData, string>>
-  >({})
 
   // Fetch standard data
   const { data: standard, isLoading } = useQuery({
@@ -151,53 +136,103 @@ function EditStandardPage() {
     enabled: !isNaN(standardId),
   })
 
-  // Populate form when data loads
-  useEffect(() => {
-    if (standard) {
-      const hasCertifiedValues = !!(
-        standard.certifiedValues && standard.certifiedValues.length > 0
-      )
-      setIsMultiValue(hasCertifiedValues)
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-24" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    )
+  }
 
-      setFormData({
-        name: standard.name,
-        type: standard.type || '',
-        serialNumber: standard.serialNumber,
-        manufacturer: standard.manufacturer || '',
-        model: standard.model || '',
-        certificateNumber: standard.certificateNumber,
-        calibratedBy: standard.calibratedBy || '',
-        calibrationDate: standard.calibrationDate
-          ? new Date(standard.calibrationDate).toISOString().split('T')[0]
-          : '',
-        nextCalibrationDate: standard.nextCalibrationDate
-          ? new Date(standard.nextCalibrationDate).toISOString().split('T')[0]
-          : '',
-        referenceValue: standard.referenceValue?.toString() || '',
-        uncertainty: standard.uncertainty?.toString() || '',
-        uncertaintyUnit: standard.uncertaintyUnit || '',
-        coverageFactor: standard.coverageFactor?.toString() || '2.0',
-        distribution: standard.distribution || 'normal',
-        drift: standard.drift?.toString() || '',
-        certifiedValues: hasCertifiedValues
-          ? standard.certifiedValues!.map(
-              (cv: {
-                nominal: string
-                value: number
-                uncertainty: number
-                unit: string
-              }) => ({
-                nominal: cv.nominal,
-                value: cv.value.toString(),
-                uncertainty: cv.uncertainty.toString(),
-                unit: cv.unit,
-              }),
-            )
-          : [],
-        status: standard.status,
-      })
-    }
-  }, [standard])
+  if (!standard) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="py-8 text-center text-destructive">
+            Erro ao carregar padrão. Tente novamente.
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <EditStandardForm
+      key={standard.id ?? standardId}
+      standard={standard}
+      standardId={standardId}
+      auditLogData={auditLogData?.data ?? []}
+    />
+  )
+}
+
+function EditStandardForm({
+  standard,
+  standardId,
+  auditLogData,
+}: {
+  standard: any
+  standardId: number
+  auditLogData: Array<AuditLogRecord>
+}) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const hasCertifiedValues = !!(
+    standard.certifiedValues && standard.certifiedValues.length > 0
+  )
+
+  const [formData, setFormData] = useState<FormData>({
+    name: standard.name,
+    type: standard.type || '',
+    serialNumber: standard.serialNumber,
+    manufacturer: standard.manufacturer || '',
+    model: standard.model || '',
+    certificateNumber: standard.certificateNumber,
+    calibratedBy: standard.calibratedBy || '',
+    calibrationDate: standard.calibrationDate
+      ? new Date(standard.calibrationDate).toISOString().split('T')[0]
+      : '',
+    nextCalibrationDate: standard.nextCalibrationDate
+      ? new Date(standard.nextCalibrationDate).toISOString().split('T')[0]
+      : '',
+    referenceValue: standard.referenceValue?.toString() || '',
+    uncertainty: standard.uncertainty?.toString() || '',
+    uncertaintyUnit: standard.uncertaintyUnit || '',
+    coverageFactor: standard.coverageFactor?.toString() || '2.0',
+    distribution: standard.distribution || 'normal',
+    drift: standard.drift?.toString() || '',
+    certifiedValues: hasCertifiedValues
+      ? standard.certifiedValues.map(
+          (cv: {
+            nominal: string
+            value: number
+            uncertainty: number
+            unit: string
+          }) => ({
+            nominal: cv.nominal,
+            value: cv.value.toString(),
+            uncertainty: cv.uncertainty.toString(),
+            unit: cv.unit,
+          }),
+        )
+      : [],
+    status: standard.status,
+  })
+  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
+    {},
+  )
+  const [isMultiValue, setIsMultiValue] = useState(hasCertifiedValues)
+
+  // Renew dialog state
+  const [showRenewDialog, setShowRenewDialog] = useState(false)
+  const [renewFormData, setRenewFormData] = useState<RenewFormData | null>(null)
+  const [renewErrors, setRenewErrors] = useState<
+    Partial<Record<keyof RenewFormData, string>>
+  >({})
 
   // Update mutation
   const updateMutation = useMutation({
@@ -459,17 +494,6 @@ function EditStandardPage() {
     })
     setRenewErrors({})
     setShowRenewDialog(true)
-  }
-
-  if (isLoading || !formData) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-24" />
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-48 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    )
   }
 
   return (
@@ -918,9 +942,9 @@ function EditStandardPage() {
         </Card>
 
         {/* Audit Log - ISO 17025 Clause 8.4 (Control of Records) */}
-        {auditLogData?.data && auditLogData.data.length > 0 && (
+        {auditLogData.length > 0 && (
           <AuditTimeline
-            events={buildAuditTimelineEvents(auditLogData.data)}
+            events={buildAuditTimelineEvents(auditLogData)}
             title="Histórico de Alterações (ISO 17025)"
           />
         )}

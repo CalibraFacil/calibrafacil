@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import type { MethodValidation } from './types'
 
@@ -47,27 +47,39 @@ export function ValidationDialog({
   initialData,
   availableVariables,
 }: ValidationDialogProps) {
-  const [validation, setValidation] = useState<MethodValidation>({
-    expression: '',
-    message: '',
-    severity: 'error',
-  })
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const dialogKey = `${open ? 'open' : 'closed'}-${initialData?.expression ?? 'new'}`
 
-  useEffect(() => {
-    if (open) {
-      if (initialData) {
-        setValidation(initialData)
-      } else {
-        setValidation({
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && (
+        <ValidationDialogBody
+          key={dialogKey}
+          onOpenChange={onOpenChange}
+          onSave={onSave}
+          initialData={initialData}
+          availableVariables={availableVariables}
+        />
+      )}
+    </Dialog>
+  )
+}
+
+function ValidationDialogBody({
+  onOpenChange,
+  onSave,
+  initialData,
+  availableVariables,
+}: Omit<ValidationDialogProps, 'open'>) {
+  const [validation, setValidation] = useState<MethodValidation>(
+    initialData
+      ? { ...initialData }
+      : {
           expression: '',
           message: '',
           severity: 'error',
-        })
-      }
-      setErrors({})
-    }
-  }, [open, initialData])
+        },
+  )
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {}
@@ -102,19 +114,16 @@ export function ValidationDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {initialData
-              ? 'Editar Critério'
-              : 'Adicionar Critério de Aceitação'}
-          </DialogTitle>
-          <DialogDescription>
-            Defina um critério de aprovação/reprovação para validar os
-            resultados da calibração.
-          </DialogDescription>
-        </DialogHeader>
+    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>
+          {initialData ? 'Editar Critério' : 'Adicionar Critério de Aceitação'}
+        </DialogTitle>
+        <DialogDescription>
+          Defina um critério de aprovação/reprovação para validar os resultados
+          da calibração.
+        </DialogDescription>
+      </DialogHeader>
 
         <div className="space-y-4 py-4">
           <Field>
@@ -203,15 +212,14 @@ export function ValidationDialog({
           </Field>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSave}>
-            {initialData ? 'Salvar' : 'Adicionar'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSave}>
+          {initialData ? 'Salvar' : 'Adicionar'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   )
 }

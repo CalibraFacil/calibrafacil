@@ -61,8 +61,12 @@ export const Route = createFileRoute('/dashboard/settings/organization')({
   head: () => ({
     meta: [{ title: 'Organização | Configurações | CalibraFácil' }],
   }),
-  component: OrganizationSettingsPage,
+  component: OrganizationSettingsRoute,
 })
+
+type ActiveOrganization = NonNullable<
+  ReturnType<typeof useActiveOrganization>['data']
+>
 
 interface Member {
   id: string
@@ -86,30 +90,51 @@ interface Invitation {
   inviterId: string
 }
 
-function OrganizationSettingsPage() {
+function OrganizationSettingsRoute() {
   const { data: activeOrg, isPending: isLoadingOrg } = useActiveOrganization()
 
-  const [name, setName] = useState('')
-  const [slug, setSlug] = useState('')
+  return <OrganizationSettingsPage key={activeOrg.id} activeOrg={activeOrg} />
+}
+
+function OrganizationSettingsPage({
+  activeOrg,
+}: {
+  activeOrg: ActiveOrganization
+}) {
+
+  const [name, setName] = useState(activeOrg.name ?? '')
+  const [slug, setSlug] = useState(activeOrg.slug ?? '')
   const [isUpdating, setIsUpdating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   // ISO 17025 / RBC compliance fields
-  const [cnpj, setCnpj] = useState('')
-  const [accreditationNumber, setAccreditationNumber] = useState('')
-  const [accreditationBody, setAccreditationBody] = useState('')
-  const [street, setStreet] = useState('')
-  const [number, setNumber] = useState('')
-  const [complement, setComplement] = useState('')
-  const [neighbourhood, setNeighbourhood] = useState('')
-  const [city, setCity] = useState('')
-  const [state, setState] = useState('')
-  const [cep, setCep] = useState('')
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [website, setWebsite] = useState('')
-  const [technicalManagerName, setTechnicalManagerName] = useState('')
-  const [technicalManagerTitle, setTechnicalManagerTitle] = useState('')
+  const [cnpj, setCnpj] = useState((activeOrg as any).cnpj || '')
+  const [accreditationNumber, setAccreditationNumber] = useState(
+    (activeOrg as any).accreditationNumber || '',
+  )
+  const [accreditationBody, setAccreditationBody] = useState(
+    (activeOrg as any).accreditationBody || '',
+  )
+  const [street, setStreet] = useState((activeOrg as any).street || '')
+  const [number, setNumber] = useState((activeOrg as any).number || '')
+  const [complement, setComplement] = useState(
+    (activeOrg as any).complement || '',
+  )
+  const [neighbourhood, setNeighbourhood] = useState(
+    (activeOrg as any).neighbourhood || '',
+  )
+  const [city, setCity] = useState((activeOrg as any).city || '')
+  const [state, setState] = useState((activeOrg as any).state || '')
+  const [cep, setCep] = useState((activeOrg as any).cep || '')
+  const [phone, setPhone] = useState((activeOrg as any).phone || '')
+  const [email, setEmail] = useState((activeOrg as any).email || '')
+  const [website, setWebsite] = useState((activeOrg as any).website || '')
+  const [technicalManagerName, setTechnicalManagerName] = useState(
+    (activeOrg as any).technicalManagerName || '',
+  )
+  const [technicalManagerTitle, setTechnicalManagerTitle] = useState(
+    (activeOrg as any).technicalManagerTitle || '',
+  )
   const [isUpdatingIso, setIsUpdatingIso] = useState(false)
 
   const [members, setMembers] = useState<Array<Member>>([])
@@ -140,29 +165,6 @@ function OrganizationSettingsPage() {
     { value: 'technician', label: 'Técnico' },
     { value: 'admin', label: 'Administrador' },
   ] as const
-
-  useEffect(() => {
-    if (activeOrg) {
-      setName(activeOrg.name)
-      setSlug(activeOrg.slug)
-      // ISO 17025 fields
-      setCnpj((activeOrg as any).cnpj || '')
-      setAccreditationNumber((activeOrg as any).accreditationNumber || '')
-      setAccreditationBody((activeOrg as any).accreditationBody || '')
-      setStreet((activeOrg as any).street || '')
-      setNumber((activeOrg as any).number || '')
-      setComplement((activeOrg as any).complement || '')
-      setNeighbourhood((activeOrg as any).neighbourhood || '')
-      setCity((activeOrg as any).city || '')
-      setState((activeOrg as any).state || '')
-      setCep((activeOrg as any).cep || '')
-      setPhone((activeOrg as any).phone || '')
-      setEmail((activeOrg as any).email || '')
-      setWebsite((activeOrg as any).website || '')
-      setTechnicalManagerName((activeOrg as any).technicalManagerName || '')
-      setTechnicalManagerTitle((activeOrg as any).technicalManagerTitle || '')
-    }
-  }, [activeOrg])
 
   useEffect(() => {
     if (!activeOrg?.id) return

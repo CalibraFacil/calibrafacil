@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -153,13 +153,6 @@ function SignatureSettingsPage() {
     },
     [handleFileSelect]
   )
-
-  // Clear preview URL on successful data fetch
-  useEffect(() => {
-    if (signatureData?.hasSignature && signatureData.url) {
-      setPreviewUrl(null)
-    }
-  }, [signatureData])
 
   if (isLoading) {
     return <SignatureSkeleton />

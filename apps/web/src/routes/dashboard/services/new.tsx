@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -126,26 +126,6 @@ function NewServicePage() {
     },
   })
 
-  // Handle method selection - auto-fill and lock asset type
-  useEffect(() => {
-    if (formData.methodId) {
-      const selectedMethod = methodsData?.data?.find(
-        (m) => m.id === formData.methodId,
-      )
-      if (selectedMethod?.assetTypeId) {
-        setFormData((prev) => ({
-          ...prev,
-          assetTypeId: selectedMethod.assetTypeId,
-        }))
-        setIsAssetTypeLocked(true)
-      } else {
-        setIsAssetTypeLocked(false)
-      }
-    } else {
-      setIsAssetTypeLocked(false)
-    }
-  }, [formData.methodId, methodsData?.data])
-
   // Computed display values for combobox inputs
   const selectedMethodName = useMemo(() => {
     if (!formData.methodId || !methodsData?.data) return ''
@@ -251,7 +231,18 @@ function NewServicePage() {
     field: TKey,
     value: FormData[TKey],
   ) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    if (field === 'methodId') {
+      const methodId = value as FormData['methodId']
+      const selectedMethod = methodsData?.data?.find((m) => m.id === methodId)
+      setIsAssetTypeLocked(!!selectedMethod?.assetTypeId)
+      setFormData((prev) => ({
+        ...prev,
+        methodId,
+        assetTypeId: selectedMethod?.assetTypeId ?? prev.assetTypeId,
+      }))
+    } else {
+      setFormData((prev) => ({ ...prev, [field]: value }))
+    }
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }

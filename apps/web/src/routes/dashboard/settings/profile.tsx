@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { useSettings } from '@/contexts/settings-context'
@@ -34,18 +34,44 @@ function ProfileSettingsPage() {
   const { user, isLoading, isUpdating, updateProfile, clearError } =
     useSettings()
 
-  const [name, setName] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (user?.name) {
-      setName(user.name)
-    }
-  }, [user?.name])
-
   if (isLoading) {
     return <ProfileSkeleton />
   }
+
+  if (!user) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          Usuário não encontrado
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <ProfileSettingsForm
+      key={user.id}
+      user={user}
+      isUpdating={isUpdating}
+      updateProfile={updateProfile}
+      clearError={clearError}
+    />
+  )
+}
+
+function ProfileSettingsForm({
+  user,
+  isUpdating,
+  updateProfile,
+  clearError,
+}: {
+  user: NonNullable<ReturnType<typeof useSettings>['user']>
+  isUpdating: boolean
+  updateProfile: ReturnType<typeof useSettings>['updateProfile']
+  clearError: ReturnType<typeof useSettings>['clearError']
+}) {
+  const [name, setName] = useState(user.name ?? '')
+  const [formError, setFormError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -62,7 +62,7 @@ export function PixPayment({
   })
 
   // Poll for payment status
-  const statusQuery = useQuery({
+  useQuery({
     queryKey: ['checkout-status', subscriptionId],
     queryFn: async () => {
       if (!subscriptionId) return null
@@ -79,6 +79,11 @@ export function PixPayment({
 
       return response.json()
     },
+    onSuccess: (data) => {
+      if ((data?.isActive || data?.isPaid) && subscriptionId) {
+        onSuccess(subscriptionId)
+      }
+    },
     enabled: !!subscriptionId,
     refetchInterval: (query) => {
       const data = query.state.data
@@ -87,19 +92,6 @@ export function PixPayment({
       return 5000 // Poll every 5 seconds for PIX
     },
   })
-
-  // Handle payment confirmation
-  useEffect(() => {
-    const data = statusQuery.data
-    if ((data?.isActive || data?.isPaid) && subscriptionId) {
-      onSuccess(subscriptionId)
-    }
-  }, [
-    statusQuery.data?.isActive,
-    statusQuery.data?.isPaid,
-    subscriptionId,
-    onSuccess,
-  ])
 
   // Auto-initiate checkout
   useEffect(() => {
