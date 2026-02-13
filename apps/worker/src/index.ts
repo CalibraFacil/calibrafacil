@@ -30,6 +30,53 @@ interface MessageBatch<T> {
     }[];
 }
 
+type Dateish = Date | string | null | undefined;
+
+function encodeKeyPart(label: string, value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        throw new Error(`R2 key part "${label}" is empty`);
+    }
+    return encodeURIComponent(trimmed);
+}
+
+function getYearFromDateish(value: Dateish, label: string): number {
+    if (!value) {
+        throw new Error(`Missing ${label} for R2 key year`);
+    }
+    if (value instanceof Date) {
+        if (Number.isNaN(value.getTime())) {
+            throw new Error(`Invalid ${label} for R2 key year`);
+        }
+        return value.getUTCFullYear();
+    }
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            throw new Error(`Invalid ${label} for R2 key year`);
+        }
+        const normalized = trimmed.replace(/^(\d{4}-\d{2}-\d{2})\s+/, "$1T");
+        const parsed = new Date(normalized);
+        if (Number.isNaN(parsed.getTime())) {
+            throw new Error(`Invalid ${label} for R2 key year`);
+        }
+        return parsed.getUTCFullYear();
+    }
+    throw new Error(`Invalid ${label} for R2 key year`);
+}
+
+function buildR2Key(params: {
+    orgId: string;
+    jobId: string;
+    year: number;
+    type: "CERTIFICATE" | "LABEL";
+}): string {
+    const orgId = encodeKeyPart("orgId", params.orgId);
+    const jobId = encodeKeyPart("jobId", params.jobId);
+    const filename = params.type === "CERTIFICATE" ? "cert.pdf" : "label.pdf";
+    return `org/${orgId}/${params.year}/jobs/${jobId}/${filename}`;
+}
+
 async function fetchJobData(
     client: Client,
     jobId: number,
@@ -133,6 +180,7 @@ async function fetchJobData(
 
     return {
         jobId: row.job_id,
+        organizationId: row.organization_id,
         performedAt: row.performed_at,
         approvedAt: row.approved_at,
         lab: {
@@ -339,12 +387,14 @@ async function setJobError(
 async function fetchLabelData(
     client: Client,
     jobId: number
-): Promise<{ label: LabelData; verificationToken: string } | null> {
+): Promise<{ label: LabelData; verificationToken: string; organizationId: string | null; approvedAt: Date | string | null } | null> {
     const result = await client.query(
         `
     SELECT
       cj.job_id,
       cj.performed_at,
+      cj.approved_at,
+      cj.organization_id,
       cj.verification_token,
       o.name as lab_name,
       a.tag as asset_tag
@@ -369,6 +419,8 @@ async function fetchLabelData(
             qrCodeDataUrl: "", // Will be filled after QR generation
         },
         verificationToken: row.verification_token,
+        organizationId: row.organization_id,
+        approvedAt: row.approved_at,
     };
 }
 
@@ -473,14 +525,27 @@ async function processLabelJob(
 
         // 5. Upload to R2
         const r2Start = performance.now();
-        const filename = `label-${data.label.jobId}.pdf`;
-        await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
+        const orgId = data.organizationId;
+        if (!orgId) {
+            throw new Error("Missing organization_id for label generation");
+        }
+        const year = getYearFromDateish(
+            data.approvedAt ?? data.label.calibrationDate,
+            "approvedAt/performedAt"
+        );
+        const key = buildR2Key({
+            orgId,
+            jobId: data.label.jobId,
+            year,
+            type: "LABEL",
+        });
+        await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
             httpMetadata: { contentType: "application/pdf" },
         });
         console.log(`[LABEL ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`);
 
         // 6. Build public URL
-        const labelUrl = `https://certificates.calibrafacil.com/${filename}`;
+        const labelUrl = `https://certificates.calibrafacil.com/${key}`;
 
         // 7. Update DB
         const dbUpdateStart = performance.now();
@@ -599,18 +664,15 @@ async function processJob(
         let signatureMetadata: SignatureMetadata | undefined;
         if (env.SIGNING_MASTER_KEY) {
             const signStart = performance.now();
-            const signingCert = await withDbClient(env, async (client) => {
-                // First get the organization_id from the job
-                const orgResult = await client.query(
-                    `SELECT organization_id FROM calibration_job WHERE id = $1`,
-                    [jobId]
-                );
-                if (orgResult.rows.length === 0) return null;
-                const organizationId = orgResult.rows[0].organization_id;
-
-                // Then fetch the signing certificate
-                return fetchSigningCertificate(client, organizationId);
-            });
+            const organizationId = job.organizationId;
+            if (!organizationId) {
+                console.warn(`[JOB ${jobId}] Missing organization_id for signing`);
+            }
+            const signingCert = organizationId
+                ? await withDbClient(env, (client) =>
+                      fetchSigningCertificate(client, organizationId)
+                  )
+                : null;
 
             if (signingCert) {
                 try {
@@ -644,14 +706,27 @@ async function processJob(
 
         // 5. Upload to R2
         const r2Start = performance.now();
-        const filename = `cert-${job.jobId}.pdf`;
-        await env.CERTIFICATES_BUCKET.put(filename, pdfBuffer, {
+        const orgId = job.organizationId;
+        if (!orgId) {
+            throw new Error("Missing organization_id for certificate generation");
+        }
+        const year = getYearFromDateish(
+            job.approvedAt ?? job.performedAt,
+            "approvedAt/performedAt"
+        );
+        const key = buildR2Key({
+            orgId,
+            jobId: job.jobId,
+            year,
+            type: "CERTIFICATE",
+        });
+        await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
             httpMetadata: { contentType: "application/pdf" },
         });
         console.log(`[JOB ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`);
 
         // 6. Build public URL
-        const certificateUrl = `https://certificates.calibrafacil.com/${filename}`;
+        const certificateUrl = `https://certificates.calibrafacil.com/${key}`;
 
         // 7. Update DB with certificate URL and signature metadata
         const dbUpdateStart = performance.now();
