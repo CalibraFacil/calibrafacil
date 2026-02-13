@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { parseAsInteger, useQueryState } from 'nuqs'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { PlusSignIcon, UserIcon } from '@hugeicons/core-free-icons'
+import { PlusSignIcon, RulerIcon } from '@hugeicons/core-free-icons'
 
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
@@ -230,7 +230,7 @@ function StandardsListPage() {
             <Empty className="border">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  <HugeiconsIcon icon={UserIcon} />
+                  <HugeiconsIcon icon={RulerIcon} />
                 </EmptyMedia>
                 <EmptyTitle>Nenhum padrão encontrado</EmptyTitle>
                 <EmptyDescription>
