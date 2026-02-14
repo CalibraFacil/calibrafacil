@@ -62,7 +62,7 @@ function PortalLayout() {
   const hasSetupContext = useRef(false);
   const [isSettingUp, setIsSettingUp] = useState(true);
 
-  // Fetch CLIENT organizations where user is a client_user (not owner/admin)
+  // Fetch CLIENT organizations where user has an external portal role
   const { data: clientOrganizations = [], isPending: orgsLoading } = useQuery({
     queryKey: ["portal-organizations"],
     queryFn: async (): Promise<Array<PortalOrganization>> => {

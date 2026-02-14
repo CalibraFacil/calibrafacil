@@ -196,7 +196,13 @@ export const statements = {
    * - approve_disposition: Approve "use as is" / "concession" dispositions
    * - escalate: Escalate NC to CAPA
    */
-  non_conformance: ["create", "read", "update", "approve_disposition", "escalate"],
+  non_conformance: [
+    "create",
+    "read",
+    "update",
+    "approve_disposition",
+    "escalate",
+  ],
 
   // ---------------------------------------------------------------------------
   // CAPA - ISO 17025:2017 Clause 8.2 (Corrective Actions)
@@ -382,7 +388,13 @@ export const admin = ac.newRole({
   service: ["create", "read", "update", "delete"],
 
   // Full NC management including disposition approval and CAPA escalation
-  non_conformance: ["create", "read", "update", "approve_disposition", "escalate"],
+  non_conformance: [
+    "create",
+    "read",
+    "update",
+    "approve_disposition",
+    "escalate",
+  ],
 
   // Full CAPA management
   capa: ["create", "read", "update", "implement", "verify", "close"],
@@ -444,7 +456,13 @@ export const owner = ac.newRole({
   service: ["create", "read", "update", "delete"],
 
   // Full NC management
-  non_conformance: ["create", "read", "update", "approve_disposition", "escalate"],
+  non_conformance: [
+    "create",
+    "read",
+    "update",
+    "approve_disposition",
+    "escalate",
+  ],
 
   // Full CAPA management
   capa: ["create", "read", "update", "implement", "verify", "close"],
@@ -529,6 +547,51 @@ export const INTERNAL_ROLES: RoleName[] = [
   "admin",
   "owner",
 ];
+
+/**
+ * External roles that are allowed to access the client portal.
+ *
+ * Note: Keeping this list explicit prevents leaking internal lab members
+ * (owner/admin/technician/member) into portal user management screens.
+ */
+export const PORTAL_ACCESS_ROLES = ["client_user"] as const;
+
+/**
+ * Roles that should be visible in customer portal member lists.
+ *
+ * Currently this matches portal access roles, but is separate so we can evolve
+ * visibility rules independently (e.g. future hidden service roles).
+ */
+export const PORTAL_VISIBLE_MEMBER_ROLES = [...PORTAL_ACCESS_ROLES] as const;
+
+/**
+ * Roles that can be managed (removed) from customer portal user management.
+ */
+export const PORTAL_MANAGEABLE_MEMBER_ROLES = ["client_user"] as const;
+
+export type PortalAccessRole = (typeof PORTAL_ACCESS_ROLES)[number];
+export type PortalVisibleMemberRole =
+  (typeof PORTAL_VISIBLE_MEMBER_ROLES)[number];
+export type PortalManageableMemberRole =
+  (typeof PORTAL_MANAGEABLE_MEMBER_ROLES)[number];
+
+export function isPortalAccessRole(role: string): role is PortalAccessRole {
+  return PORTAL_ACCESS_ROLES.includes(role as PortalAccessRole);
+}
+
+export function isPortalVisibleMemberRole(
+  role: string,
+): role is PortalVisibleMemberRole {
+  return PORTAL_VISIBLE_MEMBER_ROLES.includes(role as PortalVisibleMemberRole);
+}
+
+export function isPortalManageableMemberRole(
+  role: string,
+): role is PortalManageableMemberRole {
+  return PORTAL_MANAGEABLE_MEMBER_ROLES.includes(
+    role as PortalManageableMemberRole,
+  );
+}
 
 /**
  * Role labels for UI display (Portuguese)
