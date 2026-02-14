@@ -54,12 +54,15 @@ export interface MemberData {
   userId: string;
 }
 
+export type AuthSource = "lab" | "portal";
+
 /**
  * Context type extension for authenticated requests
  */
 export interface AuthVariables {
   session: SessionData;
   member: MemberData;
+  authSource: AuthSource;
 }
 
 // =============================================================================
@@ -86,6 +89,7 @@ export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
     }
 
     c.set("session", session as SessionData);
+    c.set("authSource", "lab");
 
     await next();
   },
@@ -111,6 +115,7 @@ export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
     }
 
     c.set("session", session as SessionData);
+    c.set("authSource", "portal");
 
     await next();
   },
@@ -130,12 +135,14 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
     const labAuth = createLabAuth();
 
     // Try portal auth first (portal_session cookie)
+    let authSource: AuthSource = "portal";
     let session = await portalAuth.api.getSession({
       headers: c.req.raw.headers,
     });
 
     // If no portal session, try lab auth (lab_session cookie)
     if (!session) {
+      authSource = "lab";
       session = await labAuth.api.getSession({
         headers: c.req.raw.headers,
       });
@@ -146,6 +153,7 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
     }
 
     c.set("session", session as SessionData);
+    c.set("authSource", authSource);
 
     await next();
   },
@@ -251,18 +259,27 @@ export const requireOrganization = createMiddleware<{
  */
 export function requirePermission(permissions: PermissionCheck) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
+    const authSource = c.get("authSource") as AuthSource;
     const labAuth = createLabAuth();
     const portalAuth = createPortalAuth();
+    let result:
+      | Awaited<ReturnType<typeof labAuth.api.hasPermission>>
+      | Awaited<ReturnType<typeof portalAuth.api.hasPermission>>
+      | null = null;
 
-    // Try lab auth first
-    let result = await labAuth.api.hasPermission({
-      headers: c.req.raw.headers,
-      body: { permission: permissions },
-    });
-
-    // If no result from lab, try portal
-    if (!result?.success) {
+    if (authSource === "lab") {
+      result = await labAuth.api.hasPermission({
+        headers: c.req.raw.headers,
+        body: { permission: permissions },
+      });
+    } else if (authSource === "portal") {
       result = await portalAuth.api.hasPermission({
+        headers: c.req.raw.headers,
+        body: { permission: permissions },
+      });
+    } else {
+      // Fallback for legacy/misconfigured middleware chains
+      result = await labAuth.api.hasPermission({
         headers: c.req.raw.headers,
         body: { permission: permissions },
       });

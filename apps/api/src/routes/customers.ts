@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { auth } from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
   customer,
@@ -19,13 +18,27 @@ import {
   UpdateComplianceSchema,
   AuditLogQuerySchema,
 } from "@calibra-facil/schemas";
-import { eq, ilike, or, count, and, desc } from "drizzle-orm";
+import {
+  PORTAL_MANAGEABLE_MEMBER_ROLES,
+  PORTAL_VISIBLE_MEMBER_ROLES,
+  isPortalManageableMemberRole,
+} from "@calibra-facil/auth/access";
+import { eq, ilike, or, count, and, desc, inArray } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
 import { withCache, withInvalidation } from "../middleware/cache";
+import { getLabCustomerById } from "../lib/customer-access";
+import {
+  cancelPortalInvitationAsService,
+  createClientOrganizationAsServiceOwner,
+  createPortalInvitationAsService,
+  enforceClientPortalMembershipBoundary,
+  PortalServiceAccountError,
+  removePortalMemberAsService,
+} from "../lib/portal-service-account";
 
 const CommandPaletteCustomerSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -67,16 +80,12 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const input = c.req.valid("json");
 
       try {
-        // Step 1: Create CLIENT organization via Better Auth
+        // Step 1: Create CLIENT organization via service account (3B model)
         const slug = generateUniqueSlug(input.name);
 
-        const orgResult = await auth.api.createOrganization({
-          body: {
-            name: input.name,
-            slug,
-            type: "CLIENT",
-          },
-          headers: c.req.raw.headers,
+        const orgResult = await createClientOrganizationAsServiceOwner({
+          name: input.name,
+          slug,
         });
 
         if (!orgResult?.id) {
@@ -85,13 +94,6 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             500,
           );
         }
-
-        // Set organization type to CLIENT directly in database
-        // (Better Auth additionalFields may not be properly passed via API)
-        await db
-          .update(organization)
-          .set({ type: "CLIENT" })
-          .where(eq(organization.id, orgResult.id));
 
         // Step 2: Insert customer record
         // - authOrganizationId: The CLIENT org (for portal access)
@@ -114,13 +116,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         let invitationId: string | null = null;
         if (input.email && input.email.trim() !== "") {
           try {
-            const inviteResult = await auth.api.createInvitation({
-              body: {
-                email: input.email,
-                role: "client_user",
-                organizationId: orgResult.id,
-              },
-              headers: c.req.raw.headers,
+            const inviteResult = await createPortalInvitationAsService({
+              email: input.email,
+              role: PORTAL_MANAGEABLE_MEMBER_ROLES[0],
+              organizationId: orgResult.id,
             });
             invitationId = inviteResult?.id ?? null;
           } catch (inviteError) {
@@ -255,16 +254,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     }
 
     try {
-      const [foundCustomer] = await db
-        .select()
-        .from(customer)
-        .where(
-          and(
-            eq(customer.id, id),
-            eq(customer.labOrganizationId, memberData.organizationId),
-          ),
-        )
-        .limit(1);
+      const foundCustomer = await getLabCustomerById(
+        id,
+        memberData.organizationId,
+      );
 
       if (!foundCustomer) {
         return c.json({ error: "Cliente nao encontrado" }, 404);
@@ -289,6 +282,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const id = parseInt(c.req.param("id"), 10);
       const input = c.req.valid("json");
       const session = c.get("session");
+      const memberData = c.get("member");
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
@@ -296,11 +290,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
       try {
         // Get existing customer for audit log
-        const [existingCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
+        const existingCustomer = await getLabCustomerById(
+          id,
+          memberData.organizationId,
+        );
 
         if (!existingCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
@@ -323,7 +316,12 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             ...input,
             updatedAt: new Date(),
           })
-          .where(eq(customer.id, id))
+          .where(
+            and(
+              eq(customer.id, id),
+              eq(customer.labOrganizationId, memberData.organizationId),
+            ),
+          )
           .returning();
 
         // Log audit entry if there were changes
@@ -358,17 +356,17 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
       const session = c.get("session");
+      const memberData = c.get("member");
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
       try {
-        const [existingCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
+        const existingCustomer = await getLabCustomerById(
+          id,
+          memberData.organizationId,
+        );
 
         if (!existingCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
@@ -390,7 +388,14 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         });
 
         // Delete the customer (cascade will handle audit logs)
-        await db.delete(customer).where(eq(customer.id, id));
+        await db
+          .delete(customer)
+          .where(
+            and(
+              eq(customer.id, id),
+              eq(customer.labOrganizationId, memberData.organizationId),
+            ),
+          );
 
         // Also delete the associated organization
         await db
@@ -413,6 +418,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
+      const memberData = c.get("member");
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
@@ -420,15 +426,18 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
       try {
         // Get customer to find authOrganizationId
-        const [foundCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
+        const foundCustomer = await getLabCustomerById(
+          id,
+          memberData.organizationId,
+        );
 
         if (!foundCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
         }
+
+        await enforceClientPortalMembershipBoundary(
+          foundCustomer.authOrganizationId,
+        );
 
         // Get members of the CLIENT organization with user details
         const members = await db
@@ -443,7 +452,12 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           })
           .from(member)
           .innerJoin(user, eq(member.userId, user.id))
-          .where(eq(member.organizationId, foundCustomer.authOrganizationId));
+          .where(
+            and(
+              eq(member.organizationId, foundCustomer.authOrganizationId),
+              inArray(member.role, PORTAL_VISIBLE_MEMBER_ROLES),
+            ),
+          );
 
         return c.json(members);
       } catch (error) {
@@ -461,6 +475,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
+      const memberData = c.get("member");
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
@@ -468,15 +483,18 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
       try {
         // Get customer to find authOrganizationId
-        const [foundCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
+        const foundCustomer = await getLabCustomerById(
+          id,
+          memberData.organizationId,
+        );
 
         if (!foundCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
         }
+
+        await enforceClientPortalMembershipBoundary(
+          foundCustomer.authOrganizationId,
+        );
 
         // Get invitations for the CLIENT organization
         const invitations = await db
@@ -517,6 +535,8 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const id = parseInt(c.req.param("id"), 10);
       const { email, role } = c.req.valid("json");
       const session = c.get("session");
+      const memberData = c.get("member");
+      const portalRole = role || PORTAL_MANAGEABLE_MEMBER_ROLES[0];
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
@@ -524,24 +544,23 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
       try {
         // Get customer to find authOrganizationId
-        const [foundCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
+        const foundCustomer = await getLabCustomerById(
+          id,
+          memberData.organizationId,
+        );
 
         if (!foundCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
         }
 
-        // Create invitation via Better Auth
-        const inviteResult = await auth.api.createInvitation({
-          body: {
-            email,
-            role: role || "client_user",
-            organizationId: foundCustomer.authOrganizationId,
-          },
-          headers: c.req.raw.headers,
+        await enforceClientPortalMembershipBoundary(
+          foundCustomer.authOrganizationId,
+        );
+
+        const inviteResult = await createPortalInvitationAsService({
+          email,
+          role: portalRole,
+          organizationId: foundCustomer.authOrganizationId,
         });
 
         if (!inviteResult?.id) {
@@ -554,7 +573,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           action: "user_invited",
           changes: {
             email,
-            role: role || "client_user",
+            role: portalRole,
             invitationId: inviteResult.id,
           },
           performedBy: session.user.id,
@@ -564,12 +583,19 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             null,
         });
 
-        return c.json(
-          { id: inviteResult.id, email, role: role || "client_user" },
-          201,
-        );
+        return c.json({ id: inviteResult.id, email, role: portalRole }, 201);
       } catch (error) {
         console.error("Error creating invitation:", error);
+        if (error instanceof PortalServiceAccountError) {
+          return c.json(
+            {
+              error: error.message,
+              code: error.code,
+            },
+            error.status as any,
+          );
+        }
+
         return c.json({ error: "Erro ao criar convite" }, 500);
       }
     },
@@ -584,6 +610,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
       const invId = c.req.param("invId");
+      const memberData = c.get("member");
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
@@ -591,11 +618,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
       try {
         // Get customer to verify ownership
-        const [foundCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
+        const foundCustomer = await getLabCustomerById(
+          id,
+          memberData.organizationId,
+        );
 
         if (!foundCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
@@ -624,19 +650,19 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
 
-        // Cancel old invitation and create a new one
-        await auth.api.cancelInvitation({
-          body: { invitationId: invId },
-          headers: c.req.raw.headers,
+        await enforceClientPortalMembershipBoundary(
+          foundCustomer.authOrganizationId,
+        );
+
+        await cancelPortalInvitationAsService({
+          invitationId: invId,
+          organizationId: foundCustomer.authOrganizationId,
         });
 
-        const newInvite = await auth.api.createInvitation({
-          body: {
-            email: foundInvitation.email,
-            role: "client_user" as const,
-            organizationId: foundCustomer.authOrganizationId,
-          },
-          headers: c.req.raw.headers,
+        const newInvite = await createPortalInvitationAsService({
+          email: foundInvitation.email,
+          role: foundInvitation.role || PORTAL_MANAGEABLE_MEMBER_ROLES[0],
+          organizationId: foundCustomer.authOrganizationId,
         });
 
         return c.json({
@@ -645,6 +671,15 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         });
       } catch (error) {
         console.error("Error resending invitation:", error);
+        if (error instanceof PortalServiceAccountError) {
+          return c.json(
+            {
+              error: error.message,
+              code: error.code,
+            },
+            error.status as any,
+          );
+        }
         return c.json({ error: "Erro ao reenviar convite" }, 500);
       }
     },
@@ -660,6 +695,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const id = parseInt(c.req.param("id"), 10);
       const invId = c.req.param("invId");
       const session = c.get("session");
+      const memberData = c.get("member");
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
@@ -667,11 +703,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
       try {
         // Get customer to verify ownership
-        const [foundCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
+        const foundCustomer = await getLabCustomerById(
+          id,
+          memberData.organizationId,
+        );
 
         if (!foundCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
@@ -700,10 +735,13 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
 
-        // Cancel invitation via Better Auth
-        await auth.api.cancelInvitation({
-          body: { invitationId: invId },
-          headers: c.req.raw.headers,
+        await enforceClientPortalMembershipBoundary(
+          foundCustomer.authOrganizationId,
+        );
+
+        await cancelPortalInvitationAsService({
+          invitationId: invId,
+          organizationId: foundCustomer.authOrganizationId,
         });
 
         // Log audit entry
@@ -721,6 +759,15 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ success: true });
       } catch (error) {
         console.error("Error canceling invitation:", error);
+        if (error instanceof PortalServiceAccountError) {
+          return c.json(
+            {
+              error: error.message,
+              code: error.code,
+            },
+            error.status as any,
+          );
+        }
         return c.json({ error: "Erro ao cancelar convite" }, 500);
       }
     },
@@ -736,6 +783,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const id = parseInt(c.req.param("id"), 10);
       const memberId = c.req.param("memberId");
       const session = c.get("session");
+      const memberData = c.get("member");
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
@@ -743,11 +791,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
       try {
         // Get customer to verify ownership
-        const [foundCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
+        const foundCustomer = await getLabCustomerById(
+          id,
+          memberData.organizationId,
+        );
 
         if (!foundCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
@@ -776,13 +823,23 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Membro nao encontrado" }, 404);
         }
 
-        // Remove member via Better Auth
-        await auth.api.removeMember({
-          body: {
-            memberIdOrEmail: memberId,
-            organizationId: foundCustomer.authOrganizationId,
-          },
-          headers: c.req.raw.headers,
+        if (!isPortalManageableMemberRole(foundMember.role)) {
+          return c.json(
+            {
+              error:
+                "Apenas usuarios externos do portal podem ser removidos por esta tela",
+            },
+            403,
+          );
+        }
+
+        await enforceClientPortalMembershipBoundary(
+          foundCustomer.authOrganizationId,
+        );
+
+        await removePortalMemberAsService({
+          memberId,
+          organizationId: foundCustomer.authOrganizationId,
         });
 
         // Log audit entry
@@ -804,6 +861,15 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ success: true });
       } catch (error) {
         console.error("Error removing member:", error);
+        if (error instanceof PortalServiceAccountError) {
+          return c.json(
+            {
+              error: error.message,
+              code: error.code,
+            },
+            error.status as any,
+          );
+        }
         return c.json({ error: "Erro ao remover membro" }, 500);
       }
     },
@@ -820,6 +886,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const id = parseInt(c.req.param("id"), 10);
       const { compliance, reason } = c.req.valid("json");
       const session = c.get("session");
+      const memberData = c.get("member");
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
@@ -827,11 +894,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
       try {
         // Get existing customer for audit log
-        const [existingCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
+        const existingCustomer = await getLabCustomerById(
+          id,
+          memberData.organizationId,
+        );
 
         if (!existingCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
@@ -869,7 +935,12 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             compliance: updatedCompliance,
             updatedAt: new Date(),
           })
-          .where(eq(customer.id, id))
+          .where(
+            and(
+              eq(customer.id, id),
+              eq(customer.labOrganizationId, memberData.organizationId),
+            ),
+          )
           .returning();
 
         // Log audit entry with reason (required for compliance changes per ISO 17025)
@@ -903,6 +974,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
       const { page, limit } = c.req.valid("query");
+      const memberData = c.get("member");
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
@@ -910,11 +982,10 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
       try {
         // Verify customer exists
-        const [foundCustomer] = await db
-          .select()
-          .from(customer)
-          .where(eq(customer.id, id))
-          .limit(1);
+        const foundCustomer = await getLabCustomerById(
+          id,
+          memberData.organizationId,
+        );
 
         if (!foundCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);

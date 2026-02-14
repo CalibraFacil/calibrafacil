@@ -38,13 +38,19 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const input = c.req.valid("json");
       const session = c.get("session");
+      const member = c.get("member");
 
       try {
         // Validate that customer exists
         const [foundCustomer] = await db
           .select()
           .from(customer)
-          .where(eq(customer.id, input.customerId))
+          .where(
+            and(
+              eq(customer.id, input.customerId),
+              eq(customer.labOrganizationId, member.organizationId),
+            ),
+          )
           .limit(1);
 
         if (!foundCustomer) {

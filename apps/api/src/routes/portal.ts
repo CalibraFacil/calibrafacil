@@ -8,7 +8,8 @@ import {
   asset,
   service,
 } from "@calibra-facil/db/schema";
-import { eq, and, inArray, desc, sql, count } from "drizzle-orm";
+import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
+import { eq, and, inArray, desc, count } from "drizzle-orm";
 import {
   requirePortalAuth,
   type AuthVariables,
@@ -31,17 +32,17 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // Returns only organizations where:
   // 1. The organization type is "CLIENT"
-  // 2. The user's role is "client_user" (not "owner" or other lab admin roles)
+  // 2. The user's role is in PORTAL_ACCESS_ROLES (external portal roles)
   //
-  // This ensures lab admins (who create CLIENT orgs and become "owner")
-  // don't see those orgs in the client portal.
+  // This ensures only external portal members can access client organizations
+  // in the portal, regardless of internal/system ownership members.
   // =========================================================================
   .get("/organizations", requirePortalAuth, async (c) => {
     const session = c.get("session");
 
     try {
       // Query member table joined with organization
-      // Filter by user ID, organization type CLIENT, and role client_user
+      // Filter by user ID, organization type CLIENT, and external portal roles
       const clientOrganizations = await db
         .select({
           id: organization.id,
@@ -58,7 +59,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(member.userId, session.user.id),
             eq(organization.type, "CLIENT"),
-            eq(member.role, "client_user"),
+            inArray(member.role, PORTAL_ACCESS_ROLES),
           ),
         );
 
@@ -81,7 +82,10 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
     try {
       // Parse pagination params
       const page = Math.max(1, parseInt(c.req.query("page") || "1"));
-      const limit = Math.min(100, Math.max(1, parseInt(c.req.query("limit") || "20")));
+      const limit = Math.min(
+        100,
+        Math.max(1, parseInt(c.req.query("limit") || "20")),
+      );
       const offset = (page - 1) * limit;
 
       // Get user's CLIENT organization IDs
@@ -93,7 +97,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(member.userId, session.user.id),
             eq(organization.type, "CLIENT"),
-            eq(member.role, "client_user"),
+            inArray(member.role, PORTAL_ACCESS_ROLES),
           ),
         );
 
@@ -156,7 +160,10 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         .from(calibrationJob)
         .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
         .innerJoin(service, eq(calibrationJob.serviceId, service.id))
-        .innerJoin(organization, eq(calibrationJob.organizationId, organization.id))
+        .innerJoin(
+          organization,
+          eq(calibrationJob.organizationId, organization.id),
+        )
         .where(
           and(
             inArray(calibrationJob.customerId, customerIds),
@@ -203,7 +210,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(member.userId, session.user.id),
             eq(organization.type, "CLIENT"),
-            eq(member.role, "client_user"),
+            inArray(member.role, PORTAL_ACCESS_ROLES),
           ),
         );
 
@@ -250,7 +257,10 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         .from(calibrationJob)
         .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
         .innerJoin(service, eq(calibrationJob.serviceId, service.id))
-        .innerJoin(organization, eq(calibrationJob.organizationId, organization.id))
+        .innerJoin(
+          organization,
+          eq(calibrationJob.organizationId, organization.id),
+        )
         .where(
           and(
             eq(calibrationJob.id, id),
@@ -292,7 +302,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(member.userId, session.user.id),
             eq(organization.type, "CLIENT"),
-            eq(member.role, "client_user"),
+            inArray(member.role, PORTAL_ACCESS_ROLES),
           ),
         );
 
@@ -345,7 +355,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
 
       return c.json({
         url,
-        filename: `certificado-${certificate.jobId}.pdf`
+        filename: `certificado-${certificate.jobId}.pdf`,
       });
     } catch (error) {
       console.error("Error generating certificate download URL:", error);

@@ -8,6 +8,19 @@ BETTER_AUTH_SECRET=your-secret-here
 # Resend API key for sending emails
 RESEND_API_KEY=re_xxx
 
+# Sender address used by portal invitation emails
+RESEND_FROM_EMAIL="Calibra Facil <noreply@calibrafacil.com>"
+
+# Service account user id that owns CLIENT organizations
+PORTAL_SERVICE_USER_ID=replace-with-better-auth-user-id
+
+# Optional public URL for client portal invitations
+# Defaults to https://portal.calibrafacil.com in production
+PORTAL_APP_URL=https://localhost:5174
+
+# Optional invitation expiration in seconds (default: 604800 = 7 days)
+PORTAL_INVITATION_EXPIRES_IN=604800
+
 # R2 secret access key for certificate storage
 R2_SECRET_ACCESS_KEY=your-r2-secret-here
 

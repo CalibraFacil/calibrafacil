@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError } from "better-auth/api";
 import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
 import { organization } from "better-auth/plugins";
@@ -41,6 +42,31 @@ function createOrganizationPlugin() {
         },
       },
     },
+    organizationHooks: {
+      beforeCreateOrganization: async ({ organization, user }) => {
+        const requestedType = organization.type ?? "LAB";
+
+        // 3B guardrail: CLIENT organizations are system-owned.
+        // They must be created through server-side flows using the
+        // configured service account (PORTAL_SERVICE_USER_ID).
+        if (requestedType === "CLIENT") {
+          const serviceUserId = process.env.PORTAL_SERVICE_USER_ID?.trim();
+
+          if (!serviceUserId) {
+            throw new APIError("BAD_REQUEST", {
+              message: "PORTAL_SERVICE_USER_ID nao configurado",
+            });
+          }
+
+          if (!user || user.id !== serviceUserId) {
+            throw new APIError("FORBIDDEN", {
+              message:
+                "CLIENT organizations must be provisioned by the portal service account",
+            });
+          }
+        }
+      },
+    },
     async sendInvitationEmail(data) {
       const appUrl = process.env.APP_URL || "https://localhost:5173";
       const inviteLink = `${appUrl}/accept-invitation/${data.id}`;
@@ -72,7 +98,8 @@ function createSharedConfig() {
   const isProduction = process.env.NODE_ENV === "production";
 
   return {
-    secret: process.env.BETTER_AUTH_SECRET || "BUILD_PLACEHOLDER_NOT_FOR_PRODUCTION",
+    secret:
+      process.env.BETTER_AUTH_SECRET || "BUILD_PLACEHOLDER_NOT_FOR_PRODUCTION",
     database: drizzleAdapter(getDb(), {
       provider: "pg" as const,
       schema,
@@ -86,22 +113,19 @@ function createSharedConfig() {
       },
     },
     trustedOrigins: isProduction
-      ? [
-        "https://calibrafacil.com",
-        "https://portal.calibrafacil.com",
-      ]
+      ? ["https://calibrafacil.com", "https://portal.calibrafacil.com"]
       : [
-        "https://localhost:5173",
-        "https://localhost:5174",
-        "https://192.168.0.10:5173",
-        "https://192.168.0.10:5174",
-      ],
+          "https://localhost:5173",
+          "https://localhost:5174",
+          "https://192.168.0.10:5173",
+          "https://192.168.0.10:5174",
+        ],
     advanced: {
       crossSubDomainCookies: isProduction
         ? {
-          enabled: true,
-          domain: ".calibrafacil.com",
-        }
+            enabled: true,
+            domain: ".calibrafacil.com",
+          }
         : { enabled: false },
       defaultCookieAttributes: {
         sameSite: "none" as const,
@@ -178,14 +202,22 @@ export type PortalAuth = ReturnType<typeof createPortalAuth>;
 
 // Legacy exports for backwards compatibility (lazy getters)
 export const labAuth = {
-  get api() { return getLabAuth().api; },
-  get handler() { return getLabAuth().handler; },
-} as Pick<LabAuth, 'api' | 'handler'>;
+  get api() {
+    return getLabAuth().api;
+  },
+  get handler() {
+    return getLabAuth().handler;
+  },
+} as Pick<LabAuth, "api" | "handler">;
 
 export const portalAuth = {
-  get api() { return getPortalAuth().api; },
-  get handler() { return getPortalAuth().handler; },
-} as Pick<PortalAuth, 'api' | 'handler'>;
+  get api() {
+    return getPortalAuth().api;
+  },
+  get handler() {
+    return getPortalAuth().handler;
+  },
+} as Pick<PortalAuth, "api" | "handler">;
 
 export const auth = labAuth;
 

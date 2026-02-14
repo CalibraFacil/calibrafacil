@@ -33,6 +33,9 @@ interface Env {
   BETTER_AUTH_SECRET: string;
   RESEND_FROM_EMAIL: string;
   RESEND_API_KEY: string;
+  PORTAL_SERVICE_USER_ID: string;
+  PORTAL_APP_URL?: string;
+  PORTAL_INVITATION_EXPIRES_IN?: string;
   DATABASE_URL: string;
   CACHE: KVNamespace;
   [key: string]: unknown;
@@ -81,7 +84,9 @@ app.use("*", async (c, next) => {
   }
 
   // Inject Hyperdrive connection string if available
-  const hyperdrive = c.env.HYPERDRIVE as { connectionString?: string } | undefined;
+  const hyperdrive = c.env.HYPERDRIVE as
+    | { connectionString?: string }
+    | undefined;
   if (hyperdrive?.connectionString) {
     process.env.HYPERDRIVE_URL = hyperdrive.connectionString;
   }

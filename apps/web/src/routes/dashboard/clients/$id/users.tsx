@@ -4,6 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
+  PORTAL_MANAGEABLE_MEMBER_ROLES,
+  isPortalManageableMemberRole,
+  isPortalVisibleMemberRole,
+} from '@calibra-facil/auth/access'
+import {
   Delete02Icon,
   Mail01Icon,
   PlusSignIcon,
@@ -97,6 +102,7 @@ function ClientUsersTab() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteError, setInviteError] = useState<string | null>(null)
+  const defaultPortalRole = PORTAL_MANAGEABLE_MEMBER_ROLES[0]
 
   const { data: members = [], isLoading: membersLoading } = useQuery({
     queryKey: ['customer-members', id],
@@ -128,7 +134,7 @@ function ClientUsersTab() {
     mutationFn: async (email: string) => {
       const res = await api.api.customers[':id'].invitations.$post({
         param: { id },
-        json: { email, role: 'client_user' },
+        json: { email, role: defaultPortalRole },
       })
       if (!res.ok) {
         const error = await res.json()
@@ -248,6 +254,10 @@ function ClientUsersTab() {
     return <Badge variant="outline">Pendente</Badge>
   }
 
+  const visibleMembers = members.filter((member) =>
+    isPortalVisibleMemberRole(member.role),
+  )
+
   return (
     <div className="space-y-6">
       {/* Portal Users Card */}
@@ -308,7 +318,7 @@ function ClientUsersTab() {
         <CardContent>
           {membersLoading ? (
             <MembersTableSkeleton />
-          ) : members.length === 0 ? (
+          ) : visibleMembers.length === 0 ? (
             <Empty className="py-8">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -332,7 +342,7 @@ function ClientUsersTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {members.map((m) => (
+                  {visibleMembers.map((m) => (
                     <TableRow key={m.id}>
                       <TableCell className="font-medium">
                         {m.userName}
@@ -340,43 +350,47 @@ function ClientUsersTab() {
                       <TableCell>{m.userEmail}</TableCell>
                       <TableCell>
                         <Badge variant="secondary">
-                          {m.role === 'client_user' ? 'Usuário' : m.role}
+                          {isPortalVisibleMemberRole(m.role)
+                            ? 'Usuário'
+                            : m.role}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <AlertDialog>
-                          <AlertDialogTrigger
-                            render={<Button variant="ghost" size="icon-sm" />}
-                          >
-                            <HugeiconsIcon
-                              icon={Delete02Icon}
-                              className="size-4 text-destructive"
-                            />
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Remover usuário
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Tem certeza que deseja remover {m.userName} do
-                                portal? Esta ação não pode ser desfeita.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                variant="destructive"
-                                onClick={() =>
-                                  removeMemberMutation.mutate(m.id)
-                                }
-                                disabled={removeMemberMutation.isPending}
-                              >
-                                Remover
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        {isPortalManageableMemberRole(m.role) && (
+                          <AlertDialog>
+                            <AlertDialogTrigger
+                              render={<Button variant="ghost" size="icon-sm" />}
+                            >
+                              <HugeiconsIcon
+                                icon={Delete02Icon}
+                                className="size-4 text-destructive"
+                              />
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Remover usuário
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja remover {m.userName} do
+                                  portal? Esta ação não pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  variant="destructive"
+                                  onClick={() =>
+                                    removeMemberMutation.mutate(m.id)
+                                  }
+                                  disabled={removeMemberMutation.isPending}
+                                >
+                                  Remover
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
