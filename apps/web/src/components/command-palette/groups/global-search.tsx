@@ -144,6 +144,12 @@ export function GlobalSearchGroup({
         return await res.json()
       }
 
+      // Backward-compatible fallback for environments where /standards/search
+      // is not deployed yet.
+      if (res.status !== 404) {
+        throw new Error('Search failed')
+      }
+
       const fallbackRes = await api.api.standards.$get({
         query: {
           query: debouncedSearch,
