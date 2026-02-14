@@ -19,6 +19,38 @@ import {
 
 type SearchMode = 'assets' | 'clients' | 'standards' | 'jobs' | null
 
+type AssetSearchResult = {
+  id: number
+  tag: string
+  serialNumber: string
+  assetTypeName: string
+  customerName: string
+}
+
+type ClientSearchResult = {
+  id: number
+  name: string
+  email: string | null
+  taxId: string | null
+}
+
+type StandardSearchResult = {
+  id: number
+  name: string
+  serialNumber: string
+  manufacturer: string | null
+}
+
+type JobSearchResult = {
+  id: number
+  jobId: string
+  status: string
+}
+
+const SEARCH_DEBOUNCE_MS = 150
+const SEARCH_MIN_LENGTH = 2
+const SEARCH_RESULT_LIMIT = '5'
+
 // Derive search mode from active page
 function getSearchModeFromPage(activePage: string): SearchMode {
   switch (activePage) {
@@ -44,112 +76,181 @@ export function GlobalSearchGroup({
 }) {
   const navigate = useNavigate()
   const { setOpen, setPages, activePage } = useCommandPalette()
-  const debouncedSearch = useDebouncedValue(searchValue, 300)
+  const trimmedSearchValue = searchValue.trim()
+  const debouncedSearch = useDebouncedValue(
+    trimmedSearchValue,
+    SEARCH_DEBOUNCE_MS,
+  )
+  const hasMinimumQuery = trimmedSearchValue.length >= SEARCH_MIN_LENGTH
+  const isWaitingDebounce =
+    hasMinimumQuery && debouncedSearch !== trimmedSearchValue
 
   // Derive search mode from active page
   const searchMode = getSearchModeFromPage(activePage)
 
   // Asset search
-  const { data: assetResults, isLoading: assetsLoading } = useQuery({
+  const {
+    data: assetResults,
+    isLoading: assetsLoading,
+    isFetching: assetsFetching,
+  } = useQuery<Array<AssetSearchResult>>({
     queryKey: ['command-search', 'assets', debouncedSearch],
     queryFn: async () => {
-      if (!debouncedSearch.trim()) return []
-      const res = await api.api.assets.$get({
-        query: { query: debouncedSearch, limit: '5', page: '1' },
+      if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
+      const res = await api.api.assets.search.$get({
+        query: { query: debouncedSearch, limit: SEARCH_RESULT_LIMIT },
       })
       if (!res.ok) throw new Error('Search failed')
-      const data = await res.json()
-      return data.data
+      return await res.json()
     },
-    enabled: searchMode === 'assets' && debouncedSearch.trim().length > 0,
+    enabled: searchMode === 'assets' && hasMinimumQuery,
     staleTime: 30000,
+    placeholderData: (previousData) => previousData,
   })
 
   // Client search
-  const { data: clientResults, isLoading: clientsLoading } = useQuery({
+  const {
+    data: clientResults,
+    isLoading: clientsLoading,
+    isFetching: clientsFetching,
+  } = useQuery<Array<ClientSearchResult>>({
     queryKey: ['command-search', 'clients', debouncedSearch],
     queryFn: async () => {
-      if (!debouncedSearch.trim()) return []
-      const res = await api.api.customers.$get({
-        query: { query: debouncedSearch, limit: '5', page: '1' },
+      if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
+      const res = await api.api.customers.search.$get({
+        query: { query: debouncedSearch, limit: SEARCH_RESULT_LIMIT },
       })
       if (!res.ok) throw new Error('Search failed')
-      const data = await res.json()
-      return data.data
+      return await res.json()
     },
-    enabled: searchMode === 'clients' && debouncedSearch.trim().length > 0,
+    enabled: searchMode === 'clients' && hasMinimumQuery,
     staleTime: 30000,
+    placeholderData: (previousData) => previousData,
   })
 
   // Standards search
-  const { data: standardResults, isLoading: standardsLoading } = useQuery({
+  const {
+    data: standardResults,
+    isLoading: standardsLoading,
+    isFetching: standardsFetching,
+  } = useQuery<Array<StandardSearchResult>>({
     queryKey: ['command-search', 'standards', debouncedSearch],
     queryFn: async () => {
-      if (!debouncedSearch.trim()) return []
-      const res = await api.api.standards.$get({
-        query: { query: debouncedSearch, limit: '5', page: '1' },
+      if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
+      const res = await api.api.standards.search.$get({
+        query: { query: debouncedSearch, limit: SEARCH_RESULT_LIMIT },
       })
-      if (!res.ok) throw new Error('Search failed')
-      const data = await res.json()
-      return data.data
+      if (res.ok) {
+        return await res.json()
+      }
+
+      // Backward-compatible fallback for environments where /standards/search
+      // is not deployed yet.
+      if (res.status !== 404) {
+        throw new Error('Search failed')
+      }
+
+      const fallbackRes = await api.api.standards.$get({
+        query: {
+          query: debouncedSearch,
+          limit: SEARCH_RESULT_LIMIT,
+          page: '1',
+        },
+      })
+
+      if (!fallbackRes.ok) {
+        throw new Error('Search failed')
+      }
+
+      const fallbackData = await fallbackRes.json()
+      return fallbackData.data.map((standard) => ({
+        id: standard.id,
+        name: standard.name,
+        serialNumber: standard.serialNumber,
+        manufacturer: standard.manufacturer,
+      }))
     },
-    enabled: searchMode === 'standards' && debouncedSearch.trim().length > 0,
+    enabled: searchMode === 'standards' && hasMinimumQuery,
     staleTime: 30000,
+    placeholderData: (previousData) => previousData,
   })
 
   // Jobs search
-  const { data: jobResults, isLoading: jobsLoading } = useQuery({
+  const {
+    data: jobResults,
+    isLoading: jobsLoading,
+    isFetching: jobsFetching,
+  } = useQuery<Array<JobSearchResult>>({
     queryKey: ['command-search', 'jobs', debouncedSearch],
     queryFn: async () => {
-      if (!debouncedSearch.trim()) return []
-      const res = await api.api.jobs.$get({
-        query: { query: debouncedSearch, limit: '5', page: '1' },
+      if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
+      const res = await api.api.jobs.search.$get({
+        query: { query: debouncedSearch, limit: SEARCH_RESULT_LIMIT },
       })
       if (!res.ok) throw new Error('Search failed')
-      const data = await res.json()
-      return data.data
+      return await res.json()
     },
-    enabled: searchMode === 'jobs' && debouncedSearch.trim().length > 0,
+    enabled: searchMode === 'jobs' && hasMinimumQuery,
     staleTime: 30000,
+    placeholderData: (previousData) => previousData,
   })
 
   // Asset results view
   if (searchMode === 'assets') {
     const isLoading = assetsLoading
+    const isFetching = assetsFetching
     const results = assetResults ?? []
+    const showMinLengthHint = trimmedSearchValue.length > 0 && !hasMinimumQuery
+    const showSearchingState =
+      hasMinimumQuery &&
+      results.length === 0 &&
+      (isWaitingDebounce || isLoading || isFetching)
+    const showEmptyState =
+      hasMinimumQuery &&
+      !isLoading &&
+      !isFetching &&
+      !isWaitingDebounce &&
+      results.length === 0
+
     return (
       <CommandGroup heading="Resultados - Ativos">
-        {isLoading && (
+        {showMinLengthHint && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Digite pelo menos 2 caracteres para buscar.
+          </div>
+        )}
+        {showSearchingState && (
           <div className="py-6 text-center text-sm text-muted-foreground">
             Buscando...
           </div>
         )}
-        {!isLoading && results.length === 0 && debouncedSearch.trim() && (
+        {showEmptyState && (
           <div className="py-6 text-center text-sm text-muted-foreground">
-            Nenhum ativo encontrado para "{debouncedSearch}"
+            Nenhum ativo encontrado para "{trimmedSearchValue}"
           </div>
         )}
-        {results.map((asset) => (
-          <CommandItem
-            key={asset.id}
-            onSelect={() => {
-              navigate({
-                to: '/dashboard/assets/$id',
-                params: { id: String(asset.id) },
-              })
-              setOpen(false)
-            }}
-          >
-            <HugeiconsIcon icon={Wrench01Icon} />
-            <div className="flex flex-col">
-              <span>{asset.assetTypeName || asset.tag || 'Ativo'}</span>
-              <span className="text-xs text-muted-foreground">
-                {asset.serialNumber || asset.tag} •{' '}
-                {asset.customerName || 'Sem cliente'}
-              </span>
-            </div>
-          </CommandItem>
-        ))}
+        {hasMinimumQuery &&
+          results.map((asset) => (
+            <CommandItem
+              key={asset.id}
+              onSelect={() => {
+                navigate({
+                  to: '/dashboard/assets/$id',
+                  params: { id: String(asset.id) },
+                })
+                setOpen(false)
+              }}
+            >
+              <HugeiconsIcon icon={Wrench01Icon} />
+              <div className="flex flex-col">
+                <span>{asset.assetTypeName || asset.tag || 'Ativo'}</span>
+                <span className="text-xs text-muted-foreground">
+                  {asset.serialNumber || asset.tag} •{' '}
+                  {asset.customerName || 'Sem cliente'}
+                </span>
+              </div>
+            </CommandItem>
+          ))}
       </CommandGroup>
     )
   }
@@ -157,39 +258,58 @@ export function GlobalSearchGroup({
   // Client results view
   if (searchMode === 'clients') {
     const isLoading = clientsLoading
+    const isFetching = clientsFetching
     const results = clientResults ?? []
+    const showMinLengthHint = trimmedSearchValue.length > 0 && !hasMinimumQuery
+    const showSearchingState =
+      hasMinimumQuery &&
+      results.length === 0 &&
+      (isWaitingDebounce || isLoading || isFetching)
+    const showEmptyState =
+      hasMinimumQuery &&
+      !isLoading &&
+      !isFetching &&
+      !isWaitingDebounce &&
+      results.length === 0
+
     return (
       <CommandGroup heading="Resultados - Clientes">
-        {isLoading && (
+        {showMinLengthHint && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Digite pelo menos 2 caracteres para buscar.
+          </div>
+        )}
+        {showSearchingState && (
           <div className="py-6 text-center text-sm text-muted-foreground">
             Buscando...
           </div>
         )}
-        {!isLoading && results.length === 0 && debouncedSearch.trim() && (
+        {showEmptyState && (
           <div className="py-6 text-center text-sm text-muted-foreground">
-            Nenhum cliente encontrado para "{debouncedSearch}"
+            Nenhum cliente encontrado para "{trimmedSearchValue}"
           </div>
         )}
-        {results.map((client) => (
-          <CommandItem
-            key={client.id}
-            onSelect={() => {
-              navigate({
-                to: '/dashboard/clients/$id',
-                params: { id: String(client.id) },
-              })
-              setOpen(false)
-            }}
-          >
-            <HugeiconsIcon icon={UserIcon} />
-            <div className="flex flex-col">
-              <span>{client.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {client.email || client.taxId || 'Sem email'}
-              </span>
-            </div>
-          </CommandItem>
-        ))}
+        {hasMinimumQuery &&
+          results.map((client) => (
+            <CommandItem
+              key={client.id}
+              onSelect={() => {
+                navigate({
+                  to: '/dashboard/clients/$id',
+                  params: { id: String(client.id) },
+                })
+                setOpen(false)
+              }}
+            >
+              <HugeiconsIcon icon={UserIcon} />
+              <div className="flex flex-col">
+                <span>{client.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {client.email || client.taxId || 'Sem email'}
+                </span>
+              </div>
+            </CommandItem>
+          ))}
       </CommandGroup>
     )
   }
@@ -197,38 +317,57 @@ export function GlobalSearchGroup({
   // Standards results view - navigate to list with search since detail page doesn't exist
   if (searchMode === 'standards') {
     const isLoading = standardsLoading
+    const isFetching = standardsFetching
     const results = standardResults ?? []
+    const showMinLengthHint = trimmedSearchValue.length > 0 && !hasMinimumQuery
+    const showSearchingState =
+      hasMinimumQuery &&
+      results.length === 0 &&
+      (isWaitingDebounce || isLoading || isFetching)
+    const showEmptyState =
+      hasMinimumQuery &&
+      !isLoading &&
+      !isFetching &&
+      !isWaitingDebounce &&
+      results.length === 0
+
     return (
       <CommandGroup heading="Resultados - Padrões">
-        {isLoading && (
+        {showMinLengthHint && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Digite pelo menos 2 caracteres para buscar.
+          </div>
+        )}
+        {showSearchingState && (
           <div className="py-6 text-center text-sm text-muted-foreground">
             Buscando...
           </div>
         )}
-        {!isLoading && results.length === 0 && debouncedSearch.trim() && (
+        {showEmptyState && (
           <div className="py-6 text-center text-sm text-muted-foreground">
-            Nenhum padrão encontrado para "{debouncedSearch}"
+            Nenhum padrão encontrado para "{trimmedSearchValue}"
           </div>
         )}
-        {results.map((standard) => (
-          <CommandItem
-            key={standard.id}
-            onSelect={() => {
-              // Navigate to standards list - detail page coming soon
-              navigate({ to: '/dashboard/standards' })
-              setOpen(false)
-            }}
-          >
-            <HugeiconsIcon icon={RulerIcon} />
-            <div className="flex flex-col">
-              <span>{standard.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {standard.serialNumber} •{' '}
-                {standard.manufacturer || 'Sem fabricante'}
-              </span>
-            </div>
-          </CommandItem>
-        ))}
+        {hasMinimumQuery &&
+          results.map((standard) => (
+            <CommandItem
+              key={standard.id}
+              onSelect={() => {
+                // Navigate to standards list - detail page coming soon
+                navigate({ to: '/dashboard/standards' })
+                setOpen(false)
+              }}
+            >
+              <HugeiconsIcon icon={RulerIcon} />
+              <div className="flex flex-col">
+                <span>{standard.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {standard.serialNumber} •{' '}
+                  {standard.manufacturer || 'Sem fabricante'}
+                </span>
+              </div>
+            </CommandItem>
+          ))}
       </CommandGroup>
     )
   }
@@ -236,37 +375,58 @@ export function GlobalSearchGroup({
   // Jobs results view - navigate to list since detail page doesn't exist
   if (searchMode === 'jobs') {
     const isLoading = jobsLoading
+    const isFetching = jobsFetching
     const results = jobResults ?? []
+    const showMinLengthHint = trimmedSearchValue.length > 0 && !hasMinimumQuery
+    const showSearchingState =
+      hasMinimumQuery &&
+      results.length === 0 &&
+      (isWaitingDebounce || isLoading || isFetching)
+    const showEmptyState =
+      hasMinimumQuery &&
+      !isLoading &&
+      !isFetching &&
+      !isWaitingDebounce &&
+      results.length === 0
+
     return (
       <CommandGroup heading="Resultados - Ordens de Serviço">
-        {isLoading && (
+        {showMinLengthHint && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Digite pelo menos 2 caracteres para buscar.
+          </div>
+        )}
+        {showSearchingState && (
           <div className="py-6 text-center text-sm text-muted-foreground">
             Buscando...
           </div>
         )}
-        {!isLoading && results.length === 0 && debouncedSearch.trim() && (
+        {showEmptyState && (
           <div className="py-6 text-center text-sm text-muted-foreground">
-            Nenhuma ordem encontrada para "{debouncedSearch}"
+            Nenhuma ordem encontrada para "{trimmedSearchValue}"
           </div>
         )}
-        {results.map((job) => (
-          <CommandItem
-            key={job.id}
-            onSelect={() => {
-              // Navigate to jobs list - detail page coming soon
-              navigate({ to: '/dashboard/jobs' })
-              setOpen(false)
-            }}
-          >
-            <HugeiconsIcon icon={ClipboardIcon} />
-            <div className="flex flex-col">
-              <span>{job.jobId || `OS-${job.id}`}</span>
-              <span className="text-xs text-muted-foreground">
-                {job.methodName || 'Sem método'} • {job.status}
-              </span>
-            </div>
-          </CommandItem>
-        ))}
+        {hasMinimumQuery &&
+          results.map((job) => (
+            <CommandItem
+              key={job.id}
+              onSelect={() => {
+                navigate({
+                  to: '/dashboard/jobs/$id',
+                  params: { id: String(job.id) },
+                })
+                setOpen(false)
+              }}
+            >
+              <HugeiconsIcon icon={ClipboardIcon} />
+              <div className="flex flex-col">
+                <span>{job.jobId || `OS-${job.id}`}</span>
+                <span className="text-xs text-muted-foreground">
+                  Status: {job.status}
+                </span>
+              </div>
+            </CommandItem>
+          ))}
       </CommandGroup>
     )
   }

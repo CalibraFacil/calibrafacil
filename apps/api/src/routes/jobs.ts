@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
@@ -42,8 +43,19 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { requirePlanLimit } from "../middleware/tier-guard";
-import { withInvalidation } from "../middleware/cache";
-import { eq, and, ilike, desc, count, lte, gte, inArray, isNull, or } from "drizzle-orm";
+import { withCache, withInvalidation } from "../middleware/cache";
+import {
+  eq,
+  and,
+  ilike,
+  desc,
+  count,
+  lte,
+  gte,
+  inArray,
+  isNull,
+  or,
+} from "drizzle-orm";
 import {
   createR2Client,
   generatePresignedUrl,
@@ -56,11 +68,20 @@ import { alias } from "drizzle-orm/pg-core";
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
 
+const CommandPaletteJobSearchQuerySchema = z.object({
+  query: z.string().trim().min(2),
+  limit: z.coerce.number().min(1).max(10).default(5),
+});
+
 /**
  * Check if environmental readings are within configured limits.
  */
 function checkEnvironmentWithinLimits(
-  env: { temperature: number | null; humidity: number | null; pressure: number | null },
+  env: {
+    temperature: number | null;
+    humidity: number | null;
+    pressure: number | null;
+  },
   limits: EnvironmentalLimitsSnapshot | null,
 ): boolean {
   if (!limits) return true; // No limits configured = always within
@@ -75,16 +96,14 @@ function checkEnvironmentWithinLimits(
   if (
     limits.humidity &&
     env.humidity != null &&
-    (env.humidity < limits.humidity.min ||
-      env.humidity > limits.humidity.max)
+    (env.humidity < limits.humidity.min || env.humidity > limits.humidity.max)
   ) {
     return false;
   }
   if (
     limits.pressure &&
     env.pressure != null &&
-    (env.pressure < limits.pressure.min ||
-      env.pressure > limits.pressure.max)
+    (env.pressure < limits.pressure.min || env.pressure > limits.pressure.max)
   ) {
     return false;
   }
@@ -146,6 +165,43 @@ async function generateJobId(
  * - POST /:id/reject: calibration:reject (admin, owner only)
  */
 export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
+  // =========================================================================
+  // GET /search - Lightweight search for command palette
+  // =========================================================================
+  .get(
+    "/search",
+    ...withLabPermission({ calibration: ["read"] }),
+    withCache("jobs-search", 30),
+    zValidator("query", CommandPaletteJobSearchQuerySchema),
+    async (c) => {
+      const memberData = c.get("member");
+      const { query, limit } = c.req.valid("query");
+
+      try {
+        const results = await db
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            status: calibrationJob.status,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              ilike(calibrationJob.jobId, `%${query}%`),
+            ),
+          )
+          .orderBy(desc(calibrationJob.createdAt))
+          .limit(limit);
+
+        return c.json(results);
+      } catch (error) {
+        console.error("Error searching jobs:", error);
+        return c.json({ error: "Erro ao buscar ordens de serviço" }, 500);
+      }
+    },
+  )
+
   // =========================================================================
   // GET / - List jobs with pagination and filtering
   // =========================================================================
@@ -526,22 +582,25 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             .from(personnelCompetence)
             .where(
               and(
-                eq(personnelCompetence.organizationId, memberData.organizationId),
+                eq(
+                  personnelCompetence.organizationId,
+                  memberData.organizationId,
+                ),
                 isNull(personnelCompetence.deletedAt),
               ),
             );
 
-          if (
-            (competenceCount?.total ?? 0) > 0 &&
-            assetData.assetTypeId
-          ) {
+          if ((competenceCount?.total ?? 0) > 0 && assetData.assetTypeId) {
             const [activeCompetence] = await db
               .select({ id: personnelCompetence.id })
               .from(personnelCompetence)
               .where(
                 and(
                   eq(personnelCompetence.userId, input.technicianId),
-                  eq(personnelCompetence.organizationId, memberData.organizationId),
+                  eq(
+                    personnelCompetence.organizationId,
+                    memberData.organizationId,
+                  ),
                   eq(personnelCompetence.assetTypeId, assetData.assetTypeId),
                   eq(personnelCompetence.status, "ACTIVE"),
                   isNull(personnelCompetence.deletedAt),
@@ -651,9 +710,16 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         // 11. Notify technician if assigned during creation
         if (input.technicianId) {
           try {
-            await notifyJobAssigned(newJob.id, input.technicianId, session.user.id);
+            await notifyJobAssigned(
+              newJob.id,
+              input.technicianId,
+              session.user.id,
+            );
           } catch (err) {
-            console.error("[Jobs] Failed to send assignment notification:", err);
+            console.error(
+              "[Jobs] Failed to send assignment notification:",
+              err,
+            );
           }
         }
 
@@ -875,7 +941,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             .where(
               and(
                 eq(personnelCompetence.userId, input.technicianId),
-                eq(personnelCompetence.organizationId, memberData.organizationId),
+                eq(
+                  personnelCompetence.organizationId,
+                  memberData.organizationId,
+                ),
                 eq(personnelCompetence.assetTypeId, jobService.assetTypeId),
                 eq(personnelCompetence.status, "ACTIVE"),
                 isNull(personnelCompetence.deletedAt),
@@ -885,7 +954,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
           if (
             !activeCompetence ||
-            (activeCompetence.expiresAt && activeCompetence.expiresAt < new Date())
+            (activeCompetence.expiresAt &&
+              activeCompetence.expiresAt < new Date())
           ) {
             return c.json(
               {
@@ -996,10 +1066,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: existing.environmentalSnapshot &&
+        reason:
+          existing.environmentalSnapshot &&
           !existing.environmentalSnapshot.withinLimits
-          ? "Submetido com condições ambientais fora dos limites"
-          : undefined,
+            ? "Submetido com condições ambientais fora dos limites"
+            : undefined,
       });
 
       // Send notifications to admins/owners (fire and forget)
@@ -1694,11 +1765,13 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       });
 
       // Notify customer (async)
-      notifyCertificateAmended(originalJob.id, amendedJob.id, input.reason).catch(
-        (err) => {
-          console.error("[Jobs] Failed to send amendment notification:", err);
-        },
-      );
+      notifyCertificateAmended(
+        originalJob.id,
+        amendedJob.id,
+        input.reason,
+      ).catch((err) => {
+        console.error("[Jobs] Failed to send amendment notification:", err);
+      });
 
       return c.json(
         {

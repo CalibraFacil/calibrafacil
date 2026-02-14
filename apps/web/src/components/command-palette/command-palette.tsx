@@ -15,14 +15,8 @@ import {
 } from '@/components/ui/command'
 
 export function CommandPalette() {
-  const { open, setOpen, activePage, setPages } = useCommandPalette()
-  const [searchValue, setSearchValue] = React.useState('')
-
-  React.useEffect(() => {
-    if (!open) {
-      setSearchValue('')
-    }
-  }, [open])
+  const { open, setOpen, activePage, setPages, searchValue, setSearchValue } =
+    useCommandPalette()
 
   const handleOpenChange = React.useCallback(
     (nextOpen: boolean) => {
@@ -43,7 +37,7 @@ export function CommandPalette() {
         setSearchValue('')
       }
     },
-    [activePage, searchValue, setPages],
+    [activePage, searchValue, setPages, setSearchValue],
   )
 
   const getPlaceholder = () => {
@@ -78,7 +72,9 @@ export function CommandPalette() {
             onValueChange={setSearchValue}
           />
           <CommandList>
-            <CommandEmpty>Nenhum resultado encontrado.</CommandEmpty>
+            {activePage === 'root' && (
+              <CommandEmpty>Nenhum resultado encontrado.</CommandEmpty>
+            )}
 
             {activePage === 'root' && (
               <>

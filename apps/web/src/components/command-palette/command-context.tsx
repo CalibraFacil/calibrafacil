@@ -20,6 +20,8 @@ export type ContextActionsConfig = {
 type CommandPaletteContextType = {
   open: boolean
   setOpen: (open: boolean) => void
+  searchValue: string
+  setSearchValue: React.Dispatch<React.SetStateAction<string>>
   contextActions: Array<CommandAction>
   registerContextActions: (config: ContextActionsConfig) => () => void
   pages: Array<string>
@@ -46,6 +48,7 @@ export function CommandPaletteProvider({
   children: React.ReactNode
 }) {
   const [open, setOpenState] = React.useState(false)
+  const [searchValue, setSearchValue] = React.useState('')
   const [pages, setPages] = React.useState<Array<string>>(['root'])
   const [contextActionsRegistry, setContextActionsRegistry] = React.useState<
     Array<ContextActionsConfig>
@@ -75,18 +78,18 @@ export function CommandPaletteProvider({
     [],
   )
 
-  const setOpen = React.useCallback<React.Dispatch<React.SetStateAction<boolean>>>(
-    (value) => {
-      setOpenState((prev) => {
-        const next = typeof value === 'function' ? value(prev) : value
-        if (!next) {
-          setPages(['root'])
-        }
-        return next
-      })
-    },
-    [],
-  )
+  const setOpen = React.useCallback<
+    React.Dispatch<React.SetStateAction<boolean>>
+  >((value) => {
+    setOpenState((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value
+      if (!next) {
+        setPages(['root'])
+        setSearchValue('')
+      }
+      return next
+    })
+  }, [])
 
   // Keyboard shortcut: Cmd+K / Ctrl+K
   React.useEffect(() => {
@@ -106,6 +109,8 @@ export function CommandPaletteProvider({
       value={{
         open,
         setOpen,
+        searchValue,
+        setSearchValue,
         contextActions,
         registerContextActions,
         pages,
