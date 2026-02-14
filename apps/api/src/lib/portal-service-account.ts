@@ -2,7 +2,7 @@ import { createLabAuth } from "@calibra-facil/auth";
 import {
   INTERNAL_ROLES,
   PORTAL_MANAGEABLE_MEMBER_ROLES,
-  PORTAL_VISIBLE_MEMBER_ROLES,
+  isPortalManageableMemberRole,
 } from "@calibra-facil/auth/access";
 import { db } from "@calibra-facil/db";
 import {
@@ -259,11 +259,7 @@ export async function createPortalInvitationAsService(params: {
   const normalizedEmail = params.email.trim().toLowerCase();
   const role = params.role || PORTAL_MANAGEABLE_MEMBER_ROLES[0];
 
-  if (
-    !PORTAL_VISIBLE_MEMBER_ROLES.includes(
-      role as (typeof PORTAL_VISIBLE_MEMBER_ROLES)[number],
-    )
-  ) {
+  if (!isPortalManageableMemberRole(role)) {
     throw new PortalServiceAccountError(
       "Funcao de convite invalida para portal",
       400,
