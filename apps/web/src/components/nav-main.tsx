@@ -87,7 +87,7 @@ export function NavMain({ items }: NavMainProps) {
                             }
                             isActive={location.pathname === subItem.url}
                           >
-                            {subItem.title}
+                            <span>{subItem.title}</span>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       ))}
