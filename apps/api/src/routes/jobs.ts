@@ -177,23 +177,28 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       const memberData = c.get("member");
       const { query, limit } = c.req.valid("query");
 
-      const results = await db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          status: calibrationJob.status,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            ilike(calibrationJob.jobId, `%${query}%`),
-          ),
-        )
-        .orderBy(desc(calibrationJob.createdAt))
-        .limit(limit);
+      try {
+        const results = await db
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            status: calibrationJob.status,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              ilike(calibrationJob.jobId, `%${query}%`),
+            ),
+          )
+          .orderBy(desc(calibrationJob.createdAt))
+          .limit(limit);
 
-      return c.json(results);
+        return c.json(results);
+      } catch (error) {
+        console.error("Error searching jobs:", error);
+        return c.json({ error: "Erro ao buscar ordens de serviço" }, 500);
+      }
     },
   )
 
