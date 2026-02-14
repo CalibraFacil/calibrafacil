@@ -35,7 +35,13 @@ function getSearchModeFromPage(activePage: string): SearchMode {
   }
 }
 
-export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
+export function GlobalSearchGroup({
+  searchValue,
+  onSearchModeSelect,
+}: {
+  searchValue: string
+  onSearchModeSelect?: () => void
+}) {
   const navigate = useNavigate()
   const { setOpen, setPages, activePage } = useCommandPalette()
   const debouncedSearch = useDebouncedValue(searchValue, 300)
@@ -138,7 +144,8 @@ export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
             <div className="flex flex-col">
               <span>{asset.assetTypeName || asset.tag || 'Ativo'}</span>
               <span className="text-xs text-muted-foreground">
-                {asset.serialNumber || asset.tag} • {asset.customerName || 'Sem cliente'}
+                {asset.serialNumber || asset.tag} •{' '}
+                {asset.customerName || 'Sem cliente'}
               </span>
             </div>
           </CommandItem>
@@ -216,7 +223,8 @@ export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
             <div className="flex flex-col">
               <span>{standard.name}</span>
               <span className="text-xs text-muted-foreground">
-                {standard.serialNumber} • {standard.manufacturer || 'Sem fabricante'}
+                {standard.serialNumber} •{' '}
+                {standard.manufacturer || 'Sem fabricante'}
               </span>
             </div>
           </CommandItem>
@@ -268,6 +276,7 @@ export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
     <CommandGroup heading="Busca Global">
       <CommandItem
         onSelect={() => {
+          onSearchModeSelect?.()
           setPages((prev) => [...prev, 'search-assets'])
         }}
       >
@@ -278,6 +287,7 @@ export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
 
       <CommandItem
         onSelect={() => {
+          onSearchModeSelect?.()
           setPages((prev) => [...prev, 'search-clients'])
         }}
       >
@@ -288,6 +298,7 @@ export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
 
       <CommandItem
         onSelect={() => {
+          onSearchModeSelect?.()
           setPages((prev) => [...prev, 'search-standards'])
         }}
       >
@@ -298,6 +309,7 @@ export function GlobalSearchGroup({ searchValue }: { searchValue: string }) {
 
       <CommandItem
         onSelect={() => {
+          onSearchModeSelect?.()
           setPages((prev) => [...prev, 'search-jobs'])
         }}
       >

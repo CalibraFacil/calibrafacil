@@ -85,7 +85,10 @@ export function CommandPalette() {
                 <ContextGroup />
                 <QuickCreateGroup />
                 <CommandSeparator />
-                <GlobalSearchGroup searchValue={searchValue} />
+                <GlobalSearchGroup
+                  searchValue={searchValue}
+                  onSearchModeSelect={() => setSearchValue('')}
+                />
                 <CommandSeparator />
                 <NavigationGroup />
               </>
