@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { auth } from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
@@ -24,7 +25,12 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
-import { withInvalidation } from "../middleware/cache";
+import { withCache, withInvalidation } from "../middleware/cache";
+
+const CommandPaletteCustomerSearchQuerySchema = z.object({
+  query: z.string().trim().min(2),
+  limit: z.coerce.number().min(1).max(10).default(5),
+});
 
 /**
  * Generate a URL-friendly slug from a string
@@ -127,6 +133,48 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       } catch (error) {
         console.error("Error creating customer:", error);
         return c.json({ error: "Erro ao criar cliente" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /search - Lightweight search for command palette
+  // =========================================================================
+  .get(
+    "/search",
+    ...withLabPermission({ client: ["read"] }),
+    withCache("customers-search", 30),
+    zValidator("query", CommandPaletteCustomerSearchQuerySchema),
+    async (c) => {
+      const memberData = c.get("member");
+      const { query, limit } = c.req.valid("query");
+
+      try {
+        const results = await db
+          .select({
+            id: customer.id,
+            name: customer.name,
+            email: customer.email,
+            taxId: customer.taxId,
+          })
+          .from(customer)
+          .where(
+            and(
+              eq(customer.labOrganizationId, memberData.organizationId),
+              or(
+                ilike(customer.name, `%${query}%`),
+                ilike(customer.taxId, `%${query}%`),
+                ilike(customer.email, `%${query}%`),
+              )!,
+            ),
+          )
+          .orderBy(customer.name)
+          .limit(limit);
+
+        return c.json(results);
+      } catch (error) {
+        console.error("Error searching customers:", error);
+        return c.json({ error: "Erro ao buscar clientes" }, 500);
       }
     },
   )
@@ -303,52 +351,59 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Delete customer
   // =========================================================================
-  .delete("/:id", ...withLabPermission({ client: ["delete"] }), withInvalidation("customers"), async (c) => {
-    const id = parseInt(c.req.param("id"), 10);
-    const session = c.get("session");
+  .delete(
+    "/:id",
+    ...withLabPermission({ client: ["delete"] }),
+    withInvalidation("customers"),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const session = c.get("session");
 
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
-
-    try {
-      const [existingCustomer] = await db
-        .select()
-        .from(customer)
-        .where(eq(customer.id, id))
-        .limit(1);
-
-      if (!existingCustomer) {
-        return c.json({ error: "Cliente nao encontrado" }, 404);
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
       }
 
-      // TODO: Check for active calibrations before deleting
-      // For now, we allow deletion
+      try {
+        const [existingCustomer] = await db
+          .select()
+          .from(customer)
+          .where(eq(customer.id, id))
+          .limit(1);
 
-      // Log audit entry before deletion
-      await db.insert(customerAuditLog).values({
-        customerId: id,
-        action: "delete",
-        changes: { customer: { old: existingCustomer, new: null } },
-        performedBy: session.user.id,
-        ipAddress:
-          c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
-      });
+        if (!existingCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
 
-      // Delete the customer (cascade will handle audit logs)
-      await db.delete(customer).where(eq(customer.id, id));
+        // TODO: Check for active calibrations before deleting
+        // For now, we allow deletion
 
-      // Also delete the associated organization
-      await db
-        .delete(organization)
-        .where(eq(organization.id, existingCustomer.authOrganizationId));
+        // Log audit entry before deletion
+        await db.insert(customerAuditLog).values({
+          customerId: id,
+          action: "delete",
+          changes: { customer: { old: existingCustomer, new: null } },
+          performedBy: session.user.id,
+          ipAddress:
+            c.req.header("x-forwarded-for") ??
+            c.req.header("x-real-ip") ??
+            null,
+        });
 
-      return c.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting customer:", error);
-      return c.json({ error: "Erro ao excluir cliente" }, 500);
-    }
-  })
+        // Delete the customer (cascade will handle audit logs)
+        await db.delete(customer).where(eq(customer.id, id));
+
+        // Also delete the associated organization
+        await db
+          .delete(organization)
+          .where(eq(organization.id, existingCustomer.authOrganizationId));
+
+        return c.json({ success: true });
+      } catch (error) {
+        console.error("Error deleting customer:", error);
+        return c.json({ error: "Erro ao excluir cliente" }, 500);
+      }
+    },
+  )
 
   // =========================================================================
   // GET /:id/members - List portal users for customer

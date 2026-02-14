@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -18,7 +19,12 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { withInvalidation } from "../middleware/cache";
+import { withCache, withInvalidation } from "../middleware/cache";
+
+const CommandPaletteAssetSearchQuerySchema = z.object({
+  query: z.string().trim().min(2),
+  limit: z.coerce.number().min(1).max(10).default(5),
+});
 
 export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -133,6 +139,52 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
       } catch (error) {
         console.error("Error creating asset:", error);
         return c.json({ error: "Erro ao criar ativo" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /search - Lightweight search for command palette
+  // =========================================================================
+  .get(
+    "/search",
+    ...withLabPermission({ equipment: ["read"] }),
+    withCache("assets-search", 30),
+    zValidator("query", CommandPaletteAssetSearchQuerySchema),
+    async (c) => {
+      const member = c.get("member");
+      const { query, limit } = c.req.valid("query");
+
+      try {
+        const results = await db
+          .select({
+            id: asset.id,
+            tag: asset.tag,
+            serialNumber: asset.serialNumber,
+            assetTypeName: assetType.name,
+            customerName: customer.name,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
+          .where(
+            and(
+              isNull(asset.deletedAt),
+              eq(customer.labOrganizationId, member.organizationId),
+              or(
+                ilike(asset.tag, `%${query}%`),
+                ilike(asset.serialNumber, `%${query}%`),
+                ilike(asset.name, `%${query}%`),
+              )!,
+            ),
+          )
+          .orderBy(asset.tag)
+          .limit(limit);
+
+        return c.json(results);
+      } catch (error) {
+        console.error("Error searching assets:", error);
+        return c.json({ error: "Erro ao buscar ativos" }, 500);
       }
     },
   )
@@ -543,7 +595,10 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             .where(eq(customer.authOrganizationId, member.organizationId))
             .limit(1);
 
-          if (!linkedCustomer || linkedCustomer.id !== existingAsset.customerId) {
+          if (
+            !linkedCustomer ||
+            linkedCustomer.id !== existingAsset.customerId
+          ) {
             return c.json({ error: "Acesso negado" }, 403);
           }
         }
