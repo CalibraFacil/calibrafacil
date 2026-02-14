@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -154,26 +154,6 @@ const statusLabels: Record<string, string> = {
 
 function ExecuteJobPage() {
     const { id } = Route.useParams()
-    const navigate = useNavigate()
-    const queryClient = useQueryClient()
-
-    // Form state
-    const [formData, setFormData] = useState<Record<string, unknown>>({})
-    const [selectedStandardIds, setSelectedStandardIds] = useState<number[]>([])
-    const [environment, setEnvironment] = useState<{
-        temperature: number | null
-        humidity: number | null
-        pressure: number | null
-    }>({ temperature: null, humidity: null, pressure: null })
-    const [sectionsOpen, setSectionsOpen] = useState({
-        standards: true,
-        environment: true,
-        data: true,
-        results: true,
-        validations: true,
-        debug: false,
-    })
-
     // Math engine
     const engine = useMemo(() => createEngine(), [])
 
@@ -215,25 +195,79 @@ function ExecuteJobPage() {
 
     const envLimits = envLimitsData?.limits ?? null
 
-    // Initialize form data, selected standards, and environment from job
-    useEffect(() => {
-        if (job?.data) {
-            setFormData(job.data)
-        }
-        // Restore selected standard IDs from snapshot
-        if (job?.standardsSnapshot && job.standardsSnapshot.length > 0) {
-            const snapshotIds = job.standardsSnapshot.map((s) => s.id)
-            setSelectedStandardIds(snapshotIds)
-        }
-        // Restore environment from snapshot
-        if (job?.environmentalSnapshot) {
-            setEnvironment({
-                temperature: job.environmentalSnapshot.temperature,
-                humidity: job.environmentalSnapshot.humidity,
-                pressure: job.environmentalSnapshot.pressure,
-            })
-        }
-    }, [job?.data, job?.standardsSnapshot, job?.environmentalSnapshot])
+    if (jobError) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-background">
+                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-6">
+                    <p className="text-red-500">Erro ao carregar job: {jobError.message}</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (jobLoading || !job) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-background">
+                <Spinner className="size-8" />
+            </div>
+        )
+    }
+
+    return (
+        <ExecuteJobForm
+            key={job.id}
+            job={job}
+            standardsData={standardsData?.data ?? []}
+            envLimits={envLimits}
+            engine={engine}
+            jobId={id}
+        />
+    )
+}
+
+function ExecuteJobForm({
+    job,
+    standardsData,
+    envLimits,
+    engine,
+    jobId,
+}: {
+    job: JobData
+    standardsData: Array<ReferenceStandard>
+    envLimits: EffectiveLimits | null
+    engine: ReturnType<typeof createEngine>
+    jobId: string
+}) {
+    const navigate = useNavigate()
+    const queryClient = useQueryClient()
+
+    // Form state
+    const [formData, setFormData] = useState<Record<string, unknown>>(
+        () => job.data ?? {},
+    )
+    const [selectedStandardIds, setSelectedStandardIds] = useState<number[]>(
+        () =>
+            job.standardsSnapshot && job.standardsSnapshot.length > 0
+                ? job.standardsSnapshot.map((s) => s.id)
+                : [],
+    )
+    const [environment, setEnvironment] = useState<{
+        temperature: number | null
+        humidity: number | null
+        pressure: number | null
+    }>(() => ({
+        temperature: job.environmentalSnapshot?.temperature ?? null,
+        humidity: job.environmentalSnapshot?.humidity ?? null,
+        pressure: job.environmentalSnapshot?.pressure ?? null,
+    }))
+    const [sectionsOpen, setSectionsOpen] = useState({
+        standards: true,
+        environment: true,
+        data: true,
+        results: true,
+        validations: true,
+        debug: false,
+    })
 
     // Build context for math engine (including standard values)
     const context = useMemo(() => {
@@ -268,9 +302,9 @@ function ExecuteJobPage() {
         }
 
         // Inject selected standard values into context
-        const selectedStandards = standardsData?.data?.filter((s) =>
+        const selectedStandards = standardsData.filter((s) =>
             selectedStandardIds.includes(s.id),
-        ) || []
+        )
 
         for (const std of selectedStandards) {
             const prefix = `std_${std.id}`
@@ -301,7 +335,7 @@ function ExecuteJobPage() {
         }
 
         return flattenForExecution(processedData, { preserveArrays: true })
-    }, [formData, job, standardsData?.data, selectedStandardIds, environment])
+    }, [formData, job, standardsData, selectedStandardIds, environment])
 
     // Evaluate formulas
     const formulaResults = useMemo(() => {
@@ -373,9 +407,9 @@ function ExecuteJobPage() {
     // Compute certified value options from selected standards
     const certifiedValueOptions = useMemo((): CertifiedValueOption[] => {
         const options: CertifiedValueOption[] = []
-        const selectedStandards = standardsData?.data?.filter((s) =>
+        const selectedStandards = standardsData.filter((s) =>
             selectedStandardIds.includes(s.id)
-        ) || []
+        )
 
         for (const std of selectedStandards) {
             if (std.certifiedValues) {
@@ -391,7 +425,7 @@ function ExecuteJobPage() {
             }
         }
         return options
-    }, [standardsData?.data, selectedStandardIds])
+    }, [standardsData, selectedStandardIds])
 
     // Update field
     const updateField = useCallback((key: string, value: unknown) => {
@@ -479,7 +513,7 @@ function ExecuteJobPage() {
     const saveMutation = useMutation({
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].execute.$post({
-                param: { id },
+                param: { id: jobId },
                 json: {
                     selectedStandardIds,
                     data: normalizeFormData(formData),
@@ -498,7 +532,7 @@ function ExecuteJobPage() {
             return res.json()
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['jobs', id] })
+            queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
             toast.success('Dados salvos com sucesso!')
         },
         onError: (error) => {
@@ -510,7 +544,7 @@ function ExecuteJobPage() {
     const submitMutation = useMutation({
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].submit.$post({
-                param: { id },
+                param: { id: jobId },
                 json: { data: normalizeFormData(formData) },
             })
             if (!res.ok) {
@@ -659,31 +693,6 @@ function ExecuteJobPage() {
         return hasRequiredFields && hasNoErrors
     }, [job, formData, validationResults])
 
-    if (jobError) {
-        return (
-            <Card>
-                <CardContent className="pt-6">
-                    <p className="text-red-500">Erro ao carregar job: {jobError.message}</p>
-                </CardContent>
-            </Card>
-        )
-    }
-
-    if (jobLoading || !job) {
-        return (
-            <div className="space-y-4">
-                <Skeleton className="h-8 w-48" />
-                <Card>
-                    <CardContent className="pt-6 space-y-4">
-                        <Skeleton className="h-6 w-full" />
-                        <Skeleton className="h-6 w-3/4" />
-                        <Skeleton className="h-6 w-1/2" />
-                    </CardContent>
-                </Card>
-            </div>
-        )
-    }
-
     const isEditable = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
 
     return (
@@ -764,7 +773,7 @@ function ExecuteJobPage() {
                             <CollapsibleContent>
                                 <CardContent className="pt-0">
                                     <div className="grid gap-2">
-                                        {standardsData?.data?.map((std) => (
+                                        {standardsData.map((std) => (
                                             <div
                                                 key={std.id}
                                                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${selectedStandardIds.includes(std.id)

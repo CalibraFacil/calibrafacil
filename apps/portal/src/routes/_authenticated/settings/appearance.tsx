@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ComputerIcon,
@@ -49,11 +49,7 @@ function applyTheme(theme: Theme) {
 }
 
 function AppearancePage() {
-  const [theme, setTheme] = useState<Theme>("system");
-
-  useEffect(() => {
-    setTheme(getStoredTheme());
-  }, []);
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme());
 
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme);

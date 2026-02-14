@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
@@ -135,38 +135,41 @@ export function InputFieldDialog({
   initialData,
   existingKeys,
 }: InputFieldDialogProps) {
-  const [field, setField] = useState<MethodInputField>({
-    key: '',
-    label: '',
-    type: 'number',
-    required: false,
-  })
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [autoKey, setAutoKey] = useState(true)
+  const dialogKey = `${open ? 'open' : 'closed'}-${initialData?.key ?? 'new'}`
 
-  // Reset form when dialog opens/closes or initialData changes
-  useEffect(() => {
-    if (open) {
-      if (initialData) {
-        setField(initialData)
-        setAutoKey(false)
-        // When editing, treat all existing column keys as manually set
-        if (initialData.columns) {
-          setManualColumnKeys(new Set(initialData.columns.map((_, i) => i)))
-        }
-      } else {
-        setField({
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && (
+        <InputFieldDialogBody
+          key={dialogKey}
+          onOpenChange={onOpenChange}
+          onSave={onSave}
+          initialData={initialData}
+          existingKeys={existingKeys}
+        />
+      )}
+    </Dialog>
+  )
+}
+
+function InputFieldDialogBody({
+  onOpenChange,
+  onSave,
+  initialData,
+  existingKeys,
+}: Omit<InputFieldDialogProps, 'open'>) {
+  const [field, setField] = useState<MethodInputField>(
+    initialData
+      ? { ...initialData }
+      : {
           key: '',
           label: '',
           type: 'number',
           required: false,
-        })
-        setAutoKey(true)
-        setManualColumnKeys(new Set())
-      }
-      setErrors({})
-    }
-  }, [open, initialData])
+        },
+  )
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [autoKey, setAutoKey] = useState(!initialData)
 
   const handleLabelChange = (label: string) => {
     const updates: Partial<MethodInputField> = { label }
@@ -202,9 +205,12 @@ export function InputFieldDialog({
   }
 
   // Track which column keys have been manually edited
-  const [manualColumnKeys, setManualColumnKeys] = useState<Set<number>>(
-    new Set(),
-  )
+  const [manualColumnKeys, setManualColumnKeys] = useState<Set<number>>(() => {
+    if (initialData?.columns) {
+      return new Set(initialData.columns.map((_, i) => i))
+    }
+    return new Set()
+  })
 
   const updateColumn = (index: number, updates: Partial<MethodTableColumn>) => {
     const newColumns = [...(field.columns || [])]
@@ -305,17 +311,15 @@ export function InputFieldDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {initialData ? 'Editar Campo' : 'Adicionar Campo'}
-          </DialogTitle>
-          <DialogDescription>
-            Defina um campo de entrada para coleta de dados durante a
-            calibração.
-          </DialogDescription>
-        </DialogHeader>
+    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>
+          {initialData ? 'Editar Campo' : 'Adicionar Campo'}
+        </DialogTitle>
+        <DialogDescription>
+          Defina um campo de entrada para coleta de dados durante a calibração.
+        </DialogDescription>
+      </DialogHeader>
 
         <div className="space-y-4 py-4">
           <Field>
@@ -519,15 +523,14 @@ export function InputFieldDialog({
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSave}>
-            {initialData ? 'Salvar' : 'Adicionar'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSave}>
+          {initialData ? 'Salvar' : 'Adicionar'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   )
 }

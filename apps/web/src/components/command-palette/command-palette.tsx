@@ -18,12 +18,18 @@ export function CommandPalette() {
   const { open, setOpen, activePage, setPages } = useCommandPalette()
   const [searchValue, setSearchValue] = React.useState('')
 
-  // Reset search when closing
   React.useEffect(() => {
     if (!open) {
       setSearchValue('')
     }
   }, [open])
+
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+    },
+    [setOpen],
+  )
 
   // Handle back navigation with Escape or Backspace on empty input
   const handleKeyDown = React.useCallback(
@@ -61,7 +67,7 @@ export function CommandPalette() {
     <>
       <CommandDialog
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={handleOpenChange}
         title="Paleta de Comandos"
         description="Use atalhos de teclado para navegar rapidamente pelo sistema."
       >

@@ -1,4 +1,9 @@
-import { Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  Navigate,
+  Outlet,
+  createFileRoute,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -77,13 +82,6 @@ function PortalLayout() {
 
   const hasClientAccess = clientOrganizations.length > 0;
 
-  // Redirect to sign-in if not authenticated
-  useEffect(() => {
-    if (!sessionPending && !session) {
-      navigate({ to: "/sign-in" });
-    }
-  }, [sessionPending, session, navigate]);
-
   // Context Setup: Only runs once on initial load
   // Uses localStorage to remember preferred org, avoiding conflicts with dashboard
   useEffect(() => {
@@ -142,13 +140,19 @@ function PortalLayout() {
   ]);
 
   // Show loading state
-  if (
-    sessionPending ||
-    !session ||
-    orgsLoading ||
-    activeOrgLoading ||
-    isSettingUp
-  ) {
+  if (sessionPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Spinner className="size-8" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Navigate to="/sign-in" />;
+  }
+
+  if (orgsLoading || activeOrgLoading || isSettingUp) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Spinner className="size-8" />
