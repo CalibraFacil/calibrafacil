@@ -17,12 +17,16 @@ import {
 export function CommandPalette() {
   const { open, setOpen, activePage, setPages } = useCommandPalette()
   const [searchValue, setSearchValue] = React.useState('')
+
+  React.useEffect(() => {
+    if (!open) {
+      setSearchValue('')
+    }
+  }, [open])
+
   const handleOpenChange = React.useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
-      if (!nextOpen) {
-        setSearchValue('')
-      }
     },
     [setOpen],
   )

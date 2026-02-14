@@ -93,6 +93,26 @@ interface Invitation {
 function OrganizationSettingsRoute() {
   const { data: activeOrg, isPending: isLoadingOrg } = useActiveOrganization()
 
+  if (isLoadingOrg) {
+    return <OrganizationSkeleton />
+  }
+
+  if (!activeOrg) {
+    return (
+      <Empty className="border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <HugeiconsIcon icon={Building06Icon} />
+          </EmptyMedia>
+          <EmptyTitle>Nenhuma organização selecionada</EmptyTitle>
+          <EmptyDescription>
+            Selecione ou crie uma organização para gerenciar suas configurações.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    )
+  }
+
   return <OrganizationSettingsPage key={activeOrg.id} activeOrg={activeOrg} />
 }
 
@@ -101,7 +121,6 @@ function OrganizationSettingsPage({
 }: {
   activeOrg: ActiveOrganization
 }) {
-
   const [name, setName] = useState(activeOrg.name ?? '')
   const [slug, setSlug] = useState(activeOrg.slug ?? '')
   const [isUpdating, setIsUpdating] = useState(false)
@@ -269,26 +288,6 @@ function OrganizationSettingsPage({
     } finally {
       setInvitationsLoading(false)
     }
-  }
-
-  if (isLoadingOrg) {
-    return <OrganizationSkeleton />
-  }
-
-  if (!activeOrg) {
-    return (
-      <Empty className="border">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <HugeiconsIcon icon={Building06Icon} />
-          </EmptyMedia>
-          <EmptyTitle>Nenhuma organização selecionada</EmptyTitle>
-          <EmptyDescription>
-            Selecione ou crie uma organização para gerenciar suas configurações.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    )
   }
 
   const handleUpdateOrganization = async (e: React.FormEvent) => {
