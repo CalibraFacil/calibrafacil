@@ -435,10 +435,6 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Cliente nao encontrado" }, 404);
         }
 
-        await enforceClientPortalMembershipBoundary(
-          foundCustomer.authOrganizationId,
-        );
-
         // Get members of the CLIENT organization with user details
         const members = await db
           .select({
@@ -491,10 +487,6 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         if (!foundCustomer) {
           return c.json({ error: "Cliente nao encontrado" }, 404);
         }
-
-        await enforceClientPortalMembershipBoundary(
-          foundCustomer.authOrganizationId,
-        );
 
         // Get invitations for the CLIENT organization
         const invitations = await db

@@ -16,6 +16,19 @@ import { Resend } from "resend";
 
 const DEFAULT_INVITATION_EXPIRATION_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function sanitizeMailHeader(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
 export class PortalServiceAccountError extends Error {
   status: number;
   code: string;
@@ -118,18 +131,24 @@ async function sendPortalInvitationEmail(params: {
     process.env.EMAIL_FROM ||
     "Calibra Facil <noreply@calibrafacil.com>";
   const invitationUrl = getInvitationUrl(params.invitationId);
+  const escapedOrganizationName = escapeHtml(params.organizationName);
+  const escapedRole = escapeHtml(params.role);
+  const escapedInviterName = escapeHtml(params.inviterName);
+  const escapedInviterEmail = escapeHtml(params.inviterEmail);
+  const escapedInvitationUrl = escapeHtml(invitationUrl);
+  const subject = sanitizeMailHeader(`Convite para ${params.organizationName}`);
 
   const resend = new Resend(apiKey);
   await resend.emails.send({
     from,
     to: params.recipientEmail,
-    subject: `Convite para ${params.organizationName}`,
+    subject,
     html: `
       <p>Ola,</p>
-      <p>Voce recebeu um convite para acessar o portal de <strong>${params.organizationName}</strong>.</p>
-      <p>Funcao: <strong>${params.role}</strong></p>
-      <p>Convidado por: ${params.inviterName} (${params.inviterEmail})</p>
-      <p><a href="${invitationUrl}">Aceitar convite</a></p>
+      <p>Voce recebeu um convite para acessar o portal de <strong>${escapedOrganizationName}</strong>.</p>
+      <p>Funcao: <strong>${escapedRole}</strong></p>
+      <p>Convidado por: ${escapedInviterName} (${escapedInviterEmail})</p>
+      <p><a href="${escapedInvitationUrl}">Aceitar convite</a></p>
       <p>Se voce nao esperava este convite, ignore este email.</p>
     `,
     text: [
@@ -403,11 +422,38 @@ export async function removePortalMemberAsService(params: {
   memberId: string;
   organizationId: string;
 }) {
+  const [target] = await db
+    .select({ id: member.id, role: member.role })
+    .from(member)
+    .where(
+      and(
+        eq(member.id, params.memberId),
+        eq(member.organizationId, params.organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!target) {
+    throw new PortalServiceAccountError(
+      "Membro nao encontrado",
+      404,
+      "MEMBER_NOT_FOUND",
+    );
+  }
+
+  if (!isPortalManageableMemberRole(target.role)) {
+    throw new PortalServiceAccountError(
+      "Apenas usuarios externos do portal podem ser removidos por esta operacao",
+      403,
+      "MEMBER_NOT_MANAGEABLE",
+    );
+  }
+
   const [deleted] = await db
     .delete(member)
     .where(
       and(
-        eq(member.id, params.memberId),
+        eq(member.id, target.id),
         eq(member.organizationId, params.organizationId),
       ),
     )
