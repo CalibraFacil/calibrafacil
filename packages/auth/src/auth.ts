@@ -1,12 +1,62 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
+import { randomBytes } from "node:crypto";
 import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
 import { organization } from "better-auth/plugins";
 import { Resend } from "resend";
 import { OrganizationInvitationEmail } from "@calibra-facil/email";
 import { ac, roles } from "./access";
+
+let devFallbackAuthSecret: string | null = null;
+
+function readEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+}
+
+function getRequiredEnv(name: string): string {
+  const value = readEnv(name);
+  if (!value) {
+    throw new Error(`${name} environment variable is required`);
+  }
+  return value;
+}
+
+function getDevFallbackAuthSecret(): string {
+  if (devFallbackAuthSecret) {
+    return devFallbackAuthSecret;
+  }
+
+  devFallbackAuthSecret = randomBytes(32).toString("base64");
+  return devFallbackAuthSecret;
+}
+
+function resolveAuthSecret(isProduction: boolean): string {
+  const configuredSecret = readEnv("BETTER_AUTH_SECRET");
+
+  if (configuredSecret && configuredSecret.length >= 32) {
+    return configuredSecret;
+  }
+
+  if (isProduction) {
+    if (!configuredSecret) {
+      throw new Error("BETTER_AUTH_SECRET environment variable is required");
+    }
+    throw new Error(
+      "BETTER_AUTH_SECRET must be at least 32 characters long in production",
+    );
+  }
+
+  if (configuredSecret && configuredSecret.length < 32) {
+    console.warn(
+      "BETTER_AUTH_SECRET is shorter than 32 chars in development; using a secure in-memory fallback secret",
+    );
+  }
+
+  return getDevFallbackAuthSecret();
+}
 
 // Organization plugin configuration factory
 function createOrganizationPlugin() {
@@ -96,10 +146,10 @@ function createOrganizationPlugin() {
 // Shared configuration factory - reads env at call time, not module load time
 function createSharedConfig() {
   const isProduction = process.env.NODE_ENV === "production";
+  const authSecret = resolveAuthSecret(isProduction);
 
   return {
-    secret:
-      process.env.BETTER_AUTH_SECRET || "BUILD_PLACEHOLDER_NOT_FOR_PRODUCTION",
+    secret: authSecret,
     database: drizzleAdapter(getDb(), {
       provider: "pg" as const,
       schema,
@@ -141,13 +191,15 @@ function createSharedConfig() {
  */
 export function createLabAuth() {
   const sharedConfig = createSharedConfig();
+  const baseURL =
+    process.env.NODE_ENV === "production"
+      ? getRequiredEnv("API_URL")
+      : "https://localhost:3000";
+
   return betterAuth({
     ...sharedConfig,
     basePath: "/api/auth/lab",
-    baseURL:
-      process.env.NODE_ENV === "production"
-        ? process.env.API_URL!
-        : "https://localhost:3000",
+    baseURL,
     advanced: {
       ...sharedConfig.advanced,
       cookiePrefix: "lab",
@@ -162,13 +214,15 @@ export function createLabAuth() {
  */
 export function createPortalAuth() {
   const sharedConfig = createSharedConfig();
+  const baseURL =
+    process.env.NODE_ENV === "production"
+      ? getRequiredEnv("API_URL")
+      : "https://localhost:3000";
+
   return betterAuth({
     ...sharedConfig,
     basePath: "/api/auth/portal",
-    baseURL:
-      process.env.NODE_ENV === "production"
-        ? process.env.API_URL!
-        : "https://localhost:3000",
+    baseURL,
     advanced: {
       ...sharedConfig.advanced,
       cookiePrefix: "portal",

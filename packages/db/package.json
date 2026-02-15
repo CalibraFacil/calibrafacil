@@ -12,7 +12,8 @@
     "build": "tsc",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio --port 4000"
+    "db:studio": "drizzle-kit studio --port 4000",
+    "security:migrate-p12": "node ./scripts/migrate-p12-encryption.mjs"
   },
   "keywords": [],
   "author": "",

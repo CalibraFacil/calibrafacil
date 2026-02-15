@@ -23,10 +23,21 @@
  */
 
 // Signing functions
-export { signPdf, getCertificateInfo, parsePkcs12, validateCertificateValidity } from "./signer.js";
+export {
+  signPdf,
+  getCertificateInfo,
+  parsePkcs12,
+  validateCertificateValidity,
+} from "./signer.js";
 
 // Encryption functions for password storage
-export { encryptPassword, decryptPassword, generateMasterKey } from "./encryption.js";
+export {
+  encryptPassword,
+  decryptPassword,
+  encryptBinary,
+  decryptBinary,
+  generateMasterKey,
+} from "./encryption.js";
 
 // Types
 export type {

@@ -7,7 +7,7 @@ import {
   service,
   organization,
 } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   createR2Client,
   generatePresignedUrl,
@@ -63,8 +63,16 @@ export const verifyRouter = new Hono()
       .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
       .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
       .innerJoin(service, eq(calibrationJob.serviceId, service.id))
-      .innerJoin(organization, eq(calibrationJob.organizationId, organization.id))
-      .where(eq(calibrationJob.verificationToken, token))
+      .innerJoin(
+        organization,
+        eq(calibrationJob.organizationId, organization.id),
+      )
+      .where(
+        and(
+          eq(calibrationJob.verificationToken, token),
+          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+        ),
+      )
       .limit(1);
 
     if (!job) {
@@ -173,7 +181,12 @@ export const verifyRouter = new Hono()
     const [job] = await db
       .select({ certificateUrl: calibrationJob.certificateUrl })
       .from(calibrationJob)
-      .where(eq(calibrationJob.verificationToken, token))
+      .where(
+        and(
+          eq(calibrationJob.verificationToken, token),
+          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+        ),
+      )
       .limit(1);
 
     if (!job) {

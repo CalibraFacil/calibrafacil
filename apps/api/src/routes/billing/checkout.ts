@@ -120,6 +120,7 @@ checkoutRouter.post(
     });
 
     const remoteIp =
+      c.req.header("cf-connecting-ip") ??
       c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
       c.req.header("x-real-ip");
 
@@ -424,7 +425,8 @@ checkoutRouter.post(
         status: "PENDING",
         // Let frontend know if QR code needs to be fetched again
         ...(result.qrCodeError && {
-          warning: "QR Code indisponível no momento. Atualize a página para tentar novamente.",
+          warning:
+            "QR Code indisponível no momento. Atualize a página para tentar novamente.",
         }),
       },
       201,
@@ -607,7 +609,8 @@ checkoutRouter.post(
         status: "PENDING",
         // Let frontend know if boleto line needs to be fetched again
         ...(result.boletoError && {
-          warning: "Linha digitável indisponível no momento. O boleto ainda pode ser acessado pelo link.",
+          warning:
+            "Linha digitável indisponível no momento. O boleto ainda pode ser acessado pelo link.",
         }),
       },
       201,

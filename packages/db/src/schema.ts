@@ -1859,7 +1859,7 @@ export const organizationSigningCertificate = pgTable(
     validFrom: timestamp("valid_from").notNull(),
     validUntil: timestamp("valid_until").notNull(),
     // Encrypted storage
-    encryptedP12: text("encrypted_p12").notNull(), // Base64-encoded PKCS#12
+    encryptedP12: text("encrypted_p12").notNull(), // AES-256-GCM encrypted PKCS#12 blob (enc:v1)
     encryptedPassword: text("encrypted_password").notNull(), // AES-256-GCM encrypted
     passwordIv: text("password_iv").notNull(), // IV for AES decryption
     // Status

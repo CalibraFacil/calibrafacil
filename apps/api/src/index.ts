@@ -1,6 +1,12 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
+import {
+  rateLimitAuth,
+  rateLimitInvitations,
+  rateLimitVerify,
+  rateLimitWebhooks,
+} from "./middleware/rate-limit";
 
 import { customersRouter } from "./routes/customers";
 import { invitationsRouter } from "./routes/invitations";
@@ -72,6 +78,32 @@ app.use(
 );
 
 /**
+ * SECURITY HEADERS
+ */
+app.use("*", async (c, next) => {
+  await next();
+
+  if ((c.env.NODE_ENV ?? "").toLowerCase() === "production") {
+    c.header(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains; preload",
+    );
+  }
+
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("Referrer-Policy", "no-referrer");
+  c.header(
+    "Permissions-Policy",
+    "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
+  );
+  c.header(
+    "Content-Security-Policy",
+    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+  );
+});
+
+/**
  * Middleware: Inject Cloudflare env into process.env for packages that use it
  * Also inject Hyperdrive connection string for database package
  */
@@ -93,6 +125,14 @@ app.use("*", async (c, next) => {
 
   await next();
 });
+
+/**
+ * RATE LIMITING
+ */
+app.use("/api/auth/*", rateLimitAuth);
+app.use("/api/invitations/*", rateLimitInvitations);
+app.use("/api/verify/*", rateLimitVerify);
+app.use("/api/webhooks/asaas", rateLimitWebhooks);
 
 /**
  * Helper: attach CORS headers to Better Auth responses
