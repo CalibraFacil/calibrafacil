@@ -194,205 +194,226 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /summary - Dashboard summary
   // =========================================================================
-  .get(
-    "/summary",
-    ...withLabPermission({ capa: ["read"] }),
-    async (c) => {
-      const member = c.get("member");
-      const orgId = member.organizationId;
+  .get("/summary", ...withLabPermission({ capa: ["read"] }), async (c) => {
+    const member = c.get("member");
+    const orgId = member.organizationId;
 
-      // Count by status
-      const statusCounts = await db
-        .select({
-          status: correctiveAction.status,
-          count: count(),
-        })
-        .from(correctiveAction)
-        .where(eq(correctiveAction.organizationId, orgId))
-        .groupBy(correctiveAction.status);
+    // Count by status
+    const statusCounts = await db
+      .select({
+        status: correctiveAction.status,
+        count: count(),
+      })
+      .from(correctiveAction)
+      .where(eq(correctiveAction.organizationId, orgId))
+      .groupBy(correctiveAction.status);
 
-      // Count by severity (non-closed)
-      const severityCounts = await db
-        .select({
-          severity: correctiveAction.severity,
-          count: count(),
-        })
-        .from(correctiveAction)
-        .where(
-          and(
-            eq(correctiveAction.organizationId, orgId),
-            sql`${correctiveAction.status} != 'CLOSED'`,
+    // Count by severity (non-closed)
+    const severityCounts = await db
+      .select({
+        severity: correctiveAction.severity,
+        count: count(),
+      })
+      .from(correctiveAction)
+      .where(
+        and(
+          eq(correctiveAction.organizationId, orgId),
+          sql`${correctiveAction.status} != 'CLOSED'`,
+        ),
+      )
+      .groupBy(correctiveAction.severity);
+
+    // Count by category (non-closed)
+    const categoryCounts = await db
+      .select({
+        category: correctiveAction.category,
+        count: count(),
+      })
+      .from(correctiveAction)
+      .where(
+        and(
+          eq(correctiveAction.organizationId, orgId),
+          sql`${correctiveAction.status} != 'CLOSED'`,
+        ),
+      )
+      .groupBy(correctiveAction.category);
+
+    // Count overdue
+    const now = new Date();
+    const [overdueResult] = await db
+      .select({ count: count() })
+      .from(correctiveAction)
+      .where(
+        and(
+          eq(correctiveAction.organizationId, orgId),
+          lte(correctiveAction.dueDate, now),
+          or(
+            eq(correctiveAction.status, "OPEN"),
+            eq(correctiveAction.status, "INVESTIGATION"),
+            eq(correctiveAction.status, "IMPLEMENTATION"),
           ),
-        )
-        .groupBy(correctiveAction.severity);
+        ),
+      );
 
-      // Count by category (non-closed)
-      const categoryCounts = await db
-        .select({
-          category: correctiveAction.category,
-          count: count(),
-        })
-        .from(correctiveAction)
-        .where(
-          and(
-            eq(correctiveAction.organizationId, orgId),
-            sql`${correctiveAction.status} != 'CLOSED'`,
-          ),
-        )
-        .groupBy(correctiveAction.category);
+    // Effectiveness rate (closed CAPAs with verification)
+    const [totalClosed] = await db
+      .select({ count: count() })
+      .from(correctiveAction)
+      .where(
+        and(
+          eq(correctiveAction.organizationId, orgId),
+          eq(correctiveAction.status, "CLOSED"),
+        ),
+      );
 
-      // Count overdue
-      const now = new Date();
-      const [overdueResult] = await db
-        .select({ count: count() })
-        .from(correctiveAction)
-        .where(
-          and(
-            eq(correctiveAction.organizationId, orgId),
-            lte(correctiveAction.dueDate, now),
-            or(
-              eq(correctiveAction.status, "OPEN"),
-              eq(correctiveAction.status, "INVESTIGATION"),
-              eq(correctiveAction.status, "IMPLEMENTATION"),
-            ),
-          ),
-        );
+    const [effectiveCount] = await db
+      .select({ count: count() })
+      .from(correctiveAction)
+      .where(
+        and(
+          eq(correctiveAction.organizationId, orgId),
+          eq(correctiveAction.status, "CLOSED"),
+          eq(correctiveAction.effectivenessConfirmed, true),
+        ),
+      );
 
-      // Effectiveness rate (closed CAPAs with verification)
-      const [totalClosed] = await db
-        .select({ count: count() })
-        .from(correctiveAction)
-        .where(
-          and(
-            eq(correctiveAction.organizationId, orgId),
-            eq(correctiveAction.status, "CLOSED"),
-          ),
-        );
+    const effectivenessRate =
+      (totalClosed?.count ?? 0) > 0
+        ? Math.round(
+            ((effectiveCount?.count ?? 0) / (totalClosed?.count ?? 1)) * 100,
+          )
+        : 0;
 
-      const [effectiveCount] = await db
-        .select({ count: count() })
-        .from(correctiveAction)
-        .where(
-          and(
-            eq(correctiveAction.organizationId, orgId),
-            eq(correctiveAction.status, "CLOSED"),
-            eq(correctiveAction.effectivenessConfirmed, true),
-          ),
-        );
+    return c.json({
+      byStatus: statusCounts,
+      bySeverity: severityCounts,
+      byCategory: categoryCounts,
+      overdue: overdueResult?.count ?? 0,
+      effectivenessRate,
+      totalClosed: totalClosed?.count ?? 0,
+    });
+  })
 
-      const effectivenessRate =
-        (totalClosed?.count ?? 0) > 0
-          ? Math.round(
-              ((effectiveCount?.count ?? 0) / (totalClosed?.count ?? 1)) * 100,
-            )
-          : 0;
+  // =========================================================================
+  // GET /:id/label - Get CAPA label by ID
+  // =========================================================================
+  .get("/:id/label", ...withLabPermission({ capa: ["read"] }), async (c) => {
+    const member = c.get("member");
+    const id = parseInt(c.req.param("id"), 10);
 
-      return c.json({
-        byStatus: statusCounts,
-        bySeverity: severityCounts,
-        byCategory: categoryCounts,
-        overdue: overdueResult?.count ?? 0,
-        effectivenessRate,
-        totalClosed: totalClosed?.count ?? 0,
-      });
-    },
-  )
+    if (isNaN(id)) {
+      return c.json({ error: "ID invalido" }, 400);
+    }
+
+    const [capa] = await db
+      .select({
+        id: correctiveAction.id,
+        label: correctiveAction.capaNumber,
+      })
+      .from(correctiveAction)
+      .where(
+        and(
+          eq(correctiveAction.id, id),
+          eq(correctiveAction.organizationId, member.organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!capa) {
+      return c.json({ error: "CAPA nao encontrada" }, 404);
+    }
+
+    return c.json(capa);
+  })
 
   // =========================================================================
   // GET /:id - Get single CAPA by ID
   // =========================================================================
-  .get(
-    "/:id",
-    ...withLabPermission({ capa: ["read"] }),
-    async (c) => {
-      const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+  .get("/:id", ...withLabPermission({ capa: ["read"] }), async (c) => {
+    const member = c.get("member");
+    const id = parseInt(c.req.param("id"), 10);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+    if (isNaN(id)) {
+      return c.json({ error: "ID invalido" }, 400);
+    }
+
+    const [capa] = await db
+      .select()
+      .from(correctiveAction)
+      .where(
+        and(
+          eq(correctiveAction.id, id),
+          eq(correctiveAction.organizationId, member.organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!capa) {
+      return c.json({ error: "CAPA nao encontrada" }, 404);
+    }
+
+    // Get linked NCs
+    const linkedNCs = await db
+      .select({
+        id: nonConformance.id,
+        ncNumber: nonConformance.ncNumber,
+        type: nonConformance.type,
+        description: nonConformance.description,
+        status: nonConformance.status,
+        detectedAt: nonConformance.detectedAt,
+      })
+      .from(nonConformance)
+      .where(eq(nonConformance.capaId, capa.id));
+
+    // Get user names
+    const userNames: Record<string, string | null> = {};
+
+    const userIds = [
+      capa.responsibleId,
+      capa.verifiedBy,
+      capa.closedBy,
+      capa.createdBy,
+    ].filter(Boolean) as string[];
+
+    if (userIds.length > 0) {
+      const users = await db
+        .select({ id: user.id, name: user.name })
+        .from(user)
+        .where(or(...userIds.map((uid) => eq(user.id, uid))));
+
+      for (const u of users) {
+        userNames[u.id] = u.name;
       }
+    }
 
-      const [capa] = await db
-        .select()
-        .from(correctiveAction)
-        .where(
-          and(
-            eq(correctiveAction.id, id),
-            eq(correctiveAction.organizationId, member.organizationId),
+    const now = new Date();
+
+    return c.json({
+      ...capa,
+      responsibleName: capa.responsibleId
+        ? (userNames[capa.responsibleId] ?? null)
+        : null,
+      verifiedByName: capa.verifiedBy
+        ? (userNames[capa.verifiedBy] ?? null)
+        : null,
+      closedByName: capa.closedBy ? (userNames[capa.closedBy] ?? null) : null,
+      createdByName: userNames[capa.createdBy] ?? null,
+      linkedNCs,
+      ageDays: capa.detectionDate
+        ? Math.ceil(
+            (now.getTime() - capa.detectionDate.getTime()) /
+              (1000 * 60 * 60 * 24),
+          )
+        : Math.ceil(
+            (now.getTime() - capa.createdAt.getTime()) / (1000 * 60 * 60 * 24),
           ),
-        )
-        .limit(1);
-
-      if (!capa) {
-        return c.json({ error: "CAPA nao encontrada" }, 404);
-      }
-
-      // Get linked NCs
-      const linkedNCs = await db
-        .select({
-          id: nonConformance.id,
-          ncNumber: nonConformance.ncNumber,
-          type: nonConformance.type,
-          description: nonConformance.description,
-          status: nonConformance.status,
-          detectedAt: nonConformance.detectedAt,
-        })
-        .from(nonConformance)
-        .where(eq(nonConformance.capaId, capa.id));
-
-      // Get user names
-      const userNames: Record<string, string | null> = {};
-
-      const userIds = [
-        capa.responsibleId,
-        capa.verifiedBy,
-        capa.closedBy,
-        capa.createdBy,
-      ].filter(Boolean) as string[];
-
-      if (userIds.length > 0) {
-        const users = await db
-          .select({ id: user.id, name: user.name })
-          .from(user)
-          .where(or(...userIds.map((uid) => eq(user.id, uid))));
-
-        for (const u of users) {
-          userNames[u.id] = u.name;
-        }
-      }
-
-      const now = new Date();
-
-      return c.json({
-        ...capa,
-        responsibleName: capa.responsibleId
-          ? userNames[capa.responsibleId] ?? null
-          : null,
-        verifiedByName: capa.verifiedBy
-          ? userNames[capa.verifiedBy] ?? null
-          : null,
-        closedByName: capa.closedBy
-          ? userNames[capa.closedBy] ?? null
-          : null,
-        createdByName: userNames[capa.createdBy] ?? null,
-        linkedNCs,
-        ageDays: capa.detectionDate
-          ? Math.ceil(
-              (now.getTime() - capa.detectionDate.getTime()) /
-                (1000 * 60 * 60 * 24),
-            )
-          : Math.ceil(
-              (now.getTime() - capa.createdAt.getTime()) /
-                (1000 * 60 * 60 * 24),
-            ),
-        isOverdue:
-          capa.dueDate &&
-          capa.dueDate < now &&
-          capa.status !== "CLOSED" &&
-          capa.status !== "VERIFICATION",
-      });
-    },
-  )
+      isOverdue:
+        capa.dueDate &&
+        capa.dueDate < now &&
+        capa.status !== "CLOSED" &&
+        capa.status !== "VERIFICATION",
+    });
+  })
 
   // =========================================================================
   // POST / - Create new CAPA
@@ -525,7 +546,8 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
       if (input.type !== undefined) updateData.type = input.type;
       if (input.severity !== undefined) updateData.severity = input.severity;
       if (input.category !== undefined) updateData.category = input.category;
-      if (input.actionPlan !== undefined) updateData.actionPlan = input.actionPlan;
+      if (input.actionPlan !== undefined)
+        updateData.actionPlan = input.actionPlan;
       if (input.responsibleId !== undefined)
         updateData.responsibleId = input.responsibleId;
       if (input.dueDate !== undefined)
@@ -538,10 +560,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
         updateData.preventiveMeasures = input.preventiveMeasures;
 
       // Auto-transition to INVESTIGATION when root cause is added
-      if (
-        input.rootCauseAnalysis &&
-        existing.status === "OPEN"
-      ) {
+      if (input.rootCauseAnalysis && existing.status === "OPEN") {
         updateData.status = "INVESTIGATION";
         updateData.investigationCompletedAt = new Date();
       }
@@ -749,8 +768,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
       if (existing.status !== "VERIFICATION") {
         return c.json(
           {
-            error:
-              "CAPA deve estar em status VERIFICATION para ser fechada",
+            error: "CAPA deve estar em status VERIFICATION para ser fechada",
           },
           400,
         );

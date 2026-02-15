@@ -155,6 +155,13 @@
       "when": 1770655045163,
       "tag": "0021_formal_method_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1771178112594,
+      "tag": "0022_add_dashboard_performance_indexes",
+      "breakpoints": true
     }
   ]
 }

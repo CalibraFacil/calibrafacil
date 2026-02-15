@@ -114,7 +114,7 @@ function withCors(c: any, res: Response) {
 }
 
 /**
- * AUTH ROUTES - Create fresh auth instance per request
+ * AUTH ROUTES
  */
 app.on(["GET", "POST"], "/api/auth/lab/*", async (c) => {
   const labAuth = createLabAuth();

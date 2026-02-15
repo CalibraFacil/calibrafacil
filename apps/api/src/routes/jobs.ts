@@ -39,6 +39,7 @@ import {
   AmendJobSchema,
 } from "@calibra-facil/schemas";
 import {
+  addServerTiming,
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
@@ -55,6 +56,7 @@ import {
   inArray,
   isNull,
   or,
+  sql,
 } from "drizzle-orm";
 import {
   createR2Client,
@@ -351,6 +353,42 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           totalPages: Math.ceil((countResult?.total ?? 0) / limit),
         },
       });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/label - Get job label by ID
+  // =========================================================================
+  .get(
+    "/:id/label",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const memberData = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [job] = await db
+        .select({
+          id: calibrationJob.id,
+          label: calibrationJob.jobId,
+        })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!job) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      return c.json(job);
     },
   )
 
@@ -1801,103 +1839,145 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/amendment-chain",
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
+      const handlerStartedAt = performance.now();
       const memberData = c.get("member");
       const id = parseInt(c.req.param("id"), 10);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+      try {
+        if (isNaN(id)) {
+          return c.json({ error: "ID invalido" }, 400);
+        }
 
-      // Get the job
-      const [job] = await db
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!job) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      // Build amendment chain by walking backwards to the original
-      const chain: Array<{
-        id: number;
-        jobId: string;
-        status: string;
-        amendmentNumber: number | null;
-        amendmentReason: string | null;
-        approvedAt: Date | null;
-        supersededAt: Date | null;
-        isCurrent: boolean;
-      }> = [];
-
-      // Safety limit to prevent infinite loops from corrupted data
-      const MAX_CHAIN_LENGTH = 100;
-
-      // Walk backwards to find the original
-      let current = job;
-      let iterations = 0;
-
-      while (current.supersedesId && iterations < MAX_CHAIN_LENGTH) {
-        iterations++;
-        const [parent] = await db
-          .select()
+        // Verify job exists and belongs to organization
+        const [job] = await db
+          .select({ id: calibrationJob.id })
           .from(calibrationJob)
-          .where(eq(calibrationJob.id, current.supersedesId))
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+            ),
+          )
           .limit(1);
 
-        if (parent) {
-          current = parent;
-        } else {
-          break;
+        if (!job) {
+          return c.json({ error: "Job nao encontrado" }, 404);
         }
-      }
 
-      // Now walk forward from the original, building the chain
-      // Use Set to detect cycles (corrupted data where A->B->A)
-      const chainIds = new Set<number>();
-      while (current && chainIds.size < MAX_CHAIN_LENGTH) {
-        if (chainIds.has(current.id)) break; // Cycle detected
-        chainIds.add(current.id);
-        chain.push({
-          id: current.id,
-          jobId: current.jobId,
-          status: current.status,
-          amendmentNumber: current.amendmentNumber,
-          amendmentReason: current.amendmentReason,
-          approvedAt: current.approvedAt,
-          supersededAt: current.supersededAt,
-          isCurrent: current.id === job.id,
+        // Safety limit to prevent infinite loops from corrupted data
+        const MAX_CHAIN_LENGTH = 100;
+
+        const dbStartedAt = performance.now();
+        const chainResult = await db.execute(sql`
+        WITH RECURSIVE ancestors AS (
+          SELECT
+            id,
+            supersedes_id,
+            0::integer AS depth,
+            ARRAY[id]::integer[] AS path
+          FROM calibration_job
+          WHERE id = ${id}
+            AND organization_id = ${memberData.organizationId}
+
+          UNION ALL
+
+          SELECT
+            parent.id,
+            parent.supersedes_id,
+            ancestors.depth + 1,
+            ancestors.path || parent.id
+          FROM calibration_job parent
+          INNER JOIN ancestors ON parent.id = ancestors.supersedes_id
+          WHERE parent.organization_id = ${memberData.organizationId}
+            AND ancestors.depth < ${MAX_CHAIN_LENGTH}
+            AND NOT (parent.id = ANY(ancestors.path))
+        ),
+        root_job AS (
+          SELECT id
+          FROM ancestors
+          ORDER BY depth DESC
+          LIMIT 1
+        ),
+        chain AS (
+          SELECT
+            job.id,
+            job.job_id,
+            job.status,
+            job.amendment_number,
+            job.amendment_reason,
+            job.approved_at,
+            job.superseded_at,
+            job.superseded_by_id,
+            0::integer AS depth,
+            ARRAY[job.id]::integer[] AS path
+          FROM calibration_job job
+          INNER JOIN root_job ON root_job.id = job.id
+          WHERE job.organization_id = ${memberData.organizationId}
+
+          UNION ALL
+
+          SELECT
+            child.id,
+            child.job_id,
+            child.status,
+            child.amendment_number,
+            child.amendment_reason,
+            child.approved_at,
+            child.superseded_at,
+            child.superseded_by_id,
+            chain.depth + 1,
+            chain.path || child.id
+          FROM calibration_job child
+          INNER JOIN chain ON child.id = chain.superseded_by_id
+          WHERE child.organization_id = ${memberData.organizationId}
+            AND chain.depth < ${MAX_CHAIN_LENGTH}
+            AND NOT (child.id = ANY(chain.path))
+        )
+        SELECT
+          id,
+          job_id,
+          status,
+          amendment_number,
+          amendment_reason,
+          approved_at,
+          superseded_at,
+          depth
+        FROM chain
+        ORDER BY depth ASC;
+      `);
+        addServerTiming(c, "amendment_chain_db", dbStartedAt);
+
+        const chainRows = chainResult as unknown as Array<{
+          id: number;
+          job_id: string;
+          status: string;
+          amendment_number: number | null;
+          amendment_reason: string | null;
+          approved_at: Date | string | null;
+          superseded_at: Date | string | null;
+        }>;
+
+        const chain = chainRows.map((row) => ({
+          id: Number(row.id),
+          jobId: row.job_id,
+          status: row.status,
+          amendmentNumber:
+            row.amendment_number === null ? null : Number(row.amendment_number),
+          amendmentReason: row.amendment_reason,
+          approvedAt: row.approved_at ? new Date(row.approved_at) : null,
+          supersededAt: row.superseded_at ? new Date(row.superseded_at) : null,
+          isCurrent: Number(row.id) === job.id,
+        }));
+
+        return c.json({
+          data: chain,
+          originalJobId: chain[0]?.id,
+          latestJobId: chain[chain.length - 1]?.id,
+          totalAmendments: chain.length - 1,
         });
-
-        if (current.supersededById) {
-          const [next] = await db
-            .select()
-            .from(calibrationJob)
-            .where(eq(calibrationJob.id, current.supersededById))
-            .limit(1);
-
-          if (next) {
-            current = next;
-          } else {
-            break;
-          }
-        } else {
-          break;
-        }
+      } finally {
+        addServerTiming(c, "amendment_chain_handler", handlerStartedAt);
       }
-
-      return c.json({
-        data: chain,
-        originalJobId: chain[0]?.id,
-        latestJobId: chain[chain.length - 1]?.id,
-        totalAmendments: chain.length - 1,
-      });
     },
   )
 

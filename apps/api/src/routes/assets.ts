@@ -321,6 +321,44 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /:id/label - Get asset label by ID
+  // =========================================================================
+  .get(
+    "/:id/label",
+    ...withLabPermission({ equipment: ["read"] }),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const member = c.get("member");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID inválido" }, 400);
+      }
+
+      const [foundAsset] = await db
+        .select({
+          id: asset.id,
+          label: asset.name,
+        })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .where(
+          and(
+            eq(asset.id, id),
+            eq(customer.labOrganizationId, member.organizationId),
+            isNull(asset.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!foundAsset) {
+        return c.json({ error: "Ativo não encontrado" }, 404);
+      }
+
+      return c.json(foundAsset);
+    },
+  )
+
+  // =========================================================================
   // GET /:id - Get asset by ID
   // =========================================================================
   .get("/:id", ...withLabPermission({ equipment: ["read"] }), async (c) => {

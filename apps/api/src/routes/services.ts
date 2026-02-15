@@ -118,6 +118,38 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /:id/label - Get service label by ID
+  // =========================================================================
+  .get("/:id/label", ...withLabPermission({ service: ["read"] }), async (c) => {
+    const member = c.get("member");
+    const id = parseInt(c.req.param("id"), 10);
+
+    if (isNaN(id)) {
+      return c.json({ error: "ID inválido" }, 400);
+    }
+
+    const [found] = await db
+      .select({
+        id: service.id,
+        label: service.name,
+      })
+      .from(service)
+      .where(
+        and(
+          eq(service.id, id),
+          eq(service.organizationId, member.organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!found) {
+      return c.json({ error: "Serviço não encontrado" }, 404);
+    }
+
+    return c.json(found);
+  })
+
+  // =========================================================================
   // GET /:id - Get single service by ID
   // =========================================================================
   .get("/:id", ...withLabPermission({ service: ["read"] }), async (c) => {
@@ -422,49 +454,57 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Deactivate service (soft delete)
   // =========================================================================
-  .delete("/:id", ...withLabPermission({ service: ["delete"] }), withInvalidation("services"), async (c) => {
-    const member = c.get("member");
-    const session = c.get("session");
-    const id = parseInt(c.req.param("id"), 10);
+  .delete(
+    "/:id",
+    ...withLabPermission({ service: ["delete"] }),
+    withInvalidation("services"),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
 
-    if (isNaN(id)) {
-      return c.json({ error: "ID inválido" }, 400);
-    }
+      if (isNaN(id)) {
+        return c.json({ error: "ID inválido" }, 400);
+      }
 
-    const [existing] = await db
-      .select()
-      .from(service)
-      .where(
-        and(
-          eq(service.id, id),
-          eq(service.organizationId, member.organizationId),
-        ),
-      )
-      .limit(1);
+      const [existing] = await db
+        .select()
+        .from(service)
+        .where(
+          and(
+            eq(service.id, id),
+            eq(service.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
 
-    if (!existing) {
-      return c.json({ error: "Serviço não encontrado" }, 404);
-    }
+      if (!existing) {
+        return c.json({ error: "Serviço não encontrado" }, 404);
+      }
 
-    // Soft delete - just deactivate
-    // Never hard delete commercial data for financial audit trail
-    const [updated] = await db
-      .update(service)
-      .set({ isActive: false })
-      .where(eq(service.id, id))
-      .returning();
+      // Soft delete - just deactivate
+      // Never hard delete commercial data for financial audit trail
+      const [updated] = await db
+        .update(service)
+        .set({ isActive: false })
+        .where(eq(service.id, id))
+        .returning();
 
-    // Audit log
-    await db.insert(serviceAuditLog).values({
-      serviceId: id,
-      action: "deactivate",
-      changes: { isActive: { old: true, new: false } },
-      performedBy: session.user.id,
-      ipAddress: c.req.header("x-forwarded-for") || null,
-    });
+      // Audit log
+      await db.insert(serviceAuditLog).values({
+        serviceId: id,
+        action: "deactivate",
+        changes: { isActive: { old: true, new: false } },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
 
-    return c.json({ message: "Serviço desativado com sucesso", data: updated });
-  })
+      return c.json({
+        message: "Serviço desativado com sucesso",
+        data: updated,
+      });
+    },
+  )
 
   // =========================================================================
   // GET /:id/audit-log - Get audit log for a service (ISO 17025 Clause 8.4)

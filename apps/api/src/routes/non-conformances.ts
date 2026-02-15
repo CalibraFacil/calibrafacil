@@ -231,108 +231,148 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /:id/label - Get NC label by ID
+  // =========================================================================
+  .get(
+    "/:id/label",
+    ...withLabPermission({ non_conformance: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [nc] = await db
+        .select({
+          id: nonConformance.id,
+          label: nonConformance.ncNumber,
+        })
+        .from(nonConformance)
+        .where(
+          and(
+            eq(nonConformance.id, id),
+            eq(nonConformance.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!nc) {
+        return c.json({ error: "Nao conformidade nao encontrada" }, 404);
+      }
+
+      return c.json(nc);
+    },
+  )
+
+  // =========================================================================
   // GET /:id - Get single NC by ID
   // =========================================================================
-  .get("/:id", ...withLabPermission({ non_conformance: ["read"] }), async (c) => {
-    const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+  .get(
+    "/:id",
+    ...withLabPermission({ non_conformance: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
 
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
 
-    const [nc] = await db
-      .select()
-      .from(nonConformance)
-      .where(
-        and(
-          eq(nonConformance.id, id),
-          eq(nonConformance.organizationId, member.organizationId),
-        ),
-      )
-      .limit(1);
-
-    if (!nc) {
-      return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-    }
-
-    // Get related CAPA if exists
-    let capa = null;
-    if (nc.capaId) {
-      const [capaResult] = await db
+      const [nc] = await db
         .select()
-        .from(correctiveAction)
+        .from(nonConformance)
         .where(
           and(
-            eq(correctiveAction.id, nc.capaId),
-            eq(correctiveAction.organizationId, member.organizationId),
+            eq(nonConformance.id, id),
+            eq(nonConformance.organizationId, member.organizationId),
           ),
         )
         .limit(1);
-      capa = capaResult ?? null;
-    }
 
-    // Get related job info if exists (scoped to org for defense-in-depth)
-    let job = null;
-    if (nc.jobId) {
-      const [jobResult] = await db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          status: calibrationJob.status,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, nc.jobId),
-            eq(calibrationJob.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-      job = jobResult ?? null;
-    }
+      if (!nc) {
+        return c.json({ error: "Nao conformidade nao encontrada" }, 404);
+      }
 
-    // Get user names
-    const [detectedByUser] = await db
-      .select({ name: user.name })
-      .from(user)
-      .where(eq(user.id, nc.detectedBy))
-      .limit(1);
+      // Get related CAPA if exists
+      let capa = null;
+      if (nc.capaId) {
+        const [capaResult] = await db
+          .select()
+          .from(correctiveAction)
+          .where(
+            and(
+              eq(correctiveAction.id, nc.capaId),
+              eq(correctiveAction.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+        capa = capaResult ?? null;
+      }
 
-    let dispositionApproverName = null;
-    if (nc.dispositionApprovedBy) {
-      const [approver] = await db
+      // Get related job info if exists (scoped to org for defense-in-depth)
+      let job = null;
+      if (nc.jobId) {
+        const [jobResult] = await db
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            status: calibrationJob.status,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, nc.jobId),
+              eq(calibrationJob.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+        job = jobResult ?? null;
+      }
+
+      // Get user names
+      const [detectedByUser] = await db
         .select({ name: user.name })
         .from(user)
-        .where(eq(user.id, nc.dispositionApprovedBy))
+        .where(eq(user.id, nc.detectedBy))
         .limit(1);
-      dispositionApproverName = approver?.name ?? null;
-    }
 
-    let resolverName = null;
-    if (nc.resolvedBy) {
-      const [resolver] = await db
-        .select({ name: user.name })
-        .from(user)
-        .where(eq(user.id, nc.resolvedBy))
-        .limit(1);
-      resolverName = resolver?.name ?? null;
-    }
+      let dispositionApproverName = null;
+      if (nc.dispositionApprovedBy) {
+        const [approver] = await db
+          .select({ name: user.name })
+          .from(user)
+          .where(eq(user.id, nc.dispositionApprovedBy))
+          .limit(1);
+        dispositionApproverName = approver?.name ?? null;
+      }
 
-    const now = new Date();
+      let resolverName = null;
+      if (nc.resolvedBy) {
+        const [resolver] = await db
+          .select({ name: user.name })
+          .from(user)
+          .where(eq(user.id, nc.resolvedBy))
+          .limit(1);
+        resolverName = resolver?.name ?? null;
+      }
 
-    return c.json({
-      ...nc,
-      detectedByName: detectedByUser?.name ?? null,
-      dispositionApproverName,
-      resolverName,
-      capa,
-      job,
-      ageDays: Math.ceil(
-        (now.getTime() - nc.detectedAt.getTime()) / (1000 * 60 * 60 * 24),
-      ),
-    });
-  })
+      const now = new Date();
+
+      return c.json({
+        ...nc,
+        detectedByName: detectedByUser?.name ?? null,
+        dispositionApproverName,
+        resolverName,
+        capa,
+        job,
+        ageDays: Math.ceil(
+          (now.getTime() - nc.detectedAt.getTime()) / (1000 * 60 * 60 * 24),
+        ),
+      });
+    },
+  )
 
   // =========================================================================
   // POST / - Create new non-conformance
@@ -405,7 +445,8 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
           newNc = inserted ?? null;
           break;
         } catch (err) {
-          if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1) throw err;
+          if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1)
+            throw err;
         }
       }
 
@@ -470,17 +511,18 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       if (existing.status === "resolved") {
-        return c.json(
-          { error: "Nao conformidade ja foi resolvida" },
-          400,
-        );
+        return c.json({ error: "Nao conformidade ja foi resolvida" }, 400);
       }
 
       // For "use_as_is" and "concession", require admin/owner role
       const requiresApproval =
         input.disposition === "use_as_is" || input.disposition === "concession";
 
-      if (requiresApproval && member.role !== "admin" && member.role !== "owner") {
+      if (
+        requiresApproval &&
+        member.role !== "admin" &&
+        member.role !== "owner"
+      ) {
         return c.json(
           {
             error:
@@ -562,10 +604,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       if (existing.status === "resolved") {
-        return c.json(
-          { error: "Nao conformidade ja foi resolvida" },
-          400,
-        );
+        return c.json({ error: "Nao conformidade ja foi resolvida" }, 400);
       }
 
       if (!existing.disposition) {
@@ -692,7 +731,8 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
           newCapa = inserted ?? null;
           break;
         } catch (err) {
-          if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1) throw err;
+          if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1)
+            throw err;
         }
       }
 
@@ -727,7 +767,9 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         existing.description,
         member.organizationId,
         session.user.id,
-      ).catch((err) => console.error("[NC] Failed to send escalation notification:", err));
+      ).catch((err) =>
+        console.error("[NC] Failed to send escalation notification:", err),
+      );
 
       return c.json(
         {

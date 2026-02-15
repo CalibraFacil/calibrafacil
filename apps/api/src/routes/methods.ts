@@ -117,6 +117,42 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /:id/label - Get method label by ID
+  // =========================================================================
+  .get(
+    "/:id/label",
+    ...withLabPermission({ template: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [method] = await db
+        .select({
+          id: calibrationMethod.id,
+          label: calibrationMethod.name,
+        })
+        .from(calibrationMethod)
+        .where(
+          and(
+            eq(calibrationMethod.id, id),
+            eq(calibrationMethod.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!method) {
+        return c.json({ error: "Método nao encontrado" }, 404);
+      }
+
+      return c.json(method);
+    },
+  )
+
+  // =========================================================================
   // GET /:id - Get a single method by ID
   // =========================================================================
   .get("/:id", ...withLabPermission({ template: ["read"] }), async (c) => {
@@ -1019,49 +1055,54 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Delete a DRAFT method only
   // =========================================================================
-  .delete("/:id", ...withLabPermission({ template: ["delete"] }), withInvalidation("methods"), async (c) => {
-    const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+  .delete(
+    "/:id",
+    ...withLabPermission({ template: ["delete"] }),
+    withInvalidation("methods"),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
 
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
-
-    try {
-      const [existing] = await db
-        .select()
-        .from(calibrationMethod)
-        .where(
-          and(
-            eq(calibrationMethod.id, id),
-            eq(calibrationMethod.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json({ error: "Método nao encontrado" }, 404);
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
       }
 
-      if (existing.status !== "DRAFT") {
-        return c.json(
-          {
-            error:
-              "Apenas rascunhos podem ser excluidos. métodos publicados devem ser arquivados.",
-          },
-          400,
-        );
+      try {
+        const [existing] = await db
+          .select()
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
+
+        if (existing.status !== "DRAFT") {
+          return c.json(
+            {
+              error:
+                "Apenas rascunhos podem ser excluidos. métodos publicados devem ser arquivados.",
+            },
+            400,
+          );
+        }
+
+        // Delete (audit logs will cascade)
+        await db.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
+
+        return c.json({ success: true });
+      } catch (error) {
+        console.error("Error deleting method:", error);
+        return c.json({ error: "Erro ao excluir método" }, 500);
       }
-
-      // Delete (audit logs will cascade)
-      await db.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
-
-      return c.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting method:", error);
-      return c.json({ error: "Erro ao excluir método" }, 500);
-    }
-  })
+    },
+  )
 
   // =========================================================================
   // GET /:id/versions - Get version history for a method

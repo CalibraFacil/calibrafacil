@@ -192,6 +192,43 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /:id/label - Get reference standard label by ID
+  // =========================================================================
+  .get(
+    "/:id/label",
+    ...withLabPermission({ standard: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [found] = await db
+        .select({
+          id: referenceStandard.id,
+          label: referenceStandard.name,
+        })
+        .from(referenceStandard)
+        .where(
+          and(
+            eq(referenceStandard.id, id),
+            eq(referenceStandard.organizationId, member.organizationId),
+            isNull(referenceStandard.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!found) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
+      }
+
+      return c.json(found);
+    },
+  )
+
+  // =========================================================================
   // GET /:id - Get single reference standard by ID
   // =========================================================================
   .get("/:id", ...withLabPermission({ standard: ["read"] }), async (c) => {

@@ -1,22 +1,44 @@
-import { Link, createFileRoute } from "@tanstack/react-router"
-import { useQuery } from "@tanstack/react-query"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { RefreshIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
+import { Link, createFileRoute } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { RefreshIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { useEffect, useRef } from 'react'
 
-import { api } from "@/utils/api"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import { SectionCards } from "./-components/section-cards"
-import { ChartCalibrations } from "./-components/chart-calibrations"
-import { RecentJobsTable } from "./-components/recent-jobs-table"
+import { api } from '@/utils/api'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { SectionCards } from './-components/section-cards'
+import { ChartCalibrations } from './-components/chart-calibrations'
+import { RecentJobsTable } from './-components/recent-jobs-table'
 
-export const Route = createFileRoute("/dashboard/")({
+const DASHBOARD_INDEX_MOUNT_MARK = 'dashboard:index:mount'
+const DASHBOARD_INDEX_FETCH_START_MARK = 'dashboard:index:fetch:start'
+const DASHBOARD_INDEX_FETCH_END_MARK = 'dashboard:index:fetch:end'
+const DASHBOARD_INDEX_DATA_READY_MARK = 'dashboard:index:data:ready'
+const DASHBOARD_INDEX_FIRST_CONTENT_MARK = 'dashboard:index:first-content'
+
+function mark(name: string) {
+  if (typeof window === 'undefined' || !window.performance) return
+  window.performance.mark(name)
+}
+
+function measure(name: string, startMark: string, endMark: string) {
+  if (typeof window === 'undefined' || !window.performance) return
+
+  try {
+    window.performance.measure(name, startMark, endMark)
+  } catch {
+    // no-op: marks may not exist if navigation interrupted
+  }
+}
+
+export const Route = createFileRoute('/dashboard/')({
   head: () => ({
     meta: [
       {
-        title: "Dashboard | CalibraFácil",
-        name: "description",
-        content: "Painel de Controle - Visão geral do laboratório",
+        title: 'Dashboard | CalibraFácil',
+        name: 'description',
+        content: 'Painel de Controle - Visão geral do laboratório',
       },
     ],
   }),
@@ -24,18 +46,63 @@ export const Route = createFileRoute("/dashboard/")({
 })
 
 function DashboardIndex() {
+  const hasMarkedDataReady = useRef(false)
+  const hasMarkedFirstContent = useRef(false)
+
+  useEffect(() => {
+    mark(DASHBOARD_INDEX_MOUNT_MARK)
+  }, [])
+
   const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ["dashboard", "stats"],
+    queryKey: ['dashboard', 'stats'],
     queryFn: async () => {
+      mark(DASHBOARD_INDEX_FETCH_START_MARK)
       const res = await api.api.dashboard.stats.$get()
       if (!res.ok) {
-        throw new Error("Falha ao carregar estatísticas")
+        throw new Error('Falha ao carregar estatísticas')
       }
-      return res.json()
+      const payload = await res.json()
+      mark(DASHBOARD_INDEX_FETCH_END_MARK)
+      measure(
+        'dashboard:index:stats-fetch',
+        DASHBOARD_INDEX_FETCH_START_MARK,
+        DASHBOARD_INDEX_FETCH_END_MARK,
+      )
+      return payload
     },
     refetchInterval: 60000, // Auto-refresh every minute
     staleTime: 30000,
   })
+
+  useEffect(() => {
+    if (!isLoading && !hasMarkedDataReady.current) {
+      hasMarkedDataReady.current = true
+      mark(DASHBOARD_INDEX_DATA_READY_MARK)
+      measure(
+        'dashboard:index:data-ready',
+        DASHBOARD_INDEX_MOUNT_MARK,
+        DASHBOARD_INDEX_DATA_READY_MARK,
+      )
+    }
+  }, [isLoading])
+
+  useEffect(() => {
+    if (isLoading || hasMarkedFirstContent.current) return
+
+    hasMarkedFirstContent.current = true
+    const rafId = window.requestAnimationFrame(() => {
+      mark(DASHBOARD_INDEX_FIRST_CONTENT_MARK)
+      measure(
+        'dashboard:index:first-content',
+        DASHBOARD_INDEX_MOUNT_MARK,
+        DASHBOARD_INDEX_FIRST_CONTENT_MARK,
+      )
+    })
+
+    return () => {
+      window.cancelAnimationFrame(rafId)
+    }
+  }, [isLoading])
 
   return (
     <div className="space-y-6 @container">
@@ -58,7 +125,7 @@ function DashboardIndex() {
           >
             <HugeiconsIcon
               icon={RefreshIcon}
-              className={cn("size-4", isRefetching && "animate-spin")}
+              className={cn('size-4', isRefetching && 'animate-spin')}
             />
             <span className="hidden sm:inline">Atualizar</span>
           </Button>
@@ -85,10 +152,7 @@ function DashboardIndex() {
           data={data?.calibrationTrend ?? []}
           isLoading={isLoading}
         />
-        <RecentJobsTable
-          jobs={data?.recentJobs ?? []}
-          isLoading={isLoading}
-        />
+        <RecentJobsTable jobs={data?.recentJobs ?? []} isLoading={isLoading} />
       </div>
     </div>
   )
