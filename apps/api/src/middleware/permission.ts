@@ -13,7 +13,7 @@ import type {
   CalibrationAction,
   RoleName,
 } from "@calibra-facil/auth/access";
-import { canPerformCalibrationAction } from "@calibra-facil/auth/access";
+import { canPerformCalibrationAction, roles } from "@calibra-facil/auth/access";
 
 // =============================================================================
 // CONTEXT TYPES
@@ -63,6 +63,107 @@ export interface AuthVariables {
   session: SessionData;
   member: MemberData;
   authSource: AuthSource;
+  serverTiming?: ServerTimingMetric[];
+  requestLabAuth?: ReturnType<typeof createLabAuth>;
+  requestPortalAuth?: ReturnType<typeof createPortalAuth>;
+}
+
+export interface ServerTimingMetric {
+  name: string;
+  dur: number;
+  desc?: string;
+}
+
+const SERVER_TIMING_KEY = "serverTiming";
+
+function getRequestLabAuth(c: {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+}) {
+  const existing = c.get("requestLabAuth") as
+    | ReturnType<typeof createLabAuth>
+    | undefined;
+  if (existing) return existing;
+
+  const auth = createLabAuth();
+  c.set("requestLabAuth", auth);
+  return auth;
+}
+
+function getRequestPortalAuth(c: {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+}) {
+  const existing = c.get("requestPortalAuth") as
+    | ReturnType<typeof createPortalAuth>
+    | undefined;
+  if (existing) return existing;
+
+  const auth = createPortalAuth();
+  c.set("requestPortalAuth", auth);
+  return auth;
+}
+
+function getServerTimingBuffer(c: {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+}): ServerTimingMetric[] {
+  const existing = c.get(SERVER_TIMING_KEY) as ServerTimingMetric[] | undefined;
+  if (existing) return existing;
+
+  const created: ServerTimingMetric[] = [];
+  c.set(SERVER_TIMING_KEY, created);
+  return created;
+}
+
+export function addServerTiming(
+  c: {
+    get: (key: string) => unknown;
+    set: (key: string, value: unknown) => void;
+  },
+  name: string,
+  startedAt: number,
+  desc?: string,
+) {
+  const dur = Math.max(0, performance.now() - startedAt);
+  getServerTimingBuffer(c).push({ name, dur, desc });
+}
+
+function applyServerTimingHeader(c: {
+  get: (key: string) => unknown;
+  header?: (name: string, value: string) => void;
+}) {
+  if (!c.header) return;
+
+  const entries =
+    (c.get(SERVER_TIMING_KEY) as ServerTimingMetric[] | undefined) ?? [];
+  if (entries.length === 0) return;
+
+  const value = entries
+    .map((entry) => {
+      const durPart = `dur=${entry.dur.toFixed(2)}`;
+      const descPart = entry.desc ? `;desc="${entry.desc}"` : "";
+      return `${entry.name};${durPart}${descPart}`;
+    })
+    .join(", ");
+
+  c.header("Server-Timing", value);
+}
+
+function hasPermissionLocally(role: RoleName, permissions: PermissionCheck) {
+  const roleAccess = roles[role] as
+    | {
+        authorize?: (input: PermissionCheck) => { success: boolean };
+      }
+    | undefined;
+
+  if (!roleAccess?.authorize) return false;
+
+  try {
+    return roleAccess.authorize(permissions).success;
+  } catch {
+    return false;
+  }
 }
 
 // =============================================================================
@@ -79,7 +180,8 @@ export interface AuthVariables {
  */
 export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
-    const labAuth = createLabAuth();
+    const authStartedAt = performance.now();
+    const labAuth = getRequestLabAuth(c);
     const session = await labAuth.api.getSession({
       headers: c.req.raw.headers,
     });
@@ -90,6 +192,7 @@ export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
 
     c.set("session", session as SessionData);
     c.set("authSource", "lab");
+    addServerTiming(c, "auth", authStartedAt, "lab");
 
     await next();
   },
@@ -105,7 +208,7 @@ export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
  */
 export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
-    const portalAuth = createPortalAuth();
+    const portalAuth = getRequestPortalAuth(c);
     const session = await portalAuth.api.getSession({
       headers: c.req.raw.headers,
     });
@@ -131,8 +234,7 @@ export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
  */
 export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
-    const portalAuth = createPortalAuth();
-    const labAuth = createLabAuth();
+    const portalAuth = getRequestPortalAuth(c);
 
     // Try portal auth first (portal_session cookie)
     let authSource: AuthSource = "portal";
@@ -143,6 +245,7 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
     // If no portal session, try lab auth (lab_session cookie)
     if (!session) {
       authSource = "lab";
+      const labAuth = getRequestLabAuth(c);
       session = await labAuth.api.getSession({
         headers: c.req.raw.headers,
       });
@@ -187,6 +290,7 @@ export type OrgType = "LAB" | "CLIENT";
 export const requireOrganization = createMiddleware<{
   Variables: AuthVariables;
 }>(async (c, next) => {
+  const orgStartedAt = performance.now();
   const session = c.get("session");
 
   if (!session?.session?.activeOrganizationId) {
@@ -237,6 +341,8 @@ export const requireOrganization = createMiddleware<{
     userId: userId,
   });
 
+  addServerTiming(c, "org", orgStartedAt);
+
   await next();
 });
 
@@ -259,26 +365,47 @@ export const requireOrganization = createMiddleware<{
  */
 export function requirePermission(permissions: PermissionCheck) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
+    const permStartedAt = performance.now();
     const authSource = c.get("authSource") as AuthSource;
-    const labAuth = createLabAuth();
-    const portalAuth = createPortalAuth();
-    let result:
-      | Awaited<ReturnType<typeof labAuth.api.hasPermission>>
-      | Awaited<ReturnType<typeof portalAuth.api.hasPermission>>
-      | null = null;
+    const member = c.get("member") as MemberData | undefined;
+
+    if (member) {
+      const hasPermission = hasPermissionLocally(member.role, permissions);
+
+      if (!hasPermission) {
+        throw new HTTPException(403, {
+          message: "Insufficient permissions",
+        });
+      }
+
+      addServerTiming(c, "perm", permStartedAt, `${authSource}-local`);
+
+      try {
+        await next();
+      } finally {
+        applyServerTimingHeader(c);
+      }
+
+      return;
+    }
+
+    let result: { success?: boolean } | null = null;
 
     if (authSource === "lab") {
+      const labAuth = getRequestLabAuth(c);
       result = await labAuth.api.hasPermission({
         headers: c.req.raw.headers,
         body: { permission: permissions },
       });
     } else if (authSource === "portal") {
+      const portalAuth = getRequestPortalAuth(c);
       result = await portalAuth.api.hasPermission({
         headers: c.req.raw.headers,
         body: { permission: permissions },
       });
     } else {
       // Fallback for legacy/misconfigured middleware chains
+      const labAuth = getRequestLabAuth(c);
       result = await labAuth.api.hasPermission({
         headers: c.req.raw.headers,
         body: { permission: permissions },
@@ -291,7 +418,13 @@ export function requirePermission(permissions: PermissionCheck) {
       });
     }
 
-    await next();
+    addServerTiming(c, "perm", permStartedAt, authSource);
+
+    try {
+      await next();
+    } finally {
+      applyServerTimingHeader(c);
+    }
   });
 }
 

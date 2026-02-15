@@ -1,5 +1,5 @@
 import { Link, useMatches } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fragment, useMemo } from 'react'
 
 import {
@@ -88,6 +88,24 @@ const routeLabels: Record<string, string> = {
   '/dashboard/personnel/$id': 'Competência',
   '/dashboard/personnel/$id/training': 'Treinamentos',
   '/dashboard/personnel/$id/audit': 'Histórico',
+}
+
+const LABEL_STALE_TIME = 5 * 60 * 1000
+
+function getCachedLabel(
+  queryClient: { getQueryData: (queryKey: readonly unknown[]) => unknown },
+  queryKeys: ReadonlyArray<readonly unknown[]>,
+  pickLabel: (cached: unknown) => string | undefined,
+): string | null {
+  for (const queryKey of queryKeys) {
+    const cached = queryClient.getQueryData(queryKey)
+    const label = pickLabel(cached)
+    if (label) {
+      return label
+    }
+  }
+
+  return null
 }
 
 // Extract entity IDs from pathname
@@ -183,6 +201,7 @@ function extractEntityIds(pathname: string): {
 
 export function DashboardHeader() {
   const matches = useMatches()
+  const queryClient = useQueryClient()
 
   // Extract IDs from current pathname
   const pathname = matches[matches.length - 1]?.pathname ?? ''
@@ -198,157 +217,293 @@ export function DashboardHeader() {
     competenceId,
   } = extractEntityIds(pathname)
 
-  // Reactive queries for entity names
-  const { data: customer } = useQuery({
+  const customerCachedLabel = getCachedLabel(
+    queryClient,
+    [['customer', customerId]],
+    (cached) => (cached as { name?: string } | undefined)?.name,
+  )
+  const assetCachedLabel = getCachedLabel(
+    queryClient,
+    [['asset', assetId]],
+    (cached) => (cached as { name?: string } | undefined)?.name,
+  )
+  const methodCachedLabel = getCachedLabel(
+    queryClient,
+    [['methods', methodId]],
+    (cached) => (cached as { name?: string } | undefined)?.name,
+  )
+  const jobCachedLabel = getCachedLabel(
+    queryClient,
+    [['jobs', jobId]],
+    (cached) => (cached as { jobId?: string } | undefined)?.jobId,
+  )
+  const serviceCachedLabel = getCachedLabel(
+    queryClient,
+    [['services', serviceId]],
+    (cached) => (cached as { name?: string } | undefined)?.name,
+  )
+  const standardCachedLabel = getCachedLabel(
+    queryClient,
+    [['standards', standardId]],
+    (cached) => (cached as { name?: string } | undefined)?.name,
+  )
+  const ncCachedLabel = getCachedLabel(
+    queryClient,
+    [['non-conformance', ncId]],
+    (cached) => (cached as { ncNumber?: string } | undefined)?.ncNumber,
+  )
+  const capaCachedLabel = getCachedLabel(
+    queryClient,
+    [['capa', capaId]],
+    (cached) => (cached as { capaNumber?: string } | undefined)?.capaNumber,
+  )
+  const competenceCachedLabel = getCachedLabel(
+    queryClient,
+    [['competence', competenceId]],
+    (cached) => (cached as { userName?: string } | undefined)?.userName,
+  )
+
+  const customerDetailFetchCount = useIsFetching({
     queryKey: ['customer', customerId],
+  })
+  const assetDetailFetchCount = useIsFetching({ queryKey: ['asset', assetId] })
+  const methodDetailFetchCount = useIsFetching({
+    queryKey: ['methods', methodId],
+  })
+  const jobDetailFetchCount = useIsFetching({ queryKey: ['jobs', jobId] })
+  const serviceDetailFetchCount = useIsFetching({
+    queryKey: ['services', serviceId],
+  })
+  const standardDetailFetchCount = useIsFetching({
+    queryKey: ['standards', standardId],
+  })
+  const ncDetailFetchCount = useIsFetching({
+    queryKey: ['non-conformance', ncId],
+  })
+  const capaDetailFetchCount = useIsFetching({ queryKey: ['capa', capaId] })
+  const competenceDetailFetchCount = useIsFetching({
+    queryKey: ['competence', competenceId],
+  })
+
+  // Reactive queries for entity labels
+  const { data: customerLabel } = useQuery({
+    queryKey: ['customers', customerId, 'label'],
     queryFn: async () => {
-      const res = await api.api.customers[':id'].$get({
+      if (customerCachedLabel) return customerCachedLabel
+
+      const res = await api.api.customers[':id'].label.$get({
         param: { id: customerId! },
       })
-      if (!res.ok) throw new Error('Failed to fetch customer')
-      return res.json()
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.label
     },
-    enabled: !!customerId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled:
+      !!customerId && !customerCachedLabel && customerDetailFetchCount === 0,
+    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: asset } = useQuery({
-    queryKey: ['asset', assetId],
+  const { data: assetLabel } = useQuery({
+    queryKey: ['assets', assetId, 'label'],
     queryFn: async () => {
-      const res = await api.api.assets[':id'].$get({
+      if (assetCachedLabel) return assetCachedLabel
+
+      const res = await api.api.assets[':id'].label.$get({
         param: { id: assetId! },
       })
-      if (!res.ok) throw new Error('Failed to fetch asset')
-      return res.json()
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.label
     },
-    enabled: !!assetId,
-    staleTime: 5 * 60 * 1000,
+    enabled: !!assetId && !assetCachedLabel && assetDetailFetchCount === 0,
+    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: method } = useQuery({
-    queryKey: ['method', methodId],
+  const { data: methodLabel } = useQuery({
+    queryKey: ['methods', methodId, 'label'],
     queryFn: async () => {
-      const res = await api.api.methods[':id'].$get({
+      if (methodCachedLabel) return methodCachedLabel
+
+      const res = await api.api.methods[':id'].label.$get({
         param: { id: methodId! },
       })
-      if (!res.ok) throw new Error('Failed to fetch method')
-      return res.json()
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.label
     },
-    enabled: !!methodId,
-    staleTime: 5 * 60 * 1000,
+    enabled: !!methodId && !methodCachedLabel && methodDetailFetchCount === 0,
+    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: job } = useQuery({
-    queryKey: ['job', jobId],
+  const { data: jobLabel } = useQuery({
+    queryKey: ['jobs', jobId, 'label'],
     queryFn: async () => {
-      const res = await api.api.jobs[':id'].$get({
+      if (jobCachedLabel) return jobCachedLabel
+
+      const res = await api.api.jobs[':id'].label.$get({
         param: { id: jobId! },
       })
-      if (!res.ok) throw new Error('Failed to fetch job')
-      return res.json()
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.label
     },
-    enabled: !!jobId,
-    staleTime: 5 * 60 * 1000,
+    enabled: !!jobId && !jobCachedLabel && jobDetailFetchCount === 0,
+    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: service } = useQuery({
-    queryKey: ['service', serviceId],
+  const { data: serviceLabel } = useQuery({
+    queryKey: ['services', serviceId, 'label'],
     queryFn: async () => {
-      const res = await api.api.services[':id'].$get({
+      if (serviceCachedLabel) return serviceCachedLabel
+
+      const res = await api.api.services[':id'].label.$get({
         param: { id: serviceId! },
       })
-      if (!res.ok) throw new Error('Failed to fetch service')
-      return res.json()
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.label
     },
-    enabled: !!serviceId,
-    staleTime: 5 * 60 * 1000,
+    enabled:
+      !!serviceId && !serviceCachedLabel && serviceDetailFetchCount === 0,
+    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: standard } = useQuery({
-    queryKey: ['standard', standardId],
+  const { data: standardLabel } = useQuery({
+    queryKey: ['standards', standardId, 'label'],
     queryFn: async () => {
-      const res = await api.api.standards[':id'].$get({
+      if (standardCachedLabel) return standardCachedLabel
+
+      const res = await api.api.standards[':id'].label.$get({
         param: { id: standardId! },
       })
-      if (!res.ok) throw new Error('Failed to fetch standard')
-      return res.json()
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.label
     },
-    enabled: !!standardId,
-    staleTime: 5 * 60 * 1000,
+    enabled:
+      !!standardId && !standardCachedLabel && standardDetailFetchCount === 0,
+    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: nc } = useQuery({
-    queryKey: ['nc', ncId],
+  const { data: ncLabel } = useQuery({
+    queryKey: ['non-conformance', ncId, 'label'],
     queryFn: async () => {
-      const res = await api.api.nc[':id'].$get({
+      if (ncCachedLabel) return ncCachedLabel
+
+      const res = await api.api.nc[':id'].label.$get({
         param: { id: ncId! },
       })
-      if (!res.ok) throw new Error('Failed to fetch NC')
-      return res.json()
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.label
     },
-    enabled: !!ncId,
-    staleTime: 5 * 60 * 1000,
+    enabled: !!ncId && !ncCachedLabel && ncDetailFetchCount === 0,
+    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: capa } = useQuery({
-    queryKey: ['capa', capaId],
+  const { data: capaLabel } = useQuery({
+    queryKey: ['capa', capaId, 'label'],
     queryFn: async () => {
-      const res = await api.api.capa[':id'].$get({
+      if (capaCachedLabel) return capaCachedLabel
+
+      const res = await api.api.capa[':id'].label.$get({
         param: { id: capaId! },
       })
-      if (!res.ok) throw new Error('Failed to fetch CAPA')
-      return res.json()
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.label
     },
-    enabled: !!capaId,
-    staleTime: 5 * 60 * 1000,
+    enabled: !!capaId && !capaCachedLabel && capaDetailFetchCount === 0,
+    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: competence } = useQuery({
-    queryKey: ['competence', competenceId],
+  const { data: competenceLabel } = useQuery({
+    queryKey: ['competence', competenceId, 'label'],
     queryFn: async () => {
-      const res = await api.api.competences[':id'].$get({
+      if (competenceCachedLabel) return competenceCachedLabel
+
+      const res = await api.api.competences[':id'].label.$get({
         param: { id: competenceId! },
       })
-      if (!res.ok) throw new Error('Failed to fetch competence')
-      return res.json()
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.label
     },
-    enabled: !!competenceId,
-    staleTime: 5 * 60 * 1000,
+    enabled:
+      !!competenceId &&
+      !competenceCachedLabel &&
+      competenceDetailFetchCount === 0,
+    staleTime: LABEL_STALE_TIME,
   })
 
   // Build entity name lookup
   const entityNames: Record<string, string> = useMemo(() => {
     const names: Record<string, string> = {}
-    if (customerId && customer?.name) names[customerId] = customer.name
-    if (assetId && asset?.name) names[assetId] = asset.name
-    if (methodId && method?.name) names[methodId] = method.name
-    if (jobId && job?.jobId) names[jobId] = job.jobId
-    if (serviceId && service?.name) names[serviceId] = service.name
-    if (standardId && standard?.name) names[standardId] = standard.name
-    if (ncId && nc?.ncNumber) names[ncId] = nc.ncNumber
-    if (capaId && capa?.capaNumber) names[capaId] = capa.capaNumber
-    if (competenceId && competence?.userName)
-      names[competenceId] = competence.userName
+    if (customerId && (customerCachedLabel || customerLabel)) {
+      names[customerId] = customerCachedLabel || customerLabel
+    }
+    if (assetId && (assetCachedLabel || assetLabel)) {
+      names[assetId] = assetCachedLabel || assetLabel
+    }
+    if (methodId && (methodCachedLabel || methodLabel)) {
+      names[methodId] = methodCachedLabel || methodLabel
+    }
+    if (jobId && (jobCachedLabel || jobLabel)) {
+      names[jobId] = jobCachedLabel || jobLabel
+    }
+    if (serviceId && (serviceCachedLabel || serviceLabel)) {
+      names[serviceId] = serviceCachedLabel || serviceLabel
+    }
+    if (standardId && (standardCachedLabel || standardLabel)) {
+      names[standardId] = standardCachedLabel || standardLabel
+    }
+    if (ncId && (ncCachedLabel || ncLabel)) {
+      names[ncId] = ncCachedLabel || ncLabel
+    }
+    if (capaId && (capaCachedLabel || capaLabel)) {
+      names[capaId] = capaCachedLabel || capaLabel
+    }
+    if (competenceId && (competenceCachedLabel || competenceLabel)) {
+      names[competenceId] = competenceCachedLabel || competenceLabel
+    }
     return names
   }, [
     customerId,
-    customer,
+    customerCachedLabel,
+    customerLabel,
+    customerDetailFetchCount,
     assetId,
-    asset,
+    assetCachedLabel,
+    assetLabel,
+    assetDetailFetchCount,
     methodId,
-    method,
+    methodCachedLabel,
+    methodLabel,
+    methodDetailFetchCount,
     jobId,
-    job,
+    jobCachedLabel,
+    jobLabel,
+    jobDetailFetchCount,
     serviceId,
-    service,
+    serviceCachedLabel,
+    serviceLabel,
+    serviceDetailFetchCount,
     standardId,
-    standard,
+    standardCachedLabel,
+    standardLabel,
+    standardDetailFetchCount,
     ncId,
-    nc,
+    ncCachedLabel,
+    ncLabel,
+    ncDetailFetchCount,
     capaId,
-    capa,
+    capaCachedLabel,
+    capaLabel,
+    capaDetailFetchCount,
     competenceId,
-    competence,
+    competenceCachedLabel,
+    competenceLabel,
+    competenceDetailFetchCount,
   ])
 
   const breadcrumbs = useMemo(() => {

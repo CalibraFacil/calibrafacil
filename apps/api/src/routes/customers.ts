@@ -243,6 +243,38 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /:id/label - Get customer label by ID
+  // =========================================================================
+  .get("/:id/label", ...withLabPermission({ client: ["read"] }), async (c) => {
+    const id = parseInt(c.req.param("id"), 10);
+    const memberData = c.get("member");
+
+    if (isNaN(id)) {
+      return c.json({ error: "ID invalido" }, 400);
+    }
+
+    const [foundCustomer] = await db
+      .select({
+        id: customer.id,
+        label: customer.name,
+      })
+      .from(customer)
+      .where(
+        and(
+          eq(customer.id, id),
+          eq(customer.labOrganizationId, memberData.organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (!foundCustomer) {
+      return c.json({ error: "Cliente nao encontrado" }, 404);
+    }
+
+    return c.json(foundCustomer);
+  })
+
+  // =========================================================================
   // GET /:id - Get customer by ID
   // =========================================================================
   .get("/:id", ...withLabPermission({ client: ["read"] }), async (c) => {

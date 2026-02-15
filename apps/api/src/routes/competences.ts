@@ -24,7 +24,17 @@ import {
   notifyCompetenceRequested,
   notifyCompetenceApproved,
 } from "@calibra-facil/notifications";
-import { eq, and, isNull, desc, count, sql, lte, gte, inArray } from "drizzle-orm";
+import {
+  eq,
+  and,
+  isNull,
+  desc,
+  count,
+  sql,
+  lte,
+  gte,
+  inArray,
+} from "drizzle-orm";
 
 /**
  * Competences Router - ISO 17025:2017 Clause 6.2.3 (Personnel Competence)
@@ -99,10 +109,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           .orderBy(desc(personnelCompetence.createdAt))
           .limit(limit)
           .offset(offset),
-        db
-          .select({ total: count() })
-          .from(personnelCompetence)
-          .where(where),
+        db.select({ total: count() }).from(personnelCompetence).where(where),
       ]);
 
       const total = totalResult?.total ?? 0;
@@ -122,60 +129,56 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /matrix - Competence matrix view (technicians × asset types)
   // =========================================================================
-  .get(
-    "/matrix",
-    ...withLabPermission({ competence: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
+  .get("/matrix", ...withLabPermission({ competence: ["read"] }), async (c) => {
+    const memberData = c.get("member");
 
-      // Get all technician/admin/owner members
-      const technicians = await db
-        .select({
-          userId: member.userId,
-          userName: user.name,
-          role: member.role,
-        })
-        .from(member)
-        .innerJoin(user, eq(member.userId, user.id))
-        .where(
-          and(
-            eq(member.organizationId, memberData.organizationId),
-            inArray(member.role, ["technician", "admin", "owner"]),
-          ),
-        );
+    // Get all technician/admin/owner members
+    const technicians = await db
+      .select({
+        userId: member.userId,
+        userName: user.name,
+        role: member.role,
+      })
+      .from(member)
+      .innerJoin(user, eq(member.userId, user.id))
+      .where(
+        and(
+          eq(member.organizationId, memberData.organizationId),
+          inArray(member.role, ["technician", "admin", "owner"]),
+        ),
+      );
 
-      // Get all asset types
-      const assetTypes = await db
-        .select({ id: assetType.id, name: assetType.name })
-        .from(assetType)
-        .orderBy(assetType.name);
+    // Get all asset types
+    const assetTypes = await db
+      .select({ id: assetType.id, name: assetType.name })
+      .from(assetType)
+      .orderBy(assetType.name);
 
-      // Get all competence records for this org
-      const competences = await db
-        .select({
-          id: personnelCompetence.id,
-          userId: personnelCompetence.userId,
-          assetTypeId: personnelCompetence.assetTypeId,
-          status: personnelCompetence.status,
-          expiresAt: personnelCompetence.expiresAt,
-        })
-        .from(personnelCompetence)
-        .where(
-          and(
-            eq(personnelCompetence.organizationId, memberData.organizationId),
-            isNull(personnelCompetence.deletedAt),
-          ),
-        );
+    // Get all competence records for this org
+    const competences = await db
+      .select({
+        id: personnelCompetence.id,
+        userId: personnelCompetence.userId,
+        assetTypeId: personnelCompetence.assetTypeId,
+        status: personnelCompetence.status,
+        expiresAt: personnelCompetence.expiresAt,
+      })
+      .from(personnelCompetence)
+      .where(
+        and(
+          eq(personnelCompetence.organizationId, memberData.organizationId),
+          isNull(personnelCompetence.deletedAt),
+        ),
+      );
 
-      return c.json({ technicians, assetTypes, competences });
-    },
-  )
+    return c.json({ technicians, assetTypes, competences });
+  })
 
   // =========================================================================
-  // GET /:id - Single competence with training records
+  // GET /:id/label - Get competence label by ID
   // =========================================================================
   .get(
-    "/:id",
+    "/:id/label",
     ...withLabPermission({ competence: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
@@ -188,30 +191,14 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
       const [comp] = await db
         .select({
           id: personnelCompetence.id,
-          organizationId: personnelCompetence.organizationId,
-          userId: personnelCompetence.userId,
-          assetTypeId: personnelCompetence.assetTypeId,
-          scopeDescription: personnelCompetence.scopeDescription,
-          status: personnelCompetence.status,
-          qualifiedAt: personnelCompetence.qualifiedAt,
-          expiresAt: personnelCompetence.expiresAt,
-          certificateR2Key: personnelCompetence.certificateR2Key,
-          certificateFileName: personnelCompetence.certificateFileName,
-          notes: personnelCompetence.notes,
-          requestedBy: personnelCompetence.requestedBy,
-          evaluatedBy: personnelCompetence.evaluatedBy,
-          approvedBy: personnelCompetence.approvedBy,
-          createdAt: personnelCompetence.createdAt,
-          updatedAt: personnelCompetence.updatedAt,
+          label: user.name,
         })
         .from(personnelCompetence)
+        .innerJoin(user, eq(personnelCompetence.userId, user.id))
         .where(
           and(
             eq(personnelCompetence.id, id),
-            eq(
-              personnelCompetence.organizationId,
-              memberData.organizationId,
-            ),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
             isNull(personnelCompetence.deletedAt),
           ),
         )
@@ -221,70 +208,117 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Competência não encontrada" }, 404);
       }
 
-      // Get user details
-      const [userData] = await db
-        .select({ name: user.name, email: user.email })
-        .from(user)
-        .where(eq(user.id, comp.userId))
-        .limit(1);
-
-      // Get asset type name
-      let assetTypeName: string | null = null;
-      if (comp.assetTypeId) {
-        const [at] = await db
-          .select({ name: assetType.name })
-          .from(assetType)
-          .where(eq(assetType.id, comp.assetTypeId))
-          .limit(1);
-        assetTypeName = at?.name ?? null;
-      }
-
-      // Get related training records (scoped to same org)
-      const trainings = await db
-        .select()
-        .from(trainingRecord)
-        .where(
-          and(
-            eq(trainingRecord.competenceId, id),
-            eq(trainingRecord.organizationId, memberData.organizationId),
-            isNull(trainingRecord.deletedAt),
-          ),
-        )
-        .orderBy(desc(trainingRecord.startDate));
-
-      // Get requestedBy, evaluatedBy, approvedBy names
-      const userIds = [
-        comp.requestedBy,
-        comp.evaluatedBy,
-        comp.approvedBy,
-      ].filter(Boolean) as string[];
-      const userNames: Record<string, string> = {};
-      if (userIds.length > 0) {
-        const users = await db
-          .select({ id: user.id, name: user.name })
-          .from(user)
-          .where(inArray(user.id, userIds));
-        for (const u of users) {
-          userNames[u.id] = u.name;
-        }
-      }
-
-      return c.json({
-        ...comp,
-        userName: userData?.name ?? null,
-        userEmail: userData?.email ?? null,
-        assetTypeName,
-        requestedByName: userNames[comp.requestedBy] ?? null,
-        evaluatedByName: comp.evaluatedBy
-          ? (userNames[comp.evaluatedBy] ?? null)
-          : null,
-        approvedByName: comp.approvedBy
-          ? (userNames[comp.approvedBy] ?? null)
-          : null,
-        trainingRecords: trainings,
-      });
+      return c.json(comp);
     },
   )
+
+  // =========================================================================
+  // GET /:id - Single competence with training records
+  // =========================================================================
+  .get("/:id", ...withLabPermission({ competence: ["read"] }), async (c) => {
+    const memberData = c.get("member");
+    const id = parseInt(c.req.param("id"), 10);
+
+    if (isNaN(id)) {
+      return c.json({ error: "ID inválido" }, 400);
+    }
+
+    const [comp] = await db
+      .select({
+        id: personnelCompetence.id,
+        organizationId: personnelCompetence.organizationId,
+        userId: personnelCompetence.userId,
+        assetTypeId: personnelCompetence.assetTypeId,
+        scopeDescription: personnelCompetence.scopeDescription,
+        status: personnelCompetence.status,
+        qualifiedAt: personnelCompetence.qualifiedAt,
+        expiresAt: personnelCompetence.expiresAt,
+        certificateR2Key: personnelCompetence.certificateR2Key,
+        certificateFileName: personnelCompetence.certificateFileName,
+        notes: personnelCompetence.notes,
+        requestedBy: personnelCompetence.requestedBy,
+        evaluatedBy: personnelCompetence.evaluatedBy,
+        approvedBy: personnelCompetence.approvedBy,
+        createdAt: personnelCompetence.createdAt,
+        updatedAt: personnelCompetence.updatedAt,
+      })
+      .from(personnelCompetence)
+      .where(
+        and(
+          eq(personnelCompetence.id, id),
+          eq(personnelCompetence.organizationId, memberData.organizationId),
+          isNull(personnelCompetence.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!comp) {
+      return c.json({ error: "Competência não encontrada" }, 404);
+    }
+
+    // Get user details
+    const [userData] = await db
+      .select({ name: user.name, email: user.email })
+      .from(user)
+      .where(eq(user.id, comp.userId))
+      .limit(1);
+
+    // Get asset type name
+    let assetTypeName: string | null = null;
+    if (comp.assetTypeId) {
+      const [at] = await db
+        .select({ name: assetType.name })
+        .from(assetType)
+        .where(eq(assetType.id, comp.assetTypeId))
+        .limit(1);
+      assetTypeName = at?.name ?? null;
+    }
+
+    // Get related training records (scoped to same org)
+    const trainings = await db
+      .select()
+      .from(trainingRecord)
+      .where(
+        and(
+          eq(trainingRecord.competenceId, id),
+          eq(trainingRecord.organizationId, memberData.organizationId),
+          isNull(trainingRecord.deletedAt),
+        ),
+      )
+      .orderBy(desc(trainingRecord.startDate));
+
+    // Get requestedBy, evaluatedBy, approvedBy names
+    const userIds = [
+      comp.requestedBy,
+      comp.evaluatedBy,
+      comp.approvedBy,
+    ].filter(Boolean) as string[];
+    const userNames: Record<string, string> = {};
+    if (userIds.length > 0) {
+      const users = await db
+        .select({ id: user.id, name: user.name })
+        .from(user)
+        .where(inArray(user.id, userIds));
+      for (const u of users) {
+        userNames[u.id] = u.name;
+      }
+    }
+
+    return c.json({
+      ...comp,
+      userName: userData?.name ?? null,
+      userEmail: userData?.email ?? null,
+      assetTypeName,
+      requestedByName: userNames[comp.requestedBy] ?? null,
+      evaluatedByName: comp.evaluatedBy
+        ? (userNames[comp.evaluatedBy] ?? null)
+        : null,
+      approvedByName: comp.approvedBy
+        ? (userNames[comp.approvedBy] ?? null)
+        : null,
+      trainingRecords: trainings,
+    });
+  })
 
   // =========================================================================
   // POST / - Create competence request (status=REQUESTED)
@@ -311,10 +345,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .limit(1);
 
       if (!targetMember) {
-        return c.json(
-          { error: "Usuário não é membro desta organização" },
-          400,
-        );
+        return c.json({ error: "Usuário não é membro desta organização" }, 400);
       }
 
       const [created] = await db
@@ -390,10 +421,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(personnelCompetence.id, id),
-            eq(
-              personnelCompetence.organizationId,
-              memberData.organizationId,
-            ),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
             isNull(personnelCompetence.deletedAt),
           ),
         )
@@ -453,10 +481,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(personnelCompetence.id, id),
-            eq(
-              personnelCompetence.organizationId,
-              memberData.organizationId,
-            ),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
             isNull(personnelCompetence.deletedAt),
           ),
         )
@@ -487,10 +512,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(trainingRecord.id, trId),
-              eq(
-                trainingRecord.organizationId,
-                memberData.organizationId,
-              ),
+              eq(trainingRecord.organizationId, memberData.organizationId),
               eq(trainingRecord.userId, existing.userId),
               isNull(trainingRecord.deletedAt),
             ),
@@ -549,10 +571,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(personnelCompetence.id, id),
-            eq(
-              personnelCompetence.organizationId,
-              memberData.organizationId,
-            ),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
             isNull(personnelCompetence.deletedAt),
           ),
         )
@@ -613,10 +632,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(personnelCompetence.id, id),
-            eq(
-              personnelCompetence.organizationId,
-              memberData.organizationId,
-            ),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
             isNull(personnelCompetence.deletedAt),
           ),
         )
@@ -629,8 +645,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
       if (existing.status !== "IN_TRAINING") {
         return c.json(
           {
-            error:
-              "Treinamento só pode ser concluído no status IN_TRAINING",
+            error: "Treinamento só pode ser concluído no status IN_TRAINING",
           },
           400,
         );
@@ -679,10 +694,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(personnelCompetence.id, id),
-            eq(
-              personnelCompetence.organizationId,
-              memberData.organizationId,
-            ),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
             isNull(personnelCompetence.deletedAt),
           ),
         )
@@ -706,9 +718,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         const qualifiedAt = input.qualifiedAt
           ? new Date(input.qualifiedAt)
           : new Date();
-        const expiresAt = input.expiresAt
-          ? new Date(input.expiresAt)
-          : null;
+        const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
 
         const [updated] = await db
           .update(personnelCompetence)
@@ -805,10 +815,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(personnelCompetence.id, id),
-            eq(
-              personnelCompetence.organizationId,
-              memberData.organizationId,
-            ),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
             isNull(personnelCompetence.deletedAt),
           ),
         )
@@ -866,10 +873,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(personnelCompetence.id, id),
-            eq(
-              personnelCompetence.organizationId,
-              memberData.organizationId,
-            ),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
             isNull(personnelCompetence.deletedAt),
           ),
         )
@@ -941,10 +945,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(personnelCompetence.id, id),
-            eq(
-              personnelCompetence.organizationId,
-              memberData.organizationId,
-            ),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
             isNull(personnelCompetence.deletedAt),
           ),
         )
@@ -992,10 +993,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(personnelCompetence.id, id),
-            eq(
-              personnelCompetence.organizationId,
-              memberData.organizationId,
-            ),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
           ),
         )
         .limit(1);
@@ -1015,10 +1013,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           reason: personnelCompetenceAuditLog.reason,
         })
         .from(personnelCompetenceAuditLog)
-        .leftJoin(
-          user,
-          eq(personnelCompetenceAuditLog.performedBy, user.id),
-        )
+        .leftJoin(user, eq(personnelCompetenceAuditLog.performedBy, user.id))
         .where(eq(personnelCompetenceAuditLog.competenceId, id))
         .orderBy(desc(personnelCompetenceAuditLog.performedAt));
 

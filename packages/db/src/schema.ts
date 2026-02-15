@@ -605,9 +605,12 @@ export const calibrationMethod = pgTable(
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    technicalReviewedBy: text("technical_reviewed_by").references(() => user.id, {
-      onDelete: "set null",
-    }),
+    technicalReviewedBy: text("technical_reviewed_by").references(
+      () => user.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     publishedAt: timestamp("published_at"),
     publishedBy: text("published_by").references(() => user.id, {
       onDelete: "set null",
@@ -1213,6 +1216,22 @@ export const calibrationJob = pgTable(
     index("job_technician_id_idx").on(table.technicianId),
     index("job_status_idx").on(table.status),
     index("job_due_date_idx").on(table.dueDate),
+    index("job_org_status_due_idx").on(
+      table.organizationId,
+      table.status,
+      table.dueDate,
+    ),
+    index("job_org_status_approved_at_idx").on(
+      table.organizationId,
+      table.status,
+      table.approvedAt,
+    ),
+    index("job_org_status_rejected_at_idx").on(
+      table.organizationId,
+      table.status,
+      table.rejectedAt,
+    ),
+    index("job_org_created_at_idx").on(table.organizationId, table.createdAt),
     uniqueIndex("job_org_job_id_uidx").on(table.organizationId, table.jobId),
     // Amendment tracking indexes for efficient chain lookups
     index("job_supersedes_id_idx").on(table.supersedesId),
@@ -1624,7 +1643,15 @@ export type NotificationChannel = "IN_APP" | "EMAIL";
  * Related entity reference for deep linking
  */
 export type NotificationRelatedEntity = {
-  entityType: "job" | "asset" | "standard" | "payment" | "customer" | "nc" | "capa" | "competence";
+  entityType:
+    | "job"
+    | "asset"
+    | "standard"
+    | "payment"
+    | "customer"
+    | "nc"
+    | "capa"
+    | "competence";
   entityId: number | string;
   jobId?: string; // Human-readable job ID for display
 };
@@ -1715,13 +1742,19 @@ export const notificationPreference = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [uniqueIndex("notification_preference_user_id_uidx").on(table.userId)],
+  (table) => [
+    uniqueIndex("notification_preference_user_id_uidx").on(table.userId),
+  ],
 );
 
 /**
  * Scheduled notification entity type
  */
-export type ScheduledNotificationEntityType = "asset" | "standard" | "job" | "competence";
+export type ScheduledNotificationEntityType =
+  | "asset"
+  | "standard"
+  | "job"
+  | "competence";
 
 /**
  * Scheduled Notification table - Tracks scheduled compliance alerts.
@@ -1747,7 +1780,9 @@ export const scheduledNotification = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("scheduled_notification_organization_id_idx").on(table.organizationId),
+    index("scheduled_notification_organization_id_idx").on(
+      table.organizationId,
+    ),
     index("scheduled_notification_scheduled_for_idx").on(table.scheduledFor),
     index("scheduled_notification_entity_idx").on(
       table.entityType,
@@ -2026,7 +2061,8 @@ export const correctiveAction = pgTable(
 
     // Root cause analysis
     rootCauseAnalysis: text("root_cause_analysis"),
-    rootCauseAnalysisMethod: text("rca_method").$type<RootCauseAnalysisMethod>(),
+    rootCauseAnalysisMethod:
+      text("rca_method").$type<RootCauseAnalysisMethod>(),
 
     // Corrective action plan
     actionPlan: text("action_plan"),
@@ -2445,10 +2481,7 @@ export const trainingRecord = pgTable(
     ),
     title: text("title").notNull(),
     type: text("type").$type<TrainingType>().notNull(),
-    status: text("status")
-      .$type<TrainingStatus>()
-      .default("planned")
-      .notNull(),
+    status: text("status").$type<TrainingStatus>().default("planned").notNull(),
     provider: text("provider"),
     description: text("description"),
     startDate: timestamp("start_date").notNull(),
