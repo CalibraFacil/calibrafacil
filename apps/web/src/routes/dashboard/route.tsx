@@ -86,16 +86,20 @@ function DashboardLayout() {
   // Uses localStorage to remember preferred org, avoiding conflicts with portal
   useEffect(() => {
     async function setupDashboardContext() {
-      if (orgsLoading || activeOrgLoading || hasSetupContext.current) return
+      if (orgsLoading || activeOrgLoading) return
+
+      if (!hasLabAccess) {
+        setIsSettingUp(false)
+        return
+      }
+
+      if (hasSetupContext.current) return
 
       hasSetupContext.current = true
+      setIsSettingUp(true)
       mark(DASHBOARD_CONTEXT_START_MARK)
 
       try {
-        if (!hasLabAccess) {
-          return
-        }
-
         // Get stored preference for dashboard
         const storedOrgId = localStorage.getItem(DASHBOARD_ORG_KEY)
 
@@ -188,7 +192,7 @@ function DashboardLayout() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <DashboardHeader />
+          <DashboardHeader suspendEntityQueries={isInitializing} />
           <main className="flex-1 p-4">
             {isInitializing ? (
               <div className="space-y-6">

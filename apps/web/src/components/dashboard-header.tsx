@@ -92,6 +92,25 @@ const routeLabels: Record<string, string> = {
 
 const LABEL_STALE_TIME = 5 * 60 * 1000
 
+type LabelResponse = {
+  ok: boolean
+  status: number
+  json: () => Promise<unknown>
+}
+
+async function parseLabelResponse(
+  response: LabelResponse,
+  entityName: string,
+): Promise<string | null> {
+  if (!response.ok) {
+    if (response.status === 404) return null
+    throw new Error(`Failed to fetch ${entityName} label`)
+  }
+
+  const data = (await response.json()) as { label?: string }
+  return data.label ?? null
+}
+
 function getCachedLabel(
   queryClient: { getQueryData: (queryKey: readonly unknown[]) => unknown },
   queryKeys: ReadonlyArray<readonly unknown[]>,
@@ -199,7 +218,13 @@ function extractEntityIds(pathname: string): {
   return result
 }
 
-export function DashboardHeader() {
+type DashboardHeaderProps = {
+  suspendEntityQueries?: boolean
+}
+
+export function DashboardHeader({
+  suspendEntityQueries = false,
+}: DashboardHeaderProps) {
   const matches = useMatches()
   const queryClient = useQueryClient()
 
@@ -294,12 +319,13 @@ export function DashboardHeader() {
       const res = await api.api.customers[':id'].label.$get({
         param: { id: customerId! },
       })
-      if (!res.ok) return null
-      const data = await res.json()
-      return data.label
+      return parseLabelResponse(res, 'customer')
     },
     enabled:
-      !!customerId && !customerCachedLabel && customerDetailFetchCount === 0,
+      !suspendEntityQueries &&
+      !!customerId &&
+      !customerCachedLabel &&
+      customerDetailFetchCount === 0,
     staleTime: LABEL_STALE_TIME,
   })
 
@@ -311,11 +337,13 @@ export function DashboardHeader() {
       const res = await api.api.assets[':id'].label.$get({
         param: { id: assetId! },
       })
-      if (!res.ok) return null
-      const data = await res.json()
-      return data.label
+      return parseLabelResponse(res, 'asset')
     },
-    enabled: !!assetId && !assetCachedLabel && assetDetailFetchCount === 0,
+    enabled:
+      !suspendEntityQueries &&
+      !!assetId &&
+      !assetCachedLabel &&
+      assetDetailFetchCount === 0,
     staleTime: LABEL_STALE_TIME,
   })
 
@@ -327,11 +355,13 @@ export function DashboardHeader() {
       const res = await api.api.methods[':id'].label.$get({
         param: { id: methodId! },
       })
-      if (!res.ok) return null
-      const data = await res.json()
-      return data.label
+      return parseLabelResponse(res, 'method')
     },
-    enabled: !!methodId && !methodCachedLabel && methodDetailFetchCount === 0,
+    enabled:
+      !suspendEntityQueries &&
+      !!methodId &&
+      !methodCachedLabel &&
+      methodDetailFetchCount === 0,
     staleTime: LABEL_STALE_TIME,
   })
 
@@ -343,11 +373,13 @@ export function DashboardHeader() {
       const res = await api.api.jobs[':id'].label.$get({
         param: { id: jobId! },
       })
-      if (!res.ok) return null
-      const data = await res.json()
-      return data.label
+      return parseLabelResponse(res, 'job')
     },
-    enabled: !!jobId && !jobCachedLabel && jobDetailFetchCount === 0,
+    enabled:
+      !suspendEntityQueries &&
+      !!jobId &&
+      !jobCachedLabel &&
+      jobDetailFetchCount === 0,
     staleTime: LABEL_STALE_TIME,
   })
 
@@ -359,12 +391,13 @@ export function DashboardHeader() {
       const res = await api.api.services[':id'].label.$get({
         param: { id: serviceId! },
       })
-      if (!res.ok) return null
-      const data = await res.json()
-      return data.label
+      return parseLabelResponse(res, 'service')
     },
     enabled:
-      !!serviceId && !serviceCachedLabel && serviceDetailFetchCount === 0,
+      !suspendEntityQueries &&
+      !!serviceId &&
+      !serviceCachedLabel &&
+      serviceDetailFetchCount === 0,
     staleTime: LABEL_STALE_TIME,
   })
 
@@ -376,12 +409,13 @@ export function DashboardHeader() {
       const res = await api.api.standards[':id'].label.$get({
         param: { id: standardId! },
       })
-      if (!res.ok) return null
-      const data = await res.json()
-      return data.label
+      return parseLabelResponse(res, 'standard')
     },
     enabled:
-      !!standardId && !standardCachedLabel && standardDetailFetchCount === 0,
+      !suspendEntityQueries &&
+      !!standardId &&
+      !standardCachedLabel &&
+      standardDetailFetchCount === 0,
     staleTime: LABEL_STALE_TIME,
   })
 
@@ -393,11 +427,13 @@ export function DashboardHeader() {
       const res = await api.api.nc[':id'].label.$get({
         param: { id: ncId! },
       })
-      if (!res.ok) return null
-      const data = await res.json()
-      return data.label
+      return parseLabelResponse(res, 'non-conformance')
     },
-    enabled: !!ncId && !ncCachedLabel && ncDetailFetchCount === 0,
+    enabled:
+      !suspendEntityQueries &&
+      !!ncId &&
+      !ncCachedLabel &&
+      ncDetailFetchCount === 0,
     staleTime: LABEL_STALE_TIME,
   })
 
@@ -409,11 +445,13 @@ export function DashboardHeader() {
       const res = await api.api.capa[':id'].label.$get({
         param: { id: capaId! },
       })
-      if (!res.ok) return null
-      const data = await res.json()
-      return data.label
+      return parseLabelResponse(res, 'capa')
     },
-    enabled: !!capaId && !capaCachedLabel && capaDetailFetchCount === 0,
+    enabled:
+      !suspendEntityQueries &&
+      !!capaId &&
+      !capaCachedLabel &&
+      capaDetailFetchCount === 0,
     staleTime: LABEL_STALE_TIME,
   })
 
@@ -425,11 +463,10 @@ export function DashboardHeader() {
       const res = await api.api.competences[':id'].label.$get({
         param: { id: competenceId! },
       })
-      if (!res.ok) return null
-      const data = await res.json()
-      return data.label
+      return parseLabelResponse(res, 'competence')
     },
     enabled:
+      !suspendEntityQueries &&
       !!competenceId &&
       !competenceCachedLabel &&
       competenceDetailFetchCount === 0,
@@ -439,71 +476,72 @@ export function DashboardHeader() {
   // Build entity name lookup
   const entityNames: Record<string, string> = useMemo(() => {
     const names: Record<string, string> = {}
-    if (customerId && (customerCachedLabel || customerLabel)) {
-      names[customerId] = customerCachedLabel || customerLabel
+    const customerDisplayLabel = customerCachedLabel ?? customerLabel ?? null
+    if (customerId && customerDisplayLabel) {
+      names[customerId] = customerDisplayLabel
     }
-    if (assetId && (assetCachedLabel || assetLabel)) {
-      names[assetId] = assetCachedLabel || assetLabel
+    const assetDisplayLabel = assetCachedLabel ?? assetLabel ?? null
+    if (assetId && assetDisplayLabel) {
+      names[assetId] = assetDisplayLabel
     }
-    if (methodId && (methodCachedLabel || methodLabel)) {
-      names[methodId] = methodCachedLabel || methodLabel
+    const methodDisplayLabel = methodCachedLabel ?? methodLabel ?? null
+    if (methodId && methodDisplayLabel) {
+      names[methodId] = methodDisplayLabel
     }
-    if (jobId && (jobCachedLabel || jobLabel)) {
-      names[jobId] = jobCachedLabel || jobLabel
+    const jobDisplayLabel = jobCachedLabel ?? jobLabel ?? null
+    if (jobId && jobDisplayLabel) {
+      names[jobId] = jobDisplayLabel
     }
-    if (serviceId && (serviceCachedLabel || serviceLabel)) {
-      names[serviceId] = serviceCachedLabel || serviceLabel
+    const serviceDisplayLabel = serviceCachedLabel ?? serviceLabel ?? null
+    if (serviceId && serviceDisplayLabel) {
+      names[serviceId] = serviceDisplayLabel
     }
-    if (standardId && (standardCachedLabel || standardLabel)) {
-      names[standardId] = standardCachedLabel || standardLabel
+    const standardDisplayLabel = standardCachedLabel ?? standardLabel ?? null
+    if (standardId && standardDisplayLabel) {
+      names[standardId] = standardDisplayLabel
     }
-    if (ncId && (ncCachedLabel || ncLabel)) {
-      names[ncId] = ncCachedLabel || ncLabel
+    const ncDisplayLabel = ncCachedLabel ?? ncLabel ?? null
+    if (ncId && ncDisplayLabel) {
+      names[ncId] = ncDisplayLabel
     }
-    if (capaId && (capaCachedLabel || capaLabel)) {
-      names[capaId] = capaCachedLabel || capaLabel
+    const capaDisplayLabel = capaCachedLabel ?? capaLabel ?? null
+    if (capaId && capaDisplayLabel) {
+      names[capaId] = capaDisplayLabel
     }
-    if (competenceId && (competenceCachedLabel || competenceLabel)) {
-      names[competenceId] = competenceCachedLabel || competenceLabel
+    const competenceDisplayLabel =
+      competenceCachedLabel ?? competenceLabel ?? null
+    if (competenceId && competenceDisplayLabel) {
+      names[competenceId] = competenceDisplayLabel
     }
     return names
   }, [
     customerId,
     customerCachedLabel,
     customerLabel,
-    customerDetailFetchCount,
     assetId,
     assetCachedLabel,
     assetLabel,
-    assetDetailFetchCount,
     methodId,
     methodCachedLabel,
     methodLabel,
-    methodDetailFetchCount,
     jobId,
     jobCachedLabel,
     jobLabel,
-    jobDetailFetchCount,
     serviceId,
     serviceCachedLabel,
     serviceLabel,
-    serviceDetailFetchCount,
     standardId,
     standardCachedLabel,
     standardLabel,
-    standardDetailFetchCount,
     ncId,
     ncCachedLabel,
     ncLabel,
-    ncDetailFetchCount,
     capaId,
     capaCachedLabel,
     capaLabel,
-    capaDetailFetchCount,
     competenceId,
     competenceCachedLabel,
     competenceLabel,
-    competenceDetailFetchCount,
   ])
 
   const breadcrumbs = useMemo(() => {
