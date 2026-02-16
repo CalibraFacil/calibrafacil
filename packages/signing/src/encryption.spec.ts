@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
+  decryptBinary,
   encryptPassword,
   decryptPassword,
+  encryptBinary,
   generateMasterKey,
 } from "./encryption";
 
@@ -36,12 +38,12 @@ describe("Password Encryption", () => {
 
       const { encryptedPassword, iv } = encryptPassword(
         originalPassword,
-        masterKey
+        masterKey,
       );
       const decryptedPassword = decryptPassword(
         encryptedPassword,
         iv,
-        masterKey
+        masterKey,
       );
 
       expect(decryptedPassword).toBe(originalPassword);
@@ -85,12 +87,12 @@ describe("Password Encryption", () => {
 
       const { encryptedPassword, iv } = encryptPassword(
         emptyPassword,
-        masterKey
+        masterKey,
       );
       const decryptedPassword = decryptPassword(
         encryptedPassword,
         iv,
-        masterKey
+        masterKey,
       );
 
       expect(decryptedPassword).toBe(emptyPassword);
@@ -101,12 +103,12 @@ describe("Password Encryption", () => {
 
       const { encryptedPassword, iv } = encryptPassword(
         specialPassword,
-        masterKey
+        masterKey,
       );
       const decryptedPassword = decryptPassword(
         encryptedPassword,
         iv,
-        masterKey
+        masterKey,
       );
 
       expect(decryptedPassword).toBe(specialPassword);
@@ -117,12 +119,12 @@ describe("Password Encryption", () => {
 
       const { encryptedPassword, iv } = encryptPassword(
         unicodePassword,
-        masterKey
+        masterKey,
       );
       const decryptedPassword = decryptPassword(
         encryptedPassword,
         iv,
-        masterKey
+        masterKey,
       );
 
       expect(decryptedPassword).toBe(unicodePassword);
@@ -131,11 +133,14 @@ describe("Password Encryption", () => {
     it("should handle long passwords", () => {
       const longPassword = "a".repeat(1000);
 
-      const { encryptedPassword, iv } = encryptPassword(longPassword, masterKey);
+      const { encryptedPassword, iv } = encryptPassword(
+        longPassword,
+        masterKey,
+      );
       const decryptedPassword = decryptPassword(
         encryptedPassword,
         iv,
-        masterKey
+        masterKey,
       );
 
       expect(decryptedPassword).toBe(longPassword);
@@ -148,5 +153,34 @@ describe("Password Encryption", () => {
         encryptPassword("password", invalidKey);
       }).toThrow("Master key must be 256 bits");
     });
+  });
+});
+
+describe("Binary Encryption", () => {
+  it("should encrypt and decrypt binary payloads", () => {
+    const masterKey = generateMasterKey();
+    const payload = Buffer.from("p12-binary-content", "utf8");
+
+    const encrypted = encryptBinary(payload, masterKey);
+    const decrypted = decryptBinary(encrypted, masterKey);
+
+    expect(decrypted.equals(payload)).toBe(true);
+  });
+
+  it("should use versioned encrypted blob prefix", () => {
+    const masterKey = generateMasterKey();
+    const payload = Buffer.from("abc", "utf8");
+
+    const encrypted = encryptBinary(payload, masterKey);
+
+    expect(encrypted.startsWith("enc:v1:")).toBe(true);
+  });
+
+  it("should reject unsupported encrypted blob formats", () => {
+    const masterKey = generateMasterKey();
+
+    expect(() => decryptBinary("legacy-base64-value", masterKey)).toThrow(
+      "Unsupported encrypted blob format",
+    );
   });
 });

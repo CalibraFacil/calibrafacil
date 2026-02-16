@@ -13,8 +13,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.958.0",
-    "@aws-sdk/s3-request-presigner": "^3.958.0",
+    "@aws-sdk/client-s3": "^3.990.0",
+    "@aws-sdk/s3-request-presigner": "^3.990.0",
     "@calibra-facil/auth": "workspace:^",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
@@ -23,7 +23,7 @@
     "@calibra-facil/notifications": "workspace:^",
     "@hono/zod-validator": "^0.7.6",
     "drizzle-orm": "^0.45.1",
-    "hono": "^4.11.1",
+    "hono": "^4.11.9",
     "resend": "^6.6.0",
     "zod": "^4.2.1"
   },

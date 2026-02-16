@@ -5,7 +5,7 @@ import { CertificateHtml, type JobData, LabelHtml, type LabelData } from "@calib
 import React from "react";
 import QRCode from "qrcode";
 import { processScheduledNotifications } from "./scheduled.js";
-import { signPdf, decryptPassword, type SignatureMetadata } from "@calibra-facil/signing";
+import { signPdf, decryptPassword, decryptBinary, type SignatureMetadata } from "@calibra-facil/signing";
 
 interface Env {
     BROWSER: Fetcher;
@@ -682,10 +682,14 @@ async function processJob(
                         signingCert.passwordIv,
                         env.SIGNING_MASTER_KEY
                     );
+                    const p12Buffer = decryptBinary(
+                        signingCert.encryptedP12,
+                        env.SIGNING_MASTER_KEY
+                    );
 
                     // Sign the PDF
                     const result = await signPdf(pdfBuffer, {
-                        p12Buffer: Buffer.from(signingCert.encryptedP12, 'base64'),
+                        p12Buffer,
                         password,
                         reason: 'Certificado de Calibracao - CalibraFacil',
                         location: 'Brasil',

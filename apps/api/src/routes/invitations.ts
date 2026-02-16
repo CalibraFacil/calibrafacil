@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "@calibra-facil/db";
-import { invitation, organization, user } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { invitation, organization } from "@calibra-facil/db/schema";
+import { and, eq, gt } from "drizzle-orm";
 
 /**
  * Public invitations router
@@ -28,34 +28,23 @@ export const invitationsRouter = new Hono()
           role: invitation.role,
           status: invitation.status,
           expiresAt: invitation.expiresAt,
-          organizationId: invitation.organizationId,
           organizationName: organization.name,
           organizationSlug: organization.slug,
-          inviterId: invitation.inviterId,
         })
         .from(invitation)
         .innerJoin(organization, eq(invitation.organizationId, organization.id))
-        .where(eq(invitation.id, id))
+        .where(
+          and(
+            eq(invitation.id, id),
+            eq(invitation.status, "pending"),
+            gt(invitation.expiresAt, new Date()),
+          ),
+        )
         .limit(1);
 
       const inv = result[0];
       if (!inv) {
         return c.json({ error: "Convite não encontrado" }, 404);
-      }
-
-      // Get inviter email if available
-      let inviterEmail = "";
-      if (inv.inviterId) {
-        const inviterResult = await db
-          .select({ email: user.email })
-          .from(user)
-          .where(eq(user.id, inv.inviterId))
-          .limit(1);
-
-        const inviter = inviterResult[0];
-        if (inviter) {
-          inviterEmail = inviter.email;
-        }
       }
 
       return c.json({
@@ -66,7 +55,6 @@ export const invitationsRouter = new Hono()
         expiresAt: inv.expiresAt,
         organizationName: inv.organizationName,
         organizationSlug: inv.organizationSlug,
-        inviterEmail,
       });
     } catch (error) {
       console.error("Error fetching invitation:", error);

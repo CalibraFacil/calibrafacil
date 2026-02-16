@@ -205,8 +205,10 @@ function calculateSha256(buffer: Uint8Array | Buffer): string {
  *
  * @example
  * ```typescript
+ * const p12Buffer = decryptBinary(encryptedP12, signingMasterKey);
+ *
  * const { signedPdf, metadata } = await signPdf(unsignedPdf, {
- *   p12Buffer: Buffer.from(encryptedP12, 'base64'),
+ *   p12Buffer,
  *   password: 'certificate-password',
  *   reason: 'Certificado de Calibracao',
  * });

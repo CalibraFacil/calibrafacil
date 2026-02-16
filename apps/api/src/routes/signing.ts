@@ -10,6 +10,7 @@ import {
 } from "../middleware/permission";
 import {
   getCertificateInfo,
+  encryptBinary,
   encryptPassword,
   SigningError,
 } from "@calibra-facil/signing";
@@ -68,15 +69,12 @@ export const signingRouter = new Hono<{
           revokedReason: organizationSigningCertificate.revokedReason,
         })
         .from(organizationSigningCertificate)
-        .leftJoin(
-          user,
-          eq(organizationSigningCertificate.createdBy, user.id)
-        )
+        .leftJoin(user, eq(organizationSigningCertificate.createdBy, user.id))
         .where(
           eq(
             organizationSigningCertificate.organizationId,
-            memberData.organizationId
-          )
+            memberData.organizationId,
+          ),
         )
         .orderBy(desc(organizationSigningCertificate.createdAt));
 
@@ -94,7 +92,7 @@ export const signingRouter = new Hono<{
       }));
 
       return c.json({ certificates: certificatesWithStatus });
-    }
+    },
   )
 
   // ===========================================================================
@@ -114,7 +112,7 @@ export const signingRouter = new Hono<{
         console.error("SIGNING_MASTER_KEY not configured");
         return c.json(
           { error: "Assinatura digital não configurada no servidor" },
-          500
+          500,
         );
       }
 
@@ -142,7 +140,7 @@ export const signingRouter = new Hono<{
             {
               error: `Certificado expirado em ${certInfo.validUntil.toLocaleDateString("pt-BR")}`,
             },
-            400
+            400,
           );
         }
 
@@ -154,28 +152,29 @@ export const signingRouter = new Hono<{
             and(
               eq(
                 organizationSigningCertificate.organizationId,
-                memberData.organizationId
+                memberData.organizationId,
               ),
               eq(
                 organizationSigningCertificate.serialNumber,
-                certInfo.serialNumber
-              )
-            )
+                certInfo.serialNumber,
+              ),
+            ),
           )
           .limit(1);
 
         if (existing) {
           return c.json(
             { error: "Certificado com este número de série já existe" },
-            400
+            400,
           );
         }
 
         // 4. Encrypt password
         const { encryptedPassword, iv } = encryptPassword(
           input.password,
-          env.SIGNING_MASTER_KEY
+          env.SIGNING_MASTER_KEY,
         );
+        const encryptedP12 = encryptBinary(p12Buffer, env.SIGNING_MASTER_KEY);
 
         // 5. Insert certificate (with transaction to prevent race condition on default)
         const newCert = await db.transaction(async (tx) => {
@@ -188,10 +187,10 @@ export const signingRouter = new Hono<{
                 and(
                   eq(
                     organizationSigningCertificate.organizationId,
-                    memberData.organizationId
+                    memberData.organizationId,
                   ),
-                  eq(organizationSigningCertificate.isDefault, true)
-                )
+                  eq(organizationSigningCertificate.isDefault, true),
+                ),
               );
           }
 
@@ -206,7 +205,7 @@ export const signingRouter = new Hono<{
               subjectCpfCnpj: certInfo.subjectCpfCnpj,
               validFrom: certInfo.validFrom,
               validUntil: certInfo.validUntil,
-              encryptedP12: input.p12Base64,
+              encryptedP12,
               encryptedPassword,
               passwordIv: iv,
               isActive: true,
@@ -238,7 +237,7 @@ export const signingRouter = new Hono<{
         console.error("Error uploading certificate:", error);
         return c.json({ error: "Erro ao processar certificado" }, 500);
       }
-    }
+    },
   )
 
   // ===========================================================================
@@ -267,9 +266,9 @@ export const signingRouter = new Hono<{
             eq(organizationSigningCertificate.id, id),
             eq(
               organizationSigningCertificate.organizationId,
-              memberData.organizationId
-            )
-          )
+              memberData.organizationId,
+            ),
+          ),
         )
         .limit(1);
 
@@ -280,7 +279,7 @@ export const signingRouter = new Hono<{
       if (!cert.isActive) {
         return c.json(
           { error: "Certificado revogado não pode ser padrão" },
-          400
+          400,
         );
       }
 
@@ -293,10 +292,10 @@ export const signingRouter = new Hono<{
             and(
               eq(
                 organizationSigningCertificate.organizationId,
-                memberData.organizationId
+                memberData.organizationId,
               ),
-              eq(organizationSigningCertificate.isDefault, true)
-            )
+              eq(organizationSigningCertificate.isDefault, true),
+            ),
           );
 
         await tx
@@ -306,7 +305,7 @@ export const signingRouter = new Hono<{
       });
 
       return c.json({ message: "Certificado definido como padrão" });
-    }
+    },
   )
 
   // ===========================================================================
@@ -319,7 +318,7 @@ export const signingRouter = new Hono<{
       "json",
       z.object({
         reason: z.string().min(1).max(500),
-      })
+      }),
     ),
     async (c) => {
       const id = parseInt(c.req.param("id"));
@@ -344,9 +343,9 @@ export const signingRouter = new Hono<{
             eq(organizationSigningCertificate.id, id),
             eq(
               organizationSigningCertificate.organizationId,
-              memberData.organizationId
-            )
-          )
+              memberData.organizationId,
+            ),
+          ),
         )
         .limit(1);
 
@@ -371,7 +370,7 @@ export const signingRouter = new Hono<{
         .where(eq(organizationSigningCertificate.id, id));
 
       return c.json({ message: "Certificado revogado com sucesso" });
-    }
+    },
   )
 
   // ===========================================================================
@@ -406,18 +405,15 @@ export const signingRouter = new Hono<{
           revokedReason: organizationSigningCertificate.revokedReason,
         })
         .from(organizationSigningCertificate)
-        .leftJoin(
-          user,
-          eq(organizationSigningCertificate.createdBy, user.id)
-        )
+        .leftJoin(user, eq(organizationSigningCertificate.createdBy, user.id))
         .where(
           and(
             eq(organizationSigningCertificate.id, id),
             eq(
               organizationSigningCertificate.organizationId,
-              memberData.organizationId
-            )
-          )
+              memberData.organizationId,
+            ),
+          ),
         )
         .limit(1);
 
@@ -438,8 +434,8 @@ export const signingRouter = new Hono<{
         ...cert,
         status,
         daysUntilExpiry: Math.ceil(
-          (cert.validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+          (cert.validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
         ),
       });
-    }
+    },
   );
