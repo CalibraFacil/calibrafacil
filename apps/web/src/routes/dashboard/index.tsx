@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { SectionCards } from './-components/section-cards'
 import { ChartCalibrations } from './-components/chart-calibrations'
 import { RecentJobsTable } from './-components/recent-jobs-table'
+import { useDashboardContextState } from './route'
 
 const DASHBOARD_INDEX_MOUNT_MARK = 'dashboard:index:mount'
 const DASHBOARD_INDEX_FETCH_START_MARK = 'dashboard:index:fetch:start'
@@ -48,13 +49,14 @@ export const Route = createFileRoute('/dashboard/')({
 function DashboardIndex() {
   const hasMarkedDataReady = useRef(false)
   const hasMarkedFirstContent = useRef(false)
+  const { activeOrganizationId } = useDashboardContextState()
 
   useEffect(() => {
     mark(DASHBOARD_INDEX_MOUNT_MARK)
   }, [])
 
-  const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['dashboard', 'stats'],
+  const { data, isPending, isFetching, refetch, isRefetching } = useQuery({
+    queryKey: ['dashboard', 'stats', activeOrganizationId ?? 'no-org'],
     queryFn: async () => {
       mark(DASHBOARD_INDEX_FETCH_START_MARK)
       const res = await api.api.dashboard.stats.$get()
@@ -73,6 +75,8 @@ function DashboardIndex() {
     refetchInterval: 60000, // Auto-refresh every minute
     staleTime: 30000,
   })
+
+  const isLoading = !data && (isPending || isFetching)
 
   useEffect(() => {
     if (!isLoading && !hasMarkedDataReady.current) {

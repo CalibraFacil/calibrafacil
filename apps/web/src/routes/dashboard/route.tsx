@@ -2,9 +2,10 @@ import {
   Outlet,
   createFileRoute,
   redirect,
+  useMatches,
   useNavigate,
 } from '@tanstack/react-router'
-import { useEffect, useState, useRef } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 
 import {
   organization,
@@ -16,7 +17,6 @@ import { CommandPalette } from '@/components/command-palette/command-palette'
 import { CommandPaletteProvider } from '@/components/command-palette/command-context'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { Spinner } from '@/components/ui/spinner'
 import {
   Card,
   CardContent,
@@ -32,6 +32,20 @@ const DASHBOARD_LAYOUT_MOUNT_MARK = 'dashboard:layout:mount'
 const DASHBOARD_LAYOUT_READY_MARK = 'dashboard:layout:ready'
 const DASHBOARD_CONTEXT_START_MARK = 'dashboard:context:start'
 const DASHBOARD_CONTEXT_END_MARK = 'dashboard:context:end'
+
+type DashboardContextState = {
+  isContextSwitching: boolean
+  activeOrganizationId: string | null
+}
+
+const DashboardContextStateContext = createContext<DashboardContextState>({
+  isContextSwitching: false,
+  activeOrganizationId: null,
+})
+
+export function useDashboardContextState() {
+  return useContext(DashboardContextStateContext)
+}
 
 function mark(name: string) {
   if (typeof window === 'undefined' || !window.performance) return
@@ -61,6 +75,7 @@ export const Route = createFileRoute('/dashboard')({
 
 function DashboardLayout() {
   const navigate = useNavigate()
+  const matches = useMatches()
   const { data: organizations, isPending: orgsLoading } = useListOrganizations()
   const { data: activeOrg, isPending: activeOrgLoading } =
     useActiveOrganization()
@@ -68,7 +83,7 @@ function DashboardLayout() {
   // Track if we've already done initial context setup
   const hasSetupContext = useRef(false)
   const hasMarkedReady = useRef(false)
-  const [isSettingUp, setIsSettingUp] = useState(true)
+  const [isSettingUp, setIsSettingUp] = useState(false)
 
   useEffect(() => {
     mark(DASHBOARD_LAYOUT_MOUNT_MARK)
@@ -79,8 +94,13 @@ function DashboardLayout() {
   const labOrganizations =
     organizations?.filter((org) => org.type !== 'CLIENT') ?? []
 
+  const pathname = matches[matches.length - 1]?.pathname ?? ''
+  const isDashboardHome =
+    pathname === '/dashboard' || pathname === '/dashboard/'
   const hasLabAccess = labOrganizations.length > 0
-  const isInitializing = orgsLoading || activeOrgLoading || isSettingUp
+  const isBootstrappingContext = orgsLoading || activeOrgLoading
+  const shouldBlockChildRoutes =
+    !isDashboardHome && (isBootstrappingContext || isSettingUp)
 
   // Context Setup: Only runs once on initial load
   // Uses localStorage to remember preferred org, avoiding conflicts with portal
@@ -96,43 +116,43 @@ function DashboardLayout() {
       if (hasSetupContext.current) return
 
       hasSetupContext.current = true
-      setIsSettingUp(true)
-      mark(DASHBOARD_CONTEXT_START_MARK)
 
-      try {
-        // Get stored preference for dashboard
-        const storedOrgId = localStorage.getItem(DASHBOARD_ORG_KEY)
+      // Get stored preference for dashboard
+      const storedOrgId = localStorage.getItem(DASHBOARD_ORG_KEY)
 
-        // Check if stored org is a valid LAB org
-        const storedOrg = storedOrgId
-          ? labOrganizations.find((org) => org.id === storedOrgId)
-          : null
+      // Check if stored org is a valid LAB org
+      const storedOrg = storedOrgId
+        ? labOrganizations.find((org) => org.id === storedOrgId)
+        : null
 
-        // Determine target org: stored preference > current if LAB > first LAB
-        let targetOrg = storedOrg
-        if (!targetOrg && activeOrg?.type !== 'CLIENT') {
-          targetOrg = labOrganizations.find((org) => org.id === activeOrg?.id)
-        }
-        if (!targetOrg) {
-          targetOrg = labOrganizations[0]
-        }
+      // Determine target org: stored preference > current if LAB > first LAB
+      let targetOrg = storedOrg
+      if (!targetOrg && activeOrg?.type !== 'CLIENT') {
+        targetOrg = labOrganizations.find((org) => org.id === activeOrg?.id)
+      }
+      if (!targetOrg) {
+        targetOrg = labOrganizations[0]
+      }
 
-        // Only switch if needed
-        if (targetOrg && activeOrg?.id !== targetOrg.id) {
+      // Only switch if needed
+      if (targetOrg && activeOrg?.id !== targetOrg.id) {
+        setIsSettingUp(true)
+        mark(DASHBOARD_CONTEXT_START_MARK)
+        try {
           await organization.setActive({ organizationId: targetOrg.id })
           localStorage.setItem(DASHBOARD_ORG_KEY, targetOrg.id)
-        } else if (targetOrg) {
-          // Store current selection
-          localStorage.setItem(DASHBOARD_ORG_KEY, targetOrg.id)
+        } finally {
+          mark(DASHBOARD_CONTEXT_END_MARK)
+          measure(
+            'dashboard:context:init',
+            DASHBOARD_CONTEXT_START_MARK,
+            DASHBOARD_CONTEXT_END_MARK,
+          )
+          setIsSettingUp(false)
         }
-      } finally {
-        mark(DASHBOARD_CONTEXT_END_MARK)
-        measure(
-          'dashboard:context:init',
-          DASHBOARD_CONTEXT_START_MARK,
-          DASHBOARD_CONTEXT_END_MARK,
-        )
-        setIsSettingUp(false)
+      } else if (targetOrg) {
+        // Store current selection
+        localStorage.setItem(DASHBOARD_ORG_KEY, targetOrg.id)
       }
     }
 
@@ -157,7 +177,7 @@ function DashboardLayout() {
   }, [orgsLoading, activeOrgLoading, isSettingUp])
 
   // No LAB access - show error page
-  if (!isInitializing && !hasLabAccess) {
+  if (!isBootstrappingContext && !hasLabAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
@@ -192,32 +212,25 @@ function DashboardLayout() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <DashboardHeader suspendEntityQueries={isInitializing} />
+          <DashboardHeader
+            suspendEntityQueries={isBootstrappingContext || isSettingUp}
+          />
           <main className="flex-1 p-4">
-            {isInitializing ? (
-              <div className="space-y-6">
-                <div className="flex items-center gap-3 text-muted-foreground">
-                  <Spinner className="size-5" />
-                  <span>Configurando contexto do laboratório...</span>
+            <DashboardContextStateContext.Provider
+              value={{
+                isContextSwitching: isBootstrappingContext || isSettingUp,
+                activeOrganizationId: activeOrg?.id ?? null,
+              }}
+            >
+              {shouldBlockChildRoutes ? (
+                <div className="space-y-4">
+                  <div className="h-10 w-56 rounded-md border bg-card/60 animate-pulse" />
+                  <div className="h-64 rounded-lg border bg-card/60 animate-pulse" />
                 </div>
-
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <div
-                      key={index}
-                      className="h-28 rounded-lg border bg-card/50 animate-pulse"
-                    />
-                  ))}
-                </div>
-
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <div className="h-80 rounded-lg border bg-card/50 animate-pulse" />
-                  <div className="h-80 rounded-lg border bg-card/50 animate-pulse" />
-                </div>
-              </div>
-            ) : (
-              <Outlet />
-            )}
+              ) : (
+                <Outlet />
+              )}
+            </DashboardContextStateContext.Provider>
           </main>
         </SidebarInset>
       </SidebarProvider>
