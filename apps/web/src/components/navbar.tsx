@@ -6,7 +6,6 @@ import {
   Cancel01Icon,
   ArrowRight01Icon,
 } from '@hugeicons/core-free-icons'
-import { motion, AnimatePresence } from 'motion/react'
 
 import { Button } from '@/components/ui/button'
 import { ModeToggle } from '@/components/mode-toggle'
@@ -95,63 +94,54 @@ export function Navbar() {
         </div>
       </div>
 
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
-            className="overflow-hidden border-t border-border/50 md:hidden"
-          >
-            <div className="flex flex-col gap-1 px-6 py-4">
-              {navLinks.map((link) =>
-                link.external ? (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    {link.label}
-                  </a>
-                ) : (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    className="rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    {link.label}
-                  </a>
-                ),
-              )}
-              <div className="mt-3 flex flex-col gap-2 border-t border-border/50 pt-4">
-                <Link to="/sign-in" onClick={() => setMobileOpen(false)}>
-                  <Button variant="outline" className="w-full">
-                    Entrar
-                  </Button>
-                </Link>
-                <a
-                  href="https://cal.com/calibrafacil/30min?user=calibrafacil"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Button className="w-full">
-                    Agendar Demo
-                    <HugeiconsIcon
-                      icon={ArrowRight01Icon}
-                      data-icon="inline-end"
-                    />
-                  </Button>
-                </a>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <div
+        className={`overflow-hidden border-t border-border/50 transition-[max-height,opacity] duration-200 ease-in-out md:hidden ${
+          mobileOpen ? 'max-h-[420px] opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="flex flex-col gap-1 px-6 py-4">
+          {navLinks.map((link) =>
+            link.external ? (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </a>
+            ) : (
+              <a
+                key={link.href}
+                href={link.href}
+                className="rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </a>
+            ),
+          )}
+          <div className="mt-3 flex flex-col gap-2 border-t border-border/50 pt-4">
+            <Link to="/sign-in" onClick={() => setMobileOpen(false)}>
+              <Button variant="outline" className="w-full">
+                Entrar
+              </Button>
+            </Link>
+            <a
+              href="https://cal.com/calibrafacil/30min?user=calibrafacil"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button className="w-full">
+                Agendar Demo
+                <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
+              </Button>
+            </a>
+          </div>
+        </div>
+      </div>
     </nav>
   )
 }

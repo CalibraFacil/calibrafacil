@@ -4,7 +4,6 @@ import {
   SecurityCheckIcon,
   BookOpen01Icon,
 } from '@hugeicons/core-free-icons'
-import { motion } from 'motion/react'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,46 +22,32 @@ export function Hero() {
 
       <div className="relative mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-3xl text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
+          <div>
             <Badge variant="outline" className="mb-6 gap-2 px-3 py-1.5">
-              <HugeiconsIcon icon={SecurityCheckIcon} className="size-3.5 text-primary" />
-              <span className="text-xs">Projetado para conformidade ISO/IEC 17025</span>
+              <HugeiconsIcon
+                icon={SecurityCheckIcon}
+                className="size-3.5 text-primary"
+              />
+              <span className="text-xs">
+                Projetado para conformidade ISO/IEC 17025
+              </span>
             </Badge>
-          </motion.div>
+          </div>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl"
-          >
+          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl">
             Gestão de calibração{' '}
             <span className="bg-gradient-to-r from-primary to-chart-1 bg-clip-text text-transparent">
               simplificada
             </span>
-          </motion.h1>
+          </h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg"
-          >
-            Plataforma completa para laboratórios de calibração. Gerencie ordens de
-            serviço, emita certificados com cálculo de incerteza conforme o GUM e
-            mantenha a rastreabilidade metrológica — tudo em um só lugar.
-          </motion.p>
+          <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Plataforma completa para laboratórios de calibração. Gerencie ordens
+            de serviço, emita certificados com cálculo de incerteza conforme o
+            GUM e mantenha a rastreabilidade metrológica — tudo em um só lugar.
+          </p>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center"
-          >
+          <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <a
               href="https://cal.com/calibrafacil/30min?user=calibrafacil"
               target="_blank"
@@ -83,14 +68,9 @@ export function Hero() {
                 Ver Documentação
               </Button>
             </a>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-            className="mt-12 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-muted-foreground"
-          >
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <div className="size-1.5 rounded-full bg-emerald-500" />
               <span>Certificados digitais</span>
@@ -103,7 +83,7 @@ export function Hero() {
               <div className="size-1.5 rounded-full bg-emerald-500" />
               <span>Portal do cliente</span>
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>
