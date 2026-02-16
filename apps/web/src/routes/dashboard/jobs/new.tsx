@@ -156,6 +156,11 @@ function NewJobPage() {
     enabled: !!formData.customerId,
   })
 
+  const selectedAsset = useMemo(() => {
+    if (!formData.assetId || !assetsData?.data) return null
+    return assetsData.data.find((a) => a.id === formData.assetId) || null
+  }, [formData.assetId, assetsData?.data])
+
   // Fetch services (filtered by asset type when asset is selected)
   const { data: servicesData, isLoading: servicesLoading } = useQuery({
     queryKey: ['services', 'for-job', selectedAsset?.assetTypeId],
@@ -180,7 +185,7 @@ function NewJobPage() {
         data: Array<Service>
       }>
     },
-    enabled: !!formData.assetId,
+    enabled: !!selectedAsset,
   })
 
   // Fetch technicians
@@ -204,11 +209,6 @@ function NewJobPage() {
     return customersData.data.find((c) => c.id === formData.customerId) || null
   }, [formData.customerId, customersData?.data])
 
-  const selectedAsset = useMemo(() => {
-    if (!formData.assetId || !assetsData?.data) return null
-    return assetsData.data.find((a) => a.id === formData.assetId) || null
-  }, [formData.assetId, assetsData?.data])
-
   const selectedService = useMemo(() => {
     if (!formData.serviceId || !servicesData?.data) return null
     return servicesData.data.find((s) => s.id === formData.serviceId) || null
@@ -230,7 +230,9 @@ function NewJobPage() {
 
   const selectedTechnicianName = useMemo(() => {
     if (!formData.technicianId || !techniciansData?.data) return ''
-    const tech = techniciansData.data.find((t) => t.id === formData.technicianId)
+    const tech = techniciansData.data.find(
+      (t) => t.id === formData.technicianId,
+    )
     return tech?.name || ''
   }, [formData.technicianId, techniciansData?.data])
 
@@ -307,9 +309,7 @@ function NewJobPage() {
         newData.serviceId = null
       }
       if (field === 'serviceId' && value) {
-        const service = servicesData?.data?.find(
-          (s) => s.id === Number(value),
-        )
+        const service = servicesData?.data?.find((s) => s.id === Number(value))
         if (service?.tat && !newData.dueDate) {
           const suggestedDueDate = new Date()
           suggestedDueDate.setDate(suggestedDueDate.getDate() + service.tat)
