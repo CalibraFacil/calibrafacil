@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { CertificateHtml, type JobData } from '@calibra-facil/documents'
 import {
   Analytics01Icon,
   ArrowRight01Icon,
@@ -42,8 +41,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import certificatePreviewHtml from './certificate-preview.html?raw'
 import { cn } from '@/lib/utils'
-import { renderToStaticMarkup } from 'react-dom/server'
 
 const commonProblems = [
   'Planilhas complexas para cálculo de incerteza.',
@@ -173,150 +172,6 @@ const traceabilityPoints = [
   'Transparência sobre distribuição, incerteza padrão e fator de abrangência.',
   'Histórico técnico para auditoria, revisão e reemissão de certificados.',
 ]
-
-const sampleCertificateJob: JobData = {
-  jobId: 'CF-2026-01842',
-  organizationId: 'org-demo',
-  performedAt: new Date('2026-03-06T10:00:00Z'),
-  approvedAt: new Date('2026-03-07T14:30:00Z'),
-  environmentalSnapshot: {
-    temperature: 20.1,
-    humidity: 52.4,
-    pressure: 1013.2,
-    recordedAt: '2026-03-06T10:05:00Z',
-    recordedBy: 'Carlos Henrique',
-    limits: {
-      temperature: { min: 18, max: 22 },
-      humidity: { min: 40, max: 60 },
-      pressure: { min: 980, max: 1030 },
-    },
-    withinLimits: true,
-    outOfLimitsJustification: null,
-  },
-  lab: {
-    name: 'CalibraFácil Laboratório de Metrologia',
-    cnpj: '12345678000199',
-    accreditationNumber: 'CRL 1234',
-    accreditationBody: 'Cgcre',
-    street: 'Av. das Indústrias',
-    number: '1250',
-    complement: 'Bloco B',
-    neighbourhood: 'Distrito Industrial',
-    city: 'Campinas',
-    state: 'SP',
-    cep: '13000-000',
-    phone: '(19) 3333-4000',
-    email: 'contato@calibrafacil.com',
-    website: 'www.calibrafacil.com',
-    technicalManagerName: 'Eng. Mariana Alves',
-    technicalManagerTitle: 'Responsável Técnica',
-  },
-  customer: {
-    name: 'Metalúrgica Horizonte Ltda.',
-    taxId: '98765432000155',
-    phone: '(11) 4000-1234',
-    email: 'qualidade@metalurgicahorizonte.com.br',
-    address: {
-      street: 'Rua do Progresso',
-      number: '450',
-      neighbourhood: 'Parque Industrial',
-      city: 'São Paulo',
-      state: 'SP',
-      cep: '04567-000',
-    },
-  },
-  asset: {
-    name: 'Paquímetro digital 150 mm',
-    serialNumber: 'PD-150-78451',
-    tag: 'DIM-0231',
-    model: '500-196-30B',
-    manufacturer: 'Mitutoyo',
-  },
-  methodSnapshot: {
-    methodId: 12,
-    methodName: 'Medição dimensional por comparação com blocos padrão',
-    methodVersion: 3,
-    dataFields: [
-      {
-        key: 'medicoes',
-        label: 'Leituras obtidas',
-        type: 'table',
-        columns: [
-          { key: 'ponto', label: 'Ponto', type: 'text' },
-          { key: 'nominal', label: 'Nominal', type: 'number', unit: 'mm' },
-          { key: 'indicado', label: 'Indicado', type: 'number', unit: 'mm' },
-          { key: 'erro', label: 'Erro', type: 'number', unit: 'mm' },
-        ],
-      },
-    ],
-    formulas: [
-      {
-        outputKey: 'erroMaximo',
-        expression: 'max(abs(erro))',
-        label: 'Erro máximo',
-        unit: 'mm',
-      },
-      {
-        outputKey: 'incertezaExpandida',
-        expression: 'uc * k',
-        label: 'Incerteza expandida',
-        unit: 'mm',
-      },
-      {
-        outputKey: 'fatorAbrangencia',
-        expression: 't_student(v_eff, 0.95)',
-        label: 'Fator de abrangência',
-      },
-    ],
-  },
-  standardsSnapshot: [
-    {
-      id: 1,
-      name: 'Bloco padrão classe 0',
-      certificateNumber: 'RBC-55421/2025',
-      calibrationDate: '2025-11-15',
-      uncertainty: 0.0012,
-      uncertaintyUnit: 'mm',
-      coverageFactor: 2,
-      certifiedValues: null,
-    },
-    {
-      id: 2,
-      name: 'Termohigrômetro de referência',
-      certificateNumber: 'RBC-28761/2025',
-      calibrationDate: '2025-10-03',
-      uncertainty: 0.2,
-      uncertaintyUnit: '°C',
-      coverageFactor: 2,
-      certifiedValues: null,
-    },
-  ],
-  data: {
-    medicoes: [
-      { ponto: '25 mm', nominal: 25, indicado: 25.003, erro: 0.003 },
-      { ponto: '50 mm', nominal: 50, indicado: 50.004, erro: 0.004 },
-      { ponto: '75 mm', nominal: 75, indicado: 75.002, erro: 0.002 },
-      { ponto: '100 mm', nominal: 100, indicado: 100.001, erro: 0.001 },
-    ],
-  },
-  results: {
-    erroMaximo: 0.004,
-    incertezaExpandida: 0.012,
-    fatorAbrangencia: 2.13,
-  },
-  approverName: 'Mariana Alves',
-  approverSignatureUrl: null,
-  supersedesId: null,
-  supersededById: null,
-  amendmentNumber: null,
-  amendmentReason: null,
-  originalJobId: null,
-  originalApprovedAt: null,
-}
-
-const certificatePreviewHtml = `<!DOCTYPE html>${renderToStaticMarkup(
-  <CertificateHtml job={sampleCertificateJob} />,
-)}`
 
 export const Route = createFileRoute('/')({
   component: LandingPage,
@@ -822,6 +677,7 @@ function CertificatePreviewFrame({ expanded = false }: { expanded?: boolean }) {
         <iframe
           title="Exemplo de certificado"
           srcDoc={certificatePreviewHtml}
+          sandbox="allow-same-origin"
           className="h-[78vh] min-h-[720px] w-full rounded-lg border-0 bg-white"
         />
       </div>
@@ -834,6 +690,7 @@ function CertificatePreviewFrame({ expanded = false }: { expanded?: boolean }) {
         <iframe
           title="Exemplo de certificado"
           srcDoc={certificatePreviewHtml}
+          sandbox="allow-same-origin"
           className="h-[780px] w-full origin-top-left scale-[0.68] border-0 bg-white"
           style={{
             width: '147%',
