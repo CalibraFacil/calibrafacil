@@ -11,9 +11,10 @@ import { Button } from '@/components/ui/button'
 import { ModeToggle } from '@/components/mode-toggle'
 
 const navLinks = [
+  { label: 'Desafios', href: '#desafios' },
   { label: 'Funcionalidades', href: '#funcionalidades' },
+  { label: 'Conformidade', href: '#conformidade' },
   { label: 'Plataforma', href: '#plataforma' },
-  { label: 'FAQ', href: '#faq' },
   {
     label: 'Documentação',
     href: 'https://docs.calibrafacil.com',
@@ -75,7 +76,7 @@ export function Navbar() {
             rel="noopener noreferrer"
           >
             <Button size="sm">
-              Agendar Demo
+              Agendar demonstração
               <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
             </Button>
           </a>
@@ -135,7 +136,7 @@ export function Navbar() {
               rel="noopener noreferrer"
             >
               <Button className="w-full">
-                Agendar Demo
+                Agendar demonstração
                 <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
               </Button>
             </a>
