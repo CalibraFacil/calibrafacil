@@ -175,6 +175,8 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           submittedAt: calibrationRequest.submittedAt,
           reviewedAt: calibrationRequest.reviewedAt,
           approvedAt: calibrationRequest.approvedAt,
+          rejectedAt: calibrationRequest.rejectedAt,
+          rejectionReason: calibrationRequest.rejectionReason,
           convertedAt: calibrationRequest.convertedAt,
           customerId: calibrationRequest.customerId,
           customerName: customer.name,

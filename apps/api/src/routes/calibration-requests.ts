@@ -26,12 +26,32 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { createCalibrationJob } from "../lib/jobs";
+import { notifyJobAssigned } from "@calibra-facil/notifications";
 
 const submitterUser = alias(user, "calibrationRequestSubmitter");
 const reviewerUser = alias(user, "calibrationRequestReviewer");
 const approverUser = alias(user, "calibrationRequestApprover");
 const rejecterUser = alias(user, "calibrationRequestRejecter");
 const converterUser = alias(user, "calibrationRequestConverter");
+
+type ConvertedRequestJob = {
+  requestItemId: number;
+  jobId: number;
+  jobCode: string;
+  status: string;
+  technicianId: string | null;
+};
+
+type ConvertRequestResult =
+  | {
+      createdJobs: ConvertedRequestJob[];
+    }
+  | {
+      error: {
+        status: 400 | 404;
+        body: string;
+      };
+    };
 
 async function getRequestItems(requestIds: number[]) {
   if (requestIds.length === 0) return [];
@@ -464,133 +484,164 @@ export const calibrationRequestsRouter = new Hono<{
       const session = c.get("session");
       const id = parseInt(c.req.param("id"), 10);
       const input = c.req.valid("json");
+      const ipAddress = c.req.header("x-forwarded-for") ?? null;
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const [request] = await db
-        .select({
-          id: calibrationRequest.id,
-          status: calibrationRequest.status,
-          customerId: calibrationRequest.customerId,
-        })
-        .from(calibrationRequest)
-        .where(
-          and(
-            eq(calibrationRequest.id, id),
-            eq(calibrationRequest.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
+      const result: ConvertRequestResult = await db.transaction(async (tx) => {
+        const [request] = await tx
+          .select({
+            id: calibrationRequest.id,
+            status: calibrationRequest.status,
+            customerId: calibrationRequest.customerId,
+          })
+          .from(calibrationRequest)
+          .where(
+            and(
+              eq(calibrationRequest.id, id),
+              eq(calibrationRequest.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1)
+          .for("update");
 
-      if (!request) {
-        return c.json({ error: "Solicitacao nao encontrada" }, 404);
-      }
-
-      if (request.status !== "APPROVED") {
-        return c.json(
-          { error: "Somente solicitacoes aprovadas podem ser convertidas" },
-          400,
-        );
-      }
-
-      const requestItems = await db
-        .select({
-          id: calibrationRequestItem.id,
-          assetId: calibrationRequestItem.assetId,
-          convertedJobId: calibrationRequestItem.convertedJobId,
-        })
-        .from(calibrationRequestItem)
-        .where(eq(calibrationRequestItem.requestId, request.id));
-
-      if (requestItems.some((item) => item.convertedJobId)) {
-        return c.json(
-          { error: "Esta solicitacao ja possui itens convertidos" },
-          400,
-        );
-      }
-
-      if (requestItems.length !== input.items.length) {
-        return c.json(
-          {
-            error:
-              "Informe exatamente um mapeamento para cada item da solicitacao",
-          },
-          400,
-        );
-      }
-
-      const requestItemIds = new Set(requestItems.map((item) => item.id));
-      if (!input.items.every((item) => requestItemIds.has(item.itemId))) {
-        return c.json(
-          {
-            error:
-              "Um ou mais itens informados nao pertencem a esta solicitacao",
-          },
-          400,
-        );
-      }
-
-      const requestItemById = new Map(
-        requestItems.map((item) => [item.id, item] as const),
-      );
-
-      const createdJobs = [];
-      for (const item of input.items) {
-        const requestItem = requestItemById.get(item.itemId);
-
-        if (!requestItem) {
-          return c.json({ error: "Item de solicitacao invalido" }, 400);
+        if (!request) {
+          return { error: { status: 404 as const, body: "Solicitacao nao encontrada" } };
         }
 
-        const newJob = await createCalibrationJob({
-          organizationId: member.organizationId,
-          createdBy: session.user.id,
-          assetId: requestItem.assetId,
-          serviceId: item.serviceId,
-          technicianId: item.technicianId,
-          dueDate: item.dueDate,
-          ipAddress: c.req.header("x-forwarded-for") ?? null,
-          sourceRequestId: request.id,
-          sourceRequestItemId: requestItem.id,
+        if (request.status !== "APPROVED") {
+          return {
+            error: {
+              status: 400 as const,
+              body: "Somente solicitacoes aprovadas podem ser convertidas",
+            },
+          };
+        }
+
+        const requestItems = await tx
+          .select({
+            id: calibrationRequestItem.id,
+            assetId: calibrationRequestItem.assetId,
+            convertedJobId: calibrationRequestItem.convertedJobId,
+          })
+          .from(calibrationRequestItem)
+          .where(eq(calibrationRequestItem.requestId, request.id))
+          .orderBy(calibrationRequestItem.id);
+
+        if (requestItems.some((item) => item.convertedJobId)) {
+          return {
+            error: {
+              status: 400 as const,
+              body: "Esta solicitacao ja possui itens convertidos",
+            },
+          };
+        }
+
+        if (requestItems.length !== input.items.length) {
+          return {
+            error: {
+              status: 400 as const,
+              body: "Informe exatamente um mapeamento para cada item da solicitacao",
+            },
+          };
+        }
+
+        const requestItemIds = new Set(requestItems.map((item) => item.id));
+        if (!input.items.every((item) => requestItemIds.has(item.itemId))) {
+          return {
+            error: {
+              status: 400 as const,
+              body: "Um ou mais itens informados nao pertencem a esta solicitacao",
+            },
+          };
+        }
+
+        const requestItemById = new Map(
+          requestItems.map((item) => [item.id, item] as const),
+        );
+        const createdJobs: ConvertedRequestJob[] = [];
+
+        for (const item of input.items) {
+          const requestItem = requestItemById.get(item.itemId);
+
+          if (!requestItem) {
+            return {
+              error: {
+                status: 400 as const,
+                body: "Item de solicitacao invalido",
+              },
+            };
+          }
+
+          const newJob = await createCalibrationJob({
+            organizationId: member.organizationId,
+            createdBy: session.user.id,
+            assetId: requestItem.assetId,
+            serviceId: item.serviceId,
+            technicianId: item.technicianId,
+            dueDate: item.dueDate,
+            ipAddress,
+            sourceRequestId: request.id,
+            sourceRequestItemId: requestItem.id,
+            executor: tx,
+            notifyOnAssignment: false,
+          });
+
+          createdJobs.push({
+            requestItemId: requestItem.id,
+            jobId: newJob.id,
+            jobCode: newJob.jobId,
+            status: newJob.status,
+            technicianId: newJob.technicianId,
+          });
+
+          await tx
+            .update(calibrationRequestItem)
+            .set({ convertedJobId: newJob.id })
+            .where(eq(calibrationRequestItem.id, requestItem.id));
+        }
+
+        await tx
+          .update(calibrationRequest)
+          .set({
+            status: "CONVERTED",
+            convertedBy: session.user.id,
+            convertedAt: new Date(),
+          })
+          .where(eq(calibrationRequest.id, request.id));
+
+        await tx.insert(calibrationRequestAuditLog).values({
+          requestId: request.id,
+          action: "convert",
+          changes: {
+            jobs: createdJobs.map(({ technicianId: _technicianId, ...job }) => job),
+          },
+          performedBy: session.user.id,
+          ipAddress,
         });
 
-        createdJobs.push({
-          requestItemId: requestItem.id,
-          jobId: newJob.id,
-          jobCode: newJob.jobId,
-          status: newJob.status,
-        });
+        return { createdJobs };
+      });
 
-        await db
-          .update(calibrationRequestItem)
-          .set({ convertedJobId: newJob.id })
-          .where(eq(calibrationRequestItem.id, requestItem.id));
+      if ("error" in result) {
+        return c.json({ error: result.error.body }, result.error.status);
       }
 
-      await db
-        .update(calibrationRequest)
-        .set({
-          status: "CONVERTED",
-          convertedBy: session.user.id,
-          convertedAt: new Date(),
-        })
-        .where(eq(calibrationRequest.id, request.id));
+      for (const job of result.createdJobs) {
+        if (!job.technicianId) continue;
 
-      await db.insert(calibrationRequestAuditLog).values({
-        requestId: request.id,
-        action: "convert",
-        changes: {
-          jobs: createdJobs,
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") ?? null,
-      });
+        try {
+          await notifyJobAssigned(job.jobId, job.technicianId, session.user.id);
+        } catch (error) {
+          console.error("[Calibration Requests] Failed to send assignment notification:", error);
+        }
+      }
 
       return c.json({
         success: true,
-        jobs: createdJobs,
+        jobs: result.createdJobs.map(({ technicianId: _technicianId, ...job }) => job),
       });
     },
   );

@@ -40,6 +40,8 @@ type RequestDetail = {
   submittedAt: string;
   reviewedAt: string | null;
   approvedAt: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
   convertedAt: string | null;
   customerName: string;
   items: Array<RequestItem>;
@@ -152,6 +154,19 @@ function RequestDetailPage() {
               {data.observations?.trim() || "Sem observações informadas."}
             </div>
           </div>
+          {data.status === "REJECTED" && (
+            <div className="sm:col-span-2">
+              <div className="text-sm text-muted-foreground">Motivo da rejeição</div>
+              <div className="font-medium">
+                {data.rejectionReason?.trim() || "Solicitação rejeitada sem motivo informado."}
+              </div>
+              {data.rejectedAt && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Rejeitada em {formatDate(data.rejectedAt)}
+                </p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

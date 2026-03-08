@@ -11,7 +11,18 @@ import {
   type MethodSnapshot,
 } from "@calibra-facil/db/schema";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
-import { and, count, desc, eq, ilike, inArray, isNull } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNull,
+  sql,
+} from "drizzle-orm";
+
+type JobDbExecutor = Pick<typeof db, "select" | "insert" | "update">;
 
 type CreateCalibrationJobParams = {
   organizationId: string;
@@ -23,7 +34,35 @@ type CreateCalibrationJobParams = {
   ipAddress?: string | null;
   sourceRequestId?: number;
   sourceRequestItemId?: number;
+  executor?: JobDbExecutor;
+  notifyOnAssignment?: boolean;
 };
+
+async function getNextJobSequence(
+  organizationId: string,
+  year: number,
+  executor: JobDbExecutor,
+) {
+  const prefix = `CAL-${year}-`;
+  const sequenceSql = sql<number>`coalesce(cast(substring(${calibrationJob.jobId} from '[0-9]+$') as integer), 0)`;
+
+  const [result] = await executor
+    .select({
+      sequence: sequenceSql,
+    })
+    .from(calibrationJob)
+    .where(
+      and(
+        eq(calibrationJob.organizationId, organizationId),
+        ilike(calibrationJob.jobId, `${prefix}%`),
+      ),
+    )
+    .orderBy(desc(sequenceSql))
+    .limit(1)
+    .for("update");
+
+  return (result?.sequence ?? 0) + 1;
+}
 
 /**
  * Generates a unique job ID for the organization.
@@ -32,33 +71,20 @@ type CreateCalibrationJobParams = {
 export async function generateJobId(
   organizationId: string,
   year: number,
+  executor?: JobDbExecutor,
 ): Promise<string> {
   const prefix = `CAL-${year}-`;
-
-  const sequence = await db.transaction(async (tx) => {
-    const [result] = await tx
-      .select({ jobId: calibrationJob.jobId })
-      .from(calibrationJob)
-      .where(
-        and(
-          eq(calibrationJob.organizationId, organizationId),
-          ilike(calibrationJob.jobId, `${prefix}%`),
-        ),
-      )
-      .orderBy(desc(calibrationJob.jobId))
-      .limit(1)
-      .for("update");
-
-    if (!result?.jobId) return 1;
-    const match = result.jobId.match(/(\d+)$/);
-    return match?.[1] ? parseInt(match[1], 10) + 1 : 1;
-  });
+  const sequence = executor
+    ? await getNextJobSequence(organizationId, year, executor)
+    : await db.transaction((tx) => getNextJobSequence(organizationId, year, tx));
 
   return `${prefix}${sequence.toString().padStart(4, "0")}`;
 }
 
 export async function createCalibrationJob(params: CreateCalibrationJobParams) {
-  const [assetData] = await db
+  const executor = params.executor ?? db;
+
+  const [assetData] = await executor
     .select({
       id: asset.id,
       customerId: asset.customerId,
@@ -83,7 +109,7 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
     throw new Error("Ativo nao pertence a esta organizacao");
   }
 
-  const [serviceData] = await db
+  const [serviceData] = await executor
     .select()
     .from(service)
     .where(
@@ -106,7 +132,7 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
     throw new Error("Servico nao possui metodo vinculado");
   }
 
-  const [methodData] = await db
+  const [methodData] = await executor
     .select()
     .from(calibrationMethod)
     .where(eq(calibrationMethod.id, serviceData.methodId))
@@ -130,7 +156,7 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
   }
 
   if (params.technicianId) {
-    const [techMember] = await db
+    const [techMember] = await executor
       .select()
       .from(member)
       .where(
@@ -146,7 +172,7 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
       throw new Error("Tecnico nao encontrado ou sem permissao");
     }
 
-    const [competenceCount] = await db
+    const [competenceCount] = await executor
       .select({ total: count() })
       .from(personnelCompetence)
       .where(
@@ -157,7 +183,7 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
       );
 
     if ((competenceCount?.total ?? 0) > 0 && assetData.assetTypeId) {
-      const [activeCompetence] = await db
+      const [activeCompetence] = await executor
         .select({
           id: personnelCompetence.id,
           expiresAt: personnelCompetence.expiresAt,
@@ -192,7 +218,7 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
   }
 
   const year = new Date().getFullYear();
-  const jobId = await generateJobId(params.organizationId, year);
+  const jobId = await generateJobId(params.organizationId, year, executor);
 
   const methodSnapshot: MethodSnapshot = {
     methodId: methodData.id,
@@ -215,7 +241,7 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
     dueDate.setDate(dueDate.getDate() + serviceData.tat);
   }
 
-  const [newJob] = await db
+  const [newJob] = await executor
     .insert(calibrationJob)
     .values({
       jobId,
@@ -235,7 +261,7 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
     throw new Error("Falha ao criar job");
   }
 
-  await db.insert(jobAuditLog).values({
+  await executor.insert(jobAuditLog).values({
     jobId: newJob.id,
     action: "create",
     changes: {
@@ -257,7 +283,7 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
     ipAddress: params.ipAddress ?? null,
   });
 
-  if (params.technicianId) {
+  if (params.technicianId && params.notifyOnAssignment !== false) {
     try {
       await notifyJobAssigned(newJob.id, params.technicianId, params.createdBy);
     } catch (error) {
