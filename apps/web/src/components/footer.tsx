@@ -2,9 +2,10 @@ import { Link } from '@tanstack/react-router'
 
 const footerLinks = {
   Produto: [
+    { label: 'Desafios', href: '#desafios' },
     { label: 'Funcionalidades', href: '#funcionalidades' },
+    { label: 'Conformidade', href: '#conformidade' },
     { label: 'Plataforma', href: '#plataforma' },
-    { label: 'FAQ', href: '#faq' },
   ],
   Recursos: [
     {
@@ -13,7 +14,7 @@ const footerLinks = {
       external: true,
     },
     {
-      label: 'Agendar Demo',
+      label: 'Agendar demonstração',
       href: 'https://cal.com/calibrafacil/30min?user=calibrafacil',
       external: true,
     },
