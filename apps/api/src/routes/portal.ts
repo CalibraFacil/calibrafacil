@@ -6,12 +6,14 @@ import {
   customer,
   calibrationJob,
   asset,
+  assetType,
   service,
 } from "@calibra-facil/db/schema";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
-import { eq, and, inArray, desc, count } from "drizzle-orm";
+import { eq, and, inArray, desc, count, isNull } from "drizzle-orm";
 import {
   requirePortalAuth,
+  requirePortalProtected,
   type AuthVariables,
 } from "../middleware/permission";
 import {
@@ -67,6 +69,89 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
     } catch (error) {
       console.error("Error listing portal organizations:", error);
       return c.json({ error: "Erro ao listar organizações" }, 500);
+    }
+  })
+
+  // =========================================================================
+  // GET /assets - List assets for active portal organization
+  // =========================================================================
+  .get("/assets", ...requirePortalProtected, async (c) => {
+    const member = c.get("member");
+
+    try {
+      const page = Math.max(1, parseInt(c.req.query("page") || "1"));
+      const limit = Math.min(
+        100,
+        Math.max(1, parseInt(c.req.query("limit") || "20")),
+      );
+      const offset = (page - 1) * limit;
+
+      const [linkedCustomer] = await db
+        .select({
+          id: customer.id,
+        })
+        .from(customer)
+        .where(eq(customer.authOrganizationId, member.organizationId))
+        .limit(1);
+
+      if (!linkedCustomer) {
+        return c.json({
+          data: [],
+          pagination: { page, limit, total: 0, totalPages: 0 },
+        });
+      }
+
+      const whereCondition = and(
+        eq(asset.customerId, linkedCustomer.id),
+        isNull(asset.deletedAt),
+      );
+
+      const [countResult] = await db
+        .select({ total: count() })
+        .from(asset)
+        .where(whereCondition);
+
+      const assets = await db
+        .select({
+          id: asset.id,
+          customerId: asset.customerId,
+          customerName: customer.name,
+          assetTypeId: asset.assetTypeId,
+          assetTypeName: assetType.name,
+          assetTypeSlug: assetType.slug,
+          name: asset.name,
+          manufacturer: asset.manufacturer,
+          model: asset.model,
+          serialNumber: asset.serialNumber,
+          tag: asset.tag,
+          status: asset.status,
+          specifications: asset.specifications,
+          lastCalibrationDate: asset.lastCalibrationDate,
+          nextCalibrationDate: asset.nextCalibrationDate,
+          comments: asset.comments,
+          createdAt: asset.createdAt,
+          updatedAt: asset.updatedAt,
+        })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
+        .where(whereCondition)
+        .orderBy(asset.tag)
+        .limit(limit)
+        .offset(offset);
+
+      return c.json({
+        data: assets,
+        pagination: {
+          page,
+          limit,
+          total: countResult?.total ?? 0,
+          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+        },
+      });
+    } catch (error) {
+      console.error("Error listing portal assets:", error);
+      return c.json({ error: "Erro ao listar ativos" }, 500);
     }
   })
 

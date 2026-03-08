@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -70,7 +70,7 @@ function AssetsPage() {
     queryKey: ["portal-assets", page, limit],
     queryFn: async (): Promise<AssetsResponse> => {
       const response = await fetch(
-        `${getApiBaseUrl()}/api/assets?page=${page}&limit=${limit}`,
+        `${getApiBaseUrl()}/api/portal/assets?page=${page}&limit=${limit}`,
         {
           credentials: "include",
         },
@@ -86,10 +86,17 @@ function AssetsPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Meus Ativos</CardTitle>
-          <CardDescription>
-            Visualize os ativos e instrumentos da sua organizacao.
-          </CardDescription>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Meus Ativos</CardTitle>
+              <CardDescription>
+                Visualize os ativos e instrumentos da sua organizacao.
+              </CardDescription>
+            </div>
+            <Button render={<Link to="/requests/new" />}>
+              Solicitar Calibracao
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {/* Loading state */}

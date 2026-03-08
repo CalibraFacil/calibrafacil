@@ -74,6 +74,11 @@ const data = {
       icon: <HugeiconsIcon icon={ClipboardIcon} />,
     },
     {
+      title: 'Solicitações',
+      url: '/dashboard/requests',
+      icon: <HugeiconsIcon icon={TaskAdd01Icon} />,
+    },
+    {
       title: 'Qualidade',
       url: '#',
       icon: <HugeiconsIcon icon={AlertCircleIcon} />,

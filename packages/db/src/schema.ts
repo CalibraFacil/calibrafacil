@@ -1072,6 +1072,13 @@ export type EnvironmentalSnapshot = {
   outOfLimitsJustification: string | null;
 };
 
+export type CalibrationRequestStatus =
+  | "PENDING"
+  | "UNDER_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "CONVERTED";
+
 /**
  * Calibration Job table - The Work Order / Operational Record
  * ISO 17025:2017 Clause 7.7 - Ensuring Validity of Results
@@ -1272,6 +1279,115 @@ export const jobAuditLog = pgTable(
 );
 
 // =============================================================================
+// CALIBRATION REQUEST - Client Portal Intake Queue
+// =============================================================================
+
+export const calibrationRequest = pgTable(
+  "calibration_request",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "restrict" }),
+    authOrganizationId: text("auth_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    status: text("status")
+      .$type<CalibrationRequestStatus>()
+      .default("PENDING")
+      .notNull(),
+    observations: text("observations"),
+    internalNotes: text("internal_notes"),
+    requestedDueDate: timestamp("requested_due_date"),
+    submittedBy: text("submitted_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+    reviewedBy: text("reviewed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at"),
+    approvedBy: text("approved_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    approvedAt: timestamp("approved_at"),
+    rejectedBy: text("rejected_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    rejectedAt: timestamp("rejected_at"),
+    rejectionReason: text("rejection_reason"),
+    convertedBy: text("converted_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    convertedAt: timestamp("converted_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("calibration_request_org_id_idx").on(table.organizationId),
+    index("calibration_request_customer_id_idx").on(table.customerId),
+    index("calibration_request_auth_org_id_idx").on(table.authOrganizationId),
+    index("calibration_request_status_idx").on(table.status),
+    index("calibration_request_submitted_at_idx").on(table.submittedAt),
+  ],
+);
+
+export const calibrationRequestItem = pgTable(
+  "calibration_request_item",
+  {
+    id: serial("id").primaryKey(),
+    requestId: integer("request_id")
+      .notNull()
+      .references(() => calibrationRequest.id, { onDelete: "cascade" }),
+    assetId: integer("asset_id")
+      .notNull()
+      .references(() => asset.id, { onDelete: "restrict" }),
+    convertedJobId: integer("converted_job_id").references(
+      () => calibrationJob.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("calibration_request_item_request_id_idx").on(table.requestId),
+    index("calibration_request_item_asset_id_idx").on(table.assetId),
+    index("calibration_request_item_job_id_idx").on(table.convertedJobId),
+    uniqueIndex("calibration_request_item_request_asset_uidx").on(
+      table.requestId,
+      table.assetId,
+    ),
+  ],
+);
+
+export const calibrationRequestAuditLog = pgTable(
+  "calibration_request_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    requestId: integer("request_id")
+      .notNull()
+      .references(() => calibrationRequest.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("cal_request_audit_log_request_id_idx").on(table.requestId),
+    index("cal_request_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
 // CALIBRATION JOB RELATIONS
 // =============================================================================
 
@@ -1341,6 +1457,85 @@ export const jobAuditLogRelations = relations(jobAuditLog, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const calibrationRequestRelations = relations(
+  calibrationRequest,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [calibrationRequest.organizationId],
+      references: [organization.id],
+    }),
+    customer: one(customer, {
+      fields: [calibrationRequest.customerId],
+      references: [customer.id],
+    }),
+    authOrganization: one(organization, {
+      fields: [calibrationRequest.authOrganizationId],
+      references: [organization.id],
+      relationName: "calibrationRequestAuthOrganization",
+    }),
+    submittedByUser: one(user, {
+      fields: [calibrationRequest.submittedBy],
+      references: [user.id],
+      relationName: "calibrationRequestSubmitter",
+    }),
+    reviewedByUser: one(user, {
+      fields: [calibrationRequest.reviewedBy],
+      references: [user.id],
+      relationName: "calibrationRequestReviewer",
+    }),
+    approvedByUser: one(user, {
+      fields: [calibrationRequest.approvedBy],
+      references: [user.id],
+      relationName: "calibrationRequestApprover",
+    }),
+    rejectedByUser: one(user, {
+      fields: [calibrationRequest.rejectedBy],
+      references: [user.id],
+      relationName: "calibrationRequestRejecter",
+    }),
+    convertedByUser: one(user, {
+      fields: [calibrationRequest.convertedBy],
+      references: [user.id],
+      relationName: "calibrationRequestConverter",
+    }),
+    items: many(calibrationRequestItem),
+    auditLogs: many(calibrationRequestAuditLog),
+  }),
+);
+
+export const calibrationRequestItemRelations = relations(
+  calibrationRequestItem,
+  ({ one }) => ({
+    request: one(calibrationRequest, {
+      fields: [calibrationRequestItem.requestId],
+      references: [calibrationRequest.id],
+    }),
+    assetRecord: one(asset, {
+      fields: [calibrationRequestItem.assetId],
+      references: [asset.id],
+    }),
+    convertedJob: one(calibrationJob, {
+      fields: [calibrationRequestItem.convertedJobId],
+      references: [calibrationJob.id],
+      relationName: "requestItemConvertedJob",
+    }),
+  }),
+);
+
+export const calibrationRequestAuditLogRelations = relations(
+  calibrationRequestAuditLog,
+  ({ one }) => ({
+    request: one(calibrationRequest, {
+      fields: [calibrationRequestAuditLog.requestId],
+      references: [calibrationRequest.id],
+    }),
+    performedByUser: one(user, {
+      fields: [calibrationRequestAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
 
 // =============================================================================
 // ENVIRONMENTAL LIMITS - ISO 17025:2017 Clause 7.1.2

@@ -15,11 +15,15 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as VTokenRouteImport } from './routes/v/$token'
 import { Route as AuthenticatedSettingsRouteRouteImport } from './routes/_authenticated/settings/route'
+import { Route as AuthenticatedRequestsRouteRouteImport } from './routes/_authenticated/requests/route'
 import { Route as AuthenticatedAssetsRouteRouteImport } from './routes/_authenticated/assets/route'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedRequestsIndexRouteImport } from './routes/_authenticated/requests/index'
 import { Route as AuthenticatedCertificatesIndexRouteImport } from './routes/_authenticated/certificates/index'
 import { Route as AuthenticatedAssetsIndexRouteImport } from './routes/_authenticated/assets/index'
 import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
+import { Route as AuthenticatedRequestsNewRouteImport } from './routes/_authenticated/requests/new'
+import { Route as AuthenticatedRequestsIdRouteImport } from './routes/_authenticated/requests/$id'
 import { Route as AuthenticatedCertificatesIdRouteImport } from './routes/_authenticated/certificates/$id'
 
 const SignInRoute = SignInRouteImport.update({
@@ -52,6 +56,12 @@ const AuthenticatedSettingsRouteRoute =
     path: '/settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedRequestsRouteRoute =
+  AuthenticatedRequestsRouteRouteImport.update({
+    id: '/requests',
+    path: '/requests',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAssetsRouteRoute =
   AuthenticatedAssetsRouteRouteImport.update({
     id: '/assets',
@@ -63,6 +73,12 @@ const AuthenticatedSettingsIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedSettingsRouteRoute,
+  } as any)
+const AuthenticatedRequestsIndexRoute =
+  AuthenticatedRequestsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedRequestsRouteRoute,
   } as any)
 const AuthenticatedCertificatesIndexRoute =
   AuthenticatedCertificatesIndexRouteImport.update({
@@ -82,6 +98,17 @@ const AuthenticatedSettingsAppearanceRoute =
     path: '/appearance',
     getParentRoute: () => AuthenticatedSettingsRouteRoute,
   } as any)
+const AuthenticatedRequestsNewRoute =
+  AuthenticatedRequestsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AuthenticatedRequestsRouteRoute,
+  } as any)
+const AuthenticatedRequestsIdRoute = AuthenticatedRequestsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AuthenticatedRequestsRouteRoute,
+} as any)
 const AuthenticatedCertificatesIdRoute =
   AuthenticatedCertificatesIdRouteImport.update({
     id: '/certificates/$id',
@@ -93,13 +120,17 @@ export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
   '/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
+  '/requests': typeof AuthenticatedRequestsRouteRouteWithChildren
   '/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
   '/v/$token': typeof VTokenRoute
   '/': typeof AuthenticatedIndexRoute
   '/certificates/$id': typeof AuthenticatedCertificatesIdRoute
+  '/requests/$id': typeof AuthenticatedRequestsIdRoute
+  '/requests/new': typeof AuthenticatedRequestsNewRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/assets/': typeof AuthenticatedAssetsIndexRoute
   '/certificates': typeof AuthenticatedCertificatesIndexRoute
+  '/requests/': typeof AuthenticatedRequestsIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -108,9 +139,12 @@ export interface FileRoutesByTo {
   '/v/$token': typeof VTokenRoute
   '/': typeof AuthenticatedIndexRoute
   '/certificates/$id': typeof AuthenticatedCertificatesIdRoute
+  '/requests/$id': typeof AuthenticatedRequestsIdRoute
+  '/requests/new': typeof AuthenticatedRequestsNewRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/assets': typeof AuthenticatedAssetsIndexRoute
   '/certificates': typeof AuthenticatedCertificatesIndexRoute
+  '/requests': typeof AuthenticatedRequestsIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -119,13 +153,17 @@ export interface FileRoutesById {
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
   '/_authenticated/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
+  '/_authenticated/requests': typeof AuthenticatedRequestsRouteRouteWithChildren
   '/_authenticated/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
   '/v/$token': typeof VTokenRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/certificates/$id': typeof AuthenticatedCertificatesIdRoute
+  '/_authenticated/requests/$id': typeof AuthenticatedRequestsIdRoute
+  '/_authenticated/requests/new': typeof AuthenticatedRequestsNewRoute
   '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/_authenticated/assets/': typeof AuthenticatedAssetsIndexRoute
   '/_authenticated/certificates/': typeof AuthenticatedCertificatesIndexRoute
+  '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -134,13 +172,17 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/sign-in'
     | '/assets'
+    | '/requests'
     | '/settings'
     | '/v/$token'
     | '/'
     | '/certificates/$id'
+    | '/requests/$id'
+    | '/requests/new'
     | '/settings/appearance'
     | '/assets/'
     | '/certificates'
+    | '/requests/'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -149,9 +191,12 @@ export interface FileRouteTypes {
     | '/v/$token'
     | '/'
     | '/certificates/$id'
+    | '/requests/$id'
+    | '/requests/new'
     | '/settings/appearance'
     | '/assets'
     | '/certificates'
+    | '/requests'
     | '/settings'
   id:
     | '__root__'
@@ -159,13 +204,17 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/sign-in'
     | '/_authenticated/assets'
+    | '/_authenticated/requests'
     | '/_authenticated/settings'
     | '/v/$token'
     | '/_authenticated/'
     | '/_authenticated/certificates/$id'
+    | '/_authenticated/requests/$id'
+    | '/_authenticated/requests/new'
     | '/_authenticated/settings/appearance'
     | '/_authenticated/assets/'
     | '/_authenticated/certificates/'
+    | '/_authenticated/requests/'
     | '/_authenticated/settings/'
   fileRoutesById: FileRoutesById
 }
@@ -220,6 +269,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/requests': {
+      id: '/_authenticated/requests'
+      path: '/requests'
+      fullPath: '/requests'
+      preLoaderRoute: typeof AuthenticatedRequestsRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/assets': {
       id: '/_authenticated/assets'
       path: '/assets'
@@ -233,6 +289,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/'
       preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/requests/': {
+      id: '/_authenticated/requests/'
+      path: '/'
+      fullPath: '/requests/'
+      preLoaderRoute: typeof AuthenticatedRequestsIndexRouteImport
+      parentRoute: typeof AuthenticatedRequestsRouteRoute
     }
     '/_authenticated/certificates/': {
       id: '/_authenticated/certificates/'
@@ -254,6 +317,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/appearance'
       preLoaderRoute: typeof AuthenticatedSettingsAppearanceRouteImport
       parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/requests/new': {
+      id: '/_authenticated/requests/new'
+      path: '/new'
+      fullPath: '/requests/new'
+      preLoaderRoute: typeof AuthenticatedRequestsNewRouteImport
+      parentRoute: typeof AuthenticatedRequestsRouteRoute
+    }
+    '/_authenticated/requests/$id': {
+      id: '/_authenticated/requests/$id'
+      path: '/$id'
+      fullPath: '/requests/$id'
+      preLoaderRoute: typeof AuthenticatedRequestsIdRouteImport
+      parentRoute: typeof AuthenticatedRequestsRouteRoute
     }
     '/_authenticated/certificates/$id': {
       id: '/_authenticated/certificates/$id'
@@ -279,6 +356,24 @@ const AuthenticatedAssetsRouteRouteWithChildren =
     AuthenticatedAssetsRouteRouteChildren,
   )
 
+interface AuthenticatedRequestsRouteRouteChildren {
+  AuthenticatedRequestsIdRoute: typeof AuthenticatedRequestsIdRoute
+  AuthenticatedRequestsNewRoute: typeof AuthenticatedRequestsNewRoute
+  AuthenticatedRequestsIndexRoute: typeof AuthenticatedRequestsIndexRoute
+}
+
+const AuthenticatedRequestsRouteRouteChildren: AuthenticatedRequestsRouteRouteChildren =
+  {
+    AuthenticatedRequestsIdRoute: AuthenticatedRequestsIdRoute,
+    AuthenticatedRequestsNewRoute: AuthenticatedRequestsNewRoute,
+    AuthenticatedRequestsIndexRoute: AuthenticatedRequestsIndexRoute,
+  }
+
+const AuthenticatedRequestsRouteRouteWithChildren =
+  AuthenticatedRequestsRouteRoute._addFileChildren(
+    AuthenticatedRequestsRouteRouteChildren,
+  )
+
 interface AuthenticatedSettingsRouteRouteChildren {
   AuthenticatedSettingsAppearanceRoute: typeof AuthenticatedSettingsAppearanceRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
@@ -297,6 +392,7 @@ const AuthenticatedSettingsRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAssetsRouteRoute: typeof AuthenticatedAssetsRouteRouteWithChildren
+  AuthenticatedRequestsRouteRoute: typeof AuthenticatedRequestsRouteRouteWithChildren
   AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedCertificatesIdRoute: typeof AuthenticatedCertificatesIdRoute
@@ -305,6 +401,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAssetsRouteRoute: AuthenticatedAssetsRouteRouteWithChildren,
+  AuthenticatedRequestsRouteRoute: AuthenticatedRequestsRouteRouteWithChildren,
   AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedCertificatesIdRoute: AuthenticatedCertificatesIdRoute,

@@ -64,6 +64,7 @@ import {
   extractKeyFromUrl,
   type R2Env,
 } from "../lib/storage";
+import { createCalibrationJob, generateJobId } from "../lib/jobs";
 import { alias } from "drizzle-orm/pg-core";
 
 // Aliases for multiple user joins
@@ -110,38 +111,6 @@ function checkEnvironmentWithinLimits(
     return false;
   }
   return true;
-}
-
-/**
- * Generates a unique job ID for the organization.
- * Format: CAL-YYYY-XXXX (per organization per year)
- */
-async function generateJobId(
-  organizationId: string,
-  year: number,
-): Promise<string> {
-  const prefix = `CAL-${year}-`;
-
-  const sequence = await db.transaction(async (tx) => {
-    const [result] = await tx
-      .select({ jobId: calibrationJob.jobId })
-      .from(calibrationJob)
-      .where(
-        and(
-          eq(calibrationJob.organizationId, organizationId),
-          ilike(calibrationJob.jobId, `${prefix}%`),
-        ),
-      )
-      .orderBy(desc(calibrationJob.jobId))
-      .limit(1)
-      .for("update");
-
-    if (!result?.jobId) return 1;
-    const match = result.jobId.match(/(\d+)$/);
-    return match?.[1] ? parseInt(match[1], 10) + 1 : 1;
-  });
-
-  return `${prefix}${sequence.toString().padStart(4, "0")}`;
 }
 
 /**
@@ -504,267 +473,34 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       const input = c.req.valid("json");
 
       try {
-        // 1. Validate Asset exists and belongs to organization (via customer)
-        const [assetData] = await db
-          .select({
-            id: asset.id,
-            name: asset.name,
-            customerId: asset.customerId,
-            assetTypeId: asset.assetTypeId,
-            deletedAt: asset.deletedAt,
-            labOrganizationId: customer.labOrganizationId, // UPDATED: Check labOrg, not authOrg
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .where(eq(asset.id, input.assetId))
-          .limit(1);
-
-        if (!assetData) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
-
-        if (assetData.deletedAt) {
-          return c.json({ error: "Ativo foi removido" }, 400);
-        }
-
-        // Verify that the customer is managed by THIS lab
-        if (assetData.labOrganizationId !== memberData.organizationId) {
-          return c.json(
-            { error: "Ativo nao pertence a esta organizacao" },
-            403,
-          );
-        }
-
-        // 2. Validate Service exists, is active, and belongs to organization
-        const [serviceData] = await db
-          .select()
-          .from(service)
-          .where(
-            and(
-              eq(service.id, input.serviceId),
-              eq(service.organizationId, memberData.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!serviceData) {
-          return c.json({ error: "Servico nao encontrado" }, 404);
-        }
-
-        if (!serviceData.isActive) {
-          return c.json({ error: "Servico esta inativo" }, 400);
-        }
-
-        // 3. Validate Service has a linked Method that is PUBLISHED
-        if (!serviceData.methodId) {
-          return c.json({ error: "Servico nao possui metodo vinculado" }, 400);
-        }
-
-        const [methodData] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(eq(calibrationMethod.id, serviceData.methodId))
-          .limit(1);
-
-        if (!methodData) {
-          return c.json({ error: "Metodo do servico nao encontrado" }, 404);
-        }
-
-        if (methodData.status !== "PUBLISHED") {
-          return c.json(
-            {
-              error:
-                "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
-            },
-            400,
-          );
-        }
-
-        // 4. Validate asset type compatibility
-        if (
-          serviceData.assetTypeId &&
-          serviceData.assetTypeId !== assetData.assetTypeId
-        ) {
-          return c.json(
-            {
-              error: "Tipo do ativo nao e compativel com o servico selecionado",
-            },
-            400,
-          );
-        }
-
-        // 5. Validate technician if provided
-        if (input.technicianId) {
-          const [techMember] = await db
-            .select()
-            .from(member)
-            .where(
-              and(
-                eq(member.userId, input.technicianId),
-                eq(member.organizationId, memberData.organizationId),
-                inArray(member.role, ["technician", "admin", "owner"]),
-              ),
-            )
-            .limit(1);
-
-          if (!techMember) {
-            return c.json(
-              { error: "Tecnico nao encontrado ou sem permissao" },
-              400,
-            );
-          }
-
-          // 5b. Validate technician competence (auto-detect enforcement)
-          const [competenceCount] = await db
-            .select({ total: count() })
-            .from(personnelCompetence)
-            .where(
-              and(
-                eq(
-                  personnelCompetence.organizationId,
-                  memberData.organizationId,
-                ),
-                isNull(personnelCompetence.deletedAt),
-              ),
-            );
-
-          if ((competenceCount?.total ?? 0) > 0 && assetData.assetTypeId) {
-            const [activeCompetence] = await db
-              .select({ id: personnelCompetence.id })
-              .from(personnelCompetence)
-              .where(
-                and(
-                  eq(personnelCompetence.userId, input.technicianId),
-                  eq(
-                    personnelCompetence.organizationId,
-                    memberData.organizationId,
-                  ),
-                  eq(personnelCompetence.assetTypeId, assetData.assetTypeId),
-                  eq(personnelCompetence.status, "ACTIVE"),
-                  isNull(personnelCompetence.deletedAt),
-                ),
-              )
-              .limit(1);
-
-            if (!activeCompetence) {
-              return c.json(
-                {
-                  error:
-                    "Técnico não possui competência ativa para este tipo de instrumento",
-                },
-                400,
-              );
-            }
-
-            // Check not expired
-            const [competenceData] = await db
-              .select({ expiresAt: personnelCompetence.expiresAt })
-              .from(personnelCompetence)
-              .where(eq(personnelCompetence.id, activeCompetence.id))
-              .limit(1);
-
-            if (
-              competenceData?.expiresAt &&
-              competenceData.expiresAt < new Date()
-            ) {
-              return c.json(
-                {
-                  error:
-                    "Técnico não possui competência ativa para este tipo de instrumento",
-                },
-                400,
-              );
-            }
-          }
-        }
-
-        // 6. Generate Job ID (per organization per year)
-        const year = new Date().getFullYear();
-        const jobId = await generateJobId(memberData.organizationId, year);
-
-        // 7. Create Method Snapshot (THE CRITICAL PART)
-        // This freezes the method configuration at job creation time
-        const methodSnapshot: MethodSnapshot = {
-          methodId: methodData.id,
-          methodName: methodData.name,
-          methodVersion: methodData.version,
-          dataFields: methodData.dataFields,
-          formulas: methodData.formulas,
-          validations: methodData.validations,
-          uncertaintyParams: methodData.uncertaintyParams,
-        };
-
-        // 8. Calculate due date based on service TAT if not provided
-        let dueDate: Date | null = null;
-        if (input.dueDate) {
-          dueDate = new Date(input.dueDate);
-        } else if (serviceData.tat) {
-          dueDate = new Date();
-          dueDate.setDate(dueDate.getDate() + serviceData.tat);
-        }
-
-        // 9. Insert Job
-        const [newJob] = await db
-          .insert(calibrationJob)
-          .values({
-            jobId,
-            organizationId: memberData.organizationId,
-            customerId: assetData.customerId,
-            assetId: input.assetId,
-            serviceId: input.serviceId,
-            technicianId: input.technicianId || null,
-            methodSnapshot,
-            status: "DRAFT",
-            dueDate,
-            createdBy: session.user.id,
-          })
-          .returning();
-
-        if (!newJob) {
-          return c.json({ error: "Falha ao criar job" }, 500);
-        }
-
-        // 10. Audit Log
-        await db.insert(jobAuditLog).values({
-          jobId: newJob.id,
-          action: "create",
-          changes: {
-            initial: {
-              assetId: input.assetId,
-              serviceId: input.serviceId,
-              technicianId: input.technicianId,
-              dueDate: dueDate?.toISOString(),
-              methodSnapshot: {
-                methodId: methodSnapshot.methodId,
-                methodName: methodSnapshot.methodName,
-                methodVersion: methodSnapshot.methodVersion,
-              },
-            },
-          },
-          performedBy: session.user.id,
+        const newJob = await createCalibrationJob({
+          organizationId: memberData.organizationId,
+          createdBy: session.user.id,
+          assetId: input.assetId,
+          serviceId: input.serviceId,
+          technicianId: input.technicianId,
+          dueDate: input.dueDate,
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
-
-        // 11. Notify technician if assigned during creation
-        if (input.technicianId) {
-          try {
-            await notifyJobAssigned(
-              newJob.id,
-              input.technicianId,
-              session.user.id,
-            );
-          } catch (err) {
-            console.error(
-              "[Jobs] Failed to send assignment notification:",
-              err,
-            );
-          }
-        }
 
         return c.json(newJob, 201);
       } catch (error) {
         console.error("Error creating job:", error);
-        return c.json({ error: "Erro ao criar job" }, 500);
+        const message =
+          error instanceof Error ? error.message : "Erro ao criar job";
+
+        if (
+          message === "Ativo nao encontrado" ||
+          message === "Servico nao encontrado"
+        ) {
+          return c.json({ error: message }, 404);
+        }
+
+        if (message === "Ativo nao pertence a esta organizacao") {
+          return c.json({ error: message }, 403);
+        }
+
+        return c.json({ error: message }, 400);
       }
     },
   )

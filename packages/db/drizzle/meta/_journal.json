@@ -162,6 +162,13 @@
       "when": 1771178112594,
       "tag": "0022_add_dashboard_performance_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1772996400000,
+      "tag": "0023_add_calibration_requests",
+      "breakpoints": true
     }
   ]
 }

@@ -15,7 +15,13 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 const routeLabels: Record<string, string> = {
   "/_authenticated": "Painel",
   "/_authenticated/assets": "Ativos",
+  "/_authenticated/assets/": "Ativos",
   "/_authenticated/certificates": "Certificados",
+  "/_authenticated/certificates/": "Certificados",
+  "/_authenticated/requests": "Solicitações",
+  "/_authenticated/requests/": "Solicitações",
+  "/_authenticated/requests/new": "Nova Solicitação",
+  "/_authenticated/requests/$id": "Solicitação",
   "/_authenticated/settings": "Configurações",
   "/_authenticated/settings/appearance": "Aparência",
 };
