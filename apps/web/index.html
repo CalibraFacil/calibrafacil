@@ -3,30 +3,80 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CalibraFácil | Gestão de Calibrações</title>
+    <title>
+      CalibraFácil | Software para Laboratórios de Calibração (ISO/IEC 17025)
+    </title>
     <meta
       name="description"
-      content="Plataforma para laboratórios de calibração com ordens de serviço, cálculo de incerteza conforme GUM, certificados digitais e portal do cliente."
+      content="Software para laboratórios de calibração com cálculo de incerteza conforme GUM, gestão de ordens de serviço, rastreabilidade metrológica e emissão automática de certificados."
+    />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="canonical" href="https://calibrafacil.com/" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CalibraFácil" />
+    <meta
+      property="og:title"
+      content="CalibraFácil | Software para laboratórios de calibração"
+    />
+    <meta
+      property="og:description"
+      content="Gestão de calibração, cálculo de incerteza conforme GUM e emissão automática de certificados para laboratórios alinhados à ISO/IEC 17025."
+    />
+    <meta property="og:url" content="https://calibrafacil.com/" />
+    <meta
+      property="og:image"
+      content="https://calibrafacil.com/og/calibrafacil-cover.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="CalibraFácil, software para laboratórios de calibração"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="CalibraFácil | Software para laboratórios de calibração"
+    />
+    <meta
+      name="twitter:description"
+      content="Gestão de calibração e cálculo de incerteza conforme GUM para laboratórios de calibração."
+    />
+    <meta
+      name="twitter:image"
+      content="https://calibrafacil.com/og/calibrafacil-cover.png"
+    />
+    <meta
+      name="twitter:image:alt"
+      content="CalibraFácil, software para laboratórios de calibração"
     />
     <link rel="icon" href="/favicon.ico" />
     <link rel="manifest" href="/manifest.json" />
-    <script>
-      // Apply theme before React hydrates (prevents flicker)
-      ;(function () {
-        try {
-          var stored = localStorage.getItem('theme')
-          var theme = stored === 'dark' || stored === 'light' ? stored : null
-          if (!theme) {
-            theme = window.matchMedia('(prefers-color-scheme: dark)').matches
-              ? 'dark'
-              : 'light'
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "name": "CalibraFácil",
+            "url": "https://calibrafacil.com/",
+            "logo": "https://calibrafacil.com/logo512.png",
+            "description": "Software para laboratórios de calibração com cálculo de incerteza conforme GUM e conformidade ISO/IEC 17025"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "CalibraFácil",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "url": "https://calibrafacil.com/",
+            "description": "Software para laboratórios de calibração com gestão de ordens de serviço, rastreabilidade metrológica e emissão automática de certificados."
           }
-          document.documentElement.classList.add(theme)
-        } catch (e) {
-          document.documentElement.classList.add('light')
-        }
-      })()
+        ]
+      }
     </script>
+    <script src="/theme-init.js"></script>
   </head>
 
   <body>

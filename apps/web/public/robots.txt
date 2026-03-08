@@ -1,3 +1,9 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /dashboard
+Disallow: /accept-invitation
+Disallow: /sign-in
+Disallow: /sign-up
+
+Sitemap: https://calibrafacil.com/sitemap.xml
