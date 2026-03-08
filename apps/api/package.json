@@ -23,7 +23,7 @@
     "@calibra-facil/notifications": "workspace:^",
     "@hono/zod-validator": "^0.7.6",
     "drizzle-orm": "^0.45.1",
-    "hono": "^4.11.9",
+    "hono": "^4.12.4",
     "resend": "^6.6.0",
     "zod": "^4.2.1"
   },
