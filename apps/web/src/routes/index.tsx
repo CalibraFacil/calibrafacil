@@ -214,14 +214,14 @@ function HeroSection() {
           </Badge>
 
           <h1 className="mt-6 text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl">
-            Cálculo de incerteza e certificados de calibração conforme ISO/IEC
-            17025
+            CalibraFácil, software para laboratórios de calibração conforme
+            ISO/IEC 17025
           </h1>
 
           <p className="mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Plataforma para gestão de calibração com cálculo automático de
-            incerteza baseado no GUM, rastreabilidade metrológica completa e
-            geração automatizada de certificados.
+            O CalibraFácil centraliza cálculo automático de incerteza baseado no
+            GUM, rastreabilidade metrológica, ordens de serviço e geração
+            automatizada de certificados em uma única plataforma.
           </p>
 
           <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row">
