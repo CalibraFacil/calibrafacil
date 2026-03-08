@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Certificado de Calibracao - CF-2026-01842</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 15mm;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 10pt;
+        line-height: 1.4;
+        color: #1a1a1a;
+        background: #fff;
+      }
+      .certificate {
+        max-width: 210mm;
+        margin: 0 auto;
+        padding: 12mm 15mm;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        border-bottom: 2px solid #0066cc;
+        padding-bottom: 12px;
+        margin-bottom: 16px;
+      }
+      .logo-section {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .logo-placeholder {
+        width: 60px;
+        height: 60px;
+        background: #0066cc;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 14pt;
+      }
+      .lab-info h1 {
+        font-size: 16pt;
+        color: #0066cc;
+        margin-bottom: 2px;
+      }
+      .lab-info p {
+        font-size: 8pt;
+        color: #666;
+      }
+      .cert-number {
+        text-align: right;
+      }
+      .cert-number h2 {
+        font-size: 11pt;
+        color: #333;
+        margin-bottom: 4px;
+      }
+      .cert-number .number {
+        font-size: 14pt;
+        font-weight: bold;
+        color: #0066cc;
+      }
+      .section {
+        margin-bottom: 16px;
+      }
+      .section-title {
+        font-size: 11pt;
+        font-weight: 600;
+        color: #0066cc;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 4px;
+        margin-bottom: 8px;
+      }
+      .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 24px;
+      }
+      .info-row {
+        display: flex;
+        gap: 8px;
+      }
+      .info-label {
+        font-weight: 600;
+        color: #555;
+        min-width: 100px;
+      }
+      .info-value {
+        color: #1a1a1a;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 9pt;
+      }
+      th,
+      td {
+        border: 1px solid #ddd;
+        padding: 6px 8px;
+        text-align: left;
+        white-space: pre-line;
+      }
+      th {
+        background: #f5f5f5;
+        font-weight: 600;
+        color: #333;
+      }
+      tr:nth-child(even) {
+        background: #fafafa;
+      }
+      .data-table {
+        margin-top: 8px;
+      }
+      .data-table-title {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 4px;
+        font-size: 10pt;
+      }
+      .signature-section {
+        margin-top: 32px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .signature-box {
+        text-align: center;
+        width: 200px;
+      }
+      .signature-line {
+        border-top: 1px solid #333;
+        margin-bottom: 4px;
+        padding-top: 4px;
+      }
+      .footer {
+        margin-top: 24px;
+        padding-top: 12px;
+        border-top: 1px solid #ccc;
+        display: flex;
+        justify-content: space-between;
+        font-size: 8pt;
+        color: #666;
+      }
+      .end-marker {
+        text-align: center;
+        font-size: 9pt;
+        font-style: italic;
+        color: #666;
+        margin-top: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="certificate">
+      <div class="header">
+        <div class="logo-section">
+          <div class="logo-placeholder">LAB</div>
+          <div class="lab-info">
+            <h1>CalibraFacil Laboratorio de Metrologia</h1>
+            <p>CNPJ: 12.345.678/0001-99</p>
+            <p>CRL 1234 - Cgcre</p>
+            <p>Av. das Industrias, 1250, Bloco B, Distrito Industrial, Campinas, SP, 13000-000</p>
+            <p>(19) 3333-4000 | contato@calibrafacil.com</p>
+          </div>
+        </div>
+        <div class="cert-number">
+          <h2>CERTIFICADO DE CALIBRACAO</h2>
+          <div class="number">CF-2026-01842</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Cliente</div>
+        <div class="info-grid">
+          <div class="info-row">
+            <span class="info-label">Nome:</span>
+            <span class="info-value">Metalurgica Horizonte Ltda.</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">CNPJ/CPF:</span>
+            <span class="info-value">98.765.432/0001-55</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Endereco:</span>
+            <span class="info-value">Rua do Progresso, 450, Parque Industrial, Sao Paulo, SP, 04567-000</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Telefone:</span>
+            <span class="info-value">(11) 4000-1234</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Instrumento Calibrado</div>
+        <div class="info-grid">
+          <div class="info-row">
+            <span class="info-label">Descricao:</span>
+            <span class="info-value">Paquimetro digital 150 mm</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Fabricante:</span>
+            <span class="info-value">Mitutoyo</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Modelo:</span>
+            <span class="info-value">500-196-30B</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">No Serie:</span>
+            <span class="info-value">PD-150-78451</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Tag:</span>
+            <span class="info-value">DIM-0231</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Metodo de Calibracao</div>
+        <div class="info-grid">
+          <div class="info-row">
+            <span class="info-label">Procedimento:</span>
+            <span class="info-value">Medicao dimensional por comparacao com blocos padrao (v3)</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Data:</span>
+            <span class="info-value">06/03/2026</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Condicoes Ambientais</div>
+        <div class="info-grid">
+          <div class="info-row">
+            <span class="info-label">Temperatura:</span>
+            <span class="info-value">20,1 °C</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Umidade:</span>
+            <span class="info-value">52,4 %</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Pressao:</span>
+            <span class="info-value">1.013,2 hPa</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Padroes Utilizados</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Padrao</th>
+              <th>Certificado</th>
+              <th>Incerteza</th>
+              <th>Validade</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Bloco padrao classe 0</td>
+              <td>RBC-55421/2025</td>
+              <td>±0,0012 mm</td>
+              <td>15/11/2025</td>
+            </tr>
+            <tr>
+              <td>Termohigrometro de referencia</td>
+              <td>RBC-28761/2025</td>
+              <td>±0,2000 °C</td>
+              <td>03/10/2025</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Dados de Calibracao</div>
+        <div class="data-table">
+          <div class="data-table-title">Leituras obtidas</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Ponto</th>
+                <th>Nominal (mm)</th>
+                <th>Indicado (mm)</th>
+                <th>Erro (mm)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>25 mm</td>
+                <td>25,0000</td>
+                <td>25,0030</td>
+                <td>0,0030</td>
+              </tr>
+              <tr>
+                <td>50 mm</td>
+                <td>50,0000</td>
+                <td>50,0040</td>
+                <td>0,0040</td>
+              </tr>
+              <tr>
+                <td>75 mm</td>
+                <td>75,0000</td>
+                <td>75,0020</td>
+                <td>0,0020</td>
+              </tr>
+              <tr>
+                <td>100 mm</td>
+                <td>100,0000</td>
+                <td>100,0010</td>
+                <td>0,0010</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Resultados</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Parametro</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Erro maximo</td>
+              <td>0,0040 mm</td>
+            </tr>
+            <tr>
+              <td>Incerteza expandida</td>
+              <td>0,0120 mm</td>
+            </tr>
+            <tr>
+              <td>Fator de abrangencia</td>
+              <td>2,1300</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="signature-section">
+        <div class="signature-box">
+          <div class="signature-line">Eng. Mariana Alves</div>
+          <div>Responsavel Tecnica</div>
+          <div style="font-size: 8pt; color: #666">07/03/2026</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>Emitido em: 08/03/2026</div>
+      </div>
+
+      <div class="end-marker">--- FIM DO CERTIFICADO ---</div>
+    </div>
+  </body>
+</html>
