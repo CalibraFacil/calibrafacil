@@ -15,7 +15,7 @@ import {
   CreateCalibrationRequestSchema,
   ListCalibrationRequestsQuerySchema,
 } from "@calibra-facil/schemas";
-import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, ilike, sql } from "drizzle-orm";
 import {
   requirePermission,
   requirePortalProtected,
@@ -75,7 +75,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("query", ListCalibrationRequestsQuerySchema),
     async (c) => {
       const member = c.get("member");
-      const { page, limit, status } = c.req.valid("query");
+      const { page, limit, status, query } = c.req.valid("query");
       const offset = (page - 1) * limit;
 
       const linkedCustomer = await getPortalCustomer(member.organizationId);
@@ -94,6 +94,15 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (status) {
         conditions.push(eq(calibrationRequest.status, status));
+      }
+
+      if (query?.trim()) {
+        conditions.push(
+          sql`(
+            ${calibrationRequest.id}::text ilike ${`%${query}%`}
+            or coalesce(${calibrationRequest.observations}, '') ilike ${`%${query}%`}
+          )`,
+        );
       }
 
       const whereCondition = and(...conditions);

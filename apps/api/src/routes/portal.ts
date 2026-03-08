@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
 import {
   member,
@@ -10,7 +11,17 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
-import { eq, and, inArray, desc, count, isNull } from "drizzle-orm";
+import {
+  eq,
+  and,
+  inArray,
+  desc,
+  count,
+  isNull,
+  ilike,
+  or,
+} from "drizzle-orm";
+import { ListAssetsQuerySchema } from "@calibra-facil/schemas";
 import {
   requirePortalAuth,
   requirePortalProtected,
@@ -75,15 +86,15 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /assets - List assets for active portal organization
   // =========================================================================
-  .get("/assets", ...requirePortalProtected, async (c) => {
+  .get(
+    "/assets",
+    ...requirePortalProtected,
+    zValidator("query", ListAssetsQuerySchema),
+    async (c) => {
     const member = c.get("member");
 
     try {
-      const page = Math.max(1, parseInt(c.req.query("page") || "1"));
-      const limit = Math.min(
-        100,
-        Math.max(1, parseInt(c.req.query("limit") || "20")),
-      );
+      const { page, limit, query } = c.req.valid("query");
       const offset = (page - 1) * limit;
 
       const [linkedCustomer] = await db
@@ -104,6 +115,15 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       const whereCondition = and(
         eq(asset.customerId, linkedCustomer.id),
         isNull(asset.deletedAt),
+        query
+          ? or(
+              ilike(asset.name, `%${query}%`),
+              ilike(asset.tag, `%${query}%`),
+              ilike(asset.serialNumber, `%${query}%`),
+              ilike(asset.manufacturer, `%${query}%`),
+              ilike(asset.model, `%${query}%`),
+            )
+          : undefined,
       );
 
       const [countResult] = await db
@@ -153,7 +173,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       console.error("Error listing portal assets:", error);
       return c.json({ error: "Erro ao listar ativos" }, 500);
     }
-  })
+    },
+  )
 
   // =========================================================================
   // GET /certificates - List certificates for portal user

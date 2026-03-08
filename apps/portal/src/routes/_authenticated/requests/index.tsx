@@ -1,5 +1,5 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -73,13 +73,27 @@ function RequestsPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search.trim());
   const limit = 20;
 
+  useEffect(() => {
+    setPage(1);
+  }, [deferredSearch]);
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["portal-requests", page, limit],
+    queryKey: ["portal-requests", page, limit, deferredSearch],
     queryFn: async (): Promise<RequestsResponse> => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+
+      if (deferredSearch) {
+        params.set("query", deferredSearch);
+      }
+
       const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/requests?page=${page}&limit=${limit}`,
+        `${getApiBaseUrl()}/api/portal/requests?${params.toString()}`,
         {
           credentials: "include",
         },
@@ -92,28 +106,6 @@ function RequestsPage() {
       return response.json();
     },
   });
-
-  const filteredRequests = useMemo(() => {
-    const requests = data?.data ?? [];
-    const normalizedSearch = search.trim().toLowerCase();
-
-    if (!normalizedSearch) {
-      return requests;
-    }
-
-    return requests.filter((request) => {
-      const haystack = [
-        request.customerName,
-        request.observations ?? "",
-        statusLabels[request.status],
-        String(request.id),
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(normalizedSearch);
-    });
-  }, [data?.data, search]);
 
   return (
     <div className="space-y-6">
@@ -139,7 +131,7 @@ function RequestsPage() {
           className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
         />
         <Input
-          placeholder="Buscar solicitações..."
+          placeholder="Buscar por número ou observações..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
@@ -160,7 +152,7 @@ function RequestsPage() {
         </Card>
       )}
 
-      {!isLoading && !error && filteredRequests.length === 0 && (
+      {!isLoading && !error && (data?.data.length ?? 0) === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
             <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
@@ -172,19 +164,23 @@ function RequestsPage() {
             <div>
               <h2 className="font-medium">Nenhuma solicitação encontrada</h2>
               <p className="text-sm text-muted-foreground">
-                Envie sua primeira solicitação de calibração para começar.
+                {deferredSearch
+                  ? "Tente ajustar os termos da busca."
+                  : "Envie sua primeira solicitação de calibração para começar."}
               </p>
             </div>
-            <Button render={<Link to="/requests/new" />}>
-              Criar Solicitação
-            </Button>
+            {!deferredSearch && (
+              <Button render={<Link to="/requests/new" />}>
+                Criar Solicitação
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {!isLoading && !error && filteredRequests.length > 0 && (
+      {!isLoading && !error && (data?.data.length ?? 0) > 0 && (
         <div className="space-y-4">
-          {filteredRequests.map((request) => (
+          {data?.data.map((request) => (
             <Card
               key={request.id}
               className="cursor-pointer transition-colors hover:bg-muted/30"

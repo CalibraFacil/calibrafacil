@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,12 @@ type PortalAsset = {
 
 type AssetsResponse = {
   data: Array<PortalAsset>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 };
 
 function formatDate(date: string | null | undefined) {
@@ -39,14 +45,30 @@ function NewRequestPage() {
   const queryClient = useQueryClient();
   const [selectedAssetIds, setSelectedAssetIds] = useState<Array<number>>([]);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search.trim());
+  const [page, setPage] = useState(1);
   const [observations, setObservations] = useState("");
   const [requestedDueDate, setRequestedDueDate] = useState("");
+  const limit = 20;
+
+  useEffect(() => {
+    setPage(1);
+  }, [deferredSearch]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["portal-request-assets"],
+    queryKey: ["portal-request-assets", page, limit, deferredSearch],
     queryFn: async (): Promise<AssetsResponse> => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+
+      if (deferredSearch) {
+        params.set("query", deferredSearch);
+      }
+
       const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/assets?limit=100`,
+        `${getApiBaseUrl()}/api/portal/assets?${params.toString()}`,
         {
           credentials: "include",
         },
@@ -59,28 +81,6 @@ function NewRequestPage() {
       return response.json();
     },
   });
-
-  const visibleAssets = useMemo(() => {
-    const assets = data?.data ?? [];
-    const normalizedSearch = search.trim().toLowerCase();
-
-    if (!normalizedSearch) {
-      return assets;
-    }
-
-    return assets.filter((asset) =>
-      [
-        asset.name,
-        asset.tag,
-        asset.serialNumber,
-        asset.manufacturer ?? "",
-        asset.assetTypeName,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalizedSearch),
-    );
-  }, [data?.data, search]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -151,6 +151,10 @@ function NewRequestPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <p className="text-xs text-muted-foreground">
+            Pesquise ou navegue pelas páginas. Os ativos selecionados continuam
+            marcados ao trocar de página.
+          </p>
 
           {isLoading && (
             <div className="flex items-center justify-center py-8">
@@ -164,15 +168,17 @@ function NewRequestPage() {
             </div>
           )}
 
-          {!isLoading && !error && visibleAssets.length === 0 && (
+          {!isLoading && !error && (data?.data.length ?? 0) === 0 && (
             <div className="py-6 text-center text-muted-foreground">
-              Nenhum ativo encontrado.
+              {deferredSearch
+                ? "Nenhum ativo encontrado para esta busca."
+                : "Nenhum ativo encontrado."}
             </div>
           )}
 
-          {!isLoading && !error && visibleAssets.length > 0 && (
+          {!isLoading && !error && (data?.data.length ?? 0) > 0 && (
             <div className="space-y-3">
-              {visibleAssets.map((asset) => {
+              {data?.data.map((asset) => {
                 const selected = selectedAssetIds.includes(asset.id);
 
                 return (
@@ -209,6 +215,39 @@ function NewRequestPage() {
                   </label>
                 );
               })}
+
+              {data && data.pagination.totalPages > 1 && (
+                <div className="flex items-center justify-between border-t pt-3">
+                  <span className="text-sm text-muted-foreground">
+                    Página {data.pagination.page} de {data.pagination.totalPages} ·{" "}
+                    {data.pagination.total} ativo(s)
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setPage((currentPage) => Math.max(1, currentPage - 1))
+                      }
+                      disabled={page === 1}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setPage((currentPage) =>
+                          Math.min(data.pagination.totalPages, currentPage + 1),
+                        )
+                      }
+                      disabled={page === data.pagination.totalPages}
+                    >
+                      Próxima
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
