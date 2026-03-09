@@ -430,6 +430,10 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: "Solicitacao nao encontrada" }, 404);
       }
 
+      if (existing.status === "REJECTED") {
+        return c.json({ error: "Solicitacao ja foi rejeitada" }, 400);
+      }
+
       if (existing.status === "CONVERTED") {
         return c.json(
           { error: "Solicitacoes convertidas nao podem ser rejeitadas" },

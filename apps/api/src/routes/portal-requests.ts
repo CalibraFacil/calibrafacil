@@ -222,6 +222,8 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
+      const ipAddress =
+        c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
 
       const linkedCustomer = await getPortalCustomer(member.organizationId);
 
@@ -255,42 +257,45 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         ? new Date(input.requestedDueDate)
         : null;
 
-      const [request] = await db
-        .insert(calibrationRequest)
-        .values({
-          organizationId: linkedCustomer.labOrganizationId,
-          customerId: linkedCustomer.id,
-          authOrganizationId: member.organizationId,
-          observations: input.observations || null,
-          requestedDueDate,
-          submittedBy: session.user.id,
-        })
-        .returning();
-
-      if (!request) {
-        return c.json({ error: "Erro ao criar solicitacao" }, 500);
-      }
-
-      await db.insert(calibrationRequestItem).values(
-        input.assetIds.map((assetId) => ({
-          requestId: request.id,
-          assetId,
-        })),
-      );
-
-      await db.insert(calibrationRequestAuditLog).values({
-        requestId: request.id,
-        action: "create",
-        changes: {
-          initial: {
-            assetIds: input.assetIds,
+      const request = await db.transaction(async (tx) => {
+        const [createdRequest] = await tx
+          .insert(calibrationRequest)
+          .values({
+            organizationId: linkedCustomer.labOrganizationId,
+            customerId: linkedCustomer.id,
+            authOrganizationId: member.organizationId,
             observations: input.observations || null,
-            requestedDueDate: requestedDueDate?.toISOString() ?? null,
+            requestedDueDate,
+            submittedBy: session.user.id,
+          })
+          .returning();
+
+        if (!createdRequest) {
+          throw new Error("Erro ao criar solicitacao");
+        }
+
+        await tx.insert(calibrationRequestItem).values(
+          input.assetIds.map((assetId) => ({
+            requestId: createdRequest.id,
+            assetId,
+          })),
+        );
+
+        await tx.insert(calibrationRequestAuditLog).values({
+          requestId: createdRequest.id,
+          action: "create",
+          changes: {
+            initial: {
+              assetIds: input.assetIds,
+              observations: input.observations || null,
+              requestedDueDate: requestedDueDate?.toISOString() ?? null,
+            },
           },
-        },
-        performedBy: session.user.id,
-        ipAddress:
-          c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+          performedBy: session.user.id,
+          ipAddress,
+        });
+
+        return createdRequest;
       });
 
       return c.json(
