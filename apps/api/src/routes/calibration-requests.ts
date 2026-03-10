@@ -420,6 +420,8 @@ export const calibrationRequestsRouter = new Hono<{
         .select({
           id: calibrationRequest.id,
           status: calibrationRequest.status,
+          reviewedBy: calibrationRequest.reviewedBy,
+          reviewedAt: calibrationRequest.reviewedAt,
         })
         .from(calibrationRequest)
         .where(
@@ -452,8 +454,8 @@ export const calibrationRequestsRouter = new Hono<{
         .set({
           status: "REJECTED",
           internalNotes: input.internalNotes || null,
-          reviewedBy: session.user.id,
-          reviewedAt: now,
+          reviewedBy: existing.reviewedBy ?? session.user.id,
+          reviewedAt: existing.reviewedAt ?? now,
           rejectedBy: session.user.id,
           rejectedAt: now,
           rejectionReason: input.reason,

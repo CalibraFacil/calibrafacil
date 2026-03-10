@@ -150,18 +150,61 @@ function CalibrationRequestDetailPage() {
   const servicesQuery = useQuery({
     queryKey: ['services', 'request-conversion'],
     queryFn: async () => {
-      const res = await api.api.services.$get({
+      const firstPageResponse = await api.api.services.$get({
         query: {
-          limit: '200',
+          page: '1',
+          limit: '100',
           isActive: 'true',
         },
       })
 
-      if (!res.ok) {
+      if (!firstPageResponse.ok) {
         throw new Error('Falha ao carregar serviços')
       }
 
-      return res.json() as Promise<{ data: Array<Service> }>
+      const firstPage = (await firstPageResponse.json()) as {
+        data: Array<Service>
+        pagination: {
+          totalPages: number
+        }
+      }
+
+      if (firstPage.pagination.totalPages <= 1) {
+        return { data: firstPage.data }
+      }
+
+      const remainingPages = await Promise.all(
+        Array.from({ length: firstPage.pagination.totalPages - 1 }, (_, index) =>
+          api.api.services.$get({
+            query: {
+              page: String(index + 2),
+              limit: '100',
+              isActive: 'true',
+            },
+          }),
+        ),
+      )
+
+      const failedPage = remainingPages.find((response) => !response.ok)
+      if (failedPage) {
+        throw new Error('Falha ao carregar serviços')
+      }
+
+      const remainingData = await Promise.all(
+        remainingPages.map(
+          async (response) =>
+            (await response.json()) as {
+              data: Array<Service>
+            },
+        ),
+      )
+
+      return {
+        data: [
+          ...firstPage.data,
+          ...remainingData.flatMap((page) => page.data),
+        ],
+      }
     },
   })
 

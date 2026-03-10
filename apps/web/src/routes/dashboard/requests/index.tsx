@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { api } from '@/utils/api'
@@ -73,16 +73,21 @@ function RequestsPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<RequestStatus | ''>('')
+  const deferredSearch = useDeferredValue(search.trim())
   const limit = 20
 
+  useEffect(() => {
+    setPage(1)
+  }, [deferredSearch])
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['calibration-requests', page, search, statusFilter],
+    queryKey: ['calibration-requests', page, deferredSearch, statusFilter],
     queryFn: async () => {
       const res = await api.api['calibration-requests'].$get({
         query: {
           page: String(page),
           limit: String(limit),
-          query: search || undefined,
+          query: deferredSearch || undefined,
           status: statusFilter || undefined,
         },
       })
@@ -188,10 +193,7 @@ function RequestsPage() {
             <Input
               placeholder="Buscar por observações..."
               value={search}
-              onChange={(event) => {
-                setSearch(event.target.value)
-                setPage(1)
-              }}
+              onChange={(event) => setSearch(event.target.value)}
               className="sm:max-w-sm"
             />
             <div className="flex flex-wrap gap-2">
