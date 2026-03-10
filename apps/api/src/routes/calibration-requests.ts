@@ -20,7 +20,7 @@ import {
   RejectCalibrationRequestSchema,
   ReviewCalibrationRequestSchema,
 } from "@calibra-facil/schemas";
-import { and, count, desc, eq, gte, ilike, inArray, lte } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, inArray, lte, sql } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
@@ -163,7 +163,12 @@ export const calibrationRequestsRouter = new Hono<{
       ];
 
       if (query) {
-        conditions.push(ilike(calibrationRequest.observations, `%${query}%`));
+        conditions.push(
+          sql`(
+            ${calibrationRequest.id}::text ilike ${`%${query}%`}
+            or coalesce(${calibrationRequest.observations}, '') ilike ${`%${query}%`}
+          )`,
+        );
       }
 
       if (status) {
@@ -277,8 +282,6 @@ export const calibrationRequestsRouter = new Hono<{
         .select({
           id: calibrationRequest.id,
           status: calibrationRequest.status,
-          reviewedBy: calibrationRequest.reviewedBy,
-          reviewedAt: calibrationRequest.reviewedAt,
         })
         .from(calibrationRequest)
         .where(

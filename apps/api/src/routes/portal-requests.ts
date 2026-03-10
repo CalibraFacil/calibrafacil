@@ -259,6 +259,39 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         : null;
 
       const request = await db.transaction(async (tx) => {
+        const lockAssetIds = [...input.assetIds].sort((left, right) => left - right);
+
+        for (const assetId of lockAssetIds) {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(${linkedCustomer.id}, ${assetId})`,
+          );
+        }
+
+        const existingItems = await tx
+          .select({
+            assetId: calibrationRequestItem.assetId,
+          })
+          .from(calibrationRequestItem)
+          .innerJoin(
+            calibrationRequest,
+            eq(calibrationRequestItem.requestId, calibrationRequest.id),
+          )
+          .where(
+            and(
+              inArray(calibrationRequestItem.assetId, input.assetIds),
+              eq(calibrationRequest.customerId, linkedCustomer.id),
+              inArray(calibrationRequest.status, [
+                "PENDING",
+                "UNDER_REVIEW",
+                "APPROVED",
+              ]),
+            ),
+          );
+
+        if (existingItems.length > 0) {
+          return null;
+        }
+
         const [createdRequest] = await tx
           .insert(calibrationRequest)
           .values({
@@ -298,6 +331,13 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
         return createdRequest;
       });
+
+      if (!request) {
+        return c.json(
+          { error: "Um ou mais ativos ja possuem uma solicitacao ativa" },
+          400,
+        );
+      }
 
       return c.json(
         {

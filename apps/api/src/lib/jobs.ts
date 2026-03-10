@@ -22,7 +22,7 @@ import {
   sql,
 } from "drizzle-orm";
 
-type JobDbExecutor = Pick<typeof db, "select" | "insert" | "update">;
+type JobDbExecutor = Pick<typeof db, "execute" | "select" | "insert" | "update">;
 
 type CreateCalibrationJobParams = {
   organizationId: string;
@@ -45,6 +45,11 @@ async function getNextJobSequence(
 ) {
   const prefix = `CAL-${year}-`;
   const sequenceSql = sql<number>`coalesce(cast(substring(${calibrationJob.jobId} from '[0-9]+$') as integer), 0)`;
+
+  // Lock per organization/year so a brand-new year with no rows cannot race to 0001.
+  await executor.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), ${year})`,
+  );
 
   const [result] = await executor
     .select({
