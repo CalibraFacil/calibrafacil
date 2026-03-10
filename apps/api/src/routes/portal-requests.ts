@@ -242,6 +242,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
             inArray(asset.id, input.assetIds),
             eq(customer.id, linkedCustomer.id),
             eq(customer.authOrganizationId, member.organizationId),
+            eq(asset.status, "ACTIVE"),
             isNull(asset.deletedAt),
           ),
         );

@@ -222,6 +222,12 @@ function CalibrationRequestDetailPage() {
   })
 
   useEffect(() => {
+    setConversionDrafts({})
+    setInternalNotes('')
+    setRejectionReason('')
+  }, [id])
+
+  useEffect(() => {
     if (!detailQuery.data) return
 
     setInternalNotes(detailQuery.data.internalNotes || '')

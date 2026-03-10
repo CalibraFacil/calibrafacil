@@ -25,6 +25,7 @@ import {
 import { ListAssetsQuerySchema } from "@calibra-facil/schemas";
 import {
   requirePortalAuth,
+  requirePermission,
   requirePortalProtected,
   type AuthVariables,
 } from "../middleware/permission";
@@ -90,6 +91,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/assets",
     ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
     zValidator("query", ListAssetsQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -115,6 +117,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
 
         const whereCondition = and(
           eq(asset.customerId, linkedCustomer.id),
+          eq(asset.status, "ACTIVE"),
           isNull(asset.deletedAt),
           query
             ? or(
