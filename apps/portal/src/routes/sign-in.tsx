@@ -1,20 +1,13 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { portalSignIn } from "@calibra-facil/auth/client";
 import { z } from "zod";
 
+import { BrandLockup, BrandMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { BrandLockup } from "@/components/brand";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -55,26 +48,31 @@ function SignInPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mb-4 flex justify-center">
-            <BrandLockup markClassName="size-10" textClassName="text-xl" />
-          </div>
-          <CardTitle className="text-2xl">Portal do Cliente</CardTitle>
-          <CardDescription>
-            Entre com seu email e senha para acessar o portal
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="grid min-h-svh lg:grid-cols-2">
+      <div className="flex flex-col gap-4 p-6 md:p-10">
+        <div className="flex justify-center gap-2 md:justify-start">
+          <Link to="/" className="flex items-center gap-2 font-medium">
+            <BrandLockup markClassName="size-7" />
+          </Link>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center">
+          <form onSubmit={handleSubmit} className="flex w-full max-w-xs flex-col gap-6">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <BrandMark className="size-12" />
+              <h1 className="text-2xl font-bold">Portal do Cliente</h1>
+              <p className="text-muted-foreground text-sm text-balance">
+                Entre com seu email e senha para acessar certificados e documentos.
+              </p>
+            </div>
+
             {error && (
               <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
                 {error}
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -87,7 +85,7 @@ function SignInPage() {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="grid gap-2">
               <Label htmlFor="password">Senha</Label>
               <Input
                 id="password"
@@ -99,7 +97,7 @@ function SignInPage() {
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Spinner className="mr-2" />
@@ -110,13 +108,29 @@ function SignInPage() {
               )}
             </Button>
 
-            <p className="text-center text-sm text-muted-foreground">
+            <p className="text-center text-sm text-muted-foreground text-balance">
               Não possui uma conta? Entre em contato com o laboratório para
               receber um convite de acesso.
             </p>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      <div className="relative hidden overflow-hidden bg-muted p-10 lg:flex lg:flex-col lg:items-center lg:justify-center">
+        <div className="absolute inset-0 bg-linear-to-br from-primary/10 via-muted to-chart-1/10" />
+        <div className="absolute -top-1/2 -left-1/2 h-full w-full rounded-full bg-chart-1/20 blur-[100px]" />
+        <div className="absolute -right-1/2 -bottom-1/2 h-full w-full rounded-full bg-primary/20 blur-[100px]" />
+
+        <div className="relative z-10 mt-auto max-w-md">
+          <blockquote className="space-y-2">
+            <p className="text-lg">
+              &ldquo;Centralize certificados, históricos de calibração e documentos
+              do laboratório em uma experiência simples para o cliente.&rdquo;
+            </p>
+            <footer className="text-sm">Portal CalibraFácil</footer>
+          </blockquote>
+        </div>
+      </div>
     </div>
   );
 }

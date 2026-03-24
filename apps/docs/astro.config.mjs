@@ -12,6 +12,14 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "CalibraFácil Docs",
+      description:
+        "Documentação da plataforma CalibraFácil para laboratórios de calibração.",
+      logo: {
+        light: "./src/assets/logo-mark-light.svg",
+        dark: "./src/assets/logo-mark-dark.svg",
+        alt: "CalibraFácil",
+      },
+      favicon: "/favicon.svg",
 
       // Single-language site in pt-BR.
       // Root locale means content lives directly in src/content/docs/ (no subdirectory).
