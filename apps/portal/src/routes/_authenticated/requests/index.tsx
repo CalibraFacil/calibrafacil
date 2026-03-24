@@ -128,9 +128,11 @@ function RequestsPage() {
         <HugeiconsIcon
           icon={Search01Icon}
           className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
         />
         <Input
           placeholder="Buscar por número ou observações..."
+          aria-label="Buscar por número ou observações"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"

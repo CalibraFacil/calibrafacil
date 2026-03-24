@@ -268,7 +268,7 @@ async function getResourceUsage(
 }
 
 /**
- * Get certificate usage (approved jobs this month)
+ * Get certificate usage (jobs created this month)
  */
 async function getCertificateUsage(organizationId: string): Promise<number> {
   const startOfMonth = new Date();
@@ -281,8 +281,7 @@ async function getCertificateUsage(organizationId: string): Promise<number> {
     .where(
       and(
         eq(calibrationJob.organizationId, organizationId),
-        eq(calibrationJob.status, "APPROVED"),
-        gte(calibrationJob.approvedAt, startOfMonth),
+        gte(calibrationJob.createdAt, startOfMonth),
       ),
     );
 

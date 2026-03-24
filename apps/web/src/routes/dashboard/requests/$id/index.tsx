@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import { useDashboardContextState } from '../../route'
 
 export const Route = createFileRoute('/dashboard/requests/$id/')({
   head: () => ({
@@ -126,6 +127,8 @@ function formatDate(date: string | null | undefined) {
 function CalibrationRequestDetailPage() {
   const { id } = Route.useParams()
   const queryClient = useQueryClient()
+  const { activeOrganizationId } = useDashboardContextState()
+  const organizationQueryKey = activeOrganizationId ?? 'no-org'
   const [internalNotes, setInternalNotes] = useState('')
   const [rejectionReason, setRejectionReason] = useState('')
   const [conversionDrafts, setConversionDrafts] = useState<
@@ -133,7 +136,7 @@ function CalibrationRequestDetailPage() {
   >({})
 
   const detailQuery = useQuery({
-    queryKey: ['calibration-request', id],
+    queryKey: ['calibration-request', organizationQueryKey, id],
     queryFn: async () => {
       const res = await api.api['calibration-requests'][':id'].$get({
         param: { id },
@@ -148,7 +151,7 @@ function CalibrationRequestDetailPage() {
   })
 
   const servicesQuery = useQuery({
-    queryKey: ['services', 'request-conversion'],
+    queryKey: ['services', organizationQueryKey, 'request-conversion'],
     queryFn: async () => {
       const firstPageResponse = await api.api.services.$get({
         query: {
@@ -211,7 +214,7 @@ function CalibrationRequestDetailPage() {
   })
 
   const techniciansQuery = useQuery({
-    queryKey: ['jobs', 'technicians'],
+    queryKey: ['jobs', organizationQueryKey, 'technicians'],
     queryFn: async () => {
       const res = await api.api.jobs.technicians.list.$get()
 
@@ -227,7 +230,7 @@ function CalibrationRequestDetailPage() {
     setConversionDrafts({})
     setInternalNotes('')
     setRejectionReason('')
-  }, [id])
+  }, [activeOrganizationId, id])
 
   useEffect(() => {
     if (!detailQuery.data) return
@@ -258,7 +261,9 @@ function CalibrationRequestDetailPage() {
 
   const invalidate = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['calibration-request', id] }),
+      queryClient.invalidateQueries({
+        queryKey: ['calibration-request', organizationQueryKey, id],
+      }),
       queryClient.invalidateQueries({ queryKey: ['calibration-requests'] }),
       queryClient.invalidateQueries({ queryKey: ['jobs'] }),
     ])
@@ -650,14 +655,19 @@ function CalibrationRequestDetailPage() {
                 >
                   Aprovar
                 </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => rejectMutation.mutate()}
-                  disabled={isSubmitting || rejectionReason.trim().length < 3}
-                >
-                  Rejeitar
-                </Button>
               </>
+            )}
+
+            {(request.status === 'PENDING' ||
+              request.status === 'UNDER_REVIEW' ||
+              request.status === 'APPROVED') && (
+              <Button
+                variant="destructive"
+                onClick={() => rejectMutation.mutate()}
+                disabled={isSubmitting || rejectionReason.trim().length < 3}
+              >
+                Rejeitar
+              </Button>
             )}
 
             {request.status === 'APPROVED' && (

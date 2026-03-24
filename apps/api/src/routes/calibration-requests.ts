@@ -11,6 +11,7 @@ import {
   calibrationRequestItem,
   customer,
   service,
+  subscription,
   user,
 } from "@calibra-facil/db/schema";
 import {
@@ -20,6 +21,12 @@ import {
   RejectCalibrationRequestSchema,
   ReviewCalibrationRequestSchema,
 } from "@calibra-facil/schemas";
+import {
+  getLimit,
+  getPlan,
+  isSubscriptionActive,
+  type PlanId,
+} from "@calibra-facil/shared";
 import {
   and,
   count,
@@ -92,7 +99,7 @@ type ConvertRequestResult =
     }
   | {
       error: {
-        status: 400 | 404;
+        status: 400 | 402 | 404;
         body: string;
       };
     };
@@ -703,6 +710,62 @@ export const calibrationRequestsRouter = new Hono<{
               error: {
                 status: 400 as const,
                 body: "Somente solicitacoes aprovadas podem ser convertidas",
+              },
+            };
+          }
+
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtext(${`plan-limit:certificates:${member.organizationId}`}))`,
+          );
+
+          const [activeSubscription] = await tx
+            .select({
+              planId: subscription.planId,
+              status: subscription.status,
+            })
+            .from(subscription)
+            .where(eq(subscription.organizationId, member.organizationId))
+            .limit(1);
+
+          const planId: PlanId =
+            (activeSubscription?.planId as PlanId | undefined) ?? "FREE";
+          const subscriptionStatus = activeSubscription?.status ?? "TRIAL";
+
+          if (
+            activeSubscription &&
+            !isSubscriptionActive(subscriptionStatus) &&
+            subscriptionStatus !== "PAST_DUE"
+          ) {
+            return {
+              error: {
+                status: 402 as const,
+                body: "Assinatura inativa. Ative um plano para continuar.",
+              },
+            };
+          }
+
+          const limit = getLimit(planId, "certificates");
+          const plan = getPlan(planId);
+          const startOfMonth = new Date();
+          startOfMonth.setDate(1);
+          startOfMonth.setHours(0, 0, 0, 0);
+
+          const [usageResult] = await tx
+            .select({ count: count() })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.organizationId, member.organizationId),
+                gte(calibrationJob.createdAt, startOfMonth),
+              ),
+            );
+
+          const projectedUsage = (usageResult?.count ?? 0) + input.items.length;
+          if (projectedUsage > limit) {
+            return {
+              error: {
+                status: 402 as const,
+                body: `Limite de certificados por mes seria excedido (${projectedUsage}/${limit}) nesta operacao. Faca upgrade para o plano ${plan.name}.`,
               },
             };
           }
