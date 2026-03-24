@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { signIn } from '@calibra-facil/auth/client'
 import { cn } from '@/lib/utils'
+import { BrandMark } from '@/components/brand'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -49,7 +50,8 @@ export function SignInForm({ className, redirect, ...props }: SignInFormProps) {
       {...props}
     >
       <FieldGroup>
-        <div className="flex flex-col items-center gap-1 text-center">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <BrandMark className="size-12" />
           <h1 className="text-2xl font-bold">Entre em sua conta</h1>
           <p className="text-muted-foreground text-sm text-balance">
             Insira seu email abaixo para entrar em sua conta
