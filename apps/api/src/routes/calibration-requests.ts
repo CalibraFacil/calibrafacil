@@ -25,6 +25,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { requirePlanLimit } from "../middleware/tier-guard";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
 
@@ -43,6 +44,17 @@ type ConvertedRequestJob = {
 };
 
 type ApprovalRequestResult =
+  | {
+      success: true;
+    }
+  | {
+      error: {
+        status: 400 | 404 | 409;
+        body: string;
+      };
+    };
+
+type RejectRequestResult =
   | {
       success: true;
     }
@@ -461,68 +473,104 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const [existing] = await db
-        .select({
-          id: calibrationRequest.id,
-          status: calibrationRequest.status,
-          reviewedBy: calibrationRequest.reviewedBy,
-          reviewedAt: calibrationRequest.reviewedAt,
-        })
-        .from(calibrationRequest)
-        .where(
-          and(
-            eq(calibrationRequest.id, id),
-            eq(calibrationRequest.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
+      const result: RejectRequestResult = await db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select({
+            id: calibrationRequest.id,
+            status: calibrationRequest.status,
+            reviewedBy: calibrationRequest.reviewedBy,
+            reviewedAt: calibrationRequest.reviewedAt,
+          })
+          .from(calibrationRequest)
+          .where(
+            and(
+              eq(calibrationRequest.id, id),
+              eq(calibrationRequest.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1)
+          .for("update");
 
-      if (!existing) {
-        return c.json({ error: "Solicitacao nao encontrada" }, 404);
-      }
+        if (!existing) {
+          return {
+            error: {
+              status: 404 as const,
+              body: "Solicitacao nao encontrada",
+            },
+          };
+        }
 
-      if (existing.status === "REJECTED") {
-        return c.json({ error: "Solicitacao ja foi rejeitada" }, 400);
-      }
+        if (existing.status === "REJECTED") {
+          return {
+            error: {
+              status: 400 as const,
+              body: "Solicitacao ja foi rejeitada",
+            },
+          };
+        }
 
-      if (existing.status === "CONVERTED") {
-        return c.json(
-          { error: "Solicitacoes convertidas nao podem ser rejeitadas" },
-          400,
-        );
-      }
+        if (existing.status === "CONVERTED") {
+          return {
+            error: {
+              status: 400 as const,
+              body: "Solicitacoes convertidas nao podem ser rejeitadas",
+            },
+          };
+        }
 
-      const now = new Date();
+        const now = new Date();
 
-      await db
-        .update(calibrationRequest)
-        .set({
-          status: "REJECTED",
-          internalNotes: input.internalNotes || null,
-          reviewedBy: existing.reviewedBy ?? session.user.id,
-          reviewedAt: existing.reviewedAt ?? now,
-          rejectedBy: session.user.id,
-          rejectedAt: now,
-          rejectionReason: input.reason,
-          approvedBy: null,
-          approvedAt: null,
-        })
-        .where(eq(calibrationRequest.id, id));
+        const [updated] = await tx
+          .update(calibrationRequest)
+          .set({
+            status: "REJECTED",
+            internalNotes: input.internalNotes || null,
+            reviewedBy: existing.reviewedBy ?? session.user.id,
+            reviewedAt: existing.reviewedAt ?? now,
+            rejectedBy: session.user.id,
+            rejectedAt: now,
+            rejectionReason: input.reason,
+            approvedBy: null,
+            approvedAt: null,
+          })
+          .where(
+            and(
+              eq(calibrationRequest.id, id),
+              eq(calibrationRequest.status, existing.status),
+            ),
+          )
+          .returning();
 
-      await db.insert(calibrationRequestAuditLog).values({
-        requestId: id,
-        action: "reject",
-        changes: {
-          status: {
-            old: existing.status,
-            new: "REJECTED",
+        if (!updated) {
+          return {
+            error: {
+              status: 409 as const,
+              body: "Solicitacao foi atualizada por outro usuario",
+            },
+          };
+        }
+
+        await tx.insert(calibrationRequestAuditLog).values({
+          requestId: id,
+          action: "reject",
+          changes: {
+            status: {
+              old: existing.status,
+              new: "REJECTED",
+            },
+            internalNotes: input.internalNotes || null,
           },
-          internalNotes: input.internalNotes || null,
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") ?? null,
-        reason: input.reason,
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") ?? null,
+          reason: input.reason,
+        });
+
+        return { success: true };
       });
+
+      if ("error" in result) {
+        return c.json({ error: result.error.body }, result.error.status);
+      }
 
       return c.json({ success: true });
     },
@@ -533,6 +581,7 @@ export const calibrationRequestsRouter = new Hono<{
       request: ["convert"],
       calibration: ["create"],
     }),
+    requirePlanLimit("certificates"),
     zValidator("json", ConvertCalibrationRequestSchema),
     async (c) => {
       const member = c.get("member");
