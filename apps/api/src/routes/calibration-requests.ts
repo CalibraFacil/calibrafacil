@@ -54,6 +54,17 @@ type ApprovalRequestResult =
       };
     };
 
+type ReviewRequestResult =
+  | {
+      success: true;
+    }
+  | {
+      error: {
+        status: 400 | 404 | 409;
+        body: string;
+      };
+    };
+
 type RejectRequestResult =
   | {
       success: true;
@@ -75,6 +86,15 @@ type ConvertRequestResult =
         body: string;
       };
     };
+
+class RequestTransitionError extends Error {
+  status: 400 | 404 | 409;
+
+  constructor(status: 400 | 404 | 409, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 async function getRequestItems(requestIds: number[]) {
   if (requestIds.length === 0) return [];
@@ -301,54 +321,85 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const [existing] = await db
-        .select({
-          id: calibrationRequest.id,
-          status: calibrationRequest.status,
-        })
-        .from(calibrationRequest)
-        .where(
-          and(
-            eq(calibrationRequest.id, id),
-            eq(calibrationRequest.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
+      const result: ReviewRequestResult = await db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select({
+            id: calibrationRequest.id,
+            status: calibrationRequest.status,
+          })
+          .from(calibrationRequest)
+          .where(
+            and(
+              eq(calibrationRequest.id, id),
+              eq(calibrationRequest.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1)
+          .for("update");
 
-      if (!existing) {
-        return c.json({ error: "Solicitacao nao encontrada" }, 404);
-      }
+        if (!existing) {
+          return {
+            error: {
+              status: 404 as const,
+              body: "Solicitacao nao encontrada",
+            },
+          };
+        }
 
-      if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
-        return c.json(
-          { error: "Somente solicitacoes pendentes podem entrar em revisao" },
-          400,
-        );
-      }
+        if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
+          return {
+            error: {
+              status: 400 as const,
+              body: "Somente solicitacoes pendentes podem entrar em revisao",
+            },
+          };
+        }
 
-      await db
-        .update(calibrationRequest)
-        .set({
-          status: "UNDER_REVIEW",
-          internalNotes: input.internalNotes || null,
-          reviewedBy: session.user.id,
-          reviewedAt: new Date(),
-        })
-        .where(eq(calibrationRequest.id, id));
+        const [updated] = await tx
+          .update(calibrationRequest)
+          .set({
+            status: "UNDER_REVIEW",
+            internalNotes: input.internalNotes || null,
+            reviewedBy: session.user.id,
+            reviewedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(calibrationRequest.id, id),
+              eq(calibrationRequest.status, existing.status),
+            ),
+          )
+          .returning();
 
-      await db.insert(calibrationRequestAuditLog).values({
-        requestId: id,
-        action: "review",
-        changes: {
-          status: {
-            old: existing.status,
-            new: "UNDER_REVIEW",
+        if (!updated) {
+          return {
+            error: {
+              status: 409 as const,
+              body: "Solicitacao foi atualizada por outro usuario",
+            },
+          };
+        }
+
+        await tx.insert(calibrationRequestAuditLog).values({
+          requestId: id,
+          action: "review",
+          changes: {
+            status: {
+              old: existing.status,
+              new: "UNDER_REVIEW",
+            },
+            internalNotes: input.internalNotes || null,
           },
-          internalNotes: input.internalNotes || null,
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") ?? null,
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") ?? null,
+        });
+
+        return { success: true };
       });
+
+      if ("error" in result) {
+        return c.json({ error: result.error.body }, result.error.status);
+      }
 
       return c.json({ success: true });
     },
@@ -594,157 +645,161 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const result: ConvertRequestResult = await db.transaction(async (tx) => {
-        const [request] = await tx
-          .select({
-            id: calibrationRequest.id,
-            status: calibrationRequest.status,
-            customerId: calibrationRequest.customerId,
-          })
-          .from(calibrationRequest)
-          .where(
-            and(
-              eq(calibrationRequest.id, id),
-              eq(calibrationRequest.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1)
-          .for("update");
+      let result: ConvertRequestResult;
+      try {
+        result = await db.transaction(async (tx) => {
+          const [request] = await tx
+            .select({
+              id: calibrationRequest.id,
+              status: calibrationRequest.status,
+              customerId: calibrationRequest.customerId,
+            })
+            .from(calibrationRequest)
+            .where(
+              and(
+                eq(calibrationRequest.id, id),
+                eq(calibrationRequest.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1)
+            .for("update");
 
-        if (!request) {
-          return { error: { status: 404 as const, body: "Solicitacao nao encontrada" } };
-        }
-
-        if (request.status !== "APPROVED") {
-          return {
-            error: {
-              status: 400 as const,
-              body: "Somente solicitacoes aprovadas podem ser convertidas",
-            },
-          };
-        }
-
-        const requestItems = await tx
-          .select({
-            id: calibrationRequestItem.id,
-            assetId: calibrationRequestItem.assetId,
-            convertedJobId: calibrationRequestItem.convertedJobId,
-          })
-          .from(calibrationRequestItem)
-          .where(eq(calibrationRequestItem.requestId, request.id))
-          .orderBy(calibrationRequestItem.id);
-
-        if (requestItems.some((item) => item.convertedJobId)) {
-          return {
-            error: {
-              status: 400 as const,
-              body: "Esta solicitacao ja possui itens convertidos",
-            },
-          };
-        }
-
-        if (requestItems.length !== input.items.length) {
-          return {
-            error: {
-              status: 400 as const,
-              body: "Informe exatamente um mapeamento para cada item da solicitacao",
-            },
-          };
-        }
-
-        const requestItemIds = new Set(requestItems.map((item) => item.id));
-        if (!input.items.every((item) => requestItemIds.has(item.itemId))) {
-          return {
-            error: {
-              status: 400 as const,
-              body: "Um ou mais itens informados nao pertencem a esta solicitacao",
-            },
-          };
-        }
-
-        const requestItemById = new Map(
-          requestItems.map((item) => [item.id, item] as const),
-        );
-        const createdJobs: ConvertedRequestJob[] = [];
-
-        for (const item of input.items) {
-          const requestItem = requestItemById.get(item.itemId);
-
-          if (!requestItem) {
+          if (!request) {
             return {
               error: {
-                status: 400 as const,
-                body: "Item de solicitacao invalido",
+                status: 404 as const,
+                body: "Solicitacao nao encontrada",
               },
             };
           }
 
-          let newJob;
-          try {
-            newJob = await createCalibrationJob({
-              organizationId: member.organizationId,
-              createdBy: session.user.id,
-              assetId: requestItem.assetId,
-              serviceId: item.serviceId,
-              technicianId: item.technicianId,
-              dueDate: item.dueDate,
-              ipAddress,
-              sourceRequestId: request.id,
-              sourceRequestItemId: requestItem.id,
-              executor: tx,
-              notifyOnAssignment: false,
-            });
-          } catch (error) {
-            if (
-              error instanceof Error &&
-              jobCreationClientErrors.has(error.message)
-            ) {
-              return {
-                error: {
-                  status: 400 as const,
-                  body: error.message,
-                },
-              };
-            }
-
-            throw error;
+          if (request.status !== "APPROVED") {
+            return {
+              error: {
+                status: 400 as const,
+                body: "Somente solicitacoes aprovadas podem ser convertidas",
+              },
+            };
           }
 
-          createdJobs.push({
-            requestItemId: requestItem.id,
-            jobId: newJob.id,
-            jobCode: newJob.jobId,
-            status: newJob.status,
-            technicianId: newJob.technicianId,
-          });
+          const requestItems = await tx
+            .select({
+              id: calibrationRequestItem.id,
+              assetId: calibrationRequestItem.assetId,
+              convertedJobId: calibrationRequestItem.convertedJobId,
+            })
+            .from(calibrationRequestItem)
+            .where(eq(calibrationRequestItem.requestId, request.id))
+            .orderBy(calibrationRequestItem.id);
+
+          if (requestItems.some((item) => item.convertedJobId)) {
+            return {
+              error: {
+                status: 400 as const,
+                body: "Esta solicitacao ja possui itens convertidos",
+              },
+            };
+          }
+
+          if (requestItems.length !== input.items.length) {
+            return {
+              error: {
+                status: 400 as const,
+                body: "Informe exatamente um mapeamento para cada item da solicitacao",
+              },
+            };
+          }
+
+          const requestItemIds = new Set(requestItems.map((item) => item.id));
+          if (!input.items.every((item) => requestItemIds.has(item.itemId))) {
+            return {
+              error: {
+                status: 400 as const,
+                body: "Um ou mais itens informados nao pertencem a esta solicitacao",
+              },
+            };
+          }
+
+          const requestItemById = new Map(
+            requestItems.map((item) => [item.id, item] as const),
+          );
+          const createdJobs: ConvertedRequestJob[] = [];
+
+          for (const item of input.items) {
+            const requestItem = requestItemById.get(item.itemId);
+
+            if (!requestItem) {
+              throw new RequestTransitionError(400, "Item de solicitacao invalido");
+            }
+
+            let newJob;
+            try {
+              newJob = await createCalibrationJob({
+                organizationId: member.organizationId,
+                createdBy: session.user.id,
+                assetId: requestItem.assetId,
+                serviceId: item.serviceId,
+                technicianId: item.technicianId,
+                dueDate: item.dueDate,
+                ipAddress,
+                sourceRequestId: request.id,
+                sourceRequestItemId: requestItem.id,
+                executor: tx,
+                notifyOnAssignment: false,
+              });
+            } catch (error) {
+              if (
+                error instanceof Error &&
+                jobCreationClientErrors.has(error.message)
+              ) {
+                throw new RequestTransitionError(400, error.message);
+              }
+
+              throw error;
+            }
+
+            createdJobs.push({
+              requestItemId: requestItem.id,
+              jobId: newJob.id,
+              jobCode: newJob.jobId,
+              status: newJob.status,
+              technicianId: newJob.technicianId,
+            });
+
+            await tx
+              .update(calibrationRequestItem)
+              .set({ convertedJobId: newJob.id })
+              .where(eq(calibrationRequestItem.id, requestItem.id));
+          }
 
           await tx
-            .update(calibrationRequestItem)
-            .set({ convertedJobId: newJob.id })
-            .where(eq(calibrationRequestItem.id, requestItem.id));
+            .update(calibrationRequest)
+            .set({
+              status: "CONVERTED",
+              convertedBy: session.user.id,
+              convertedAt: new Date(),
+            })
+            .where(eq(calibrationRequest.id, request.id));
+
+          await tx.insert(calibrationRequestAuditLog).values({
+            requestId: request.id,
+            action: "convert",
+            changes: {
+              jobs: createdJobs.map(({ technicianId: _technicianId, ...job }) => job),
+            },
+            performedBy: session.user.id,
+            ipAddress,
+          });
+
+          return { createdJobs };
+        });
+      } catch (error) {
+        if (error instanceof RequestTransitionError) {
+          return c.json({ error: error.message }, error.status);
         }
 
-        await tx
-          .update(calibrationRequest)
-          .set({
-            status: "CONVERTED",
-            convertedBy: session.user.id,
-            convertedAt: new Date(),
-          })
-          .where(eq(calibrationRequest.id, request.id));
-
-        await tx.insert(calibrationRequestAuditLog).values({
-          requestId: request.id,
-          action: "convert",
-          changes: {
-            jobs: createdJobs.map(({ technicianId: _technicianId, ...job }) => job),
-          },
-          performedBy: session.user.id,
-          ipAddress,
-        });
-
-        return { createdJobs };
-      });
+        throw error;
+      }
 
       if ("error" in result) {
         return c.json({ error: result.error.body }, result.error.status);

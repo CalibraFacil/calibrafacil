@@ -300,8 +300,18 @@ export const ListCalibrationRequestsQuerySchema = z.object({
   query: z.string().optional(),
   status: CalibrationRequestStatusSchema.optional(),
   customerId: z.coerce.number().optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
+  dateFrom: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data inicial invalida",
+    })
+    .optional(),
+  dateTo: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data final invalida",
+    })
+    .optional(),
 });
 
 export type ListCalibrationRequestsQuery = z.infer<
