@@ -60,7 +60,7 @@ const statusLabels: Record<JobStatus, string> = {
 }
 
 function JobsListPage() {
-  const { activeOrganizationId } = useDashboardContextState()
+  const { activeOrganizationId, isContextSwitching } = useDashboardContextState()
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('')
@@ -68,8 +68,17 @@ function JobsListPage() {
   const limit = 20
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['jobs', activeOrganizationId, page, search, statusFilter],
-    enabled: !!activeOrganizationId,
+    // The authenticated lab session determines the active org server-side.
+    // Keep the org id in the query key for cache scoping, but don't block the
+    // request on the hook alone because it can lag behind the actual session.
+    queryKey: [
+      'jobs',
+      activeOrganizationId ?? 'session-active',
+      page,
+      search,
+      statusFilter,
+    ],
+    enabled: !isContextSwitching,
     queryFn: async () => {
       const res = await api.api.jobs.$get({
         query: {
@@ -101,13 +110,12 @@ function JobsListPage() {
     setPage(1)
   }
 
-  if (!activeOrganizationId) {
+  if (isContextSwitching) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Selecione uma organização ativa para visualizar as ordens de
-            serviço.
+            Carregando o contexto da organização ativa.
           </p>
         </CardContent>
       </Card>

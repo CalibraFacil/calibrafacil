@@ -226,6 +226,8 @@ function CalibrationRequestDetailPage() {
     },
   })
 
+  const request = detailQuery.data
+
   useEffect(() => {
     setConversionDrafts({})
     setInternalNotes('')
@@ -258,6 +260,40 @@ function CalibrationRequestDetailPage() {
       )
     })
   }, [detailQuery.data])
+
+  useEffect(() => {
+    if (!request || !servicesQuery.data?.data) return
+
+    setConversionDrafts((current) => {
+      let changed = false
+      const next = { ...current }
+
+      for (const item of request.items) {
+        if (item.convertedJobId) continue
+
+        const compatibleServices = servicesQuery.data.data.filter(
+          (service) =>
+            service.methodId !== null &&
+            service.methodStatus === 'PUBLISHED' &&
+            (!service.assetTypeId || service.assetTypeId === item.assetTypeId),
+        )
+
+        if (
+          compatibleServices.length === 1 &&
+          !next[item.id]?.serviceId
+        ) {
+          next[item.id] = {
+            serviceId: String(compatibleServices[0].id),
+            technicianId: next[item.id]?.technicianId || '',
+            dueDate: next[item.id]?.dueDate || '',
+          }
+          changed = true
+        }
+      }
+
+      return changed ? next : current
+    })
+  }, [request, servicesQuery.data])
 
   const invalidate = async () => {
     await Promise.all([
@@ -377,16 +413,47 @@ function CalibrationRequestDetailPage() {
     onError: (error) => toast.error(error.message),
   })
 
-  const request = detailQuery.data
+  const pendingConversionItems = useMemo(
+    () => request?.items.filter((item) => item.convertedJobId === null) ?? [],
+    [request],
+  )
+
+  const conversionBlockedReason = useMemo(() => {
+    if (!request || request.status !== 'APPROVED') return null
+    if (pendingConversionItems.length === 0) {
+      return 'Todos os itens desta solicitação já foram convertidos.'
+    }
+
+    const itemsWithoutService = pendingConversionItems.filter((item) => {
+      const draft = conversionDrafts[item.id]
+      return !draft?.serviceId
+    })
+
+    if (itemsWithoutService.length === 0) return null
+
+    const itemsWithoutCompatibleService = itemsWithoutService.filter((item) => {
+      const compatibleServices =
+        servicesQuery.data?.data.filter(
+          (service) =>
+            service.methodId !== null &&
+            service.methodStatus === 'PUBLISHED' &&
+            (!service.assetTypeId || service.assetTypeId === item.assetTypeId),
+        ) ?? []
+
+      return compatibleServices.length === 0
+    })
+
+    if (itemsWithoutCompatibleService.length > 0) {
+      return 'Há ativos sem serviço compatível publicado. Ajuste os serviços cadastrados antes de converter.'
+    }
+
+    return 'Selecione um serviço para cada ativo acima para habilitar a conversão.'
+  }, [conversionDrafts, pendingConversionItems, request, servicesQuery.data])
 
   const canConvert = useMemo(() => {
     if (!request || request.status !== 'APPROVED') return false
-
-    return request.items.every((item) => {
-      const draft = conversionDrafts[item.id]
-      return draft?.serviceId
-    })
-  }, [conversionDrafts, request])
+    return pendingConversionItems.length > 0 && !conversionBlockedReason
+  }, [conversionBlockedReason, pendingConversionItems.length, request])
 
   if (detailQuery.isLoading) {
     return (
@@ -686,6 +753,12 @@ function CalibrationRequestDetailPage() {
               </Button>
             )}
           </div>
+
+          {request.status === 'APPROVED' && conversionBlockedReason && (
+            <p className="text-sm text-muted-foreground">
+              {conversionBlockedReason}
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>
