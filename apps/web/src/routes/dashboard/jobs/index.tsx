@@ -61,7 +61,6 @@ const statusLabels: Record<JobStatus, string> = {
 
 function JobsListPage() {
   const { activeOrganizationId } = useDashboardContextState()
-  const organizationQueryKey = activeOrganizationId ?? 'no-org'
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('')
@@ -69,7 +68,8 @@ function JobsListPage() {
   const limit = 20
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['jobs', organizationQueryKey, page, search, statusFilter],
+    queryKey: ['jobs', activeOrganizationId, page, search, statusFilter],
+    enabled: !!activeOrganizationId,
     queryFn: async () => {
       const res = await api.api.jobs.$get({
         query: {

@@ -88,9 +88,26 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
         try {
           const { cancelSubscription } = await import("../../services/asaas");
           await cancelSubscription(sub.asaasSubscriptionId);
+
+          const [updated] = await db
+            .update(subscription)
+            .set({
+              status: "CANCELED",
+              canceledAt: new Date(),
+            })
+            .where(eq(subscription.id, sub.id))
+            .returning();
+
+          return c.json({ subscription: updated });
         } catch (error) {
           console.error("Error canceling Asaas subscription:", error);
-          // Continue with local cancellation even if Asaas fails
+          return c.json(
+            {
+              error:
+                "Falha ao cancelar assinatura no provedor de pagamento. Tente novamente.",
+            },
+            502,
+          );
         }
       }
 
