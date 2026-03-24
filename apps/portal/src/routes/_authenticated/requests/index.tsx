@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useDeferredValue, useEffect, useState } from "react";
+import { type ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -7,11 +7,19 @@ import {
   Notebook01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { DataTable } from "@/components/ui/data-table";
+import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { getApiBaseUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/requests/")({
@@ -135,156 +143,165 @@ function RequestsPage() {
     },
   });
 
+  const columns: Array<ColumnDef<CalibrationRequest>> = useMemo(
+    () => [
+      {
+        accessorKey: "id",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Solicitação" />
+        ),
+        cell: ({ row }) => (
+          <div className="space-y-1">
+            <Link
+              to="/requests/$id"
+              params={{ id: String(row.original.id) }}
+              className="font-medium hover:underline"
+            >
+              Solicitação #{row.original.id}
+            </Link>
+            <p className="text-xs text-muted-foreground">
+              {row.original.itemCount} ativo(s)
+            </p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "submittedAt",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Enviada em" />
+        ),
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {formatDate(row.original.submittedAt)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "requestedDueDate",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Prazo solicitado" />
+        ),
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {formatDate(row.original.requestedDueDate)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "observations",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Observações" />
+        ),
+        cell: ({ row }) => (
+          <p className="max-w-[28rem] truncate text-muted-foreground">
+            {row.original.observations?.trim() || "Sem observações informadas."}
+          </p>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Status" />
+        ),
+        cell: ({ row }) => (
+          <span
+            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses[row.original.status]}`}
+          >
+            {statusLabels[row.original.status]}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Solicitações de Calibração
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Acompanhe as solicitações enviadas ao laboratório.
-          </p>
-        </div>
-
-        <Button render={<Link to="/requests/new" />}>
-          <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
-          Nova Solicitação
-        </Button>
-      </div>
-
-      <div className="relative w-full sm:max-w-sm">
-        <HugeiconsIcon
-          icon={Search01Icon}
-          className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <Input
-          placeholder="Buscar por número ou observações..."
-          aria-label="Buscar por número ou observações"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
-      </div>
-
-      {isLoading && (
-        <div className="flex items-center justify-center py-10">
-          <Spinner className="size-8" />
-        </div>
-      )}
-
-      {error && (
-        <Card>
-          <CardContent className="py-6 text-center text-destructive">
-            Erro ao carregar solicitações.
-          </CardContent>
-        </Card>
-      )}
-
-      {!isLoading && !error && (data?.data.length ?? 0) === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-            <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
-              <HugeiconsIcon
-                icon={Notebook01Icon}
-                className="size-6 text-primary"
-              />
-            </div>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="font-medium">Nenhuma solicitação encontrada</h2>
-              <p className="text-sm text-muted-foreground">
-                {deferredSearch
-                  ? "Tente ajustar os termos da busca."
-                  : "Envie sua primeira solicitação de calibração para começar."}
-              </p>
+              <CardTitle>Solicitações de Calibração</CardTitle>
+              <CardDescription>
+                Acompanhe as solicitações enviadas ao laboratório.
+              </CardDescription>
             </div>
-            {!deferredSearch && (
-              <Button render={<Link to="/requests/new" />}>
-                Criar Solicitação
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
-      {!isLoading && !error && (data?.data.length ?? 0) > 0 && (
-        <div className="space-y-4">
-          {data?.data.map((request) => (
-            <Link
-              key={request.id}
-              to="/requests/$id"
-              params={{ id: String(request.id) }}
-              className="block"
-            >
-              <Card className="transition-colors hover:bg-muted/30">
-                <CardContent className="flex flex-col gap-4 py-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">
-                          Solicitação #{request.id}
-                        </span>
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses[request.status]}`}
-                        >
-                          {statusLabels[request.status]}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {request.itemCount} ativo(s) · Enviada em{" "}
-                        {formatDate(request.submittedAt)}
-                      </p>
-                    </div>
+            <Button render={<Link to="/requests/new" />}>
+              <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
+              Nova Solicitação
+            </Button>
+          </div>
+        </CardHeader>
 
-                    <div className="text-sm text-muted-foreground">
-                      Prazo solicitado: {formatDate(request.requestedDueDate)}
-                    </div>
-                  </div>
+        <CardContent className="space-y-4">
+          <div className="relative w-full sm:max-w-sm">
+            <HugeiconsIcon
+              icon={Search01Icon}
+              className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              placeholder="Buscar por número ou observações..."
+              aria-label="Buscar por número ou observações"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
 
-                  <p className="text-sm text-muted-foreground">
-                    {request.observations?.trim()
-                      ? request.observations
-                      : "Sem observações informadas."}
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-
-          {data && data.pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                Página {data.pagination.page} de {data.pagination.totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setPage((currentPage) => Math.max(1, currentPage - 1))
-                  }
-                  disabled={page === 1}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setPage((currentPage) =>
-                      Math.min(data.pagination.totalPages, currentPage + 1),
-                    )
-                  }
-                  disabled={page === data.pagination.totalPages}
-                >
-                  Próxima
-                </Button>
-              </div>
+          {error && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
+              {error.message}
             </div>
           )}
-        </div>
-      )}
+
+          {!error &&
+            !isLoading &&
+            (data?.data.length ?? 0) === 0 &&
+            !deferredSearch && (
+              <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed py-12 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
+                  <HugeiconsIcon
+                    icon={Notebook01Icon}
+                    className="size-6 text-primary"
+                  />
+                </div>
+                <div>
+                  <h2 className="font-medium">
+                    Nenhuma solicitação encontrada
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Envie sua primeira solicitação de calibração para começar.
+                  </p>
+                </div>
+                <Button render={<Link to="/requests/new" />}>
+                  Criar Solicitação
+                </Button>
+              </div>
+            )}
+
+          {!error &&
+            ((data?.data.length ?? 0) > 0 || deferredSearch || isLoading) && (
+              <DataTable
+                columns={columns}
+                data={data?.data ?? []}
+                isLoading={isLoading}
+                pagination={data?.pagination}
+                onPageChange={setPage}
+                itemName="solicitações"
+              />
+            )}
+
+          {!error && !isLoading && deferredSearch && (
+            <p className="text-sm text-muted-foreground">
+              {data?.pagination.total ?? 0} resultado
+              {(data?.pagination.total ?? 0) !== 1 ? "s" : ""} encontrado
+              {(data?.pagination.total ?? 0) !== 1 ? "s" : ""}.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
