@@ -30,6 +30,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
+import { useDashboardContextState } from '../route'
 import { type Job, jobsColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/jobs/')({
@@ -59,6 +60,8 @@ const statusLabels: Record<JobStatus, string> = {
 }
 
 function JobsListPage() {
+  const { activeOrganizationId } = useDashboardContextState()
+  const organizationQueryKey = activeOrganizationId ?? 'no-org'
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('')
@@ -66,7 +69,7 @@ function JobsListPage() {
   const limit = 20
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['jobs', page, search, statusFilter],
+    queryKey: ['jobs', organizationQueryKey, page, search, statusFilter],
     queryFn: async () => {
       const res = await api.api.jobs.$get({
         query: {

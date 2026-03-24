@@ -264,8 +264,12 @@ function CalibrationRequestDetailPage() {
       queryClient.invalidateQueries({
         queryKey: ['calibration-request', organizationQueryKey, id],
       }),
-      queryClient.invalidateQueries({ queryKey: ['calibration-requests'] }),
-      queryClient.invalidateQueries({ queryKey: ['jobs'] }),
+      queryClient.invalidateQueries({
+        queryKey: ['calibration-requests', organizationQueryKey],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['jobs', organizationQueryKey],
+      }),
     ])
   }
 
@@ -337,7 +341,10 @@ function CalibrationRequestDetailPage() {
 
   const convertMutation = useMutation({
     mutationFn: async () => {
-      const items = detailQuery.data?.items ?? []
+      const items =
+        detailQuery.data?.items.filter(
+          (item) => item.convertedJobId === null,
+        ) ?? []
       const payload = items.map((item) => {
         const draft = conversionDrafts[item.id]
 

@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { DataTable } from '@/components/ui/data-table'
+import { useDashboardContextState } from '../route'
 
 export const Route = createFileRoute('/dashboard/requests/')({
   head: () => ({
@@ -70,6 +71,8 @@ function formatDate(date: string | null | undefined) {
 }
 
 function RequestsPage() {
+  const { activeOrganizationId } = useDashboardContextState()
+  const organizationQueryKey = activeOrganizationId ?? 'no-org'
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<RequestStatus | ''>('')
@@ -81,7 +84,13 @@ function RequestsPage() {
   }, [deferredSearch])
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['calibration-requests', page, deferredSearch, statusFilter],
+    queryKey: [
+      'calibration-requests',
+      organizationQueryKey,
+      page,
+      deferredSearch,
+      statusFilter,
+    ],
     queryFn: async () => {
       const res = await api.api['calibration-requests'].$get({
         query: {

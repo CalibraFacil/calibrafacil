@@ -898,15 +898,19 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: result.error.body }, result.error.status);
       }
 
-      for (const job of result.createdJobs) {
-        if (!job.technicianId) continue;
+      const notificationResults = await Promise.allSettled(
+        result.createdJobs
+          .filter((job) => job.technicianId)
+          .map((job) =>
+            notifyJobAssigned(job.jobId, job.technicianId!, session.user.id),
+          ),
+      );
 
-        try {
-          await notifyJobAssigned(job.jobId, job.technicianId, session.user.id);
-        } catch (error) {
+      for (const notificationResult of notificationResults) {
+        if (notificationResult.status === "rejected") {
           console.error(
             "[Calibration Requests] Failed to send assignment notification:",
-            error,
+            notificationResult.reason,
           );
         }
       }

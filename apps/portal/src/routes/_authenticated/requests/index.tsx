@@ -99,7 +99,36 @@ function RequestsPage() {
       );
 
       if (!response.ok) {
-        throw new Error("Falha ao carregar solicitacoes");
+        let errorMessage = `Falha ao carregar solicitacoes (${response.status})`;
+        const jsonResponse = response.clone();
+
+        try {
+          const errorBody = (await jsonResponse.json()) as
+            | {
+                error?: string;
+                errors?: Array<{ message?: string }>;
+              }
+            | undefined;
+
+          errorMessage =
+            errorBody?.error ||
+            errorBody?.errors
+              ?.map((item) => item.message)
+              .filter(Boolean)
+              .join(", ") ||
+            errorMessage;
+        } catch {
+          try {
+            const errorText = await response.text();
+            if (errorText.trim()) {
+              errorMessage = `${errorText.trim()} (${response.status})`;
+            }
+          } catch {
+            // Ignore parse failures and keep the default message.
+          }
+        }
+
+        throw new Error(errorMessage);
       }
 
       return response.json();
