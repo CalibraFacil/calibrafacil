@@ -11,12 +11,14 @@ import {
 import { customersRouter } from "./routes/customers";
 import { invitationsRouter } from "./routes/invitations";
 import { portalRouter } from "./routes/portal";
+import { portalRequestsRouter } from "./routes/portal-requests";
 import { assetsRouter } from "./routes/assets";
 import { assetTypesRouter } from "./routes/asset-types";
 import { methodsRouter } from "./routes/methods";
 import { servicesRouter } from "./routes/services";
 import { standardsRouter } from "./routes/standards";
 import { jobsRouter } from "./routes/jobs";
+import { calibrationRequestsRouter } from "./routes/calibration-requests";
 import { verifyRouter } from "./routes/verify";
 import { dashboardRouter } from "./routes/dashboard";
 import { billingRouter } from "./routes/billing";
@@ -176,12 +178,14 @@ const routes = app
   .route("/api/customers", customersRouter)
   .route("/api/invitations", invitationsRouter)
   .route("/api/portal", portalRouter)
+  .route("/api/portal/requests", portalRequestsRouter)
   .route("/api/assets", assetsRouter)
   .route("/api/asset-types", assetTypesRouter)
   .route("/api/methods", methodsRouter)
   .route("/api/services", servicesRouter)
   .route("/api/standards", standardsRouter)
   .route("/api/jobs", jobsRouter)
+  .route("/api/calibration-requests", calibrationRequestsRouter)
   .route("/api/verify", verifyRouter)
   .route("/api/dashboard", dashboardRouter)
   .route("/api/billing", billingRouter)

@@ -60,6 +60,10 @@ const routeLabels: Record<string, string> = {
   '/dashboard/jobs/$id': 'Ordem de Serviço',
   '/dashboard/jobs/$id/execute': 'Executar',
 
+  // Calibration Requests
+  '/dashboard/requests': 'Solicitações de Calibração',
+  '/dashboard/requests/$id': 'Solicitação',
+
   // Services
   '/dashboard/services': 'Serviços',
   '/dashboard/services/new': 'Novo Serviço',

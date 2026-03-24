@@ -30,6 +30,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
+import { useDashboardContextState } from '../route'
 import { type Job, jobsColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/jobs/')({
@@ -59,6 +60,7 @@ const statusLabels: Record<JobStatus, string> = {
 }
 
 function JobsListPage() {
+  const { activeOrganizationId, isContextSwitching } = useDashboardContextState()
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('')
@@ -66,7 +68,17 @@ function JobsListPage() {
   const limit = 20
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['jobs', page, search, statusFilter],
+    // The authenticated lab session determines the active org server-side.
+    // Keep the org id in the query key for cache scoping, but don't block the
+    // request on the hook alone because it can lag behind the actual session.
+    queryKey: [
+      'jobs',
+      activeOrganizationId ?? 'session-active',
+      page,
+      search,
+      statusFilter,
+    ],
+    enabled: !isContextSwitching,
     queryFn: async () => {
       const res = await api.api.jobs.$get({
         query: {
@@ -96,6 +108,18 @@ function JobsListPage() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     setPage(1)
+  }
+
+  if (isContextSwitching) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-muted-foreground">
+            Carregando o contexto da organização ativa.
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
   if (error) {

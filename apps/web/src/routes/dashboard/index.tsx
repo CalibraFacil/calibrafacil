@@ -1,7 +1,11 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { RefreshIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import {
+  Notebook01Icon,
+  RefreshIcon,
+  PlusSignIcon,
+} from '@hugeicons/core-free-icons'
 import { useEffect, useRef } from 'react'
 
 import { api } from '@/utils/api'
@@ -132,6 +136,19 @@ function DashboardIndex() {
               className={cn('size-4', isRefetching && 'animate-spin')}
             />
             <span className="hidden sm:inline">Atualizar</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label="Solicitações"
+            render={<Link to="/dashboard/requests" />}
+          >
+            <HugeiconsIcon
+              icon={Notebook01Icon}
+              className="size-4"
+              aria-hidden="true"
+            />
+            <span className="sr-only sm:not-sr-only">Solicitações</span>
           </Button>
           <Button size="sm" render={<Link to="/dashboard/jobs/new" />}>
             <HugeiconsIcon icon={PlusSignIcon} className="size-4" />

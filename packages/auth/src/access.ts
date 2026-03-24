@@ -72,6 +72,18 @@ export const statements = {
   ],
 
   // ---------------------------------------------------------------------------
+  // REQUEST - Client portal calibration intake queue
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Submit a new client calibration request
+   * - read: View request details and queue state
+   * - update: Review, approve, reject, and annotate requests
+   * - convert: Convert approved requests into internal calibration jobs
+   */
+  request: ["create", "read", "update", "convert"],
+
+  // ---------------------------------------------------------------------------
   // TEMPLATE - Calculation templates that define math models and form schemas
   // ---------------------------------------------------------------------------
   /**
@@ -260,6 +272,7 @@ export const member = ac.newRole({
 
   // Read-only access to operational data
   calibration: ["read"],
+  request: ["read"],
   template: ["read"],
   standard: ["read"],
   equipment: ["read"],
@@ -296,6 +309,7 @@ export const technician = ac.newRole({
   // - Can submit for review (Draft -> Review)
   // - CANNOT approve or reject (manager only - ISO 17025 clause 6.2.4)
   calibration: ["create", "read", "update", "delete", "submit"],
+  request: ["read", "update", "convert"],
 
   // Read-only access to templates (cannot modify calculation logic)
   template: ["read"],
@@ -356,6 +370,7 @@ export const admin = ac.newRole({
     "approve",
     "reject",
   ],
+  request: ["create", "read", "update", "convert"],
 
   // Full template management
   template: ["create", "read", "update", "delete", "publish"],
@@ -424,6 +439,7 @@ export const owner = ac.newRole({
     "approve",
     "reject",
   ],
+  request: ["create", "read", "update", "convert"],
 
   // Full template management
   template: ["create", "read", "update", "delete", "publish"],
@@ -487,6 +503,9 @@ export const client_user = ac.newRole({
 
   // Calibration: read-only access to see status
   calibration: ["read"],
+
+  // Requests: create and track portal intake
+  request: ["create", "read"],
 
   // Certificates: full access to their certificates
   certificate: ["read", "download", "verify"],
@@ -613,7 +632,7 @@ export const roleDescriptions: Record<RoleName, string> = {
   admin: "Controle operacional completo, aprova e rejeita calibrações",
   owner: "Controle total incluindo faturamento e exclusão da organização",
   client_user:
-    "Acesso ao portal do cliente para visualizar ativos e certificados",
+    "Acesso ao portal do cliente para visualizar ativos, certificados e solicitações",
 };
 
 /**

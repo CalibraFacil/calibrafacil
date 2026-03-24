@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
 import {
   member,
@@ -6,12 +7,26 @@ import {
   customer,
   calibrationJob,
   asset,
+  assetType,
   service,
 } from "@calibra-facil/db/schema";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
-import { eq, and, inArray, desc, count } from "drizzle-orm";
+import {
+  eq,
+  and,
+  inArray,
+  desc,
+  count,
+  isNull,
+  ilike,
+  or,
+  sql,
+} from "drizzle-orm";
+import { ListAssetsQuerySchema } from "@calibra-facil/schemas";
 import {
   requirePortalAuth,
+  requirePermission,
+  requirePortalProtected,
   type AuthVariables,
 } from "../middleware/permission";
 import {
@@ -69,6 +84,101 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "Erro ao listar organizações" }, 500);
     }
   })
+
+  // =========================================================================
+  // GET /assets - List assets for active portal organization
+  // =========================================================================
+  .get(
+    "/assets",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
+    zValidator("query", ListAssetsQuerySchema),
+    async (c) => {
+      const member = c.get("member");
+
+      try {
+        const { page, limit, query } = c.req.valid("query");
+        const offset = (page - 1) * limit;
+
+        const [linkedCustomer] = await db
+          .select({
+            id: customer.id,
+          })
+          .from(customer)
+          .where(eq(customer.authOrganizationId, member.organizationId))
+          .limit(1);
+
+        if (!linkedCustomer) {
+          return c.json({
+            data: [],
+            pagination: { page, limit, total: 0, totalPages: 0 },
+          });
+        }
+
+        const whereCondition = and(
+          eq(asset.customerId, linkedCustomer.id),
+          eq(asset.status, "ACTIVE"),
+          isNull(asset.deletedAt),
+          query
+            ? or(
+                ilike(asset.name, `%${query}%`),
+                ilike(asset.tag, `%${query}%`),
+                ilike(asset.serialNumber, `%${query}%`),
+                ilike(asset.manufacturer, `%${query}%`),
+                ilike(asset.model, `%${query}%`),
+              )
+            : undefined,
+        );
+
+        const [countResult] = await db
+          .select({ total: count() })
+          .from(asset)
+          .where(whereCondition);
+
+        const assets = await db
+          .select({
+            id: asset.id,
+            customerId: asset.customerId,
+            customerName: customer.name,
+            assetTypeId: asset.assetTypeId,
+            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+            assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
+            name: asset.name,
+            manufacturer: asset.manufacturer,
+            model: asset.model,
+            serialNumber: asset.serialNumber,
+            tag: asset.tag,
+            status: asset.status,
+            specifications: asset.specifications,
+            lastCalibrationDate: asset.lastCalibrationDate,
+            nextCalibrationDate: asset.nextCalibrationDate,
+            comments: asset.comments,
+            createdAt: asset.createdAt,
+            updatedAt: asset.updatedAt,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+          .where(whereCondition)
+          .orderBy(asset.tag)
+          .limit(limit)
+          .offset(offset);
+
+        return c.json({
+          data: assets,
+          pagination: {
+            page,
+            limit,
+            total: countResult?.total ?? 0,
+            totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+          },
+        });
+      } catch (error) {
+        console.error("Error listing portal assets:", error);
+        return c.json({ error: "Erro ao listar ativos" }, 500);
+      }
+    },
+  )
 
   // =========================================================================
   // GET /certificates - List certificates for portal user

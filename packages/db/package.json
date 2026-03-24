@@ -24,6 +24,7 @@
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.8.3",
+    "kysely": "^0.28.14",
     "postgres": "^3.4.7"
   },
   "devDependencies": {

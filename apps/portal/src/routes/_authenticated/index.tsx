@@ -1,6 +1,10 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { File01Icon, Wrench01Icon } from "@hugeicons/core-free-icons";
+import {
+  File01Icon,
+  Notebook01Icon,
+  Wrench01Icon,
+} from "@hugeicons/core-free-icons";
 
 import {
   Card,
@@ -29,7 +33,7 @@ function PortalHome() {
       </Card>
 
       {/* Feature Cards */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         {/* Assets Card */}
         <Card className="hover:bg-muted/50 transition-colors">
           <CardHeader>
@@ -55,6 +59,34 @@ function PortalHome() {
               render={<Link to="/assets" />}
             >
               Ver Ativos
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:bg-muted/50 transition-colors">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
+                <HugeiconsIcon
+                  icon={Notebook01Icon}
+                  className="size-5 text-primary"
+                />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Solicitações</CardTitle>
+                <CardDescription>
+                  Solicite novas calibracoes para seus equipamentos
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="outline"
+              className="w-full"
+              render={<Link to="/requests" />}
+            >
+              Ver Solicitações
             </Button>
           </CardContent>
         </Card>

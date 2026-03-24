@@ -1,11 +1,8 @@
+import type { Context } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import { db } from "@calibra-facil/db";
-import {
-  subscription,
-  calibrationJob,
-  member,
-} from "@calibra-facil/db/schema";
+import { subscription, calibrationJob, member } from "@calibra-facil/db/schema";
 import { eq, and, gte, count } from "drizzle-orm";
 import {
   getPlan,
@@ -46,59 +43,84 @@ export type LimitResource = keyof PlanLimits;
  * // In invitations.ts - check user limit before inviting
  * .post("/", ...withLabPermission({ member: ["create"] }), requirePlanLimit("users"), handler)
  */
+export async function assertPlanLimit(
+  c: Context<{ Variables: AuthVariables }>,
+  resource: LimitResource,
+  requested = 1,
+) {
+  const memberData = c.get("member");
+  const kv = (c.env as Record<string, unknown>).CACHE as
+    | KVNamespace
+    | undefined;
+  const requestedCount = Math.max(0, requested);
+
+  // Get subscription (cached)
+  const sub = await getCachedSubscription(kv, memberData.organizationId);
+
+  // Determine effective plan (FREE if no subscription)
+  const planId: PlanId = (sub?.planId as PlanId) || "FREE";
+  const status = sub?.status || "TRIAL";
+
+  // Check if subscription allows access
+  if (sub && !isSubscriptionActive(status) && status !== "PAST_DUE") {
+    throw new HTTPException(402, {
+      message: "Assinatura inativa. Ative um plano para continuar.",
+      cause: { code: "SUBSCRIPTION_INACTIVE", planId, status },
+    });
+  }
+
+  // Warn but allow for PAST_DUE (soft block)
+  if (status === "PAST_DUE") {
+    c.header("X-Subscription-Warning", "past_due");
+    c.header(
+      "X-Subscription-Message",
+      "Pagamento pendente. Regularize para evitar bloqueio.",
+    );
+  }
+
+  // Get plan limits
+  const limit = getLimit(planId, resource);
+
+  // Get current usage (cached)
+  const usage = await getCachedResourceUsage(
+    kv,
+    memberData.organizationId,
+    resource,
+  );
+  const projectedUsage = usage + requestedCount;
+
+  // Check if limit exceeded
+  if (projectedUsage > limit) {
+    const plan = getPlan(planId);
+    const message =
+      requestedCount > 1
+        ? `Limite de ${getResourceLabel(resource)} seria excedido (${projectedUsage}/${limit}) nesta operacao. Faca upgrade para o proximo plano.`
+        : `Limite de ${getResourceLabel(resource)} atingido (${usage}/${limit}). Faca upgrade para o proximo plano.`;
+
+    throw new HTTPException(402, {
+      message,
+      cause: {
+        code: "LIMIT_EXCEEDED",
+        resource,
+        current: usage,
+        requested: requestedCount,
+        projected: projectedUsage,
+        limit,
+        planId,
+        planName: plan.name,
+      },
+    });
+  }
+
+  // Add usage info to response headers (for UI display)
+  c.header("X-Plan-Id", planId);
+  c.header(`X-Usage-${resource}`, String(usage));
+  c.header(`X-Limit-${resource}`, String(limit));
+}
+
 export function requirePlanLimit(resource: LimitResource) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
-    const memberData = c.get("member");
-    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
-
-    // Get subscription (cached)
-    const sub = await getCachedSubscription(kv, memberData.organizationId);
-
-    // Determine effective plan (FREE if no subscription)
-    const planId: PlanId = sub?.planId as PlanId || "FREE";
-    const status = sub?.status || "TRIAL";
-
-    // Check if subscription allows access
-    if (sub && !isSubscriptionActive(status) && status !== "PAST_DUE") {
-      throw new HTTPException(402, {
-        message: "Assinatura inativa. Ative um plano para continuar.",
-        cause: { code: "SUBSCRIPTION_INACTIVE", planId, status },
-      });
-    }
-
-    // Warn but allow for PAST_DUE (soft block)
-    if (status === "PAST_DUE") {
-      c.header("X-Subscription-Warning", "past_due");
-      c.header("X-Subscription-Message", "Pagamento pendente. Regularize para evitar bloqueio.");
-    }
-
-    // Get plan limits
-    const limit = getLimit(planId, resource);
-
-    // Get current usage (cached)
-    const usage = await getCachedResourceUsage(kv, memberData.organizationId, resource);
-
-    // Check if limit exceeded
-    if (usage >= limit) {
-      const plan = getPlan(planId);
-      throw new HTTPException(402, {
-        message: `Limite de ${getResourceLabel(resource)} atingido (${usage}/${limit}). Faca upgrade para o proximo plano.`,
-        cause: {
-          code: "LIMIT_EXCEEDED",
-          resource,
-          current: usage,
-          limit,
-          planId,
-          planName: plan.name,
-        },
-      });
-    }
-
-    // Add usage info to response headers (for UI display)
-    c.header("X-Plan-Id", planId);
-    c.header(`X-Usage-${resource}`, String(usage));
-    c.header(`X-Limit-${resource}`, String(limit));
-
+    await assertPlanLimit(c, resource);
     await next();
   });
 }
@@ -116,13 +138,15 @@ export function requirePlanLimit(resource: LimitResource) {
 export function requireFeature(feature: FeatureFlag) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
     const memberData = c.get("member");
-    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
+    const kv = (c.env as Record<string, unknown>).CACHE as
+      | KVNamespace
+      | undefined;
 
     // Get subscription (cached)
     const sub = await getCachedSubscription(kv, memberData.organizationId);
 
     // Determine effective plan (FREE if no subscription)
-    const planId: PlanId = sub?.planId as PlanId || "FREE";
+    const planId: PlanId = (sub?.planId as PlanId) || "FREE";
     const status = sub?.status || "TRIAL";
 
     // Check if subscription allows access
@@ -229,7 +253,7 @@ async function getCachedResourceUsage(
  */
 async function getResourceUsage(
   organizationId: string,
-  resource: LimitResource
+  resource: LimitResource,
 ): Promise<number> {
   switch (resource) {
     case "certificates":
@@ -244,7 +268,7 @@ async function getResourceUsage(
 }
 
 /**
- * Get certificate usage (approved jobs this month)
+ * Get certificate usage (jobs created this month)
  */
 async function getCertificateUsage(organizationId: string): Promise<number> {
   const startOfMonth = new Date();
@@ -257,9 +281,8 @@ async function getCertificateUsage(organizationId: string): Promise<number> {
     .where(
       and(
         eq(calibrationJob.organizationId, organizationId),
-        eq(calibrationJob.status, "APPROVED"),
-        gte(calibrationJob.approvedAt, startOfMonth)
-      )
+        gte(calibrationJob.createdAt, startOfMonth),
+      ),
     );
 
   return result?.count ?? 0;

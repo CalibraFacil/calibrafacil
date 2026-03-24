@@ -11,7 +11,11 @@
     "build": "tsc",
     "typecheck": "tsc"
   },
-  "keywords": ["notifications", "calibration", "iso17025"],
+  "keywords": [
+    "notifications",
+    "calibration",
+    "iso17025"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {

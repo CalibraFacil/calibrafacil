@@ -257,6 +257,124 @@ export const ListAssetsQuerySchema = z.object({
 export type ListAssetsQuery = z.infer<typeof ListAssetsQuerySchema>;
 
 // =============================================================================
+// CALIBRATION REQUEST SCHEMAS - Portal Intake Queue
+// =============================================================================
+
+export const CalibrationRequestStatusSchema = z.enum([
+  "PENDING",
+  "UNDER_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "CONVERTED",
+]);
+
+export type CalibrationRequestStatus = z.infer<
+  typeof CalibrationRequestStatusSchema
+>;
+
+export const CreateCalibrationRequestSchema = z.object({
+  assetIds: z
+    .array(z.coerce.number().min(1, "Ativo inválido"))
+    .min(1, "Selecione pelo menos um ativo")
+    .max(100, "Selecione no máximo 100 ativos por solicitação")
+    .refine((assetIds) => new Set(assetIds).size === assetIds.length, {
+      message: "Não repita ativos na mesma solicitação",
+    }),
+  observations: z.string().trim().max(2000).optional(),
+  requestedDueDate: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Prazo solicitado inválido",
+    })
+    .optional()
+    .nullable(),
+});
+
+export type CreateCalibrationRequestInput = z.infer<
+  typeof CreateCalibrationRequestSchema
+>;
+
+export const ListCalibrationRequestsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  query: z.string().optional(),
+  status: CalibrationRequestStatusSchema.optional(),
+  customerId: z.coerce.number().optional(),
+  dateFrom: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data inicial invalida",
+    })
+    .optional(),
+  dateTo: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data final invalida",
+    })
+    .optional(),
+});
+
+export type ListCalibrationRequestsQuery = z.infer<
+  typeof ListCalibrationRequestsQuerySchema
+>;
+
+export const ReviewCalibrationRequestSchema = z.object({
+  internalNotes: z.string().trim().max(2000).optional(),
+});
+
+export type ReviewCalibrationRequestInput = z.infer<
+  typeof ReviewCalibrationRequestSchema
+>;
+
+export const ApproveCalibrationRequestSchema = z.object({
+  internalNotes: z.string().trim().max(2000).optional(),
+});
+
+export type ApproveCalibrationRequestInput = z.infer<
+  typeof ApproveCalibrationRequestSchema
+>;
+
+export const RejectCalibrationRequestSchema = z.object({
+  reason: z.string().trim().min(3, "Motivo e obrigatorio"),
+  internalNotes: z.string().trim().max(2000).optional(),
+});
+
+export type RejectCalibrationRequestInput = z.infer<
+  typeof RejectCalibrationRequestSchema
+>;
+
+export const ConvertCalibrationRequestItemSchema = z.object({
+  itemId: z.coerce.number().min(1, "Item invalido"),
+  serviceId: z.coerce.number().min(1, "Servico e obrigatorio"),
+  technicianId: z.string().optional().nullable(),
+  dueDate: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data prevista invalida",
+    })
+    .optional()
+    .nullable(),
+});
+
+export const ConvertCalibrationRequestSchema = z.object({
+  items: z
+    .array(ConvertCalibrationRequestItemSchema)
+    .min(1, "Informe ao menos um item para conversao")
+    .max(100, "Converta no maximo 100 itens por vez")
+    .refine(
+      (items) =>
+        new Set(items.map((item) => item.itemId)).size === items.length,
+      {
+        message: "Nao repita itens na conversao",
+      },
+    ),
+});
+
+export type ConvertCalibrationRequestInput = z.infer<
+  typeof ConvertCalibrationRequestSchema
+>;
+
+// =============================================================================
 // CALIBRATION METHOD SCHEMAS - ISO 17025 Validated Templates
 // =============================================================================
 
@@ -424,10 +542,7 @@ export type ListMethodsQuery = z.infer<typeof ListMethodsQuerySchema>;
  * Schema for returning a method to draft with optional reason
  */
 export const ReturnMethodToDraftSchema = z.object({
-  reason: z
-    .string()
-    .trim()
-    .min(3, "Motivo é obrigatório"),
+  reason: z.string().trim().min(3, "Motivo é obrigatório"),
 });
 
 export type ReturnMethodToDraftInput = z.infer<
