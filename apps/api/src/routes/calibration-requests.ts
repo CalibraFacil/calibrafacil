@@ -20,12 +20,22 @@ import {
   RejectCalibrationRequestSchema,
   ReviewCalibrationRequestSchema,
 } from "@calibra-facil/schemas";
-import { and, count, desc, eq, gte, ilike, inArray, lte, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  lt,
+  sql,
+} from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { requirePlanLimit } from "../middleware/tier-guard";
+import { assertPlanLimit } from "../middleware/tier-guard";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
 
@@ -229,7 +239,11 @@ export const calibrationRequestsRouter = new Hono<{
       }
 
       if (dateTo) {
-        conditions.push(lte(calibrationRequest.submittedAt, new Date(dateTo)));
+        const nextDay = new Date(dateTo);
+        nextDay.setHours(0, 0, 0, 0);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        conditions.push(lt(calibrationRequest.submittedAt, nextDay));
       }
 
       const whereCondition = and(...conditions);
@@ -326,6 +340,8 @@ export const calibrationRequestsRouter = new Hono<{
           .select({
             id: calibrationRequest.id,
             status: calibrationRequest.status,
+            reviewedBy: calibrationRequest.reviewedBy,
+            reviewedAt: calibrationRequest.reviewedAt,
           })
           .from(calibrationRequest)
           .where(
@@ -355,13 +371,21 @@ export const calibrationRequestsRouter = new Hono<{
           };
         }
 
+        const now = new Date();
+
         const [updated] = await tx
           .update(calibrationRequest)
           .set({
             status: "UNDER_REVIEW",
             internalNotes: input.internalNotes || null,
-            reviewedBy: session.user.id,
-            reviewedAt: new Date(),
+            reviewedBy:
+              existing.status === "UNDER_REVIEW"
+                ? (existing.reviewedBy ?? session.user.id)
+                : session.user.id,
+            reviewedAt:
+              existing.status === "UNDER_REVIEW"
+                ? (existing.reviewedAt ?? now)
+                : now,
           })
           .where(
             and(
@@ -632,7 +656,6 @@ export const calibrationRequestsRouter = new Hono<{
       request: ["convert"],
       calibration: ["create"],
     }),
-    requirePlanLimit("certificates"),
     zValidator("json", ConvertCalibrationRequestSchema),
     async (c) => {
       const member = c.get("member");
@@ -644,6 +667,8 @@ export const calibrationRequestsRouter = new Hono<{
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
       }
+
+      await assertPlanLimit(c, "certificates", input.items.length);
 
       let result: ConvertRequestResult;
       try {
@@ -729,7 +754,10 @@ export const calibrationRequestsRouter = new Hono<{
             const requestItem = requestItemById.get(item.itemId);
 
             if (!requestItem) {
-              throw new RequestTransitionError(400, "Item de solicitacao invalido");
+              throw new RequestTransitionError(
+                400,
+                "Item de solicitacao invalido",
+              );
             }
 
             let newJob;
@@ -785,7 +813,9 @@ export const calibrationRequestsRouter = new Hono<{
             requestId: request.id,
             action: "convert",
             changes: {
-              jobs: createdJobs.map(({ technicianId: _technicianId, ...job }) => job),
+              jobs: createdJobs.map(
+                ({ technicianId: _technicianId, ...job }) => job,
+              ),
             },
             performedBy: session.user.id,
             ipAddress,
@@ -811,13 +841,18 @@ export const calibrationRequestsRouter = new Hono<{
         try {
           await notifyJobAssigned(job.jobId, job.technicianId, session.user.id);
         } catch (error) {
-          console.error("[Calibration Requests] Failed to send assignment notification:", error);
+          console.error(
+            "[Calibration Requests] Failed to send assignment notification:",
+            error,
+          );
         }
       }
 
       return c.json({
         success: true,
-        jobs: result.createdJobs.map(({ technicianId: _technicianId, ...job }) => job),
+        jobs: result.createdJobs.map(
+          ({ technicianId: _technicianId, ...job }) => job,
+        ),
       });
     },
   );

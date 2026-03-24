@@ -11,7 +11,11 @@
     "build": "tsc",
     "typecheck": "tsc"
   },
-  "keywords": ["notifications", "calibration", "iso17025"],
+  "keywords": [
+    "notifications",
+    "calibration",
+    "iso17025"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -19,7 +23,6 @@
     "@calibra-facil/email": "workspace:*",
     "@react-email/components": "^1.0.2",
     "drizzle-orm": "^0.45.1",
-    "kysely": "^0.28.14",
     "resend": "^4.5.0"
   },
   "devDependencies": {

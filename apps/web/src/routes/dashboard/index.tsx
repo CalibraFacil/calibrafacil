@@ -137,9 +137,18 @@ function DashboardIndex() {
             />
             <span className="hidden sm:inline">Atualizar</span>
           </Button>
-          <Button size="sm" variant="outline" render={<Link to="/dashboard/requests" />}>
-            <HugeiconsIcon icon={Notebook01Icon} className="size-4" />
-            <span className="hidden sm:inline">Solicitações</span>
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label="Solicitações"
+            render={<Link to="/dashboard/requests" />}
+          >
+            <HugeiconsIcon
+              icon={Notebook01Icon}
+              className="size-4"
+              aria-hidden="true"
+            />
+            <span className="sr-only sm:not-sr-only">Solicitações</span>
           </Button>
           <Button size="sm" render={<Link to="/dashboard/jobs/new" />}>
             <HugeiconsIcon icon={PlusSignIcon} className="size-4" />

@@ -1,4 +1,4 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useDeferredValue, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -70,7 +70,6 @@ function formatDate(date: string | null | undefined) {
 }
 
 function RequestsPage() {
-  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim());
@@ -181,47 +180,45 @@ function RequestsPage() {
       {!isLoading && !error && (data?.data.length ?? 0) > 0 && (
         <div className="space-y-4">
           {data?.data.map((request) => (
-            <Card
+            <Link
               key={request.id}
-              className="cursor-pointer transition-colors hover:bg-muted/30"
-              onClick={() =>
-                navigate({
-                  to: "/requests/$id",
-                  params: { id: String(request.id) },
-                })
-              }
+              to="/requests/$id"
+              params={{ id: String(request.id) }}
+              className="block"
             >
-              <CardContent className="flex flex-col gap-4 py-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">
-                        Solicitação #{request.id}
-                      </span>
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses[request.status]}`}
-                      >
-                        {statusLabels[request.status]}
-                      </span>
+              <Card className="transition-colors hover:bg-muted/30">
+                <CardContent className="flex flex-col gap-4 py-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">
+                          Solicitação #{request.id}
+                        </span>
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusClasses[request.status]}`}
+                        >
+                          {statusLabels[request.status]}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {request.itemCount} ativo(s) · Enviada em{" "}
+                        {formatDate(request.submittedAt)}
+                      </p>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {request.itemCount} ativo(s) · Enviada em{" "}
-                      {formatDate(request.submittedAt)}
-                    </p>
+
+                    <div className="text-sm text-muted-foreground">
+                      Prazo solicitado: {formatDate(request.requestedDueDate)}
+                    </div>
                   </div>
 
-                  <div className="text-sm text-muted-foreground">
-                    Prazo solicitado: {formatDate(request.requestedDueDate)}
-                  </div>
-                </div>
-
-                <p className="text-sm text-muted-foreground">
-                  {request.observations?.trim()
-                    ? request.observations
-                    : "Sem observações informadas."}
-                </p>
-              </CardContent>
-            </Card>
+                  <p className="text-sm text-muted-foreground">
+                    {request.observations?.trim()
+                      ? request.observations
+                      : "Sem observações informadas."}
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
 
           {data && data.pagination.totalPages > 1 && (

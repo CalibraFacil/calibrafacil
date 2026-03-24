@@ -6,20 +6,28 @@ CREATE TABLE "calibration_request" (
   "status" text DEFAULT 'PENDING' NOT NULL,
   "observations" text,
   "internal_notes" text,
-  "requested_due_date" timestamp,
+  "requested_due_date" timestamptz,
   "submitted_by" text NOT NULL,
-  "submitted_at" timestamp DEFAULT now() NOT NULL,
+  "submitted_at" timestamptz DEFAULT now() NOT NULL,
   "reviewed_by" text,
-  "reviewed_at" timestamp,
+  "reviewed_at" timestamptz,
   "approved_by" text,
-  "approved_at" timestamp,
+  "approved_at" timestamptz,
   "rejected_by" text,
-  "rejected_at" timestamp,
+  "rejected_at" timestamptz,
   "rejection_reason" text,
   "converted_by" text,
-  "converted_at" timestamp,
-  "created_at" timestamp DEFAULT now() NOT NULL,
-  "updated_at" timestamp DEFAULT now() NOT NULL
+  "converted_at" timestamptz,
+  "created_at" timestamptz DEFAULT now() NOT NULL,
+  "updated_at" timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT "calibration_request_status_check"
+    CHECK ("status" IN (
+      'PENDING',
+      'UNDER_REVIEW',
+      'APPROVED',
+      'REJECTED',
+      'CONVERTED'
+    ))
 );
 --> statement-breakpoint
 CREATE TABLE "calibration_request_item" (
@@ -27,7 +35,7 @@ CREATE TABLE "calibration_request_item" (
   "request_id" integer NOT NULL,
   "asset_id" integer NOT NULL,
   "converted_job_id" integer,
-  "created_at" timestamp DEFAULT now() NOT NULL
+  "created_at" timestamptz DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "calibration_request_audit_log" (
@@ -36,7 +44,7 @@ CREATE TABLE "calibration_request_audit_log" (
   "action" text NOT NULL,
   "changes" jsonb,
   "performed_by" text NOT NULL,
-  "performed_at" timestamp DEFAULT now() NOT NULL,
+  "performed_at" timestamptz DEFAULT now() NOT NULL,
   "ip_address" text,
   "reason" text
 );

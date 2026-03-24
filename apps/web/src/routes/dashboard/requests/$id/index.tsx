@@ -174,14 +174,16 @@ function CalibrationRequestDetailPage() {
       }
 
       const remainingPages = await Promise.all(
-        Array.from({ length: firstPage.pagination.totalPages - 1 }, (_, index) =>
-          api.api.services.$get({
-            query: {
-              page: String(index + 2),
-              limit: '100',
-              isActive: 'true',
-            },
-          }),
+        Array.from(
+          { length: firstPage.pagination.totalPages - 1 },
+          (_, index) =>
+            api.api.services.$get({
+              query: {
+                page: String(index + 2),
+                limit: '100',
+                isActive: 'true',
+              },
+            }),
         ),
       )
 
@@ -468,8 +470,10 @@ function CalibrationRequestDetailPage() {
             const compatibleServices =
               servicesQuery.data?.data.filter(
                 (service) =>
-                  !service.assetTypeId ||
-                  service.assetTypeId === item.assetTypeId,
+                  service.methodId !== null &&
+                  service.methodStatus === 'PUBLISHED' &&
+                  (!service.assetTypeId ||
+                    service.assetTypeId === item.assetTypeId),
               ) ?? []
 
             return (

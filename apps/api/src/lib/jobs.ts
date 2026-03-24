@@ -11,18 +11,12 @@ import {
   type MethodSnapshot,
 } from "@calibra-facil/db/schema";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
-import {
-  and,
-  count,
-  desc,
-  eq,
-  ilike,
-  inArray,
-  isNull,
-  sql,
-} from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 
-type JobDbExecutor = Pick<typeof db, "execute" | "select" | "insert" | "update">;
+type JobDbExecutor = Pick<
+  typeof db,
+  "execute" | "select" | "insert" | "update"
+>;
 
 type CreateCalibrationJobParams = {
   organizationId: string;
@@ -51,6 +45,22 @@ export const jobCreationClientErrors = new Set([
   "Tecnico nao encontrado ou sem permissao",
   "Técnico não possui competência ativa para este tipo de instrumento",
 ]);
+
+function addBusinessDays(startDate: Date, businessDays: number) {
+  const dueDate = new Date(startDate);
+  let remainingBusinessDays = businessDays;
+
+  while (remainingBusinessDays > 0) {
+    dueDate.setDate(dueDate.getDate() + 1);
+
+    const dayOfWeek = dueDate.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      remainingBusinessDays -= 1;
+    }
+  }
+
+  return dueDate;
+}
 
 async function persistCalibrationJob(
   params: CreateCalibrationJobParams,
@@ -107,7 +117,12 @@ async function persistCalibrationJob(
   const [methodData] = await executor
     .select()
     .from(calibrationMethod)
-    .where(eq(calibrationMethod.id, serviceData.methodId))
+    .where(
+      and(
+        eq(calibrationMethod.id, serviceData.methodId),
+        eq(calibrationMethod.organizationId, serviceData.organizationId),
+      ),
+    )
     .limit(1);
 
   if (!methodData) {
@@ -208,9 +223,8 @@ async function persistCalibrationJob(
       params.dueDate instanceof Date
         ? params.dueDate
         : new Date(params.dueDate);
-  } else if (serviceData.tat) {
-    dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + serviceData.tat);
+  } else if (serviceData.tat !== null && serviceData.tat !== undefined) {
+    dueDate = addBusinessDays(new Date(), serviceData.tat);
   }
 
   const [newJob] = await executor
@@ -301,7 +315,9 @@ export async function generateJobId(
   const prefix = `CAL-${year}-`;
   const sequence = executor
     ? await getNextJobSequence(organizationId, year, executor)
-    : await db.transaction((tx) => getNextJobSequence(organizationId, year, tx));
+    : await db.transaction((tx) =>
+        getNextJobSequence(organizationId, year, tx),
+      );
 
   return `${prefix}${sequence.toString().padStart(4, "0")}`;
 }

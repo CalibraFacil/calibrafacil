@@ -1301,30 +1301,36 @@ export const calibrationRequest = pgTable(
       .notNull(),
     observations: text("observations"),
     internalNotes: text("internal_notes"),
-    requestedDueDate: timestamp("requested_due_date"),
+    requestedDueDate: timestamp("requested_due_date", {
+      withTimezone: true,
+    }),
     submittedBy: text("submitted_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     reviewedBy: text("reviewed_by").references(() => user.id, {
       onDelete: "set null",
     }),
-    reviewedAt: timestamp("reviewed_at"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     approvedBy: text("approved_by").references(() => user.id, {
       onDelete: "set null",
     }),
-    approvedAt: timestamp("approved_at"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
     rejectedBy: text("rejected_by").references(() => user.id, {
       onDelete: "set null",
     }),
-    rejectedAt: timestamp("rejected_at"),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
     rejectionReason: text("rejection_reason"),
     convertedBy: text("converted_by").references(() => user.id, {
       onDelete: "set null",
     }),
-    convertedAt: timestamp("converted_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
+    convertedAt: timestamp("converted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
@@ -1352,7 +1358,9 @@ export const calibrationRequestItem = pgTable(
       () => calibrationJob.id,
       { onDelete: "set null" },
     ),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     index("calibration_request_item_request_id_idx").on(table.requestId),
@@ -1377,7 +1385,9 @@ export const calibrationRequestAuditLog = pgTable(
     performedBy: text("performed_by")
       .notNull()
       .references(() => user.id),
-    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    performedAt: timestamp("performed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     ipAddress: text("ip_address"),
     reason: text("reason"),
   },

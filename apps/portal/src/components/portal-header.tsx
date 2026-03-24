@@ -15,11 +15,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 const routeLabels: Record<string, string> = {
   "/_authenticated": "Painel",
   "/_authenticated/assets": "Ativos",
-  "/_authenticated/assets/": "Ativos",
   "/_authenticated/certificates": "Certificados",
-  "/_authenticated/certificates/": "Certificados",
   "/_authenticated/requests": "Solicitações",
-  "/_authenticated/requests/": "Solicitações",
   "/_authenticated/requests/new": "Nova Solicitação",
   "/_authenticated/requests/$id": "Solicitação",
   "/_authenticated/settings": "Configurações",
@@ -30,12 +27,31 @@ export function PortalHeader() {
   const matches = useMatches();
 
   const breadcrumbs = useMemo(() => {
+    const seenRouteIds = new Set<string>();
+
     return matches
       .filter((m) => m.routeId?.startsWith("/_authenticated"))
-      .map((m) => ({
-        path: m.pathname,
-        label: routeLabels[m.routeId] ?? m.pathname.split("/").pop() ?? "",
-      }));
+      .map((m) => {
+        const normalizedRouteId = m.routeId.replace(/\/+$/, "");
+        const normalizedPath = m.pathname.replace(/\/+$/, "") || "/";
+
+        return {
+          routeId: normalizedRouteId,
+          path: normalizedPath,
+          label:
+            routeLabels[normalizedRouteId] ??
+            normalizedPath.split("/").pop() ??
+            "",
+        };
+      })
+      .filter((match) => {
+        if (seenRouteIds.has(match.routeId)) {
+          return false;
+        }
+
+        seenRouteIds.add(match.routeId);
+        return true;
+      });
   }, [matches]);
 
   return (
