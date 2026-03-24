@@ -101,6 +101,19 @@ function JobsListPage() {
     setPage(1)
   }
 
+  if (!activeOrganizationId) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-muted-foreground">
+            Selecione uma organização ativa para visualizar as ordens de
+            serviço.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (error) {
     return (
       <Card>

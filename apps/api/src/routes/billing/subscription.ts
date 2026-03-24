@@ -13,6 +13,27 @@ import { withInvalidation } from "../../middleware/cache";
 // SUBSCRIPTION ROUTES - Organization subscription management
 // =============================================================================
 
+function serializePublicSubscription(
+  sub: typeof subscription.$inferSelect | null,
+) {
+  if (!sub) {
+    return null;
+  }
+
+  return {
+    id: sub.id,
+    planId: sub.planId,
+    status: sub.status,
+    billingCycle: sub.billingCycle,
+    currentPeriodStart: sub.currentPeriodStart,
+    currentPeriodEnd: sub.currentPeriodEnd,
+    nextBillingDate: sub.nextBillingDate,
+    trialEndsAt: sub.trialEndsAt,
+    canceledAt: sub.canceledAt,
+    createdAt: sub.createdAt,
+  };
+}
+
 export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - Get current organization's subscription
@@ -43,18 +64,7 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
     const usage = await getOrganizationUsage(memberData.organizationId);
 
     return c.json({
-      subscription: {
-        id: sub.id,
-        planId: sub.planId,
-        status: sub.status,
-        billingCycle: sub.billingCycle,
-        currentPeriodStart: sub.currentPeriodStart,
-        currentPeriodEnd: sub.currentPeriodEnd,
-        nextBillingDate: sub.nextBillingDate,
-        trialEndsAt: sub.trialEndsAt,
-        canceledAt: sub.canceledAt,
-        createdAt: sub.createdAt,
-      },
+      subscription: serializePublicSubscription(sub),
       plan,
       usage,
       limits: plan.limits,
@@ -88,7 +98,18 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
         try {
           const { cancelSubscription } = await import("../../services/asaas");
           await cancelSubscription(sub.asaasSubscriptionId);
+        } catch (error) {
+          console.error("Error canceling Asaas subscription:", error);
+          return c.json(
+            {
+              error:
+                "Falha ao cancelar assinatura no provedor de pagamento. Tente novamente.",
+            },
+            502,
+          );
+        }
 
+        try {
           const [updated] = await db
             .update(subscription)
             .set({
@@ -98,15 +119,21 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
             .where(eq(subscription.id, sub.id))
             .returning();
 
-          return c.json({ subscription: updated });
+          return c.json({
+            subscription: serializePublicSubscription(updated ?? null),
+          });
         } catch (error) {
-          console.error("Error canceling Asaas subscription:", error);
+          console.error("Error updating canceled subscription locally:", {
+            error,
+            subscriptionId: sub.id,
+            asaasSubscriptionId: sub.asaasSubscriptionId,
+          });
           return c.json(
             {
               error:
-                "Falha ao cancelar assinatura no provedor de pagamento. Tente novamente.",
+                "Assinatura cancelada no provedor, mas falhou ao atualizar o estado local. Contate o suporte.",
             },
-            502,
+            500,
           );
         }
       }
@@ -121,7 +148,9 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
         .where(eq(subscription.id, sub.id))
         .returning();
 
-      return c.json({ subscription: updated });
+      return c.json({
+        subscription: serializePublicSubscription(updated ?? null),
+      });
     },
   );
 
@@ -138,7 +167,7 @@ export async function getOrganizationUsage(organizationId: string) {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  // Count certificates this month using the same created-at metric
+  // Count quota usage this month using the same created-at metric
   // enforced by tier guard quota checks.
   const [certResult] = await db
     .select({ count: count() })
@@ -159,7 +188,7 @@ export async function getOrganizationUsage(organizationId: string) {
   // TODO: Calculate storage usage when file storage is implemented
 
   return {
-    certificates: certResult?.count ?? 0,
+    jobsCreated: certResult?.count ?? 0,
     users: memberResult?.count ?? 0,
     storage: 0, // Placeholder until storage tracking is implemented
   };

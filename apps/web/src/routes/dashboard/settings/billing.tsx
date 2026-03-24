@@ -135,7 +135,7 @@ function BillingSettingsPage() {
   const { subscription, plan, usage, limits } = subscriptionQuery.data || {
     subscription: null,
     plan: null,
-    usage: { certificates: 0, users: 0, storage: 0 },
+    usage: { jobsCreated: 0, users: 0, storage: 0 },
     limits: { certificates: 10, users: 1, storage: 100 * 1024 * 1024 },
   }
 
@@ -145,8 +145,8 @@ function BillingSettingsPage() {
     STATUS_BADGES[subscription?.status || 'TRIAL'] || STATUS_BADGES.TRIAL
 
   // Calculate usage percentages
-  const certificatePercentage = limits?.certificates
-    ? Math.min(100, (usage.certificates / limits.certificates) * 100)
+  const jobsCreatedPercentage = limits?.certificates
+    ? Math.min(100, (usage.jobsCreated / limits.certificates) * 100)
     : 0
   const userPercentage = limits?.users
     ? Math.min(100, (usage.users / limits.users) * 100)
@@ -241,16 +241,16 @@ function BillingSettingsPage() {
             {/* Certificates Usage */}
             <div className="p-4 border rounded-lg space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="font-medium">Certificados este mês</span>
+                <span className="font-medium">Ordens criadas este mês</span>
                 <span className="text-muted-foreground">
-                  {usage.certificates} /{' '}
+                  {usage.jobsCreated} /{' '}
                   {limits?.certificates === 999999
                     ? 'Ilimitado'
                     : limits?.certificates}
                 </span>
               </div>
-              <Progress value={certificatePercentage} className="h-2" />
-              {certificatePercentage >= 80 &&
+              <Progress value={jobsCreatedPercentage} className="h-2" />
+              {jobsCreatedPercentage >= 80 &&
                 limits?.certificates !== 999999 && (
                   <p className="text-xs text-amber-600">
                     Você está próximo do limite. Considere fazer upgrade.
