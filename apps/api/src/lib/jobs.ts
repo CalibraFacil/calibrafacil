@@ -38,57 +38,10 @@ type CreateCalibrationJobParams = {
   notifyOnAssignment?: boolean;
 };
 
-async function getNextJobSequence(
-  organizationId: string,
-  year: number,
+async function persistCalibrationJob(
+  params: CreateCalibrationJobParams,
   executor: JobDbExecutor,
 ) {
-  const prefix = `CAL-${year}-`;
-  const sequenceSql = sql<number>`coalesce(cast(substring(${calibrationJob.jobId} from '[0-9]+$') as integer), 0)`;
-
-  // Lock per organization/year so a brand-new year with no rows cannot race to 0001.
-  await executor.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), ${year})`,
-  );
-
-  const [result] = await executor
-    .select({
-      sequence: sequenceSql,
-    })
-    .from(calibrationJob)
-    .where(
-      and(
-        eq(calibrationJob.organizationId, organizationId),
-        ilike(calibrationJob.jobId, `${prefix}%`),
-      ),
-    )
-    .orderBy(desc(sequenceSql))
-    .limit(1)
-    .for("update");
-
-  return (result?.sequence ?? 0) + 1;
-}
-
-/**
- * Generates a unique job ID for the organization.
- * Format: CAL-YYYY-XXXX (per organization per year)
- */
-export async function generateJobId(
-  organizationId: string,
-  year: number,
-  executor?: JobDbExecutor,
-): Promise<string> {
-  const prefix = `CAL-${year}-`;
-  const sequence = executor
-    ? await getNextJobSequence(organizationId, year, executor)
-    : await db.transaction((tx) => getNextJobSequence(organizationId, year, tx));
-
-  return `${prefix}${sequence.toString().padStart(4, "0")}`;
-}
-
-export async function createCalibrationJob(params: CreateCalibrationJobParams) {
-  const executor = params.executor ?? db;
-
   const [assetData] = await executor
     .select({
       id: asset.id,
@@ -287,6 +240,62 @@ export async function createCalibrationJob(params: CreateCalibrationJobParams) {
     performedBy: params.createdBy,
     ipAddress: params.ipAddress ?? null,
   });
+
+  return newJob;
+}
+
+async function getNextJobSequence(
+  organizationId: string,
+  year: number,
+  executor: JobDbExecutor,
+) {
+  const prefix = `CAL-${year}-`;
+  const sequenceSql = sql<number>`coalesce(cast(substring(${calibrationJob.jobId} from '[0-9]+$') as integer), 0)`;
+
+  // Lock per organization/year so a brand-new year with no rows cannot race to 0001.
+  await executor.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${organizationId}), ${year})`,
+  );
+
+  const [result] = await executor
+    .select({
+      sequence: sequenceSql,
+    })
+    .from(calibrationJob)
+    .where(
+      and(
+        eq(calibrationJob.organizationId, organizationId),
+        ilike(calibrationJob.jobId, `${prefix}%`),
+      ),
+    )
+    .orderBy(desc(sequenceSql))
+    .limit(1)
+    .for("update");
+
+  return (result?.sequence ?? 0) + 1;
+}
+
+/**
+ * Generates a unique job ID for the organization.
+ * Format: CAL-YYYY-XXXX (per organization per year)
+ */
+export async function generateJobId(
+  organizationId: string,
+  year: number,
+  executor?: JobDbExecutor,
+): Promise<string> {
+  const prefix = `CAL-${year}-`;
+  const sequence = executor
+    ? await getNextJobSequence(organizationId, year, executor)
+    : await db.transaction((tx) => getNextJobSequence(organizationId, year, tx));
+
+  return `${prefix}${sequence.toString().padStart(4, "0")}`;
+}
+
+export async function createCalibrationJob(params: CreateCalibrationJobParams) {
+  const newJob = params.executor
+    ? await persistCalibrationJob(params, params.executor)
+    : await db.transaction((tx) => persistCalibrationJob(params, tx));
 
   if (params.technicianId && params.notifyOnAssignment !== false) {
     try {

@@ -337,7 +337,13 @@ export const ConvertCalibrationRequestItemSchema = z.object({
   itemId: z.coerce.number().min(1, "Item invalido"),
   serviceId: z.coerce.number().min(1, "Servico e obrigatorio"),
   technicianId: z.string().optional().nullable(),
-  dueDate: z.string().optional().nullable(),
+  dueDate: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data prevista invalida",
+    })
+    .optional()
+    .nullable(),
 });
 
 export const ConvertCalibrationRequestSchema = z.object({
