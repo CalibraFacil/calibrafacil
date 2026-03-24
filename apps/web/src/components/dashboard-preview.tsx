@@ -1,5 +1,7 @@
 import { motion } from 'motion/react'
 
+import { BrandMark } from '@/components/brand'
+
 export function DashboardPreview() {
   return (
     <section id="plataforma" className="relative py-16 md:py-24">
@@ -66,11 +68,7 @@ export function DashboardPreview() {
               {/* Sidebar */}
               <div className="hidden w-52 shrink-0 border-r border-border/40 bg-muted/20 p-4 md:block">
                 <div className="mb-6 flex items-center gap-2">
-                  <div className="flex size-7 items-center justify-center rounded-sm bg-primary">
-                    <span className="text-[10px] font-bold text-primary-foreground">
-                      CF
-                    </span>
-                  </div>
+                  <BrandMark className="size-7" />
                   <span className="text-xs font-semibold">MetroCal Lab</span>
                 </div>
 

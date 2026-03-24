@@ -1,5 +1,7 @@
 import { Link } from '@tanstack/react-router'
 
+import { BrandLockup } from '@/components/brand'
+
 const footerLinks = {
   Produto: [
     { label: 'Desafios', href: '#desafios' },
@@ -38,14 +40,7 @@ export function Footer() {
           {/* Brand */}
           <div className="sm:col-span-2 md:col-span-1">
             <Link to="/" className="flex items-center gap-2.5 select-none">
-              <div className="flex size-8 items-center justify-center rounded-sm bg-primary">
-                <span className="text-sm font-bold text-primary-foreground">
-                  CF
-                </span>
-              </div>
-              <span className="text-lg font-semibold tracking-tight">
-                Calibra<span className="text-primary">Fácil</span>
-              </span>
+              <BrandLockup />
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
               Plataforma de gestão para laboratórios de calibração, com

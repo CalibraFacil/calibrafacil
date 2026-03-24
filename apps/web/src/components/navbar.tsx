@@ -7,6 +7,7 @@ import {
   ArrowRight01Icon,
 } from '@hugeicons/core-free-icons'
 
+import { BrandLockup } from '@/components/brand'
 import { Button } from '@/components/ui/button'
 import { ModeToggle } from '@/components/mode-toggle'
 
@@ -29,14 +30,7 @@ export function Navbar() {
     <nav className="fixed top-0 right-0 left-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link to="/" className="flex items-center gap-2.5 select-none">
-          <div className="flex size-8 items-center justify-center rounded-sm bg-primary">
-            <span className="text-sm font-bold text-primary-foreground">
-              CF
-            </span>
-          </div>
-          <span className="text-lg font-semibold tracking-tight">
-            Calibra<span className="text-primary">Fácil</span>
-          </span>
+          <BrandLockup />
         </Link>
 
         <div className="hidden items-center gap-1 md:flex">

@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { BrandLockup } from "@/components/brand";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -57,6 +58,9 @@ function SignInPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <div className="mb-4 flex justify-center">
+            <BrandLockup markClassName="size-10" textClassName="text-xl" />
+          </div>
           <CardTitle className="text-2xl">Portal do Cliente</CardTitle>
           <CardDescription>
             Entre com seu email e senha para acessar o portal
