@@ -281,7 +281,13 @@ export const CreateCalibrationRequestSchema = z.object({
       message: "Não repita ativos na mesma solicitação",
     }),
   observations: z.string().trim().max(2000).optional(),
-  requestedDueDate: z.string().optional().nullable(),
+  requestedDueDate: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Prazo solicitado inválido",
+    })
+    .optional()
+    .nullable(),
 });
 
 export type CreateCalibrationRequestInput = z.infer<

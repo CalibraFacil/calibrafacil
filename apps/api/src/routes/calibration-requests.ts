@@ -53,6 +53,20 @@ type ConvertRequestResult =
       };
     };
 
+const jobCreationClientErrors = new Set([
+  "Ativo nao encontrado",
+  "Ativo foi removido",
+  "Ativo nao pertence a esta organizacao",
+  "Servico nao encontrado",
+  "Servico esta inativo",
+  "Servico nao possui metodo vinculado",
+  "Metodo do servico nao encontrado",
+  "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
+  "Tipo do ativo nao e compativel com o servico selecionado",
+  "Tecnico nao encontrado ou sem permissao",
+  "Técnico não possui competência ativa para este tipo de instrumento",
+]);
+
 async function getRequestItems(requestIds: number[]) {
   if (requestIds.length === 0) return [];
 
@@ -588,19 +602,36 @@ export const calibrationRequestsRouter = new Hono<{
             };
           }
 
-          const newJob = await createCalibrationJob({
-            organizationId: member.organizationId,
-            createdBy: session.user.id,
-            assetId: requestItem.assetId,
-            serviceId: item.serviceId,
-            technicianId: item.technicianId,
-            dueDate: item.dueDate,
-            ipAddress,
-            sourceRequestId: request.id,
-            sourceRequestItemId: requestItem.id,
-            executor: tx,
-            notifyOnAssignment: false,
-          });
+          let newJob;
+          try {
+            newJob = await createCalibrationJob({
+              organizationId: member.organizationId,
+              createdBy: session.user.id,
+              assetId: requestItem.assetId,
+              serviceId: item.serviceId,
+              technicianId: item.technicianId,
+              dueDate: item.dueDate,
+              ipAddress,
+              sourceRequestId: request.id,
+              sourceRequestItemId: requestItem.id,
+              executor: tx,
+              notifyOnAssignment: false,
+            });
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              jobCreationClientErrors.has(error.message)
+            ) {
+              return {
+                error: {
+                  status: 400 as const,
+                  body: error.message,
+                },
+              };
+            }
+
+            throw error;
+          }
 
           createdJobs.push({
             requestItemId: requestItem.id,
