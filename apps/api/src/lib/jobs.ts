@@ -38,6 +38,20 @@ type CreateCalibrationJobParams = {
   notifyOnAssignment?: boolean;
 };
 
+export const jobCreationClientErrors = new Set([
+  "Ativo nao encontrado",
+  "Ativo foi removido",
+  "Ativo nao pertence a esta organizacao",
+  "Servico nao encontrado",
+  "Servico esta inativo",
+  "Servico nao possui metodo vinculado",
+  "Metodo do servico nao encontrado",
+  "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
+  "Tipo do ativo nao e compativel com o servico selecionado",
+  "Tecnico nao encontrado ou sem permissao",
+  "Técnico não possui competência ativa para este tipo de instrumento",
+]);
+
 async function persistCalibrationJob(
   params: CreateCalibrationJobParams,
   executor: JobDbExecutor,

@@ -25,7 +25,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { createCalibrationJob } from "../lib/jobs";
+import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
 
 const submitterUser = alias(user, "calibrationRequestSubmitter");
@@ -42,6 +42,17 @@ type ConvertedRequestJob = {
   technicianId: string | null;
 };
 
+type ApprovalRequestResult =
+  | {
+      success: true;
+    }
+  | {
+      error: {
+        status: 400 | 404 | 409;
+        body: string;
+      };
+    };
+
 type ConvertRequestResult =
   | {
       createdJobs: ConvertedRequestJob[];
@@ -52,20 +63,6 @@ type ConvertRequestResult =
         body: string;
       };
     };
-
-const jobCreationClientErrors = new Set([
-  "Ativo nao encontrado",
-  "Ativo foi removido",
-  "Ativo nao pertence a esta organizacao",
-  "Servico nao encontrado",
-  "Servico esta inativo",
-  "Servico nao possui metodo vinculado",
-  "Metodo do servico nao encontrado",
-  "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
-  "Tipo do ativo nao e compativel com o servico selecionado",
-  "Tecnico nao encontrado ou sem permissao",
-  "Técnico não possui competência ativa para este tipo de instrumento",
-]);
 
 async function getRequestItems(requestIds: number[]) {
   if (requestIds.length === 0) return [];
@@ -358,63 +355,94 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const [existing] = await db
-        .select({
-          id: calibrationRequest.id,
-          status: calibrationRequest.status,
-          reviewedBy: calibrationRequest.reviewedBy,
-          reviewedAt: calibrationRequest.reviewedAt,
-        })
-        .from(calibrationRequest)
-        .where(
-          and(
-            eq(calibrationRequest.id, id),
-            eq(calibrationRequest.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
+      const result: ApprovalRequestResult = await db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select({
+            id: calibrationRequest.id,
+            status: calibrationRequest.status,
+            reviewedBy: calibrationRequest.reviewedBy,
+            reviewedAt: calibrationRequest.reviewedAt,
+          })
+          .from(calibrationRequest)
+          .where(
+            and(
+              eq(calibrationRequest.id, id),
+              eq(calibrationRequest.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1)
+          .for("update");
 
-      if (!existing) {
-        return c.json({ error: "Solicitacao nao encontrada" }, 404);
-      }
+        if (!existing) {
+          return {
+            error: {
+              status: 404 as const,
+              body: "Solicitacao nao encontrada",
+            },
+          };
+        }
 
-      if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
-        return c.json(
-          { error: "Somente solicitacoes pendentes podem ser aprovadas" },
-          400,
-        );
-      }
+        if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
+          return {
+            error: {
+              status: 400 as const,
+              body: "Somente solicitacoes pendentes podem ser aprovadas",
+            },
+          };
+        }
 
-      const now = new Date();
+        const now = new Date();
 
-      await db
-        .update(calibrationRequest)
-        .set({
-          status: "APPROVED",
-          internalNotes: input.internalNotes || null,
-          reviewedBy: existing.reviewedBy ?? session.user.id,
-          reviewedAt: existing.reviewedAt ?? now,
-          approvedBy: session.user.id,
-          approvedAt: now,
-          rejectedBy: null,
-          rejectedAt: null,
-          rejectionReason: null,
-        })
-        .where(eq(calibrationRequest.id, id));
+        const [updated] = await tx
+          .update(calibrationRequest)
+          .set({
+            status: "APPROVED",
+            internalNotes: input.internalNotes || null,
+            reviewedBy: existing.reviewedBy ?? session.user.id,
+            reviewedAt: existing.reviewedAt ?? now,
+            approvedBy: session.user.id,
+            approvedAt: now,
+            rejectedBy: null,
+            rejectedAt: null,
+            rejectionReason: null,
+          })
+          .where(
+            and(
+              eq(calibrationRequest.id, id),
+              eq(calibrationRequest.status, existing.status),
+            ),
+          )
+          .returning();
 
-      await db.insert(calibrationRequestAuditLog).values({
-        requestId: id,
-        action: "approve",
-        changes: {
-          status: {
-            old: existing.status,
-            new: "APPROVED",
+        if (!updated) {
+          return {
+            error: {
+              status: 409 as const,
+              body: "Solicitacao foi atualizada por outro usuario",
+            },
+          };
+        }
+
+        await tx.insert(calibrationRequestAuditLog).values({
+          requestId: id,
+          action: "approve",
+          changes: {
+            status: {
+              old: existing.status,
+              new: "APPROVED",
+            },
+            internalNotes: input.internalNotes || null,
           },
-          internalNotes: input.internalNotes || null,
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") ?? null,
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") ?? null,
+        });
+
+        return { success: true };
       });
+
+      if ("error" in result) {
+        return c.json({ error: result.error.body }, result.error.status);
+      }
 
       return c.json({ success: true });
     },

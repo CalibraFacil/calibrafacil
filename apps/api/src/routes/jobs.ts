@@ -64,7 +64,11 @@ import {
   extractKeyFromUrl,
   type R2Env,
 } from "../lib/storage";
-import { createCalibrationJob, generateJobId } from "../lib/jobs";
+import {
+  createCalibrationJob,
+  generateJobId,
+  jobCreationClientErrors,
+} from "../lib/jobs";
 import { alias } from "drizzle-orm/pg-core";
 
 // Aliases for multiple user joins
@@ -500,7 +504,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: message }, 403);
         }
 
-        return c.json({ error: message }, 400);
+        if (jobCreationClientErrors.has(message)) {
+          return c.json({ error: message }, 400);
+        }
+
+        return c.json({ error: "Erro ao criar job" }, 500);
       }
     },
   )
