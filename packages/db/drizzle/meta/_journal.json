@@ -169,6 +169,13 @@
       "when": 1772996400000,
       "tag": "0023_add_calibration_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1774407600000,
+      "tag": "0024_add_sso_provider",
+      "breakpoints": true
     }
   ]
 }
