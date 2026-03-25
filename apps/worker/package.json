@@ -9,6 +9,7 @@
     "dependencies": {
         "@calibra-facil/db": "workspace:^",
         "@calibra-facil/documents": "workspace:^",
+        "@calibra-facil/shared": "workspace:^",
         "@calibra-facil/signing": "workspace:^",
         "@cloudflare/puppeteer": "^1.0.4",
         "pg": "^8.16.3",

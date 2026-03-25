@@ -176,6 +176,20 @@
       "when": 1774407600000,
       "tag": "0024_add_sso_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1774418400000,
+      "tag": "0025_add_templates_domains_api_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1774432800000,
+      "tag": "0026_harden_sso_provider_constraints",
+      "breakpoints": true
     }
   ]
 }
