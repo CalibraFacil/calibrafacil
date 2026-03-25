@@ -21,8 +21,30 @@ import {
   requirePortalProtected,
   type AuthVariables,
 } from "../middleware/permission";
+import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 
-async function getPortalCustomer(authOrganizationId: string) {
+function getPortalHostOrigin(c: { req: { header: (name: string) => string | undefined } }) {
+  return c.req.header("origin") ?? c.req.header("referer") ?? null;
+}
+
+async function getPortalLabScope(c: {
+  req: { header: (name: string) => string | undefined };
+}) {
+  const origin = getPortalHostOrigin(c);
+  if (!origin) return null;
+
+  try {
+    const url = new URL(origin);
+    return resolveLabOrganizationIdByPortalHostname(url.hostname);
+  } catch {
+    return null;
+  }
+}
+
+async function getPortalCustomer(
+  authOrganizationId: string,
+  portalLabScope?: string | null,
+) {
   const [linkedCustomer] = await db
     .select({
       id: customer.id,
@@ -30,7 +52,14 @@ async function getPortalCustomer(authOrganizationId: string) {
       labOrganizationId: customer.labOrganizationId,
     })
     .from(customer)
-    .where(eq(customer.authOrganizationId, authOrganizationId))
+    .where(
+      and(
+        eq(customer.authOrganizationId, authOrganizationId),
+        portalLabScope
+          ? eq(customer.labOrganizationId, portalLabScope)
+          : undefined,
+      ),
+    )
     .limit(1);
 
   return linkedCustomer ?? null;
@@ -75,10 +104,14 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("query", ListCalibrationRequestsQuerySchema),
     async (c) => {
       const member = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
       const { page, limit, status, query } = c.req.valid("query");
       const offset = (page - 1) * limit;
 
-      const linkedCustomer = await getPortalCustomer(member.organizationId);
+      const linkedCustomer = await getPortalCustomer(
+        member.organizationId,
+        portalLabScope,
+      );
 
       if (!linkedCustomer) {
         return c.json({
@@ -163,13 +196,17 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     requirePermission({ request: ["read"] }),
     async (c) => {
       const member = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
       const id = parseInt(c.req.param("id"), 10);
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const linkedCustomer = await getPortalCustomer(member.organizationId);
+      const linkedCustomer = await getPortalCustomer(
+        member.organizationId,
+        portalLabScope,
+      );
 
       if (!linkedCustomer) {
         return c.json({ error: "Solicitacao nao encontrada" }, 404);
@@ -221,11 +258,15 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
+      const portalLabScope = await getPortalLabScope(c);
       const input = c.req.valid("json");
       const ipAddress =
         c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
 
-      const linkedCustomer = await getPortalCustomer(member.organizationId);
+      const linkedCustomer = await getPortalCustomer(
+        member.organizationId,
+        portalLabScope,
+      );
 
       if (!linkedCustomer) {
         return c.json({ error: "Cliente vinculado nao encontrado" }, 404);

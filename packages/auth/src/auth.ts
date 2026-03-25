@@ -4,10 +4,12 @@ import { APIError } from "better-auth/api";
 import { randomBytes } from "node:crypto";
 import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
+import { and, eq } from "drizzle-orm";
 import { organization } from "better-auth/plugins";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
 import { OrganizationInvitationEmail } from "@calibra-facil/email";
+import { hasEntitlement } from "@calibra-facil/shared";
 import { ac, roles } from "./access";
 
 let devFallbackAuthSecret: string | null = null;
@@ -150,12 +152,46 @@ function createTrustedOrigins(
       isProduction,
     );
 
+    const requestOrigin = normalizeDynamicTrustedOrigin(
+      request?.headers.get("origin") ?? null,
+      isProduction,
+    );
+
     if (issuerOrigin) {
       origins.add(issuerOrigin);
     }
 
+    if (requestOrigin && (await isActivePortalCustomOrigin(requestOrigin))) {
+      origins.add(requestOrigin);
+    }
+
     return [...origins];
   };
+}
+
+async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {
+  try {
+    const url = new URL(origin);
+    const record = await getDb().query.organizationCustomDomain.findFirst({
+      where: and(
+        eq(schema.organizationCustomDomain.hostname, url.hostname.toLowerCase()),
+        eq(schema.organizationCustomDomain.isActive, true),
+      ),
+    });
+
+    if (!record?.organizationId || !record.verifiedAt) {
+      return false;
+    }
+
+    const currentSubscription = await getDb().query.subscription.findFirst({
+      where: eq(schema.subscription.organizationId, record.organizationId),
+    });
+
+    const planId = currentSubscription?.planId ?? "FREE";
+    return hasEntitlement(planId, "custom_domain");
+  } catch {
+    return false;
+  }
 }
 
 // Organization plugin configuration factory

@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Building06Icon,
@@ -12,6 +13,8 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { authClient, useActiveOrganization } from '@calibra-facil/auth/client'
+import { usePlanAccess } from '@/hooks/use-plan-access'
+import { api } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -809,6 +812,8 @@ function OrganizationSettingsPage({
         </CardContent>
       </Card>
 
+      <CustomPortalDomainCard />
+
       {/* Members Card */}
       <Card>
         <CardHeader>
@@ -1127,6 +1132,236 @@ function OrganizationSettingsPage({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function CustomPortalDomainCard() {
+  const queryClient = useQueryClient()
+  const accessQuery = usePlanAccess()
+  const [hostname, setHostname] = useState('')
+
+  const domainQuery = useQuery({
+    queryKey: ['portal-domain'],
+    queryFn: async () => {
+      const res = await api.api['portal-domains'].$get()
+      if (!res.ok) {
+        throw new Error('Falha ao carregar domínio do portal')
+      }
+      return res.json() as Promise<{
+        portalBaseUrl: string
+        domain: {
+          id: string
+          hostname: string
+          verifiedAt: string | null
+          activatedAt: string | null
+          lastVerifiedAt: string | null
+          isActive: boolean
+          verification: { type: 'TXT'; host: string; value: string }
+        } | null
+      }>
+    },
+  })
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.api['portal-domains'].$post({
+        json: { hostname },
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(
+          data && typeof data === 'object' && 'error' in data
+            ? String(data.error)
+            : 'Falha ao salvar domínio',
+        )
+      }
+      return res.json()
+    },
+    onSuccess: async () => {
+      toast.success('Domínio salvo. Configure o TXT e verifique.')
+      await queryClient.invalidateQueries({ queryKey: ['portal-domain'] })
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Falha ao salvar domínio')
+    },
+  })
+
+  const verifyMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.api['portal-domains'].verify.$post()
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(
+          data && typeof data === 'object' && 'error' in data
+            ? String(data.error)
+            : 'Falha ao verificar domínio',
+        )
+      }
+      return res.json()
+    },
+    onSuccess: async () => {
+      toast.success('Domínio verificado')
+      await queryClient.invalidateQueries({ queryKey: ['portal-domain'] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao verificar domínio',
+      )
+    },
+  })
+
+  const activateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.api['portal-domains'].activate.$post()
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(
+          data && typeof data === 'object' && 'error' in data
+            ? String(data.error)
+            : 'Falha ao ativar domínio',
+        )
+      }
+      return res.json()
+    },
+    onSuccess: async () => {
+      toast.success('Domínio ativado')
+      await queryClient.invalidateQueries({ queryKey: ['portal-domain'] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao ativar domínio',
+      )
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.api['portal-domains'].$delete()
+      if (!res.ok) {
+        throw new Error('Falha ao remover domínio')
+      }
+    },
+    onSuccess: async () => {
+      toast.success('Domínio removido')
+      setHostname('')
+      await queryClient.invalidateQueries({ queryKey: ['portal-domain'] })
+    },
+    onError: () => {
+      toast.error('Falha ao remover domínio')
+    },
+  })
+
+  const hasCustomDomain = accessQuery.data?.hasCustomDomain ?? false
+  const domain = domainQuery.data?.domain ?? null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Domínio do Portal</CardTitle>
+        <CardDescription>
+          Configure um domínio próprio para o portal do cliente. Esta entrega
+          cobre o portal; o dashboard continua no domínio principal.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!hasCustomDomain && (
+          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            O domínio personalizado do portal fica disponível a partir do plano
+            Professional.
+          </div>
+        )}
+
+        <div className="rounded-lg border p-4">
+          <p className="font-medium">URL atual do portal</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {domainQuery.data?.portalBaseUrl ?? 'https://portal.calibrafacil.com'}
+          </p>
+        </div>
+
+        <form
+          className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-end"
+          onSubmit={(event) => {
+            event.preventDefault()
+            createMutation.mutate()
+          }}
+        >
+          <Field className="flex-1">
+            <FieldLabel htmlFor="portal-domain-hostname">Hostname</FieldLabel>
+            <Input
+              id="portal-domain-hostname"
+              value={hostname}
+              onChange={(event) => setHostname(event.target.value)}
+              placeholder="portal.suaempresa.com.br"
+              disabled={!hasCustomDomain || createMutation.isPending}
+            />
+            <FieldDescription>
+              Use apenas o hostname. Exemplo: <code>portal.suaempresa.com.br</code>.
+            </FieldDescription>
+          </Field>
+          <Button
+            type="submit"
+            disabled={!hasCustomDomain || !hostname.trim() || createMutation.isPending}
+          >
+            Salvar domínio
+          </Button>
+        </form>
+
+        {domain && (
+          <div className="space-y-4 rounded-lg border p-4">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={domain.verifiedAt ? 'default' : 'secondary'}>
+                {domain.verifiedAt ? 'Verificado' : 'Aguardando DNS'}
+              </Badge>
+              <Badge variant={domain.isActive ? 'default' : 'secondary'}>
+                {domain.isActive ? 'Ativo' : 'Inativo'}
+              </Badge>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <p className="text-sm text-muted-foreground">Hostname</p>
+                <p className="font-medium">{domain.hostname}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Registro TXT</p>
+                <p className="font-mono text-sm">{domain.verification.host}</p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-sm text-muted-foreground">Token</p>
+                <p className="font-mono text-sm">{domain.verification.value}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => verifyMutation.mutate()}
+                disabled={!hasCustomDomain || verifyMutation.isPending}
+              >
+                Verificar DNS
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => activateMutation.mutate()}
+                disabled={!hasCustomDomain || !domain.verifiedAt || activateMutation.isPending}
+              >
+                Ativar domínio
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+              >
+                Remover
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

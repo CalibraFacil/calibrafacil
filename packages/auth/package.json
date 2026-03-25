@@ -15,7 +15,9 @@
     "@better-auth/sso": "^1.4.18",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/email": "workspace:^",
+    "@calibra-facil/shared": "workspace:^",
     "better-auth": "^1.4.18",
+    "drizzle-orm": "^0.45.1",
     "react": "^19.0.0",
     "resend": "^6.6.0"
   },

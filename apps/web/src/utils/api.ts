@@ -5,12 +5,16 @@ function getApiBaseURL(): string {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL
   }
-  // In browser, use the same hostname with port 3000
   if (typeof window !== 'undefined') {
     const host = window.location.hostname
-    return `https://${host}:3000`
+    if (host === 'localhost' || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+      return `https://${host}:3000`
+    }
+
+    return 'https://api.calibrafacil.com'
   }
-  return 'https://localhost:3000'
+
+  return 'https://api.calibrafacil.com'
 }
 
 export const api = hc<AppType>(getApiBaseURL(), {

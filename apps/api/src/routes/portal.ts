@@ -35,6 +35,25 @@ import {
   extractKeyFromUrl,
   type R2Env,
 } from "../lib/storage";
+import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
+
+function getPortalHostOrigin(c: { req: { header: (name: string) => string | undefined } }) {
+  return c.req.header("origin") ?? c.req.header("referer") ?? null;
+}
+
+async function getPortalLabScope(c: {
+  req: { header: (name: string) => string | undefined };
+}) {
+  const origin = getPortalHostOrigin(c);
+  if (!origin) return null;
+
+  try {
+    const url = new URL(origin);
+    return resolveLabOrganizationIdByPortalHostname(url.hostname);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Portal routes - endpoints specific to the client portal.
@@ -54,6 +73,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/organizations", requirePortalAuth, async (c) => {
     const session = c.get("session");
+    const portalLabScope = await getPortalLabScope(c);
 
     try {
       // Query member table joined with organization
@@ -70,11 +90,15 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .from(member)
         .innerJoin(organization, eq(member.organizationId, organization.id))
+        .leftJoin(customer, eq(customer.authOrganizationId, organization.id))
         .where(
           and(
             eq(member.userId, session.user.id),
             eq(organization.type, "CLIENT"),
             inArray(member.role, PORTAL_ACCESS_ROLES),
+            portalLabScope
+              ? eq(customer.labOrganizationId, portalLabScope)
+              : undefined,
           ),
         );
 
@@ -95,6 +119,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("query", ListAssetsQuerySchema),
     async (c) => {
       const member = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
 
       try {
         const { page, limit, query } = c.req.valid("query");
@@ -103,6 +128,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         const [linkedCustomer] = await db
           .select({
             id: customer.id,
+            labOrganizationId: customer.labOrganizationId,
           })
           .from(customer)
           .where(eq(customer.authOrganizationId, member.organizationId))
@@ -113,6 +139,13 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
             data: [],
             pagination: { page, limit, total: 0, totalPages: 0 },
           });
+        }
+
+        if (
+          portalLabScope &&
+          linkedCustomer.labOrganizationId !== portalLabScope
+        ) {
+          return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
         }
 
         const whereCondition = and(
@@ -188,6 +221,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/certificates", requirePortalAuth, async (c) => {
     const session = c.get("session");
+    const portalLabScope = await getPortalLabScope(c);
 
     try {
       // Parse pagination params
@@ -224,7 +258,14 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       const customers = await db
         .select({ id: customer.id })
         .from(customer)
-        .where(inArray(customer.authOrganizationId, orgIds));
+        .where(
+          and(
+            inArray(customer.authOrganizationId, orgIds),
+            portalLabScope
+              ? eq(customer.labOrganizationId, portalLabScope)
+              : undefined,
+          ),
+        );
 
       if (customers.length === 0) {
         return c.json({
@@ -304,6 +345,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/certificates/:id", requirePortalAuth, async (c) => {
     const session = c.get("session");
+    const portalLabScope = await getPortalLabScope(c);
     const id = parseInt(c.req.param("id"));
 
     if (isNaN(id)) {
@@ -334,7 +376,14 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       const customers = await db
         .select({ id: customer.id })
         .from(customer)
-        .where(inArray(customer.authOrganizationId, orgIds));
+        .where(
+          and(
+            inArray(customer.authOrganizationId, orgIds),
+            portalLabScope
+              ? eq(customer.labOrganizationId, portalLabScope)
+              : undefined,
+          ),
+        );
 
       if (customers.length === 0) {
         return c.json({ error: "Certificado nao encontrado" }, 404);
@@ -396,6 +445,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/certificates/:id/download", requirePortalAuth, async (c) => {
     const session = c.get("session");
+    const portalLabScope = await getPortalLabScope(c);
     const id = parseInt(c.req.param("id"));
 
     if (isNaN(id)) {
@@ -426,7 +476,14 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       const customers = await db
         .select({ id: customer.id })
         .from(customer)
-        .where(inArray(customer.authOrganizationId, orgIds));
+        .where(
+          and(
+            inArray(customer.authOrganizationId, orgIds),
+            portalLabScope
+              ? eq(customer.labOrganizationId, portalLabScope)
+              : undefined,
+          ),
+        );
 
       if (customers.length === 0) {
         return c.json({ error: "Certificado nao encontrado" }, 404);
