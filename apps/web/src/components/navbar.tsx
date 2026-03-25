@@ -9,13 +9,13 @@ import {
 
 import { BrandLockup } from '@/components/brand'
 import { Button } from '@/components/ui/button'
-import { ModeToggle } from '@/components/mode-toggle'
 
 const navLinks = [
   { label: 'Desafios', href: '#desafios' },
   { label: 'Funcionalidades', href: '#funcionalidades' },
   { label: 'Conformidade', href: '#conformidade' },
   { label: 'Plataforma', href: '#plataforma' },
+  { label: 'FAQ', href: '#faq' },
   {
     label: 'Documentação',
     href: 'https://docs.calibrafacil.com',
@@ -58,7 +58,6 @@ export function Navbar() {
         </div>
 
         <div className="hidden items-center gap-2 md:flex">
-          <ModeToggle />
           <Link to="/sign-in">
             <Button variant="ghost" size="sm">
               Entrar
@@ -77,7 +76,6 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2 md:hidden">
-          <ModeToggle />
           <Button
             variant="ghost"
             size="icon"
