@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 
 import { BrandLockup } from '@/components/brand'
+import { ModeToggle } from '@/components/mode-toggle'
 
 const footerLinks = {
   Produto: [
@@ -8,6 +9,7 @@ const footerLinks = {
     { label: 'Funcionalidades', href: '#funcionalidades' },
     { label: 'Conformidade', href: '#conformidade' },
     { label: 'Plataforma', href: '#plataforma' },
+    { label: 'FAQ', href: '#faq' },
   ],
   Recursos: [
     {
@@ -84,9 +86,12 @@ export function Footer() {
             &copy; {new Date().getFullYear()} CalibraFácil. Todos os direitos
             reservados.
           </p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <div className="size-1.5 rounded-full bg-emerald-500" />
-            <span>Todos os sistemas operacionais</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="size-1.5 rounded-full bg-emerald-500" />
+              <span>Todos os sistemas operacionais</span>
+            </div>
+            <ModeToggle />
           </div>
         </div>
       </div>
