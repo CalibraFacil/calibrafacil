@@ -7,6 +7,7 @@
     "build": "vite build",
     "build:ci": "vite build && node ./scripts/check-bundle-size.mjs",
     "check:bundle": "node ./scripts/check-bundle-size.mjs",
+    "render:og": "node ./scripts/render-og.mjs",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "lint": "oxlint",
