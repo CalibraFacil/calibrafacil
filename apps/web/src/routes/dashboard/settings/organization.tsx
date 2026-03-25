@@ -93,6 +93,16 @@ interface Invitation {
   inviterId: string
 }
 
+interface OrganizationUnit {
+  id: number
+  name: string
+  slug: string
+  status: 'ACTIVE' | 'ARCHIVED'
+  isDefault: boolean
+  createdAt: string
+  archivedAt: string | null
+}
+
 function OrganizationSettingsRoute() {
   const { data: activeOrg, isPending: isLoadingOrg } = useActiveOrganization()
 
@@ -124,6 +134,7 @@ function OrganizationSettingsPage({
 }: {
   activeOrg: ActiveOrganization
 }) {
+  const queryClient = useQueryClient()
   const [name, setName] = useState(activeOrg.name ?? '')
   const [slug, setSlug] = useState(activeOrg.slug ?? '')
   const [isUpdating, setIsUpdating] = useState(false)
@@ -181,12 +192,56 @@ function OrganizationSettingsPage({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
+  const [newUnitName, setNewUnitName] = useState('')
 
   const availableRoles = [
     { value: 'member', label: 'Membro' },
     { value: 'technician', label: 'Técnico' },
     { value: 'admin', label: 'Administrador' },
   ] as const
+
+  const unitsQuery = useQuery({
+    queryKey: ['organization-units', activeOrg.id],
+    queryFn: async () => {
+      const response = await api.api.units.admin.units.$get()
+      if (!response.ok) {
+        throw new Error('Falha ao carregar unidades')
+      }
+
+      return (await response.json()) as { data: OrganizationUnit[] }
+    },
+  })
+
+  const createUnitMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const response = await api.api.units.admin.units.$post({
+        json: { name },
+      })
+
+      const data = (await response.json()) as
+        | OrganizationUnit
+        | { error?: string }
+
+      if (!response.ok || 'error' in data) {
+        throw new Error(('error' in data && data.error) || 'Erro ao criar unidade')
+      }
+
+      return data
+    },
+    onSuccess: async () => {
+      setNewUnitName('')
+      await queryClient.invalidateQueries({
+        queryKey: ['organization-units', activeOrg.id],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['dashboard-units', activeOrg.id],
+      })
+      toast.success('Unidade criada com sucesso')
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Erro ao criar unidade')
+    },
+  })
 
   useEffect(() => {
     if (!activeOrg?.id) return
@@ -808,6 +863,75 @@ function OrganizationSettingsPage({
                 </Button>
               </div>
             </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Unidades</CardTitle>
+          <CardDescription>
+            Estruture a operação do laboratório por unidade operacional.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {unitsQuery.isPending ? (
+            <div className="space-y-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {(unitsQuery.data?.data ?? []).map((unit) => (
+                <div
+                  key={unit.id}
+                  className="flex items-center justify-between rounded-lg border p-4"
+                >
+                  <div>
+                    <p className="font-medium">{unit.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {unit.slug}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {unit.isDefault ? (
+                      <Badge variant="secondary">Padrão</Badge>
+                    ) : null}
+                    <Badge
+                      variant={
+                        unit.status === 'ACTIVE' ? 'default' : 'secondary'
+                      }
+                    >
+                      {unit.status === 'ACTIVE' ? 'Ativa' : 'Arquivada'}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Separator />
+
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!newUnitName.trim()) return
+              createUnitMutation.mutate(newUnitName.trim())
+            }}
+          >
+            <Input
+              value={newUnitName}
+              onChange={(e) => setNewUnitName(e.target.value)}
+              placeholder="Nova unidade"
+              disabled={createUnitMutation.isPending}
+            />
+            <Button
+              type="submit"
+              disabled={createUnitMutation.isPending || !newUnitName.trim()}
+            >
+              {createUnitMutation.isPending ? 'Criando...' : 'Criar unidade'}
+            </Button>
           </form>
         </CardContent>
       </Card>

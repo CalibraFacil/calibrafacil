@@ -12,6 +12,7 @@ import {
   referenceStandard,
   user,
   member,
+  memberUnitAssignment,
   environmentalLimits,
   personnelCompetence,
   type MethodSnapshot,
@@ -70,6 +71,7 @@ import {
   jobCreationClientErrors,
 } from "../lib/jobs";
 import { alias } from "drizzle-orm/pg-core";
+import { buildUnitScopeCondition } from "../lib/units";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
@@ -163,6 +165,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
               ilike(calibrationJob.jobId, `%${query}%`),
             ),
           )
@@ -205,6 +208,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       // Build conditions - always scope to organization
       const conditions = [
         eq(calibrationJob.organizationId, memberData.organizationId),
+        buildUnitScopeCondition(calibrationJob.unitId, memberData),
       ];
 
       if (query) {
@@ -353,6 +357,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -436,6 +441,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         and(
           eq(calibrationJob.id, id),
           eq(calibrationJob.organizationId, memberData.organizationId),
+          buildUnitScopeCondition(calibrationJob.unitId, memberData),
         ),
       )
       .limit(1);
@@ -476,9 +482,17 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
 
+      if (!memberData.activeUnitId) {
+        return c.json(
+          { error: "Selecione uma unidade específica para criar ordens" },
+          400,
+        );
+      }
+
       try {
         const newJob = await createCalibrationJob({
           organizationId: memberData.organizationId,
+          unitId: memberData.activeUnitId,
           createdBy: session.user.id,
           assetId: input.assetId,
           serviceId: input.serviceId,
@@ -539,6 +553,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -584,6 +599,37 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
               { error: "Tecnico nao encontrado ou sem permissao" },
               400,
             );
+          }
+
+          if (
+            existing.unitId &&
+            !["admin", "owner"].includes(techMember.role)
+          ) {
+            const [assignment] = await db
+              .select({ id: memberUnitAssignment.id })
+              .from(memberUnitAssignment)
+              .where(
+                and(
+                  eq(memberUnitAssignment.memberId, techMember.id),
+                  eq(
+                    memberUnitAssignment.organizationId,
+                    memberData.organizationId,
+                  ),
+                  eq(memberUnitAssignment.unitId, existing.unitId),
+                  inArray(memberUnitAssignment.role, [
+                    "technician",
+                    "unit_admin",
+                  ]),
+                ),
+              )
+              .limit(1);
+
+            if (!assignment) {
+              return c.json(
+                { error: "Tecnico nao encontrado ou sem permissao" },
+                400,
+              );
+            }
           }
         }
 
@@ -665,6 +711,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -675,7 +722,12 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Validate technician
       const [techMember] = await db
-        .select({ userId: member.userId, userName: user.name })
+        .select({
+          id: member.id,
+          userId: member.userId,
+          userName: user.name,
+          role: member.role,
+        })
         .from(member)
         .innerJoin(user, eq(member.userId, user.id))
         .where(
@@ -692,6 +744,37 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           { error: "Tecnico nao encontrado ou sem permissao" },
           400,
         );
+      }
+
+      if (existing.unitId) {
+        const [assignment] =
+          techMember.role === "admin" || techMember.role === "owner"
+            ? [{ id: 1 }]
+            : await db
+                .select({ id: memberUnitAssignment.id })
+                .from(memberUnitAssignment)
+                .where(
+                  and(
+                    eq(memberUnitAssignment.memberId, input.technicianId),
+                    eq(
+                      memberUnitAssignment.organizationId,
+                      memberData.organizationId,
+                    ),
+                    eq(memberUnitAssignment.unitId, existing.unitId),
+                    inArray(memberUnitAssignment.role, [
+                      "technician",
+                      "unit_admin",
+                    ]),
+                  ),
+                )
+                .limit(1);
+
+        if (!assignment) {
+          return c.json(
+            { error: "Tecnico nao encontrado ou sem permissao" },
+            400,
+          );
+        }
       }
 
       // Validate competence (auto-detect enforcement)
@@ -809,6 +892,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -893,6 +977,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -921,6 +1006,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               inArray(referenceStandard.id, input.selectedStandardIds),
               eq(referenceStandard.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, memberData),
             ),
           );
 
@@ -1139,6 +1225,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1269,6 +1356,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1349,6 +1437,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1426,6 +1515,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1472,6 +1562,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         .values({
           jobId: newJobId,
           organizationId: originalJob.organizationId,
+          unitId: originalJob.unitId,
           customerId: originalJob.customerId,
           assetId: originalJob.assetId,
           serviceId: originalJob.serviceId,
@@ -1600,6 +1691,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(calibrationJob.id, id),
               eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
             ),
           )
           .limit(1);
@@ -1747,6 +1839,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1785,8 +1878,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
 
-      // Get all members with technical roles
-      const technicians = await db
+      const baseQuery = db
         .select({
           id: user.id,
           name: user.name,
@@ -1794,14 +1886,39 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           role: member.role,
         })
         .from(member)
-        .innerJoin(user, eq(member.userId, user.id))
-        .where(
-          and(
-            eq(member.organizationId, memberData.organizationId),
-            inArray(member.role, ["technician", "admin", "owner"]),
-          ),
-        )
-        .orderBy(user.name);
+        .innerJoin(user, eq(member.userId, user.id));
+
+      const technicians = memberData.activeUnitId
+        ? await baseQuery
+            .leftJoin(
+              memberUnitAssignment,
+              eq(memberUnitAssignment.memberId, member.id),
+            )
+            .where(
+              and(
+                eq(member.organizationId, memberData.organizationId),
+                inArray(member.role, ["technician", "admin", "owner"]),
+                or(
+                  inArray(member.role, ["admin", "owner"]),
+                  and(
+                    eq(memberUnitAssignment.unitId, memberData.activeUnitId),
+                    inArray(memberUnitAssignment.role, [
+                      "technician",
+                      "unit_admin",
+                    ]),
+                  ),
+                ),
+              ),
+            )
+            .orderBy(user.name)
+        : await baseQuery
+            .where(
+              and(
+                eq(member.organizationId, memberData.organizationId),
+                inArray(member.role, ["technician", "admin", "owner"]),
+              ),
+            )
+            .orderBy(user.name);
 
       return c.json({ data: technicians });
     },
@@ -1828,6 +1945,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1875,6 +1993,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1934,6 +2053,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);

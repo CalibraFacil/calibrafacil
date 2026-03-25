@@ -20,6 +20,7 @@ import {
 import { withCache, withInvalidation } from "../middleware/cache";
 import { CACHE_TTL } from "../lib/cache";
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
+import { buildUnitScopeCondition } from "../lib/units";
 
 /**
  * Services Router - Commercial Service Catalog (Product Registry)
@@ -51,7 +52,10 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
       const offset = (page - 1) * limit;
 
       // Build conditions - always scope to organization
-      const conditions = [eq(service.organizationId, member.organizationId)];
+      const conditions = [
+        eq(service.organizationId, member.organizationId),
+        buildUnitScopeCondition(service.unitId, member),
+      ];
 
       if (query) {
         conditions.push(
@@ -138,6 +142,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
         and(
           eq(service.id, id),
           eq(service.organizationId, member.organizationId),
+          buildUnitScopeCondition(service.unitId, member),
         ),
       )
       .limit(1);
@@ -184,6 +189,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
         and(
           eq(service.id, id),
           eq(service.organizationId, member.organizationId),
+          buildUnitScopeCondition(service.unitId, member),
         ),
       )
       .limit(1);
@@ -207,6 +213,13 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
+
+      if (!member.activeUnitId) {
+        return c.json(
+          { error: "Selecione uma unidade específica para criar serviços" },
+          400,
+        );
+      }
 
       // If methodId is provided, validate it belongs to same organization
       // and auto-fill assetTypeId from method
@@ -258,6 +271,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
       const [newService] = await db
         .insert(service)
         .values({
+          unitId: member.activeUnitId,
           organizationId: member.organizationId,
           name: input.name,
           description: input.description || null,
@@ -313,6 +327,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(service.id, id),
             eq(service.organizationId, member.organizationId),
+            buildUnitScopeCondition(service.unitId, member),
           ),
         )
         .limit(1);
@@ -474,6 +489,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(service.id, id),
             eq(service.organizationId, member.organizationId),
+            buildUnitScopeCondition(service.unitId, member),
           ),
         )
         .limit(1);
@@ -528,6 +544,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(service.id, id),
             eq(service.organizationId, member.organizationId),
+            buildUnitScopeCondition(service.unitId, member),
           ),
         )
         .limit(1);

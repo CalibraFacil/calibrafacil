@@ -45,6 +45,7 @@ import {
 import { assertPlanLimit } from "../middleware/tier-guard";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
+import { buildUnitScopeCondition } from "../lib/units";
 
 const submitterUser = alias(user, "calibrationRequestSubmitter");
 const reviewerUser = alias(user, "calibrationRequestReviewer");
@@ -145,7 +146,11 @@ async function getRequestItems(requestIds: number[]) {
     .orderBy(calibrationRequestItem.id);
 }
 
-async function getRequestDetail(requestId: number, organizationId: string) {
+async function getRequestDetail(
+  requestId: number,
+  organizationId: string,
+  unitCondition: ReturnType<typeof and>,
+) {
   const [request] = await db
     .select({
       id: calibrationRequest.id,
@@ -189,6 +194,7 @@ async function getRequestDetail(requestId: number, organizationId: string) {
       and(
         eq(calibrationRequest.id, requestId),
         eq(calibrationRequest.organizationId, organizationId),
+        unitCondition,
       ),
     )
     .limit(1);
@@ -220,6 +226,7 @@ export const calibrationRequestsRouter = new Hono<{
 
       const conditions = [
         eq(calibrationRequest.organizationId, member.organizationId),
+        buildUnitScopeCondition(calibrationRequest.unitId, member),
       ];
 
       if (query) {
@@ -320,7 +327,11 @@ export const calibrationRequestsRouter = new Hono<{
       return c.json({ error: "ID invalido" }, 400);
     }
 
-    const request = await getRequestDetail(id, member.organizationId);
+    const request = await getRequestDetail(
+      id,
+      member.organizationId,
+      buildUnitScopeCondition(calibrationRequest.unitId, member),
+    );
 
     if (!request) {
       return c.json({ error: "Solicitacao nao encontrada" }, 404);
@@ -355,6 +366,7 @@ export const calibrationRequestsRouter = new Hono<{
             and(
               eq(calibrationRequest.id, id),
               eq(calibrationRequest.organizationId, member.organizationId),
+              buildUnitScopeCondition(calibrationRequest.unitId, member),
             ),
           )
           .limit(1)
@@ -462,6 +474,7 @@ export const calibrationRequestsRouter = new Hono<{
             and(
               eq(calibrationRequest.id, id),
               eq(calibrationRequest.organizationId, member.organizationId),
+              buildUnitScopeCondition(calibrationRequest.unitId, member),
             ),
           )
           .limit(1)
@@ -568,6 +581,7 @@ export const calibrationRequestsRouter = new Hono<{
             and(
               eq(calibrationRequest.id, id),
               eq(calibrationRequest.organizationId, member.organizationId),
+              buildUnitScopeCondition(calibrationRequest.unitId, member),
             ),
           )
           .limit(1)
@@ -685,12 +699,14 @@ export const calibrationRequestsRouter = new Hono<{
               id: calibrationRequest.id,
               status: calibrationRequest.status,
               customerId: calibrationRequest.customerId,
+              unitId: calibrationRequest.unitId,
             })
             .from(calibrationRequest)
             .where(
               and(
                 eq(calibrationRequest.id, id),
                 eq(calibrationRequest.organizationId, member.organizationId),
+                buildUnitScopeCondition(calibrationRequest.unitId, member),
               ),
             )
             .limit(1)
@@ -827,6 +843,7 @@ export const calibrationRequestsRouter = new Hono<{
             try {
               newJob = await createCalibrationJob({
                 organizationId: member.organizationId,
+                unitId: request.unitId,
                 createdBy: session.user.id,
                 assetId: requestItem.assetId,
                 serviceId: item.serviceId,

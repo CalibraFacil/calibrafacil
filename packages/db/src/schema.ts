@@ -154,6 +154,107 @@ export const member = pgTable(
   ],
 );
 
+export type OrganizationUnitStatus = "ACTIVE" | "ARCHIVED";
+export type MemberUnitRole = "member" | "technician" | "unit_admin";
+
+export const organizationUnit = pgTable(
+  "organization_unit",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    status: text("status")
+      .$type<OrganizationUnitStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("organization_unit_org_id_idx").on(table.organizationId),
+    index("organization_unit_status_idx").on(table.status),
+    uniqueIndex("organization_unit_org_slug_uidx").on(
+      table.organizationId,
+      table.slug,
+    ),
+  ],
+);
+
+export const memberUnitAssignment = pgTable(
+  "member_unit_assignment",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "cascade" }),
+    role: text("role").$type<MemberUnitRole>().default("member").notNull(),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("member_unit_assignment_org_id_idx").on(table.organizationId),
+    index("member_unit_assignment_member_id_idx").on(table.memberId),
+    index("member_unit_assignment_unit_id_idx").on(table.unitId),
+    unique("member_unit_assignment_member_unit_unique").on(
+      table.memberId,
+      table.unitId,
+    ),
+  ],
+);
+
+export const organizationEventLog = pgTable(
+  "organization_event_log",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "set null",
+    }),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    actorMemberId: text("actor_member_id").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("organization_event_log_org_id_idx").on(table.organizationId),
+    index("organization_event_log_unit_id_idx").on(table.unitId),
+    index("organization_event_log_action_idx").on(table.action),
+    index("organization_event_log_created_at_idx").on(table.createdAt),
+  ],
+);
+
 export const invitation = pgTable(
   "invitation",
   {
@@ -478,7 +579,10 @@ export const organizationRelations = relations(
   organization,
   ({ one, many }) => ({
     members: many(member),
+    units: many(organizationUnit),
+    unitAssignments: many(memberUnitAssignment),
     invitations: many(invitation),
+    eventLogs: many(organizationEventLog),
     subscription: one(subscription),
     ssoProviders: many(ssoProvider),
     customDomain: one(organizationCustomDomain),
@@ -487,7 +591,7 @@ export const organizationRelations = relations(
   }),
 );
 
-export const memberRelations = relations(member, ({ one }) => ({
+export const memberRelations = relations(member, ({ one, many }) => ({
   organization: one(organization, {
     fields: [member.organizationId],
     references: [organization.id],
@@ -496,7 +600,52 @@ export const memberRelations = relations(member, ({ one }) => ({
     fields: [member.userId],
     references: [user.id],
   }),
+  unitAssignments: many(memberUnitAssignment),
 }));
+
+export const memberUnitAssignmentRelations = relations(
+  memberUnitAssignment,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [memberUnitAssignment.organizationId],
+      references: [organization.id],
+    }),
+    member: one(member, {
+      fields: [memberUnitAssignment.memberId],
+      references: [member.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [memberUnitAssignment.unitId],
+      references: [organizationUnit.id],
+    }),
+    createdByUser: one(user, {
+      fields: [memberUnitAssignment.createdBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const organizationEventLogRelations = relations(
+  organizationEventLog,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [organizationEventLog.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [organizationEventLog.unitId],
+      references: [organizationUnit.id],
+    }),
+    actorUser: one(user, {
+      fields: [organizationEventLog.actorUserId],
+      references: [user.id],
+    }),
+    actorMember: one(member, {
+      fields: [organizationEventLog.actorMemberId],
+      references: [member.id],
+    }),
+  }),
+);
 
 export const invitationRelations = relations(invitation, ({ one }) => ({
   organization: one(organization, {
@@ -626,6 +775,9 @@ export const asset = pgTable(
   "asset",
   {
     id: serial("id").primaryKey(),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "cascade" }),
@@ -652,6 +804,7 @@ export const asset = pgTable(
       .notNull(),
   },
   (table) => [
+    index("asset_unit_id_idx").on(table.unitId),
     index("asset_customer_id_idx").on(table.customerId),
     index("asset_type_id_idx").on(table.assetTypeId),
     index("asset_status_idx").on(table.status),
@@ -698,6 +851,10 @@ export const assetTypeRelations = relations(assetType, ({ many }) => ({
 }));
 
 export const assetRelations = relations(asset, ({ one, many }) => ({
+  unit: one(organizationUnit, {
+    fields: [asset.unitId],
+    references: [organizationUnit.id],
+  }),
   customer: one(customer, {
     fields: [asset.customerId],
     references: [customer.id],
@@ -969,6 +1126,9 @@ export const service = pgTable(
   "service",
   {
     id: serial("id").primaryKey(),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -998,6 +1158,7 @@ export const service = pgTable(
       .notNull(),
   },
   (table) => [
+    index("service_unit_id_idx").on(table.unitId),
     index("service_organization_id_idx").on(table.organizationId),
     index("service_method_id_idx").on(table.methodId),
     index("service_asset_type_id_idx").on(table.assetTypeId),
@@ -1043,6 +1204,10 @@ export const serviceRelations = relations(service, ({ one, many }) => ({
   organization: one(organization, {
     fields: [service.organizationId],
     references: [organization.id],
+  }),
+  unit: one(organizationUnit, {
+    fields: [service.unitId],
+    references: [organizationUnit.id],
   }),
   method: one(calibrationMethod, {
     fields: [service.methodId],
@@ -1112,6 +1277,9 @@ export const referenceStandard = pgTable(
   "reference_standard",
   {
     id: serial("id").primaryKey(),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -1154,6 +1322,7 @@ export const referenceStandard = pgTable(
     deletedAt: timestamp("deleted_at"), // Soft delete
   },
   (table) => [
+    index("standard_unit_id_idx").on(table.unitId),
     index("standard_organization_id_idx").on(table.organizationId),
     index("standard_status_idx").on(table.status),
     index("standard_next_cal_date_idx").on(table.nextCalibrationDate),
@@ -1201,6 +1370,10 @@ export const referenceStandardRelations = relations(
     organization: one(organization, {
       fields: [referenceStandard.organizationId],
       references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [referenceStandard.unitId],
+      references: [organizationUnit.id],
     }),
     createdByUser: one(user, {
       fields: [referenceStandard.createdBy],
@@ -1328,6 +1501,9 @@ export const calibrationJob = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
     // Customer who owns the asset
     customerId: integer("customer_id")
       .notNull()
@@ -1452,6 +1628,7 @@ export const calibrationJob = pgTable(
     }>(),
   },
   (table) => [
+    index("job_unit_id_idx").on(table.unitId),
     index("job_organization_id_idx").on(table.organizationId),
     index("job_customer_id_idx").on(table.customerId),
     index("job_asset_id_idx").on(table.assetId),
@@ -1526,6 +1703,9 @@ export const calibrationRequest = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "restrict" }),
@@ -1573,6 +1753,7 @@ export const calibrationRequest = pgTable(
       .notNull(),
   },
   (table) => [
+    index("calibration_request_unit_id_idx").on(table.unitId),
     index("calibration_request_org_id_idx").on(table.organizationId),
     index("calibration_request_customer_id_idx").on(table.customerId),
     index("calibration_request_auth_org_id_idx").on(table.authOrganizationId),
@@ -1645,6 +1826,10 @@ export const calibrationJobRelations = relations(
       fields: [calibrationJob.organizationId],
       references: [organization.id],
     }),
+    unit: one(organizationUnit, {
+      fields: [calibrationJob.unitId],
+      references: [organizationUnit.id],
+    }),
     customer: one(customer, {
       fields: [calibrationJob.customerId],
       references: [customer.id],
@@ -1716,6 +1901,10 @@ export const calibrationRequestRelations = relations(
       fields: [calibrationRequest.organizationId],
       references: [organization.id],
     }),
+    unit: one(organizationUnit, {
+      fields: [calibrationRequest.unitId],
+      references: [organizationUnit.id],
+    }),
     customer: one(customer, {
       fields: [calibrationRequest.customerId],
       references: [customer.id],
@@ -1752,6 +1941,27 @@ export const calibrationRequestRelations = relations(
     }),
     items: many(calibrationRequestItem),
     auditLogs: many(calibrationRequestAuditLog),
+  }),
+);
+
+export const organizationUnitRelations = relations(
+  organizationUnit,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [organizationUnit.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationUnit.createdBy],
+      references: [user.id],
+    }),
+    memberAssignments: many(memberUnitAssignment),
+    services: many(service),
+    standards: many(referenceStandard),
+    jobs: many(calibrationJob),
+    calibrationRequests: many(calibrationRequest),
+    assets: many(asset),
+    eventLogs: many(organizationEventLog),
   }),
 );
 

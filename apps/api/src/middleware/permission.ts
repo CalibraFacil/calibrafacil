@@ -5,6 +5,7 @@ import { db } from "@calibra-facil/db";
 import {
   member as memberTable,
   organization as organizationTable,
+  type MemberUnitRole,
 } from "@calibra-facil/db/schema";
 import { eq, and } from "drizzle-orm";
 import type {
@@ -14,6 +15,10 @@ import type {
   RoleName,
 } from "@calibra-facil/auth/access";
 import { canPerformCalibrationAction, roles } from "@calibra-facil/auth/access";
+import {
+  resolveMemberUnitScope,
+  type ResolvedUnit,
+} from "../lib/units";
 
 // =============================================================================
 // CONTEXT TYPES
@@ -52,6 +57,13 @@ export interface MemberData {
   organizationId: string;
   organizationType: OrgType;
   userId: string;
+  activeUnitId: number | null;
+  activeUnitName: string | null;
+  accessibleUnitIds: number[];
+  accessibleUnits: ResolvedUnit[];
+  selectedUnitScope: "all" | "unit";
+  canAccessAllUnits: boolean;
+  unitRole: MemberUnitRole | null;
 }
 
 export type AuthSource = "lab" | "portal";
@@ -164,6 +176,67 @@ function hasPermissionLocally(role: RoleName, permissions: PermissionCheck) {
   } catch {
     return false;
   }
+}
+
+const UNIT_SCOPED_RESOURCES = new Set([
+  "calibration",
+  "request",
+  "standard",
+  "equipment",
+  "client",
+  "certificate",
+  "report",
+  "audit",
+  "service",
+  "non_conformance",
+  "capa",
+  "competence",
+]);
+
+function getEffectivePermissionRole(
+  member: Pick<MemberData, "role" | "unitRole">,
+  permissions: PermissionCheck,
+): RoleName {
+  if (member.role === "owner" || member.role === "admin") {
+    return member.role;
+  }
+
+  const resources = Object.keys(permissions);
+  const isUnitScopedOnly = resources.every((resource) =>
+    UNIT_SCOPED_RESOURCES.has(resource),
+  );
+
+  if (!isUnitScopedOnly) {
+    return member.role;
+  }
+
+  if (member.unitRole === "unit_admin") {
+    return "admin";
+  }
+
+  if (member.unitRole === "technician") {
+    return "technician";
+  }
+
+  return member.role;
+}
+
+function getCalibrationAuthorizationRole(
+  member: Pick<MemberData, "role" | "unitRole">,
+): RoleName {
+  if (member.role === "owner" || member.role === "admin") {
+    return member.role;
+  }
+
+  if (member.unitRole === "unit_admin") {
+    return "admin";
+  }
+
+  if (member.unitRole === "technician") {
+    return "technician";
+  }
+
+  return member.role;
 }
 
 // =============================================================================
@@ -333,12 +406,38 @@ export const requireOrganization = createMiddleware<{
 
   const orgType = (memberInfo.orgType as OrgType) ?? "LAB";
 
+  const unitScope =
+    orgType === "LAB"
+      ? await resolveMemberUnitScope({
+          organizationId: activeOrgId,
+          memberId: memberInfo.memberId,
+          memberRole: memberInfo.memberRole as RoleName,
+          userId,
+          requestedScope: c.req.header("x-active-unit-id") ?? null,
+        })
+      : {
+          activeUnitId: null,
+          activeUnitName: null,
+          accessibleUnitIds: [],
+          accessibleUnits: [],
+          selectedUnitScope: "unit" as const,
+          canAccessAllUnits: false,
+          unitRole: null,
+        };
+
   c.set("member", {
     id: memberInfo.memberId,
     role: memberInfo.memberRole as RoleName,
     organizationId: activeOrgId,
     organizationType: orgType,
     userId: userId,
+    activeUnitId: unitScope.activeUnitId,
+    activeUnitName: unitScope.activeUnitName,
+    accessibleUnitIds: unitScope.accessibleUnitIds,
+    accessibleUnits: unitScope.accessibleUnits,
+    selectedUnitScope: unitScope.selectedUnitScope,
+    canAccessAllUnits: unitScope.canAccessAllUnits,
+    unitRole: unitScope.unitRole,
   });
 
   addServerTiming(c, "org", orgStartedAt);
@@ -370,7 +469,10 @@ export function requirePermission(permissions: PermissionCheck) {
     const member = c.get("member") as MemberData | undefined;
 
     if (member) {
-      const hasPermission = hasPermissionLocally(member.role, permissions);
+      const hasPermission = hasPermissionLocally(
+        getEffectivePermissionRole(member, permissions),
+        permissions,
+      );
 
       if (!hasPermission) {
         throw new HTTPException(403, {
@@ -535,9 +637,11 @@ export function requireCalibrationAction<
     const member = c.get("member") as MemberData;
     const state = await getState(c);
 
-    if (!canPerformCalibrationAction(member.role, state, action)) {
+    const effectiveRole = getCalibrationAuthorizationRole(member);
+
+    if (!canPerformCalibrationAction(effectiveRole, state, action)) {
       throw new HTTPException(403, {
-        message: `Cannot ${action} calibration in '${state}' state with role '${member.role}'`,
+        message: `Cannot ${action} calibration in '${state}' state with role '${effectiveRole}'`,
       });
     }
 

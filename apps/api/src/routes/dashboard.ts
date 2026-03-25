@@ -16,6 +16,7 @@ import {
 import { eq, and, count, sql, gte, lte, inArray, desc } from "drizzle-orm";
 import { withCache } from "../middleware/cache";
 import { CACHE_TTL } from "../lib/cache";
+import { buildUnitScopeCondition } from "../lib/units";
 
 /**
  * Dashboard Router - Aggregated metrics for ISO 17025 lab dashboard
@@ -47,6 +48,21 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
       thirtyDaysFromNow.setDate(now.getDate() + 30);
       const ninetyDaysAgo = new Date(now);
       ninetyDaysAgo.setDate(now.getDate() - 90);
+      const jobUnitScopeCondition = buildUnitScopeCondition(
+        calibrationJob.unitId,
+        memberData,
+      );
+      const standardUnitScopeCondition = buildUnitScopeCondition(
+        referenceStandard.unitId,
+        memberData,
+      );
+      const trendUnitFilter =
+        memberData.selectedUnitScope === "all"
+          ? sql`AND unit_id IN (${sql.join(
+              memberData.accessibleUnitIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})`
+          : sql`AND unit_id = ${memberData.activeUnitId}`;
 
       try {
         const dbStartedAt = performance.now();
@@ -67,6 +83,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             .where(
               and(
                 eq(calibrationJob.organizationId, memberData.organizationId),
+                jobUnitScopeCondition,
                 inArray(calibrationJob.status, [
                   "DRAFT",
                   "IN_PROGRESS",
@@ -85,6 +102,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             .where(
               and(
                 eq(calibrationJob.organizationId, memberData.organizationId),
+                jobUnitScopeCondition,
                 eq(calibrationJob.status, "APPROVED"),
                 gte(calibrationJob.approvedAt, startOfMonth),
               ),
@@ -97,6 +115,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             .where(
               and(
                 eq(calibrationJob.organizationId, memberData.organizationId),
+                jobUnitScopeCondition,
                 eq(calibrationJob.status, "REJECTED"),
                 gte(calibrationJob.rejectedAt, startOfMonth),
               ),
@@ -109,6 +128,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             .where(
               and(
                 eq(referenceStandard.organizationId, memberData.organizationId),
+                standardUnitScopeCondition,
                 eq(referenceStandard.status, "ACTIVE"),
                 lte(referenceStandard.nextCalibrationDate, thirtyDaysFromNow),
                 gte(referenceStandard.nextCalibrationDate, now),
@@ -122,6 +142,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             .where(
               and(
                 eq(calibrationJob.organizationId, memberData.organizationId),
+                jobUnitScopeCondition,
                 lte(calibrationJob.dueDate, now),
                 inArray(calibrationJob.status, [
                   "DRAFT",
@@ -140,6 +161,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             COUNT(*) FILTER (WHERE status = 'REJECTED') as rejected
           FROM calibration_job
           WHERE organization_id = ${memberData.organizationId}
+            ${trendUnitFilter}
             AND (
               (status = 'APPROVED' AND approved_at >= ${ninetyDaysAgo.toISOString()})
               OR (status = 'REJECTED' AND rejected_at >= ${ninetyDaysAgo.toISOString()})
@@ -166,7 +188,12 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
             .leftJoin(service, eq(calibrationJob.serviceId, service.id))
             .leftJoin(user, eq(calibrationJob.technicianId, user.id))
-            .where(eq(calibrationJob.organizationId, memberData.organizationId))
+            .where(
+              and(
+                eq(calibrationJob.organizationId, memberData.organizationId),
+                jobUnitScopeCondition,
+              ),
+            )
             .orderBy(desc(calibrationJob.createdAt))
             .limit(10),
         ]);
