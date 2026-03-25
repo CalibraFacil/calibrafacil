@@ -8,6 +8,7 @@ import {
 } from "../../middleware/permission";
 import { getPlan, type PlanId } from "@calibra-facil/shared";
 import { withInvalidation } from "../../middleware/cache";
+import { requireFeature } from "../../middleware/tier-guard";
 
 // =============================================================================
 // SUBSCRIPTION ROUTES - Organization subscription management
@@ -38,7 +39,11 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - Get current organization's subscription
   // =========================================================================
-  .get("/", ...withLabPermission({ billing: ["read"] }), async (c) => {
+  .get(
+    "/",
+    ...withLabPermission({ billing: ["read"] }),
+    requireFeature("financial"),
+    async (c) => {
     const memberData = c.get("member");
 
     // Get subscription
@@ -69,7 +74,8 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
       usage,
       limits: plan.limits,
     });
-  })
+    },
+  )
 
   // =========================================================================
   // DELETE / - Cancel subscription
@@ -77,6 +83,7 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
   .delete(
     "/",
     ...withLabPermission({ billing: ["update"] }),
+    requireFeature("financial"),
     withInvalidation("subscription"),
     async (c) => {
       const memberData = c.get("member");

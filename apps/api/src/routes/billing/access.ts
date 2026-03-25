@@ -1,0 +1,32 @@
+import { Hono } from "hono";
+import {
+  requireLabProtected,
+  requireOrgType,
+  type AuthVariables,
+} from "../../middleware/permission";
+import { getOrganizationPlanAccess } from "../../lib/organization-plan";
+import { getPlan } from "@calibra-facil/shared";
+
+export const billingAccessRouter = new Hono<{ Variables: AuthVariables }>().get(
+  "/",
+  ...requireLabProtected,
+  requireOrgType("LAB"),
+  async (c) => {
+    const member = c.get("member");
+    const access = await getOrganizationPlanAccess(member.organizationId);
+    const plan = getPlan(access.planId);
+
+    return c.json({
+      planId: access.planId,
+      planName: access.planName,
+      status: access.status,
+      limits: plan.limits,
+      entitlements: access.entitlements,
+      hasFinancial: access.entitlements.includes("financial"),
+      hasApi: access.entitlements.includes("api"),
+      hasCustomDomain: access.entitlements.includes("custom_domain"),
+      hasCustomTemplates: access.entitlements.includes("custom_templates"),
+      hasSso: access.entitlements.includes("sso"),
+    });
+  },
+);

@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
+  ENTITLEMENT_METADATA,
   PLANS,
   PLAN_PRICES,
   formatPrice,
@@ -24,30 +25,6 @@ interface PlanSelectionStepProps {
   onSelect: (planId: PlanId, cycle: BillingCycle) => void
 }
 
-// Feature descriptions for display
-const FEATURE_LABELS: Record<string, { name: string; description: string }> = {
-  math_engine: {
-    name: 'Motor Matemático',
-    description: 'Cálculos de incerteza de medição',
-  },
-  portal: {
-    name: 'Portal do Cliente',
-    description: 'Acesso externo para seus clientes',
-  },
-  financial: {
-    name: 'Módulo Financeiro',
-    description: 'Faturamento e gestão de pagamentos',
-  },
-  api: {
-    name: 'Acesso à API',
-    description: 'Integração com sistemas externos',
-  },
-  custom_domain: {
-    name: 'Domínio Personalizado',
-    description: 'portal.suaempresa.com.br',
-  },
-}
-
 // All features in display order
 const ALL_FEATURES: FeatureFlag[] = [
   'math_engine',
@@ -55,6 +32,13 @@ const ALL_FEATURES: FeatureFlag[] = [
   'financial',
   'api',
   'custom_domain',
+  'sso',
+  'approval_workflow',
+  'advanced_audit_trail',
+  'custom_templates',
+  'priority_support',
+  'multi_unit',
+  'custom_integrations',
 ]
 
 // Plans to show in checkout (excludes FREE)
@@ -68,11 +52,23 @@ const CHECKOUT_PLANS: Array<CheckoutPlanId> = [
 // Plan order for upgrade comparison
 const PLAN_ORDER: PlanId[] = ['FREE', 'STANDARD', 'PROFESSIONAL', 'ENTERPRISE']
 
-// Plan descriptions for UI display
-const PLAN_DESCRIPTIONS: Record<CheckoutPlanId, string> = {
-  STANDARD: 'Para pequenas empresas',
-  PROFESSIONAL: 'Para empresas em crescimento',
-  ENTERPRISE: 'Para grandes operações',
+const PLAN_HIGHLIGHTS: Record<CheckoutPlanId, string[]> = {
+  STANDARD: [
+    'Portal do cliente incluído',
+    'Templates padrão de certificado',
+    'Suporte padrão',
+  ],
+  PROFESSIONAL: [
+    'Fluxo de revisão e aprovação',
+    'Templates personalizados',
+    'Suporte prioritário',
+  ],
+  ENTERPRISE: [
+    'SSO corporativo via OIDC',
+    'Suporte dedicado sob consulta',
+    'Onboarding assistido',
+    'Soluções customizadas para operação complexa',
+  ],
 }
 
 export function PlanSelectionStep({
@@ -142,7 +138,7 @@ export function PlanSelectionStep({
         {CHECKOUT_PLANS.map((planId) => {
           const plan = PLANS[planId]
           const isCurrent = currentPlanId === planId
-          const isPopular = planId === 'PROFESSIONAL'
+          const isPopular = Boolean(plan.isPopular)
           const canSelect = canUpgrade(planId)
 
           return (
@@ -179,12 +175,20 @@ export function PlanSelectionStep({
 
               {/* Plan Header */}
               <div
-                className={cn('text-center', (isPopular || isCurrent) && 'mt-2')}
+                className={cn(
+                  'text-center',
+                  (isPopular || isCurrent) && 'mt-2',
+                )}
               >
                 <h3 className="text-lg font-semibold">{plan.name}</h3>
                 <p className="text-xs text-muted-foreground">
-                  {PLAN_DESCRIPTIONS[planId]}
+                  {plan.description}
                 </p>
+                {plan.recommendedFor && (
+                  <p className="mt-2 text-xs font-medium text-primary">
+                    {plan.recommendedFor}
+                  </p>
+                )}
               </div>
 
               {/* Price */}
@@ -205,7 +209,9 @@ export function PlanSelectionStep({
               {/* Limits */}
               <div className="mt-4 space-y-2 border-t pt-4">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Certificados/mês</span>
+                  <span className="text-muted-foreground">
+                    Certificados/mês
+                  </span>
                   <span className="font-medium">
                     {plan.limits.certificates === 999999
                       ? 'Ilimitados'
@@ -222,11 +228,27 @@ export function PlanSelectionStep({
                 </div>
               </div>
 
+              {/* Commercial Highlights */}
+              <div className="mt-4 space-y-2 border-t pt-4">
+                {PLAN_HIGHLIGHTS[planId].map((highlight) => (
+                  <div
+                    key={highlight}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <HugeiconsIcon
+                      icon={Tick02Icon}
+                      className="size-4 shrink-0 text-primary"
+                    />
+                    <span>{highlight}</span>
+                  </div>
+                ))}
+              </div>
+
               {/* Features */}
               <div className="mt-4 flex-1 space-y-2 border-t pt-4">
                 {ALL_FEATURES.map((feature) => {
                   const has = hasFeature(planId, feature)
-                  const label = FEATURE_LABELS[feature]
+                  const label = ENTITLEMENT_METADATA[feature]
                   return (
                     <div
                       key={feature}
@@ -243,7 +265,7 @@ export function PlanSelectionStep({
                         )}
                       />
                       <span className={cn(!has && 'line-through')}>
-                        {label?.name || feature}
+                        {label.name}
                       </span>
                     </div>
                   )
