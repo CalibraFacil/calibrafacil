@@ -18,6 +18,8 @@ import { canPerformCalibrationAction, roles } from "@calibra-facil/auth/access";
 import {
   resolveMemberUnitScope,
   type ResolvedUnit,
+  getUnitGovernanceAccess as getGovernanceAccessFromScope,
+  type UnitGovernanceAccess,
 } from "../lib/units";
 
 // =============================================================================
@@ -65,6 +67,8 @@ export interface MemberData {
   canAccessAllUnits: boolean;
   unitRole: MemberUnitRole | null;
 }
+
+export type GovernanceAccess = UnitGovernanceAccess;
 
 export type AuthSource = "lab" | "portal";
 
@@ -237,6 +241,15 @@ function getCalibrationAuthorizationRole(
   }
 
   return member.role;
+}
+
+export function getGovernanceAccess(
+  member: Pick<
+    MemberData,
+    "role" | "unitRole" | "accessibleUnitIds" | "canAccessAllUnits"
+  >,
+): GovernanceAccess {
+  return getGovernanceAccessFromScope(member);
 }
 
 // =============================================================================

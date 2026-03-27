@@ -26,6 +26,23 @@ export type ResolvedUnitScope = {
   unitRole: MemberUnitRole | null;
 };
 
+export type UnitGovernanceMember = Pick<
+  ResolvedUnitScope,
+  "accessibleUnitIds" | "canAccessAllUnits" | "unitRole"
+> & {
+  role: RoleName;
+};
+
+export type UnitGovernanceAccess = {
+  isGlobalManager: boolean;
+  canManageOrganizationUnits: boolean;
+  canManageAssignments: boolean;
+  canManageGlobalRoles: boolean;
+  canViewGovernance: boolean;
+  canAccessConsolidatedView: boolean;
+  managedUnitIds: number[];
+};
+
 const GLOBAL_MULTI_UNIT_ROLES = new Set<RoleName>(["owner", "admin"]);
 
 function slugifyUnitName(name: string) {
@@ -46,6 +63,27 @@ export function getDefaultUnitRole(role: RoleName): MemberUnitRole {
 
 export function isUnitScopedManagementRole(role: RoleName, unitRole?: string | null) {
   return GLOBAL_MULTI_UNIT_ROLES.has(role) || unitRole === "unit_admin";
+}
+
+export function isGlobalUnitManager(role: RoleName) {
+  return GLOBAL_MULTI_UNIT_ROLES.has(role);
+}
+
+export function getUnitGovernanceAccess(
+  member: UnitGovernanceMember,
+): UnitGovernanceAccess {
+  const isGlobalManager = isGlobalUnitManager(member.role);
+  const canManageAssignments = isGlobalManager || member.unitRole === "unit_admin";
+
+  return {
+    isGlobalManager,
+    canManageOrganizationUnits: isGlobalManager,
+    canManageAssignments,
+    canManageGlobalRoles: isGlobalManager,
+    canViewGovernance: canManageAssignments,
+    canAccessConsolidatedView: isGlobalManager && member.canAccessAllUnits,
+    managedUnitIds: member.accessibleUnitIds,
+  };
 }
 
 export async function ensureDefaultUnitForOrganization(
