@@ -103,6 +103,35 @@ interface OrganizationUnit {
   archivedAt: string | null
 }
 
+type UnitAssignmentRole = 'member' | 'technician' | 'unit_admin'
+type EditableUnitAssignmentRole = UnitAssignmentRole | 'none'
+
+interface GovernanceViewer {
+  isGlobalManager: boolean
+  canManageOrganizationUnits: boolean
+  canManageAssignments: boolean
+  canManageGlobalRoles: boolean
+  canViewGovernance: boolean
+  canAccessConsolidatedView: boolean
+  managedUnitIds: number[]
+}
+
+interface GovernanceAssignment {
+  unitId: number
+  unitName: string
+  role: UnitAssignmentRole
+}
+
+interface GovernanceMember {
+  id: string
+  userId: string
+  role: string
+  name: string
+  email: string
+  createdAt: string
+  assignments: GovernanceAssignment[]
+}
+
 function OrganizationSettingsRoute() {
   const { data: activeOrg, isPending: isLoadingOrg } = useActiveOrganization()
 
@@ -135,6 +164,12 @@ function OrganizationSettingsPage({
   activeOrg: ActiveOrganization
 }) {
   const queryClient = useQueryClient()
+  const currentOrgRole =
+    typeof activeOrg.members?.[0]?.role === 'string'
+      ? activeOrg.members[0].role
+      : 'member'
+  const canManageOrganizationSettings =
+    currentOrgRole === 'owner' || currentOrgRole === 'admin'
   const [name, setName] = useState(activeOrg.name ?? '')
   const [slug, setSlug] = useState(activeOrg.slug ?? '')
   const [isUpdating, setIsUpdating] = useState(false)
@@ -188,6 +223,15 @@ function OrganizationSettingsPage({
   const [isRemoving, setIsRemoving] = useState(false)
 
   const [updatingRoleFor, setUpdatingRoleFor] = useState<string | null>(null)
+  const [savingAssignmentsFor, setSavingAssignmentsFor] = useState<string | null>(
+    null,
+  )
+  const [assignmentDrafts, setAssignmentDrafts] = useState<
+    Record<string, Record<number, EditableUnitAssignmentRole>>
+  >({})
+  const [editingUnitId, setEditingUnitId] = useState<number | null>(null)
+  const [unitNameDrafts, setUnitNameDrafts] = useState<Record<number, string>>({})
+  const [updatingUnitId, setUpdatingUnitId] = useState<number | null>(null)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
@@ -204,13 +248,70 @@ function OrganizationSettingsPage({
     queryKey: ['organization-units', activeOrg.id],
     queryFn: async () => {
       const response = await api.api.units.admin.units.$get()
+      if (response.status === 403) {
+        return {
+          data: [] as OrganizationUnit[],
+          viewer: {
+            isGlobalManager: false,
+            canManageOrganizationUnits: false,
+            canManageAssignments: false,
+            canManageGlobalRoles: false,
+            canViewGovernance: false,
+            canAccessConsolidatedView: false,
+            managedUnitIds: [],
+          } satisfies GovernanceViewer,
+        }
+      }
+
       if (!response.ok) {
         throw new Error('Falha ao carregar unidades')
       }
 
-      return (await response.json()) as { data: OrganizationUnit[] }
+      return (await response.json()) as {
+        data: OrganizationUnit[]
+        viewer: GovernanceViewer
+      }
     },
   })
+
+  const governanceMembersQuery = useQuery({
+    queryKey: ['organization-governance-members', activeOrg.id],
+    queryFn: async () => {
+      const response = await api.api.units.admin.members.$get()
+      if (response.status === 403) {
+        return {
+          data: [] as GovernanceMember[],
+          viewer: {
+            isGlobalManager: false,
+            canManageOrganizationUnits: false,
+            canManageAssignments: false,
+            canManageGlobalRoles: false,
+            canViewGovernance: false,
+            canAccessConsolidatedView: false,
+            managedUnitIds: [],
+          } satisfies GovernanceViewer,
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error('Falha ao carregar governança por unidade')
+      }
+
+      return (await response.json()) as {
+        data: GovernanceMember[]
+        viewer: GovernanceViewer
+      }
+    },
+  })
+
+  const governanceViewer =
+    governanceMembersQuery.data?.viewer ?? unitsQuery.data?.viewer ?? null
+  const canManageOrganizationUnits =
+    governanceViewer?.canManageOrganizationUnits ?? canManageOrganizationSettings
+  const canManageAssignments = governanceViewer?.canManageAssignments ?? false
+  const canManageGlobalRoles =
+    governanceViewer?.canManageGlobalRoles ?? canManageOrganizationSettings
+  const canViewGovernance = governanceViewer?.canViewGovernance ?? false
 
   const createUnitMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -234,6 +335,9 @@ function OrganizationSettingsPage({
         queryKey: ['organization-units', activeOrg.id],
       })
       await queryClient.invalidateQueries({
+        queryKey: ['organization-governance-members', activeOrg.id],
+      })
+      await queryClient.invalidateQueries({
         queryKey: ['dashboard-units', activeOrg.id],
       })
       toast.success('Unidade criada com sucesso')
@@ -243,11 +347,137 @@ function OrganizationSettingsPage({
     },
   })
 
+  const updateUnitMutation = useMutation({
+    mutationFn: async ({
+      unitId,
+      payload,
+    }: {
+      unitId: number
+      payload: { name?: string; status?: 'ACTIVE' | 'ARCHIVED' }
+    }) => {
+      const response = await api.api.units.admin.units[':id'].$patch({
+        param: { id: String(unitId) },
+        json: payload,
+      })
+
+      const data = (await response.json()) as OrganizationUnit | { error?: string }
+
+      if (!response.ok || 'error' in data) {
+        throw new Error(
+          ('error' in data && data.error) || 'Erro ao atualizar unidade',
+        )
+      }
+
+      return data
+    },
+    onSuccess: async () => {
+      setEditingUnitId(null)
+      setUpdatingUnitId(null)
+      await queryClient.invalidateQueries({
+        queryKey: ['organization-units', activeOrg.id],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['organization-governance-members', activeOrg.id],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['dashboard-units', activeOrg.id],
+      })
+      toast.success('Unidade atualizada com sucesso')
+    },
+    onError: (error) => {
+      setUpdatingUnitId(null)
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao atualizar unidade',
+      )
+    },
+  })
+
+  const updateAssignmentsMutation = useMutation({
+    mutationFn: async ({
+      memberId,
+      assignments,
+    }: {
+      memberId: string
+      assignments: Array<{ unitId: number; role: UnitAssignmentRole }>
+    }) => {
+      const response = await api.api.units.admin.members[':memberId'].assignments.$put(
+        {
+          param: { memberId },
+          json: { assignments },
+        },
+      )
+
+      const data = (await response.json()) as { success?: boolean; error?: string }
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Erro ao atualizar atribuições')
+      }
+
+      return data
+    },
+    onSuccess: async () => {
+      setSavingAssignmentsFor(null)
+      await queryClient.invalidateQueries({
+        queryKey: ['organization-governance-members', activeOrg.id],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['dashboard-units', activeOrg.id],
+      })
+      toast.success('Atribuições atualizadas com sucesso')
+    },
+    onError: (error) => {
+      setSavingAssignmentsFor(null)
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao atualizar atribuições',
+      )
+    },
+  })
+
+  const updateGlobalRoleMutation = useMutation({
+    mutationFn: async ({
+      memberId,
+      role,
+    }: {
+      memberId: string
+      role: 'member' | 'technician' | 'admin'
+    }) => {
+      const response = await api.api.units.admin.members[':memberId'].role.$patch({
+        param: { memberId },
+        json: { role },
+      })
+
+      const data = (await response.json()) as { success?: boolean; error?: string }
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Erro ao atualizar papel global')
+      }
+
+      return data
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        loadMembers(),
+        queryClient.invalidateQueries({
+          queryKey: ['organization-governance-members', activeOrg.id],
+        }),
+      ])
+      toast.success('Função atualizada com sucesso')
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao atualizar função',
+      )
+    },
+  })
+
   useEffect(() => {
     if (!activeOrg?.id) return
 
     let cancelled = false
     const fetchMembers = async () => {
+      if (!canManageOrganizationSettings) {
+        setMembers([])
+        setMembersLoading(false)
+        return
+      }
       setMembersLoading(true)
       try {
         const result = await authClient.organization.listMembers({
@@ -273,6 +503,11 @@ function OrganizationSettingsPage({
     }
 
     const fetchInvitations = async () => {
+      if (!canManageOrganizationSettings) {
+        setInvitations([])
+        setInvitationsLoading(false)
+        return
+      }
       setInvitationsLoading(true)
       try {
         const result = await authClient.organization.listInvitations({
@@ -302,10 +537,41 @@ function OrganizationSettingsPage({
     return () => {
       cancelled = true
     }
-  }, [activeOrg?.id])
+  }, [activeOrg?.id, canManageOrganizationSettings])
+
+  useEffect(() => {
+    const units = unitsQuery.data?.data ?? []
+    const governanceMembers = governanceMembersQuery.data?.data ?? []
+
+    if (units.length === 0 || governanceMembers.length === 0) {
+      setAssignmentDrafts({})
+      setUnitNameDrafts(
+        Object.fromEntries(units.map((unit) => [unit.id, unit.name])),
+      )
+      return
+    }
+
+    setUnitNameDrafts(
+      Object.fromEntries(units.map((unit) => [unit.id, unit.name])),
+    )
+    setAssignmentDrafts(
+      Object.fromEntries(
+        governanceMembers.map((member) => [
+          member.id,
+          Object.fromEntries(
+            units.map((unit) => [
+              unit.id,
+              member.assignments.find((assignment) => assignment.unitId === unit.id)
+                ?.role ?? 'none',
+            ]),
+          ),
+        ]),
+      ),
+    )
+  }, [governanceMembersQuery.data, unitsQuery.data])
 
   const loadMembers = async () => {
-    if (!activeOrg) return
+    if (!activeOrg || !canManageOrganizationSettings) return
     setMembersLoading(true)
     try {
       const result = await authClient.organization.listMembers({
@@ -327,7 +593,7 @@ function OrganizationSettingsPage({
   }
 
   const loadInvitations = async () => {
-    if (!activeOrg) return
+    if (!activeOrg || !canManageOrganizationSettings) return
     setInvitationsLoading(true)
     try {
       const result = await authClient.organization.listInvitations({
@@ -474,22 +740,15 @@ function OrganizationSettingsPage({
   }
 
   const handleUpdateMemberRole = async (memberId: string, newRole: string) => {
+    if (!canManageGlobalRoles) return
     setUpdatingRoleFor(memberId)
     try {
-      const result = await authClient.organization.updateMemberRole({
+      await updateGlobalRoleMutation.mutateAsync({
         memberId,
-        role: newRole,
-        organizationId: activeOrg.id,
+        role: newRole as 'member' | 'technician' | 'admin',
       })
-      if (result.error) {
-        throw new Error(result.error.message ?? 'Falha ao atualizar função')
-      }
-      toast.success('Função atualizada com sucesso')
-      await loadMembers()
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Falha ao atualizar função'
-      toast.error(message)
+    } catch {
+      // Mutation handles user-facing errors.
     } finally {
       setUpdatingRoleFor(null)
     }
@@ -551,6 +810,99 @@ function OrganizationSettingsPage({
     return labels[role] || role
   }
 
+  const getUnitRoleLabel = (role: EditableUnitAssignmentRole) => {
+    const labels: Record<EditableUnitAssignmentRole, string> = {
+      none: 'Sem acesso',
+      member: 'Membro',
+      technician: 'Técnico',
+      unit_admin: 'Admin. da unidade',
+    }
+    return labels[role] || role
+  }
+
+  const updateAssignmentDraft = (
+    memberId: string,
+    unitId: number,
+    role: EditableUnitAssignmentRole,
+  ) => {
+    setAssignmentDrafts((current) => ({
+      ...current,
+      [memberId]: {
+        ...(current[memberId] ?? {}),
+        [unitId]: role,
+      },
+    }))
+  }
+
+  const getDraftAssignmentsForMember = (memberId: string) => {
+    const draft = assignmentDrafts[memberId] ?? {}
+    return Object.entries(draft)
+      .filter(([, role]) => role && role !== 'none')
+      .map(([unitId, role]) => ({
+        unitId: Number(unitId),
+        role: role as UnitAssignmentRole,
+      }))
+      .sort((a, b) => a.unitId - b.unitId)
+  }
+
+  const getPersistedAssignmentsForMember = (member: GovernanceMember) =>
+    [...member.assignments]
+      .map((assignment) => ({
+        unitId: assignment.unitId,
+        role: assignment.role,
+      }))
+      .sort((a, b) => a.unitId - b.unitId)
+
+  const hasAssignmentChanges = (member: GovernanceMember) => {
+    const draft = JSON.stringify(getDraftAssignmentsForMember(member.id))
+    const persisted = JSON.stringify(getPersistedAssignmentsForMember(member))
+    return draft !== persisted
+  }
+
+  const handleSaveAssignments = async (member: GovernanceMember) => {
+    setSavingAssignmentsFor(member.id)
+    try {
+      await updateAssignmentsMutation.mutateAsync({
+        memberId: member.id,
+        assignments: getDraftAssignmentsForMember(member.id),
+      })
+    } catch {
+      setSavingAssignmentsFor(null)
+    }
+  }
+
+  const handleRenameUnit = async (unit: OrganizationUnit) => {
+    const nextName = unitNameDrafts[unit.id]?.trim()
+    if (!nextName || nextName === unit.name) {
+      setEditingUnitId(null)
+      return
+    }
+
+    setUpdatingUnitId(unit.id)
+    try {
+      await updateUnitMutation.mutateAsync({
+        unitId: unit.id,
+        payload: { name: nextName },
+      })
+    } catch {
+      setUpdatingUnitId(null)
+    }
+  }
+
+  const handleToggleUnitStatus = async (unit: OrganizationUnit) => {
+    setUpdatingUnitId(unit.id)
+    try {
+      await updateUnitMutation.mutateAsync({
+        unitId: unit.id,
+        payload: {
+          status: unit.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE',
+        },
+      })
+    } catch {
+      setUpdatingUnitId(null)
+    }
+  }
+
   const formatTimeRemaining = (expiresAt: Date) => {
     const now = new Date()
     const diff = expiresAt.getTime() - now.getTime()
@@ -602,68 +954,70 @@ function OrganizationSettingsPage({
 
   return (
     <div className="space-y-6">
-      {/* Organization Details Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Detalhes da Organização</CardTitle>
-          <CardDescription>
-            Atualize as informações da sua organização.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleUpdateOrganization}>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="org-name">Nome</FieldLabel>
-                <Input
-                  id="org-name"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value)
-                    setFormError(null)
-                  }}
-                  disabled={isUpdating}
-                  placeholder="Nome da organização"
-                />
-                {formError && <FieldError>{formError}</FieldError>}
-              </Field>
+      {canManageOrganizationSettings && (
+        <>
+          {/* Organization Details Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Detalhes da Organização</CardTitle>
+              <CardDescription>
+                Atualize as informações da sua organização.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleUpdateOrganization}>
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="org-name">Nome</FieldLabel>
+                    <Input
+                      id="org-name"
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value)
+                        setFormError(null)
+                      }}
+                      disabled={isUpdating}
+                      placeholder="Nome da organização"
+                    />
+                    {formError && <FieldError>{formError}</FieldError>}
+                  </Field>
 
-              <Field>
-                <FieldLabel htmlFor="org-slug">Slug</FieldLabel>
-                <Input
-                  id="org-slug"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
-                  disabled={isUpdating}
-                  placeholder="slug-da-organizacao"
-                />
-                <FieldDescription>
-                  URL amigável para identificar sua organização.
-                </FieldDescription>
-              </Field>
+                  <Field>
+                    <FieldLabel htmlFor="org-slug">Slug</FieldLabel>
+                    <Input
+                      id="org-slug"
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value)}
+                      disabled={isUpdating}
+                      placeholder="slug-da-organizacao"
+                    />
+                    <FieldDescription>
+                      URL amigável para identificar sua organização.
+                    </FieldDescription>
+                  </Field>
 
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isUpdating}>
-                  {isUpdating ? 'Salvando...' : 'Salvar alterações'}
-                </Button>
-              </div>
-            </FieldGroup>
-          </form>
-        </CardContent>
-      </Card>
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={isUpdating}>
+                      {isUpdating ? 'Salvando...' : 'Salvar alterações'}
+                    </Button>
+                  </div>
+                </FieldGroup>
+              </form>
+            </CardContent>
+          </Card>
 
-      {/* ISO 17025 / RBC Compliance Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Informações ISO 17025</CardTitle>
-          <CardDescription>
-            Dados do laboratório para certificados de calibração conforme ISO/IEC
-            17025 e RBC/Inmetro.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleUpdateIso17025}>
-            <FieldGroup>
+          {/* ISO 17025 / RBC Compliance Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Informações ISO 17025</CardTitle>
+              <CardDescription>
+                Dados do laboratório para certificados de calibração conforme ISO/IEC
+                17025 e RBC/Inmetro.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleUpdateIso17025}>
+                <FieldGroup>
               {/* Identification */}
               <Field>
                 <FieldLabel htmlFor="org-cnpj">CNPJ</FieldLabel>
@@ -865,7 +1219,11 @@ function OrganizationSettingsPage({
             </FieldGroup>
           </form>
         </CardContent>
-      </Card>
+          </Card>
+
+          <CustomPortalDomainCard />
+        </>
+      )}
 
       <Card>
         <CardHeader>
@@ -875,6 +1233,14 @@ function OrganizationSettingsPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!canManageOrganizationUnits && (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              Você pode consultar as unidades e gerenciar atribuições dentro do
+              seu escopo, mas a criação, edição estrutural e arquivamento de
+              unidades ficam disponíveis apenas para administradores globais.
+            </div>
+          )}
+
           {unitsQuery.isPending ? (
             <div className="space-y-2">
               <Skeleton className="h-12 w-full" />
@@ -885,61 +1251,289 @@ function OrganizationSettingsPage({
               {(unitsQuery.data?.data ?? []).map((unit) => (
                 <div
                   key={unit.id}
-                  className="flex items-center justify-between rounded-lg border p-4"
+                  className="rounded-lg border p-4"
                 >
-                  <div>
-                    <p className="font-medium">{unit.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {unit.slug}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {unit.isDefault ? (
-                      <Badge variant="secondary">Padrão</Badge>
-                    ) : null}
-                    <Badge
-                      variant={
-                        unit.status === 'ACTIVE' ? 'default' : 'secondary'
-                      }
-                    >
-                      {unit.status === 'ACTIVE' ? 'Ativa' : 'Arquivada'}
-                    </Badge>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-2">
+                      {editingUnitId === unit.id ? (
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <Input
+                            value={unitNameDrafts[unit.id] ?? unit.name}
+                            onChange={(event) =>
+                              setUnitNameDrafts((current) => ({
+                                ...current,
+                                [unit.id]: event.target.value,
+                              }))
+                            }
+                            disabled={updatingUnitId === unit.id}
+                            className="sm:w-72"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={updatingUnitId === unit.id}
+                              onClick={() => handleRenameUnit(unit)}
+                            >
+                              Salvar
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={updatingUnitId === unit.id}
+                              onClick={() => {
+                                setEditingUnitId(null)
+                                setUnitNameDrafts((current) => ({
+                                  ...current,
+                                  [unit.id]: unit.name,
+                                }))
+                              }}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="font-medium">{unit.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {unit.slug}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {unit.isDefault ? (
+                        <Badge variant="secondary">Padrão</Badge>
+                      ) : null}
+                      <Badge
+                        variant={
+                          unit.status === 'ACTIVE' ? 'default' : 'secondary'
+                        }
+                      >
+                        {unit.status === 'ACTIVE' ? 'Ativa' : 'Arquivada'}
+                      </Badge>
+                      {canManageOrganizationUnits && (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={
+                              updatingUnitId === unit.id ||
+                              updateUnitMutation.isPending
+                            }
+                            onClick={() => {
+                              setEditingUnitId(unit.id)
+                              setUnitNameDrafts((current) => ({
+                                ...current,
+                                [unit.id]: current[unit.id] ?? unit.name,
+                              }))
+                            }}
+                          >
+                            Renomear
+                          </Button>
+                          {!unit.isDefault && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={
+                                updatingUnitId === unit.id ||
+                                updateUnitMutation.isPending
+                              }
+                              onClick={() => handleToggleUnitStatus(unit)}
+                            >
+                              {unit.status === 'ACTIVE' ? 'Arquivar' : 'Reativar'}
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          <Separator />
+          {canManageOrganizationUnits && (
+            <>
+              <Separator />
 
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (!newUnitName.trim()) return
-              createUnitMutation.mutate(newUnitName.trim())
-            }}
-          >
-            <Input
-              value={newUnitName}
-              onChange={(e) => setNewUnitName(e.target.value)}
-              placeholder="Nova unidade"
-              disabled={createUnitMutation.isPending}
-            />
-            <Button
-              type="submit"
-              disabled={createUnitMutation.isPending || !newUnitName.trim()}
-            >
-              {createUnitMutation.isPending ? 'Criando...' : 'Criar unidade'}
-            </Button>
-          </form>
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!newUnitName.trim()) return
+                  createUnitMutation.mutate(newUnitName.trim())
+                }}
+              >
+                <Input
+                  value={newUnitName}
+                  onChange={(e) => setNewUnitName(e.target.value)}
+                  placeholder="Nova unidade"
+                  disabled={createUnitMutation.isPending}
+                />
+                <Button
+                  type="submit"
+                  disabled={createUnitMutation.isPending || !newUnitName.trim()}
+                >
+                  {createUnitMutation.isPending ? 'Criando...' : 'Criar unidade'}
+                </Button>
+              </form>
+            </>
+          )}
         </CardContent>
       </Card>
 
-      <CustomPortalDomainCard />
+      {canViewGovernance && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Governança por Unidade</CardTitle>
+            <CardDescription>
+              Controle quem atua em cada unidade e qual papel operacional cada
+              membro assume no seu escopo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {governanceMembersQuery.isPending ? (
+              <MembersSkeleton />
+            ) : governanceMembersQuery.data?.data.length ? (
+              <div className="space-y-4">
+                {governanceMembersQuery.data.data.map((member) => {
+                  const isGlobalManagerMember =
+                    member.role === 'owner' || member.role === 'admin'
+
+                  return (
+                    <div
+                      key={member.id}
+                      className="rounded-lg border p-4 space-y-4"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="font-medium">{member.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {member.email}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">
+                            Papel global: {getRoleLabel(member.role)}
+                          </Badge>
+                          {isGlobalManagerMember ? (
+                            <Badge>Papel global com acesso total</Badge>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {isGlobalManagerMember ? (
+                        <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                          Este membro tem acesso global à organização. As
+                          atribuições por unidade não restringem owner/admin.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="space-y-3">
+                            {(unitsQuery.data?.data ?? []).map((unit) => (
+                              <div
+                                key={`${member.id}-${unit.id}`}
+                                className="flex flex-col gap-2 rounded-md border p-3 md:flex-row md:items-center md:justify-between"
+                              >
+                                <div>
+                                  <p className="font-medium">{unit.name}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {unit.slug}
+                                  </p>
+                                </div>
+                                <Select
+                                  value={
+                                    assignmentDrafts[member.id]?.[unit.id] ?? 'none'
+                                  }
+                                  onValueChange={(value) =>
+                                    updateAssignmentDraft(
+                                      member.id,
+                                      unit.id,
+                                      value as EditableUnitAssignmentRole,
+                                    )
+                                  }
+                                  disabled={
+                                    !canManageAssignments ||
+                                    savingAssignmentsFor === member.id
+                                  }
+                                >
+                                  <SelectTrigger className="w-full md:w-52">
+                                    <SelectValue>
+                                      {getUnitRoleLabel(
+                                        assignmentDrafts[member.id]?.[unit.id] ?? 'none',
+                                      )}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {(
+                                      [
+                                        'none',
+                                        'member',
+                                        'technician',
+                                        'unit_admin',
+                                      ] as EditableUnitAssignmentRole[]
+                                    ).map((role) => (
+                                      <SelectItem key={role} value={role}>
+                                        {getUnitRoleLabel(role)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <p className="text-sm text-muted-foreground">
+                              {member.assignments.length > 0
+                                ? `Atribuições atuais: ${member.assignments
+                                    .map(
+                                      (assignment) =>
+                                        `${assignment.unitName} (${getUnitRoleLabel(
+                                          assignment.role,
+                                        )})`,
+                                    )
+                                    .join(', ')}`
+                                : 'Sem atribuições ativas neste escopo.'}
+                            </p>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={
+                                !canManageAssignments ||
+                                !hasAssignmentChanges(member) ||
+                                savingAssignmentsFor === member.id
+                              }
+                              onClick={() => handleSaveAssignments(member)}
+                            >
+                              {savingAssignmentsFor === member.id
+                                ? 'Salvando...'
+                                : 'Salvar atribuições'}
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nenhum membro disponível no seu escopo de governança.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Members Card */}
-      <Card>
+      {canManageOrganizationSettings && (
+        <Card>
         <CardHeader>
           <CardTitle>Membros</CardTitle>
           <CardDescription>
@@ -1066,10 +1660,11 @@ function OrganizationSettingsPage({
             </div>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      )}
 
       {/* Invitations Card */}
-      {(invitations.length > 0 || invitationsLoading) && (
+      {canManageOrganizationSettings && (invitations.length > 0 || invitationsLoading) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1155,7 +1750,7 @@ function OrganizationSettingsPage({
       )}
 
       {/* Remove Member Confirmation Dialog */}
-      <AlertDialog
+      {canManageOrganizationSettings && <AlertDialog
         open={!!memberToRemove}
         onOpenChange={(open) => {
           if (!open) setMemberToRemove(null)
@@ -1184,10 +1779,10 @@ function OrganizationSettingsPage({
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog>}
 
       {/* Danger Zone */}
-      <Card className="border-destructive/50">
+      {canManageOrganizationSettings && <Card className="border-destructive/50">
         <CardHeader>
           <CardTitle className="text-destructive">
             Excluir Organização
@@ -1254,7 +1849,7 @@ function OrganizationSettingsPage({
             </AlertDialogContent>
           </AlertDialog>
         </CardContent>
-      </Card>
+      </Card>}
     </div>
   )
 }
