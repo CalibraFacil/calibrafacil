@@ -22,6 +22,7 @@ import { jobsRouter } from "./routes/jobs";
 import { calibrationRequestsRouter } from "./routes/calibration-requests";
 import { verifyRouter } from "./routes/verify";
 import { dashboardRouter } from "./routes/dashboard";
+import { reportsRouter } from "./routes/reports";
 import { billingRouter } from "./routes/billing";
 import { webhooksRouter } from "./routes/webhooks";
 import { notificationsRouter } from "./routes/notifications";
@@ -201,6 +202,7 @@ const routes = app
   .route("/api/calibration-requests", calibrationRequestsRouter)
   .route("/api/verify", verifyRouter)
   .route("/api/dashboard", dashboardRouter)
+  .route("/api/reports", reportsRouter)
   .route("/api/billing", billingRouter)
   .route("/api/webhooks", webhooksRouter)
   .route("/api/notifications", notificationsRouter)

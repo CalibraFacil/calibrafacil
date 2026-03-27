@@ -15,6 +15,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
+import { useActiveOrganization } from '@calibra-facil/auth/client'
 
 import { OrganizationSwitcher } from './organization-switcher'
 import { NavMain } from './nav-main'
@@ -112,11 +113,6 @@ const data = {
       icon: CropIcon,
     },
     {
-      name: 'Relatórios',
-      url: '#',
-      icon: PieChartIcon,
-    },
-    {
       name: 'Compliance',
       url: '#',
       icon: MapsIcon,
@@ -125,6 +121,23 @@ const data = {
 }
 
 export function AppSidebar() {
+  const { data: activeOrg } = useActiveOrganization()
+  const currentRole =
+    typeof activeOrg?.members?.[0]?.role === 'string'
+      ? activeOrg.members[0].role
+      : 'member'
+  const canAccessConsolidatedReports =
+    currentRole === 'owner' || currentRole === 'admin'
+
+  const navMain = [...data.navMain]
+  if (canAccessConsolidatedReports) {
+    navMain.splice(1, 0, {
+      title: 'Relatórios',
+      url: '/dashboard/reports',
+      icon: <HugeiconsIcon icon={PieChartIcon} />,
+    })
+  }
+
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
@@ -132,7 +145,7 @@ export function AppSidebar() {
         <SidebarSearch />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navMain} />
         <NavProjects projects={data.projects} />
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
