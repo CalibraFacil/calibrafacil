@@ -41,6 +41,7 @@ import { isAllowedPortalOrigin } from "./lib/portal-domains";
 import { portalDomainsRouter } from "./routes/portal-domains";
 import { certificateTemplatesRouter } from "./routes/certificate-templates";
 import { unitsRouter } from "./routes/units";
+import { integrationsRouter } from "./routes/integrations";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -219,6 +220,7 @@ const routes = app
   .route("/api/portal-domains", portalDomainsRouter)
   .route("/api/certificate-templates", certificateTemplatesRouter)
   .route("/api/units", unitsRouter)
+  .route("/api/integrations", integrationsRouter)
   .route("/api/public/v1", publicApiRouter);
 
 export type AppType = typeof routes;

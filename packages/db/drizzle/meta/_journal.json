@@ -204,6 +204,13 @@
       "when": 1774591200000,
       "tag": "0028_add_unit_institutional_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1774598400000,
+      "tag": "0029_add_custom_integrations",
+      "breakpoints": true
     }
   ]
 }

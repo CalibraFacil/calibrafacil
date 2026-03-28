@@ -12,6 +12,17 @@ import {
   integer,
   real,
 } from "drizzle-orm/pg-core";
+import type {
+  GenericFinancialErpConnectionConfig,
+  IntegrationCredentialType,
+  IntegrationEventLevel,
+  IntegrationProvider,
+  IntegrationStatus,
+  IntegrationSyncStatus,
+  IntegrationSyncTarget,
+  IntegrationSyncTrigger,
+  IntegrationType,
+} from "@calibra-facil/shared";
 
 // =============================================================================
 // ASSET TYPE - Dynamic Instrument Classification (ISO 17025)
@@ -448,6 +459,177 @@ export const organizationApiKeyAuditLog = pgTable(
   ],
 );
 
+export const organizationIntegration = pgTable(
+  "organization_integration",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    type: text("type").$type<IntegrationType>().notNull(),
+    provider: text("provider").$type<IntegrationProvider>().notNull(),
+    name: text("name").notNull(),
+    status: text("status").$type<IntegrationStatus>().default("ACTIVE").notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedBy: text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    lastValidatedAt: timestamp("last_validated_at"),
+    lastValidationError: text("last_validation_error"),
+    disabledAt: timestamp("disabled_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("organization_integration_org_id_idx").on(table.organizationId),
+    index("organization_integration_status_idx").on(table.status),
+  ],
+);
+
+export const integrationConnection = pgTable(
+  "integration_connection",
+  {
+    id: text("id").primaryKey(),
+    integrationId: text("integration_id")
+      .notNull()
+      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    credentialType: text("credential_type")
+      .$type<IntegrationCredentialType>()
+      .default("bearer")
+      .notNull(),
+    config: jsonb("config")
+      .$type<GenericFinancialErpConnectionConfig>()
+      .notNull(),
+    encryptedSecret: text("encrypted_secret").notNull(),
+    secretIv: text("secret_iv").notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedBy: text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("integration_connection_integration_uidx").on(table.integrationId),
+    index("integration_connection_org_id_idx").on(table.organizationId),
+  ],
+);
+
+export const integrationObjectLink = pgTable(
+  "integration_object_link",
+  {
+    id: text("id").primaryKey(),
+    integrationId: text("integration_id")
+      .notNull()
+      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    target: text("target").$type<IntegrationSyncTarget>().notNull(),
+    localEntityId: text("local_entity_id").notNull(),
+    remoteEntityId: text("remote_entity_id"),
+    remoteDisplayId: text("remote_display_id"),
+    lastSyncedAt: timestamp("last_synced_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("integration_object_link_local_uidx").on(
+      table.integrationId,
+      table.target,
+      table.localEntityId,
+    ),
+    index("integration_object_link_remote_idx").on(
+      table.integrationId,
+      table.target,
+      table.remoteEntityId,
+    ),
+  ],
+);
+
+export const integrationSyncRun = pgTable(
+  "integration_sync_run",
+  {
+    id: text("id").primaryKey(),
+    integrationId: text("integration_id")
+      .notNull()
+      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    trigger: text("trigger").$type<IntegrationSyncTrigger>().notNull(),
+    target: text("target").$type<IntegrationSyncTarget>().notNull(),
+    status: text("status")
+      .$type<IntegrationSyncStatus>()
+      .default("PENDING")
+      .notNull(),
+    initiatedBy: text("initiated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    processedCount: integer("processed_count").default(0).notNull(),
+    successCount: integer("success_count").default(0).notNull(),
+    errorCount: integer("error_count").default(0).notNull(),
+    summary: jsonb("summary").$type<Record<string, unknown>>(),
+    errorSummary: text("error_summary"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("integration_sync_run_integration_idx").on(table.integrationId),
+    index("integration_sync_run_org_idx").on(table.organizationId),
+    index("integration_sync_run_status_idx").on(table.status),
+    index("integration_sync_run_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const integrationEventLog = pgTable(
+  "integration_event_log",
+  {
+    id: serial("id").primaryKey(),
+    integrationId: text("integration_id")
+      .notNull()
+      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    runId: text("run_id").references(() => integrationSyncRun.id, {
+      onDelete: "cascade",
+    }),
+    level: text("level").$type<IntegrationEventLevel>().default("info").notNull(),
+    event: text("event").notNull(),
+    message: text("message").notNull(),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("integration_event_log_integration_idx").on(table.integrationId),
+    index("integration_event_log_org_idx").on(table.organizationId),
+    index("integration_event_log_run_idx").on(table.runId),
+    index("integration_event_log_created_at_idx").on(table.createdAt),
+  ],
+);
+
 // =============================================================================
 // ASSET TYPE - Instrument Classification Blueprint
 // =============================================================================
@@ -615,6 +797,11 @@ export const organizationRelations = relations(
     customDomain: one(organizationCustomDomain),
     certificateTemplates: many(certificateTemplate),
     apiKeys: many(organizationApiKey),
+    integrations: many(organizationIntegration),
+    integrationConnections: many(integrationConnection),
+    integrationSyncRuns: many(integrationSyncRun),
+    integrationEventLogs: many(integrationEventLog),
+    integrationObjectLinks: many(integrationObjectLink),
   }),
 );
 
@@ -758,6 +945,109 @@ export const organizationApiKeyAuditLogRelations = relations(
     performedByUser: one(user, {
       fields: [organizationApiKeyAuditLog.performedBy],
       references: [user.id],
+    }),
+  }),
+);
+
+export const organizationIntegrationRelations = relations(
+  organizationIntegration,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [organizationIntegration.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationIntegration.createdBy],
+      references: [user.id],
+      relationName: "organizationIntegrationCreator",
+    }),
+    updatedByUser: one(user, {
+      fields: [organizationIntegration.updatedBy],
+      references: [user.id],
+      relationName: "organizationIntegrationUpdater",
+    }),
+    connection: one(integrationConnection, {
+      fields: [organizationIntegration.id],
+      references: [integrationConnection.integrationId],
+    }),
+    runs: many(integrationSyncRun),
+    events: many(integrationEventLog),
+    objectLinks: many(integrationObjectLink),
+  }),
+);
+
+export const integrationConnectionRelations = relations(
+  integrationConnection,
+  ({ one }) => ({
+    integration: one(organizationIntegration, {
+      fields: [integrationConnection.integrationId],
+      references: [organizationIntegration.id],
+    }),
+    organization: one(organization, {
+      fields: [integrationConnection.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [integrationConnection.createdBy],
+      references: [user.id],
+      relationName: "integrationConnectionCreator",
+    }),
+    updatedByUser: one(user, {
+      fields: [integrationConnection.updatedBy],
+      references: [user.id],
+      relationName: "integrationConnectionUpdater",
+    }),
+  }),
+);
+
+export const integrationObjectLinkRelations = relations(
+  integrationObjectLink,
+  ({ one }) => ({
+    integration: one(organizationIntegration, {
+      fields: [integrationObjectLink.integrationId],
+      references: [organizationIntegration.id],
+    }),
+    organization: one(organization, {
+      fields: [integrationObjectLink.organizationId],
+      references: [organization.id],
+    }),
+  }),
+);
+
+export const integrationSyncRunRelations = relations(
+  integrationSyncRun,
+  ({ one, many }) => ({
+    integration: one(organizationIntegration, {
+      fields: [integrationSyncRun.integrationId],
+      references: [organizationIntegration.id],
+    }),
+    organization: one(organization, {
+      fields: [integrationSyncRun.organizationId],
+      references: [organization.id],
+    }),
+    initiatedByUser: one(user, {
+      fields: [integrationSyncRun.initiatedBy],
+      references: [user.id],
+      relationName: "integrationRunInitiator",
+    }),
+    events: many(integrationEventLog),
+  }),
+);
+
+export const integrationEventLogRelations = relations(
+  integrationEventLog,
+  ({ one }) => ({
+    integration: one(organizationIntegration, {
+      fields: [integrationEventLog.integrationId],
+      references: [organizationIntegration.id],
+    }),
+    organization: one(organization, {
+      fields: [integrationEventLog.organizationId],
+      references: [organization.id],
+    }),
+    run: one(integrationSyncRun, {
+      fields: [integrationEventLog.runId],
+      references: [integrationSyncRun.id],
     }),
   }),
 );
