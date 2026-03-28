@@ -3,10 +3,8 @@ import {
   Book02Icon,
   Building02Icon,
   ClipboardIcon,
-  CropIcon,
   CustomerSupportIcon,
   Home01Icon,
-  MapsIcon,
   PieChartIcon,
   Settings05Icon,
   TaskAdd01Icon,
@@ -19,7 +17,6 @@ import { useActiveOrganization } from '@calibra-facil/auth/client'
 
 import { OrganizationSwitcher } from './organization-switcher'
 import { NavMain } from './nav-main'
-import { NavProjects } from './nav-projects'
 import { NavUser } from './nav-user'
 import { SidebarSearch } from './sidebar-search'
 
@@ -91,31 +88,9 @@ const data = {
   ],
   navSecondary: [
     {
-      title: 'Configurações',
-      url: '/dashboard/settings',
-      icon: <HugeiconsIcon icon={Settings05Icon} />,
-    },
-    {
-      title: 'Suporte',
-      url: '/support',
-      icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
-    },
-    {
       title: 'Documentação',
       url: 'https://docs.calibrafacil.com',
       icon: <HugeiconsIcon icon={Book02Icon} />,
-    },
-  ],
-  projects: [
-    {
-      name: 'Engenharia de Métodos',
-      url: '#',
-      icon: CropIcon,
-    },
-    {
-      name: 'Compliance',
-      url: '#',
-      icon: MapsIcon,
     },
   ],
 }
@@ -130,13 +105,35 @@ export function AppSidebar() {
     currentRole === 'owner' || currentRole === 'admin'
 
   const navMain = [...data.navMain]
-  if (canAccessConsolidatedReports) {
-    navMain.splice(1, 0, {
-      title: 'Relatórios',
-      url: '/dashboard/reports',
-      icon: <HugeiconsIcon icon={PieChartIcon} />,
-    })
-  }
+
+  const navSecondary = [...data.navSecondary]
+  const managementItems = [
+    ...(canAccessConsolidatedReports
+      ? [
+          {
+            title: 'Relatórios',
+            url: '/dashboard/reports',
+            icon: <HugeiconsIcon icon={PieChartIcon} />,
+          },
+        ]
+      : []),
+    {
+      title: 'Customer Success',
+      url: '/dashboard/customer-success',
+      icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
+      items: [
+        {
+          title: 'Área do laboratório',
+          url: '/dashboard/customer-success',
+        },
+      ],
+    },
+    {
+      title: 'Configurações',
+      url: '/dashboard/settings',
+      icon: <HugeiconsIcon icon={Settings05Icon} />,
+    },
+  ]
 
   return (
     <Sidebar variant="inset" collapsible="icon">
@@ -146,11 +143,11 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navMain} />
-        <NavProjects projects={data.projects} />
+        <NavMain items={managementItems} label="Gestão" />
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>
-              {data.navSecondary.map((item) => (
+              {navSecondary.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     render={

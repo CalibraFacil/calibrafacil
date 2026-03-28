@@ -5,6 +5,7 @@ import {
   organization,
   useListOrganizations,
 } from '@calibra-facil/auth/client'
+import { canAccessBackoffice } from '@calibra-facil/auth/access'
 import { BrandLockup } from '@/components/brand'
 import { Button } from '@/components/ui/button'
 import {
@@ -44,6 +45,13 @@ export const Route = createFileRoute('/onboarding/organization')({
 
     if (!session) {
       throw redirect({ to: '/sign-in' })
+    }
+
+    if (
+      canAccessBackoffice(session.user.role) &&
+      !session.session.impersonatedBy
+    ) {
+      throw redirect({ to: '/backoffice' })
     }
   },
   component: OrganizationOnboardingPage,
@@ -238,6 +246,10 @@ function OrganizationOnboardingPage() {
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p>Seu primeiro laboratório LAB será criado e ativado.</p>
               <p>Você poderá acessar o dashboard imediatamente.</p>
+              <p>
+                Este fluxo é exclusivo para contas do laboratório. Contas
+                internas da plataforma devem usar o backoffice.
+              </p>
               <p>
                 Campos de ISO 17025, acreditação e endereço completo podem ser
                 preenchidos depois em Configurações &gt; Organização.

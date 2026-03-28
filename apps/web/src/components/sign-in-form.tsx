@@ -12,9 +12,15 @@ import { Separator } from '@/components/ui/separator'
 
 interface SignInFormProps extends React.ComponentProps<'form'> {
   redirect?: string
+  mode?: 'lab' | 'backoffice'
 }
 
-export function SignInForm({ className, redirect, ...props }: SignInFormProps) {
+export function SignInForm({
+  className,
+  redirect,
+  mode = 'lab',
+  ...props
+}: SignInFormProps) {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -38,6 +44,37 @@ export function SignInForm({ className, redirect, ...props }: SignInFormProps) {
       setIsLoading(false)
       setError(error.message ?? 'Failed to sign in')
       return
+    }
+
+    if (mode === 'backoffice') {
+      try {
+        const accessRes = await api.api.backoffice.access.$get()
+
+        if (!accessRes.ok) {
+          setError('Falha ao validar acesso ao backoffice')
+          return
+        }
+
+        const access = (await accessRes.json()) as {
+          allowed: boolean
+          bootstrapAvailable: boolean
+        }
+
+        if (access.allowed) {
+          navigate({ to: redirect || '/backoffice' })
+          return
+        }
+
+        if (access.bootstrapAvailable) {
+          navigate({ to: '/backoffice/bootstrap' })
+          return
+        }
+
+        setError('Sua conta não possui acesso ao backoffice')
+        return
+      } finally {
+        setIsLoading(false)
+      }
     }
 
     setIsLoading(false)
@@ -94,9 +131,13 @@ export function SignInForm({ className, redirect, ...props }: SignInFormProps) {
       <FieldGroup>
         <div className="flex flex-col items-center gap-3 text-center">
           <BrandMark className="size-12" />
-          <h1 className="text-2xl font-bold">Entre em sua conta</h1>
+          <h1 className="text-2xl font-bold">
+            {mode === 'backoffice' ? 'Entrar no backoffice' : 'Entre em sua conta'}
+          </h1>
           <p className="text-muted-foreground text-sm text-balance">
-            Insira seu email abaixo para entrar em sua conta
+            {mode === 'backoffice'
+              ? 'Acesso interno da equipe CalibraFácil'
+              : 'Insira seu email abaixo para entrar em sua conta'}
           </p>
         </div>
         {error && (
@@ -119,7 +160,7 @@ export function SignInForm({ className, redirect, ...props }: SignInFormProps) {
           <div className="flex items-center">
             <FieldLabel htmlFor="password">Senha</FieldLabel>
             <Link
-              to="/"
+              to="/reset-password"
               className="ml-auto text-sm underline-offset-4 hover:underline"
             >
               Esqueceu sua senha?
@@ -145,56 +186,60 @@ export function SignInForm({ className, redirect, ...props }: SignInFormProps) {
             )}
           </Button>
         </Field>
-        <Separator />
-        <Field>
-          <div className="space-y-1">
-            <FieldLabel htmlFor="organizationSlug">Entrar com SSO</FieldLabel>
-            <p className="text-sm text-muted-foreground">
-              Informe o slug da organização e, se quiser, um email corporativo
-              como login hint.
-            </p>
-          </div>
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="organizationSlug">
-            Slug da organização
-          </FieldLabel>
-          <Input
-            id="organizationSlug"
-            value={organizationSlug}
-            onChange={(e) => setOrganizationSlug(e.target.value)}
-            placeholder="laboratorio-acreditado"
-            required={false}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="ssoEmail">Email corporativo</FieldLabel>
-          <Input
-            id="ssoEmail"
-            type="email"
-            value={ssoEmail}
-            onChange={(e) => setSsoEmail(e.target.value)}
-            placeholder="voce@empresa.com.br"
-            required={false}
-          />
-        </Field>
-        <Field>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isSsoLoading || !organizationSlug.trim()}
-            onClick={handleSsoSubmit}
-          >
-            {isSsoLoading ? (
-              <>
-                <Spinner className="mr-2" />
-                Redirecionando...
-              </>
-            ) : (
-              'Entrar com SSO'
-            )}
-          </Button>
-        </Field>
+        {mode === 'lab' ? (
+          <>
+            <Separator />
+            <Field>
+              <div className="space-y-1">
+                <FieldLabel htmlFor="organizationSlug">Entrar com SSO</FieldLabel>
+                <p className="text-sm text-muted-foreground">
+                  Informe o slug da organização e, se quiser, um email corporativo
+                  como login hint.
+                </p>
+              </div>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="organizationSlug">
+                Slug da organização
+              </FieldLabel>
+              <Input
+                id="organizationSlug"
+                value={organizationSlug}
+                onChange={(e) => setOrganizationSlug(e.target.value)}
+                placeholder="laboratorio-acreditado"
+                required={false}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="ssoEmail">Email corporativo</FieldLabel>
+              <Input
+                id="ssoEmail"
+                type="email"
+                value={ssoEmail}
+                onChange={(e) => setSsoEmail(e.target.value)}
+                placeholder="voce@empresa.com.br"
+                required={false}
+              />
+            </Field>
+            <Field>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isSsoLoading || !organizationSlug.trim()}
+                onClick={handleSsoSubmit}
+              >
+                {isSsoLoading ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Redirecionando...
+                  </>
+                ) : (
+                  'Entrar com SSO'
+                )}
+              </Button>
+            </Field>
+          </>
+        ) : null}
         {/* <Field>
           <FieldDescription className="text-center">
             Não possui uma conta?{' '}

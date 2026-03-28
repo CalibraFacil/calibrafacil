@@ -3,10 +3,12 @@ import { subscription } from "@calibra-facil/db/schema";
 import {
   getEnabledEntitlements,
   getPlan,
+  getPlanSupportPolicy,
   hasEntitlement,
   isSubscriptionActive,
   type FeatureFlag,
   type PlanId,
+  type PlanSupportPolicy,
   type SubscriptionStatus,
 } from "@calibra-facil/shared";
 import { eq } from "drizzle-orm";
@@ -17,6 +19,7 @@ export interface OrganizationPlanAccess {
   planName: string;
   isActive: boolean;
   entitlements: FeatureFlag[];
+  supportPolicy: PlanSupportPolicy;
 }
 
 export async function getOrganizationPlanAccess(
@@ -37,6 +40,7 @@ export async function getOrganizationPlanAccess(
     planName: plan.name,
     isActive: currentSubscription ? isSubscriptionActive(status) : true,
     entitlements: getEnabledEntitlements(planId),
+    supportPolicy: getPlanSupportPolicy(planId),
   };
 }
 

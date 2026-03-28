@@ -12,6 +12,7 @@ import {
   useActiveOrganization,
   useListOrganizations,
 } from '@calibra-facil/auth/client'
+import { canAccessBackoffice } from '@calibra-facil/auth/access'
 import { AppSidebar } from '@/components/app-sidebar'
 import { CommandPalette } from '@/components/command-palette/command-palette'
 import { CommandPaletteProvider } from '@/components/command-palette/command-context'
@@ -68,6 +69,13 @@ export const Route = createFileRoute('/dashboard')({
 
     if (!session) {
       throw redirect({ to: '/sign-in' })
+    }
+
+    if (
+      canAccessBackoffice(session.user.role) &&
+      !session.session.impersonatedBy
+    ) {
+      throw redirect({ to: '/backoffice' })
     }
   },
   component: DashboardLayout,

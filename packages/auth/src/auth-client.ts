@@ -1,8 +1,8 @@
 /// <reference path="./vite-env.d.ts" />
-import { organizationClient } from "better-auth/client/plugins";
+import { adminClient, organizationClient } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ssoClient } from "@better-auth/sso/client";
-import { ac, roles } from "./access";
+import { ac, platformAc, platformRoles, roles } from "./access";
 
 function getApiBaseURL(): string {
   // Primary source of truth (Cloudflare Pages, Vite)
@@ -58,6 +58,10 @@ export const labAuthClient = createBetterAuthClient({
     credentials: "include",
   },
   plugins: [
+    adminClient({
+      ac: platformAc,
+      roles: platformRoles,
+    }),
     organizationPluginConfig,
     ssoClient({ domainVerification: { enabled: true } }),
   ],
@@ -91,6 +95,8 @@ export const {
   // Settings page methods
   updateUser,
   changePassword,
+  requestPasswordReset,
+  resetPassword,
   listSessions,
   revokeSession,
   revokeOtherSessions,
@@ -107,6 +113,7 @@ export const usePortalListOrganizations = portalAuthClient.useListOrganizations;
 export const usePortalActiveOrganization =
   portalAuthClient.useActiveOrganization;
 export const portalOrganization = portalAuthClient.organization;
+export const labAdmin = labAuthClient.admin;
 
 // =============================================================================
 // PERMISSION CHECKING UTILITIES

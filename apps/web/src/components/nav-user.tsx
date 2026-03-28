@@ -1,4 +1,5 @@
 import {
+  BriefcaseIcon,
   CheckmarkBadge01Icon,
   CreditCardIcon,
   Logout01Icon,
@@ -9,7 +10,8 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { signOut, useSession } from '@calibra-facil/auth/client'
-import { Link } from '@tanstack/react-router'
+import { canAccessBackoffice } from '@calibra-facil/auth/access'
+import { Link, useLocation } from '@tanstack/react-router'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -28,9 +30,11 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
+import { api } from '@/utils/api'
 
 export function NavUser() {
   const { isMobile } = useSidebar()
+  const location = useLocation()
   const { data: session, isPending } = useSession()
 
   const getInitials = (name: string) =>
@@ -42,9 +46,20 @@ export function NavUser() {
       .join('')
       .toUpperCase()
 
-  const handleSignOut = () => {
-    void signOut() // fire it off
-    window.location.replace("/sign-in")
+  const handleSignOut = async () => {
+    await signOut()
+
+    const isBackofficePath = location.pathname.startsWith('/backoffice')
+    window.location.replace(
+      isBackofficePath ? '/backoffice/sign-in' : '/sign-in',
+    )
+  }
+
+  const handleStopImpersonating = async () => {
+    const res = await api.api.backoffice.impersonation.stop.$post()
+    if (res.ok) {
+      window.location.assign('/backoffice')
+    }
   }
 
   if (isPending) {
@@ -68,6 +83,14 @@ export function NavUser() {
   }
 
   const user = session.user
+  const roleCandidate = (user as { role?: unknown }).role
+  const userRole = typeof roleCandidate === 'string' ? roleCandidate : null
+  const impersonatedBy =
+    typeof (session.session as { impersonatedBy?: unknown }).impersonatedBy ===
+    'string'
+      ? ((session.session as { impersonatedBy?: string }).impersonatedBy ?? null)
+      : null
+  const showBackoffice = !impersonatedBy && canAccessBackoffice(userRole)
 
   return (
     <SidebarMenu>
@@ -119,6 +142,12 @@ export function NavUser() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
+              {showBackoffice ? (
+                <DropdownMenuItem>
+                  <HugeiconsIcon icon={BriefcaseIcon} />
+                  <Link to="/backoffice">Backoffice</Link>
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem>
                 <HugeiconsIcon icon={CheckmarkBadge01Icon} />
                 <Link to="/dashboard/settings/profile">Conta</Link>
@@ -133,6 +162,15 @@ export function NavUser() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
+            {impersonatedBy ? (
+              <>
+                <DropdownMenuItem onClick={handleStopImpersonating}>
+                  <HugeiconsIcon icon={BriefcaseIcon} />
+                  Parar impersonação
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
             <DropdownMenuItem onClick={handleSignOut}>
               <HugeiconsIcon icon={Logout01Icon} />
               Sair

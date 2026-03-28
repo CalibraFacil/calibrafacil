@@ -5,12 +5,12 @@ import { randomBytes } from "node:crypto";
 import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
-import { organization } from "better-auth/plugins";
+import { admin as adminPlugin, organization } from "better-auth/plugins";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
 import { OrganizationInvitationEmail } from "@calibra-facil/email";
 import { hasEntitlement } from "@calibra-facil/shared";
-import { ac, roles } from "./access";
+import { ac, platformAc, platformRoles, roles } from "./access";
 
 let devFallbackAuthSecret: string | null = null;
 
@@ -261,10 +261,13 @@ function createOrganizationPlugin() {
         throw new Error("RESEND_API_KEY is not configured");
       }
       const resend = new Resend(apiKey);
+      const fromEmail =
+        process.env.RESEND_FROM_EMAIL ||
+        process.env.EMAIL_FROM ||
+        "Calibra Fácil <noreply@calibrafacil.com>";
 
       await resend.emails.send({
-        from:
-          process.env.EMAIL_FROM || "Calibra Fácil <noreply@calibrafacil.com>",
+        from: fromEmail,
         to: data.email,
         subject: `Convite para ${data.organization.name}`,
         react: OrganizationInvitationEmail({
@@ -292,6 +295,63 @@ function createSharedConfig() {
     }),
     emailAndPassword: {
       enabled: true,
+      sendResetPassword: async ({
+        user,
+        url,
+      }: {
+        user: { email: string };
+        url: string;
+      }) => {
+        const apiKey = process.env.RESEND_API_KEY;
+
+        if (!apiKey) {
+          if (isProduction) {
+            throw new Error("RESEND_API_KEY is required to send reset emails");
+          }
+
+          console.info(
+            `[Better Auth] Reset password link for ${user.email}: ${url}`,
+          );
+          return;
+        }
+
+        const resend = new Resend(apiKey);
+        const fromEmail =
+          process.env.RESEND_FROM_EMAIL ||
+          process.env.EMAIL_FROM ||
+          "Calibra Fácil <noreply@calibrafacil.com>";
+
+        await resend.emails.send({
+          from: fromEmail,
+          to: user.email,
+          subject: "Defina sua senha no CalibraFácil",
+          html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+              <h2>Defina sua senha</h2>
+              <p>Recebemos uma solicitação para definir ou redefinir a sua senha no CalibraFácil.</p>
+              <p>
+                <a
+                  href="${url}"
+                  style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;"
+                >
+                  Definir senha
+                </a>
+              </p>
+              <p>Se você não esperava este email, ignore esta mensagem.</p>
+              <p><small>Se o botão não funcionar, copie e cole este link no navegador:</small><br />${url}</p>
+            </div>
+          `,
+          text: [
+            "Defina sua senha no CalibraFácil",
+            "",
+            "Use o link abaixo para definir ou redefinir sua senha:",
+            url,
+            "",
+            "Se você não esperava este email, ignore esta mensagem.",
+          ].join("\n"),
+        });
+      },
+      resetPasswordTokenExpiresIn: 60 * 60,
     },
     user: {
       deleteUser: {
@@ -334,6 +394,11 @@ export function createLabAuth() {
       cookiePrefix: "lab",
     },
     plugins: [
+      adminPlugin({
+        ac: platformAc,
+        roles: platformRoles,
+        defaultRole: "user",
+      }),
       createOrganizationPlugin(),
       sso({
         providersLimit: 1,

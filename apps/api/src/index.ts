@@ -42,6 +42,9 @@ import { portalDomainsRouter } from "./routes/portal-domains";
 import { certificateTemplatesRouter } from "./routes/certificate-templates";
 import { unitsRouter } from "./routes/units";
 import { integrationsRouter } from "./routes/integrations";
+import { customerSuccessRouter } from "./routes/customer-success";
+import { internalCustomerSuccessRouter } from "./routes/internal-customer-success";
+import { backofficeRouter } from "./routes/backoffice";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -55,6 +58,8 @@ interface Env {
   PORTAL_APP_URL?: string;
   PORTAL_INVITATION_EXPIRES_IN?: string;
   DATABASE_URL: string;
+  INTERNAL_OPERATOR_EMAILS?: string;
+  BACKOFFICE_BOOTSTRAP_TOKEN?: string;
   CACHE: KVNamespace;
   [key: string]: unknown;
 }
@@ -221,6 +226,9 @@ const routes = app
   .route("/api/certificate-templates", certificateTemplatesRouter)
   .route("/api/units", unitsRouter)
   .route("/api/integrations", integrationsRouter)
+  .route("/api/customer-success", customerSuccessRouter)
+  .route("/api/backoffice", backofficeRouter)
+  .route("/api/internal/customer-success", internalCustomerSuccessRouter)
   .route("/api/public/v1", publicApiRouter);
 
 export type AppType = typeof routes;

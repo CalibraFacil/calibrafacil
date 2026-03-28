@@ -32,14 +32,15 @@ export type NavMainItem = {
 
 type NavMainProps = {
   items: Array<NavMainItem>
+  label?: string
 }
 
-export function NavMain({ items }: NavMainProps) {
+export function NavMain({ items, label = 'Dashboard' }: NavMainProps) {
   const location = useLocation()
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Dashboard</SidebarGroupLabel>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
 
       <SidebarMenu>
         {items.map((item) => {

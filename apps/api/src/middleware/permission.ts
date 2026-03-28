@@ -13,8 +13,15 @@ import type {
   CalibrationState,
   CalibrationAction,
   RoleName,
+  PlatformRole,
 } from "@calibra-facil/auth/access";
-import { canPerformCalibrationAction, roles } from "@calibra-facil/auth/access";
+import {
+  canAccessBackoffice,
+  canPerformCalibrationAction,
+  hasPlatformRole,
+  parsePlatformRoles,
+  roles,
+} from "@calibra-facil/auth/access";
 import {
   resolveMemberUnitScope,
   type ResolvedUnit,
@@ -35,6 +42,10 @@ export interface SessionData {
     name: string;
     email: string;
     emailVerified: boolean;
+    role?: string | null;
+    banned?: boolean | null;
+    banReason?: string | null;
+    banExpires?: Date | null;
     image?: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -47,6 +58,7 @@ export interface SessionData {
     createdAt: Date;
     updatedAt: Date;
     token: string;
+    impersonatedBy?: string | null;
   };
 }
 
@@ -79,6 +91,7 @@ export interface AuthVariables {
   session: SessionData;
   member: MemberData;
   authSource: AuthSource;
+  platformRoles?: PlatformRole[];
   serverTiming?: ServerTimingMetric[];
   requestLabAuth?: ReturnType<typeof createLabAuth>;
   requestPortalAuth?: ReturnType<typeof createPortalAuth>;
@@ -164,6 +177,20 @@ function applyServerTimingHeader(c: {
     .join(", ");
 
   c.header("Server-Timing", value);
+}
+
+export function isInternalOperatorEmail(
+  email: string | null | undefined,
+  rawAllowlist: string | null | undefined,
+) {
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail || !rawAllowlist) return false;
+
+  return rawAllowlist
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(normalizedEmail);
 }
 
 function hasPermissionLocally(role: RoleName, permissions: PermissionCheck) {
@@ -695,6 +722,60 @@ export const requirePortalProtected = [
   requirePortalAuth,
   requireOrganization,
 ] as const;
+
+export const requireInternalOperator = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const session = c.get("session");
+  const envAllowlist =
+    (c.env as Record<string, unknown> | undefined)?.INTERNAL_OPERATOR_EMAILS ??
+    process.env.INTERNAL_OPERATOR_EMAILS;
+
+  if (
+    !isInternalOperatorEmail(
+      session?.user?.email,
+      typeof envAllowlist === "string" ? envAllowlist : undefined,
+    )
+  ) {
+    throw new HTTPException(403, {
+      message: "Internal operator access required",
+    });
+  }
+
+  await next();
+});
+
+export const requireBackofficeAccess = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const session = c.get("session");
+  const roles = parsePlatformRoles(session?.user?.role);
+
+  if (!canAccessBackoffice(session?.user?.role)) {
+    throw new HTTPException(403, {
+      message: "Backoffice access required",
+    });
+  }
+
+  c.set("platformRoles", roles);
+  await next();
+});
+
+export const requirePlatformAdmin = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const session = c.get("session");
+  const roles = parsePlatformRoles(session?.user?.role);
+
+  if (!hasPlatformRole(session?.user?.role, "platform_admin")) {
+    throw new HTTPException(403, {
+      message: "Platform admin access required",
+    });
+  }
+
+  c.set("platformRoles", roles);
+  await next();
+});
 
 /**
  * Create a protected route handler with permission check.

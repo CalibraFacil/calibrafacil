@@ -211,6 +211,20 @@
       "when": 1774598400000,
       "tag": "0029_add_custom_integrations",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1774605600000,
+      "tag": "0030_add_enterprise_ops_workflows",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1774677600000,
+      "tag": "0031_add_backoffice_admin_fields",
+      "breakpoints": true
     }
   ]
 }

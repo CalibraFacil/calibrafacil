@@ -1,3 +1,5 @@
+import type { PlanSupportPolicy } from "./customer-success";
+
 // =============================================================================
 // PLAN CONFIGURATION - SaaS Tiering System
 // =============================================================================
@@ -86,6 +88,7 @@ export interface PlanConfig {
   isPopular?: boolean;
   limits: PlanLimits;
   entitlements: PlanEntitlements;
+  support: PlanSupportPolicy;
 }
 
 // Storage constants for readability
@@ -94,6 +97,41 @@ const GB = 1024 * MB;
 const TB = 1024 * GB;
 const UNLIMITED_CERTIFICATES = 999999;
 const UNLIMITED_USERS = 999;
+
+const SUPPORT_POLICIES: Record<PlanId, PlanSupportPolicy> = {
+  FREE: {
+    supportMode: "standard",
+    hasPrioritySupport: false,
+    targetFirstResponseBusinessHours: 48,
+    targetResolutionLabel: "Melhor esforço",
+    includesAssistedOnboarding: false,
+    includesAssistedMigration: false,
+  },
+  STANDARD: {
+    supportMode: "standard",
+    hasPrioritySupport: false,
+    targetFirstResponseBusinessHours: 24,
+    targetResolutionLabel: "Até 3 dias úteis",
+    includesAssistedOnboarding: false,
+    includesAssistedMigration: false,
+  },
+  PROFESSIONAL: {
+    supportMode: "priority",
+    hasPrioritySupport: true,
+    targetFirstResponseBusinessHours: 8,
+    targetResolutionLabel: "Prioridade operacional",
+    includesAssistedOnboarding: false,
+    includesAssistedMigration: false,
+  },
+  ENTERPRISE: {
+    supportMode: "dedicated",
+    hasPrioritySupport: true,
+    targetFirstResponseBusinessHours: 4,
+    targetResolutionLabel: "SLA dedicado",
+    includesAssistedOnboarding: true,
+    includesAssistedMigration: true,
+  },
+};
 
 /**
  * Catalog of entitlement labels for UI and error messages.
@@ -215,6 +253,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       storage: 100 * MB,
     },
     entitlements: createEntitlements([]),
+    support: SUPPORT_POLICIES.FREE,
   },
   STANDARD: {
     id: "STANDARD",
@@ -226,6 +265,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       storage: 5 * GB,
     },
     entitlements: createEntitlements(["math_engine", "portal"]),
+    support: SUPPORT_POLICIES.STANDARD,
   },
   PROFESSIONAL: {
     id: "PROFESSIONAL",
@@ -249,6 +289,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "custom_templates",
       "priority_support",
     ]),
+    support: SUPPORT_POLICIES.PROFESSIONAL,
   },
   ENTERPRISE: {
     id: "ENTERPRISE",
@@ -273,6 +314,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "multi_unit",
       "custom_integrations",
     ]),
+    support: SUPPORT_POLICIES.ENTERPRISE,
   },
 } as const;
 
@@ -375,6 +417,10 @@ export function getPlanPrice(
   if (planId === "FREE") return 0;
   const prices = PLAN_PRICES[planId];
   return cycle === "MONTHLY" ? prices.monthly : prices.yearly;
+}
+
+export function getPlanSupportPolicy(planId: PlanId): PlanSupportPolicy {
+  return PLANS[planId].support;
 }
 
 /**
