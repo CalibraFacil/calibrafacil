@@ -1,8 +1,11 @@
 import * as React from 'react'
+import { useNavigate } from '@tanstack/react-router'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   Building02Icon,
-  PlusSignIcon,
+  MapsIcon,
+  Settings05Icon,
   UnfoldMoreIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -13,27 +16,18 @@ import {
   useListOrganizations,
 } from '@calibra-facil/auth/client'
 
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { api } from '@/utils/api'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -42,76 +36,83 @@ import {
 } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 
+const DASHBOARD_ORG_KEY = 'dashboard-active-org'
+const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
+
+type UnitSummary = {
+  id: number
+  name: string
+  slug: string
+  role: string
+}
+
+type UnitsResponse = {
+  activeUnitId: number | null
+  activeUnitName: string | null
+  selectedUnitScope: 'all' | 'unit'
+  canAccessAllUnits: boolean
+  data: UnitSummary[]
+}
+
 export function OrganizationSwitcher() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { isMobile } = useSidebar()
   const { data: allOrganizations, isPending: isLoadingOrgs } =
     useListOrganizations()
   const { data: activeOrg } = useActiveOrganization()
 
-  // Filter to only show LAB organizations in the dashboard switcher
-  // The 'type' field is a direct column on organization table (not in metadata)
   const organizations = React.useMemo(() => {
     if (!allOrganizations) return []
     return allOrganizations.filter((org) => org.type !== 'CLIENT')
   }, [allOrganizations])
 
-  const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [orgName, setOrgName] = React.useState('')
-  const [orgSlug, setOrgSlug] = React.useState('')
-  const [orgCnpj, setOrgCnpj] = React.useState('')
-  const [orgPhone, setOrgPhone] = React.useState('')
-  const [orgEmail, setOrgEmail] = React.useState('')
-  const [isCreating, setIsCreating] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
+  const unitsQuery = useQuery({
+    queryKey: ['dashboard-units', activeOrg?.id ?? 'no-org'],
+    enabled: Boolean(activeOrg?.id),
+    queryFn: async () => {
+      const response = await api.api.units.$get()
+      if (!response.ok) {
+        throw new Error('Falha ao carregar unidades')
+      }
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-  }
+      return (await response.json()) as UnitsResponse
+    },
+  })
 
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const name = e.target.value
-    setOrgName(name)
-    setOrgSlug(generateSlug(name))
-  }
+  const currentUnitValue = React.useMemo(() => {
+    if (!unitsQuery.data) return ''
+    if (unitsQuery.data.selectedUnitScope === 'all') return 'all'
+    return unitsQuery.data.activeUnitId ? String(unitsQuery.data.activeUnitId) : ''
+  }, [unitsQuery.data])
 
-  const handleCreateOrganization = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setIsCreating(true)
-
-    const { error } = await organization.create({
-      name: orgName,
-      slug: orgSlug,
-      type: 'LAB',
-      cnpj: orgCnpj || undefined,
-      phone: orgPhone || undefined,
-      email: orgEmail || undefined,
-    })
-
-    setIsCreating(false)
-
-    if (error) {
-      setError(error.message ?? 'Erro ao criar laboratório')
-      return
+  const currentUnitLabel = React.useMemo(() => {
+    if (!unitsQuery.data) {
+      return activeOrg?.slug ?? 'Nenhum selecionado'
     }
 
-    setOrgName('')
-    setOrgSlug('')
-    setOrgCnpj('')
-    setOrgPhone('')
-    setOrgEmail('')
-    setDialogOpen(false)
-  }
+    if (unitsQuery.data.selectedUnitScope === 'all') {
+      return 'Todas as unidades'
+    }
+
+    return unitsQuery.data.activeUnitName ?? activeOrg?.slug ?? 'Nenhuma unidade'
+  }, [activeOrg?.slug, unitsQuery.data])
 
   const handleSetActiveOrganization = async (orgId: string) => {
     await organization.setActive({ organizationId: orgId })
-    // Store preference for dashboard to avoid conflicts with portal
-    localStorage.setItem('dashboard-active-org', orgId)
+    localStorage.setItem(DASHBOARD_ORG_KEY, orgId)
+    await queryClient.invalidateQueries()
+  }
+
+  const handleSetActiveUnit = async (value: string) => {
+    if (!activeOrg?.id) return
+
+    window.localStorage.setItem(
+      `${DASHBOARD_UNIT_KEY_PREFIX}${activeOrg.id}`,
+      value,
+    )
+
+    await queryClient.invalidateQueries()
   }
 
   if (isLoadingOrgs) {
@@ -122,7 +123,7 @@ export function OrganizationSwitcher() {
             <Skeleton className="size-8 rounded-lg" />
             <div className="grid flex-1 gap-1">
               <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-20" />
             </div>
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -131,163 +132,120 @@ export function OrganizationSwitcher() {
   }
 
   return (
-    <>
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                    <HugeiconsIcon icon={Building02Icon} className="size-4" />
-                  </div>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">
-                      {activeOrg?.name ?? 'Selecionar laboratório'}
-                    </span>
-                    <span className="truncate text-xs">
-                      {activeOrg?.slug ?? 'Nenhum selecionado'}
-                    </span>
-                  </div>
-                  <HugeiconsIcon icon={UnfoldMoreIcon} className="ml-auto" />
-                </SidebarMenuButton>
-              }
-            />
-            <DropdownMenuContent
-              className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-              align="start"
-              side={isMobile ? 'bottom' : 'right'}
-              sideOffset={4}
-            >
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="text-muted-foreground text-xs">
-                  Laboratórios
-                </DropdownMenuLabel>
-                {organizations && organizations.length > 0 ? (
-                  organizations.map((org, index) => (
-                    <DropdownMenuItem
-                      key={org.id}
-                      onClick={() => handleSetActiveOrganization(org.id)}
-                      className="gap-2 p-2"
-                    >
-                      <div className="flex size-6 items-center justify-center rounded-md border">
-                        <HugeiconsIcon
-                          icon={Building02Icon}
-                          className="size-3.5 shrink-0"
-                        />
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <SidebarMenuButton
+                size="lg"
+                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              >
+                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                  <HugeiconsIcon icon={Building02Icon} className="size-4" />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-medium">
+                    {activeOrg?.name ?? 'Selecionar laboratório'}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {currentUnitLabel}
+                  </span>
+                </div>
+                <HugeiconsIcon icon={UnfoldMoreIcon} className="ml-auto" />
+              </SidebarMenuButton>
+            }
+          />
+          <DropdownMenuContent
+            className="w-(--radix-dropdown-menu-trigger-width) min-w-64 rounded-lg"
+            align="start"
+            side={isMobile ? 'bottom' : 'right'}
+            sideOffset={4}
+          >
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-muted-foreground text-xs">
+                Laboratórios
+              </DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={activeOrg?.id ?? ''}
+                onValueChange={handleSetActiveOrganization}
+              >
+                {organizations.length > 0 ? (
+                  organizations.map((org) => (
+                    <DropdownMenuRadioItem key={org.id} value={org.id}>
+                      <HugeiconsIcon icon={Building02Icon} className="size-4" />
+                      <div className="min-w-0">
+                        <div className="truncate">{org.name}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {org.slug}
+                        </div>
                       </div>
-                      {org.name}
-                      {index < 9 && (
-                        <DropdownMenuShortcut>
-                          ⌘{index + 1}
-                        </DropdownMenuShortcut>
-                      )}
-                    </DropdownMenuItem>
+                    </DropdownMenuRadioItem>
                   ))
                 ) : (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  <DropdownMenuItem disabled>
                     Nenhum laboratório encontrado
-                  </div>
+                  </DropdownMenuItem>
                 )}
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="gap-2 p-2"
-                onClick={() => setDialogOpen(true)}
-              >
-                <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
-                  <HugeiconsIcon icon={PlusSignIcon} className="size-4" />
-                </div>
-                <div className="text-muted-foreground font-medium">
-                  Adicionar laboratório
-                </div>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </SidebarMenuItem>
-      </SidebarMenu>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Criar Laboratório</DialogTitle>
-            <DialogDescription>
-              Crie um novo laboratório para gerenciar suas calibrações e ativos.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleCreateOrganization} className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="org-name">Nome do Laboratório</Label>
-              <Input
-                id="org-name"
-                value={orgName}
-                onChange={handleNameChange}
-                placeholder="Meu Laboratório"
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="org-slug">Identificador (slug)</Label>
-              <Input
-                id="org-slug"
-                value={orgSlug}
-                onChange={(e) => setOrgSlug(e.target.value)}
-                placeholder="Laboratório"
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Usado na URL: app.calibrafacil.com/{orgSlug || 'slug'}
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="org-cnpj">CNPJ (opcional)</Label>
-              <Input
-                id="org-cnpj"
-                value={orgCnpj}
-                onChange={(e) => setOrgCnpj(e.target.value)}
-                placeholder="00.000.000/0000-00"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="org-phone">Telefone (opcional)</Label>
-                <Input
-                  id="org-phone"
-                  value={orgPhone}
-                  onChange={(e) => setOrgPhone(e.target.value)}
-                  placeholder="(11) 99999-9999"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="org-email">Email (opcional)</Label>
-                <Input
-                  id="org-email"
-                  type="email"
-                  value={orgEmail}
-                  onChange={(e) => setOrgEmail(e.target.value)}
-                  placeholder="contato@lab.com.br"
-                />
-              </div>
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDialogOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isCreating}>
-                {isCreating ? 'Criando...' : 'Criar Laboratório'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+            {activeOrg?.id && unitsQuery.data ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-muted-foreground text-xs">
+                    Matrizes e unidades
+                  </DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={currentUnitValue}
+                    onValueChange={handleSetActiveUnit}
+                  >
+                    {unitsQuery.data.canAccessAllUnits ? (
+                      <DropdownMenuRadioItem value="all">
+                        <HugeiconsIcon icon={MapsIcon} className="size-4" />
+                        <div className="min-w-0">
+                          <div className="truncate">Todas as unidades</div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            Visão consolidada da organização
+                          </div>
+                        </div>
+                      </DropdownMenuRadioItem>
+                    ) : null}
+
+                    {unitsQuery.data.data.map((unit) => (
+                      <DropdownMenuRadioItem
+                        key={unit.id}
+                        value={String(unit.id)}
+                      >
+                        <HugeiconsIcon icon={MapsIcon} className="size-4" />
+                        <div className="min-w-0">
+                          <div className="truncate">{unit.name}</div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {unit.role === 'unit_admin'
+                              ? 'Administrador da unidade'
+                              : unit.role === 'technician'
+                                ? 'Técnico da unidade'
+                                : 'Escopo operacional'}
+                          </div>
+                        </div>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuGroup>
+              </>
+            ) : null}
+
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => navigate({ to: '/dashboard/settings/organization' })}
+            >
+              <HugeiconsIcon icon={Settings05Icon} className="size-4" />
+              Gerenciar organização e unidades
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
   )
 }

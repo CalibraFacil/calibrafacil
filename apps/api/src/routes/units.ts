@@ -6,6 +6,7 @@ import {
   member,
   memberUnitAssignment,
   type MemberUnitRole,
+  type OrganizationInstallationType,
   organizationEventLog,
   organizationUnit,
   user,
@@ -20,12 +21,37 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 
-const CreateUnitSchema = z.object({
+const optionalText = z.string().trim().max(255).optional();
+const optionalLongText = z.string().trim().max(4000).optional();
+const installationTypeSchema = z.enum(["PERMANENT", "TEMPORARY", "MOBILE"]);
+
+const UnitProfileSchema = z.object({
   name: z.string().trim().min(2, "Nome da unidade é obrigatório"),
+  legalName: optionalText,
+  tradeName: optionalText,
+  cnpj: optionalText,
+  accreditationNumber: optionalText,
+  accreditationBody: optionalText,
+  installationType: installationTypeSchema.optional(),
+  street: optionalText,
+  number: optionalText,
+  complement: optionalText,
+  neighbourhood: optionalText,
+  city: optionalText,
+  state: optionalText,
+  cep: optionalText,
+  phone: optionalText,
+  email: optionalText,
+  website: optionalText,
+  technicalManagerName: optionalText,
+  technicalManagerTitle: optionalText,
+  scopeSummary: optionalLongText,
+  scopeNotes: optionalLongText,
 });
 
-const UpdateUnitSchema = z.object({
-  name: z.string().trim().min(2).optional(),
+const CreateUnitSchema = UnitProfileSchema;
+
+const UpdateUnitSchema = UnitProfileSchema.partial().extend({
   status: z.enum(["ACTIVE", "ARCHIVED"]).optional(),
 });
 
@@ -51,6 +77,70 @@ function slugify(name: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
+
+function normalizeNullableText(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function buildUnitProfileValues(
+  input: z.infer<typeof UnitProfileSchema> | z.infer<typeof UpdateUnitSchema>,
+) {
+  return {
+    legalName: normalizeNullableText(input.legalName),
+    tradeName: normalizeNullableText(input.tradeName),
+    cnpj: normalizeNullableText(input.cnpj),
+    accreditationNumber: normalizeNullableText(input.accreditationNumber),
+    accreditationBody: normalizeNullableText(input.accreditationBody),
+    installationType:
+      (input.installationType as OrganizationInstallationType | undefined) ??
+      "PERMANENT",
+    street: normalizeNullableText(input.street),
+    number: normalizeNullableText(input.number),
+    complement: normalizeNullableText(input.complement),
+    neighbourhood: normalizeNullableText(input.neighbourhood),
+    city: normalizeNullableText(input.city),
+    state: normalizeNullableText(input.state),
+    cep: normalizeNullableText(input.cep),
+    phone: normalizeNullableText(input.phone),
+    email: normalizeNullableText(input.email),
+    website: normalizeNullableText(input.website),
+    technicalManagerName: normalizeNullableText(input.technicalManagerName),
+    technicalManagerTitle: normalizeNullableText(input.technicalManagerTitle),
+    scopeSummary: normalizeNullableText(input.scopeSummary),
+    scopeNotes: normalizeNullableText(input.scopeNotes),
+  };
+}
+
+const unitSelectFields = {
+  id: organizationUnit.id,
+  name: organizationUnit.name,
+  slug: organizationUnit.slug,
+  legalName: organizationUnit.legalName,
+  tradeName: organizationUnit.tradeName,
+  cnpj: organizationUnit.cnpj,
+  accreditationNumber: organizationUnit.accreditationNumber,
+  accreditationBody: organizationUnit.accreditationBody,
+  installationType: organizationUnit.installationType,
+  street: organizationUnit.street,
+  number: organizationUnit.number,
+  complement: organizationUnit.complement,
+  neighbourhood: organizationUnit.neighbourhood,
+  city: organizationUnit.city,
+  state: organizationUnit.state,
+  cep: organizationUnit.cep,
+  phone: organizationUnit.phone,
+  email: organizationUnit.email,
+  website: organizationUnit.website,
+  technicalManagerName: organizationUnit.technicalManagerName,
+  technicalManagerTitle: organizationUnit.technicalManagerTitle,
+  scopeSummary: organizationUnit.scopeSummary,
+  scopeNotes: organizationUnit.scopeNotes,
+  status: organizationUnit.status,
+  isDefault: organizationUnit.isDefault,
+  createdAt: organizationUnit.createdAt,
+  archivedAt: organizationUnit.archivedAt,
+} as const;
 
 function getViewerAccess(c: {
   get: (key: string) => unknown;
@@ -95,15 +185,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const units = await db
-        .select({
-          id: organizationUnit.id,
-          name: organizationUnit.name,
-          slug: organizationUnit.slug,
-          status: organizationUnit.status,
-          isDefault: organizationUnit.isDefault,
-          createdAt: organizationUnit.createdAt,
-          archivedAt: organizationUnit.archivedAt,
-        })
+        .select(unitSelectFields)
         .from(organizationUnit)
         .where(
           and(
@@ -133,6 +215,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const baseSlug = slugify(input.name);
+      const profileValues = buildUnitProfileValues(input);
 
       const [existingCount] = await db
         .select({ total: count() })
@@ -153,6 +236,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           organizationId: memberData.organizationId,
           name: input.name,
           slug,
+          ...profileValues,
           status: "ACTIVE",
           isDefault: false,
           createdBy: session.user.id,
@@ -170,6 +254,9 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         details: {
           name: input.name,
           slug,
+          installationType: profileValues.installationType,
+          cnpj: profileValues.cnpj,
+          accreditationNumber: profileValues.accreditationNumber,
         },
       });
 
@@ -226,6 +313,96 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         updateData.slug = slugify(input.name);
       }
 
+      const profileUpdates = buildUnitProfileValues(input);
+
+      if ("legalName" in input && profileUpdates.legalName !== existing.legalName) {
+        updateData.legalName = profileUpdates.legalName;
+      }
+      if ("tradeName" in input && profileUpdates.tradeName !== existing.tradeName) {
+        updateData.tradeName = profileUpdates.tradeName;
+      }
+      if ("cnpj" in input && profileUpdates.cnpj !== existing.cnpj) {
+        updateData.cnpj = profileUpdates.cnpj;
+      }
+      if (
+        "accreditationNumber" in input &&
+        profileUpdates.accreditationNumber !== existing.accreditationNumber
+      ) {
+        updateData.accreditationNumber = profileUpdates.accreditationNumber;
+      }
+      if (
+        "accreditationBody" in input &&
+        profileUpdates.accreditationBody !== existing.accreditationBody
+      ) {
+        updateData.accreditationBody = profileUpdates.accreditationBody;
+      }
+      if (
+        input.installationType &&
+        profileUpdates.installationType !== existing.installationType
+      ) {
+        updateData.installationType = profileUpdates.installationType;
+      }
+      if ("street" in input && profileUpdates.street !== existing.street) {
+        updateData.street = profileUpdates.street;
+      }
+      if ("number" in input && profileUpdates.number !== existing.number) {
+        updateData.number = profileUpdates.number;
+      }
+      if (
+        "complement" in input &&
+        profileUpdates.complement !== existing.complement
+      ) {
+        updateData.complement = profileUpdates.complement;
+      }
+      if (
+        "neighbourhood" in input &&
+        profileUpdates.neighbourhood !== existing.neighbourhood
+      ) {
+        updateData.neighbourhood = profileUpdates.neighbourhood;
+      }
+      if ("city" in input && profileUpdates.city !== existing.city) {
+        updateData.city = profileUpdates.city;
+      }
+      if ("state" in input && profileUpdates.state !== existing.state) {
+        updateData.state = profileUpdates.state;
+      }
+      if ("cep" in input && profileUpdates.cep !== existing.cep) {
+        updateData.cep = profileUpdates.cep;
+      }
+      if ("phone" in input && profileUpdates.phone !== existing.phone) {
+        updateData.phone = profileUpdates.phone;
+      }
+      if ("email" in input && profileUpdates.email !== existing.email) {
+        updateData.email = profileUpdates.email;
+      }
+      if ("website" in input && profileUpdates.website !== existing.website) {
+        updateData.website = profileUpdates.website;
+      }
+      if (
+        "technicalManagerName" in input &&
+        profileUpdates.technicalManagerName !== existing.technicalManagerName
+      ) {
+        updateData.technicalManagerName = profileUpdates.technicalManagerName;
+      }
+      if (
+        "technicalManagerTitle" in input &&
+        profileUpdates.technicalManagerTitle !== existing.technicalManagerTitle
+      ) {
+        updateData.technicalManagerTitle = profileUpdates.technicalManagerTitle;
+      }
+      if (
+        "scopeSummary" in input &&
+        profileUpdates.scopeSummary !== existing.scopeSummary
+      ) {
+        updateData.scopeSummary = profileUpdates.scopeSummary;
+      }
+      if (
+        "scopeNotes" in input &&
+        profileUpdates.scopeNotes !== existing.scopeNotes
+      ) {
+        updateData.scopeNotes = profileUpdates.scopeNotes;
+      }
+
       if (input.status && input.status !== existing.status) {
         updateData.status = input.status;
         updateData.archivedAt =
@@ -259,9 +436,17 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           before: {
             name: existing.name,
             slug: existing.slug,
+            legalName: existing.legalName,
+            tradeName: existing.tradeName,
+            cnpj: existing.cnpj,
+            accreditationNumber: existing.accreditationNumber,
+            accreditationBody: existing.accreditationBody,
+            installationType: existing.installationType,
+            technicalManagerName: existing.technicalManagerName,
+            technicalManagerTitle: existing.technicalManagerTitle,
             status: existing.status,
           },
-          after: updateData,
+          after: updated,
         },
       });
 

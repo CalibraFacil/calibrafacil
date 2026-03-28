@@ -33,20 +33,26 @@ export function SignUpForm({
     setError(null)
     setIsLoading(true)
 
-    const { error } = await signUp.email({
-      name,
-      email,
-      password,
-    })
+    try {
+      const { error } = await signUp.email({
+        name,
+        email,
+        password,
+      })
 
-    setIsLoading(false)
-
-    if (error) {
-      setError(error.message ?? 'Failed to create account')
-      return
+      if (error) {
+        setError(error.message ?? 'Failed to create account')
+        return
+      }
+      navigate({
+        to: '/onboarding/organization',
+        search: redirect ? { redirect } : undefined,
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao criar conta')
+    } finally {
+      setIsLoading(false)
     }
-
-    navigate({ to: redirect || '/dashboard' })
   }
 
   return (

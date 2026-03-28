@@ -156,6 +156,10 @@ export const member = pgTable(
 
 export type OrganizationUnitStatus = "ACTIVE" | "ARCHIVED";
 export type MemberUnitRole = "member" | "technician" | "unit_admin";
+export type OrganizationInstallationType =
+  | "PERMANENT"
+  | "TEMPORARY"
+  | "MOBILE";
 
 export const organizationUnit = pgTable(
   "organization_unit",
@@ -166,6 +170,29 @@ export const organizationUnit = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
+    legalName: text("legal_name"),
+    tradeName: text("trade_name"),
+    cnpj: text("cnpj"),
+    accreditationNumber: text("accreditation_number"),
+    accreditationBody: text("accreditation_body"),
+    installationType: text("installation_type")
+      .$type<OrganizationInstallationType>()
+      .default("PERMANENT")
+      .notNull(),
+    street: text("street"),
+    number: text("number"),
+    complement: text("complement"),
+    neighbourhood: text("neighbourhood"),
+    city: text("city"),
+    state: text("state"),
+    cep: text("cep"),
+    phone: text("phone"),
+    email: text("email"),
+    website: text("website"),
+    technicalManagerName: text("technical_manager_name"),
+    technicalManagerTitle: text("technical_manager_title"),
+    scopeSummary: text("scope_summary"),
+    scopeNotes: text("scope_notes"),
     status: text("status")
       .$type<OrganizationUnitStatus>()
       .default("ACTIVE")

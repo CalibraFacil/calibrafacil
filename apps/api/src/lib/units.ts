@@ -1,6 +1,7 @@
 import { db } from "@calibra-facil/db";
 import {
   memberUnitAssignment,
+  organization,
   organizationUnit,
   type MemberUnitRole,
 } from "@calibra-facil/db/schema";
@@ -107,12 +108,53 @@ export async function ensureDefaultUnitForOrganization(
     return existing;
   }
 
+  const [orgRecord] = await db
+    .select({
+      name: organization.name,
+      cnpj: organization.cnpj,
+      accreditationNumber: organization.accreditationNumber,
+      accreditationBody: organization.accreditationBody,
+      street: organization.street,
+      number: organization.number,
+      complement: organization.complement,
+      neighbourhood: organization.neighbourhood,
+      city: organization.city,
+      state: organization.state,
+      cep: organization.cep,
+      phone: organization.phone,
+      email: organization.email,
+      website: organization.website,
+      technicalManagerName: organization.technicalManagerName,
+      technicalManagerTitle: organization.technicalManagerTitle,
+    })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1);
+
   const [created] = await db
     .insert(organizationUnit)
     .values({
       organizationId,
       name: "Matriz",
       slug: slugifyUnitName("Matriz"),
+      legalName: orgRecord?.name ?? "Matriz",
+      tradeName: orgRecord?.name ?? "Matriz",
+      cnpj: orgRecord?.cnpj ?? null,
+      accreditationNumber: orgRecord?.accreditationNumber ?? null,
+      accreditationBody: orgRecord?.accreditationBody ?? null,
+      installationType: "PERMANENT",
+      street: orgRecord?.street ?? null,
+      number: orgRecord?.number ?? null,
+      complement: orgRecord?.complement ?? null,
+      neighbourhood: orgRecord?.neighbourhood ?? null,
+      city: orgRecord?.city ?? null,
+      state: orgRecord?.state ?? null,
+      cep: orgRecord?.cep ?? null,
+      phone: orgRecord?.phone ?? null,
+      email: orgRecord?.email ?? null,
+      website: orgRecord?.website ?? null,
+      technicalManagerName: orgRecord?.technicalManagerName ?? null,
+      technicalManagerTitle: orgRecord?.technicalManagerTitle ?? null,
       status: "ACTIVE",
       isDefault: true,
       createdBy: userId ?? null,

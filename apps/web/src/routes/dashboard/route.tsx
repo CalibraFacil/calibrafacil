@@ -98,6 +98,7 @@ function DashboardLayout() {
   const isDashboardHome =
     pathname === '/dashboard' || pathname === '/dashboard/'
   const hasLabAccess = labOrganizations.length > 0
+  const hasAnyOrganizations = (organizations?.length ?? 0) > 0
   const isBootstrappingContext = orgsLoading || activeOrgLoading
   const shouldBlockChildRoutes =
     !isDashboardHome && (isBootstrappingContext || isSettingUp)
@@ -176,7 +177,32 @@ function DashboardLayout() {
     }
   }, [orgsLoading, activeOrgLoading, isSettingUp])
 
-  // No LAB access - show error page
+  // No LAB access but no organizations yet - send to onboarding
+  if (!isBootstrappingContext && !hasLabAccess && !hasAnyOrganizations) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Complete o onboarding</CardTitle>
+            <CardDescription>
+              Sua conta foi criada, mas você ainda não configurou um laboratório
+              para acessar o dashboard.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Button onClick={() => navigate({ to: '/onboarding/organization' })}>
+              Criar laboratório
+            </Button>
+            <Button variant="outline" onClick={() => navigate({ to: '/' })}>
+              Voltar para o início
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // No LAB access - show restricted page for portal-only users
   if (!isBootstrappingContext && !hasLabAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">

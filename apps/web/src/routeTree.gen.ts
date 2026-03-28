@@ -14,6 +14,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignUpIndexRouteImport } from './routes/sign-up/index'
 import { Route as SignInIndexRouteImport } from './routes/sign-in/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as OnboardingOrganizationRouteImport } from './routes/onboarding/organization'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard/reports'
 import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitation/$id'
 import { Route as DashboardStandardsRouteRouteImport } from './routes/dashboard/standards/route'
@@ -107,6 +108,11 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DashboardRouteRoute,
+} as any)
+const OnboardingOrganizationRoute = OnboardingOrganizationRouteImport.update({
+  id: '/onboarding/organization',
+  path: '/onboarding/organization',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardReportsRoute = DashboardReportsRouteImport.update({
   id: '/reports',
@@ -486,6 +492,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/dashboard/reports': typeof DashboardReportsRoute
+  '/onboarding/organization': typeof OnboardingOrganizationRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/sign-in': typeof SignInIndexRoute
   '/sign-up': typeof SignUpIndexRoute
@@ -550,6 +557,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/dashboard/reports': typeof DashboardReportsRoute
+  '/onboarding/organization': typeof OnboardingOrganizationRoute
   '/dashboard': typeof DashboardIndexRoute
   '/sign-in': typeof SignInIndexRoute
   '/sign-up': typeof SignUpIndexRoute
@@ -623,6 +631,7 @@ export interface FileRoutesById {
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/dashboard/reports': typeof DashboardReportsRoute
+  '/onboarding/organization': typeof OnboardingOrganizationRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/sign-in/': typeof SignInIndexRoute
   '/sign-up/': typeof SignUpIndexRoute
@@ -700,6 +709,7 @@ export interface FileRouteTypes {
     | '/dashboard/standards'
     | '/accept-invitation/$id'
     | '/dashboard/reports'
+    | '/onboarding/organization'
     | '/dashboard/'
     | '/sign-in'
     | '/sign-up'
@@ -764,6 +774,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/accept-invitation/$id'
     | '/dashboard/reports'
+    | '/onboarding/organization'
     | '/dashboard'
     | '/sign-in'
     | '/sign-up'
@@ -836,6 +847,7 @@ export interface FileRouteTypes {
     | '/dashboard/standards'
     | '/accept-invitation/$id'
     | '/dashboard/reports'
+    | '/onboarding/organization'
     | '/dashboard/'
     | '/sign-in/'
     | '/sign-up/'
@@ -900,6 +912,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
   AcceptInvitationIdRoute: typeof AcceptInvitationIdRoute
+  OnboardingOrganizationRoute: typeof OnboardingOrganizationRoute
   SignInIndexRoute: typeof SignInIndexRoute
   SignUpIndexRoute: typeof SignUpIndexRoute
 }
@@ -940,6 +953,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/'
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
+    }
+    '/onboarding/organization': {
+      id: '/onboarding/organization'
+      path: '/onboarding/organization'
+      fullPath: '/onboarding/organization'
+      preLoaderRoute: typeof OnboardingOrganizationRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/dashboard/reports': {
       id: '/dashboard/reports'
@@ -1724,6 +1744,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRouteRoute: DashboardRouteRouteWithChildren,
   AcceptInvitationIdRoute: AcceptInvitationIdRoute,
+  OnboardingOrganizationRoute: OnboardingOrganizationRoute,
   SignInIndexRoute: SignInIndexRoute,
   SignUpIndexRoute: SignUpIndexRoute,
 }
