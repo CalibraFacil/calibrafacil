@@ -7,21 +7,23 @@ import QRCode from "qrcode";
 import { processScheduledNotifications } from "./scheduled.js";
 import { signPdf, decryptPassword, decryptBinary, type SignatureMetadata } from "@calibra-facil/signing";
 import { DEFAULT_CERTIFICATE_TEMPLATE_CONFIG } from "@calibra-facil/shared";
+import { processIntegrationSync, type IntegrationSyncQueueMessage } from "./integrations.js";
 
 interface Env {
     BROWSER: Fetcher;
     CERTIFICATES_BUCKET: R2Bucket;
     HYPERDRIVE: Hyperdrive;
     SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
+    INTEGRATIONS_MASTER_KEY?: string;
 }
 
-// Discriminated union for queue messages - supports both certificate and label generation
-// type field is optional for backwards compatibility (defaults to CERTIFICATE)
-interface QueueMessage {
-    type?: "CERTIFICATE" | "LABEL";
-    jobId: number;
-    userId: string;
-}
+type QueueMessage =
+    | {
+          type?: "CERTIFICATE" | "LABEL";
+          jobId: number;
+          userId: string;
+      }
+    | IntegrationSyncQueueMessage;
 
 interface MessageBatch<T> {
     messages: {
@@ -810,52 +812,65 @@ export default {
         console.log(`[BATCH] Processing ${batchSize} job(s)`);
         const batchStart = performance.now();
 
-        // Launch browser ONCE for the entire batch
-        const browserStart = performance.now();
-        const browser = await puppeteer.launch(env.BROWSER);
-        console.log(`[BATCH] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`);
+        const integrationMessages = batch.messages.filter(
+            (msg) => msg.body.type === "INTEGRATION_SYNC"
+        );
+        const documentMessages = batch.messages.filter(
+            (msg) => msg.body.type !== "INTEGRATION_SYNC"
+        );
 
-        // Create page ONCE and reuse
-        const pageStart = performance.now();
-        const page = await browser.newPage();
-        await configurePage(page);
-        console.log(`[BATCH] browser.newPage + configure: ${Math.round(performance.now() - pageStart)}ms`);
+        for (const msg of integrationMessages) {
+            const body = msg.body as IntegrationSyncQueueMessage;
+            await processIntegrationSync(env, body);
+            msg.ack();
+        }
 
-        try {
-            // Process each job with the shared browser/page
-            for (const msg of batch.messages) {
-                const { jobId, userId, type } = msg.body;
+        if (documentMessages.length > 0) {
+            // Launch browser ONCE for the entire document batch
+            const browserStart = performance.now();
+            const browser = await puppeteer.launch(env.BROWSER);
+            console.log(`[BATCH] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`);
 
-                // Default to CERTIFICATE for backwards compatibility
-                const messageType = type || "CERTIFICATE";
+            // Create page ONCE and reuse
+            const pageStart = performance.now();
+            const page = await browser.newPage();
+            await configurePage(page);
+            console.log(`[BATCH] browser.newPage + configure: ${Math.round(performance.now() - pageStart)}ms`);
 
-                let result: { success: boolean; error?: string };
+            try {
+                for (const msg of documentMessages) {
+                    const { jobId, userId, type } = msg.body as {
+                        type?: "CERTIFICATE" | "LABEL";
+                        jobId: number;
+                        userId: string;
+                    };
+                    const messageType = type || "CERTIFICATE";
 
-                if (messageType === "LABEL") {
-                    result = await processLabelJob(env, page, jobId, userId);
-                    // Label failures don't change job status - just log the error
-                    if (!result.success) {
-                        console.error(`[LABEL ${jobId}] Failed:`, result.error);
+                    let result: { success: boolean; error?: string };
+
+                    if (messageType === "LABEL") {
+                        result = await processLabelJob(env, page, jobId, userId);
+                        if (!result.success) {
+                            console.error(`[LABEL ${jobId}] Failed:`, result.error);
+                        }
+                    } else {
+                        result = await processJob(env, page, jobId, userId);
+                        if (!result.success) {
+                            await withDbClient(env, (client) =>
+                                setJobError(client, jobId, result.error || "Unknown error", userId)
+                            ).catch((dbError) => {
+                                console.error(`[JOB ${jobId}] Failed to record error:`, dbError);
+                            });
+                        }
                     }
-                } else {
-                    result = await processJob(env, page, jobId, userId);
-                    // Certificate failures set job to REJECTED
-                    if (!result.success) {
-                        await withDbClient(env, (client) =>
-                            setJobError(client, jobId, result.error || "Unknown error", userId)
-                        ).catch((dbError) => {
-                            console.error(`[JOB ${jobId}] Failed to record error:`, dbError);
-                        });
-                    }
+
+                    msg.ack();
                 }
-
-                msg.ack();
+            } finally {
+                await browser.close().catch((e) => {
+                    console.error("[BATCH] browser.close failed:", e);
+                });
             }
-        } finally {
-            // Always close browser at the end
-            await browser.close().catch((e) => {
-                console.error("[BATCH] browser.close failed:", e);
-            });
         }
 
         const batchMs = Math.round(performance.now() - batchStart);

@@ -3,6 +3,7 @@ import {
   Building06Icon,
   CreditCardIcon,
   Key01Icon,
+  LinkSquare02Icon,
   Notification01Icon,
   PaintBoardIcon,
   ShieldKeyIcon,
@@ -67,6 +68,12 @@ const settingsNavItems: Array<SettingsNavItem> = [
     label: 'Autenticação',
     href: '/dashboard/settings/authentication',
     icon: <HugeiconsIcon icon={Key01Icon} className="size-4" />,
+  },
+  {
+    value: 'integrations',
+    label: 'Integrações',
+    href: '/dashboard/settings/integrations',
+    icon: <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" />,
   },
   {
     value: 'appearance',
