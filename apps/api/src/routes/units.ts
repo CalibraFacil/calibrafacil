@@ -10,7 +10,7 @@ import {
   organizationUnit,
   user,
 } from "@calibra-facil/db/schema";
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne } from "drizzle-orm";
 import {
   type AuthVariables,
   type MemberData,
@@ -111,6 +111,48 @@ function dedupeUnitAssignments(
   );
 }
 
+function getScopeSummary(memberData: MemberData, viewer: ReturnType<typeof getGovernanceAccess>) {
+  const activeUnit = memberData.accessibleUnits.find(
+    (unit) => unit.id === memberData.activeUnitId,
+  );
+
+  const effectiveRole =
+    memberData.role === "owner" || memberData.role === "admin"
+      ? "global_manager"
+      : memberData.unitRole === "unit_admin"
+        ? "unit_admin"
+        : memberData.unitRole === "technician"
+          ? "technician"
+          : "member";
+
+  return {
+    isConsolidated: memberData.selectedUnitScope === "all",
+    activeUnitId: memberData.activeUnitId,
+    activeUnitName: activeUnit?.name ?? memberData.activeUnitName,
+    accessibleUnitsCount: memberData.accessibleUnits.length,
+    managedUnitsCount: viewer.managedUnitIds.length,
+    effectiveRole,
+    effectiveRoleLabel:
+      effectiveRole === "global_manager"
+        ? "Administrador global"
+        : effectiveRole === "unit_admin"
+          ? "Administrador de unidade"
+          : effectiveRole === "technician"
+            ? "Técnico"
+            : "Membro",
+    label:
+      memberData.selectedUnitScope === "all"
+        ? "Visão consolidada"
+        : activeUnit?.name ?? memberData.activeUnitName ?? "Unidade ativa",
+    description:
+      memberData.selectedUnitScope === "all"
+        ? "Operando em visão consolidada para todas as unidades acessíveis."
+        : activeUnit
+          ? `Operando com foco operacional em ${activeUnit.name}.`
+          : "Selecione uma unidade para operar.",
+  };
+}
+
 export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
@@ -125,6 +167,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         selectedUnitScope: memberData.selectedUnitScope,
         canAccessAllUnits: memberData.canAccessAllUnits,
         viewer,
+        scopeSummary: getScopeSummary(memberData, viewer),
         data: memberData.accessibleUnits,
       });
     },
@@ -433,6 +476,82 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       });
     },
   )
+  .get(
+    "/admin/activity",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    async (c) => {
+      const { memberData, viewer } = getViewerAccess(c);
+
+      if (!viewer.canViewGovernance) {
+        return c.json({ error: "Permissão insuficiente" }, 403);
+      }
+
+      const events = await db
+        .select({
+          id: organizationEventLog.id,
+          action: organizationEventLog.action,
+          entityType: organizationEventLog.entityType,
+          entityId: organizationEventLog.entityId,
+          unitId: organizationEventLog.unitId,
+          details: organizationEventLog.details,
+          createdAt: organizationEventLog.createdAt,
+          actorUserId: organizationEventLog.actorUserId,
+          actorUserName: user.name,
+          actorUserEmail: user.email,
+          unitName: organizationUnit.name,
+        })
+        .from(organizationEventLog)
+        .leftJoin(user, eq(organizationEventLog.actorUserId, user.id))
+        .leftJoin(organizationUnit, eq(organizationEventLog.unitId, organizationUnit.id))
+        .where(eq(organizationEventLog.organizationId, memberData.organizationId))
+        .orderBy(desc(organizationEventLog.createdAt))
+        .limit(80);
+
+      const filteredEvents = viewer.isGlobalManager
+        ? events
+        : events.filter((event) => {
+            if (event.unitId && viewer.managedUnitIds.includes(event.unitId)) {
+              return true;
+            }
+
+            const scopedUnitIds = Array.isArray(event.details?.scopedUnitIds)
+              ? event.details.scopedUnitIds
+                  .map((value) => Number(value))
+                  .filter((value) => Number.isInteger(value))
+              : [];
+
+            return scopedUnitIds.some((unitId) =>
+              viewer.managedUnitIds.includes(unitId),
+            );
+          });
+
+      return c.json({
+        viewer,
+        data: filteredEvents.slice(0, 20).map((event) => ({
+          id: event.id,
+          action: event.action,
+          entityType: event.entityType,
+          entityId: event.entityId,
+          createdAt: event.createdAt,
+          details: event.details,
+          unit: event.unitId
+            ? {
+                id: event.unitId,
+                name: event.unitName ?? "Unidade removida",
+              }
+            : null,
+          actorUser: event.actorUserId
+            ? {
+                id: event.actorUserId,
+                name: event.actorUserName ?? "Usuário removido",
+                email: event.actorUserEmail ?? null,
+              }
+            : null,
+        })),
+      });
+    },
+  )
   .put(
     "/admin/members/:memberId/assignments",
     ...requireLabProtected,
@@ -528,6 +647,13 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       // Deduping here keeps the subsequent inArray delete filter scoped to the
       // unique set of unit IDs this viewer is allowed to affect.
       const scopedEditableUnitIds = Array.from(new Set(editableUnitIds));
+      const scopedUnitIds = Array.from(
+        new Set(
+          existingAssignments
+            .map((assignment) => assignment.unitId)
+            .concat(unitIds),
+        ),
+      );
 
       if (scopedEditableUnitIds.length > 0) {
         await db
@@ -562,6 +688,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         entityId: targetMemberId,
         details: {
           managedUnitIds: viewer.managedUnitIds,
+          scopedUnitIds,
           before: existingAssignments,
           after: dedupedAssignments,
         },
