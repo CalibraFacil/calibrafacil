@@ -12,7 +12,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { authClient, useSession } from '@calibra-facil/auth/client'
+import {
+  backofficeSignOut,
+  getBackofficeSession,
+  useBackofficeSession,
+} from '@calibra-facil/auth/client'
 import { api } from '@/utils/api'
 
 type BackofficeSignInSearch = {
@@ -24,7 +28,7 @@ export const Route = createFileRoute('/backoffice/sign-in')({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
   }),
   beforeLoad: async () => {
-    const { data: session } = await authClient.getSession()
+    const { data: session } = await getBackofficeSession()
 
     if (!session) {
       return
@@ -39,7 +43,7 @@ export const Route = createFileRoute('/backoffice/sign-in')({
 function BackofficeSignInPage() {
   const navigate = useNavigate()
   const { redirect: redirectTo } = Route.useSearch()
-  const { data: session } = useSession()
+  const { data: session } = useBackofficeSession()
   const accessQuery = useQuery({
     queryKey: ['backoffice', 'access', 'sign-in'],
     queryFn: async () => {
@@ -65,10 +69,16 @@ function BackofficeSignInPage() {
 
     if (session?.user && accessQuery.data?.bootstrapAvailable) {
       navigate({ to: '/backoffice/bootstrap' })
+      return
+    }
+
+    if (session?.user && accessQuery.isSuccess) {
+      void backofficeSignOut()
     }
   }, [
     accessQuery.data?.allowed,
     accessQuery.data?.bootstrapAvailable,
+    accessQuery.isSuccess,
     navigate,
     redirectTo,
     session?.user,

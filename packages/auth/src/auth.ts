@@ -6,6 +6,7 @@ import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { admin as adminPlugin, organization } from "better-auth/plugins";
+import { oneTimeToken } from "better-auth/plugins/one-time-token";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
 import { OrganizationInvitationEmail } from "@calibra-facil/email";
@@ -399,6 +400,11 @@ export function createLabAuth() {
         roles: platformRoles,
         defaultRole: "user",
       }),
+      oneTimeToken({
+        disableClientRequest: true,
+        expiresIn: 3,
+        storeToken: "hashed",
+      }),
       createOrganizationPlugin(),
       sso({
         providersLimit: 1,
@@ -409,6 +415,40 @@ export function createLabAuth() {
         domainVerification: {
           enabled: true,
         },
+      }),
+    ],
+  });
+}
+
+/**
+ * Factory function to create Backoffice Auth instance
+ * Call this inside request handlers to ensure env vars are available
+ */
+export function createBackofficeAuth() {
+  const sharedConfig = createSharedConfig();
+  const baseURL =
+    process.env.NODE_ENV === "production"
+      ? getRequiredEnv("API_URL")
+      : "https://localhost:3000";
+
+  return betterAuth({
+    ...sharedConfig,
+    basePath: "/api/auth/backoffice",
+    baseURL,
+    advanced: {
+      ...sharedConfig.advanced,
+      cookiePrefix: "backoffice",
+    },
+    plugins: [
+      adminPlugin({
+        ac: platformAc,
+        roles: platformRoles,
+        defaultRole: "user",
+      }),
+      oneTimeToken({
+        disableClientRequest: true,
+        expiresIn: 3,
+        storeToken: "hashed",
       }),
     ],
   });
@@ -440,6 +480,7 @@ export function createPortalAuth() {
 // For backwards compatibility in non-Worker environments (like local dev with Bun)
 // These are lazily initialized on first use
 let _labAuth: ReturnType<typeof createLabAuth> | null = null;
+let _backofficeAuth: ReturnType<typeof createBackofficeAuth> | null = null;
 let _portalAuth: ReturnType<typeof createPortalAuth> | null = null;
 
 export function getLabAuth() {
@@ -447,6 +488,13 @@ export function getLabAuth() {
     _labAuth = createLabAuth();
   }
   return _labAuth;
+}
+
+export function getBackofficeAuth() {
+  if (!_backofficeAuth) {
+    _backofficeAuth = createBackofficeAuth();
+  }
+  return _backofficeAuth;
 }
 
 export function getPortalAuth() {
@@ -458,6 +506,7 @@ export function getPortalAuth() {
 
 // Type definitions for auth instances with organization plugin
 export type LabAuth = ReturnType<typeof createLabAuth>;
+export type BackofficeAuth = ReturnType<typeof createBackofficeAuth>;
 export type PortalAuth = ReturnType<typeof createPortalAuth>;
 
 // Legacy exports for backwards compatibility (lazy getters)
@@ -469,6 +518,15 @@ export const labAuth = {
     return getLabAuth().handler;
   },
 } as Pick<LabAuth, "api" | "handler">;
+
+export const backofficeAuth = {
+  get api() {
+    return getBackofficeAuth().api;
+  },
+  get handler() {
+    return getBackofficeAuth().handler;
+  },
+} as Pick<BackofficeAuth, "api" | "handler">;
 
 export const portalAuth = {
   get api() {

@@ -80,6 +80,24 @@ export const portalAuthClient = createBetterAuthClient({
   plugins: [organizationPluginConfig],
 });
 
+/**
+ * Backoffice Auth Client - for the internal operations workspace (apps/web /backoffice)
+ * Connects to: /api/auth/backoffice/*
+ */
+export const backofficeAuthClient = createBetterAuthClient({
+  baseURL: getApiBaseURL(),
+  basePath: "/api/auth/backoffice",
+  fetchOptions: {
+    credentials: "include",
+  },
+  plugins: [
+    adminClient({
+      ac: platformAc,
+      roles: platformRoles,
+    }),
+  ],
+});
+
 // Keep the original 'authClient' export for backwards compatibility (uses lab auth)
 export const authClient = labAuthClient;
 
@@ -114,6 +132,13 @@ export const usePortalActiveOrganization =
   portalAuthClient.useActiveOrganization;
 export const portalOrganization = portalAuthClient.organization;
 export const labAdmin = labAuthClient.admin;
+
+// Backoffice-specific exports (for apps/web /backoffice)
+export const backofficeSignIn = backofficeAuthClient.signIn;
+export const backofficeSignOut = backofficeAuthClient.signOut;
+export const useBackofficeSession = backofficeAuthClient.useSession;
+export const getBackofficeSession = () => backofficeAuthClient.getSession();
+export const backofficeAdmin = backofficeAuthClient.admin;
 
 // =============================================================================
 // PERMISSION CHECKING UTILITIES

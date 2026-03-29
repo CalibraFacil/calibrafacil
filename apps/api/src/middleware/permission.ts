@@ -1,6 +1,10 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
+import {
+  createBackofficeAuth,
+  createLabAuth,
+  createPortalAuth,
+} from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
   member as memberTable,
@@ -82,7 +86,7 @@ export interface MemberData {
 
 export type GovernanceAccess = UnitGovernanceAccess;
 
-export type AuthSource = "lab" | "portal";
+export type AuthSource = "lab" | "backoffice" | "portal";
 
 /**
  * Context type extension for authenticated requests
@@ -94,6 +98,7 @@ export interface AuthVariables {
   platformRoles?: PlatformRole[];
   serverTiming?: ServerTimingMetric[];
   requestLabAuth?: ReturnType<typeof createLabAuth>;
+  requestBackofficeAuth?: ReturnType<typeof createBackofficeAuth>;
   requestPortalAuth?: ReturnType<typeof createPortalAuth>;
 }
 
@@ -130,6 +135,20 @@ function getRequestPortalAuth(c: {
 
   const auth = createPortalAuth();
   c.set("requestPortalAuth", auth);
+  return auth;
+}
+
+function getRequestBackofficeAuth(c: {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+}) {
+  const existing = c.get("requestBackofficeAuth") as
+    | ReturnType<typeof createBackofficeAuth>
+    | undefined;
+  if (existing) return existing;
+
+  const auth = createBackofficeAuth();
+  c.set("requestBackofficeAuth", auth);
   return auth;
 }
 
@@ -338,6 +357,34 @@ export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
 );
 
 /**
+ * Middleware to require authentication using Backoffice auth.
+ * For use on internal backoffice routes.
+ * Sets `session` in the context.
+ *
+ * @example
+ * app.use("*", requireBackofficeAuthSession);
+ */
+export const requireBackofficeAuthSession = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const authStartedAt = performance.now();
+  const backofficeAuth = getRequestBackofficeAuth(c);
+  const session = await backofficeAuth.api.getSession({
+    headers: c.req.raw.headers,
+  });
+
+  if (!session) {
+    throw new HTTPException(401, { message: "Unauthorized" });
+  }
+
+  c.set("session", session as SessionData);
+  c.set("authSource", "backoffice");
+  addServerTiming(c, "auth", authStartedAt, "backoffice");
+
+  await next();
+});
+
+/**
  * Middleware to require authentication (tries both auth instances).
  * For use on routes that should accept both lab and portal users.
  * Sets `session` in the context.
@@ -544,6 +591,10 @@ export function requirePermission(permissions: PermissionCheck) {
       result = await portalAuth.api.hasPermission({
         headers: c.req.raw.headers,
         body: { permission: permissions },
+      });
+    } else if (authSource === "backoffice") {
+      throw new HTTPException(403, {
+        message: "Organization permissions are unavailable in backoffice auth",
       });
     } else {
       // Fallback for legacy/misconfigured middleware chains

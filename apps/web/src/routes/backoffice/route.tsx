@@ -7,7 +7,10 @@ import {
 } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
-import { authClient, useSession } from '@calibra-facil/auth/client'
+import {
+  getBackofficeSession,
+  useBackofficeSession,
+} from '@calibra-facil/auth/client'
 import { BackofficeHeader } from '@/components/backoffice-header'
 import { BackofficeSidebar } from '@/components/backoffice-sidebar'
 import { Button } from '@/components/ui/button'
@@ -28,7 +31,7 @@ export const Route = createFileRoute('/backoffice')({
       return
     }
 
-    const { data: session } = await authClient.getSession()
+    const { data: session } = await getBackofficeSession()
 
     if (!session) {
       throw redirect({
@@ -46,7 +49,7 @@ function BackofficeLayout() {
   const isAuthPage =
     location.pathname === '/backoffice/sign-in' ||
     location.pathname === '/backoffice/bootstrap'
-  const { data: session } = useSession()
+  const { data: session } = useBackofficeSession()
 
   const accessQuery = useQuery({
     queryKey: ['backoffice', 'access', 'layout'],

@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
+import {
+  createBackofficeAuth,
+  createLabAuth,
+  createPortalAuth,
+} from "@calibra-facil/auth";
 import {
   rateLimitAuth,
   rateLimitInvitations,
@@ -181,6 +185,12 @@ function withCors(c: any, res: Response) {
 app.on(["GET", "POST"], "/api/auth/lab/*", async (c) => {
   const labAuth = createLabAuth();
   const res = await labAuth.handler(c.req.raw);
+  return await withCors(c, res);
+});
+
+app.on(["GET", "POST"], "/api/auth/backoffice/*", async (c) => {
+  const backofficeAuth = createBackofficeAuth();
+  const res = await backofficeAuth.handler(c.req.raw);
   return await withCors(c, res);
 });
 

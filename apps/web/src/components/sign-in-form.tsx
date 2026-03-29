@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { signIn } from '@calibra-facil/auth/client'
+import {
+  backofficeSignIn,
+  backofficeSignOut,
+  signIn,
+} from '@calibra-facil/auth/client'
 import { api } from '@/utils/api'
 import { cn } from '@/lib/utils'
 import { BrandMark } from '@/components/brand'
@@ -35,7 +39,8 @@ export function SignInForm({
     setError(null)
     setIsLoading(true)
 
-    const { error } = await signIn.email({
+    const authSignIn = mode === 'backoffice' ? backofficeSignIn : signIn
+    const { error } = await authSignIn.email({
       email,
       password,
     })
@@ -70,6 +75,7 @@ export function SignInForm({
           return
         }
 
+        await backofficeSignOut()
         setError('Sua conta não possui acesso ao backoffice')
         return
       } finally {

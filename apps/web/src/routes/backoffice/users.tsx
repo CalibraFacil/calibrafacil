@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { ArrowDown01Icon, ArrowUp01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { createFileRoute } from '@tanstack/react-router'
@@ -17,7 +17,7 @@ import {
 import { toast } from 'sonner'
 
 import { parsePlatformRoles } from '@calibra-facil/auth/access'
-import { useSession } from '@calibra-facil/auth/client'
+import { useBackofficeSession } from '@calibra-facil/auth/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,9 +40,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { api } from '@/utils/api'
+import { api, resolveApiURL } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice/users')({
+  validateSearch: (search: Record<string, unknown>) => ({
+    impersonationError:
+      typeof search.impersonationError === 'string'
+        ? search.impersonationError
+        : undefined,
+  }),
   component: BackofficeUsersPage,
 })
 
@@ -162,7 +168,8 @@ function formatCreatedAt(value: BackofficeUser['createdAt']) {
 
 function BackofficeUsersPage() {
   const queryClient = useQueryClient()
-  const { data: session } = useSession()
+  const { data: session } = useBackofficeSession()
+  const { impersonationError } = Route.useSearch()
   const [draft, setDraft] = useState({
     name: '',
     email: '',
@@ -188,6 +195,12 @@ function BackofficeUsersPage() {
     [sessionRole],
   )
   const canManageRoles = currentPlatformRoles.includes('platform_admin')
+
+  useEffect(() => {
+    if (impersonationError) {
+      toast.error(impersonationError)
+    }
+  }, [impersonationError])
 
   const organizationsQuery = useQuery({
     queryKey: ['backoffice', 'organizations', 'options'],
@@ -315,11 +328,22 @@ function BackofficeUsersPage() {
       })
 
       if (!res.ok) {
-        throw new Error('Falha ao iniciar impersonação')
+        const data = await res.json().catch(() => null)
+        throw new Error(
+          data &&
+            typeof data === 'object' &&
+            'error' in data &&
+            typeof data.error === 'string'
+            ? data.error
+            : 'Falha ao iniciar impersonação',
+        )
       }
+
+      const data = await res.json()
+      return data as { redirectPath: string }
     },
-    onSuccess: () => {
-      window.location.assign('/dashboard')
+    onSuccess: (data) => {
+      window.location.assign(resolveApiURL(data.redirectPath))
     },
     onError: (error) => {
       toast.error(

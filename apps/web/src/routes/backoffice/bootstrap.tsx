@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { useSession } from '@calibra-facil/auth/client'
+import { useBackofficeSession } from '@calibra-facil/auth/client'
 import { BrandLockup } from '@/components/brand'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,7 +26,7 @@ export const Route = createFileRoute('/backoffice/bootstrap')({
 
 function BackofficeBootstrapPage() {
   const navigate = useNavigate()
-  const { data: session } = useSession()
+  const { data: session } = useBackofficeSession()
   const [token, setToken] = useState('')
   const [error, setError] = useState<string | null>(null)
 

@@ -12,7 +12,7 @@ function getStoredActiveUnitId(): string | null {
   return window.localStorage.getItem(`${DASHBOARD_UNIT_KEY_PREFIX}${activeOrgId}`)
 }
 
-function getApiBaseURL(): string {
+export function getApiBaseURL(): string {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL
   }
@@ -26,6 +26,14 @@ function getApiBaseURL(): string {
   }
 
   return 'https://api.calibrafacil.com'
+}
+
+export function resolveApiURL(pathOrUrl: string): string {
+  if (/^https?:\/\//.test(pathOrUrl)) {
+    return pathOrUrl
+  }
+
+  return new URL(pathOrUrl, getApiBaseURL()).toString()
 }
 
 export const api = hc<AppType>(getApiBaseURL(), {

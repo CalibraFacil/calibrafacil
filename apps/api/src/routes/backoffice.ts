@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { and, asc, desc, eq, ilike, inArray, like, not, or, sql } from "drizzle-orm";
-import { createLabAuth } from "@calibra-facil/auth";
+import { createBackofficeAuth, createLabAuth } from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
   member,
@@ -21,7 +21,7 @@ import {
 } from "@calibra-facil/auth/access";
 import {
   requireBackofficeAccess,
-  requireLabAuth,
+  requireBackofficeAuthSession,
   requirePlatformAdmin,
   type AuthVariables,
 } from "../middleware/permission";
@@ -60,6 +60,11 @@ const BanUserSchema = z.object({
   banExpiresIn: z.number().int().positive().optional(),
 });
 
+const ImpersonationBridgeSchema = z.object({
+  token: z.string().trim().min(1),
+  targetUserId: z.string().trim().min(1),
+});
+
 function extractErrorMessage(payload: unknown, fallback: string) {
   if (!payload || typeof payload !== "object") {
     return fallback;
@@ -76,7 +81,52 @@ function extractErrorMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
-async function forwardAuthResponse(params: {
+function getAppRedirectErrorUrl(c: {
+  req: {
+    header(name: string): string | undefined;
+  };
+  env?: unknown;
+}) {
+  return `${resolveAppUrl(c)}/backoffice/users`;
+}
+
+function redirectToAppWithError(
+  c: {
+    req: {
+      header(name: string): string | undefined;
+    };
+    env?: unknown;
+  },
+  message: string,
+) {
+  const url = new URL(getAppRedirectErrorUrl(c));
+  url.searchParams.set("impersonationError", message);
+
+  return Response.redirect(url.toString(), 302);
+}
+
+function getSetCookieHeaders(headers: Headers) {
+  const candidate = headers as Headers & {
+    getSetCookie?: () => string[];
+  };
+
+  if (typeof candidate.getSetCookie === "function") {
+    return candidate.getSetCookie();
+  }
+
+  const value = headers.get("set-cookie");
+  return value ? [value] : [];
+}
+
+function extractCookieHeaderFromResponseHeaders(headers: Headers) {
+  const cookies = getSetCookieHeaders(headers)
+    .map((value) => value.split(";", 1)[0]?.trim() ?? "")
+    .filter(Boolean);
+
+  return cookies.join("; ");
+}
+
+async function forwardLabAuthResponse(params: {
   c: {
     req: { raw: Request };
   };
@@ -179,7 +229,7 @@ function resolveAppUrl(c: {
 export const backofficeRouter = new Hono<{
   Variables: AuthVariables;
 }>()
-  .use("*", requireLabAuth)
+  .use("*", requireBackofficeAuthSession)
   .get("/access", async (c) => {
     const session = c.get("session");
     const roles = parsePlatformRoles(session.user.role);
@@ -240,30 +290,233 @@ export const backofficeRouter = new Hono<{
   })
   .post("/impersonation/stop", async (c) => {
     const session = c.get("session");
-    const impersonatedBy = session.session.impersonatedBy ?? null;
+    const labAuth = createLabAuth();
+    const labSession = await labAuth.api.getSession({
+      headers: c.req.raw.headers,
+    });
+    const impersonatedBy = labSession?.session.impersonatedBy ?? null;
 
     if (!impersonatedBy) {
       return c.json({ error: "Nenhuma impersonação ativa" }, 400);
     }
 
-    const response = await forwardAuthResponse({
+    const response = await forwardLabAuthResponse({
       c,
       path: "/api/auth/lab/admin/stop-impersonating",
     });
 
     if (response.ok) {
       await logPlatformEvent({
-        actorUserId: impersonatedBy,
-        targetUserId: session.user.id,
+        actorUserId: session.user.id,
+        targetUserId: labSession?.user.id ?? null,
         action: "backoffice.impersonation.stop",
         entityType: "user",
-        entityId: session.user.id,
+        entityId: labSession?.user.id ?? null,
+        details: {
+          impersonatedBy,
+        },
       });
     }
 
     return response;
   })
   .use("*", requireBackofficeAccess)
+  .get(
+    "/impersonation/bridge",
+    zValidator("query", ImpersonationBridgeSchema),
+    async (c) => {
+      const session = c.get("session");
+      const input = c.req.valid("query");
+      const labAuth = createLabAuth() as any;
+
+      const targetUser = await db.query.user.findFirst({
+        where: eq(userTable.id, input.targetUserId),
+      });
+
+      if (!targetUser) {
+        await logPlatformEvent({
+          actorUserId: session.user.id,
+          targetUserId: input.targetUserId,
+          action: "backoffice.impersonation.failed",
+          entityType: "user",
+          entityId: input.targetUserId,
+          details: {
+            reason: "target_not_found",
+          },
+        });
+
+        return redirectToAppWithError(c, "Usuário alvo não encontrado");
+      }
+
+      try {
+        const verifyResponse = (await labAuth.api.verifyOneTimeToken({
+          body: { token: input.token },
+          asResponse: true,
+        })) as Response;
+
+        if (!verifyResponse.ok) {
+          const payload = await verifyResponse.json().catch(() => null);
+
+          await logPlatformEvent({
+            actorUserId: session.user.id,
+            targetUserId: input.targetUserId,
+            action: "backoffice.impersonation.failed",
+            entityType: "user",
+            entityId: input.targetUserId,
+            details: {
+              reason: "invalid_handoff_token",
+            },
+          });
+
+          return redirectToAppWithError(
+            c,
+            extractErrorMessage(
+              payload,
+              "Falha ao validar o handoff de impersonação",
+            ),
+          );
+        }
+
+        const operatorLabCookie = extractCookieHeaderFromResponseHeaders(
+          verifyResponse.headers,
+        );
+
+        if (!operatorLabCookie) {
+          await logPlatformEvent({
+            actorUserId: session.user.id,
+            targetUserId: input.targetUserId,
+            action: "backoffice.impersonation.failed",
+            entityType: "user",
+            entityId: input.targetUserId,
+            details: {
+              reason: "missing_lab_cookie_after_verify",
+            },
+          });
+
+          return redirectToAppWithError(
+            c,
+            "Falha ao preparar a sessão LAB do operador para impersonação",
+          );
+        }
+
+        const operatorLabSession = await labAuth.api.getSession({
+          headers: new Headers({
+            cookie: operatorLabCookie,
+          }),
+        });
+
+        if (!operatorLabSession) {
+          await logPlatformEvent({
+            actorUserId: session.user.id,
+            targetUserId: input.targetUserId,
+            action: "backoffice.impersonation.failed",
+            entityType: "user",
+            entityId: input.targetUserId,
+            details: {
+              reason: "lab_session_not_established",
+            },
+          });
+
+          return redirectToAppWithError(
+            c,
+            "Falha ao estabelecer a sessão LAB do operador",
+          );
+        }
+
+        if (operatorLabSession.user.id !== session.user.id) {
+          await logPlatformEvent({
+            actorUserId: session.user.id,
+            targetUserId: input.targetUserId,
+            action: "backoffice.impersonation.failed",
+            entityType: "user",
+            entityId: input.targetUserId,
+            details: {
+              reason: "operator_identity_mismatch",
+              labUserId: operatorLabSession.user.id,
+            },
+          });
+
+          return redirectToAppWithError(
+            c,
+            "Falha ao reconciliar a identidade do operador no handoff",
+          );
+        }
+
+        const impersonateResponse = (await labAuth.api.impersonateUser({
+          body: {
+            userId: input.targetUserId,
+          },
+          headers: new Headers({
+            cookie: operatorLabCookie,
+          }),
+          asResponse: true,
+        })) as Response;
+
+        if (!impersonateResponse.ok) {
+          const payload = await impersonateResponse.json().catch(() => null);
+
+          await logPlatformEvent({
+            actorUserId: session.user.id,
+            targetUserId: input.targetUserId,
+            action: "backoffice.impersonation.failed",
+            entityType: "user",
+            entityId: input.targetUserId,
+            details: {
+              reason: "lab_impersonation_rejected",
+            },
+          });
+
+          return redirectToAppWithError(
+            c,
+            extractErrorMessage(
+              payload,
+              "Falha ao iniciar impersonação no dashboard LAB",
+            ),
+          );
+        }
+
+        await logPlatformEvent({
+          actorUserId: session.user.id,
+          targetUserId: input.targetUserId,
+          action: "backoffice.impersonation.start",
+          entityType: "user",
+          entityId: input.targetUserId,
+          details: {
+            email: targetUser.email,
+            via: "one_time_token_bridge",
+          },
+        });
+
+        const headers = new Headers(impersonateResponse.headers);
+        headers.set("Location", `${resolveAppUrl(c)}/dashboard`);
+
+        return new Response(null, {
+          status: 302,
+          headers,
+        });
+      } catch (error) {
+        await logPlatformEvent({
+          actorUserId: session.user.id,
+          targetUserId: input.targetUserId,
+          action: "backoffice.impersonation.failed",
+          entityType: "user",
+          entityId: input.targetUserId,
+          details: {
+            reason: "unexpected_error",
+            message: error instanceof Error ? error.message : null,
+          },
+        });
+
+        return redirectToAppWithError(
+          c,
+          extractErrorMessage(
+            error instanceof Error ? { message: error.message } : null,
+            "Falha ao concluir a ponte de impersonação",
+          ),
+        );
+      }
+    },
+  )
   .route("/customer-success", internalCustomerSuccessRouter)
   .get("/organizations", async (c) => {
     const rows = await db
@@ -526,7 +779,7 @@ export const backofficeRouter = new Hono<{
     });
   })
   .post("/users", requirePlatformAdmin, zValidator("json", CreatePlatformUserSchema), async (c) => {
-    const auth = createLabAuth() as any;
+    const auth = createBackofficeAuth() as any;
     const session = c.get("session");
     const input = c.req.valid("json");
     const temporaryPassword = randomBytes(24).toString("base64url");
@@ -546,7 +799,7 @@ export const backofficeRouter = new Hono<{
         ? (createdUser.user as { id: string; email: string; name: string })
         : (createdUser as { id: string; email: string; name: string });
 
-    const resetResponse = await forwardAuthResponse({
+    const resetResponse = await forwardLabAuthResponse({
       c,
       path: "/api/auth/lab/request-password-reset",
       body: {
@@ -581,25 +834,40 @@ export const backofficeRouter = new Hono<{
   .post(
     "/users/:id/impersonate",
     async (c) => {
+      const backofficeAuth = createBackofficeAuth() as any;
       const session = c.get("session");
       const targetUserId = c.req.param("id");
-      const response = await forwardAuthResponse({
-        c,
-        path: "/api/auth/lab/admin/impersonate-user",
-        body: { userId: targetUserId },
+      const targetUser = await db.query.user.findFirst({
+        where: eq(userTable.id, targetUserId),
       });
 
-      if (response.ok) {
-        await logPlatformEvent({
-          actorUserId: session.user.id,
-          targetUserId,
-          action: "backoffice.impersonation.start",
-          entityType: "user",
-          entityId: targetUserId,
-        });
+      if (!targetUser) {
+        return c.json({ error: "Usuário alvo não encontrado" }, 404);
       }
 
-      return response;
+      const handoff = await backofficeAuth.api.generateOneTimeToken({
+        headers: c.req.raw.headers,
+      });
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        targetUserId,
+        action: "backoffice.impersonation.handoff.started",
+        entityType: "user",
+        entityId: targetUserId,
+        details: {
+          email: targetUser.email,
+        },
+      });
+
+      const bridgeSearch = new URLSearchParams({
+        token: handoff.token,
+        targetUserId,
+      });
+
+      return c.json({
+        redirectPath: `/api/backoffice/impersonation/bridge?${bridgeSearch.toString()}`,
+      });
     },
   )
   .use("/users/:id/request-password-reset", requirePlatformAdmin)
@@ -618,7 +886,7 @@ export const backofficeRouter = new Hono<{
     }
 
     const appUrl = resolveAppUrl(c);
-    const response = await forwardAuthResponse({
+    const response = await forwardLabAuthResponse({
       c,
       path: "/api/auth/lab/request-password-reset",
       body: {
@@ -657,7 +925,7 @@ export const backofficeRouter = new Hono<{
     "/users/:id/role",
     zValidator("json", SetPlatformRoleSchema),
     async (c) => {
-      const auth = createLabAuth() as any;
+      const auth = createBackofficeAuth() as any;
       const session = c.get("session");
       const userId = c.req.param("id");
       const input = c.req.valid("json");
@@ -685,7 +953,7 @@ export const backofficeRouter = new Hono<{
     },
   )
   .post("/users/:id/ban", zValidator("json", BanUserSchema), async (c) => {
-    const auth = createLabAuth() as any;
+    const auth = createBackofficeAuth() as any;
     const session = c.get("session");
     const userId = c.req.param("id");
     const input = c.req.valid("json");
@@ -714,7 +982,7 @@ export const backofficeRouter = new Hono<{
     return c.json(result);
   })
   .post("/users/:id/unban", async (c) => {
-    const auth = createLabAuth() as any;
+    const auth = createBackofficeAuth() as any;
     const session = c.get("session");
     const userId = c.req.param("id");
 

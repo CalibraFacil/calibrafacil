@@ -18,7 +18,7 @@ import {
 } from "../lib/customer-success";
 import {
   requireBackofficeAccess,
-  requireLabAuth,
+  requireBackofficeAuthSession,
   type AuthVariables,
 } from "../middleware/permission";
 
@@ -133,7 +133,7 @@ async function listRequestsForOrganization(organizationId: string) {
 export const internalCustomerSuccessRouter = new Hono<{
   Variables: AuthVariables;
 }>()
-  .use("*", requireLabAuth, requireBackofficeAccess)
+  .use("*", requireBackofficeAuthSession, requireBackofficeAccess)
   .get("/access", (c) => c.json({ allowed: true }))
   .get("/organizations", async (c) => {
     const rows = await db

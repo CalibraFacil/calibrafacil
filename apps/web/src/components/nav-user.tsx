@@ -9,7 +9,12 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { signOut, useSession } from '@calibra-facil/auth/client'
+import {
+  backofficeSignOut,
+  signOut,
+  useBackofficeSession,
+  useSession,
+} from '@calibra-facil/auth/client'
 import { canAccessBackoffice } from '@calibra-facil/auth/access'
 import { Link, useLocation } from '@tanstack/react-router'
 
@@ -35,7 +40,15 @@ import { api } from '@/utils/api'
 export function NavUser() {
   const { isMobile } = useSidebar()
   const location = useLocation()
-  const { data: session, isPending } = useSession()
+  const isBackofficePath = location.pathname.startsWith('/backoffice')
+  const labSessionQuery = useSession()
+  const backofficeSessionQuery = useBackofficeSession()
+  const session = isBackofficePath
+    ? backofficeSessionQuery.data
+    : labSessionQuery.data
+  const isPending = isBackofficePath
+    ? backofficeSessionQuery.isPending
+    : labSessionQuery.isPending
 
   const getInitials = (name: string) =>
     name
@@ -47,9 +60,11 @@ export function NavUser() {
       .toUpperCase()
 
   const handleSignOut = async () => {
-    await signOut()
-
-    const isBackofficePath = location.pathname.startsWith('/backoffice')
+    if (isBackofficePath) {
+      await backofficeSignOut()
+    } else {
+      await signOut()
+    }
     window.location.replace(
       isBackofficePath ? '/backoffice/sign-in' : '/sign-in',
     )

@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { useSession } from '@calibra-facil/auth/client'
+import { useBackofficeSession } from '@calibra-facil/auth/client'
 import { api } from '@/utils/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -141,7 +141,7 @@ function toDateInputValue(value: string | null) {
 
 function InternalCustomerSuccessPage() {
   const queryClient = useQueryClient()
-  const { data: session } = useSession()
+  const { data: session } = useBackofficeSession()
   const [selectedOrganizationId, setSelectedOrganizationId] = useState('')
   const [profileDraft, setProfileDraft] = useState({
     accountOwnerName: '',
