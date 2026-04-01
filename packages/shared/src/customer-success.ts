@@ -14,6 +14,22 @@ export type MigrationStatus =
   | "COMPLETED"
   | "BLOCKED";
 
+export type GoLiveStatus =
+  | "NOT_SCHEDULED"
+  | "SCHEDULED"
+  | "AT_RISK"
+  | "LIVE";
+
+export type CustomerSuccessHealthStatus =
+  | "HEALTHY"
+  | "ATTENTION"
+  | "CRITICAL";
+
+export type CustomerSuccessSlaTier =
+  | "PLAN_DEFAULT"
+  | "PRIORITY"
+  | "DEDICATED";
+
 export type SupportRequestCategory =
   | "GENERAL"
   | "TRAINING"
@@ -37,6 +53,12 @@ export type SupportEventKind =
   | "assigned"
   | "public_reply"
   | "resolved";
+
+export type SupportRequestSlaStatus =
+  | "ON_TRACK"
+  | "DUE_SOON"
+  | "BREACHED"
+  | "RESOLVED";
 
 export type SupportMode = "standard" | "priority" | "dedicated";
 

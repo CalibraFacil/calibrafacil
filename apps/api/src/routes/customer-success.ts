@@ -11,7 +11,11 @@ import {
 import { getOrganizationPlanAccess } from "../lib/organization-plan";
 import {
   calculateSlaTargetAt,
+  deriveDefaultSlaTier,
+  deriveGoLiveStatus,
   ensureSuccessProfile,
+  getSupportRequestSlaStatus,
+  resolveEffectiveSlaHours,
   writeOrganizationCustomerSuccessEvent,
   writeSupportRequestEvent,
 } from "../lib/customer-success";
@@ -36,6 +40,10 @@ const CreateSupportRequestSchema = z.object({
 });
 
 async function listSupportRequests(organizationId: string, publicOnly: boolean) {
+  const [profile, planAccess] = await Promise.all([
+    ensureSuccessProfile(organizationId),
+    getOrganizationPlanAccess(organizationId),
+  ]);
   const requests = await db.query.organizationSupportRequest.findMany({
     where: eq(organizationSupportRequest.organizationId, organizationId),
     with: {
@@ -73,6 +81,17 @@ async function listSupportRequests(organizationId: string, publicOnly: boolean) 
 
   return requests.map((request) => ({
     ...request,
+    slaStatus: getSupportRequestSlaStatus({
+      status: request.status,
+      slaTargetAt: request.slaTargetAt,
+    }),
+    timeToSlaMs: request.slaTargetAt
+      ? request.slaTargetAt.getTime() - Date.now()
+      : null,
+    prioritySupport:
+      profile.prioritySupport ||
+      deriveDefaultSlaTier(planAccess.supportPolicy) !== "PLAN_DEFAULT" ||
+      planAccess.supportPolicy.hasPrioritySupport,
     events: eventsByRequest.get(request.id) ?? [],
   }));
 }
@@ -85,7 +104,14 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
     const profile = await ensureSuccessProfile(member.organizationId);
 
     return c.json({
-      profile,
+      profile: {
+        ...profile,
+        goLiveStatus: deriveGoLiveStatus({
+          currentStatus: profile.goLiveStatus,
+          goLiveActualDate: profile.goLiveActualDate,
+          goLiveTargetDate: profile.goLiveTargetDate,
+        }),
+      },
       supportPolicy: planAccess.supportPolicy,
       plan: {
         id: planAccess.planId,
@@ -119,6 +145,11 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
       const planAccess = await getOrganizationPlanAccess(member.organizationId);
+      const profile = await ensureSuccessProfile(member.organizationId);
+      const effectiveSlaTier =
+        profile.slaTier === "PLAN_DEFAULT"
+          ? deriveDefaultSlaTier(planAccess.supportPolicy)
+          : profile.slaTier;
 
       const [created] = await db
         .insert(organizationSupportRequest)
@@ -131,7 +162,10 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
           subject: input.subject,
           description: input.description,
           slaTargetAt: calculateSlaTargetAt(
-            planAccess.supportPolicy.targetFirstResponseBusinessHours,
+            resolveEffectiveSlaHours(
+              planAccess.supportPolicy.targetFirstResponseBusinessHours,
+              effectiveSlaTier,
+            ),
           ),
         })
         .returning();
@@ -183,6 +217,14 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
           ...created,
           requestedByUser: requester ?? null,
           assignedToUser: null,
+          slaStatus: "ON_TRACK",
+          timeToSlaMs: created.slaTargetAt
+            ? created.slaTargetAt.getTime() - Date.now()
+            : null,
+          prioritySupport:
+            profile.prioritySupport ||
+            effectiveSlaTier !== "PLAN_DEFAULT" ||
+            planAccess.supportPolicy.hasPrioritySupport,
           events: [
             {
               kind: "created",

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ColumnDef } from '@tanstack/react-table'
 import { toast } from 'sonner'
 
 import { useBackofficeSession } from '@calibra-facil/auth/client'
@@ -14,6 +15,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { DataTable } from '@/components/ui/data-table'
+import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 import {
   Field,
   FieldDescription,
@@ -23,6 +26,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
 export const Route = createFileRoute('/backoffice/customer-success')({
@@ -32,18 +36,89 @@ export const Route = createFileRoute('/backoffice/customer-success')({
   component: InternalCustomerSuccessPage,
 })
 
-type OrganizationSummary = {
+type HealthStatus = 'HEALTHY' | 'ATTENTION' | 'CRITICAL'
+type GoLiveStatus = 'NOT_SCHEDULED' | 'SCHEDULED' | 'AT_RISK' | 'LIVE'
+type OnboardingStatus =
+  | 'NOT_STARTED'
+  | 'DISCOVERY'
+  | 'CONFIGURATION'
+  | 'TRAINING'
+  | 'LIVE'
+  | 'BLOCKED'
+type MigrationStatus =
+  | 'NOT_REQUIRED'
+  | 'PLANNING'
+  | 'IN_PROGRESS'
+  | 'VALIDATION'
+  | 'COMPLETED'
+  | 'BLOCKED'
+type SlaTier = 'PLAN_DEFAULT' | 'PRIORITY' | 'DEDICATED'
+type SupportRequestStatus =
+  | 'OPEN'
+  | 'IN_PROGRESS'
+  | 'WAITING_ON_CUSTOMER'
+  | 'RESOLVED'
+  | 'CLOSED'
+type SupportPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
+type SupportSlaStatus = 'ON_TRACK' | 'DUE_SOON' | 'BREACHED' | 'RESOLVED'
+
+type Operator = {
+  id: string
+  name: string
+  email: string
+  role: string
+}
+
+type OrganizationQueueItem = {
   id: string
   name: string
   slug: string
   type: string | null
-  onboardingStatus: string | null
-  migrationStatus: string | null
   accountOwnerName: string | null
   accountOwnerEmail: string | null
   supportContactEmail: string | null
-  goLiveTargetDate: string | null
-  goLiveActualDate: string | null
+  internalOwnerUser: Operator | null
+  profile: {
+    onboardingStatus: OnboardingStatus
+    migrationStatus: MigrationStatus
+    goLiveStatus: GoLiveStatus
+    healthStatus: HealthStatus
+    nextAction: string | null
+    nextActionDueAt: string | null
+    lastTouchedAt: string | null
+    goLiveTargetDate: string | null
+    goLiveActualDate: string | null
+    prioritySupport: boolean
+    slaTier: SlaTier
+  }
+  supportPolicy: {
+    supportMode: string
+    hasPrioritySupport: boolean
+    targetFirstResponseBusinessHours: number
+    targetResolutionLabel: string
+    includesAssistedOnboarding: boolean
+    includesAssistedMigration: boolean
+  }
+  plan: {
+    id: string
+    name: string
+    status: string
+  }
+  operationalSummary: {
+    supportMode: string
+    effectiveSlaTier: SlaTier
+    prioritySupport: boolean
+    healthStatus: HealthStatus
+    goLiveStatus: GoLiveStatus
+    workstreams: string[]
+    openRequestsCount: number
+    urgentRequestsCount: number
+    dueSoonRequestsCount: number
+    breachedRequestsCount: number
+    totalRequestsCount: number
+    needsAttention: boolean
+    nextActionOverdue: boolean
+  }
 }
 
 type ProfilePayload = {
@@ -58,20 +133,15 @@ type ProfilePayload = {
     accountOwnerName: string | null
     accountOwnerEmail: string | null
     supportContactEmail: string | null
-    onboardingStatus:
-      | 'NOT_STARTED'
-      | 'DISCOVERY'
-      | 'CONFIGURATION'
-      | 'TRAINING'
-      | 'LIVE'
-      | 'BLOCKED'
-    migrationStatus:
-      | 'NOT_REQUIRED'
-      | 'PLANNING'
-      | 'IN_PROGRESS'
-      | 'VALIDATION'
-      | 'COMPLETED'
-      | 'BLOCKED'
+    internalOwnerUserId: string | null
+    prioritySupport: boolean
+    slaTier: SlaTier
+    onboardingStatus: OnboardingStatus
+    migrationStatus: MigrationStatus
+    goLiveStatus: GoLiveStatus
+    healthStatus: HealthStatus
+    nextAction: string | null
+    nextActionDueAt: string | null
     goLiveTargetDate: string | null
     goLiveActualDate: string | null
     publicStatusNote: string | null
@@ -90,18 +160,34 @@ type ProfilePayload = {
     name: string
     status: string
   }
+  internalOwnerUser: Operator | null
+  operators: Operator[]
+  operationalSummary: OrganizationQueueItem['operationalSummary']
+  timeline: Array<{
+    id: number
+    action: string
+    entityType: string
+    entityId: string | null
+    details: Record<string, unknown> | null
+    createdAt: string
+    actorUser: { id: string; name: string; email: string | null } | null
+  }>
 }
 
 type SupportRequest = {
   id: number
   category: string
-  priority: string
-  status: string
+  priority: SupportPriority
+  status: SupportRequestStatus
   subject: string
   description: string
   publicResponse: string | null
   createdAt: string
-  requestedByUser: { name: string; email: string } | null
+  slaTargetAt: string | null
+  slaStatus: SupportSlaStatus
+  timeToSlaMs: number | null
+  prioritySupport: boolean
+  requestedByUser: { id?: string; name: string; email: string } | null
   assignedToUser: { id: string; name: string; email: string } | null
   events: Array<{
     kind: string
@@ -118,7 +204,73 @@ type RequestsPayload = {
     name: string
     slug: string
   }
+  operationalSummary: OrganizationQueueItem['operationalSummary']
   data: SupportRequest[]
+}
+
+type SupportQueueItem = SupportRequest & {
+  organization: { id: string; name: string; slug: string } | null
+  organizationHealth: HealthStatus
+  effectiveSlaTier: SlaTier
+}
+
+const onboardingLabels: Record<OnboardingStatus, string> = {
+  NOT_STARTED: 'Não iniciado',
+  DISCOVERY: 'Discovery',
+  CONFIGURATION: 'Configuração',
+  TRAINING: 'Treinamento',
+  LIVE: 'Em produção',
+  BLOCKED: 'Bloqueado',
+}
+
+const migrationLabels: Record<MigrationStatus, string> = {
+  NOT_REQUIRED: 'Não necessário',
+  PLANNING: 'Planejamento',
+  IN_PROGRESS: 'Em andamento',
+  VALIDATION: 'Validação',
+  COMPLETED: 'Concluído',
+  BLOCKED: 'Bloqueado',
+}
+
+const goLiveLabels: Record<GoLiveStatus, string> = {
+  NOT_SCHEDULED: 'Sem data',
+  SCHEDULED: 'Agendado',
+  AT_RISK: 'Em risco',
+  LIVE: 'Em produção',
+}
+
+const healthLabels: Record<HealthStatus, string> = {
+  HEALTHY: 'Saudável',
+  ATTENTION: 'Atenção',
+  CRITICAL: 'Crítico',
+}
+
+const slaTierLabels: Record<SlaTier, string> = {
+  PLAN_DEFAULT: 'Plano',
+  PRIORITY: 'Prioritário',
+  DEDICATED: 'Dedicado',
+}
+
+const requestStatusLabels: Record<SupportRequestStatus, string> = {
+  OPEN: 'Aberto',
+  IN_PROGRESS: 'Em andamento',
+  WAITING_ON_CUSTOMER: 'Aguardando laboratório',
+  RESOLVED: 'Resolvido',
+  CLOSED: 'Fechado',
+}
+
+const requestPriorityLabels: Record<SupportPriority, string> = {
+  LOW: 'Baixa',
+  NORMAL: 'Normal',
+  HIGH: 'Alta',
+  URGENT: 'Urgente',
+}
+
+const slaStatusLabels: Record<SupportSlaStatus, string> = {
+  ON_TRACK: 'Dentro do SLA',
+  DUE_SOON: 'SLA vencendo',
+  BREACHED: 'SLA violado',
+  RESOLVED: 'Resolvido',
 }
 
 async function parseApiError(res: Response, fallback: string) {
@@ -126,29 +278,101 @@ async function parseApiError(res: Response, fallback: string) {
 
   if (data && typeof data === 'object') {
     if ('error' in data && typeof data.error === 'string') return data.error
-    if ('message' in data && typeof data.message === 'string') {
-      return data.message
-    }
+    if ('message' in data && typeof data.message === 'string') return data.message
   }
 
   return fallback
 }
 
-function toDateInputValue(value: string | null) {
+function formatDateTime(value: string | null) {
+  if (!value) return 'Não definido'
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
+
+function formatDateOnly(value: string | null) {
   if (!value) return ''
   return new Date(value).toISOString().slice(0, 10)
+}
+
+function formatRelativeSla(value: number | null) {
+  if (value === null) return 'Sem SLA definido'
+
+  const absoluteHours = Math.round(Math.abs(value) / (60 * 60 * 1000))
+  if (value <= 0) {
+    return `${absoluteHours}h em atraso`
+  }
+
+  if (absoluteHours < 24) {
+    return `${absoluteHours}h restantes`
+  }
+
+  return `${Math.round(absoluteHours / 24)}d restantes`
+}
+
+function getHealthBadgeVariant(status: HealthStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (status) {
+    case 'CRITICAL':
+      return 'destructive'
+    case 'ATTENTION':
+      return 'default'
+    default:
+      return 'outline'
+  }
+}
+
+function getSlaBadgeVariant(status: SupportSlaStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (status) {
+    case 'BREACHED':
+      return 'destructive'
+    case 'DUE_SOON':
+      return 'default'
+    case 'RESOLVED':
+      return 'secondary'
+    default:
+      return 'outline'
+  }
+}
+
+function getPriorityBadgeVariant(priority: SupportPriority): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (priority) {
+    case 'URGENT':
+      return 'destructive'
+    case 'HIGH':
+      return 'default'
+    case 'LOW':
+      return 'outline'
+    default:
+      return 'secondary'
+  }
 }
 
 function InternalCustomerSuccessPage() {
   const queryClient = useQueryClient()
   const { data: session } = useBackofficeSession()
   const [selectedOrganizationId, setSelectedOrganizationId] = useState('')
+  const [organizationFilter, setOrganizationFilter] = useState<
+    'all' | 'attention' | 'critical' | 'priority' | 'onboarding' | 'migration'
+  >('all')
+  const [ticketFilter, setTicketFilter] = useState<
+    'all' | 'breached' | 'due' | 'open' | 'mine' | 'waiting'
+  >('all')
+  const [search, setSearch] = useState('')
   const [profileDraft, setProfileDraft] = useState({
     accountOwnerName: '',
     accountOwnerEmail: '',
     supportContactEmail: '',
-    onboardingStatus: 'NOT_STARTED',
-    migrationStatus: 'NOT_REQUIRED',
+    internalOwnerUserId: '',
+    prioritySupport: false,
+    slaTier: 'PLAN_DEFAULT' as SlaTier,
+    onboardingStatus: 'NOT_STARTED' as OnboardingStatus,
+    migrationStatus: 'NOT_REQUIRED' as MigrationStatus,
+    goLiveStatus: 'NOT_SCHEDULED' as GoLiveStatus,
+    healthStatus: 'HEALTHY' as HealthStatus,
+    nextAction: '',
+    nextActionDueAt: '',
     goLiveTargetDate: '',
     goLiveActualDate: '',
     publicStatusNote: '',
@@ -173,36 +397,84 @@ function InternalCustomerSuccessPage() {
     queryKey: ['backoffice', 'customer-success', 'organizations'],
     queryFn: async () => {
       const res = await api.api.backoffice['customer-success'].organizations.$get()
-
       if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao carregar organizações'),
-        )
+        throw new Error(await parseApiError(res, 'Falha ao carregar contas'))
       }
 
-      return res.json() as Promise<{ data: OrganizationSummary[] }>
+      return res.json() as Promise<{ data: OrganizationQueueItem[] }>
     },
     enabled: accessQuery.isSuccess,
   })
 
+  const supportQueueQuery = useQuery({
+    queryKey: ['backoffice', 'support', 'queue', 'customer-success'],
+    queryFn: async () => {
+      const res = await api.api.backoffice.support.queue.$get()
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao carregar fila de tickets'))
+      }
+
+      return res.json() as Promise<{ data: SupportQueueItem[] }>
+    },
+    enabled: accessQuery.isSuccess,
+  })
+
+  const filteredOrganizations = useMemo(() => {
+    const items = organizationsQuery.data?.data ?? []
+    const normalizedSearch = search.trim().toLowerCase()
+
+    return items.filter((organization) => {
+      const matchesSearch =
+        normalizedSearch.length === 0 ||
+        organization.name.toLowerCase().includes(normalizedSearch) ||
+        organization.slug.toLowerCase().includes(normalizedSearch) ||
+        (organization.accountOwnerName ?? '').toLowerCase().includes(normalizedSearch) ||
+        (organization.internalOwnerUser?.name ?? '').toLowerCase().includes(normalizedSearch)
+
+      if (!matchesSearch) return false
+
+      switch (organizationFilter) {
+        case 'attention':
+          return organization.operationalSummary.needsAttention
+        case 'critical':
+          return organization.operationalSummary.healthStatus === 'CRITICAL'
+        case 'priority':
+          return organization.operationalSummary.prioritySupport
+        case 'onboarding':
+          return organization.profile.onboardingStatus !== 'LIVE'
+        case 'migration':
+          return (
+            organization.profile.migrationStatus !== 'NOT_REQUIRED' &&
+            organization.profile.migrationStatus !== 'COMPLETED'
+          )
+        default:
+          return true
+      }
+    })
+  }, [organizationFilter, organizationsQuery.data, search])
+
   useEffect(() => {
-    if (!selectedOrganizationId && organizationsQuery.data?.data.length) {
-      setSelectedOrganizationId(organizationsQuery.data.data[0].id)
+    if (!filteredOrganizations.length) return
+
+    const hasSelected = filteredOrganizations.some(
+      (organization) => organization.id === selectedOrganizationId,
+    )
+
+    if (!selectedOrganizationId || !hasSelected) {
+      setSelectedOrganizationId(filteredOrganizations[0].id)
     }
-  }, [organizationsQuery.data, selectedOrganizationId])
+  }, [filteredOrganizations, selectedOrganizationId])
 
   const profileQuery = useQuery({
     queryKey: ['backoffice', 'customer-success', 'profile', selectedOrganizationId],
     queryFn: async () => {
       const res =
-        await api.api.backoffice['customer-success'].organizations[':id'].profile.$get(
-          {
-            param: { id: selectedOrganizationId },
-          },
-        )
+        await api.api.backoffice['customer-success'].organizations[':id'].profile.$get({
+          param: { id: selectedOrganizationId },
+        })
 
       if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao carregar perfil'))
+        throw new Error(await parseApiError(res, 'Falha ao carregar detalhe da conta'))
       }
 
       return res.json() as Promise<ProfilePayload>
@@ -214,27 +486,18 @@ function InternalCustomerSuccessPage() {
     queryKey: ['backoffice', 'customer-success', 'requests', selectedOrganizationId],
     queryFn: async () => {
       const res =
-        await api.api.backoffice['customer-success'].organizations[':id'].requests.$get(
-          {
-            param: { id: selectedOrganizationId },
-          },
-        )
+        await api.api.backoffice['customer-success'].organizations[':id'].requests.$get({
+          param: { id: selectedOrganizationId },
+        })
 
       if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao carregar solicitações'),
-        )
+        throw new Error(await parseApiError(res, 'Falha ao carregar tickets da conta'))
       }
 
       return res.json() as Promise<RequestsPayload>
     },
     enabled: Boolean(selectedOrganizationId) && accessQuery.isSuccess,
   })
-
-  const selectedOrganization =
-    organizationsQuery.data?.data.find(
-      (organization) => organization.id === selectedOrganizationId,
-    ) ?? null
 
   useEffect(() => {
     if (!profileQuery.data) return
@@ -243,10 +506,17 @@ function InternalCustomerSuccessPage() {
       accountOwnerName: profileQuery.data.profile.accountOwnerName ?? '',
       accountOwnerEmail: profileQuery.data.profile.accountOwnerEmail ?? '',
       supportContactEmail: profileQuery.data.profile.supportContactEmail ?? '',
+      internalOwnerUserId: profileQuery.data.profile.internalOwnerUserId ?? '',
+      prioritySupport: profileQuery.data.profile.prioritySupport,
+      slaTier: profileQuery.data.profile.slaTier,
       onboardingStatus: profileQuery.data.profile.onboardingStatus,
       migrationStatus: profileQuery.data.profile.migrationStatus,
-      goLiveTargetDate: toDateInputValue(profileQuery.data.profile.goLiveTargetDate),
-      goLiveActualDate: toDateInputValue(profileQuery.data.profile.goLiveActualDate),
+      goLiveStatus: profileQuery.data.profile.goLiveStatus,
+      healthStatus: profileQuery.data.profile.healthStatus,
+      nextAction: profileQuery.data.profile.nextAction ?? '',
+      nextActionDueAt: formatDateOnly(profileQuery.data.profile.nextActionDueAt),
+      goLiveTargetDate: formatDateOnly(profileQuery.data.profile.goLiveTargetDate),
+      goLiveActualDate: formatDateOnly(profileQuery.data.profile.goLiveActualDate),
       publicStatusNote: profileQuery.data.profile.publicStatusNote ?? '',
       internalNotes: profileQuery.data.profile.internalNotes ?? '',
     })
@@ -264,6 +534,12 @@ function InternalCustomerSuccessPage() {
         queryKey: ['backoffice', 'customer-success', 'requests', selectedOrganizationId],
       }),
       queryClient.invalidateQueries({
+        queryKey: ['backoffice', 'support', 'queue', 'customer-success'],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['backoffice', 'support', 'queue'],
+      }),
+      queryClient.invalidateQueries({
         queryKey: ['customer-success', 'profile'],
       }),
       queryClient.invalidateQueries({
@@ -275,26 +551,33 @@ function InternalCustomerSuccessPage() {
   const updateProfileMutation = useMutation({
     mutationFn: async () => {
       const res =
-        await api.api.backoffice['customer-success'].organizations[':id'].profile.$put(
-          {
-            param: { id: selectedOrganizationId },
-            json: {
-              accountOwnerName: profileDraft.accountOwnerName,
-              accountOwnerEmail: profileDraft.accountOwnerEmail || null,
-              supportContactEmail: profileDraft.supportContactEmail || null,
-              onboardingStatus: profileDraft.onboardingStatus as ProfilePayload['profile']['onboardingStatus'],
-              migrationStatus: profileDraft.migrationStatus as ProfilePayload['profile']['migrationStatus'],
-              goLiveTargetDate: profileDraft.goLiveTargetDate
-                ? new Date(profileDraft.goLiveTargetDate).toISOString()
-                : null,
-              goLiveActualDate: profileDraft.goLiveActualDate
-                ? new Date(profileDraft.goLiveActualDate).toISOString()
-                : null,
-              publicStatusNote: profileDraft.publicStatusNote || null,
-              internalNotes: profileDraft.internalNotes || null,
-            },
+        await api.api.backoffice['customer-success'].organizations[':id'].profile.$put({
+          param: { id: selectedOrganizationId },
+          json: {
+            accountOwnerName: profileDraft.accountOwnerName,
+            accountOwnerEmail: profileDraft.accountOwnerEmail || null,
+            supportContactEmail: profileDraft.supportContactEmail || null,
+            internalOwnerUserId: profileDraft.internalOwnerUserId || null,
+            prioritySupport: profileDraft.prioritySupport,
+            slaTier: profileDraft.slaTier,
+            onboardingStatus: profileDraft.onboardingStatus,
+            migrationStatus: profileDraft.migrationStatus,
+            goLiveStatus: profileDraft.goLiveStatus,
+            healthStatus: profileDraft.healthStatus,
+            nextAction: profileDraft.nextAction || null,
+            nextActionDueAt: profileDraft.nextActionDueAt
+              ? new Date(profileDraft.nextActionDueAt).toISOString()
+              : null,
+            goLiveTargetDate: profileDraft.goLiveTargetDate
+              ? new Date(profileDraft.goLiveTargetDate).toISOString()
+              : null,
+            goLiveActualDate: profileDraft.goLiveActualDate
+              ? new Date(profileDraft.goLiveActualDate).toISOString()
+              : null,
+            publicStatusNote: profileDraft.publicStatusNote || null,
+            internalNotes: profileDraft.internalNotes || null,
           },
-        )
+        })
 
       if (!res.ok) {
         throw new Error(
@@ -305,7 +588,7 @@ function InternalCustomerSuccessPage() {
       return res.json()
     },
     onSuccess: async () => {
-      toast.success('Perfil operacional atualizado')
+      toast.success('Conta operacional atualizada')
       await refreshCurrentOrganization()
     },
     onError: (error) => {
@@ -324,15 +607,15 @@ function InternalCustomerSuccessPage() {
         throw new Error('Informe uma resposta antes de enviar')
       }
 
-      const res = await api.api.backoffice['customer-success'].requests[
-        ':id'
-      ].respond.$post({
-        param: { id: String(requestId) },
-        json: {
-          message,
-          publicVisible: true,
+      const res = await api.api.backoffice['customer-success'].requests[':id'].respond.$post(
+        {
+          param: { id: String(requestId) },
+          json: {
+            message,
+            publicVisible: true,
+          },
         },
-      })
+      )
 
       if (!res.ok) {
         throw new Error(await parseApiError(res, 'Falha ao responder'))
@@ -341,44 +624,43 @@ function InternalCustomerSuccessPage() {
       return res.json()
     },
     onSuccess: async (_, requestId) => {
-      toast.success(`Resposta enviada para a solicitação #${requestId}`)
+      toast.success(`Resposta enviada para o ticket #${requestId}`)
       setResponseDrafts((current) => ({ ...current, [requestId]: '' }))
       await refreshCurrentOrganization()
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Falha ao responder solicitação',
-      )
+      toast.error(error instanceof Error ? error.message : 'Falha ao responder ticket')
     },
   })
 
   const assignMutation = useMutation({
-    mutationFn: async (requestId: number) => {
-      const userId = session?.user?.id
-      if (!userId) {
-        throw new Error('Sessão inválida para assumir a solicitação')
-      }
-
-      const res = await api.api.backoffice['customer-success'].requests[
-        ':id'
-      ].assign.$post({
-        param: { id: String(requestId) },
-        json: { assignedToUserId: userId },
-      })
+    mutationFn: async ({
+      requestId,
+      assignedToUserId,
+    }: {
+      requestId: number
+      assignedToUserId: string | null
+    }) => {
+      const res = await api.api.backoffice['customer-success'].requests[':id'].assign.$post(
+        {
+          param: { id: String(requestId) },
+          json: { assignedToUserId },
+        },
+      )
 
       if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao assumir solicitação'))
+        throw new Error(await parseApiError(res, 'Falha ao atribuir ticket'))
       }
 
       return res.json()
     },
     onSuccess: async () => {
-      toast.success('Solicitação atribuída ao operador atual')
+      toast.success('Atribuição atualizada')
       await refreshCurrentOrganization()
     },
     onError: (error) => {
       toast.error(
-        error instanceof Error ? error.message : 'Falha ao assumir solicitação',
+        error instanceof Error ? error.message : 'Falha ao atualizar atribuição',
       )
     },
   })
@@ -389,14 +671,14 @@ function InternalCustomerSuccessPage() {
       status,
     }: {
       requestId: number
-      status: SupportRequest['status']
+      status: SupportRequestStatus
     }) => {
-      const res = await api.api.backoffice['customer-success'].requests[
-        ':id'
-      ].status.$post({
-        param: { id: String(requestId) },
-        json: { status },
-      })
+      const res = await api.api.backoffice['customer-success'].requests[':id'].status.$post(
+        {
+          param: { id: String(requestId) },
+          json: { status },
+        },
+      )
 
       if (!res.ok) {
         throw new Error(await parseApiError(res, 'Falha ao atualizar status'))
@@ -409,11 +691,242 @@ function InternalCustomerSuccessPage() {
       await refreshCurrentOrganization()
     },
     onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Falha ao atualizar status',
-      )
+      toast.error(error instanceof Error ? error.message : 'Falha ao atualizar status')
     },
   })
+
+  const takeOwnershipMutation = useMutation({
+    mutationFn: async () => {
+      const userId = session?.user?.id
+      if (!userId) {
+        throw new Error('Sessão inválida para assumir a conta')
+      }
+
+      const res =
+        await api.api.backoffice['customer-success'].organizations[':id'].profile.$put({
+          param: { id: selectedOrganizationId },
+          json: {
+            internalOwnerUserId: userId,
+          },
+        })
+
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao assumir a conta'))
+      }
+
+      return res.json()
+    },
+    onSuccess: async () => {
+      toast.success('Conta atribuída ao operador atual')
+      await refreshCurrentOrganization()
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Falha ao assumir a conta')
+    },
+  })
+
+  const organizationColumns = useMemo<ColumnDef<OrganizationQueueItem>[]>(
+    () => [
+      {
+        id: 'organization',
+        accessorFn: (row) => row.name,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Conta" />
+        ),
+        cell: ({ row }) => {
+          const organization = row.original
+          const isSelected = organization.id === selectedOrganizationId
+
+          return (
+            <div className="flex min-w-60 flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">{organization.name}</span>
+                {isSelected ? <Badge>Selecionada</Badge> : null}
+              </div>
+              <span className="text-sm text-muted-foreground">{organization.slug}</span>
+            </div>
+          )
+        },
+      },
+      {
+        id: 'workflow',
+        accessorFn: (row) => row.operationalSummary.workstreams.join(','),
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Workflow" />
+        ),
+        cell: ({ row }) => {
+          const organization = row.original
+          return (
+            <div className="flex min-w-56 flex-col gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={getHealthBadgeVariant(organization.operationalSummary.healthStatus)}>
+                  {healthLabels[organization.operationalSummary.healthStatus]}
+                </Badge>
+                <Badge variant="outline">
+                  {goLiveLabels[organization.operationalSummary.goLiveStatus]}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">
+                  {onboardingLabels[organization.profile.onboardingStatus]}
+                </Badge>
+                <Badge variant="outline">
+                  {migrationLabels[organization.profile.migrationStatus]}
+                </Badge>
+              </div>
+            </div>
+          )
+        },
+      },
+      {
+        id: 'owner',
+        accessorFn: (row) => row.internalOwnerUser?.name ?? '',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Owner" />
+        ),
+        cell: ({ row }) => {
+          const organization = row.original
+          return (
+            <div className="flex min-w-52 flex-col gap-1">
+              <span className="font-medium">
+                {organization.internalOwnerUser?.name ?? 'Sem responsável'}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {organization.accountOwnerName ?? 'Sem owner externo'}
+              </span>
+            </div>
+          )
+        },
+      },
+      {
+        id: 'risk',
+        accessorFn: (row) =>
+          row.operationalSummary.breachedRequestsCount +
+          row.operationalSummary.dueSoonRequestsCount +
+          row.operationalSummary.openRequestsCount,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Pressão" />
+        ),
+        cell: ({ row }) => {
+          const organization = row.original
+          return (
+            <div className="flex min-w-48 flex-col gap-1 text-sm">
+              <span>{organization.operationalSummary.openRequestsCount} tickets abertos</span>
+              <span className="text-muted-foreground">
+                {organization.operationalSummary.breachedRequestsCount} violados ·{' '}
+                {organization.operationalSummary.dueSoonRequestsCount} vencendo
+              </span>
+            </div>
+          )
+        },
+      },
+    ],
+    [selectedOrganizationId],
+  )
+
+  const supportQueueData = supportQueueQuery.data?.data ?? []
+  const filteredSupportQueue = useMemo(() => {
+    return supportQueueData.filter((request) => {
+      const isMine = request.assignedToUser?.id === session?.user?.id
+
+      switch (ticketFilter) {
+        case 'breached':
+          return request.slaStatus === 'BREACHED'
+        case 'due':
+          return request.slaStatus === 'DUE_SOON'
+        case 'open':
+          return request.status === 'OPEN' || request.status === 'IN_PROGRESS'
+        case 'mine':
+          return isMine
+        case 'waiting':
+          return request.status === 'WAITING_ON_CUSTOMER'
+        default:
+          return true
+      }
+    })
+  }, [session?.user?.id, supportQueueData, ticketFilter])
+
+  const supportQueueColumns = useMemo<ColumnDef<SupportQueueItem>[]>(
+    () => [
+      {
+        id: 'subject',
+        accessorFn: (row) => row.subject,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Ticket" />
+        ),
+        cell: ({ row }) => {
+          const request = row.original
+          return (
+            <div className="flex min-w-64 flex-col gap-1">
+              <span className="font-medium">{request.subject}</span>
+              <span className="text-sm text-muted-foreground">
+                {request.organization?.name ?? 'Organização removida'} ·{' '}
+                {requestPriorityLabels[request.priority]}
+              </span>
+            </div>
+          )
+        },
+      },
+      {
+        id: 'sla',
+        accessorFn: (row) => row.slaStatus,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="SLA" />
+        ),
+        cell: ({ row }) => {
+          const request = row.original
+          return (
+            <div className="flex min-w-44 flex-col gap-1">
+              <Badge variant={getSlaBadgeVariant(request.slaStatus)}>
+                {slaStatusLabels[request.slaStatus]}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {formatRelativeSla(request.timeToSlaMs)}
+              </span>
+            </div>
+          )
+        },
+      },
+      {
+        id: 'status',
+        accessorFn: (row) => row.status,
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Status" />
+        ),
+        cell: ({ row }) => {
+          const request = row.original
+          return (
+            <div className="flex min-w-44 flex-col gap-2">
+              <Badge variant="outline">{requestStatusLabels[request.status]}</Badge>
+              <Badge variant={getHealthBadgeVariant(request.organizationHealth)}>
+                {healthLabels[request.organizationHealth]}
+              </Badge>
+            </div>
+          )
+        },
+      },
+      {
+        id: 'owner',
+        accessorFn: (row) => row.assignedToUser?.name ?? '',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Responsável" />
+        ),
+        cell: ({ row }) => (
+          <div className="min-w-44 text-sm">
+            {row.original.assignedToUser?.name ?? 'Não atribuído'}
+          </div>
+        ),
+      },
+    ],
+    [],
+  )
+
+  const selectedOrganization =
+    organizationsQuery.data?.data.find(
+      (organization) => organization.id === selectedOrganizationId,
+    ) ?? null
+  const hasSelection = Boolean(selectedOrganizationId && selectedOrganization)
+  const organizationRequests = requestsQuery.data?.data ?? []
 
   if (accessQuery.isLoading || organizationsQuery.isLoading) {
     return <InternalCustomerSuccessSkeleton />
@@ -438,447 +951,829 @@ function InternalCustomerSuccessPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Backoffice</CardTitle>
+          <CardTitle>Customer Success</CardTitle>
           <CardDescription>
             {organizationsQuery.error instanceof Error
               ? organizationsQuery.error.message
-              : 'Falha ao carregar organizações'}
+              : 'Falha ao carregar contas'}
           </CardDescription>
         </CardHeader>
       </Card>
     )
   }
 
-  if (!selectedOrganizationId || profileQuery.isLoading || requestsQuery.isLoading) {
-    return <InternalCustomerSuccessSkeleton />
-  }
-
-  if (profileQuery.isError) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Backoffice</CardTitle>
-          <CardDescription>
-            {profileQuery.error instanceof Error
-              ? profileQuery.error.message
-              : 'Falha ao carregar perfil da organização'}
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    )
-  }
-
-  const requestList = requestsQuery.data?.data ?? []
+  const totalOrganizations = organizationsQuery.data?.data.length ?? 0
+  const attentionCount =
+    organizationsQuery.data?.data.filter((item) => item.operationalSummary.needsAttention)
+      .length ?? 0
+  const priorityCount =
+    organizationsQuery.data?.data.filter((item) => item.operationalSummary.prioritySupport)
+      .length ?? 0
+  const breachedCount =
+    supportQueueData.filter((request) => request.slaStatus === 'BREACHED').length ?? 0
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
-          Backoffice de Customer Success
+          Customer Success Operacional
         </h1>
         <p className="text-muted-foreground">
-          Superfície mínima para onboarding assistido, migração e resposta às
-          solicitações operacionais.
+          Workspace interno para onboarding, migração, suporte prioritário e SLA.
         </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          title="Contas acompanhadas"
+          value={String(totalOrganizations)}
+          description="Organizações LAB no radar operacional"
+        />
+        <SummaryCard
+          title="Precisam de atenção"
+          value={String(attentionCount)}
+          description="Contas com risco, bloqueio ou próxima ação vencida"
+        />
+        <SummaryCard
+          title="Priority support"
+          value={String(priorityCount)}
+          description="Contas com postura prioritária ou dedicada"
+        />
+        <SummaryCard
+          title="SLA violado"
+          value={String(breachedCount)}
+          description="Tickets abertos fora da janela alvo"
+        />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Organização Atendida</CardTitle>
+          <CardTitle>Fila de Contas</CardTitle>
           <CardDescription>
-            Escolha a organização para atualizar o pipeline operacional.
+            Filtre por risco ou workflow e abra a conta para operar onboarding,
+            migração e suporte no mesmo contexto.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Field>
-            <FieldLabel>Organização</FieldLabel>
-            <NativeSelect
-              value={selectedOrganizationId}
-              onChange={(event) => setSelectedOrganizationId(event.target.value)}
-              className="w-full"
-            >
-              {organizationsQuery.data.data.map((organization) => (
-                <NativeSelectOption key={organization.id} value={organization.id}>
-                  {organization.name}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-          {selectedOrganization ? (
-            <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-              <Badge variant="outline">{selectedOrganization.slug}</Badge>
-              {selectedOrganization.onboardingStatus ? (
-                <Badge variant="outline">
-                  Onboarding: {selectedOrganization.onboardingStatus}
-                </Badge>
-              ) : null}
-              {selectedOrganization.migrationStatus ? (
-                <Badge variant="outline">
-                  Migração: {selectedOrganization.migrationStatus}
-                </Badge>
-              ) : null}
-            </div>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {[
+              ['all', 'Todas'],
+              ['attention', 'Precisam de atenção'],
+              ['critical', 'Críticas'],
+              ['priority', 'Priority support'],
+              ['onboarding', 'Onboarding ativo'],
+              ['migration', 'Migração ativa'],
+            ].map(([value, label]) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant={organizationFilter === value ? 'default' : 'outline'}
+                onClick={() =>
+                  setOrganizationFilter(
+                    value as
+                      | 'all'
+                      | 'attention'
+                      | 'critical'
+                      | 'priority'
+                      | 'onboarding'
+                      | 'migration',
+                  )
+                }
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar por conta, slug, owner ou operador"
+          />
+
+          <DataTable
+            columns={organizationColumns}
+            data={filteredOrganizations}
+            onRowClick={(row) => setSelectedOrganizationId(row.id)}
+          />
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Perfil Operacional</CardTitle>
-            <CardDescription>
-              Status público, owner da conta, contato de suporte e go-live.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault()
-                updateProfileMutation.mutate()
-              }}
-            >
-              <FieldGroup>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field>
-                    <FieldLabel>Plano</FieldLabel>
-                    <Input
-                      value={profileQuery.data.plan.name}
-                      disabled
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Modo de suporte</FieldLabel>
-                    <Input
-                      value={profileQuery.data.supportPolicy.supportMode}
-                      disabled
-                    />
-                    <FieldDescription>
-                      SLA derivado automaticamente do plano.
-                    </FieldDescription>
-                  </Field>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field>
-                    <FieldLabel>Account owner</FieldLabel>
-                    <Input
-                      value={profileDraft.accountOwnerName}
-                      onChange={(event) =>
-                        setProfileDraft((current) => ({
-                          ...current,
-                          accountOwnerName: event.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Email do owner</FieldLabel>
-                    <Input
-                      type="email"
-                      value={profileDraft.accountOwnerEmail}
-                      onChange={(event) =>
-                        setProfileDraft((current) => ({
-                          ...current,
-                          accountOwnerEmail: event.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                </div>
-
-                <Field>
-                  <FieldLabel>Email de suporte</FieldLabel>
-                  <Input
-                    type="email"
-                    value={profileDraft.supportContactEmail}
-                    onChange={(event) =>
-                      setProfileDraft((current) => ({
-                        ...current,
-                        supportContactEmail: event.target.value,
-                      }))
-                    }
-                  />
-                </Field>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field>
-                    <FieldLabel>Onboarding</FieldLabel>
-                    <NativeSelect
-                      value={profileDraft.onboardingStatus}
-                      onChange={(event) =>
-                        setProfileDraft((current) => ({
-                          ...current,
-                          onboardingStatus: event.target.value,
-                        }))
-                      }
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Conta Selecionada</CardTitle>
+              <CardDescription>
+                {selectedOrganization
+                  ? `${selectedOrganization.name} · ${selectedOrganization.slug}`
+                  : 'Selecione uma conta na fila operacional'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {selectedOrganization ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge
+                      variant={getHealthBadgeVariant(
+                        selectedOrganization.operationalSummary.healthStatus,
+                      )}
                     >
-                      {[
-                        'NOT_STARTED',
-                        'DISCOVERY',
-                        'CONFIGURATION',
-                        'TRAINING',
-                        'LIVE',
-                        'BLOCKED',
-                      ].map((status) => (
-                        <NativeSelectOption key={status} value={status}>
-                          {status}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                  <Field>
-                    <FieldLabel>Migração</FieldLabel>
-                    <NativeSelect
-                      value={profileDraft.migrationStatus}
-                      onChange={(event) =>
-                        setProfileDraft((current) => ({
-                          ...current,
-                          migrationStatus: event.target.value,
-                        }))
+                      {
+                        healthLabels[
+                          selectedOrganization.operationalSummary.healthStatus
+                        ]
                       }
-                    >
-                      {[
-                        'NOT_REQUIRED',
-                        'PLANNING',
-                        'IN_PROGRESS',
-                        'VALIDATION',
-                        'COMPLETED',
-                        'BLOCKED',
-                      ].map((status) => (
-                        <NativeSelectOption key={status} value={status}>
-                          {status}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                </div>
+                    </Badge>
+                    <Badge variant="outline">
+                      {goLiveLabels[selectedOrganization.operationalSummary.goLiveStatus]}
+                    </Badge>
+                    <Badge variant="outline">
+                      SLA {slaTierLabels[selectedOrganization.operationalSummary.effectiveSlaTier]}
+                    </Badge>
+                    {selectedOrganization.operationalSummary.prioritySupport ? (
+                      <Badge>Priority support</Badge>
+                    ) : null}
+                  </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field>
-                    <FieldLabel>Meta de go-live</FieldLabel>
-                    <Input
-                      type="date"
-                      value={profileDraft.goLiveTargetDate}
-                      onChange={(event) =>
-                        setProfileDraft((current) => ({
-                          ...current,
-                          goLiveTargetDate: event.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Go-live real</FieldLabel>
-                    <Input
-                      type="date"
-                      value={profileDraft.goLiveActualDate}
-                      onChange={(event) =>
-                        setProfileDraft((current) => ({
-                          ...current,
-                          goLiveActualDate: event.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                </div>
-
-                <Field>
-                  <FieldLabel>Status público</FieldLabel>
-                  <Textarea
-                    rows={4}
-                    value={profileDraft.publicStatusNote}
-                    onChange={(event) =>
-                      setProfileDraft((current) => ({
-                        ...current,
-                        publicStatusNote: event.target.value,
-                      }))
-                    }
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel>Notas internas</FieldLabel>
-                  <Textarea
-                    rows={6}
-                    value={profileDraft.internalNotes}
-                    onChange={(event) =>
-                      setProfileDraft((current) => ({
-                        ...current,
-                        internalNotes: event.target.value,
-                      }))
-                    }
-                  />
-                </Field>
-              </FieldGroup>
-
-              <Button type="submit" disabled={updateProfileMutation.isPending}>
-                {updateProfileMutation.isPending
-                  ? 'Salvando...'
-                  : 'Salvar perfil operacional'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Solicitações da Organização</CardTitle>
-            <CardDescription>
-              Timeline simples para atribuição, resposta e mudança de status.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {requestList.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhuma solicitação registrada para esta organização.
-              </p>
-            ) : (
-              requestList.map((request) => (
-                <div
-                  key={request.id}
-                  className="space-y-4 rounded-lg border p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="font-medium">{request.subject}</p>
-                      <p className="text-xs text-muted-foreground">
-                        #{request.id} • {request.category} • {request.priority}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm font-medium">Próxima ação</p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {selectedOrganization.profile.nextAction ?? 'Nenhuma ação definida'}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Prazo: {formatDateTime(selectedOrganization.profile.nextActionDueAt)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{request.status}</Badge>
-                      <NativeSelect
-                        size="sm"
-                        value={request.status}
+                    <div className="rounded-lg border p-4">
+                      <p className="text-sm font-medium">Responsável interno</p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {selectedOrganization.internalOwnerUser?.name ?? 'Não definido'}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Último toque: {formatDateTime(selectedOrganization.profile.lastTouchedAt)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <MiniMetric
+                      label="Tickets abertos"
+                      value={selectedOrganization.operationalSummary.openRequestsCount}
+                    />
+                    <MiniMetric
+                      label="SLA vencendo"
+                      value={selectedOrganization.operationalSummary.dueSoonRequestsCount}
+                    />
+                    <MiniMetric
+                      label="SLA violado"
+                      value={selectedOrganization.operationalSummary.breachedRequestsCount}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {selectedOrganization.operationalSummary.workstreams.map((item) => (
+                      <Badge key={item} variant="outline">
+                        {item}
+                      </Badge>
+                    ))}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => takeOwnershipMutation.mutate()}
+                      disabled={takeOwnershipMutation.isPending}
+                    >
+                      Assumir conta
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma conta selecionada.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Postura Operacional</CardTitle>
+              <CardDescription>
+                Atualize owner interno, saúde da conta, próximo passo e comunicação.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {profileQuery.isLoading ? (
+                <InternalCustomerSuccessSkeleton compact />
+              ) : !hasSelection ? (
+                <p className="text-sm text-muted-foreground">
+                  Ajuste os filtros ou selecione uma conta na fila operacional.
+                </p>
+              ) : profileQuery.isError ? (
+                <p className="text-sm text-destructive">
+                  {profileQuery.error instanceof Error
+                    ? profileQuery.error.message
+                    : 'Falha ao carregar detalhe da conta'}
+                </p>
+              ) : (
+                <form
+                  className="space-y-5"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    updateProfileMutation.mutate()
+                  }}
+                >
+                  <FieldGroup>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field>
+                        <FieldLabel>Plano</FieldLabel>
+                        <Input value={profileQuery.data.plan.name} disabled />
+                      </Field>
+                      <Field>
+                        <FieldLabel>Modo de suporte</FieldLabel>
+                        <Input value={profileQuery.data.supportPolicy.supportMode} disabled />
+                        <FieldDescription>
+                          Meta de primeira resposta: {' '}
+                          {profileQuery.data.supportPolicy.targetFirstResponseBusinessHours}h
+                        </FieldDescription>
+                      </Field>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field>
+                        <FieldLabel>Owner da conta</FieldLabel>
+                        <Input
+                          value={profileDraft.accountOwnerName}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              accountOwnerName: event.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel>Email do owner</FieldLabel>
+                        <Input
+                          type="email"
+                          value={profileDraft.accountOwnerEmail}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              accountOwnerEmail: event.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field>
+                        <FieldLabel>Contato de suporte</FieldLabel>
+                        <Input
+                          type="email"
+                          value={profileDraft.supportContactEmail}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              supportContactEmail: event.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel>Owner interno</FieldLabel>
+                        <NativeSelect
+                          value={profileDraft.internalOwnerUserId}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              internalOwnerUserId: event.target.value,
+                            }))
+                          }
+                        >
+                          <NativeSelectOption value="">Sem owner</NativeSelectOption>
+                          {profileQuery.data.operators.map((operator) => (
+                            <NativeSelectOption key={operator.id} value={operator.id}>
+                              {operator.name}
+                            </NativeSelectOption>
+                          ))}
+                        </NativeSelect>
+                      </Field>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field>
+                        <FieldLabel>Onboarding</FieldLabel>
+                        <NativeSelect
+                          value={profileDraft.onboardingStatus}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              onboardingStatus: event.target.value as OnboardingStatus,
+                            }))
+                          }
+                        >
+                          {Object.entries(onboardingLabels).map(([value, label]) => (
+                            <NativeSelectOption key={value} value={value}>
+                              {label}
+                            </NativeSelectOption>
+                          ))}
+                        </NativeSelect>
+                      </Field>
+                      <Field>
+                        <FieldLabel>Migração</FieldLabel>
+                        <NativeSelect
+                          value={profileDraft.migrationStatus}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              migrationStatus: event.target.value as MigrationStatus,
+                            }))
+                          }
+                        >
+                          {Object.entries(migrationLabels).map(([value, label]) => (
+                            <NativeSelectOption key={value} value={value}>
+                              {label}
+                            </NativeSelectOption>
+                          ))}
+                        </NativeSelect>
+                      </Field>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <Field>
+                        <FieldLabel>Go-live</FieldLabel>
+                        <NativeSelect
+                          value={profileDraft.goLiveStatus}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              goLiveStatus: event.target.value as GoLiveStatus,
+                            }))
+                          }
+                        >
+                          {Object.entries(goLiveLabels).map(([value, label]) => (
+                            <NativeSelectOption key={value} value={value}>
+                              {label}
+                            </NativeSelectOption>
+                          ))}
+                        </NativeSelect>
+                      </Field>
+                      <Field>
+                        <FieldLabel>Saúde</FieldLabel>
+                        <NativeSelect
+                          value={profileDraft.healthStatus}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              healthStatus: event.target.value as HealthStatus,
+                            }))
+                          }
+                        >
+                          {Object.entries(healthLabels).map(([value, label]) => (
+                            <NativeSelectOption key={value} value={value}>
+                              {label}
+                            </NativeSelectOption>
+                          ))}
+                        </NativeSelect>
+                      </Field>
+                      <Field>
+                        <FieldLabel>SLA da conta</FieldLabel>
+                        <NativeSelect
+                          value={profileDraft.slaTier}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              slaTier: event.target.value as SlaTier,
+                            }))
+                          }
+                        >
+                          {Object.entries(slaTierLabels).map(([value, label]) => (
+                            <NativeSelectOption key={value} value={value}>
+                              {label}
+                            </NativeSelectOption>
+                          ))}
+                        </NativeSelect>
+                      </Field>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field>
+                        <FieldLabel>Meta de go-live</FieldLabel>
+                        <Input
+                          type="date"
+                          value={profileDraft.goLiveTargetDate}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              goLiveTargetDate: event.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel>Go-live real</FieldLabel>
+                        <Input
+                          type="date"
+                          value={profileDraft.goLiveActualDate}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              goLiveActualDate: event.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                      <Field>
+                        <FieldLabel>Próxima ação</FieldLabel>
+                        <Input
+                          value={profileDraft.nextAction}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              nextAction: event.target.value,
+                            }))
+                          }
+                          placeholder="Ex.: validar planilha de migração e reagendar treinamento"
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel>Prazo</FieldLabel>
+                        <Input
+                          type="date"
+                          value={profileDraft.nextActionDueAt}
+                          onChange={(event) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              nextActionDueAt: event.target.value,
+                            }))
+                          }
+                        />
+                      </Field>
+                    </div>
+
+                    <Field>
+                      <FieldLabel>Priority support</FieldLabel>
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={profileDraft.prioritySupport}
+                          onCheckedChange={(checked) =>
+                            setProfileDraft((current) => ({
+                              ...current,
+                              prioritySupport: checked,
+                            }))
+                          }
+                        />
+                        <FieldDescription>
+                          Destaca a conta na fila e antecipa o tratamento operacional.
+                        </FieldDescription>
+                      </div>
+                    </Field>
+
+                    <Field>
+                      <FieldLabel>Status público</FieldLabel>
+                      <Textarea
+                        rows={4}
+                        value={profileDraft.publicStatusNote}
                         onChange={(event) =>
+                          setProfileDraft((current) => ({
+                            ...current,
+                            publicStatusNote: event.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel>Notas internas</FieldLabel>
+                      <Textarea
+                        rows={5}
+                        value={profileDraft.internalNotes}
+                        onChange={(event) =>
+                          setProfileDraft((current) => ({
+                            ...current,
+                            internalNotes: event.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+
+                  <Button type="submit" disabled={updateProfileMutation.isPending}>
+                    {updateProfileMutation.isPending
+                      ? 'Salvando...'
+                      : 'Salvar postura operacional'}
+                  </Button>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Timeline da Conta</CardTitle>
+              <CardDescription>
+                Mudanças operacionais recentes de onboarding, suporte e postura.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {profileQuery.isLoading ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <Skeleton key={index} className="h-16 w-full" />
+                ))
+              ) : !hasSelection ? (
+                <p className="text-sm text-muted-foreground">
+                  Selecione uma conta para ver a timeline operacional.
+                </p>
+              ) : profileQuery.data?.timeline.length ? (
+                profileQuery.data.timeline.map((event) => (
+                  <div key={event.id} className="rounded-lg border p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{event.action}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDateTime(event.createdAt)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {event.actorUser?.name ?? 'Sistema'}
+                    </p>
+                    {event.details ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {JSON.stringify(event.details)}
+                      </p>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma atividade operacional registrada para esta conta.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Tickets da Conta</CardTitle>
+              <CardDescription>
+                Responda, atribua ou mova o status sem sair do contexto da conta.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {requestsQuery.isLoading ? (
+                Array.from({ length: 3 }).map((_, index) => (
+                  <Skeleton key={index} className="h-40 w-full" />
+                ))
+              ) : !hasSelection ? (
+                <p className="text-sm text-muted-foreground">
+                  Selecione uma conta para operar seus tickets.
+                </p>
+              ) : requestsQuery.isError ? (
+                <p className="text-sm text-destructive">
+                  {requestsQuery.error instanceof Error
+                    ? requestsQuery.error.message
+                    : 'Falha ao carregar tickets'}
+                </p>
+              ) : organizationRequests.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Nenhum ticket registrado para esta conta.
+                </p>
+              ) : (
+                organizationRequests.map((request) => (
+                  <div key={request.id} className="space-y-4 rounded-lg border p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <p className="font-medium">{request.subject}</p>
+                        <p className="text-xs text-muted-foreground">
+                          #{request.id} · {request.category} ·{' '}
+                          {requestPriorityLabels[request.priority]}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant={getPriorityBadgeVariant(request.priority)}>
+                          {requestPriorityLabels[request.priority]}
+                        </Badge>
+                        <Badge variant={getSlaBadgeVariant(request.slaStatus)}>
+                          {slaStatusLabels[request.slaStatus]}
+                        </Badge>
+                        <Badge variant="outline">
+                          {requestStatusLabels[request.status]}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-muted-foreground">
+                      {request.description}
+                    </p>
+
+                    <div className="text-xs text-muted-foreground">
+                      SLA: {formatRelativeSla(request.timeToSlaMs)} · Responsável:{' '}
+                      {request.assignedToUser?.name ?? 'Não atribuído'}
+                    </div>
+
+                    <Field>
+                      <FieldLabel>Resposta pública</FieldLabel>
+                      <Textarea
+                        rows={3}
+                        value={responseDrafts[request.id] ?? ''}
+                        onChange={(event) =>
+                          setResponseDrafts((current) => ({
+                            ...current,
+                            [request.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="Resposta visível para o laboratório"
+                      />
+                    </Field>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          assignMutation.mutate({
+                            requestId: request.id,
+                            assignedToUserId: session?.user?.id ?? null,
+                          })
+                        }
+                        disabled={assignMutation.isPending}
+                      >
+                        Assumir
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => respondMutation.mutate(request.id)}
+                        disabled={respondMutation.isPending}
+                      >
+                        Responder
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
                           updateStatusMutation.mutate({
                             requestId: request.id,
-                            status: event.target.value as SupportRequest['status'],
+                            status: 'WAITING_ON_CUSTOMER',
                           })
                         }
                       >
-                        {[
-                          'OPEN',
-                          'IN_PROGRESS',
-                          'WAITING_ON_CUSTOMER',
-                          'RESOLVED',
-                          'CLOSED',
-                        ].map((status) => (
-                          <NativeSelectOption key={status} value={status}>
-                            {status}
-                          </NativeSelectOption>
+                        Aguardar laboratório
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          updateStatusMutation.mutate({
+                            requestId: request.id,
+                            status: 'RESOLVED',
+                          })
+                        }
+                      >
+                        Resolver
+                      </Button>
+                    </div>
+
+                    {request.events.length > 0 ? (
+                      <div className="space-y-2 border-t pt-3">
+                        {request.events.map((event, index) => (
+                          <div
+                            key={`${request.id}-${index}-${event.createdAt}`}
+                            className="text-sm"
+                          >
+                            <p>{event.message}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {event.actorUser?.name ?? 'Sistema'} ·{' '}
+                              {formatDateTime(event.createdAt)}
+                              {event.publicVisible ? ' · Público' : ' · Interno'}
+                            </p>
+                          </div>
                         ))}
-                      </NativeSelect>
-                    </div>
+                      </div>
+                    ) : null}
                   </div>
-
-                  <p className="text-sm text-muted-foreground">
-                    {request.description}
-                  </p>
-
-                  <div className="text-xs text-muted-foreground">
-                    Solicitante: {request.requestedByUser?.name ?? 'N/A'}
-                    {request.assignedToUser
-                      ? ` • Responsável: ${request.assignedToUser.name}`
-                      : ' • Sem responsável'}
-                  </div>
-
-                  <Field>
-                    <FieldLabel>Resposta pública</FieldLabel>
-                    <Textarea
-                      rows={3}
-                      value={responseDrafts[request.id] ?? ''}
-                      onChange={(event) =>
-                        setResponseDrafts((current) => ({
-                          ...current,
-                          [request.id]: event.target.value,
-                        }))
-                      }
-                      placeholder="Resposta operacional visível para o laboratório."
-                    />
-                  </Field>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => assignMutation.mutate(request.id)}
-                      disabled={assignMutation.isPending}
-                    >
-                      Assumir
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => respondMutation.mutate(request.id)}
-                      disabled={respondMutation.isPending}
-                    >
-                      Responder
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        updateStatusMutation.mutate({
-                          requestId: request.id,
-                          status: 'WAITING_ON_CUSTOMER',
-                        })
-                      }
-                    >
-                      Aguardar laboratório
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        updateStatusMutation.mutate({
-                          requestId: request.id,
-                          status: 'RESOLVED',
-                        })
-                      }
-                    >
-                      Marcar como resolvido
-                    </Button>
-                  </div>
-
-                  {request.events.length > 0 ? (
-                    <div className="space-y-2 border-t pt-3">
-                      {request.events.map((event, index) => (
-                        <div
-                          key={`${request.id}-${index}-${event.createdAt}`}
-                          className="text-sm"
-                        >
-                          <p>{event.message}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {event.actorUser?.name ?? 'Sistema'} •{' '}
-                            {new Intl.DateTimeFormat('pt-BR', {
-                              dateStyle: 'medium',
-                              timeStyle: 'short',
-                            }).format(new Date(event.createdAt))}
-                            {event.publicVisible ? ' • Público' : ' • Interno'}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Fila Global de Tickets</CardTitle>
+          <CardDescription>
+            Visão consolidada para priorização rápida por SLA, dono e status.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {[
+              ['all', 'Todos'],
+              ['breached', 'SLA violado'],
+              ['due', 'SLA vencendo'],
+              ['open', 'Em tratamento'],
+              ['mine', 'Meus tickets'],
+              ['waiting', 'Aguardando laboratório'],
+            ].map(([value, label]) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant={ticketFilter === value ? 'default' : 'outline'}
+                onClick={() =>
+                  setTicketFilter(
+                    value as
+                      | 'all'
+                      | 'breached'
+                      | 'due'
+                      | 'open'
+                      | 'mine'
+                      | 'waiting',
+                  )
+                }
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+
+          <DataTable
+            columns={supportQueueColumns}
+            data={filteredSupportQueue}
+            isLoading={supportQueueQuery.isLoading}
+            onRowClick={(row) => {
+              if (row.organization?.id) {
+                setSelectedOrganizationId(row.organization.id)
+              }
+            }}
+          />
+        </CardContent>
+      </Card>
     </div>
   )
 }
 
-function InternalCustomerSuccessSkeleton() {
+function SummaryCard(props: {
+  title: string
+  value: string
+  description: string
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{props.title}</CardTitle>
+        <CardDescription>{props.description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p className="text-3xl font-semibold">{props.value}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function MiniMetric(props: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border p-4">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+        {props.label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold">{props.value}</p>
+    </div>
+  )
+}
+
+function InternalCustomerSuccessSkeleton(props?: { compact?: boolean }) {
+  if (props?.compact) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <Skeleton className="h-10 w-80" />
-      <Skeleton className="h-36 rounded-xl" />
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Skeleton className="h-[720px] rounded-xl" />
-        <Skeleton className="h-[720px] rounded-xl" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-32 w-full" />
+        ))}
+      </div>
+      <Skeleton className="h-96 w-full" />
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Skeleton className="h-[720px] w-full" />
+        <Skeleton className="h-[720px] w-full" />
       </div>
     </div>
   )
