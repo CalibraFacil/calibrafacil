@@ -20,14 +20,20 @@ import {
   formatIntegrationCustomerAddress,
   normalizeGenericFinancialErpConfig,
   type GenericFinancialErpConnectionConfig,
+  type IntegrationDependencyWarning,
   type IntegrationBillingDocumentPayload,
   type IntegrationCustomerPayload,
+  type IntegrationReadinessSummary,
+  type IntegrationReadinessStatus,
   type IntegrationServiceOrderPayload,
+  type IntegrationSetupStatus,
   type IntegrationSyncStatus,
   type IntegrationSyncTarget,
+  type IntegrationTargetCoverageSummary,
+  type IntegrationTargetSyncSummary,
   type IntegrationSyncTrigger,
 } from "@calibra-facil/shared";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 
 export interface IntegrationsEnv {
   INTEGRATIONS_MASTER_KEY?: string;
@@ -45,6 +51,37 @@ type GenericConnectionRecord = {
   integration: typeof organizationIntegration.$inferSelect;
   connection: typeof integrationConnection.$inferSelect;
 };
+
+export interface IntegrationOverview {
+  readiness: IntegrationReadinessSummary;
+  targets: IntegrationTargetSyncSummary[];
+  syncSummary: {
+    lastRunAt: string | null;
+    lastSuccessfulRunAt: string | null;
+    lastErrorAt: string | null;
+    hasRecentFailures: boolean;
+  };
+}
+
+function formatCustomerAddress(
+  address: typeof customer.$inferSelect["address"],
+): string | null {
+  if (!address) return null;
+
+  const parts = [
+    address.street,
+    address.number,
+    address.neighbourhood,
+    address.city,
+    address.state,
+    address.cep,
+  ].filter(
+    (value): value is string =>
+      typeof value === "string" && value.trim().length > 0,
+  );
+
+  return parts.length > 0 ? parts.join(", ") : null;
+}
 
 function getMasterKey(env: IntegrationsEnv) {
   if (!env.INTEGRATIONS_MASTER_KEY) {
@@ -405,6 +442,383 @@ async function loadTargetPayloads(
     case "billing_document":
       return loadBillingDocumentPayloads(organizationId, limit);
   }
+}
+
+async function countLocalTargetRecords(
+  organizationId: string,
+  target: IntegrationSyncTarget,
+) {
+  switch (target) {
+    case "customer": {
+      const [row] = await db
+        .select({ total: count() })
+        .from(customer)
+        .where(eq(customer.labOrganizationId, organizationId));
+      return Number(row?.total ?? 0);
+    }
+    case "service_order": {
+      const [row] = await db
+        .select({ total: count() })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.organizationId, organizationId),
+            inArray(calibrationJob.status, [
+              "DRAFT",
+              "IN_PROGRESS",
+              "REVIEW",
+              "APPROVED",
+              "SUPERSEDED",
+            ]),
+          ),
+        );
+      return Number(row?.total ?? 0);
+    }
+    case "billing_document": {
+      const rows = await db
+        .select({
+          amount: service.price,
+        })
+        .from(calibrationJob)
+        .leftJoin(service, eq(calibrationJob.serviceId, service.id))
+        .where(
+          and(
+            eq(calibrationJob.organizationId, organizationId),
+            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+          ),
+        );
+      return rows.filter((row) => typeof row.amount === "number" && row.amount > 0)
+        .length;
+    }
+  }
+}
+
+async function countLinkedTargetRecords(
+  integrationId: string,
+  target: IntegrationSyncTarget,
+) {
+  const [row] = await db
+    .select({ total: count() })
+    .from(integrationObjectLink)
+    .where(
+      and(
+        eq(integrationObjectLink.integrationId, integrationId),
+        eq(integrationObjectLink.target, target),
+      ),
+    );
+
+  return Number(row?.total ?? 0);
+}
+
+function hasRemoteValidation(record: GenericConnectionRecord) {
+  return Boolean(
+    record.integration.lastValidatedAt && !record.integration.lastValidationError,
+  );
+}
+
+function buildDependencyWarnings(params: {
+  target: IntegrationSyncTarget;
+  integrationStatus: typeof organizationIntegration.$inferSelect["status"];
+  validated: boolean;
+  coverageByTarget: Record<IntegrationSyncTarget, IntegrationTargetCoverageSummary>;
+}) {
+  const warnings: IntegrationDependencyWarning[] = [];
+
+  if (params.integrationStatus !== "ACTIVE") {
+    warnings.push({
+      code: "INTEGRATION_DISABLED",
+      target: params.target,
+      severity: "error",
+      message: "Ative a integração antes de sincronizar este alvo.",
+    });
+  }
+
+  if (!params.validated) {
+    warnings.push({
+      code: "VALIDATION_REQUIRED",
+      target: params.target,
+      severity: "error",
+      message: "Valide a conexão antes de executar sincronizações.",
+    });
+  }
+
+  if (params.target === "service_order") {
+    const customerCoverage = params.coverageByTarget.customer;
+
+    if (customerCoverage.localCount > customerCoverage.linkedCount) {
+      warnings.push({
+        code: "CUSTOMERS_NOT_SYNCED",
+        target: params.target,
+        severity: "error",
+        message:
+          "Existem clientes locais sem vínculo remoto. Sincronize clientes antes das ordens de serviço.",
+      });
+    }
+  }
+
+  if (params.target === "billing_document") {
+    const customerCoverage = params.coverageByTarget.customer;
+    const serviceOrderCoverage = params.coverageByTarget.service_order;
+
+    if (customerCoverage.localCount > customerCoverage.linkedCount) {
+      warnings.push({
+        code: "CUSTOMERS_NOT_SYNCED",
+        target: params.target,
+        severity: "error",
+        message:
+          "Existem clientes locais sem vínculo remoto. Sincronize clientes antes do faturamento.",
+      });
+    }
+
+    if (serviceOrderCoverage.localCount > serviceOrderCoverage.linkedCount) {
+      warnings.push({
+        code: "SERVICE_ORDERS_NOT_SYNCED",
+        target: params.target,
+        severity: "error",
+        message:
+          "Existem ordens de serviço sem vínculo remoto. Sincronize ordens antes do faturamento.",
+      });
+    }
+  }
+
+  return warnings;
+}
+
+function dedupeDependencyWarnings(
+  warnings: IntegrationDependencyWarning[],
+): IntegrationDependencyWarning[] {
+  const map = new Map<string, IntegrationDependencyWarning>();
+
+  for (const warning of warnings) {
+    const key = `${warning.target}:${warning.code}`;
+    if (!map.has(key)) {
+      map.set(key, warning);
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function buildSetupStatus(params: {
+  record: GenericConnectionRecord;
+  validated: boolean;
+}): IntegrationSetupStatus {
+  const baseUrl = params.record.connection.config.baseUrl.trim();
+
+  if (!baseUrl || !params.record.connection.encryptedSecret) {
+    return "NOT_CONFIGURED";
+  }
+
+  if (params.record.integration.lastValidationError) {
+    return "ACTION_REQUIRED";
+  }
+
+  if (params.validated) {
+    return "READY";
+  }
+
+  return "CONFIGURED";
+}
+
+function buildReadinessStatus(params: {
+  setupStatus: IntegrationSetupStatus;
+  canSync: boolean;
+  dependencyWarnings: IntegrationDependencyWarning[];
+}): IntegrationReadinessStatus {
+  if (params.setupStatus === "NOT_CONFIGURED") {
+    return "NOT_READY";
+  }
+
+  if (!params.canSync) {
+    return "NOT_READY";
+  }
+
+  return params.dependencyWarnings.length > 0 ? "DEGRADED" : "READY";
+}
+
+function buildPreviewSampleRecord(
+  payload:
+    | IntegrationCustomerPayload
+    | IntegrationServiceOrderPayload
+    | IntegrationBillingDocumentPayload,
+) {
+  if ("name" in payload) {
+    return {
+      externalId: payload.externalId,
+      label: payload.name,
+      subtitle: payload.email ?? payload.taxId ?? null,
+    };
+  }
+
+  if ("assetName" in payload) {
+    return {
+      externalId: payload.externalId,
+      label: `OS ${payload.jobId}`,
+      subtitle:
+        payload.customerName ??
+        payload.assetName ??
+        payload.serviceName ??
+        payload.unitName ??
+        null,
+    };
+  }
+
+  return {
+    externalId: payload.externalId,
+    label: `Faturamento ${payload.jobId}`,
+    subtitle:
+      payload.customerName ?? payload.serviceName ?? payload.unitName ?? null,
+  };
+}
+
+export async function buildIntegrationOverview(
+  record: GenericConnectionRecord,
+): Promise<IntegrationOverview> {
+  const [recentRuns, recentErrorEvent] = await Promise.all([
+    db.query.integrationSyncRun.findMany({
+      where: eq(integrationSyncRun.integrationId, record.integration.id),
+      orderBy: [desc(integrationSyncRun.createdAt)],
+      limit: 50,
+    }),
+    db.query.integrationEventLog.findFirst({
+      where: and(
+        eq(integrationEventLog.integrationId, record.integration.id),
+        eq(integrationEventLog.level, "error"),
+      ),
+      orderBy: [desc(integrationEventLog.createdAt)],
+    }),
+  ]);
+
+  const coverageEntries = await Promise.all(
+    (["customer", "service_order", "billing_document"] as const).map(
+      async (target) => {
+        const [localCount, linkedCount] = await Promise.all([
+          countLocalTargetRecords(record.integration.organizationId, target),
+          countLinkedTargetRecords(record.integration.id, target),
+        ]);
+
+        return [
+          target,
+          {
+            target,
+            localCount,
+            linkedCount,
+            unlinkedCount: Math.max(localCount - linkedCount, 0),
+          } satisfies IntegrationTargetCoverageSummary,
+        ] as const;
+      },
+    ),
+  );
+
+  const coverageByTarget = Object.fromEntries(coverageEntries) as Record<
+    IntegrationSyncTarget,
+    IntegrationTargetCoverageSummary
+  >;
+
+  const validated = hasRemoteValidation(record);
+  const targets: IntegrationTargetSyncSummary[] = (
+    ["customer", "service_order", "billing_document"] as const
+  ).map((target) => {
+    const targetRuns = recentRuns.filter((run) => run.target === target);
+    const lastRun = targetRuns[0] ?? null;
+    const lastSuccessfulRun =
+      targetRuns.find(
+        (run) =>
+          run.status === "COMPLETED" ||
+          (run.status === "PARTIAL" && run.successCount > 0),
+      ) ?? null;
+    const warnings = buildDependencyWarnings({
+      target,
+      integrationStatus: record.integration.status,
+      validated,
+      coverageByTarget,
+    });
+
+    return {
+      target,
+      lastRunAt: lastRun?.createdAt?.toISOString?.() ?? null,
+      lastSuccessfulRunAt: lastSuccessfulRun?.finishedAt?.toISOString?.() ?? null,
+      lastStatus: lastRun?.status ?? null,
+      processedCount: lastRun?.processedCount ?? 0,
+      successCount: lastRun?.successCount ?? 0,
+      errorCount: lastRun?.errorCount ?? 0,
+      blocked: warnings.some((warning) => warning.severity === "error"),
+      warnings,
+      coverage: coverageByTarget[target],
+    };
+  });
+
+  const dependencyWarnings = dedupeDependencyWarnings(
+    targets.flatMap((target) => target.warnings),
+  );
+  const setupStatus = buildSetupStatus({
+    record,
+    validated,
+  });
+  const canSync = validated && record.integration.status === "ACTIVE";
+  const readiness: IntegrationReadinessSummary = {
+    setupStatus,
+    readinessStatus: buildReadinessStatus({
+      setupStatus,
+      canSync,
+      dependencyWarnings,
+    }),
+    validationRequired: !validated,
+    canSync,
+    lastValidatedAt: record.integration.lastValidatedAt?.toISOString?.() ?? null,
+    lastValidationError: record.integration.lastValidationError,
+    dependencyWarnings,
+  };
+
+  const lastRun = recentRuns[0] ?? null;
+  const lastSuccessfulRun =
+    recentRuns.find(
+      (run) =>
+        run.status === "COMPLETED" ||
+        (run.status === "PARTIAL" && run.successCount > 0),
+    ) ?? null;
+
+  return {
+    readiness,
+    targets,
+    syncSummary: {
+      lastRunAt: lastRun?.createdAt?.toISOString?.() ?? null,
+      lastSuccessfulRunAt: lastSuccessfulRun?.finishedAt?.toISOString?.() ?? null,
+      lastErrorAt: recentErrorEvent?.createdAt?.toISOString?.() ?? null,
+      hasRecentFailures: Boolean(recentErrorEvent),
+    },
+  };
+}
+
+export async function previewIntegrationSync(params: {
+  record: GenericConnectionRecord;
+  target: IntegrationSyncTarget;
+  limit: number;
+}) {
+  const overview = await buildIntegrationOverview(params.record);
+  const targetSummary = overview.targets.find(
+    (target) => target.target === params.target,
+  );
+
+  if (!targetSummary) {
+    throw new Error("Alvo de sincronização inválido");
+  }
+
+  const payloads = await loadTargetPayloads(
+    params.record.integration.organizationId,
+    params.target,
+    Math.min(params.limit, 25),
+  );
+
+  return {
+    target: params.target,
+    requestedLimit: params.limit,
+    blocked: targetSummary.blocked,
+    warnings: targetSummary.warnings,
+    coverage: targetSummary.coverage,
+    previewCount: payloads.length,
+    sampleRecords: payloads.slice(0, 5).map(buildPreviewSampleRecord),
+  };
 }
 
 async function getExistingLink(
