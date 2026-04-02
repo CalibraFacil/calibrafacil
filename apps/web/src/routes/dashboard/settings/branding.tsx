@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ColorInput } from '@/components/ui/color-input'
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,13 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
@@ -85,6 +92,12 @@ const layoutOptions = {
   ],
 } as const
 
+function getOptionLabel<
+  T extends ReadonlyArray<{ value: string; label: string }>,
+>(options: T, value: string) {
+  return options.find((option) => option.value === value)?.label ?? value
+}
+
 const sectionOptions: Array<{
   key: keyof CertificateTemplateConfig['sections']
   label: string
@@ -137,7 +150,9 @@ function BrandingSettingsPage() {
   const templates = templatesQuery.data?.items ?? []
   const selectedTemplate = useMemo(
     () =>
-      templates.find((template) => templateKey(template) === selectedTemplateKey) ??
+      templates.find(
+        (template) => templateKey(template) === selectedTemplateKey,
+      ) ??
       templates[0] ??
       null,
     [selectedTemplateKey, templates],
@@ -191,7 +206,9 @@ function BrandingSettingsPage() {
       await refreshTemplates()
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao criar template')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao criar template',
+      )
     },
   })
 
@@ -238,10 +255,11 @@ function BrandingSettingsPage() {
         throw new Error('Selecione um template salvo para duplicar')
       }
 
-      const res =
-        await api.api['certificate-templates'][':id'].duplicate.$post({
+      const res = await api.api['certificate-templates'][':id'].duplicate.$post(
+        {
           param: { id: String(selectedTemplate.id) },
-        })
+        },
+      )
 
       if (!res.ok) {
         const data = await res.json().catch(() => null)
@@ -272,10 +290,11 @@ function BrandingSettingsPage() {
         throw new Error('Selecione um template salvo')
       }
 
-      const res =
-        await api.api['certificate-templates'][':id']['set-default'].$post({
-          param: { id: String(selectedTemplate.id) },
-        })
+      const res = await api.api['certificate-templates'][':id'][
+        'set-default'
+      ].$post({
+        param: { id: String(selectedTemplate.id) },
+      })
 
       if (!res.ok) {
         const data = await res.json().catch(() => null)
@@ -377,7 +396,9 @@ function BrandingSettingsPage() {
       await refreshTemplates()
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao enviar logo')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao enviar logo',
+      )
     },
   })
 
@@ -411,7 +432,9 @@ function BrandingSettingsPage() {
       await refreshTemplates()
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao remover logo')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao remover logo',
+      )
     },
   })
 
@@ -459,7 +482,9 @@ function BrandingSettingsPage() {
             {selectedTemplate && (
               <Badge variant="outline">v{selectedTemplate.version}</Badge>
             )}
-            {!canManageTemplates && <Badge variant="outline">Professional+</Badge>}
+            {!canManageTemplates && (
+              <Badge variant="outline">Professional+</Badge>
+            )}
           </div>
 
           {!canManageTemplates && (
@@ -524,22 +549,29 @@ function BrandingSettingsPage() {
             <div className="space-y-2">
               {templates.map((template) => {
                 const isSelected =
-                  selectedTemplate && templateKey(template) === templateKey(selectedTemplate)
+                  selectedTemplate &&
+                  templateKey(template) === templateKey(selectedTemplate)
 
                 return (
                   <button
                     key={templateKey(template)}
                     type="button"
-                    onClick={() => setSelectedTemplateKey(templateKey(template))}
+                    onClick={() =>
+                      setSelectedTemplateKey(templateKey(template))
+                    }
                     className={cn(
                       'w-full rounded-xl border p-4 text-left transition-colors hover:bg-muted/40',
-                      isSelected ? 'border-primary bg-primary/5' : 'border-border',
+                      isSelected
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border',
                     )}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-medium">{template.name}</p>
-                        <p className="text-xs text-muted-foreground">{template.slug}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {template.slug}
+                        </p>
                       </div>
                       <div className="flex flex-wrap justify-end gap-1">
                         {template.isDefault && <Badge>Padrão</Badge>}
@@ -562,9 +594,12 @@ function BrandingSettingsPage() {
                         }}
                       />
                       <span className="text-xs text-muted-foreground">
-                        {layoutOptions.headerStyle.find(
-                          (item) => item.value === template.config.layout.headerStyle,
-                        )?.label}
+                        {
+                          layoutOptions.headerStyle.find(
+                            (item) =>
+                              item.value === template.config.layout.headerStyle,
+                          )?.label
+                        }
                       </span>
                     </div>
                   </button>
@@ -588,7 +623,9 @@ function BrandingSettingsPage() {
                 <div className="flex flex-wrap gap-2">
                   {selectedTemplate?.isDefault && <Badge>Padrão</Badge>}
                   {selectedTemplate && (
-                    <Badge variant="secondary">v{selectedTemplate.version}</Badge>
+                    <Badge variant="secondary">
+                      v{selectedTemplate.version}
+                    </Badge>
                   )}
                   {selectedTemplate && (
                     <Badge variant="outline">{selectedTemplate.status}</Badge>
@@ -662,51 +699,52 @@ function BrandingSettingsPage() {
                         setDraft((current) => ({
                           ...current,
                           name: event.target.value,
-                        }))}
+                        }))
+                      }
                       disabled={!canManageTemplates || isSystemTemplate}
                     />
                   </Field>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <Field>
-                      <FieldLabel htmlFor="template-primary">
-                        Cor primária
-                      </FieldLabel>
-                      <Input
-                        id="template-primary"
+                      <FieldLabel>Cor primária</FieldLabel>
+                      <ColorInput
                         value={draft.config.theme.primaryColor}
-                        onChange={(event) =>
+                        title="Cor primária"
+                        description="Usada no cabeçalho, títulos e identidade principal do certificado."
+                        onChange={(nextColor) =>
                           setDraft((current) => ({
                             ...current,
                             config: {
                               ...current.config,
                               theme: {
                                 ...current.config.theme,
-                                primaryColor: event.target.value,
+                                primaryColor: nextColor,
                               },
                             },
-                          }))}
+                          }))
+                        }
                         disabled={!canManageTemplates || isSystemTemplate}
                       />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="template-accent">
-                        Cor de apoio
-                      </FieldLabel>
-                      <Input
-                        id="template-accent"
+                      <FieldLabel>Cor de apoio</FieldLabel>
+                      <ColorInput
                         value={draft.config.theme.accentColor}
-                        onChange={(event) =>
+                        title="Cor de apoio"
+                        description="Usada em áreas secundárias e reforço visual sem competir com a cor principal."
+                        onChange={(nextColor) =>
                           setDraft((current) => ({
                             ...current,
                             config: {
                               ...current.config,
                               theme: {
                                 ...current.config.theme,
-                                accentColor: event.target.value,
+                                accentColor: nextColor,
                               },
                             },
-                          }))}
+                          }))
+                        }
                         disabled={!canManageTemplates || isSystemTemplate}
                       />
                     </Field>
@@ -730,10 +768,6 @@ function BrandingSettingsPage() {
                               Nenhuma logo enviada para este template.
                             </div>
                           )}
-                          <FieldDescription>
-                            O asset é salvo no storage privado e a renderização do
-                            certificado usa a mesma referência versionada.
-                          </FieldDescription>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
@@ -760,7 +794,9 @@ function BrandingSettingsPage() {
                               uploadLogoMutation.isPending
                             }
                           >
-                            {draft.config.theme.logoUrl ? 'Trocar logo' : 'Enviar logo'}
+                            {draft.config.theme.logoUrl
+                              ? 'Trocar logo'
+                              : 'Enviar logo'}
                           </Button>
                           <Button
                             type="button"
@@ -797,13 +833,16 @@ function BrandingSettingsPage() {
                               documentTitle: event.target.value,
                             },
                           },
-                        }))}
+                        }))
+                      }
                       disabled={!canManageTemplates || isSystemTemplate}
                     />
                   </Field>
 
                   <Field>
-                    <FieldLabel htmlFor="template-intro">Texto de abertura</FieldLabel>
+                    <FieldLabel htmlFor="template-intro">
+                      Texto de abertura
+                    </FieldLabel>
                     <Textarea
                       id="template-intro"
                       value={draft.config.content.introText ?? ''}
@@ -817,14 +856,17 @@ function BrandingSettingsPage() {
                               introText: event.target.value.trim() || null,
                             },
                           },
-                        }))}
+                        }))
+                      }
                       disabled={!canManageTemplates || isSystemTemplate}
                       rows={4}
                     />
                   </Field>
 
                   <Field>
-                    <FieldLabel htmlFor="template-footer">Nota de rodapé</FieldLabel>
+                    <FieldLabel htmlFor="template-footer">
+                      Nota de rodapé
+                    </FieldLabel>
                     <Textarea
                       id="template-footer"
                       value={draft.config.content.footerNote ?? ''}
@@ -838,7 +880,8 @@ function BrandingSettingsPage() {
                               footerNote: event.target.value.trim() || null,
                             },
                           },
-                        }))}
+                        }))
+                      }
                       disabled={!canManageTemplates || isSystemTemplate}
                       rows={3}
                     />
@@ -856,14 +899,21 @@ function BrandingSettingsPage() {
                               ...current.config,
                               layout: {
                                 ...current.config.layout,
-                                headerStyle: value as CertificateTemplateConfig['layout']['headerStyle'],
+                                headerStyle:
+                                  value as CertificateTemplateConfig['layout']['headerStyle'],
                               },
                             },
-                          }))}
+                          }))
+                        }
                         disabled={!canManageTemplates || isSystemTemplate}
                       >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue>
+                            {getOptionLabel(
+                              layoutOptions.headerStyle,
+                              draft.config.layout.headerStyle,
+                            )}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {layoutOptions.headerStyle.map((option) => (
@@ -886,14 +936,21 @@ function BrandingSettingsPage() {
                               ...current.config,
                               layout: {
                                 ...current.config.layout,
-                                density: value as CertificateTemplateConfig['layout']['density'],
+                                density:
+                                  value as CertificateTemplateConfig['layout']['density'],
                               },
                             },
-                          }))}
+                          }))
+                        }
                         disabled={!canManageTemplates || isSystemTemplate}
                       >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue>
+                            {getOptionLabel(
+                              layoutOptions.density,
+                              draft.config.layout.density,
+                            )}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {layoutOptions.density.map((option) => (
@@ -916,14 +973,21 @@ function BrandingSettingsPage() {
                               ...current.config,
                               layout: {
                                 ...current.config.layout,
-                                emphasis: value as CertificateTemplateConfig['layout']['emphasis'],
+                                emphasis:
+                                  value as CertificateTemplateConfig['layout']['emphasis'],
                               },
                             },
-                          }))}
+                          }))
+                        }
                         disabled={!canManageTemplates || isSystemTemplate}
                       >
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue>
+                            {getOptionLabel(
+                              layoutOptions.emphasis,
+                              draft.config.layout.emphasis,
+                            )}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {layoutOptions.emphasis.map((option) => (
@@ -959,17 +1023,14 @@ function BrandingSettingsPage() {
                                     [option.key]: !enabled,
                                   },
                                 },
-                              }))}
+                              }))
+                            }
                           >
                             {option.label}
                           </Button>
                         )
                       })}
                     </div>
-                    <FieldDescription>
-                      Structured v2 mantém a ordem do certificado fixa, mas dá
-                      controle suficiente sobre visibilidade e tom visual.
-                    </FieldDescription>
                   </Field>
                 </FieldGroup>
 
