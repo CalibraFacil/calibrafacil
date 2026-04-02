@@ -36,6 +36,7 @@ import { sessionsRouter } from "./routes/sessions";
 import { ssoRouter } from "./routes/sso";
 import { apiKeysRouter } from "./routes/api-keys";
 import { publicApiRouter } from "./routes/public-api";
+import { publicApiV2DocsRouter, publicApiV2Router } from "./routes/public-api-v2";
 import { isAllowedPortalOrigin } from "./lib/portal-domains";
 import { portalDomainsRouter } from "./routes/portal-domains";
 import { certificateTemplatesRouter } from "./routes/certificate-templates";
@@ -99,6 +100,9 @@ app.use(
 app.use("*", async (c, next) => {
   await next();
 
+  const requestPath = new URL(c.req.url).pathname;
+  const isPublicApiReference = requestPath === "/api/public/v2/reference";
+
   if ((c.env.NODE_ENV ?? "").toLowerCase() === "production") {
     c.header(
       "Strict-Transport-Security",
@@ -113,10 +117,27 @@ app.use("*", async (c, next) => {
     "Permissions-Policy",
     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
   );
-  c.header(
-    "Content-Security-Policy",
-    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
-  );
+
+  if (isPublicApiReference) {
+    c.header(
+      "Content-Security-Policy",
+      [
+        "default-src 'self' https: data: blob:",
+        "script-src 'self' 'unsafe-inline' https:",
+        "style-src 'self' 'unsafe-inline' https:",
+        "img-src 'self' data: https:",
+        "font-src 'self' data: https:",
+        "connect-src 'self' https:",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+      ].join("; "),
+    );
+  } else {
+    c.header(
+      "Content-Security-Policy",
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    );
+  }
 });
 
 /**
@@ -237,7 +258,9 @@ const routes = app
   .route("/api/certificate-templates", certificateTemplatesRouter)
   .route("/api/units", unitsRouter)
   .route("/api/integrations", integrationsRouter)
-  .route("/api/public/v1", publicApiRouter);
+  .route("/api/public/v1", publicApiRouter)
+  .route("/api/public/v2", publicApiV2DocsRouter)
+  .route("/api/public/v2", publicApiV2Router);
 
 export type AppType = typeof routes;
 
