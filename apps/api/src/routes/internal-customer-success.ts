@@ -12,12 +12,20 @@ import {
   user as userTable,
 } from "@calibra-facil/db/schema";
 import {
+  buildWorkflowDelays,
   deriveDefaultSlaTier,
   deriveGoLiveStatus,
   deriveHealthStatus,
+  deriveNextActionStatus,
   ensureSuccessProfile,
+  getActiveCustomerSuccessBlockers,
+  getOrganizationAttentionScore,
   getOrganizationWorkstreams,
+  getSupportRequestAttentionScore,
+  getSupportRequestNeedsEscalation,
   getSupportRequestSlaStatus,
+  resolveCustomerSuccessBlocker,
+  upsertCustomerSuccessBlocker,
   writeOrganizationCustomerSuccessEvent,
   writeSupportRequestEvent,
 } from "../lib/customer-success";
@@ -80,6 +88,18 @@ const UpdateSuccessProfileSchema = z.object({
   internalNotes: z.string().trim().max(4000).nullable().optional(),
 });
 
+const UpdateNextActionSchema = z.object({
+  nextAction: z.string().trim().min(3).max(1000).nullable(),
+  nextActionDueAt: z.string().datetime().nullable(),
+  markCompleted: z.boolean().default(false),
+});
+
+const UpdateBlockerSchema = z.object({
+  scope: z.enum(["ONBOARDING", "MIGRATION", "GO_LIVE", "SUPPORT"]),
+  mode: z.enum(["ADD", "RESOLVE"]),
+  reason: z.string().trim().min(3).max(1000).optional(),
+});
+
 const AssignSupportRequestSchema = z.object({
   assignedToUserId: z.string().trim().min(1).nullable(),
 });
@@ -99,6 +119,10 @@ const UpdateSupportRequestStatusSchema = z.object({
   ]),
 });
 
+const EscalateSupportRequestSchema = z.object({
+  reason: z.string().trim().min(3).max(1000),
+});
+
 function normalizeNullableText(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -109,6 +133,21 @@ function isOpenSupportStatus(status: string) {
     status === "OPEN" ||
     status === "IN_PROGRESS" ||
     status === "WAITING_ON_CUSTOMER"
+  );
+}
+
+function hasActiveWorkflow(params: {
+  onboardingStatus: string;
+  migrationStatus: string;
+  goLiveStatus: string;
+}) {
+  return (
+    (params.onboardingStatus !== "NOT_STARTED" &&
+      params.onboardingStatus !== "LIVE") ||
+    (params.migrationStatus !== "NOT_REQUIRED" &&
+      params.migrationStatus !== "COMPLETED") ||
+    params.goLiveStatus === "SCHEDULED" ||
+    params.goLiveStatus === "AT_RISK"
   );
 }
 
@@ -179,16 +218,23 @@ function buildOperationalSummary(params: {
   urgentRequestsCount: number;
   dueSoonRequestsCount: number;
   breachedRequestsCount: number;
+  escalatedRequestsCount: number;
   totalRequestsCount: number;
 }) {
   const effectiveSlaTier =
     params.profile.slaTier === "PLAN_DEFAULT"
       ? deriveDefaultSlaTier(params.supportPolicy)
       : params.profile.slaTier;
+  const activeBlockers = getActiveCustomerSuccessBlockers(params.profile.blockers);
   const goLiveStatus = deriveGoLiveStatus({
     currentStatus: params.profile.goLiveStatus,
     goLiveActualDate: params.profile.goLiveActualDate,
     goLiveTargetDate: params.profile.goLiveTargetDate,
+  });
+  const nextActionStatus = deriveNextActionStatus({
+    nextAction: params.profile.nextAction,
+    nextActionDueAt: params.profile.nextActionDueAt,
+    nextActionCompletedAt: params.profile.nextActionCompletedAt,
   });
   const healthStatus = deriveHealthStatus({
     currentStatus: params.profile.healthStatus,
@@ -203,9 +249,25 @@ function buildOperationalSummary(params: {
     migrationStatus: params.profile.migrationStatus,
     openRequestsCount: params.openRequestsCount,
   });
-  const nextActionOverdue =
-    params.profile.nextActionDueAt !== null &&
-    params.profile.nextActionDueAt.getTime() < Date.now();
+  const workflowDelays = buildWorkflowDelays({
+    nextActionStatus,
+    goLiveStatus,
+    activeBlockersCount: activeBlockers.length,
+  });
+  const attentionScore = getOrganizationAttentionScore({
+    healthStatus,
+    prioritySupport:
+      params.profile.prioritySupport ||
+      effectiveSlaTier !== "PLAN_DEFAULT" ||
+      params.supportPolicy.hasPrioritySupport,
+    breachedRequestsCount: params.breachedRequestsCount,
+    dueSoonRequestsCount: params.dueSoonRequestsCount,
+    urgentRequestsCount: params.urgentRequestsCount,
+    nextActionStatus,
+    activeBlockersCount: activeBlockers.length,
+    goLiveStatus,
+    internalOwnerUserId: params.profile.internalOwnerUserId,
+  });
 
   return {
     supportMode: params.supportPolicy.supportMode,
@@ -221,12 +283,23 @@ function buildOperationalSummary(params: {
     urgentRequestsCount: params.urgentRequestsCount,
     dueSoonRequestsCount: params.dueSoonRequestsCount,
     breachedRequestsCount: params.breachedRequestsCount,
+    escalatedRequestsCount: params.escalatedRequestsCount,
     totalRequestsCount: params.totalRequestsCount,
     needsAttention:
       healthStatus !== "HEALTHY" ||
       params.breachedRequestsCount > 0 ||
-      nextActionOverdue,
-    nextActionOverdue,
+      workflowDelays.nextActionOverdue ||
+      activeBlockers.length > 0,
+    nextActionStatus,
+    nextActionOverdue: workflowDelays.nextActionOverdue,
+    activeBlockersCount: activeBlockers.length,
+    activeBlockerScopes: activeBlockers.map((blocker) => blocker.scope),
+    blockers: activeBlockers,
+    workflowDelays,
+    attentionScore,
+    needsEscalation:
+      params.breachedRequestsCount > 0 || params.escalatedRequestsCount > 0,
+    hasInternalOwner: Boolean(params.profile.internalOwnerUserId),
   };
 }
 
@@ -255,6 +328,7 @@ async function listRequestsForOrganization(organizationId: string) {
         urgentRequestsCount: 0,
         dueSoonRequestsCount: 0,
         breachedRequestsCount: 0,
+        escalatedRequestsCount: 0,
         totalRequestsCount: 0,
       }),
     };
@@ -281,26 +355,45 @@ async function listRequestsForOrganization(organizationId: string) {
     eventsByRequest.set(event.supportRequestId, bucket);
   }
 
-  const enrichedRequests = requests.map((request) => {
-    const slaStatus = getSupportRequestSlaStatus({
-      status: request.status,
-      slaTargetAt: request.slaTargetAt,
+  const enrichedRequests = requests
+    .map((request) => {
+      const slaStatus = getSupportRequestSlaStatus({
+        status: request.status,
+        slaTargetAt: request.slaTargetAt,
     });
     const timeToSlaMs = request.slaTargetAt
       ? request.slaTargetAt.getTime() - Date.now()
       : null;
 
-    return {
-      ...request,
+    const prioritySupport =
+      profile.prioritySupport ||
+      deriveDefaultSlaTier(planAccess.supportPolicy) !== "PLAN_DEFAULT" ||
+      planAccess.supportPolicy.hasPrioritySupport;
+
+      return {
+        ...request,
       slaStatus,
       timeToSlaMs,
-      prioritySupport:
-        profile.prioritySupport ||
-        deriveDefaultSlaTier(planAccess.supportPolicy) !== "PLAN_DEFAULT" ||
-        planAccess.supportPolicy.hasPrioritySupport,
-      events: eventsByRequest.get(request.id) ?? [],
-    };
-  });
+      prioritySupport,
+      needsEscalation: getSupportRequestNeedsEscalation({
+        status: request.status,
+        slaStatus,
+        priority: request.priority,
+        prioritySupport,
+        escalatedAt: request.escalatedAt,
+      }),
+      attentionScore: getSupportRequestAttentionScore({
+        status: request.status,
+        slaStatus,
+        priority: request.priority,
+        assignedToUserId: request.assignedToUserId,
+        prioritySupport,
+        escalatedAt: request.escalatedAt,
+      }),
+        events: eventsByRequest.get(request.id) ?? [],
+      };
+    })
+    .sort((left, right) => right.attentionScore - left.attentionScore);
 
   const openRequests = enrichedRequests.filter((request) =>
     isOpenSupportStatus(request.status),
@@ -320,6 +413,9 @@ async function listRequestsForOrganization(organizationId: string) {
       ).length,
       breachedRequestsCount: openRequests.filter(
         (request) => request.slaStatus === "BREACHED",
+      ).length,
+      escalatedRequestsCount: openRequests.filter(
+        (request) => request.escalatedAt !== null || request.needsEscalation,
       ).length,
       totalRequestsCount: enrichedRequests.length,
     }),
@@ -352,8 +448,10 @@ export const internalCustomerSuccessRouter = new Hono<{
         goLiveTargetDate: organizationSuccessProfile.goLiveTargetDate,
         goLiveActualDate: organizationSuccessProfile.goLiveActualDate,
         healthStatus: organizationSuccessProfile.healthStatus,
+        blockers: organizationSuccessProfile.blockers,
         nextAction: organizationSuccessProfile.nextAction,
         nextActionDueAt: organizationSuccessProfile.nextActionDueAt,
+        nextActionCompletedAt: organizationSuccessProfile.nextActionCompletedAt,
         lastTouchedAt: organizationSuccessProfile.lastTouchedAt,
         updatedAt: organizationSuccessProfile.updatedAt,
         openRequestsCount: sql<number>`count(case when ${organizationSupportRequest.status} in ('OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER') then 1 end)`,
@@ -361,6 +459,7 @@ export const internalCustomerSuccessRouter = new Hono<{
         urgentRequestsCount: sql<number>`count(case when ${organizationSupportRequest.status} in ('OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER') and ${organizationSupportRequest.priority} in ('HIGH', 'URGENT') then 1 end)`,
         dueSoonRequestsCount: sql<number>`count(case when ${organizationSupportRequest.status} in ('OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER') and ${organizationSupportRequest.slaTargetAt} > ${now} and ${organizationSupportRequest.slaTargetAt} <= ${new Date(now.getTime() + 4 * 60 * 60 * 1000)} then 1 end)`,
         breachedRequestsCount: sql<number>`count(case when ${organizationSupportRequest.status} in ('OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER') and ${organizationSupportRequest.slaTargetAt} <= ${now} then 1 end)`,
+        escalatedRequestsCount: sql<number>`count(case when ${organizationSupportRequest.status} in ('OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER') and ${organizationSupportRequest.escalatedAt} is not null then 1 end)`,
       })
       .from(organization)
       .leftJoin(
@@ -390,8 +489,10 @@ export const internalCustomerSuccessRouter = new Hono<{
         organizationSuccessProfile.goLiveTargetDate,
         organizationSuccessProfile.goLiveActualDate,
         organizationSuccessProfile.healthStatus,
+        organizationSuccessProfile.blockers,
         organizationSuccessProfile.nextAction,
         organizationSuccessProfile.nextActionDueAt,
+        organizationSuccessProfile.nextActionCompletedAt,
         organizationSuccessProfile.lastTouchedAt,
         organizationSuccessProfile.updatedAt,
       )
@@ -423,8 +524,10 @@ export const internalCustomerSuccessRouter = new Hono<{
                 migrationStatus: row.migrationStatus ?? "NOT_REQUIRED",
                 goLiveStatus: row.goLiveStatus ?? "NOT_SCHEDULED",
                 healthStatus: row.healthStatus ?? "HEALTHY",
+                blockers: row.blockers ?? [],
                 nextAction: row.nextAction,
                 nextActionDueAt: row.nextActionDueAt,
+                nextActionCompletedAt: row.nextActionCompletedAt,
                 goLiveTargetDate: row.goLiveTargetDate,
                 goLiveActualDate: row.goLiveActualDate,
                 publicStatusNote: null,
@@ -475,6 +578,7 @@ export const internalCustomerSuccessRouter = new Hono<{
           urgentRequestsCount: Number(row.urgentRequestsCount ?? 0),
           dueSoonRequestsCount: Number(row.dueSoonRequestsCount ?? 0),
           breachedRequestsCount: Number(row.breachedRequestsCount ?? 0),
+          escalatedRequestsCount: Number(row.escalatedRequestsCount ?? 0),
           totalRequestsCount: Number(row.totalRequestsCount ?? 0),
         });
 
@@ -496,11 +600,13 @@ export const internalCustomerSuccessRouter = new Hono<{
             healthStatus: operationalSummary.healthStatus,
             nextAction: profile.nextAction,
             nextActionDueAt: profile.nextActionDueAt,
+            nextActionCompletedAt: profile.nextActionCompletedAt,
             lastTouchedAt: profile.lastTouchedAt,
             goLiveTargetDate: profile.goLiveTargetDate,
             goLiveActualDate: profile.goLiveActualDate,
             prioritySupport: operationalSummary.prioritySupport,
             slaTier: operationalSummary.effectiveSlaTier,
+            blockers: operationalSummary.blockers,
           },
           supportPolicy: planAccess.supportPolicy,
           plan: {
@@ -510,6 +616,19 @@ export const internalCustomerSuccessRouter = new Hono<{
           },
           operationalSummary,
         };
+      }).sort((left, right) => {
+        if (right.operationalSummary.attentionScore !== left.operationalSummary.attentionScore) {
+          return right.operationalSummary.attentionScore - left.operationalSummary.attentionScore;
+        }
+
+        const leftDue = left.profile.nextActionDueAt
+          ? new Date(left.profile.nextActionDueAt).getTime()
+          : Number.POSITIVE_INFINITY;
+        const rightDue = right.profile.nextActionDueAt
+          ? new Date(right.profile.nextActionDueAt).getTime()
+          : Number.POSITIVE_INFINITY;
+
+        return leftDue - rightDue;
       }),
     });
   })
@@ -570,6 +689,33 @@ export const internalCustomerSuccessRouter = new Hono<{
       }
 
       const existing = await ensureSuccessProfile(org.id);
+      const nextInternalOwnerUserId =
+        input.internalOwnerUserId !== undefined
+          ? input.internalOwnerUserId
+          : existing.internalOwnerUserId;
+      const nextOnboardingStatus =
+        input.onboardingStatus ?? existing.onboardingStatus;
+      const nextMigrationStatus =
+        input.migrationStatus ?? existing.migrationStatus;
+      const nextGoLiveStatus = input.goLiveStatus ?? existing.goLiveStatus;
+
+      if (
+        hasActiveWorkflow({
+          onboardingStatus: nextOnboardingStatus,
+          migrationStatus: nextMigrationStatus,
+          goLiveStatus: nextGoLiveStatus,
+        }) &&
+        !nextInternalOwnerUserId
+      ) {
+        return c.json(
+          {
+            error:
+              "Defina um responsável interno antes de manter a conta em workflow ativo.",
+          },
+          400,
+        );
+      }
+
       const [updated] = await db
         .update(organizationSuccessProfile)
         .set({
@@ -596,6 +742,7 @@ export const internalCustomerSuccessRouter = new Hono<{
           migrationStatus: input.migrationStatus ?? existing.migrationStatus,
           goLiveStatus: input.goLiveStatus ?? existing.goLiveStatus,
           healthStatus: input.healthStatus ?? existing.healthStatus,
+          blockers: existing.blockers,
           nextAction:
             input.nextAction !== undefined
               ? normalizeNullableText(input.nextAction)
@@ -606,6 +753,10 @@ export const internalCustomerSuccessRouter = new Hono<{
                 ? new Date(input.nextActionDueAt)
                 : null
               : existing.nextActionDueAt,
+          nextActionCompletedAt:
+            input.nextAction !== undefined || input.nextActionDueAt !== undefined
+              ? null
+              : existing.nextActionCompletedAt,
           goLiveTargetDate:
             input.goLiveTargetDate !== undefined
               ? input.goLiveTargetDate
@@ -649,6 +800,121 @@ export const internalCustomerSuccessRouter = new Hono<{
           healthStatus: input.healthStatus,
           nextAction:
             input.nextAction !== undefined ? normalizeNullableText(input.nextAction) : undefined,
+        },
+      });
+
+      return c.json(updated ?? existing);
+    },
+  )
+  .post(
+    "/organizations/:id/next-action",
+    zValidator("json", UpdateNextActionSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+      const org = await db.query.organization.findFirst({
+        where: and(eq(organization.id, id), eq(organization.type, "LAB")),
+      });
+
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      const existing = await ensureSuccessProfile(org.id);
+      const nextAction = input.markCompleted
+        ? null
+        : normalizeNullableText(input.nextAction);
+      const nextActionDueAt =
+        input.markCompleted || !input.nextActionDueAt
+          ? null
+          : new Date(input.nextActionDueAt);
+
+      const [updated] = await db
+        .update(organizationSuccessProfile)
+        .set({
+          nextAction,
+          nextActionDueAt,
+          nextActionCompletedAt: input.markCompleted ? new Date() : null,
+          lastTouchedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(organizationSuccessProfile.organizationId, org.id))
+        .returning();
+
+      await writeOrganizationCustomerSuccessEvent({
+        organizationId: org.id,
+        actorUserId: session.user.id,
+        action: input.markCompleted
+          ? "customer_success.next_action.completed"
+          : "customer_success.next_action.updated",
+        entityType: "organization_success_profile",
+        entityId: String(updated?.id ?? existing.id),
+        details: {
+          nextAction,
+          nextActionDueAt: nextActionDueAt?.toISOString() ?? null,
+        },
+      });
+
+      return c.json(updated ?? existing);
+    },
+  )
+  .post(
+    "/organizations/:id/block",
+    zValidator("json", UpdateBlockerSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+      const org = await db.query.organization.findFirst({
+        where: and(eq(organization.id, id), eq(organization.type, "LAB")),
+      });
+
+      if (!org) {
+        return c.json({ error: "Organização não encontrada" }, 404);
+      }
+
+      if (input.mode === "ADD" && !input.reason) {
+        return c.json({ error: "Informe o motivo do bloqueio" }, 400);
+      }
+
+      const existing = await ensureSuccessProfile(org.id);
+      const blockers =
+        input.mode === "ADD"
+          ? upsertCustomerSuccessBlocker({
+              blockers: existing.blockers,
+              scope: input.scope,
+              reason: input.reason!,
+              actorUserId: session.user.id,
+            })
+          : resolveCustomerSuccessBlocker({
+              blockers: existing.blockers,
+              scope: input.scope,
+              actorUserId: session.user.id,
+            });
+
+      const [updated] = await db
+        .update(organizationSuccessProfile)
+        .set({
+          blockers,
+          lastTouchedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(organizationSuccessProfile.organizationId, org.id))
+        .returning();
+
+      await writeOrganizationCustomerSuccessEvent({
+        organizationId: org.id,
+        actorUserId: session.user.id,
+        action:
+          input.mode === "ADD"
+            ? "customer_success.blocker.added"
+            : "customer_success.blocker.resolved",
+        entityType: "organization_success_profile",
+        entityId: String(updated?.id ?? existing.id),
+        details: {
+          scope: input.scope,
+          reason: input.reason ?? null,
         },
       });
 
@@ -855,6 +1121,62 @@ export const internalCustomerSuccessRouter = new Hono<{
         details: {
           previousStatus: existing.status,
           nextStatus: input.status,
+        },
+      });
+
+      return c.json(updated);
+    },
+  )
+  .post(
+    "/requests/:id/escalate",
+    zValidator("json", EscalateSupportRequestSchema),
+    async (c) => {
+      const session = c.get("session");
+      const id = Number.parseInt(c.req.param("id"), 10);
+      const input = c.req.valid("json");
+
+      if (!Number.isInteger(id)) {
+        return c.json({ error: "Solicitação inválida" }, 400);
+      }
+
+      const existing = await db.query.organizationSupportRequest.findFirst({
+        where: eq(organizationSupportRequest.id, id),
+      });
+
+      if (!existing) {
+        return c.json({ error: "Solicitação não encontrada" }, 404);
+      }
+
+      const [updated] = await db
+        .update(organizationSupportRequest)
+        .set({
+          escalatedAt: new Date(),
+          escalatedByUserId: session.user.id,
+          escalationReason: input.reason,
+          updatedAt: new Date(),
+        })
+        .where(eq(organizationSupportRequest.id, id))
+        .returning();
+
+      await touchSuccessProfile(existing.organizationId);
+
+      await writeSupportRequestEvent({
+        supportRequestId: id,
+        organizationId: existing.organizationId,
+        actorUserId: session.user.id,
+        kind: "escalated",
+        message: input.reason,
+        publicVisible: false,
+      });
+
+      await writeOrganizationCustomerSuccessEvent({
+        organizationId: existing.organizationId,
+        actorUserId: session.user.id,
+        action: "support_request.escalated",
+        entityType: "organization_support_request",
+        entityId: String(id),
+        details: {
+          reason: input.reason,
         },
       });
 

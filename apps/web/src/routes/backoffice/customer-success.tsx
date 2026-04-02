@@ -53,6 +53,8 @@ type MigrationStatus =
   | 'COMPLETED'
   | 'BLOCKED'
 type SlaTier = 'PLAN_DEFAULT' | 'PRIORITY' | 'DEDICATED'
+type NextActionStatus = 'NONE' | 'PENDING' | 'DUE_SOON' | 'OVERDUE' | 'COMPLETED'
+type BlockerScope = 'ONBOARDING' | 'MIGRATION' | 'GO_LIVE' | 'SUPPORT'
 type SupportRequestStatus =
   | 'OPEN'
   | 'IN_PROGRESS'
@@ -61,6 +63,16 @@ type SupportRequestStatus =
   | 'CLOSED'
 type SupportPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
 type SupportSlaStatus = 'ON_TRACK' | 'DUE_SOON' | 'BREACHED' | 'RESOLVED'
+type Blocker = {
+  id: string
+  scope: BlockerScope
+  status: 'ACTIVE' | 'RESOLVED'
+  reason: string
+  createdAt: string
+  createdByUserId: string | null
+  resolvedAt: string | null
+  resolvedByUserId: string | null
+}
 
 type Operator = {
   id: string
@@ -85,11 +97,13 @@ type OrganizationQueueItem = {
     healthStatus: HealthStatus
     nextAction: string | null
     nextActionDueAt: string | null
+    nextActionCompletedAt: string | null
     lastTouchedAt: string | null
     goLiveTargetDate: string | null
     goLiveActualDate: string | null
     prioritySupport: boolean
     slaTier: SlaTier
+    blockers: Blocker[]
   }
   supportPolicy: {
     supportMode: string
@@ -115,9 +129,23 @@ type OrganizationQueueItem = {
     urgentRequestsCount: number
     dueSoonRequestsCount: number
     breachedRequestsCount: number
+    escalatedRequestsCount: number
     totalRequestsCount: number
     needsAttention: boolean
+    needsEscalation: boolean
+    attentionScore: number
+    nextActionStatus: NextActionStatus
     nextActionOverdue: boolean
+    activeBlockersCount: number
+    activeBlockerScopes: BlockerScope[]
+    blockers: Blocker[]
+    workflowDelays: {
+      hasBlockedWorkflow: boolean
+      goLiveAtRisk: boolean
+      nextActionOverdue: boolean
+      nextActionDueSoon: boolean
+    }
+    hasInternalOwner: boolean
   }
 }
 
@@ -142,10 +170,12 @@ type ProfilePayload = {
     healthStatus: HealthStatus
     nextAction: string | null
     nextActionDueAt: string | null
+    nextActionCompletedAt: string | null
     goLiveTargetDate: string | null
     goLiveActualDate: string | null
     publicStatusNote: string | null
     internalNotes: string | null
+    blockers: Blocker[]
   }
   supportPolicy: {
     supportMode: string
@@ -189,6 +219,10 @@ type SupportRequest = {
   prioritySupport: boolean
   requestedByUser: { id?: string; name: string; email: string } | null
   assignedToUser: { id: string; name: string; email: string } | null
+  escalatedAt?: string | null
+  escalationReason?: string | null
+  needsEscalation?: boolean
+  attentionScore?: number
   events: Array<{
     kind: string
     message: string
@@ -212,6 +246,18 @@ type SupportQueueItem = SupportRequest & {
   organization: { id: string; name: string; slug: string } | null
   organizationHealth: HealthStatus
   effectiveSlaTier: SlaTier
+  prioritySupport: boolean
+  needsEscalation: boolean
+  attentionScore: number
+  escalationReason: string | null
+  nextActionStatus: NextActionStatus
+  organizationBlockers: Blocker[]
+  workflowDelays: {
+    hasBlockedWorkflow: boolean
+    goLiveAtRisk: boolean
+    nextActionOverdue: boolean
+    nextActionDueSoon: boolean
+  }
 }
 
 const onboardingLabels: Record<OnboardingStatus, string> = {
@@ -249,6 +295,21 @@ const slaTierLabels: Record<SlaTier, string> = {
   PLAN_DEFAULT: 'Plano',
   PRIORITY: 'Prioritário',
   DEDICATED: 'Dedicado',
+}
+
+const nextActionStatusLabels: Record<NextActionStatus, string> = {
+  NONE: 'Sem ação',
+  PENDING: 'Pendente',
+  DUE_SOON: 'Vencendo',
+  OVERDUE: 'Atrasada',
+  COMPLETED: 'Concluída',
+}
+
+const blockerScopeLabels: Record<BlockerScope, string> = {
+  ONBOARDING: 'Onboarding',
+  MIGRATION: 'Migração',
+  GO_LIVE: 'Go-live',
+  SUPPORT: 'Suporte',
 }
 
 const requestStatusLabels: Record<SupportRequestStatus, string> = {
@@ -349,15 +410,47 @@ function getPriorityBadgeVariant(priority: SupportPriority): 'default' | 'second
   }
 }
 
+function getNextActionBadgeVariant(
+  status: NextActionStatus,
+): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (status) {
+    case 'OVERDUE':
+      return 'destructive'
+    case 'DUE_SOON':
+      return 'default'
+    case 'COMPLETED':
+      return 'secondary'
+    case 'PENDING':
+      return 'outline'
+    default:
+      return 'outline'
+  }
+}
+
 function InternalCustomerSuccessPage() {
   const queryClient = useQueryClient()
   const { data: session } = useBackofficeSession()
   const [selectedOrganizationId, setSelectedOrganizationId] = useState('')
   const [organizationFilter, setOrganizationFilter] = useState<
-    'all' | 'attention' | 'critical' | 'priority' | 'onboarding' | 'migration'
+    | 'all'
+    | 'attention'
+    | 'critical'
+    | 'priority'
+    | 'onboarding'
+    | 'migration'
+    | 'overdue'
+    | 'unassigned'
+    | 'escalation'
   >('all')
   const [ticketFilter, setTicketFilter] = useState<
-    'all' | 'breached' | 'due' | 'open' | 'mine' | 'waiting'
+    | 'all'
+    | 'breached'
+    | 'due'
+    | 'open'
+    | 'mine'
+    | 'waiting'
+    | 'unassigned'
+    | 'escalation'
   >('all')
   const [search, setSearch] = useState('')
   const [profileDraft, setProfileDraft] = useState({
@@ -379,6 +472,9 @@ function InternalCustomerSuccessPage() {
     internalNotes: '',
   })
   const [responseDrafts, setResponseDrafts] = useState<Record<number, string>>({})
+  const [blockerScopeDraft, setBlockerScopeDraft] =
+    useState<BlockerScope>('ONBOARDING')
+  const [blockerReasonDraft, setBlockerReasonDraft] = useState('')
 
   const accessQuery = useQuery({
     queryKey: ['backoffice', 'access'],
@@ -447,6 +543,15 @@ function InternalCustomerSuccessPage() {
             organization.profile.migrationStatus !== 'NOT_REQUIRED' &&
             organization.profile.migrationStatus !== 'COMPLETED'
           )
+        case 'overdue':
+          return (
+            organization.operationalSummary.nextActionStatus === 'OVERDUE' ||
+            organization.operationalSummary.breachedRequestsCount > 0
+          )
+        case 'unassigned':
+          return !organization.internalOwnerUser
+        case 'escalation':
+          return organization.operationalSummary.needsEscalation
         default:
           return true
       }
@@ -564,10 +669,6 @@ function InternalCustomerSuccessPage() {
             migrationStatus: profileDraft.migrationStatus,
             goLiveStatus: profileDraft.goLiveStatus,
             healthStatus: profileDraft.healthStatus,
-            nextAction: profileDraft.nextAction || null,
-            nextActionDueAt: profileDraft.nextActionDueAt
-              ? new Date(profileDraft.nextActionDueAt).toISOString()
-              : null,
             goLiveTargetDate: profileDraft.goLiveTargetDate
               ? new Date(profileDraft.goLiveTargetDate).toISOString()
               : null,
@@ -596,6 +697,101 @@ function InternalCustomerSuccessPage() {
         error instanceof Error
           ? error.message
           : 'Falha ao atualizar perfil operacional',
+      )
+    },
+  })
+
+  const nextActionMutation = useMutation({
+    mutationFn: async ({
+      markCompleted = false,
+    }: {
+      markCompleted?: boolean
+    }) => {
+      const res =
+        await api.api.backoffice['customer-success'].organizations[':id']['next-action'].$post(
+          {
+            param: { id: selectedOrganizationId },
+            json: {
+              nextAction: markCompleted ? null : profileDraft.nextAction || null,
+              nextActionDueAt:
+                markCompleted || !profileDraft.nextActionDueAt
+                  ? null
+                  : new Date(profileDraft.nextActionDueAt).toISOString(),
+              markCompleted,
+            },
+          },
+        )
+
+      if (!res.ok) {
+        throw new Error(
+          await parseApiError(res, 'Falha ao atualizar próxima ação'),
+        )
+      }
+
+      return res.json()
+    },
+    onSuccess: async (_, variables) => {
+      toast.success(
+        variables.markCompleted
+          ? 'Próxima ação concluída'
+          : 'Próxima ação atualizada',
+      )
+      if (variables.markCompleted) {
+        setProfileDraft((current) => ({
+          ...current,
+          nextAction: '',
+          nextActionDueAt: '',
+        }))
+      }
+      await refreshCurrentOrganization()
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Falha ao atualizar próxima ação',
+      )
+    },
+  })
+
+  const blockerMutation = useMutation({
+    mutationFn: async ({
+      scope,
+      mode,
+    }: {
+      scope: BlockerScope
+      mode: 'ADD' | 'RESOLVE'
+    }) => {
+      const res =
+        await api.api.backoffice['customer-success'].organizations[':id'].block.$post(
+          {
+            param: { id: selectedOrganizationId },
+            json: {
+              scope,
+              mode,
+              reason: mode === 'ADD' ? blockerReasonDraft : undefined,
+            },
+          },
+        )
+
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao atualizar bloqueio'))
+      }
+
+      return res.json()
+    },
+    onSuccess: async (_, variables) => {
+      toast.success(
+        variables.mode === 'ADD' ? 'Bloqueio registrado' : 'Bloqueio resolvido',
+      )
+      if (variables.mode === 'ADD') {
+        setBlockerReasonDraft('')
+      }
+      await refreshCurrentOrganization()
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao atualizar bloqueio',
       )
     },
   })
@@ -692,6 +888,37 @@ function InternalCustomerSuccessPage() {
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Falha ao atualizar status')
+    },
+  })
+
+  const escalateMutation = useMutation({
+    mutationFn: async ({
+      requestId,
+      reason,
+    }: {
+      requestId: number
+      reason: string
+    }) => {
+      const res =
+        await api.api.backoffice['customer-success'].requests[':id'].escalate.$post(
+          {
+            param: { id: String(requestId) },
+            json: { reason },
+          },
+        )
+
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao escalar ticket'))
+      }
+
+      return res.json()
+    },
+    onSuccess: async () => {
+      toast.success('Ticket escalado')
+      await refreshCurrentOrganization()
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Falha ao escalar ticket')
     },
   })
 
@@ -801,9 +1028,7 @@ function InternalCustomerSuccessPage() {
       {
         id: 'risk',
         accessorFn: (row) =>
-          row.operationalSummary.breachedRequestsCount +
-          row.operationalSummary.dueSoonRequestsCount +
-          row.operationalSummary.openRequestsCount,
+          row.operationalSummary.attentionScore,
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title="Pressão" />
         ),
@@ -811,10 +1036,10 @@ function InternalCustomerSuccessPage() {
           const organization = row.original
           return (
             <div className="flex min-w-48 flex-col gap-1 text-sm">
-              <span>{organization.operationalSummary.openRequestsCount} tickets abertos</span>
+              <span>Score {organization.operationalSummary.attentionScore}</span>
               <span className="text-muted-foreground">
-                {organization.operationalSummary.breachedRequestsCount} violados ·{' '}
-                {organization.operationalSummary.dueSoonRequestsCount} vencendo
+                {nextActionStatusLabels[organization.operationalSummary.nextActionStatus]} ·{' '}
+                {organization.operationalSummary.activeBlockersCount} bloqueios
               </span>
             </div>
           )
@@ -840,6 +1065,10 @@ function InternalCustomerSuccessPage() {
           return isMine
         case 'waiting':
           return request.status === 'WAITING_ON_CUSTOMER'
+        case 'unassigned':
+          return !request.assignedToUser
+        case 'escalation':
+          return request.needsEscalation || Boolean(request.escalationReason)
         default:
           return true
       }
@@ -883,6 +1112,9 @@ function InternalCustomerSuccessPage() {
               <span className="text-xs text-muted-foreground">
                 {formatRelativeSla(request.timeToSlaMs)}
               </span>
+              {request.needsEscalation ? (
+                <Badge variant="destructive">Escalação pendente</Badge>
+              ) : null}
             </div>
           )
         },
@@ -901,6 +1133,7 @@ function InternalCustomerSuccessPage() {
               <Badge variant={getHealthBadgeVariant(request.organizationHealth)}>
                 {healthLabels[request.organizationHealth]}
               </Badge>
+              {request.prioritySupport ? <Badge>Priority</Badge> : null}
             </div>
           )
         },
@@ -913,7 +1146,10 @@ function InternalCustomerSuccessPage() {
         ),
         cell: ({ row }) => (
           <div className="min-w-44 text-sm">
-            {row.original.assignedToUser?.name ?? 'Não atribuído'}
+            <p>{row.original.assignedToUser?.name ?? 'Não atribuído'}</p>
+            <p className="text-xs text-muted-foreground">
+              Score {row.original.attentionScore}
+            </p>
           </div>
         ),
       },
@@ -971,6 +1207,8 @@ function InternalCustomerSuccessPage() {
       .length ?? 0
   const breachedCount =
     supportQueueData.filter((request) => request.slaStatus === 'BREACHED').length ?? 0
+  const escalationCount =
+    supportQueueData.filter((request) => request.needsEscalation).length ?? 0
 
   return (
     <div className="space-y-6">
@@ -1000,9 +1238,9 @@ function InternalCustomerSuccessPage() {
           description="Contas com postura prioritária ou dedicada"
         />
         <SummaryCard
-          title="SLA violado"
-          value={String(breachedCount)}
-          description="Tickets abertos fora da janela alvo"
+          title="Escalação pendente"
+          value={String(escalationCount)}
+          description={`${breachedCount} tickets já fora do SLA alvo`}
         />
       </div>
 
@@ -1023,6 +1261,9 @@ function InternalCustomerSuccessPage() {
               ['priority', 'Priority support'],
               ['onboarding', 'Onboarding ativo'],
               ['migration', 'Migração ativa'],
+              ['overdue', 'Próxima ação atrasada'],
+              ['unassigned', 'Sem owner'],
+              ['escalation', 'Escalação'],
             ].map(([value, label]) => (
               <Button
                 key={value}
@@ -1037,7 +1278,10 @@ function InternalCustomerSuccessPage() {
                       | 'critical'
                       | 'priority'
                       | 'onboarding'
-                      | 'migration',
+                      | 'migration'
+                      | 'overdue'
+                      | 'unassigned'
+                      | 'escalation',
                   )
                 }
               >
@@ -1103,6 +1347,19 @@ function InternalCustomerSuccessPage() {
                       <p className="mt-2 text-sm text-muted-foreground">
                         {selectedOrganization.profile.nextAction ?? 'Nenhuma ação definida'}
                       </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Badge
+                          variant={getNextActionBadgeVariant(
+                            selectedOrganization.operationalSummary.nextActionStatus,
+                          )}
+                        >
+                          {
+                            nextActionStatusLabels[
+                              selectedOrganization.operationalSummary.nextActionStatus
+                            ]
+                          }
+                        </Badge>
+                      </div>
                       <p className="mt-2 text-xs text-muted-foreground">
                         Prazo: {formatDateTime(selectedOrganization.profile.nextActionDueAt)}
                       </p>
@@ -1118,7 +1375,7 @@ function InternalCustomerSuccessPage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-4 md:grid-cols-4">
                     <MiniMetric
                       label="Tickets abertos"
                       value={selectedOrganization.operationalSummary.openRequestsCount}
@@ -1130,6 +1387,10 @@ function InternalCustomerSuccessPage() {
                     <MiniMetric
                       label="SLA violado"
                       value={selectedOrganization.operationalSummary.breachedRequestsCount}
+                    />
+                    <MiniMetric
+                      label="Escalados"
+                      value={selectedOrganization.operationalSummary.escalatedRequestsCount}
                     />
                   </div>
 
@@ -1148,7 +1409,59 @@ function InternalCustomerSuccessPage() {
                     >
                       Assumir conta
                     </Button>
+                    {selectedOrganization.profile.nextAction ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          nextActionMutation.mutate({
+                            markCompleted: true,
+                          })
+                        }
+                        disabled={nextActionMutation.isPending}
+                      >
+                        Concluir próxima ação
+                      </Button>
+                    ) : null}
                   </div>
+
+                  {selectedOrganization.operationalSummary.blockers.length > 0 ? (
+                    <div className="rounded-lg border border-dashed p-4">
+                      <p className="text-sm font-medium">Bloqueios ativos</p>
+                      <div className="mt-3 space-y-2">
+                        {selectedOrganization.operationalSummary.blockers.map((blocker) => (
+                          <div
+                            key={blocker.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                          >
+                            <div>
+                              <p className="font-medium">
+                                {blockerScopeLabels[blocker.scope]}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {blocker.reason}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                blockerMutation.mutate({
+                                  scope: blocker.scope,
+                                  mode: 'RESOLVE',
+                                })
+                              }
+                              disabled={blockerMutation.isPending}
+                            >
+                              Resolver bloqueio
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -1419,6 +1732,72 @@ function InternalCustomerSuccessPage() {
                       </Field>
                     </div>
 
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => nextActionMutation.mutate({})}
+                        disabled={nextActionMutation.isPending}
+                      >
+                        {nextActionMutation.isPending
+                          ? 'Atualizando ação...'
+                          : 'Atualizar próxima ação'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          nextActionMutation.mutate({
+                            markCompleted: true,
+                          })
+                        }
+                        disabled={
+                          nextActionMutation.isPending || !profileDraft.nextAction
+                        }
+                      >
+                        Concluir ação atual
+                      </Button>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-[0.7fr_1.3fr_auto] md:items-end">
+                      <Field>
+                        <FieldLabel>Bloqueio</FieldLabel>
+                        <NativeSelect
+                          value={blockerScopeDraft}
+                          onChange={(event) =>
+                            setBlockerScopeDraft(event.target.value as BlockerScope)
+                          }
+                        >
+                          {Object.entries(blockerScopeLabels).map(([value, label]) => (
+                            <NativeSelectOption key={value} value={value}>
+                              {label}
+                            </NativeSelectOption>
+                          ))}
+                        </NativeSelect>
+                      </Field>
+                      <Field>
+                        <FieldLabel>Motivo do bloqueio</FieldLabel>
+                        <Input
+                          value={blockerReasonDraft}
+                          onChange={(event) => setBlockerReasonDraft(event.target.value)}
+                          placeholder="Ex.: aguardando base de migração validada"
+                        />
+                      </Field>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          blockerMutation.mutate({
+                            scope: blockerScopeDraft,
+                            mode: 'ADD',
+                          })
+                        }
+                        disabled={blockerMutation.isPending || !blockerReasonDraft.trim()}
+                      >
+                        Registrar bloqueio
+                      </Button>
+                    </div>
+
                     <Field>
                       <FieldLabel>Priority support</FieldLabel>
                       <div className="flex items-center gap-3">
@@ -1580,6 +1959,22 @@ function InternalCustomerSuccessPage() {
                       {request.assignedToUser?.name ?? 'Não atribuído'}
                     </div>
 
+                    {request.needsEscalation || request.escalationReason ? (
+                      <div className="rounded-md border border-dashed p-3 text-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="destructive">
+                            {request.needsEscalation
+                              ? 'Escalação pendente'
+                              : 'Escalado'}
+                          </Badge>
+                        </div>
+                        <p className="mt-2 text-muted-foreground">
+                          {request.escalationReason ??
+                            'Este ticket precisa de acompanhamento prioritário.'}
+                        </p>
+                      </div>
+                    ) : null}
+
                     <Field>
                       <FieldLabel>Resposta pública</FieldLabel>
                       <Textarea
@@ -1640,6 +2035,24 @@ function InternalCustomerSuccessPage() {
                       >
                         Resolver
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          escalateMutation.mutate({
+                            requestId: request.id,
+                            reason: request.slaStatus === 'BREACHED'
+                              ? 'Escalação automática do operador: ticket fora do SLA.'
+                              : 'Escalação manual do operador para tratamento prioritário.',
+                          })
+                        }
+                        disabled={
+                          escalateMutation.isPending ||
+                          Boolean(request.escalationReason)
+                        }
+                      >
+                        Escalar
+                      </Button>
                     </div>
 
                     {request.events.length > 0 ? (
@@ -1683,6 +2096,8 @@ function InternalCustomerSuccessPage() {
               ['open', 'Em tratamento'],
               ['mine', 'Meus tickets'],
               ['waiting', 'Aguardando laboratório'],
+              ['unassigned', 'Sem responsável'],
+              ['escalation', 'Escalação'],
             ].map(([value, label]) => (
               <Button
                 key={value}
@@ -1697,7 +2112,9 @@ function InternalCustomerSuccessPage() {
                       | 'due'
                       | 'open'
                       | 'mine'
-                      | 'waiting',
+                      | 'waiting'
+                      | 'unassigned'
+                      | 'escalation',
                   )
                 }
               >

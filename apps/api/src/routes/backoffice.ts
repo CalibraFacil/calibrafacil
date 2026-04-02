@@ -28,9 +28,14 @@ import {
 import { internalCustomerSuccessRouter } from "./internal-customer-success";
 import { getOrganizationPlanAccess } from "../lib/organization-plan";
 import {
+  buildWorkflowDelays,
   deriveDefaultSlaTier,
   deriveGoLiveStatus,
   deriveHealthStatus,
+  deriveNextActionStatus,
+  getActiveCustomerSuccessBlockers,
+  getSupportRequestAttentionScore,
+  getSupportRequestNeedsEscalation,
   getSupportRequestSlaStatus,
 } from "../lib/customer-success";
 
@@ -694,6 +699,33 @@ export const backofficeRouter = new Hono<{
         status: row.status,
         slaTargetAt: row.slaTargetAt,
       });
+      const activeBlockers = getActiveCustomerSuccessBlockers(profile?.blockers);
+      const nextActionStatus = profile
+        ? deriveNextActionStatus({
+            nextAction: profile.nextAction,
+            nextActionDueAt: profile.nextActionDueAt,
+            nextActionCompletedAt: profile.nextActionCompletedAt,
+          })
+        : "NONE";
+      const prioritySupport =
+        (profile?.prioritySupport ?? false) ||
+        effectiveSlaTier !== "PLAN_DEFAULT" ||
+        (planAccess?.supportPolicy.hasPrioritySupport ?? false);
+      const needsEscalation = getSupportRequestNeedsEscalation({
+        status: row.status,
+        slaStatus,
+        priority: row.priority,
+        prioritySupport,
+        escalatedAt: row.escalatedAt,
+      });
+      const attentionScore = getSupportRequestAttentionScore({
+        status: row.status,
+        slaStatus,
+        priority: row.priority,
+        assignedToUserId: row.assignedToUserId,
+        prioritySupport,
+        escalatedAt: row.escalatedAt,
+      });
 
       return {
         ...row,
@@ -702,12 +734,32 @@ export const backofficeRouter = new Hono<{
           ? row.slaTargetAt.getTime() - Date.now()
           : null,
         organizationHealth: healthStatus,
-        prioritySupport:
-          (profile?.prioritySupport ?? false) ||
-          effectiveSlaTier !== "PLAN_DEFAULT" ||
-          (planAccess?.supportPolicy.hasPrioritySupport ?? false),
+        prioritySupport,
         effectiveSlaTier,
+        needsEscalation,
+        attentionScore,
+        escalationReason: row.escalationReason,
+        nextActionStatus,
+        organizationBlockers: activeBlockers,
+        workflowDelays: buildWorkflowDelays({
+          nextActionStatus,
+          goLiveStatus,
+          activeBlockersCount: activeBlockers.length,
+        }),
       };
+    }).sort((left, right) => {
+      if (right.attentionScore !== left.attentionScore) {
+        return right.attentionScore - left.attentionScore;
+      }
+
+      const leftSla = left.slaTargetAt
+        ? new Date(left.slaTargetAt).getTime()
+        : Number.POSITIVE_INFINITY;
+      const rightSla = right.slaTargetAt
+        ? new Date(right.slaTargetAt).getTime()
+        : Number.POSITIVE_INFINITY;
+
+      return leftSla - rightSla;
     });
 
     return c.json({ data });

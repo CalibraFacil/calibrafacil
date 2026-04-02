@@ -14,6 +14,7 @@ import {
   real,
 } from "drizzle-orm/pg-core";
 import type {
+  CustomerSuccessBlocker,
   CustomerSuccessHealthStatus,
   CustomerSuccessSlaTier,
   GenericFinancialErpConnectionConfig,
@@ -377,8 +378,10 @@ export const organizationSuccessProfile = pgTable(
       .$type<CustomerSuccessHealthStatus>()
       .default("HEALTHY")
       .notNull(),
+    blockers: jsonb("blockers").$type<CustomerSuccessBlocker[]>(),
     nextAction: text("next_action"),
     nextActionDueAt: timestamp("next_action_due_at"),
+    nextActionCompletedAt: timestamp("next_action_completed_at"),
     goLiveTargetDate: timestamp("go_live_target_date"),
     goLiveActualDate: timestamp("go_live_actual_date"),
     publicStatusNote: text("public_status_note"),
@@ -404,6 +407,9 @@ export const organizationSuccessProfile = pgTable(
     index("organization_success_profile_health_idx").on(table.healthStatus),
     index("organization_success_profile_priority_support_idx").on(
       table.prioritySupport,
+    ),
+    index("organization_success_profile_next_action_due_idx").on(
+      table.nextActionDueAt,
     ),
   ],
 );
@@ -435,6 +441,11 @@ export const organizationSupportRequest = pgTable(
     publicResponse: text("public_response"),
     slaTargetAt: timestamp("sla_target_at"),
     firstResponseAt: timestamp("first_response_at"),
+    escalatedAt: timestamp("escalated_at"),
+    escalatedByUserId: text("escalated_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    escalationReason: text("escalation_reason"),
     resolvedAt: timestamp("resolved_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -446,6 +457,9 @@ export const organizationSupportRequest = pgTable(
     index("organization_support_request_org_idx").on(table.organizationId),
     index("organization_support_request_status_idx").on(table.status),
     index("organization_support_request_priority_idx").on(table.priority),
+    index("organization_support_request_escalated_at_idx").on(
+      table.escalatedAt,
+    ),
     index("organization_support_request_created_at_idx").on(table.createdAt),
   ],
 );

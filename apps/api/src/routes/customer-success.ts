@@ -4,6 +4,7 @@ import { z } from "zod";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import {
+  organizationSuccessProfile,
   organizationSupportRequest,
   organizationSupportRequestEvent,
   user,
@@ -13,7 +14,9 @@ import {
   calculateSlaTargetAt,
   deriveDefaultSlaTier,
   deriveGoLiveStatus,
+  deriveNextActionStatus,
   ensureSuccessProfile,
+  getActiveCustomerSuccessBlockers,
   getSupportRequestSlaStatus,
   resolveEffectiveSlaHours,
   writeOrganizationCustomerSuccessEvent,
@@ -112,6 +115,22 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
           goLiveTargetDate: profile.goLiveTargetDate,
         }),
       },
+      publicSummary: {
+        healthStatus: profile.healthStatus,
+        onboardingStatus: profile.onboardingStatus,
+        migrationStatus: profile.migrationStatus,
+        goLiveStatus: deriveGoLiveStatus({
+          currentStatus: profile.goLiveStatus,
+          goLiveActualDate: profile.goLiveActualDate,
+          goLiveTargetDate: profile.goLiveTargetDate,
+        }),
+        nextActionStatus: deriveNextActionStatus({
+          nextAction: profile.nextAction,
+          nextActionDueAt: profile.nextActionDueAt,
+          nextActionCompletedAt: profile.nextActionCompletedAt,
+        }),
+        hasActiveBlockers: getActiveCustomerSuccessBlockers(profile.blockers).length > 0,
+      },
       supportPolicy: planAccess.supportPolicy,
       plan: {
         id: planAccess.planId,
@@ -201,6 +220,14 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
           subject: input.subject,
         },
       });
+
+      await db
+        .update(organizationSuccessProfile)
+        .set({
+          lastTouchedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(organizationSuccessProfile.organizationId, member.organizationId));
 
       const [requester] = await db
         .select({
