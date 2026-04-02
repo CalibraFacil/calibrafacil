@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { db } from "@calibra-facil/db";
 import { certificateTemplate } from "@calibra-facil/db/schema";
 import {
@@ -17,6 +18,12 @@ import {
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
 import { getOrganizationPlanAccess } from "../lib/organization-plan";
+import {
+  createR2Client,
+  uploadToR2,
+  generatePresignedUrl,
+  type R2Env,
+} from "../lib/storage";
 import { and, desc, eq, ne } from "drizzle-orm";
 
 const TemplateConfigSchema = z.object({
@@ -48,6 +55,13 @@ const TemplateConfigSchema = z.object({
       showAmendmentNotice: z.boolean().optional(),
     })
     .optional(),
+  layout: z
+    .object({
+      headerStyle: z.enum(["classic", "split", "minimal"]).optional(),
+      density: z.enum(["comfortable", "compact"]).optional(),
+      emphasis: z.enum(["brand", "formal", "neutral"]).optional(),
+    })
+    .optional(),
 });
 
 const CreateTemplateSchema = z.object({
@@ -59,6 +73,15 @@ const UpdateTemplateSchema = z.object({
   name: z.string().trim().min(3).max(80).optional(),
   config: TemplateConfigSchema.optional(),
 });
+
+const MAX_LOGO_FILE_SIZE = 2 * 1024 * 1024;
+const ALLOWED_LOGO_CONTENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/svg+xml",
+];
+const LOGO_URL_EXPIRY = 900;
 
 function slugifyTemplateName(value: string): string {
   return value
@@ -74,6 +97,30 @@ function toTemplateConfigRecord(
   config: CertificateTemplateConfig,
 ): Record<string, unknown> {
   return config as unknown as Record<string, unknown>;
+}
+
+function getApiBaseUrl(): string {
+  return process.env.API_URL || "https://localhost:3000";
+}
+
+function buildTemplateLogoKey(organizationId: string, templateId: number): string {
+  return `branding-logos/${organizationId}/${templateId}/${Date.now()}-${randomUUID()}`;
+}
+
+function encodeLogoAssetKey(key: string): string {
+  return Buffer.from(key, "utf8").toString("base64url");
+}
+
+function decodeLogoAssetKey(key: string): string | null {
+  try {
+    return Buffer.from(key, "base64url").toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function buildTemplateLogoUrl(key: string): string {
+  return `${getApiBaseUrl()}/api/certificate-templates/logo/${encodeLogoAssetKey(key)}`;
 }
 export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
@@ -185,6 +232,162 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
       );
     },
   )
+  .post(
+    "/:id/logo",
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+    requireFeature("custom_templates"),
+    async (c) => {
+      const member = c.get("member");
+      const id = Number.parseInt(c.req.param("id"), 10);
+      const env = c.env as R2Env;
+
+      if (!Number.isFinite(id)) {
+        return c.json({ error: "Template inválido" }, 400);
+      }
+
+      const existing = await db.query.certificateTemplate.findFirst({
+        where: and(
+          eq(certificateTemplate.id, id),
+          eq(certificateTemplate.organizationId, member.organizationId),
+        ),
+      });
+
+      if (!existing) {
+        return c.json({ error: "Template não encontrado" }, 404);
+      }
+
+      const formData = await c.req.formData();
+      const file = formData.get("logo") as File | null;
+
+      if (!file) {
+        return c.json({ error: "Nenhum arquivo enviado" }, 400);
+      }
+
+      if (!ALLOWED_LOGO_CONTENT_TYPES.includes(file.type)) {
+        return c.json(
+          { error: "Formato inválido. Use PNG, JPG, WebP ou SVG." },
+          400,
+        );
+      }
+
+      if (file.size > MAX_LOGO_FILE_SIZE) {
+        return c.json(
+          {
+            error: `Arquivo muito grande. Máximo ${MAX_LOGO_FILE_SIZE / 1024 / 1024}MB.`,
+          },
+          400,
+        );
+      }
+
+      const key = buildTemplateLogoKey(member.organizationId, existing.id);
+      const buffer = await file.arrayBuffer();
+      const r2Client = createR2Client(env);
+      await uploadToR2(r2Client, env.R2_BUCKET_NAME, key, buffer, file.type);
+
+      const currentConfig = normalizeCertificateTemplateConfig(
+        existing.config as Partial<CertificateTemplateConfig> | undefined,
+      );
+
+      const [updated] = await db
+        .update(certificateTemplate)
+        .set({
+          version: existing.version + 1,
+          config: toTemplateConfigRecord({
+            ...currentConfig,
+            theme: {
+              ...currentConfig.theme,
+              logoUrl: buildTemplateLogoUrl(key),
+            },
+          }),
+          updatedAt: new Date(),
+        })
+        .where(eq(certificateTemplate.id, existing.id))
+        .returning();
+
+      return c.json({
+        item: {
+          ...updated,
+          config: normalizeCertificateTemplateConfig(updated?.config as any),
+        },
+      });
+    },
+  )
+  .delete(
+    "/:id/logo",
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+    requireFeature("custom_templates"),
+    async (c) => {
+      const member = c.get("member");
+      const id = Number.parseInt(c.req.param("id"), 10);
+
+      if (!Number.isFinite(id)) {
+        return c.json({ error: "Template inválido" }, 400);
+      }
+
+      const existing = await db.query.certificateTemplate.findFirst({
+        where: and(
+          eq(certificateTemplate.id, id),
+          eq(certificateTemplate.organizationId, member.organizationId),
+        ),
+      });
+
+      if (!existing) {
+        return c.json({ error: "Template não encontrado" }, 404);
+      }
+
+      const currentConfig = normalizeCertificateTemplateConfig(
+        existing.config as Partial<CertificateTemplateConfig> | undefined,
+      );
+
+      const [updated] = await db
+        .update(certificateTemplate)
+        .set({
+          version: existing.version + 1,
+          config: toTemplateConfigRecord({
+            ...currentConfig,
+            theme: {
+              ...currentConfig.theme,
+              logoUrl: null,
+            },
+          }),
+          updatedAt: new Date(),
+        })
+        .where(eq(certificateTemplate.id, existing.id))
+        .returning();
+
+      return c.json({
+        item: {
+          ...updated,
+          config: normalizeCertificateTemplateConfig(updated?.config as any),
+        },
+      });
+    },
+  )
+  .get("/logo/:key", async (c) => {
+    const env = c.env as R2Env;
+    const decodedKey = decodeLogoAssetKey(c.req.param("key"));
+
+    if (!decodedKey) {
+      return c.json({ error: "Asset inválido" }, 400);
+    }
+
+    try {
+      const r2Client = createR2Client(env);
+      const url = await generatePresignedUrl(
+        r2Client,
+        env.R2_BUCKET_NAME,
+        decodedKey,
+        LOGO_URL_EXPIRY,
+      );
+
+      return c.redirect(url, 302);
+    } catch (error) {
+      console.error("Error fetching template logo:", error);
+      return c.json({ error: "Erro ao carregar logo" }, 404);
+    }
+  })
   .put(
     "/:id",
     ...withLabPermission({ organization: ["update"] }),
@@ -257,6 +460,13 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
                 >),
                 ...((input.config?.sections as Record<string, unknown>) ?? {}),
               },
+              layout: {
+                ...(((existing.config as any)?.layout ?? {}) as Record<
+                  string,
+                  unknown
+                >),
+                ...((input.config?.layout as Record<string, unknown>) ?? {}),
+              },
             } as unknown as Partial<CertificateTemplateConfig>,
             ),
           ),
@@ -271,6 +481,77 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
           config: normalizeCertificateTemplateConfig(updated?.config as any),
         },
       });
+    },
+  )
+  .post(
+    "/:id/duplicate",
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+    requireFeature("custom_templates"),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = Number.parseInt(c.req.param("id"), 10);
+
+      if (!Number.isFinite(id)) {
+        return c.json({ error: "Template inválido" }, 400);
+      }
+
+      const existing = await db.query.certificateTemplate.findFirst({
+        where: and(
+          eq(certificateTemplate.id, id),
+          eq(certificateTemplate.organizationId, member.organizationId),
+        ),
+      });
+
+      if (!existing) {
+        return c.json({ error: "Template não encontrado" }, 404);
+      }
+
+      let duplicateName = `${existing.name} copy`;
+      let duplicateSlug = slugifyTemplateName(duplicateName);
+      let counter = 2;
+
+      while (
+        await db.query.certificateTemplate.findFirst({
+          where: and(
+            eq(certificateTemplate.organizationId, member.organizationId),
+            eq(certificateTemplate.slug, duplicateSlug),
+          ),
+        })
+      ) {
+        duplicateName = `${existing.name} copy ${counter}`;
+        duplicateSlug = slugifyTemplateName(duplicateName);
+        counter += 1;
+      }
+
+      const [created] = await db
+        .insert(certificateTemplate)
+        .values({
+          organizationId: member.organizationId,
+          name: duplicateName,
+          slug: duplicateSlug,
+          version: 1,
+          isDefault: false,
+          status: "ACTIVE",
+          config: toTemplateConfigRecord(
+            normalizeCertificateTemplateConfig(
+              existing.config as Partial<CertificateTemplateConfig> | undefined,
+            ),
+          ),
+          createdBy: session.user.id,
+        })
+        .returning();
+
+      return c.json(
+        {
+          item: {
+            ...created,
+            config: normalizeCertificateTemplateConfig(created?.config as any),
+          },
+        },
+        201,
+      );
     },
   )
   .post(

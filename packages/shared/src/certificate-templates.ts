@@ -24,11 +24,18 @@ export interface CertificateTemplateSections {
   showAmendmentNotice: boolean;
 }
 
+export interface CertificateTemplateLayout {
+  headerStyle: "classic" | "split" | "minimal";
+  density: "comfortable" | "compact";
+  emphasis: "brand" | "formal" | "neutral";
+}
+
 export interface CertificateTemplateConfig {
   version: CertificateTemplateConfigVersion;
   theme: CertificateTemplateTheme;
   content: CertificateTemplateContent;
   sections: CertificateTemplateSections;
+  layout: CertificateTemplateLayout;
 }
 
 export interface CertificateTemplateSnapshot {
@@ -62,6 +69,11 @@ export const DEFAULT_CERTIFICATE_TEMPLATE_CONFIG: CertificateTemplateConfig = {
     showSignature: true,
     showAmendmentNotice: true,
   },
+  layout: {
+    headerStyle: "classic",
+    density: "comfortable",
+    emphasis: "brand",
+  },
 };
 
 export function normalizeCertificateTemplateConfig(
@@ -80,6 +92,10 @@ export function normalizeCertificateTemplateConfig(
     sections: {
       ...DEFAULT_CERTIFICATE_TEMPLATE_CONFIG.sections,
       ...(config?.sections ?? {}),
+    },
+    layout: {
+      ...DEFAULT_CERTIFICATE_TEMPLATE_CONFIG.layout,
+      ...(config?.layout ?? {}),
     },
   };
 }

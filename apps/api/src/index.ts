@@ -41,6 +41,7 @@ import { portalDomainsRouter } from "./routes/portal-domains";
 import { certificateTemplatesRouter } from "./routes/certificate-templates";
 import { unitsRouter } from "./routes/units";
 import { integrationsRouter } from "./routes/integrations";
+import { profileMediaRouter } from "./routes/profile-media";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -237,6 +238,7 @@ const routes = app
   .route("/api/certificate-templates", certificateTemplatesRouter)
   .route("/api/units", unitsRouter)
   .route("/api/integrations", integrationsRouter)
+  .route("/api/profile-media", profileMediaRouter)
   .route("/api/public/v1", publicApiRouter);
 
 export type AppType = typeof routes;
