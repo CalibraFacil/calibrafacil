@@ -20,7 +20,24 @@ export type IntegrationSyncTarget =
   | "service_order"
   | "billing_document";
 
-export type IntegrationSyncTrigger = "manual" | "event";
+export type IntegrationSyncTrigger =
+  | "manual"
+  | "event"
+  | "scheduled"
+  | "retry";
+
+export type IntegrationRunMode = "disabled" | "manual_only" | "scheduled";
+
+export type IntegrationScheduleFrequency = "daily" | "weekly";
+
+export type IntegrationScheduleStatus =
+  | "disabled"
+  | "manual_only"
+  | "scheduled"
+  | "due"
+  | "running"
+  | "blocked"
+  | "failing";
 
 export type IntegrationSyncStatus =
   | "PENDING"
@@ -46,6 +63,25 @@ export const DEFAULT_GENERIC_ERP_PATHS = {
   billingDocuments: "/billing-documents",
 } as const;
 
+export const DEFAULT_INTEGRATION_SCHEDULE_FREQUENCY: IntegrationScheduleFrequency =
+  "daily";
+
+export interface IntegrationTargetScheduleConfig {
+  mode: IntegrationRunMode;
+  frequency: IntegrationScheduleFrequency;
+  nextScheduledRunAt: string | null;
+  lastScheduledRunAt: string | null;
+}
+
+export interface IntegrationTargetScheduleSummary {
+  target: IntegrationSyncTarget;
+  mode: IntegrationRunMode;
+  frequency: IntegrationScheduleFrequency;
+  status: IntegrationScheduleStatus;
+  nextScheduledRunAt: string | null;
+  lastScheduledRunAt: string | null;
+}
+
 export interface GenericFinancialErpConnectionConfig {
   baseUrl: string;
   healthPath: string;
@@ -53,6 +89,7 @@ export interface GenericFinancialErpConnectionConfig {
   serviceOrderPath: string;
   billingDocumentPath: string;
   authType: IntegrationCredentialType;
+  schedules: Record<IntegrationSyncTarget, IntegrationTargetScheduleConfig>;
 }
 
 export interface IntegrationCustomerPayload {
@@ -121,12 +158,18 @@ export interface IntegrationTargetSyncSummary {
   lastRunAt: string | null;
   lastSuccessfulRunAt: string | null;
   lastStatus: IntegrationSyncStatus | null;
+  lastTrigger: IntegrationSyncTrigger | null;
   processedCount: number;
   successCount: number;
   errorCount: number;
   blocked: boolean;
   warnings: IntegrationDependencyWarning[];
   coverage: IntegrationTargetCoverageSummary;
+  schedule: IntegrationTargetScheduleSummary;
+  lastRunDurationMs: number | null;
+  consecutiveFailures: number;
+  lastBlockedAt: string | null;
+  hasActiveRun: boolean;
 }
 
 export interface IntegrationReadinessSummary {
@@ -264,12 +307,37 @@ function normalizePath(path: string, fallback: string): string {
   return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 }
 
+function normalizeScheduleConfig(
+  input?: Partial<IntegrationTargetScheduleConfig> | null,
+): IntegrationTargetScheduleConfig {
+  const mode =
+    input?.mode === "disabled" ||
+    input?.mode === "manual_only" ||
+    input?.mode === "scheduled"
+      ? input.mode
+      : "manual_only";
+  const frequency =
+    input?.frequency === "weekly" || input?.frequency === "daily"
+      ? input.frequency
+      : DEFAULT_INTEGRATION_SCHEDULE_FREQUENCY;
+
+  return {
+    mode,
+    frequency,
+    nextScheduledRunAt: input?.nextScheduledRunAt ?? null,
+    lastScheduledRunAt: input?.lastScheduledRunAt ?? null,
+  };
+}
+
 export function normalizeGenericFinancialErpConfig(input: {
   baseUrl: string;
   healthPath?: string;
   customerPath?: string;
   serviceOrderPath?: string;
   billingDocumentPath?: string;
+  schedules?: Partial<
+    Record<IntegrationSyncTarget, Partial<IntegrationTargetScheduleConfig>>
+  >;
 }): GenericFinancialErpConnectionConfig {
   const trimmedBaseUrl = normalizeIntegrationBaseUrl(input.baseUrl);
 
@@ -292,5 +360,12 @@ export function normalizeGenericFinancialErpConfig(input: {
       DEFAULT_GENERIC_ERP_PATHS.billingDocuments,
     ),
     authType: "bearer",
+    schedules: {
+      customer: normalizeScheduleConfig(input.schedules?.customer),
+      service_order: normalizeScheduleConfig(input.schedules?.service_order),
+      billing_document: normalizeScheduleConfig(
+        input.schedules?.billing_document,
+      ),
+    },
   };
 }

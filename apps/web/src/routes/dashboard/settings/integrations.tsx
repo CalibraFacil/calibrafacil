@@ -8,6 +8,9 @@ import { useActiveOrganization, useSession } from '@calibra-facil/auth/client'
 import type {
   IntegrationDependencyWarning,
   IntegrationReadinessSummary,
+  IntegrationRunMode,
+  IntegrationScheduleFrequency,
+  IntegrationScheduleStatus,
   IntegrationTargetCoverageSummary,
   IntegrationTargetSyncSummary,
 } from '@calibra-facil/shared'
@@ -55,13 +58,20 @@ interface IntegrationConfig {
 interface IntegrationRun {
   id: string
   target: SyncTarget
-  trigger: 'manual' | 'event'
+  trigger: 'manual' | 'event' | 'scheduled' | 'retry'
   status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'PARTIAL'
   processedCount: number
   successCount: number
   errorCount: number
   errorSummary: string | null
   createdAt: string
+  startedAt?: string | null
+  finishedAt?: string | null
+  summary?: {
+    requestedLimit?: number
+    blocked?: boolean
+    retryOfRunId?: string | null
+  } | null
 }
 
 interface IntegrationEvent {
@@ -183,6 +193,13 @@ function formatDateTime(value: string | null) {
   })
 }
 
+function formatDuration(value: number | null | undefined) {
+  if (!value || value <= 0) return 'Sem duração'
+  if (value < 1000) return `${value} ms`
+  if (value < 60_000) return `${Math.round(value / 100) / 10}s`
+  return `${Math.round(value / 6000) / 10} min`
+}
+
 function readinessBadgeVariant(
   status: IntegrationReadinessSummary['readinessStatus'],
 ) {
@@ -201,12 +218,61 @@ function coveragePercentage(coverage: IntegrationTargetCoverageSummary) {
   return Math.round((coverage.linkedCount / coverage.localCount) * 100)
 }
 
+function scheduleStatusVariant(status: IntegrationScheduleStatus) {
+  switch (status) {
+    case 'scheduled':
+    case 'manual_only':
+    case 'disabled':
+      return 'outline'
+    case 'due':
+      return 'secondary'
+    case 'running':
+      return 'default'
+    case 'blocked':
+    case 'failing':
+      return 'destructive'
+  }
+}
+
+function scheduleStatusLabel(status: IntegrationScheduleStatus) {
+  switch (status) {
+    case 'disabled':
+      return 'Desligado'
+    case 'manual_only':
+      return 'Manual'
+    case 'scheduled':
+      return 'Agendado'
+    case 'due':
+      return 'Vencido'
+    case 'running':
+      return 'Executando'
+    case 'blocked':
+      return 'Bloqueado'
+    case 'failing':
+      return 'Falhando'
+  }
+}
+
+function runTriggerLabel(trigger: IntegrationRun['trigger']) {
+  switch (trigger) {
+    case 'scheduled':
+      return 'Agendado'
+    case 'retry':
+      return 'Reprocessado'
+    case 'event':
+      return 'Evento'
+    default:
+      return 'Manual'
+  }
+}
+
 function fallbackTargetSummary(target: SyncTarget): IntegrationTargetSyncSummary {
   return {
     target,
     lastRunAt: null,
     lastSuccessfulRunAt: null,
     lastStatus: null,
+    lastTrigger: null,
     processedCount: 0,
     successCount: 0,
     errorCount: 0,
@@ -218,6 +284,18 @@ function fallbackTargetSummary(target: SyncTarget): IntegrationTargetSyncSummary
       linkedCount: 0,
       unlinkedCount: 0,
     },
+    schedule: {
+      target,
+      mode: 'manual_only',
+      frequency: 'daily',
+      status: 'manual_only',
+      nextScheduledRunAt: null,
+      lastScheduledRunAt: null,
+    },
+    lastRunDurationMs: null,
+    consecutiveFailures: 0,
+    lastBlockedAt: null,
+    hasActiveRun: false,
   }
 }
 
@@ -476,6 +554,69 @@ function IntegrationsSettingsPage() {
     },
   })
 
+  const scheduleMutation = useMutation({
+    mutationFn: async ({
+      id,
+      target,
+      mode,
+      frequency,
+    }: {
+      id: string
+      target: SyncTarget
+      mode: IntegrationRunMode
+      frequency?: IntegrationScheduleFrequency
+    }) => {
+      const res = await api.api.integrations[':id'].schedule.$post({
+        param: { id },
+        json: { target, mode, frequency },
+      })
+
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao atualizar agenda'))
+      }
+
+      return res.json()
+    },
+    onSuccess: async () => {
+      toast.success('Agendamento atualizado')
+      await refreshIntegrations()
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao atualizar agenda',
+      )
+    },
+  })
+
+  const retryMutation = useMutation({
+    mutationFn: async ({
+      id,
+      runId,
+    }: {
+      id: string
+      runId: string
+    }) => {
+      const res = await api.api.integrations[':id'].runs[':runId'].retry.$post({
+        param: { id, runId },
+      })
+
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao reprocessar sync'))
+      }
+
+      return res.json()
+    },
+    onSuccess: async () => {
+      toast.success('Reprocessamento disparado')
+      await refreshIntegrations()
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao reprocessar sync',
+      )
+    },
+  })
+
   if (isLoadingOrg || isLoadingSession) {
     return <IntegrationsSkeleton />
   }
@@ -519,6 +660,8 @@ function IntegrationsSettingsPage() {
     atRisk: payload.data.filter(
       (integration) => integration.overview.readiness.readinessStatus !== 'READY',
     ).length,
+    scheduledTargets: payload.data.flatMap((integration) => integration.overview.targets)
+      .filter((target) => target.schedule.mode === 'scheduled').length,
   }
 
   return (
@@ -546,6 +689,11 @@ function IntegrationsSettingsPage() {
             </Badge>
             <Badge variant="outline">
               {activeSummaries.atRisk} em atenção
+            </Badge>
+            <Badge variant="outline">
+              {activeSummaries.scheduledTargets} alvo
+              {activeSummaries.scheduledTargets === 1 ? '' : 's'} agendado
+              {activeSummaries.scheduledTargets === 1 ? '' : 's'}
             </Badge>
           </div>
 
@@ -881,6 +1029,16 @@ function IntegrationsSettingsPage() {
                                 </div>
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-muted-foreground">
+                                    Trigger
+                                  </span>
+                                  <span>
+                                    {summary.lastTrigger
+                                      ? runTriggerLabel(summary.lastTrigger)
+                                      : 'Sem execução'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
                                     Último sucesso
                                   </span>
                                   <span>
@@ -892,6 +1050,168 @@ function IntegrationsSettingsPage() {
                                     Última execução
                                   </span>
                                   <span>{formatDateTime(summary.lastRunAt)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Duração
+                                  </span>
+                                  <span>
+                                    {formatDuration(summary.lastRunDurationMs)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="rounded-md border p-3 text-sm">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium">Agendamento</span>
+                                  <Badge
+                                    variant={scheduleStatusVariant(
+                                      summary.schedule.status,
+                                    )}
+                                  >
+                                    {scheduleStatusLabel(summary.schedule.status)}
+                                  </Badge>
+                                </div>
+                                <div className="mt-3 grid gap-2 text-sm">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-muted-foreground">
+                                      Modo
+                                    </span>
+                                    <span>
+                                      {summary.schedule.mode === 'scheduled'
+                                        ? 'Automático'
+                                        : summary.schedule.mode === 'disabled'
+                                          ? 'Desligado'
+                                          : 'Manual'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-muted-foreground">
+                                      Frequência
+                                    </span>
+                                    <span>
+                                      {summary.schedule.frequency === 'weekly'
+                                        ? 'Semanal'
+                                        : 'Diária'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-muted-foreground">
+                                      Próxima execução
+                                    </span>
+                                    <span>
+                                      {formatDateTime(
+                                        summary.schedule.nextScheduledRunAt,
+                                      )}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-muted-foreground">
+                                      Último schedule
+                                    </span>
+                                    <span>
+                                      {formatDateTime(
+                                        summary.schedule.lastScheduledRunAt,
+                                      )}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-muted-foreground">
+                                      Falhas consecutivas
+                                    </span>
+                                    <span>{summary.consecutiveFailures}</span>
+                                  </div>
+                                </div>
+
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant={
+                                      summary.schedule.mode === 'manual_only'
+                                        ? 'default'
+                                        : 'outline'
+                                    }
+                                    onClick={() =>
+                                      scheduleMutation.mutate({
+                                        id: integration.id,
+                                        target,
+                                        mode: 'manual_only',
+                                      })
+                                    }
+                                    disabled={
+                                      !hasEntitlement ||
+                                      scheduleMutation.isPending
+                                    }
+                                  >
+                                    Manual
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant={
+                                      summary.schedule.mode === 'scheduled'
+                                      && summary.schedule.frequency === 'daily'
+                                        ? 'default'
+                                        : 'outline'
+                                    }
+                                    onClick={() =>
+                                      scheduleMutation.mutate({
+                                        id: integration.id,
+                                        target,
+                                        mode: 'scheduled',
+                                        frequency: 'daily',
+                                      })
+                                    }
+                                    disabled={
+                                      !hasEntitlement ||
+                                      scheduleMutation.isPending
+                                    }
+                                  >
+                                    Diário
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant={
+                                      summary.schedule.mode === 'scheduled'
+                                      && summary.schedule.frequency === 'weekly'
+                                        ? 'default'
+                                        : 'outline'
+                                    }
+                                    onClick={() =>
+                                      scheduleMutation.mutate({
+                                        id: integration.id,
+                                        target,
+                                        mode: 'scheduled',
+                                        frequency: 'weekly',
+                                      })
+                                    }
+                                    disabled={
+                                      !hasEntitlement ||
+                                      scheduleMutation.isPending
+                                    }
+                                  >
+                                    Semanal
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant={
+                                      summary.schedule.mode === 'disabled'
+                                        ? 'destructive'
+                                        : 'outline'
+                                    }
+                                    onClick={() =>
+                                      scheduleMutation.mutate({
+                                        id: integration.id,
+                                        target,
+                                        mode: 'disabled',
+                                      })
+                                    }
+                                    disabled={
+                                      !hasEntitlement ||
+                                      scheduleMutation.isPending
+                                    }
+                                  >
+                                    Desligar
+                                  </Button>
                                 </div>
                               </div>
 
@@ -949,6 +1269,13 @@ function IntegrationsSettingsPage() {
                                     : targetMeta[target].syncLabel}
                                 </Button>
                               </div>
+
+                              {summary.lastBlockedAt && (
+                                <p className="text-xs text-muted-foreground">
+                                  Último bloqueio detectado em{' '}
+                                  {formatDateTime(summary.lastBlockedAt)}.
+                                </p>
+                              )}
 
                               {preview && (
                                 <>
@@ -1022,14 +1349,46 @@ function IntegrationsSettingsPage() {
                             className="rounded-md border p-3 text-sm"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium">
-                                {targetMeta[run.target].label}
-                              </span>
-                              <Badge variant="outline">{run.status}</Badge>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium">
+                                  {targetMeta[run.target].label}
+                                </span>
+                                <Badge variant="outline">
+                                  {runTriggerLabel(run.trigger)}
+                                </Badge>
+                                <Badge variant="outline">{run.status}</Badge>
+                              </div>
+                              {run.status !== 'PENDING' &&
+                              run.status !== 'RUNNING' ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    retryMutation.mutate({
+                                      id: integration.id,
+                                      runId: run.id,
+                                    })
+                                  }
+                                  disabled={
+                                    !hasEntitlement || retryMutation.isPending
+                                  }
+                                >
+                                  {retryMutation.isPending
+                                    ? 'Reprocessando...'
+                                    : 'Reprocessar'}
+                                </Button>
+                              ) : null}
                             </div>
                             <p className="mt-1 text-muted-foreground">
                               {run.successCount}/{run.processedCount} itens com
                               sucesso em {formatDateTime(run.createdAt)}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Limite: {run.summary?.requestedLimit ?? 50}
+                              {run.summary?.blocked ? ' · bloqueado por dependência' : ''}
+                              {run.summary?.retryOfRunId
+                                ? ` · retry de ${run.summary.retryOfRunId}`
+                                : ''}
                             </p>
                             {run.errorSummary && (
                               <p className="mt-1 text-destructive">

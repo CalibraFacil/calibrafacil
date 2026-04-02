@@ -18,6 +18,7 @@ import {
 } from "@calibra-facil/signing";
 import {
   formatIntegrationCustomerAddress,
+  DEFAULT_INTEGRATION_SCHEDULE_FREQUENCY,
   normalizeGenericFinancialErpConfig,
   type GenericFinancialErpConnectionConfig,
   type IntegrationDependencyWarning,
@@ -25,10 +26,14 @@ import {
   type IntegrationCustomerPayload,
   type IntegrationReadinessSummary,
   type IntegrationReadinessStatus,
+  type IntegrationRunMode,
+  type IntegrationScheduleFrequency,
+  type IntegrationScheduleStatus,
   type IntegrationServiceOrderPayload,
   type IntegrationSetupStatus,
   type IntegrationSyncStatus,
   type IntegrationSyncTarget,
+  type IntegrationTargetScheduleSummary,
   type IntegrationTargetCoverageSummary,
   type IntegrationTargetSyncSummary,
   type IntegrationSyncTrigger,
@@ -62,6 +67,14 @@ export interface IntegrationOverview {
     hasRecentFailures: boolean;
   };
 }
+
+export const INTEGRATION_TARGETS = [
+  "customer",
+  "service_order",
+  "billing_document",
+] as const satisfies readonly IntegrationSyncTarget[];
+
+export const DEFAULT_INTEGRATION_SYNC_LIMIT = 50;
 
 function formatCustomerAddress(
   address: typeof customer.$inferSelect["address"],
@@ -110,8 +123,72 @@ export function buildGenericConnectionConfig(input: {
   customerPath?: string;
   serviceOrderPath?: string;
   billingDocumentPath?: string;
+  schedules?: GenericFinancialErpConnectionConfig["schedules"];
 }) {
   return normalizeGenericFinancialErpConfig(input);
+}
+
+function toIsoDate(value?: Date | null) {
+  return value?.toISOString?.() ?? null;
+}
+
+function parseDate(value: string | null | undefined) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function calculateNextScheduledRunAt(
+  frequency: IntegrationScheduleFrequency,
+  from: Date,
+) {
+  const next = new Date(from);
+  next.setMilliseconds(0);
+
+  if (frequency === "weekly") {
+    next.setDate(next.getDate() + 7);
+  } else {
+    next.setDate(next.getDate() + 1);
+  }
+
+  return next.toISOString();
+}
+
+export function getTargetScheduleConfig(
+  config: GenericFinancialErpConnectionConfig,
+  target: IntegrationSyncTarget,
+) {
+  return config.schedules[target];
+}
+
+export function updateTargetScheduleConfig(params: {
+  config: GenericFinancialErpConnectionConfig;
+  target: IntegrationSyncTarget;
+  mode?: IntegrationRunMode;
+  frequency?: IntegrationScheduleFrequency;
+  nextScheduledRunAt?: string | null;
+  lastScheduledRunAt?: string | null;
+}) {
+  return normalizeGenericFinancialErpConfig({
+    ...params.config,
+    schedules: {
+      ...params.config.schedules,
+      [params.target]: {
+        ...params.config.schedules[params.target],
+        mode: params.mode ?? params.config.schedules[params.target].mode,
+        frequency:
+          params.frequency ?? params.config.schedules[params.target].frequency,
+        nextScheduledRunAt:
+          params.nextScheduledRunAt === undefined
+            ? params.config.schedules[params.target].nextScheduledRunAt
+            : params.nextScheduledRunAt,
+        lastScheduledRunAt:
+          params.lastScheduledRunAt === undefined
+            ? params.config.schedules[params.target].lastScheduledRunAt
+            : params.lastScheduledRunAt,
+      },
+    },
+  });
 }
 
 function buildAuthHeaders(secret: string) {
@@ -209,7 +286,10 @@ export async function getIntegrationRecord(
 
   return {
     integration,
-    connection: integration.connection,
+    connection: {
+      ...integration.connection,
+      config: normalizeGenericFinancialErpConfig(integration.connection.config),
+    },
   };
 }
 
@@ -671,9 +751,85 @@ function buildPreviewSampleRecord(
   };
 }
 
+function isSuccessfulRun(
+  run: typeof integrationSyncRun.$inferSelect,
+): boolean {
+  return (
+    run.status === "COMPLETED" ||
+    (run.status === "PARTIAL" && run.successCount > 0)
+  );
+}
+
+function isFailingRun(run: typeof integrationSyncRun.$inferSelect): boolean {
+  return run.status === "FAILED" || (run.status === "PARTIAL" && run.errorCount > 0);
+}
+
+function getRunDurationMs(run: typeof integrationSyncRun.$inferSelect) {
+  if (!run.startedAt || !run.finishedAt) return null;
+  return Math.max(run.finishedAt.getTime() - run.startedAt.getTime(), 0);
+}
+
+function getConsecutiveFailures(runs: typeof integrationSyncRun.$inferSelect[]) {
+  let streak = 0;
+
+  for (const run of runs) {
+    if (run.status === "PENDING" || run.status === "RUNNING") {
+      continue;
+    }
+
+    if (isFailingRun(run)) {
+      streak += 1;
+      continue;
+    }
+
+    break;
+  }
+
+  return streak;
+}
+
+function getLastBlockedAt(runs: typeof integrationSyncRun.$inferSelect[]) {
+  for (const run of runs) {
+    const summary =
+      run.summary && typeof run.summary === "object"
+        ? (run.summary as Record<string, unknown>)
+        : null;
+
+    if (summary?.blocked === true) {
+      return toIsoDate(run.finishedAt ?? run.updatedAt ?? run.createdAt);
+    }
+  }
+
+  return null;
+}
+
+function buildScheduleStatus(params: {
+  mode: IntegrationRunMode;
+  nextScheduledRunAt: string | null;
+  hasActiveRun: boolean;
+  blocked: boolean;
+  consecutiveFailures: number;
+  now: Date;
+}): IntegrationScheduleStatus {
+  if (params.mode === "disabled") return "disabled";
+  if (params.mode === "manual_only") return "manual_only";
+  if (params.hasActiveRun) return "running";
+  if (params.blocked) return "blocked";
+  if (params.consecutiveFailures > 0) return "failing";
+
+  const nextRun = parseDate(params.nextScheduledRunAt);
+  if (nextRun && nextRun.getTime() <= params.now.getTime()) {
+    return "due";
+  }
+
+  return "scheduled";
+}
+
 export async function buildIntegrationOverview(
   record: GenericConnectionRecord,
 ): Promise<IntegrationOverview> {
+  const now = new Date();
+  const normalizedConfig = normalizeGenericFinancialErpConfig(record.connection.config);
   const [recentRuns, recentErrorEvent] = await Promise.all([
     db.query.integrationSyncRun.findMany({
       where: eq(integrationSyncRun.integrationId, record.integration.id),
@@ -716,37 +872,59 @@ export async function buildIntegrationOverview(
   >;
 
   const validated = hasRemoteValidation(record);
-  const targets: IntegrationTargetSyncSummary[] = (
-    ["customer", "service_order", "billing_document"] as const
-  ).map((target) => {
+  const targets: IntegrationTargetSyncSummary[] = INTEGRATION_TARGETS.map(
+    (target) => {
     const targetRuns = recentRuns.filter((run) => run.target === target);
     const lastRun = targetRuns[0] ?? null;
-    const lastSuccessfulRun =
-      targetRuns.find(
-        (run) =>
-          run.status === "COMPLETED" ||
-          (run.status === "PARTIAL" && run.successCount > 0),
-      ) ?? null;
+    const lastSuccessfulRun = targetRuns.find(isSuccessfulRun) ?? null;
     const warnings = buildDependencyWarnings({
       target,
       integrationStatus: record.integration.status,
       validated,
       coverageByTarget,
     });
+    const scheduleConfig = getTargetScheduleConfig(normalizedConfig, target);
+    const hasActiveRun = targetRuns.some(
+      (run) => run.status === "PENDING" || run.status === "RUNNING",
+    );
+    const consecutiveFailures = getConsecutiveFailures(targetRuns);
+    const blocked = warnings.some((warning) => warning.severity === "error");
+    const schedule: IntegrationTargetScheduleSummary = {
+      target,
+      mode: scheduleConfig.mode,
+      frequency: scheduleConfig.frequency,
+      status: buildScheduleStatus({
+        mode: scheduleConfig.mode,
+        nextScheduledRunAt: scheduleConfig.nextScheduledRunAt,
+        hasActiveRun,
+        blocked,
+        consecutiveFailures,
+        now,
+      }),
+      nextScheduledRunAt: scheduleConfig.nextScheduledRunAt,
+      lastScheduledRunAt: scheduleConfig.lastScheduledRunAt,
+    };
 
     return {
       target,
-      lastRunAt: lastRun?.createdAt?.toISOString?.() ?? null,
-      lastSuccessfulRunAt: lastSuccessfulRun?.finishedAt?.toISOString?.() ?? null,
+      lastRunAt: toIsoDate(lastRun?.createdAt) ?? null,
+      lastSuccessfulRunAt: toIsoDate(lastSuccessfulRun?.finishedAt) ?? null,
       lastStatus: lastRun?.status ?? null,
+      lastTrigger: lastRun?.trigger ?? null,
       processedCount: lastRun?.processedCount ?? 0,
       successCount: lastRun?.successCount ?? 0,
       errorCount: lastRun?.errorCount ?? 0,
-      blocked: warnings.some((warning) => warning.severity === "error"),
+      blocked,
       warnings,
       coverage: coverageByTarget[target],
+      schedule,
+      lastRunDurationMs: lastRun ? getRunDurationMs(lastRun) : null,
+      consecutiveFailures,
+      lastBlockedAt: getLastBlockedAt(targetRuns),
+      hasActiveRun,
     };
-  });
+    },
+  );
 
   const dependencyWarnings = dedupeDependencyWarnings(
     targets.flatMap((target) => target.warnings),
@@ -771,20 +949,15 @@ export async function buildIntegrationOverview(
   };
 
   const lastRun = recentRuns[0] ?? null;
-  const lastSuccessfulRun =
-    recentRuns.find(
-      (run) =>
-        run.status === "COMPLETED" ||
-        (run.status === "PARTIAL" && run.successCount > 0),
-    ) ?? null;
+  const lastSuccessfulRun = recentRuns.find(isSuccessfulRun) ?? null;
 
   return {
     readiness,
     targets,
     syncSummary: {
-      lastRunAt: lastRun?.createdAt?.toISOString?.() ?? null,
-      lastSuccessfulRunAt: lastSuccessfulRun?.finishedAt?.toISOString?.() ?? null,
-      lastErrorAt: recentErrorEvent?.createdAt?.toISOString?.() ?? null,
+      lastRunAt: toIsoDate(lastRun?.createdAt),
+      lastSuccessfulRunAt: toIsoDate(lastSuccessfulRun?.finishedAt),
+      lastErrorAt: toIsoDate(recentErrorEvent?.createdAt),
       hasRecentFailures: Boolean(recentErrorEvent),
     },
   };
@@ -819,6 +992,60 @@ export async function previewIntegrationSync(params: {
     previewCount: payloads.length,
     sampleRecords: payloads.slice(0, 5).map(buildPreviewSampleRecord),
   };
+}
+
+function buildRunSummary(params: {
+  target: IntegrationSyncTarget;
+  processedCount?: number;
+  successCount?: number;
+  errorCount?: number;
+  requestedLimit?: number;
+  blocked?: boolean;
+  retryOfRunId?: string | null;
+}) {
+  return {
+    target: params.target,
+    processedCount: params.processedCount ?? 0,
+    successCount: params.successCount ?? 0,
+    errorCount: params.errorCount ?? 0,
+    requestedLimit: params.requestedLimit ?? DEFAULT_INTEGRATION_SYNC_LIMIT,
+    blocked: params.blocked ?? false,
+    retryOfRunId: params.retryOfRunId ?? null,
+  } satisfies Record<string, unknown>;
+}
+
+export function getRequestedLimitFromRun(
+  run: typeof integrationSyncRun.$inferSelect,
+) {
+  const summary =
+    run.summary && typeof run.summary === "object"
+      ? (run.summary as Record<string, unknown>)
+      : null;
+  const requestedLimit = summary?.requestedLimit;
+
+  if (typeof requestedLimit === "number" && Number.isFinite(requestedLimit)) {
+    return Math.max(1, Math.min(250, Math.trunc(requestedLimit)));
+  }
+
+  return DEFAULT_INTEGRATION_SYNC_LIMIT;
+}
+
+export async function hasActiveSyncRun(params: {
+  integrationId: string;
+  organizationId: string;
+  target: IntegrationSyncTarget;
+}) {
+  const existing = await db.query.integrationSyncRun.findFirst({
+    where: and(
+      eq(integrationSyncRun.integrationId, params.integrationId),
+      eq(integrationSyncRun.organizationId, params.organizationId),
+      eq(integrationSyncRun.target, params.target),
+      inArray(integrationSyncRun.status, ["PENDING", "RUNNING"]),
+    ),
+    orderBy: [desc(integrationSyncRun.createdAt)],
+  });
+
+  return existing;
 }
 
 async function getExistingLink(
@@ -955,6 +1182,10 @@ export async function runIntegrationSync(params: {
     .set({
       status: "RUNNING",
       startedAt: new Date(),
+      summary: buildRunSummary({
+        target: params.target,
+        requestedLimit: params.limit,
+      }),
       updatedAt: new Date(),
     })
     .where(eq(integrationSyncRun.id, params.runId));
@@ -1029,12 +1260,13 @@ export async function runIntegrationSync(params: {
         successCount,
         errorCount,
         errorSummary,
-        summary: {
+        summary: buildRunSummary({
           target: params.target,
           processedCount,
           successCount,
           errorCount,
-        },
+          requestedLimit: params.limit,
+        }),
         finishedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -1089,7 +1321,9 @@ export async function createSyncRun(params: {
   organizationId: string;
   trigger: IntegrationSyncTrigger;
   target: IntegrationSyncTarget;
-  initiatedBy: string;
+  initiatedBy?: string | null;
+  requestedLimit?: number;
+  retryOfRunId?: string | null;
 }) {
   const id = crypto.randomUUID();
 
@@ -1100,8 +1334,63 @@ export async function createSyncRun(params: {
     trigger: params.trigger,
     target: params.target,
     status: "PENDING",
-    initiatedBy: params.initiatedBy,
+    initiatedBy: params.initiatedBy ?? null,
+    summary: buildRunSummary({
+      target: params.target,
+      requestedLimit: params.requestedLimit,
+      retryOfRunId: params.retryOfRunId,
+    }),
   });
 
   return id;
+}
+
+export async function failSyncRunAsBlocked(params: {
+  integrationId: string;
+  organizationId: string;
+  runId: string;
+  target: IntegrationSyncTarget;
+  requestedLimit: number;
+  message: string;
+}) {
+  await db
+    .update(integrationSyncRun)
+    .set({
+      status: "FAILED",
+      errorSummary: params.message,
+      finishedAt: new Date(),
+      summary: buildRunSummary({
+        target: params.target,
+        requestedLimit: params.requestedLimit,
+        blocked: true,
+      }),
+      updatedAt: new Date(),
+    })
+    .where(eq(integrationSyncRun.id, params.runId));
+
+  await writeIntegrationEvent({
+    integrationId: params.integrationId,
+    organizationId: params.organizationId,
+    runId: params.runId,
+    level: "warning",
+    event: "sync.blocked",
+    message: params.message,
+    details: {
+      target: params.target,
+      blocked: true,
+    },
+  });
+}
+
+export function buildInitialNextScheduledRunAt(
+  frequency: IntegrationScheduleFrequency = DEFAULT_INTEGRATION_SCHEDULE_FREQUENCY,
+) {
+  return calculateNextScheduledRunAt(frequency, new Date());
+}
+
+export function buildNextScheduledRunAtFrom(params: {
+  frequency: IntegrationScheduleFrequency;
+  from: Date;
+}) {
+  return calculateNextScheduledRunAt(params.frequency, params.from);
 }

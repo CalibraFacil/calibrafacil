@@ -7,7 +7,11 @@ import QRCode from "qrcode";
 import { processScheduledNotifications } from "./scheduled.js";
 import { signPdf, decryptPassword, decryptBinary, type SignatureMetadata } from "@calibra-facil/signing";
 import { DEFAULT_CERTIFICATE_TEMPLATE_CONFIG } from "@calibra-facil/shared";
-import { processIntegrationSync, type IntegrationSyncQueueMessage } from "./integrations.js";
+import {
+    processIntegrationSync,
+    processScheduledIntegrationSyncs,
+    type IntegrationSyncQueueMessage,
+} from "./integrations.js";
 
 interface Env {
     BROWSER: Fetcher;
@@ -906,12 +910,31 @@ export default {
         });
     },
 
-    // Scheduled handler for compliance notifications (runs daily at 08:00 UTC)
+    // Scheduled handlers for compliance notifications and integration syncs
     async scheduled(
-        _event: ScheduledEvent,
+        event: ScheduledEvent,
         env: Env,
-        ctx: ExecutionContext
+        _ctx: ExecutionContext
     ): Promise<void> {
+        if (event.cron === "*/30 * * * *") {
+            console.log("[Scheduled] Starting integration scheduler");
+            const start = performance.now();
+
+            try {
+                const result = await processScheduledIntegrationSyncs(env);
+                const duration = Math.round(performance.now() - start);
+                console.log(
+                    `[Scheduled] Integration scheduler completed in ${duration}ms: ` +
+                    `${result.scheduledRuns} run(s) dispatched`
+                );
+            } catch (error) {
+                console.error("[Scheduled] Error processing integrations:", error);
+                throw error;
+            }
+
+            return;
+        }
+
         console.log("[Scheduled] Starting daily compliance notification check");
         const start = performance.now();
 
