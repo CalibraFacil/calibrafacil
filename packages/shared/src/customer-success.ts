@@ -97,3 +97,72 @@ export interface PlanSupportPolicy {
   includesAssistedOnboarding: boolean;
   includesAssistedMigration: boolean;
 }
+
+export type CustomerSuccessWorkflowState =
+  | "INACTIVE"
+  | "ACTIVE"
+  | "BLOCKED"
+  | "AT_RISK"
+  | "COMPLETED";
+
+export type CustomerSuccessSupportWorkflowState =
+  | "IDLE"
+  | "ACTIVE"
+  | "AT_RISK"
+  | "ESCALATED";
+
+export type CustomerSuccessAccountOwnershipStatus =
+  | "UNASSIGNED"
+  | "ASSIGNED"
+  | "AT_RISK";
+
+export type CustomerSuccessWorkflowWarningCode =
+  | "ACTIVE_BLOCKERS"
+  | "GO_LIVE_AT_RISK"
+  | "ONBOARDING_NOT_INCLUDED_IN_PLAN"
+  | "MIGRATION_NOT_INCLUDED_IN_PLAN"
+  | "NEXT_ACTION_DUE_SOON"
+  | "NEXT_ACTION_OVERDUE"
+  | "SLA_DUE_SOON"
+  | "SLA_BREACHED"
+  | "ESCALATION_REQUIRED";
+
+export type CustomerSuccessWorkflowViolationCode =
+  | "MISSING_INTERNAL_OWNER"
+  | "MISSING_NEXT_ACTION";
+
+export interface CustomerSuccessWorkflowWarning {
+  code: CustomerSuccessWorkflowWarningCode;
+  message: string;
+}
+
+export interface CustomerSuccessWorkflowViolation {
+  code: CustomerSuccessWorkflowViolationCode;
+  message: string;
+}
+
+export interface CustomerSuccessWorkflowPolicy {
+  supportMode: SupportMode;
+  effectiveSlaTier: CustomerSuccessSlaTier;
+  prioritySupport: boolean;
+  targetFirstResponseBusinessHours: number;
+  dueSoonThresholdBusinessHours: number;
+  includesAssistedOnboarding: boolean;
+  includesAssistedMigration: boolean;
+  requiresInternalOwnerForActiveWorkflows: boolean;
+  requiresNextActionForActiveWorkflows: boolean;
+}
+
+export interface CustomerSuccessWorkflowSummary {
+  accountOwnershipStatus: CustomerSuccessAccountOwnershipStatus;
+  onboardingState: CustomerSuccessWorkflowState;
+  migrationState: CustomerSuccessWorkflowState;
+  supportState: CustomerSuccessSupportWorkflowState;
+  goLiveState: CustomerSuccessWorkflowState;
+  hasActiveDeliveryWorkflows: boolean;
+  hasActiveSupportWorkflow: boolean;
+  hasActiveWorkflows: boolean;
+  warnings: CustomerSuccessWorkflowWarning[];
+  violations: CustomerSuccessWorkflowViolation[];
+  policy: CustomerSuccessWorkflowPolicy;
+}

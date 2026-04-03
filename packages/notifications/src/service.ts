@@ -119,6 +119,12 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   COMPETENCE_EXPIRED: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
   COMPETENCE_REQUESTED: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
   COMPETENCE_APPROVED: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
+  CUSTOMER_SUCCESS_WORKFLOW_BLOCKED: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_GO_LIVE_AT_RISK: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_SLA_DUE_SOON: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_SLA_BREACHED: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_ESCALATION_REQUIRED: { inApp: true, email: true },
 };
 
 // =============================================================================

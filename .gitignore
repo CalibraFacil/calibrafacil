@@ -51,3 +51,4 @@ packages/math-engine/docs/validation/latex/*.log
 packages/math-engine/docs/validation/latex/*.out
 packages/math-engine/docs/validation/latex/*.synctex.gz
 packages/math-engine/docs/validation/latex/*.jpg
+.todos/

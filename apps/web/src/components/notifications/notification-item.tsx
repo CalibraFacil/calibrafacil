@@ -30,6 +30,12 @@ type NotificationType =
   | 'PAYMENT_FAILED'
   | 'NC_CREATED'
   | 'NC_ESCALATED_TO_CAPA'
+  | 'CUSTOMER_SUCCESS_WORKFLOW_BLOCKED'
+  | 'CUSTOMER_SUCCESS_GO_LIVE_AT_RISK'
+  | 'CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE'
+  | 'CUSTOMER_SUCCESS_SLA_DUE_SOON'
+  | 'CUSTOMER_SUCCESS_SLA_BREACHED'
+  | 'CUSTOMER_SUCCESS_ESCALATION_REQUIRED'
 
 type NotificationPriority = 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -66,6 +72,12 @@ const notificationIcons = {
   PAYMENT_FAILED: CancelCircleIcon,
   NC_CREATED: Alert02Icon,
   NC_ESCALATED_TO_CAPA: Alert02Icon,
+  CUSTOMER_SUCCESS_WORKFLOW_BLOCKED: Alert02Icon,
+  CUSTOMER_SUCCESS_GO_LIVE_AT_RISK: Alert02Icon,
+  CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE: Calendar03Icon,
+  CUSTOMER_SUCCESS_SLA_DUE_SOON: Calendar03Icon,
+  CUSTOMER_SUCCESS_SLA_BREACHED: Alert02Icon,
+  CUSTOMER_SUCCESS_ESCALATION_REQUIRED: Alert02Icon,
 } as const
 
 const notificationColors: Record<NotificationType, string> = {
@@ -83,6 +95,12 @@ const notificationColors: Record<NotificationType, string> = {
   PAYMENT_FAILED: 'text-red-500',
   NC_CREATED: 'text-amber-500',
   NC_ESCALATED_TO_CAPA: 'text-red-500',
+  CUSTOMER_SUCCESS_WORKFLOW_BLOCKED: 'text-red-500',
+  CUSTOMER_SUCCESS_GO_LIVE_AT_RISK: 'text-red-500',
+  CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE: 'text-amber-500',
+  CUSTOMER_SUCCESS_SLA_DUE_SOON: 'text-amber-500',
+  CUSTOMER_SUCCESS_SLA_BREACHED: 'text-red-500',
+  CUSTOMER_SUCCESS_ESCALATION_REQUIRED: 'text-red-500',
 }
 
 export function NotificationItem({

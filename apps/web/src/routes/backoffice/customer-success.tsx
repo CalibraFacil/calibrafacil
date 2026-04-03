@@ -63,6 +63,20 @@ type SupportRequestStatus =
   | 'CLOSED'
 type SupportPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
 type SupportSlaStatus = 'ON_TRACK' | 'DUE_SOON' | 'BREACHED' | 'RESOLVED'
+type WorkflowState = 'INACTIVE' | 'ACTIVE' | 'BLOCKED' | 'AT_RISK' | 'COMPLETED'
+type SupportWorkflowState = 'IDLE' | 'ACTIVE' | 'AT_RISK' | 'ESCALATED'
+type AccountOwnershipStatus = 'UNASSIGNED' | 'ASSIGNED' | 'AT_RISK'
+type WorkflowWarningCode =
+  | 'ACTIVE_BLOCKERS'
+  | 'GO_LIVE_AT_RISK'
+  | 'ONBOARDING_NOT_INCLUDED_IN_PLAN'
+  | 'MIGRATION_NOT_INCLUDED_IN_PLAN'
+  | 'NEXT_ACTION_DUE_SOON'
+  | 'NEXT_ACTION_OVERDUE'
+  | 'SLA_DUE_SOON'
+  | 'SLA_BREACHED'
+  | 'ESCALATION_REQUIRED'
+type WorkflowViolationCode = 'MISSING_INTERNAL_OWNER' | 'MISSING_NEXT_ACTION'
 type Blocker = {
   id: string
   scope: BlockerScope
@@ -79,6 +93,37 @@ type Operator = {
   name: string
   email: string
   role: string
+}
+
+type WorkflowIssue<TCode extends string> = {
+  code: TCode
+  message: string
+}
+
+type WorkflowPolicy = {
+  supportMode: 'standard' | 'priority' | 'dedicated'
+  effectiveSlaTier: SlaTier
+  prioritySupport: boolean
+  targetFirstResponseBusinessHours: number
+  dueSoonThresholdBusinessHours: number
+  includesAssistedOnboarding: boolean
+  includesAssistedMigration: boolean
+  requiresInternalOwnerForActiveWorkflows: boolean
+  requiresNextActionForActiveWorkflows: boolean
+}
+
+type WorkflowSummary = {
+  accountOwnershipStatus: AccountOwnershipStatus
+  onboardingState: WorkflowState
+  migrationState: WorkflowState
+  supportState: SupportWorkflowState
+  goLiveState: WorkflowState
+  hasActiveDeliveryWorkflows: boolean
+  hasActiveSupportWorkflow: boolean
+  hasActiveWorkflows: boolean
+  warnings: WorkflowIssue<WorkflowWarningCode>[]
+  violations: WorkflowIssue<WorkflowViolationCode>[]
+  policy: WorkflowPolicy
 }
 
 type OrganizationQueueItem = {
@@ -146,7 +191,15 @@ type OrganizationQueueItem = {
       nextActionDueSoon: boolean
     }
     hasInternalOwner: boolean
+    workflow: WorkflowSummary
+    workflowWarnings: WorkflowIssue<WorkflowWarningCode>[]
+    workflowViolations: WorkflowIssue<WorkflowViolationCode>[]
+    policy: WorkflowPolicy
   }
+  workflow: WorkflowSummary
+  workflowWarnings: WorkflowIssue<WorkflowWarningCode>[]
+  workflowViolations: WorkflowIssue<WorkflowViolationCode>[]
+  policy: WorkflowPolicy
 }
 
 type ProfilePayload = {
@@ -193,6 +246,10 @@ type ProfilePayload = {
   internalOwnerUser: Operator | null
   operators: Operator[]
   operationalSummary: OrganizationQueueItem['operationalSummary']
+  workflow: WorkflowSummary
+  workflowWarnings: WorkflowIssue<WorkflowWarningCode>[]
+  workflowViolations: WorkflowIssue<WorkflowViolationCode>[]
+  policy: WorkflowPolicy
   timeline: Array<{
     id: number
     action: string
@@ -239,6 +296,10 @@ type RequestsPayload = {
     slug: string
   }
   operationalSummary: OrganizationQueueItem['operationalSummary']
+  workflow: WorkflowSummary
+  workflowWarnings: WorkflowIssue<WorkflowWarningCode>[]
+  workflowViolations: WorkflowIssue<WorkflowViolationCode>[]
+  policy: WorkflowPolicy
   data: SupportRequest[]
 }
 
@@ -303,6 +364,27 @@ const nextActionStatusLabels: Record<NextActionStatus, string> = {
   DUE_SOON: 'Vencendo',
   OVERDUE: 'Atrasada',
   COMPLETED: 'Concluída',
+}
+
+const workflowStateLabels: Record<WorkflowState, string> = {
+  INACTIVE: 'Inativo',
+  ACTIVE: 'Ativo',
+  BLOCKED: 'Bloqueado',
+  AT_RISK: 'Em risco',
+  COMPLETED: 'Concluído',
+}
+
+const supportWorkflowStateLabels: Record<SupportWorkflowState, string> = {
+  IDLE: 'Sem fila ativa',
+  ACTIVE: 'Em operação',
+  AT_RISK: 'Exige atenção',
+  ESCALATED: 'Escalado',
+}
+
+const ownershipStatusLabels: Record<AccountOwnershipStatus, string> = {
+  UNASSIGNED: 'Sem owner',
+  ASSIGNED: 'Owner definido',
+  AT_RISK: 'Owner obrigatório ausente',
 }
 
 const blockerScopeLabels: Record<BlockerScope, string> = {
@@ -427,6 +509,24 @@ function getNextActionBadgeVariant(
   }
 }
 
+function getWorkflowBadgeVariant(
+  status: WorkflowState | SupportWorkflowState | AccountOwnershipStatus,
+): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (status) {
+    case 'BLOCKED':
+    case 'AT_RISK':
+    case 'ESCALATED':
+      return 'destructive'
+    case 'ACTIVE':
+      return 'default'
+    case 'COMPLETED':
+    case 'ASSIGNED':
+      return 'secondary'
+    default:
+      return 'outline'
+  }
+}
+
 function InternalCustomerSuccessPage() {
   const queryClient = useQueryClient()
   const { data: session } = useBackofficeSession()
@@ -537,11 +637,14 @@ function InternalCustomerSuccessPage() {
         case 'priority':
           return organization.operationalSummary.prioritySupport
         case 'onboarding':
-          return organization.profile.onboardingStatus !== 'LIVE'
+          return (
+            organization.workflow.onboardingState !== 'INACTIVE' &&
+            organization.workflow.onboardingState !== 'COMPLETED'
+          )
         case 'migration':
           return (
-            organization.profile.migrationStatus !== 'NOT_REQUIRED' &&
-            organization.profile.migrationStatus !== 'COMPLETED'
+            organization.workflow.migrationState !== 'INACTIVE' &&
+            organization.workflow.migrationState !== 'COMPLETED'
           )
         case 'overdue':
           return (
@@ -549,9 +652,9 @@ function InternalCustomerSuccessPage() {
             organization.operationalSummary.breachedRequestsCount > 0
           )
         case 'unassigned':
-          return !organization.internalOwnerUser
+          return organization.workflow.accountOwnershipStatus !== 'ASSIGNED'
         case 'escalation':
-          return organization.operationalSummary.needsEscalation
+          return organization.workflow.supportState === 'ESCALATED'
         default:
           return true
       }
@@ -1336,9 +1439,67 @@ function InternalCustomerSuccessPage() {
                     <Badge variant="outline">
                       SLA {slaTierLabels[selectedOrganization.operationalSummary.effectiveSlaTier]}
                     </Badge>
+                    <Badge
+                      variant={getWorkflowBadgeVariant(
+                        selectedOrganization.workflow.accountOwnershipStatus,
+                      )}
+                    >
+                      {
+                        ownershipStatusLabels[
+                          selectedOrganization.workflow.accountOwnershipStatus
+                        ]
+                      }
+                    </Badge>
                     {selectedOrganization.operationalSummary.prioritySupport ? (
                       <Badge>Priority support</Badge>
                     ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Badge
+                      variant={getWorkflowBadgeVariant(
+                        selectedOrganization.workflow.onboardingState,
+                      )}
+                    >
+                      Onboarding{' '}
+                      {
+                        workflowStateLabels[
+                          selectedOrganization.workflow.onboardingState
+                        ]
+                      }
+                    </Badge>
+                    <Badge
+                      variant={getWorkflowBadgeVariant(
+                        selectedOrganization.workflow.migrationState,
+                      )}
+                    >
+                      Migração{' '}
+                      {
+                        workflowStateLabels[
+                          selectedOrganization.workflow.migrationState
+                        ]
+                      }
+                    </Badge>
+                    <Badge
+                      variant={getWorkflowBadgeVariant(
+                        selectedOrganization.workflow.goLiveState,
+                      )}
+                    >
+                      Go-live{' '}
+                      {workflowStateLabels[selectedOrganization.workflow.goLiveState]}
+                    </Badge>
+                    <Badge
+                      variant={getWorkflowBadgeVariant(
+                        selectedOrganization.workflow.supportState,
+                      )}
+                    >
+                      Suporte{' '}
+                      {
+                        supportWorkflowStateLabels[
+                          selectedOrganization.workflow.supportState
+                        ]
+                      }
+                    </Badge>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
@@ -1374,6 +1535,30 @@ function InternalCustomerSuccessPage() {
                       </p>
                     </div>
                   </div>
+
+                  {selectedOrganization.workflowViolations.length > 0 ? (
+                    <div className="rounded-lg border border-dashed border-destructive/40 bg-destructive/5 p-4">
+                      <p className="text-sm font-medium text-destructive">
+                        Ações requeridas
+                      </p>
+                      <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                        {selectedOrganization.workflowViolations.map((issue) => (
+                          <p key={issue.code}>{issue.message}</p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {selectedOrganization.workflowWarnings.length > 0 ? (
+                    <div className="rounded-lg border border-dashed p-4">
+                      <p className="text-sm font-medium">Alertas do workflow</p>
+                      <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                        {selectedOrganization.workflowWarnings.map((issue) => (
+                          <p key={issue.code}>{issue.message}</p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="grid gap-4 md:grid-cols-4">
                     <MiniMetric
@@ -1513,6 +1698,39 @@ function InternalCustomerSuccessPage() {
                           {profileQuery.data.supportPolicy.targetFirstResponseBusinessHours}h
                         </FieldDescription>
                       </Field>
+                    </div>
+
+                    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                      <p>
+                        SLA efetivo:{' '}
+                        <strong>
+                          {slaTierLabels[profileQuery.data.policy.effectiveSlaTier]}
+                        </strong>
+                        {' · '}
+                        Resposta alvo:{' '}
+                        <strong>
+                          {profileQuery.data.policy.targetFirstResponseBusinessHours}h úteis
+                        </strong>
+                        {' · '}
+                        Alerta SLA:{' '}
+                        <strong>
+                          {profileQuery.data.policy.dueSoonThresholdBusinessHours}h úteis
+                        </strong>
+                        {' · '}
+                        Owner interno obrigatório:{' '}
+                        <strong>
+                          {profileQuery.data.policy.requiresInternalOwnerForActiveWorkflows
+                            ? 'Sim'
+                            : 'Não'}
+                        </strong>
+                        {' · '}
+                        Próxima ação obrigatória:{' '}
+                        <strong>
+                          {profileQuery.data.policy.requiresNextActionForActiveWorkflows
+                            ? 'Sim'
+                            : 'Não'}
+                        </strong>
+                      </p>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">

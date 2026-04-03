@@ -61,6 +61,52 @@ type SupportPolicy = {
   includesAssistedMigration: boolean
 }
 
+type WorkflowState = 'INACTIVE' | 'ACTIVE' | 'BLOCKED' | 'AT_RISK' | 'COMPLETED'
+type SupportWorkflowState = 'IDLE' | 'ACTIVE' | 'AT_RISK' | 'ESCALATED'
+type AccountOwnershipStatus = 'UNASSIGNED' | 'ASSIGNED' | 'AT_RISK'
+type WorkflowWarningCode =
+  | 'ACTIVE_BLOCKERS'
+  | 'GO_LIVE_AT_RISK'
+  | 'ONBOARDING_NOT_INCLUDED_IN_PLAN'
+  | 'MIGRATION_NOT_INCLUDED_IN_PLAN'
+  | 'NEXT_ACTION_DUE_SOON'
+  | 'NEXT_ACTION_OVERDUE'
+  | 'SLA_DUE_SOON'
+  | 'SLA_BREACHED'
+  | 'ESCALATION_REQUIRED'
+type WorkflowViolationCode = 'MISSING_INTERNAL_OWNER' | 'MISSING_NEXT_ACTION'
+
+type WorkflowIssue<TCode extends string> = {
+  code: TCode
+  message: string
+}
+
+type WorkflowPolicy = {
+  supportMode: SupportPolicy['supportMode']
+  effectiveSlaTier: 'PLAN_DEFAULT' | 'PRIORITY' | 'DEDICATED'
+  prioritySupport: boolean
+  targetFirstResponseBusinessHours: number
+  dueSoonThresholdBusinessHours: number
+  includesAssistedOnboarding: boolean
+  includesAssistedMigration: boolean
+  requiresInternalOwnerForActiveWorkflows: boolean
+  requiresNextActionForActiveWorkflows: boolean
+}
+
+type WorkflowSummary = {
+  accountOwnershipStatus: AccountOwnershipStatus
+  onboardingState: WorkflowState
+  migrationState: WorkflowState
+  supportState: SupportWorkflowState
+  goLiveState: WorkflowState
+  hasActiveDeliveryWorkflows: boolean
+  hasActiveSupportWorkflow: boolean
+  hasActiveWorkflows: boolean
+  warnings: WorkflowIssue<WorkflowWarningCode>[]
+  violations: WorkflowIssue<WorkflowViolationCode>[]
+  policy: WorkflowPolicy
+}
+
 type SuccessProfileResponse = {
   profile: {
     id: number
@@ -90,6 +136,10 @@ type SuccessProfileResponse = {
     name: string
     status: string
   }
+  workflow: WorkflowSummary
+  workflowWarnings: WorkflowIssue<WorkflowWarningCode>[]
+  workflowViolations: WorkflowIssue<WorkflowViolationCode>[]
+  policy: WorkflowPolicy
 }
 
 type SupportRequest = {
@@ -192,6 +242,27 @@ const nextActionLabels: Record<SuccessProfileResponse['publicSummary']['nextActi
   COMPLETED: 'Último passo concluído',
 }
 
+const workflowStateLabels: Record<WorkflowState, string> = {
+  INACTIVE: 'Inativo',
+  ACTIVE: 'Ativo',
+  BLOCKED: 'Bloqueado',
+  AT_RISK: 'Em risco',
+  COMPLETED: 'Concluído',
+}
+
+const supportWorkflowStateLabels: Record<SupportWorkflowState, string> = {
+  IDLE: 'Sem fila ativa',
+  ACTIVE: 'Em operação',
+  AT_RISK: 'Exige atenção',
+  ESCALATED: 'Escalado',
+}
+
+const ownershipStatusLabels: Record<AccountOwnershipStatus, string> = {
+  UNASSIGNED: 'Sem owner interno',
+  ASSIGNED: 'Owner definido',
+  AT_RISK: 'Sem owner em workflow ativo',
+}
+
 const slaStatusLabels: Record<SupportRequest['slaStatus'], string> = {
   ON_TRACK: 'Dentro do SLA',
   DUE_SOON: 'SLA vencendo',
@@ -242,6 +313,24 @@ function formatRelativeSla(value: number | null) {
   if (value <= 0) return `${absoluteHours}h em atraso`
   if (absoluteHours < 24) return `${absoluteHours}h restantes`
   return `${Math.round(absoluteHours / 24)}d restantes`
+}
+
+function getWorkflowBadgeVariant(
+  status: WorkflowState | SupportWorkflowState | AccountOwnershipStatus,
+): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (status) {
+    case 'BLOCKED':
+    case 'ESCALATED':
+    case 'AT_RISK':
+      return 'destructive'
+    case 'ACTIVE':
+      return 'default'
+    case 'COMPLETED':
+    case 'ASSIGNED':
+      return 'secondary'
+    default:
+      return 'outline'
+  }
 }
 
 function CustomerSuccessPage() {
@@ -397,12 +486,32 @@ function CustomerSuccessPage() {
             <Separator />
             <div className="space-y-1 text-sm">
               <p>
+                <strong>SLA efetivo:</strong>{' '}
+                {payload.policy.effectiveSlaTier === 'DEDICATED'
+                  ? 'Dedicado'
+                  : payload.policy.effectiveSlaTier === 'PRIORITY'
+                    ? 'Prioritário'
+                    : 'Padrão do plano'}
+              </p>
+              <p>
                 <strong>Onboarding assistido:</strong>{' '}
                 {payload.supportPolicy.includesAssistedOnboarding ? 'Sim' : 'Não'}
               </p>
               <p>
                 <strong>Migração assistida:</strong>{' '}
                 {payload.supportPolicy.includesAssistedMigration ? 'Sim' : 'Não'}
+              </p>
+              <p>
+                <strong>Owner interno exigido em workflow ativo:</strong>{' '}
+                {payload.policy.requiresInternalOwnerForActiveWorkflows ? 'Sim' : 'Não'}
+              </p>
+              <p>
+                <strong>Limiar de alerta de SLA:</strong>{' '}
+                {payload.policy.dueSoonThresholdBusinessHours}h úteis
+              </p>
+              <p>
+                <strong>Próxima ação exigida em workflow ativo:</strong>{' '}
+                {payload.policy.requiresNextActionForActiveWorkflows ? 'Sim' : 'Não'}
               </p>
             </div>
           </CardContent>
@@ -469,6 +578,9 @@ function CustomerSuccessPage() {
               <Badge variant="outline">
                 {nextActionLabels[payload.publicSummary.nextActionStatus]}
               </Badge>
+              <Badge variant={getWorkflowBadgeVariant(payload.workflow.accountOwnershipStatus)}>
+                {ownershipStatusLabels[payload.workflow.accountOwnershipStatus]}
+              </Badge>
               {payload.publicSummary.hasActiveBlockers ? (
                 <Badge>Existem dependências ativas</Badge>
               ) : null}
@@ -477,6 +589,37 @@ function CustomerSuccessPage() {
               Onboarding: {onboardingLabels[payload.publicSummary.onboardingStatus]} ·
               Migração: {migrationLabels[payload.publicSummary.migrationStatus]}
             </p>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={getWorkflowBadgeVariant(payload.workflow.onboardingState)}>
+                Onboarding {workflowStateLabels[payload.workflow.onboardingState]}
+              </Badge>
+              <Badge variant={getWorkflowBadgeVariant(payload.workflow.migrationState)}>
+                Migração {workflowStateLabels[payload.workflow.migrationState]}
+              </Badge>
+              <Badge variant={getWorkflowBadgeVariant(payload.workflow.supportState)}>
+                Suporte {supportWorkflowStateLabels[payload.workflow.supportState]}
+              </Badge>
+            </div>
+            {payload.workflowViolations.length > 0 ? (
+              <div className="rounded-lg border border-dashed border-destructive/40 bg-destructive/5 p-3 text-sm">
+                <p className="font-medium text-destructive">Ações requeridas</p>
+                <div className="mt-2 space-y-1 text-muted-foreground">
+                  {payload.workflowViolations.map((issue) => (
+                    <p key={issue.code}>{issue.message}</p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {payload.workflowWarnings.length > 0 ? (
+              <div className="rounded-lg border border-dashed p-3 text-sm">
+                <p className="font-medium">Alertas operacionais</p>
+                <div className="mt-2 space-y-1 text-muted-foreground">
+                  {payload.workflowWarnings.slice(0, 3).map((issue) => (
+                    <p key={issue.code}>{issue.message}</p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -491,6 +634,9 @@ function CustomerSuccessPage() {
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">
                 {goLiveLabels[payload.profile.goLiveStatus]}
+              </Badge>
+              <Badge variant={getWorkflowBadgeVariant(payload.workflow.goLiveState)}>
+                {workflowStateLabels[payload.workflow.goLiveState]}
               </Badge>
             </div>
             <p>

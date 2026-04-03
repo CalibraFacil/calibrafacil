@@ -12,18 +12,23 @@ import {
   user as userTable,
 } from "@calibra-facil/db/schema";
 import {
+  buildCustomerSuccessWorkflow,
   buildWorkflowDelays,
   deriveDefaultSlaTier,
   deriveGoLiveStatus,
   deriveHealthStatus,
   deriveNextActionStatus,
+  emitCustomerSuccessAutomationSignals,
   ensureSuccessProfile,
+  getCustomerSuccessAutomationSnapshot,
   getActiveCustomerSuccessBlockers,
   getOrganizationAttentionScore,
   getOrganizationWorkstreams,
   getSupportRequestAttentionScore,
   getSupportRequestNeedsEscalation,
   getSupportRequestSlaStatus,
+  resolveDueSoonThresholdHours,
+  resolveEffectiveSlaHours,
   resolveCustomerSuccessBlocker,
   upsertCustomerSuccessBlocker,
   writeOrganizationCustomerSuccessEvent,
@@ -226,6 +231,10 @@ function buildOperationalSummary(params: {
       ? deriveDefaultSlaTier(params.supportPolicy)
       : params.profile.slaTier;
   const activeBlockers = getActiveCustomerSuccessBlockers(params.profile.blockers);
+  const prioritySupport =
+    params.profile.prioritySupport ||
+    effectiveSlaTier !== "PLAN_DEFAULT" ||
+    params.supportPolicy.hasPrioritySupport;
   const goLiveStatus = deriveGoLiveStatus({
     currentStatus: params.profile.goLiveStatus,
     goLiveActualDate: params.profile.goLiveActualDate,
@@ -256,10 +265,7 @@ function buildOperationalSummary(params: {
   });
   const attentionScore = getOrganizationAttentionScore({
     healthStatus,
-    prioritySupport:
-      params.profile.prioritySupport ||
-      effectiveSlaTier !== "PLAN_DEFAULT" ||
-      params.supportPolicy.hasPrioritySupport,
+    prioritySupport,
     breachedRequestsCount: params.breachedRequestsCount,
     dueSoonRequestsCount: params.dueSoonRequestsCount,
     urgentRequestsCount: params.urgentRequestsCount,
@@ -268,14 +274,27 @@ function buildOperationalSummary(params: {
     goLiveStatus,
     internalOwnerUserId: params.profile.internalOwnerUserId,
   });
+  const workflow = buildCustomerSuccessWorkflow({
+    supportPolicy: params.supportPolicy,
+    effectiveSlaTier,
+    prioritySupport,
+    onboardingStatus: params.profile.onboardingStatus,
+    migrationStatus: params.profile.migrationStatus,
+    goLiveStatus,
+    nextActionStatus,
+    nextAction: params.profile.nextAction,
+    internalOwnerUserId: params.profile.internalOwnerUserId,
+    blockers: params.profile.blockers,
+    openRequestsCount: params.openRequestsCount,
+    dueSoonRequestsCount: params.dueSoonRequestsCount,
+    breachedRequestsCount: params.breachedRequestsCount,
+    escalatedRequestsCount: params.escalatedRequestsCount,
+  });
 
   return {
     supportMode: params.supportPolicy.supportMode,
     effectiveSlaTier,
-    prioritySupport:
-      params.profile.prioritySupport ||
-      effectiveSlaTier !== "PLAN_DEFAULT" ||
-      params.supportPolicy.hasPrioritySupport,
+    prioritySupport,
     healthStatus,
     goLiveStatus,
     workstreams,
@@ -300,6 +319,10 @@ function buildOperationalSummary(params: {
     needsEscalation:
       params.breachedRequestsCount > 0 || params.escalatedRequestsCount > 0,
     hasInternalOwner: Boolean(params.profile.internalOwnerUserId),
+    workflow,
+    workflowWarnings: workflow.warnings,
+    workflowViolations: workflow.violations,
+    policy: workflow.policy,
   };
 }
 
@@ -355,41 +378,53 @@ async function listRequestsForOrganization(organizationId: string) {
     eventsByRequest.set(event.supportRequestId, bucket);
   }
 
+  const effectiveSlaTier =
+    profile.slaTier === "PLAN_DEFAULT"
+      ? deriveDefaultSlaTier(planAccess.supportPolicy)
+      : profile.slaTier;
+  const dueSoonThresholdHours = resolveDueSoonThresholdHours(
+    resolveEffectiveSlaHours(
+      planAccess.supportPolicy.targetFirstResponseBusinessHours,
+      effectiveSlaTier,
+    ),
+  );
+
   const enrichedRequests = requests
     .map((request) => {
       const slaStatus = getSupportRequestSlaStatus({
         status: request.status,
         slaTargetAt: request.slaTargetAt,
-    });
-    const timeToSlaMs = request.slaTargetAt
-      ? request.slaTargetAt.getTime() - Date.now()
-      : null;
+        dueSoonThresholdHours,
+      });
+      const timeToSlaMs = request.slaTargetAt
+        ? request.slaTargetAt.getTime() - Date.now()
+        : null;
 
-    const prioritySupport =
-      profile.prioritySupport ||
-      deriveDefaultSlaTier(planAccess.supportPolicy) !== "PLAN_DEFAULT" ||
-      planAccess.supportPolicy.hasPrioritySupport;
+      const prioritySupport =
+        profile.prioritySupport ||
+        effectiveSlaTier !== "PLAN_DEFAULT" ||
+        planAccess.supportPolicy.hasPrioritySupport;
 
       return {
         ...request,
-      slaStatus,
-      timeToSlaMs,
-      prioritySupport,
-      needsEscalation: getSupportRequestNeedsEscalation({
-        status: request.status,
         slaStatus,
-        priority: request.priority,
+        timeToSlaMs,
         prioritySupport,
-        escalatedAt: request.escalatedAt,
-      }),
-      attentionScore: getSupportRequestAttentionScore({
-        status: request.status,
-        slaStatus,
-        priority: request.priority,
-        assignedToUserId: request.assignedToUserId,
-        prioritySupport,
-        escalatedAt: request.escalatedAt,
-      }),
+        needsEscalation: getSupportRequestNeedsEscalation({
+          status: request.status,
+          slaStatus,
+          priority: request.priority,
+          prioritySupport,
+          escalatedAt: request.escalatedAt,
+        }),
+        attentionScore: getSupportRequestAttentionScore({
+          status: request.status,
+          slaStatus,
+          priority: request.priority,
+          assignedToUserId: request.assignedToUserId,
+          prioritySupport,
+          escalatedAt: request.escalatedAt,
+        }),
         events: eventsByRequest.get(request.id) ?? [],
       };
     })
@@ -611,6 +646,10 @@ export const internalCustomerSuccessRouter = new Hono<{
             status: planAccess.status,
           },
           operationalSummary,
+          workflow: operationalSummary.workflow,
+          workflowWarnings: operationalSummary.workflowWarnings,
+          workflowViolations: operationalSummary.workflowViolations,
+          policy: operationalSummary.policy,
         };
       }).sort((left, right) => {
         if (right.operationalSummary.attentionScore !== left.operationalSummary.attentionScore) {
@@ -666,6 +705,10 @@ export const internalCustomerSuccessRouter = new Hono<{
       internalOwnerUser,
       operators,
       operationalSummary: requestsData.operationalSummary,
+      workflow: requestsData.operationalSummary.workflow,
+      workflowWarnings: requestsData.operationalSummary.workflowWarnings,
+      workflowViolations: requestsData.operationalSummary.workflowViolations,
+      policy: requestsData.operationalSummary.policy,
       timeline,
     });
   })
@@ -684,6 +727,7 @@ export const internalCustomerSuccessRouter = new Hono<{
         return c.json({ error: "Organização não encontrada" }, 404);
       }
 
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(org.id);
       const existing = await ensureSuccessProfile(org.id);
       const nextInternalOwnerUserId =
         input.internalOwnerUserId !== undefined
@@ -694,6 +738,19 @@ export const internalCustomerSuccessRouter = new Hono<{
       const nextMigrationStatus =
         input.migrationStatus ?? existing.migrationStatus;
       const nextGoLiveStatus = input.goLiveStatus ?? existing.goLiveStatus;
+      const nextAction =
+        input.nextAction !== undefined
+          ? normalizeNullableText(input.nextAction)
+          : existing.nextAction;
+      const workflowFieldsTouched =
+        input.internalOwnerUserId !== undefined ||
+        input.onboardingStatus !== undefined ||
+        input.migrationStatus !== undefined ||
+        input.goLiveStatus !== undefined ||
+        input.nextAction !== undefined ||
+        input.nextActionDueAt !== undefined ||
+        input.goLiveTargetDate !== undefined ||
+        input.goLiveActualDate !== undefined;
 
       if (
         hasActiveWorkflow({
@@ -707,6 +764,38 @@ export const internalCustomerSuccessRouter = new Hono<{
           {
             error:
               "Defina um responsável interno antes de manter a conta em workflow ativo.",
+            workflowViolations: [
+              {
+                code: "MISSING_INTERNAL_OWNER",
+                message:
+                  "Defina um responsável interno para contas com onboarding, migração ou go-live ativos.",
+              },
+            ],
+          },
+          400,
+        );
+      }
+
+      if (
+        workflowFieldsTouched &&
+        hasActiveWorkflow({
+          onboardingStatus: nextOnboardingStatus,
+          migrationStatus: nextMigrationStatus,
+          goLiveStatus: nextGoLiveStatus,
+        }) &&
+        !nextAction
+      ) {
+        return c.json(
+          {
+            error:
+              "Defina a próxima ação antes de manter a conta em workflow ativo.",
+            workflowViolations: [
+              {
+                code: "MISSING_NEXT_ACTION",
+                message:
+                  "Defina uma próxima ação para contas com onboarding, migração ou go-live ativos.",
+              },
+            ],
           },
           400,
         );
@@ -739,10 +828,7 @@ export const internalCustomerSuccessRouter = new Hono<{
           goLiveStatus: input.goLiveStatus ?? existing.goLiveStatus,
           healthStatus: input.healthStatus ?? existing.healthStatus,
           blockers: existing.blockers,
-          nextAction:
-            input.nextAction !== undefined
-              ? normalizeNullableText(input.nextAction)
-              : existing.nextAction,
+          nextAction,
           nextActionDueAt:
             input.nextActionDueAt !== undefined
               ? input.nextActionDueAt
@@ -799,6 +885,14 @@ export const internalCustomerSuccessRouter = new Hono<{
         },
       });
 
+      const nextAutomation = await getCustomerSuccessAutomationSnapshot(org.id);
+      await emitCustomerSuccessAutomationSignals({
+        organizationId: org.id,
+        previous: previousAutomation,
+        next: nextAutomation,
+        actorUserId: session.user.id,
+      });
+
       return c.json(updated ?? existing);
     },
   )
@@ -817,6 +911,7 @@ export const internalCustomerSuccessRouter = new Hono<{
         return c.json({ error: "Organização não encontrada" }, 404);
       }
 
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(org.id);
       const existing = await ensureSuccessProfile(org.id);
       const nextAction = input.markCompleted
         ? null
@@ -825,6 +920,31 @@ export const internalCustomerSuccessRouter = new Hono<{
         input.markCompleted || !input.nextActionDueAt
           ? null
           : new Date(input.nextActionDueAt);
+
+      if (
+        !input.markCompleted &&
+        hasActiveWorkflow({
+          onboardingStatus: existing.onboardingStatus,
+          migrationStatus: existing.migrationStatus,
+          goLiveStatus: existing.goLiveStatus,
+        }) &&
+        !nextAction
+      ) {
+        return c.json(
+          {
+            error:
+              "Defina a próxima ação antes de manter a conta em workflow ativo.",
+            workflowViolations: [
+              {
+                code: "MISSING_NEXT_ACTION",
+                message:
+                  "Defina uma próxima ação para contas com onboarding, migração ou go-live ativos.",
+              },
+            ],
+          },
+          400,
+        );
+      }
 
       const [updated] = await db
         .update(organizationSuccessProfile)
@@ -852,6 +972,14 @@ export const internalCustomerSuccessRouter = new Hono<{
         },
       });
 
+      const nextAutomation = await getCustomerSuccessAutomationSnapshot(org.id);
+      await emitCustomerSuccessAutomationSignals({
+        organizationId: org.id,
+        previous: previousAutomation,
+        next: nextAutomation,
+        actorUserId: session.user.id,
+      });
+
       return c.json(updated ?? existing);
     },
   )
@@ -874,6 +1002,7 @@ export const internalCustomerSuccessRouter = new Hono<{
         return c.json({ error: "Informe o motivo do bloqueio" }, 400);
       }
 
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(org.id);
       const existing = await ensureSuccessProfile(org.id);
       const blockers =
         input.mode === "ADD"
@@ -914,6 +1043,14 @@ export const internalCustomerSuccessRouter = new Hono<{
         },
       });
 
+      const nextAutomation = await getCustomerSuccessAutomationSnapshot(org.id);
+      await emitCustomerSuccessAutomationSignals({
+        organizationId: org.id,
+        previous: previousAutomation,
+        next: nextAutomation,
+        actorUserId: session.user.id,
+      });
+
       return c.json(updated ?? existing);
     },
   )
@@ -936,6 +1073,10 @@ export const internalCustomerSuccessRouter = new Hono<{
         slug: org.slug,
       },
       operationalSummary: requestsData.operationalSummary,
+      workflow: requestsData.operationalSummary.workflow,
+      workflowWarnings: requestsData.operationalSummary.workflowWarnings,
+      workflowViolations: requestsData.operationalSummary.workflowViolations,
+      policy: requestsData.operationalSummary.policy,
       data: requestsData.requests,
     });
   })
@@ -959,6 +1100,9 @@ export const internalCustomerSuccessRouter = new Hono<{
         return c.json({ error: "Solicitação não encontrada" }, 404);
       }
 
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(
+        existing.organizationId,
+      );
       const [updated] = await db
         .update(organizationSupportRequest)
         .set({
@@ -995,6 +1139,16 @@ export const internalCustomerSuccessRouter = new Hono<{
         },
       });
 
+      const nextAutomation = await getCustomerSuccessAutomationSnapshot(
+        existing.organizationId,
+      );
+      await emitCustomerSuccessAutomationSignals({
+        organizationId: existing.organizationId,
+        previous: previousAutomation,
+        next: nextAutomation,
+        actorUserId: session.user.id,
+      });
+
       return c.json(updated);
     },
   )
@@ -1018,6 +1172,9 @@ export const internalCustomerSuccessRouter = new Hono<{
         return c.json({ error: "Solicitação não encontrada" }, 404);
       }
 
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(
+        existing.organizationId,
+      );
       const nextStatus =
         existing.status === "OPEN" ? "IN_PROGRESS" : existing.status;
 
@@ -1054,6 +1211,16 @@ export const internalCustomerSuccessRouter = new Hono<{
         },
       });
 
+      const nextAutomation = await getCustomerSuccessAutomationSnapshot(
+        existing.organizationId,
+      );
+      await emitCustomerSuccessAutomationSignals({
+        organizationId: existing.organizationId,
+        previous: previousAutomation,
+        next: nextAutomation,
+        actorUserId: session.user.id,
+      });
+
       return c.json(updated);
     },
   )
@@ -1077,6 +1244,9 @@ export const internalCustomerSuccessRouter = new Hono<{
         return c.json({ error: "Solicitação não encontrada" }, 404);
       }
 
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(
+        existing.organizationId,
+      );
       const [updated] = await db
         .update(organizationSupportRequest)
         .set({
@@ -1120,6 +1290,16 @@ export const internalCustomerSuccessRouter = new Hono<{
         },
       });
 
+      const nextAutomation = await getCustomerSuccessAutomationSnapshot(
+        existing.organizationId,
+      );
+      await emitCustomerSuccessAutomationSignals({
+        organizationId: existing.organizationId,
+        previous: previousAutomation,
+        next: nextAutomation,
+        actorUserId: session.user.id,
+      });
+
       return c.json(updated);
     },
   )
@@ -1143,6 +1323,9 @@ export const internalCustomerSuccessRouter = new Hono<{
         return c.json({ error: "Solicitação não encontrada" }, 404);
       }
 
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(
+        existing.organizationId,
+      );
       const [updated] = await db
         .update(organizationSupportRequest)
         .set({
@@ -1174,6 +1357,16 @@ export const internalCustomerSuccessRouter = new Hono<{
         details: {
           reason: input.reason,
         },
+      });
+
+      const nextAutomation = await getCustomerSuccessAutomationSnapshot(
+        existing.organizationId,
+      );
+      await emitCustomerSuccessAutomationSignals({
+        organizationId: existing.organizationId,
+        previous: previousAutomation,
+        next: nextAutomation,
+        actorUserId: session.user.id,
       });
 
       return c.json(updated);

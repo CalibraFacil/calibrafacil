@@ -34,6 +34,8 @@ import {
   deriveHealthStatus,
   deriveNextActionStatus,
   getActiveCustomerSuccessBlockers,
+  resolveDueSoonThresholdHours,
+  resolveEffectiveSlaHours,
   getSupportRequestAttentionScore,
   getSupportRequestNeedsEscalation,
   getSupportRequestSlaStatus,
@@ -672,6 +674,15 @@ export const backofficeRouter = new Hono<{
               goLiveTargetDate: profile.goLiveTargetDate,
             })
           : "NOT_SCHEDULED";
+      const dueSoonThresholdHours =
+        profile && planAccess
+          ? resolveDueSoonThresholdHours(
+              resolveEffectiveSlaHours(
+                planAccess.supportPolicy.targetFirstResponseBusinessHours,
+                effectiveSlaTier,
+              ),
+            )
+          : 4;
       const healthStatus =
         profile && planAccess
           ? deriveHealthStatus({
@@ -683,6 +694,7 @@ export const backofficeRouter = new Hono<{
                 getSupportRequestSlaStatus({
                   status: row.status,
                   slaTargetAt: row.slaTargetAt,
+                  dueSoonThresholdHours,
                 }) === "BREACHED"
                   ? 1
                   : 0,
@@ -690,6 +702,7 @@ export const backofficeRouter = new Hono<{
                 getSupportRequestSlaStatus({
                   status: row.status,
                   slaTargetAt: row.slaTargetAt,
+                  dueSoonThresholdHours,
                 }) === "DUE_SOON"
                   ? 1
                   : 0,
@@ -698,6 +711,7 @@ export const backofficeRouter = new Hono<{
       const slaStatus = getSupportRequestSlaStatus({
         status: row.status,
         slaTargetAt: row.slaTargetAt,
+        dueSoonThresholdHours,
       });
       const activeBlockers = getActiveCustomerSuccessBlockers(profile?.blockers);
       const nextActionStatus = profile

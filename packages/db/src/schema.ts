@@ -3039,7 +3039,13 @@ export type NotificationType =
   | "COMPETENCE_EXPIRING" // ISO 17025 Clause 6.2.3 - Competence expiring soon
   | "COMPETENCE_EXPIRED" // ISO 17025 Clause 6.2.3 - Competence expired, blocks assignment
   | "COMPETENCE_REQUESTED" // ISO 17025 Clause 6.2.3 - New qualification request
-  | "COMPETENCE_APPROVED"; // ISO 17025 Clause 6.2.3 - Qualification approved
+  | "COMPETENCE_APPROVED" // ISO 17025 Clause 6.2.3 - Qualification approved
+  | "CUSTOMER_SUCCESS_WORKFLOW_BLOCKED"
+  | "CUSTOMER_SUCCESS_GO_LIVE_AT_RISK"
+  | "CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE"
+  | "CUSTOMER_SUCCESS_SLA_DUE_SOON"
+  | "CUSTOMER_SUCCESS_SLA_BREACHED"
+  | "CUSTOMER_SUCCESS_ESCALATION_REQUIRED";
 
 /**
  * Notification priority levels

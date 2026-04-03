@@ -39,6 +39,12 @@ type NotificationType =
   | 'COMPETENCE_EXPIRED'
   | 'COMPETENCE_REQUESTED'
   | 'COMPETENCE_APPROVED'
+  | 'CUSTOMER_SUCCESS_WORKFLOW_BLOCKED'
+  | 'CUSTOMER_SUCCESS_GO_LIVE_AT_RISK'
+  | 'CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE'
+  | 'CUSTOMER_SUCCESS_SLA_DUE_SOON'
+  | 'CUSTOMER_SUCCESS_SLA_BREACHED'
+  | 'CUSTOMER_SUCCESS_ESCALATION_REQUIRED'
 
 type NotificationPreference = {
   inApp: boolean
@@ -90,6 +96,42 @@ const notificationSettings: NotificationSetting[] = [
     id: 'CERTIFICATE_AMENDED',
     title: 'Certificado retificado',
     description: 'Quando um certificado é retificado',
+    category: 'operational',
+  },
+  {
+    id: 'CUSTOMER_SUCCESS_WORKFLOW_BLOCKED',
+    title: 'Workflow bloqueado',
+    description: 'Quando onboarding, migração ou go-live entra em bloqueio ativo',
+    category: 'operational',
+  },
+  {
+    id: 'CUSTOMER_SUCCESS_GO_LIVE_AT_RISK',
+    title: 'Go-live em risco',
+    description: 'Quando a operação identifica risco relevante para o go-live',
+    category: 'operational',
+  },
+  {
+    id: 'CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE',
+    title: 'Próxima ação atrasada',
+    description: 'Quando o plano de acompanhamento fica com ação vencida',
+    category: 'operational',
+  },
+  {
+    id: 'CUSTOMER_SUCCESS_SLA_DUE_SOON',
+    title: 'SLA prestes a vencer',
+    description: 'Quando uma solicitação de suporte se aproxima do vencimento',
+    category: 'operational',
+  },
+  {
+    id: 'CUSTOMER_SUCCESS_SLA_BREACHED',
+    title: 'SLA violado',
+    description: 'Quando uma solicitação de suporte ultrapassa o SLA alvo',
+    category: 'operational',
+  },
+  {
+    id: 'CUSTOMER_SUCCESS_ESCALATION_REQUIRED',
+    title: 'Escalação necessária',
+    description: 'Quando o suporte entra em estado de escalação prioritária',
     category: 'operational',
   },
   // Compliance notifications
@@ -179,6 +221,12 @@ const defaultPreferences: NotificationPreferencesMap = {
   COMPETENCE_EXPIRED: { inApp: true, email: true },
   COMPETENCE_REQUESTED: { inApp: true, email: true },
   COMPETENCE_APPROVED: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_WORKFLOW_BLOCKED: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_GO_LIVE_AT_RISK: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_SLA_DUE_SOON: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_SLA_BREACHED: { inApp: true, email: true },
+  CUSTOMER_SUCCESS_ESCALATION_REQUIRED: { inApp: true, email: true },
   PAYMENT_RECEIVED: { inApp: true, email: true },
   PAYMENT_FAILED: { inApp: true, email: true },
 }
