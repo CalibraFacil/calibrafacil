@@ -50,6 +50,20 @@ export type IntegrationEventLevel = "info" | "warning" | "error";
 
 export type IntegrationCredentialType = "bearer";
 
+export type IntegrationMappingValueMode = "source" | "constant";
+
+export type IntegrationMappingFormatter =
+  | "none"
+  | "string"
+  | "number"
+  | "boolean"
+  | "upper_case"
+  | "lower_case"
+  | "digits_only"
+  | "date_only"
+  | "iso_datetime"
+  | "currency_major";
+
 export type IntegrationDependencyWarningCode =
   | "CUSTOMERS_NOT_SYNCED"
   | "SERVICE_ORDERS_NOT_SYNCED"
@@ -82,6 +96,25 @@ export interface IntegrationTargetScheduleSummary {
   lastScheduledRunAt: string | null;
 }
 
+export interface IntegrationFieldMappingRule {
+  id: string;
+  destinationField: string;
+  enabled: boolean;
+  valueMode: IntegrationMappingValueMode;
+  sourceField: string | null;
+  constantValue: string | null;
+  formatter: IntegrationMappingFormatter;
+}
+
+export interface IntegrationTargetMappingConfig {
+  fields: IntegrationFieldMappingRule[];
+}
+
+export type IntegrationMappingsConfig = Record<
+  IntegrationSyncTarget,
+  IntegrationTargetMappingConfig
+>;
+
 export interface GenericFinancialErpConnectionConfig {
   baseUrl: string;
   healthPath: string;
@@ -90,6 +123,7 @@ export interface GenericFinancialErpConnectionConfig {
   billingDocumentPath: string;
   authType: IntegrationCredentialType;
   schedules: Record<IntegrationSyncTarget, IntegrationTargetScheduleConfig>;
+  mappings: IntegrationMappingsConfig;
 }
 
 export interface IntegrationCustomerPayload {
@@ -181,6 +215,80 @@ export interface IntegrationReadinessSummary {
   lastValidationError: string | null;
   dependencyWarnings: IntegrationDependencyWarning[];
 }
+
+export interface IntegrationMappingValidationIssue {
+  target: IntegrationSyncTarget;
+  fieldId?: string;
+  destinationField?: string;
+  message: string;
+}
+
+export interface IntegrationMappedPreviewSample {
+  externalId: string;
+  label: string;
+  subtitle: string | null;
+  mappedPayload: Record<string, unknown>;
+  issues: string[];
+}
+
+export const INTEGRATION_CANONICAL_FIELDS: Record<
+  IntegrationSyncTarget,
+  readonly string[]
+> = {
+  customer: [
+    "externalId",
+    "organizationId",
+    "name",
+    "taxId",
+    "email",
+    "phone",
+    "address",
+    "createdAt",
+    "updatedAt",
+  ],
+  service_order: [
+    "externalId",
+    "organizationId",
+    "unitId",
+    "unitName",
+    "jobId",
+    "status",
+    "customerExternalId",
+    "customerName",
+    "assetName",
+    "assetTag",
+    "serviceName",
+    "servicePriceCents",
+    "currency",
+    "performedAt",
+    "approvedAt",
+    "updatedAt",
+  ],
+  billing_document: [
+    "externalId",
+    "organizationId",
+    "unitId",
+    "unitName",
+    "jobId",
+    "customerExternalId",
+    "customerName",
+    "serviceName",
+    "amountCents",
+    "currency",
+    "issuedAt",
+    "dueAt",
+    "status",
+  ],
+};
+
+export const INTEGRATION_REQUIRED_DESTINATION_FIELDS: Record<
+  IntegrationSyncTarget,
+  readonly string[]
+> = {
+  customer: ["externalId", "name"],
+  service_order: ["externalId", "jobId", "status"],
+  billing_document: ["externalId", "jobId", "amountCents", "currency", "status"],
+};
 
 function parseIpv4Address(hostname: string): number[] | null {
   const parts = hostname.split(".");
@@ -301,6 +409,20 @@ export function formatIntegrationCustomerAddress(
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
+function defaultMappingRules(
+  target: IntegrationSyncTarget,
+): IntegrationFieldMappingRule[] {
+  return INTEGRATION_CANONICAL_FIELDS[target].map((field) => ({
+    id: `${target}:${field}`,
+    destinationField: field,
+    enabled: true,
+    valueMode: "source",
+    sourceField: field,
+    constantValue: null,
+    formatter: "none",
+  }));
+}
+
 function normalizePath(path: string, fallback: string): string {
   const trimmed = path.trim().replace(/\/+$/, "");
   if (!trimmed) return fallback;
@@ -329,6 +451,68 @@ function normalizeScheduleConfig(
   };
 }
 
+function normalizeMappingRule(
+  rule: Partial<IntegrationFieldMappingRule> | undefined,
+  fallbackId: string,
+): IntegrationFieldMappingRule {
+  const valueMode =
+    rule?.valueMode === "constant" || rule?.valueMode === "source"
+      ? rule.valueMode
+      : "source";
+
+  return {
+    id: typeof rule?.id === "string" && rule.id.trim() ? rule.id : fallbackId,
+    destinationField:
+      typeof rule?.destinationField === "string" ? rule.destinationField.trim() : "",
+    enabled: rule?.enabled ?? true,
+    valueMode,
+    sourceField:
+      typeof rule?.sourceField === "string" && rule.sourceField.trim()
+        ? rule.sourceField.trim()
+        : null,
+    constantValue:
+      rule?.constantValue === undefined || rule?.constantValue === null
+        ? null
+        : String(rule.constantValue),
+    formatter:
+      rule?.formatter === "string" ||
+      rule?.formatter === "number" ||
+      rule?.formatter === "boolean" ||
+      rule?.formatter === "upper_case" ||
+      rule?.formatter === "lower_case" ||
+      rule?.formatter === "digits_only" ||
+      rule?.formatter === "date_only" ||
+      rule?.formatter === "iso_datetime" ||
+      rule?.formatter === "currency_major"
+        ? rule.formatter
+        : "none",
+  };
+}
+
+function normalizeTargetMappingConfig(
+  target: IntegrationSyncTarget,
+  input?: Partial<IntegrationTargetMappingConfig> | null,
+): IntegrationTargetMappingConfig {
+  const fallback = defaultMappingRules(target);
+  const normalizedFields =
+    input?.fields?.map((rule, index) =>
+      normalizeMappingRule(rule, fallback[index]?.id ?? `${target}:field:${index}`),
+    ) ?? fallback;
+
+  return {
+    fields:
+      normalizedFields.length > 0 ? normalizedFields : defaultMappingRules(target),
+  };
+}
+
+export function getDefaultIntegrationMappings(): IntegrationMappingsConfig {
+  return {
+    customer: normalizeTargetMappingConfig("customer"),
+    service_order: normalizeTargetMappingConfig("service_order"),
+    billing_document: normalizeTargetMappingConfig("billing_document"),
+  };
+}
+
 export function normalizeGenericFinancialErpConfig(input: {
   baseUrl: string;
   healthPath?: string;
@@ -337,6 +521,9 @@ export function normalizeGenericFinancialErpConfig(input: {
   billingDocumentPath?: string;
   schedules?: Partial<
     Record<IntegrationSyncTarget, Partial<IntegrationTargetScheduleConfig>>
+  >;
+  mappings?: Partial<
+    Record<IntegrationSyncTarget, Partial<IntegrationTargetMappingConfig>>
   >;
 }): GenericFinancialErpConnectionConfig {
   const trimmedBaseUrl = normalizeIntegrationBaseUrl(input.baseUrl);
@@ -367,5 +554,198 @@ export function normalizeGenericFinancialErpConfig(input: {
         input.schedules?.billing_document,
       ),
     },
+    mappings: {
+      customer: normalizeTargetMappingConfig("customer", input.mappings?.customer),
+      service_order: normalizeTargetMappingConfig(
+        "service_order",
+        input.mappings?.service_order,
+      ),
+      billing_document: normalizeTargetMappingConfig(
+        "billing_document",
+        input.mappings?.billing_document,
+      ),
+    },
   };
+}
+
+export function validateIntegrationMappings(
+  mappings: IntegrationMappingsConfig,
+): IntegrationMappingValidationIssue[] {
+  const issues: IntegrationMappingValidationIssue[] = [];
+
+  for (const target of Object.keys(mappings) as IntegrationSyncTarget[]) {
+    const config = mappings[target];
+    const seenDestinations = new Set<string>();
+
+    for (const field of config.fields) {
+      if (!field.enabled) {
+        continue;
+      }
+
+      if (!field.destinationField.trim()) {
+        issues.push({
+          target,
+          fieldId: field.id,
+          message: "Destino é obrigatório.",
+        });
+        continue;
+      }
+
+      const normalizedDestination = field.destinationField.trim();
+      if (seenDestinations.has(normalizedDestination)) {
+        issues.push({
+          target,
+          fieldId: field.id,
+          destinationField: normalizedDestination,
+          message: `Destino duplicado: ${normalizedDestination}.`,
+        });
+      }
+      seenDestinations.add(normalizedDestination);
+
+      if (field.valueMode === "source") {
+        if (!field.sourceField) {
+          issues.push({
+            target,
+            fieldId: field.id,
+            destinationField: normalizedDestination,
+            message: `Selecione um campo de origem para ${normalizedDestination}.`,
+          });
+          continue;
+        }
+
+        if (!INTEGRATION_CANONICAL_FIELDS[target].includes(field.sourceField)) {
+          issues.push({
+            target,
+            fieldId: field.id,
+            destinationField: normalizedDestination,
+            message: `Campo de origem inválido: ${field.sourceField}.`,
+          });
+        }
+      } else if (field.constantValue === null) {
+        issues.push({
+          target,
+          fieldId: field.id,
+          destinationField: normalizedDestination,
+          message: `Informe um valor constante para ${normalizedDestination}.`,
+        });
+      }
+    }
+
+    for (const requiredField of INTEGRATION_REQUIRED_DESTINATION_FIELDS[target]) {
+      const enabledRule = config.fields.find(
+        (field) =>
+          field.enabled && field.destinationField.trim() === requiredField,
+      );
+
+      if (!enabledRule) {
+        issues.push({
+          target,
+          destinationField: requiredField,
+          message: `Campo obrigatório ausente: ${requiredField}.`,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
+function parseBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value !== "string") return null;
+
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "sim"].includes(normalized)) return true;
+  if (["false", "0", "no", "nao", "não"].includes(normalized)) return false;
+  return null;
+}
+
+function formatMappingValue(
+  value: unknown,
+  formatter: IntegrationMappingFormatter,
+): unknown {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  switch (formatter) {
+    case "none":
+      return value;
+    case "string":
+      return String(value);
+    case "number": {
+      const parsed =
+        typeof value === "number" ? value : Number.parseFloat(String(value));
+      return Number.isFinite(parsed) ? parsed : value;
+    }
+    case "boolean": {
+      const parsed = parseBoolean(value);
+      return parsed === null ? value : parsed;
+    }
+    case "upper_case":
+      return String(value).toUpperCase();
+    case "lower_case":
+      return String(value).toLowerCase();
+    case "digits_only":
+      return String(value).replace(/\D+/g, "");
+    case "date_only": {
+      const parsed = new Date(String(value));
+      return Number.isNaN(parsed.getTime())
+        ? value
+        : parsed.toISOString().slice(0, 10);
+    }
+    case "iso_datetime": {
+      const parsed = new Date(String(value));
+      return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
+    }
+    case "currency_major": {
+      const parsed =
+        typeof value === "number" ? value : Number.parseFloat(String(value));
+      return Number.isFinite(parsed) ? Math.round(parsed) / 100 : value;
+    }
+  }
+}
+
+export function applyIntegrationMappings(
+  target: IntegrationSyncTarget,
+  payload: Record<string, unknown>,
+  mapping: IntegrationTargetMappingConfig,
+): {
+  mappedPayload: Record<string, unknown>;
+  issues: string[];
+} {
+  const mappedPayload: Record<string, unknown> = {};
+  const issues: string[] = [];
+
+  for (const field of mapping.fields) {
+    if (!field.enabled) continue;
+
+    const destinationField = field.destinationField.trim();
+    if (!destinationField) continue;
+
+    const rawValue =
+      field.valueMode === "source"
+        ? field.sourceField
+          ? payload[field.sourceField]
+          : null
+        : field.constantValue;
+    const formattedValue = formatMappingValue(rawValue, field.formatter);
+
+    mappedPayload[destinationField] = formattedValue;
+  }
+
+  for (const requiredField of INTEGRATION_REQUIRED_DESTINATION_FIELDS[target]) {
+    const value = mappedPayload[requiredField];
+    const missing =
+      value === null ||
+      value === undefined ||
+      (typeof value === "string" && value.trim().length === 0);
+
+    if (missing) {
+      issues.push(`Campo obrigatório sem valor: ${requiredField}.`);
+    }
+  }
+
+  return { mappedPayload, issues };
 }

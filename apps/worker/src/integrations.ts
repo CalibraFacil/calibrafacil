@@ -1,10 +1,13 @@
 import { Client } from "pg";
 import { decryptPassword } from "@calibra-facil/signing";
 import {
+    applyIntegrationMappings,
     formatIntegrationCustomerAddress,
     normalizeGenericFinancialErpConfig,
+    validateIntegrationMappings,
 } from "@calibra-facil/shared";
 import type {
+    IntegrationMappingValidationIssue,
     GenericFinancialErpConnectionConfig,
     IntegrationDependencyWarning,
     IntegrationBillingDocumentPayload,
@@ -83,6 +86,36 @@ function getTargetSchedule(
     target: IntegrationSyncTarget
 ): IntegrationTargetScheduleConfig {
     return config.schedules[target];
+}
+
+function getMappingValidationIssues(
+    config: GenericFinancialErpConnectionConfig,
+    target?: IntegrationSyncTarget
+): IntegrationMappingValidationIssue[] {
+    const issues = validateIntegrationMappings(config.mappings);
+    if (!target) return issues;
+    return issues.filter((issue) => issue.target === target);
+}
+
+function assertValidMappings(
+    config: GenericFinancialErpConnectionConfig,
+    target?: IntegrationSyncTarget
+) {
+    const issues = getMappingValidationIssues(config, target);
+    if (issues.length === 0) return;
+    throw new Error(issues.map((issue) => issue.message).join(" "));
+}
+
+function buildMappedTargetPayload(
+    config: GenericFinancialErpConnectionConfig,
+    target: IntegrationSyncTarget,
+    payload: SyncPayload
+) {
+    return applyIntegrationMappings(
+        target,
+        payload as unknown as Record<string, unknown>,
+        config.mappings[target]
+    );
 }
 
 async function withDbClient<T>(
@@ -610,6 +643,16 @@ async function pushRecord(
         payload: SyncPayload;
     }
 ) {
+    const { mappedPayload, issues } = buildMappedTargetPayload(
+        params.config,
+        params.target,
+        params.payload
+    );
+
+    if (issues.length > 0) {
+        throw new Error(`Payload inválido para ${params.target}: ${issues.join(" ")}`);
+    }
+
     const existingRemoteId = await getExistingRemoteId(
         client,
         params.integrationId,
@@ -625,7 +668,7 @@ async function pushRecord(
     const result = await callRemoteJson(url, {
         method,
         headers: buildHeaders(params.secret),
-        body: JSON.stringify(params.payload),
+        body: JSON.stringify(mappedPayload),
     });
 
     if (!result.ok) {
@@ -913,6 +956,8 @@ export async function processIntegrationSync(
 
                 return;
             }
+
+            assertValidMappings(runtime.config, message.target);
 
             const secret = decryptPassword(
                 runtime.encryptedSecret,

@@ -6,6 +6,10 @@ import { toast } from 'sonner'
 import { normalizeIntegrationBaseUrl } from '@calibra-facil/shared'
 import { useActiveOrganization, useSession } from '@calibra-facil/auth/client'
 import type {
+  IntegrationFieldMappingRule,
+  IntegrationMappedPreviewSample,
+  IntegrationMappingFormatter,
+  IntegrationMappingsConfig,
   IntegrationDependencyWarning,
   IntegrationReadinessSummary,
   IntegrationRunMode,
@@ -14,10 +18,12 @@ import type {
   IntegrationTargetCoverageSummary,
   IntegrationTargetSyncSummary,
 } from '@calibra-facil/shared'
+import { getDefaultIntegrationMappings, INTEGRATION_CANONICAL_FIELDS } from '@calibra-facil/shared'
 import { api } from '@/utils/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Card,
   CardContent,
@@ -34,6 +40,13 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -53,6 +66,7 @@ interface IntegrationConfig {
   serviceOrderPath: string
   billingDocumentPath: string
   authType: 'bearer'
+  mappings: IntegrationMappingsConfig
 }
 
 interface IntegrationRun {
@@ -130,11 +144,7 @@ interface SyncPreviewResponse {
   warnings: IntegrationDependencyWarning[]
   coverage: IntegrationTargetCoverageSummary
   previewCount: number
-  sampleRecords: Array<{
-    externalId: string
-    label: string
-    subtitle: string | null
-  }>
+  sampleRecords: IntegrationMappedPreviewSample[]
 }
 
 const defaultDraft = {
@@ -170,6 +180,52 @@ const targetMeta: Record<
     description: 'Depende de clientes e ordens já resolvidos no ERP.',
     syncLabel: 'Sincronizar faturamento',
   },
+}
+
+const formatterOptions: Array<{
+  value: IntegrationMappingFormatter
+  label: string
+}> = [
+  { value: 'none', label: 'Sem formatação' },
+  { value: 'string', label: 'Texto' },
+  { value: 'number', label: 'Número' },
+  { value: 'boolean', label: 'Booleano' },
+  { value: 'upper_case', label: 'Maiúsculas' },
+  { value: 'lower_case', label: 'Minúsculas' },
+  { value: 'digits_only', label: 'Somente dígitos' },
+  { value: 'date_only', label: 'Data' },
+  { value: 'iso_datetime', label: 'Data e hora ISO' },
+  { value: 'currency_major', label: 'Moeda em unidade' },
+]
+
+function cloneMappings(mappings: IntegrationMappingsConfig): IntegrationMappingsConfig {
+  return {
+    customer: {
+      fields: mappings.customer.fields.map((field) => ({ ...field })),
+    },
+    service_order: {
+      fields: mappings.service_order.fields.map((field) => ({ ...field })),
+    },
+    billing_document: {
+      fields: mappings.billing_document.fields.map((field) => ({ ...field })),
+    },
+  }
+}
+
+function createEmptyMappingRule(target: SyncTarget): IntegrationFieldMappingRule {
+  return {
+    id: crypto.randomUUID(),
+    destinationField: '',
+    enabled: true,
+    valueMode: 'source',
+    sourceField: INTEGRATION_CANONICAL_FIELDS[target][0] ?? null,
+    constantValue: null,
+    formatter: 'none',
+  }
+}
+
+function formatPreviewPayload(payload: Record<string, unknown>) {
+  return JSON.stringify(payload, null, 2)
 }
 
 async function parseApiError(res: Response, fallback: string) {
@@ -389,6 +445,9 @@ function IntegrationsSettingsPage() {
   const [previewByKey, setPreviewByKey] = useState<
     Record<string, SyncPreviewResponse>
   >({})
+  const [mappingDrafts, setMappingDrafts] = useState<
+    Record<string, IntegrationMappingsConfig>
+  >({})
 
   const integrationsQuery = useQuery({
     queryKey: ['integrations'],
@@ -408,6 +467,26 @@ function IntegrationsSettingsPage() {
 
   const refreshIntegrations = async () => {
     await queryClient.invalidateQueries({ queryKey: ['integrations'] })
+  }
+
+  const getMappingDraft = (integration: IntegrationSummary) =>
+    mappingDrafts[integration.id] ??
+    cloneMappings(
+      integration.connection.config?.mappings ?? getDefaultIntegrationMappings(),
+    )
+
+  const updateMappingDraft = (
+    integration: IntegrationSummary,
+    updater: (current: IntegrationMappingsConfig) => IntegrationMappingsConfig,
+  ) => {
+    setMappingDrafts((current) => {
+      const base = current[integration.id] ?? getMappingDraft(integration)
+
+      return {
+        ...current,
+        [integration.id]: updater(cloneMappings(base)),
+      }
+    })
   }
 
   const createMutation = useMutation({
@@ -457,6 +536,46 @@ function IntegrationsSettingsPage() {
     },
   })
 
+  const updateMutation = useMutation({
+    mutationFn: async ({
+      id,
+      mappings,
+    }: {
+      id: string
+      mappings: IntegrationMappingsConfig
+    }) => {
+      const res = await api.api.integrations[':id'].$put({
+        param: { id },
+        json: { mappings },
+      })
+
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao salvar mapeamento'))
+      }
+
+      return res.json()
+    },
+    onSuccess: async (_data, variables) => {
+      toast.success('Mapeamento salvo')
+      setMappingDrafts((current) => {
+        const next = { ...current }
+        delete next[variables.id]
+        return next
+      })
+      setPreviewByKey((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(([key]) => !key.startsWith(`${variables.id}:`)),
+        ),
+      )
+      await refreshIntegrations()
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao salvar mapeamento',
+      )
+    },
+  })
+
   const toggleMutation = useMutation({
     mutationFn: async ({
       id,
@@ -491,13 +610,15 @@ function IntegrationsSettingsPage() {
     mutationFn: async ({
       id,
       target,
+      mappings,
     }: {
       id: string
       target: SyncTarget
+      mappings?: IntegrationMappingsConfig
     }) => {
       const res = await api.api.integrations[':id'].sync.preview.$post({
         param: { id },
-        json: { target, limit: 50 },
+        json: { target, limit: 50, mappings },
       })
 
       if (!res.ok) {
@@ -651,6 +772,10 @@ function IntegrationsSettingsPage() {
         </CardHeader>
       </Card>
     )
+  }
+
+  if (!integrationsQuery.data) {
+    return <IntegrationsSkeleton />
   }
 
   const payload = integrationsQuery.data
@@ -843,6 +968,7 @@ function IntegrationsSettingsPage() {
           const checklist = buildChecklist(integration)
           const dependencyWarnings =
             integration.overview.readiness.dependencyWarnings
+          const draftMappings = getMappingDraft(integration)
 
           return (
             <Card key={integration.id}>
@@ -988,6 +1114,7 @@ function IntegrationsSettingsPage() {
                         const summary = getTargetSummary(integration, target)
                         const preview =
                           previewByKey[`${integration.id}:${target}`] ?? null
+                        const targetMappings = draftMappings[target]
 
                         return (
                           <Card key={target}>
@@ -1234,22 +1361,282 @@ function IntegrationsSettingsPage() {
                                 </div>
                               )}
 
+                              <div className="space-y-3 rounded-md border p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div>
+                                    <p className="font-medium">Mapeamento</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Ajuste o payload enviado ao ERP para este alvo.
+                                    </p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      updateMappingDraft(integration, (current) => ({
+                                        ...current,
+                                        [target]: {
+                                          fields: [
+                                            ...current[target].fields,
+                                            createEmptyMappingRule(target),
+                                          ],
+                                        },
+                                      }))
+                                    }
+                                  >
+                                    Adicionar campo
+                                  </Button>
+                                </div>
+
+                                <div className="space-y-3">
+                                  {targetMappings.fields.map((field) => (
+                                    <div
+                                      key={field.id}
+                                      className="rounded-md border bg-muted/20 p-3"
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                          <Checkbox
+                                            checked={field.enabled}
+                                            onCheckedChange={(checked) =>
+                                              updateMappingDraft(integration, (current) => ({
+                                                ...current,
+                                                [target]: {
+                                                  fields: current[target].fields.map((item) =>
+                                                    item.id === field.id
+                                                      ? {
+                                                          ...item,
+                                                          enabled: checked === true,
+                                                        }
+                                                      : item,
+                                                  ),
+                                                },
+                                              }))
+                                            }
+                                          />
+                                          <span className="text-sm font-medium">
+                                            {field.destinationField || 'Novo campo'}
+                                          </span>
+                                        </div>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() =>
+                                            updateMappingDraft(integration, (current) => ({
+                                              ...current,
+                                              [target]: {
+                                                fields: current[target].fields.filter(
+                                                  (item) => item.id !== field.id,
+                                                ),
+                                              },
+                                            }))
+                                          }
+                                        >
+                                          Remover
+                                        </Button>
+                                      </div>
+
+                                      <div className="mt-3 grid gap-3">
+                                        <Field>
+                                          <FieldLabel>Destino</FieldLabel>
+                                          <Input
+                                            value={field.destinationField}
+                                            onChange={(e) =>
+                                              updateMappingDraft(integration, (current) => ({
+                                                ...current,
+                                                [target]: {
+                                                  fields: current[target].fields.map((item) =>
+                                                    item.id === field.id
+                                                      ? {
+                                                          ...item,
+                                                          destinationField: e.target.value,
+                                                        }
+                                                      : item,
+                                                  ),
+                                                },
+                                              }))
+                                            }
+                                            placeholder="ex: externalCode"
+                                          />
+                                        </Field>
+
+                                        <div className="grid gap-3 md:grid-cols-3">
+                                          <Field>
+                                            <FieldLabel>Origem</FieldLabel>
+                                            <Select
+                                              value={field.valueMode}
+                                              onValueChange={(value) =>
+                                                updateMappingDraft(integration, (current) => ({
+                                                  ...current,
+                                                  [target]: {
+                                                    fields: current[target].fields.map((item) =>
+                                                      item.id === field.id
+                                                        ? {
+                                                            ...item,
+                                                            valueMode:
+                                                              value === 'constant'
+                                                                ? 'constant'
+                                                                : 'source',
+                                                          }
+                                                        : item,
+                                                    ),
+                                                  },
+                                                }))
+                                              }
+                                            >
+                                              <SelectTrigger>
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="source">Campo do CalibraFácil</SelectItem>
+                                                <SelectItem value="constant">Valor constante</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </Field>
+
+                                          {field.valueMode === 'source' ? (
+                                            <Field>
+                                              <FieldLabel>Campo fonte</FieldLabel>
+                                              <Select
+                                                value={field.sourceField ?? ''}
+                                                onValueChange={(value) =>
+                                                  updateMappingDraft(integration, (current) => ({
+                                                    ...current,
+                                                    [target]: {
+                                                      fields: current[target].fields.map((item) =>
+                                                        item.id === field.id
+                                                          ? {
+                                                              ...item,
+                                                              sourceField: value,
+                                                            }
+                                                          : item,
+                                                      ),
+                                                    },
+                                                  }))
+                                                }
+                                              >
+                                                <SelectTrigger>
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {INTEGRATION_CANONICAL_FIELDS[target].map((sourceField) => (
+                                                    <SelectItem
+                                                      key={sourceField}
+                                                      value={sourceField}
+                                                    >
+                                                      {sourceField}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </Field>
+                                          ) : (
+                                            <Field>
+                                              <FieldLabel>Valor constante</FieldLabel>
+                                              <Input
+                                                value={field.constantValue ?? ''}
+                                                onChange={(e) =>
+                                                  updateMappingDraft(integration, (current) => ({
+                                                    ...current,
+                                                    [target]: {
+                                                      fields: current[target].fields.map((item) =>
+                                                        item.id === field.id
+                                                          ? {
+                                                              ...item,
+                                                              constantValue: e.target.value,
+                                                            }
+                                                          : item,
+                                                      ),
+                                                    },
+                                                  }))
+                                                }
+                                                placeholder="ex: BRL"
+                                              />
+                                            </Field>
+                                          )}
+
+                                          <Field>
+                                            <FieldLabel>Formato</FieldLabel>
+                                            <Select
+                                              value={field.formatter}
+                                              onValueChange={(value) =>
+                                                updateMappingDraft(integration, (current) => ({
+                                                  ...current,
+                                                  [target]: {
+                                                    fields: current[target].fields.map((item) =>
+                                                      item.id === field.id
+                                                        ? {
+                                                            ...item,
+                                                            formatter:
+                                                              value as IntegrationMappingFormatter,
+                                                          }
+                                                        : item,
+                                                    ),
+                                                  },
+                                                }))
+                                              }
+                                            >
+                                              <SelectTrigger>
+                                                <SelectValue />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {formatterOptions.map((option) => (
+                                                  <SelectItem
+                                                    key={option.value}
+                                                    value={option.value}
+                                                  >
+                                                    {option.label}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </Field>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      previewMutation.mutate({
+                                        id: integration.id,
+                                        target,
+                                        mappings: draftMappings,
+                                      })
+                                    }
+                                    disabled={
+                                      !hasEntitlement || previewMutation.isPending
+                                    }
+                                  >
+                                    {previewMutation.isPending
+                                      ? 'Validando...'
+                                      : 'Prévia do mapeamento'}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() =>
+                                      updateMutation.mutate({
+                                        id: integration.id,
+                                        mappings: draftMappings,
+                                      })
+                                    }
+                                    disabled={
+                                      !hasEntitlement || updateMutation.isPending
+                                    }
+                                  >
+                                    {updateMutation.isPending
+                                      ? 'Salvando...'
+                                      : 'Salvar mapeamento'}
+                                  </Button>
+                                </div>
+                              </div>
+
                               <div className="flex flex-wrap gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    previewMutation.mutate({
-                                      id: integration.id,
-                                      target,
-                                    })
-                                  }
-                                  disabled={
-                                    !hasEntitlement || previewMutation.isPending
-                                  }
-                                >
-                                  {previewMutation.isPending ? 'Montando...' : 'Prévia'}
-                                </Button>
                                 <Button
                                   size="sm"
                                   onClick={() =>
@@ -1311,6 +1698,21 @@ function IntegrationsSettingsPage() {
                                               {record.subtitle ??
                                                 record.externalId}
                                             </p>
+                                            {record.issues.length > 0 ? (
+                                              <div className="mt-2 space-y-1">
+                                                {record.issues.map((issue) => (
+                                                  <p
+                                                    key={`${record.externalId}:${issue}`}
+                                                    className="text-xs text-destructive"
+                                                  >
+                                                    {issue}
+                                                  </p>
+                                                ))}
+                                              </div>
+                                            ) : null}
+                                            <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-2 text-xs">
+                                              {formatPreviewPayload(record.mappedPayload)}
+                                            </pre>
                                           </div>
                                         ))}
                                       </div>
