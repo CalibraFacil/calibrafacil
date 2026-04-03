@@ -10,6 +10,7 @@ import {
   getPortalBaseUrlForLabOrganization,
   sanitizePortalHostname,
 } from "../lib/portal-domains";
+import { writeOrganizationAuditEvent } from "../lib/audit";
 import {
   type AuthVariables,
   requireLabProtected,
@@ -227,6 +228,22 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(eq(organizationCustomDomain.id, existing.id))
           .returning();
 
+        if (updated) {
+          await writeOrganizationAuditEvent({
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "portal_domain.updated",
+            entityType: "portal_domain",
+            entityId: updated.id,
+            details: {
+              hostname: updated.hostname,
+              verificationHost: buildPortalDomainVerificationHost(updated.hostname),
+              previousHostname: existing.hostname,
+            },
+          });
+        }
+
         return c.json({ domain: serializeDomain(updated || null) });
       }
 
@@ -241,6 +258,21 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .returning();
 
+      if (created) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "portal_domain.created",
+          entityType: "portal_domain",
+          entityId: created.id,
+          details: {
+            hostname: created.hostname,
+            verificationHost: buildPortalDomainVerificationHost(created.hostname),
+          },
+        });
+      }
+
       return c.json({ domain: serializeDomain(created || null) }, 201);
     },
   )
@@ -251,6 +283,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     requireFeature("custom_domain"),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const record = await getOrganizationCustomDomain(member.organizationId);
 
       if (!record) {
@@ -285,6 +318,21 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         .where(eq(organizationCustomDomain.id, record.id))
         .returning();
 
+      if (updated) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "portal_domain.verified",
+          entityType: "portal_domain",
+          entityId: updated.id,
+          details: {
+            hostname: updated.hostname,
+            verificationHost: buildPortalDomainVerificationHost(updated.hostname),
+          },
+        });
+      }
+
       return c.json({ domain: serializeDomain(updated ?? null) });
     },
   )
@@ -295,6 +343,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     requireFeature("custom_domain"),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const record = await getOrganizationCustomDomain(member.organizationId);
 
       if (!record) {
@@ -315,6 +364,20 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         .where(eq(organizationCustomDomain.id, record.id))
         .returning();
 
+      if (updated) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "portal_domain.activated",
+          entityType: "portal_domain",
+          entityId: updated.id,
+          details: {
+            hostname: updated.hostname,
+          },
+        });
+      }
+
       return c.json({ domain: serializeDomain(updated ?? null) });
     },
   )
@@ -324,6 +387,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     requireRole(["admin", "owner"]),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const record = await getOrganizationCustomDomain(member.organizationId);
 
       if (!record) {
@@ -333,6 +397,20 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       await db
         .delete(organizationCustomDomain)
         .where(eq(organizationCustomDomain.id, record.id));
+
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "portal_domain.deleted",
+        entityType: "portal_domain",
+        entityId: record.id,
+        details: {
+          hostname: record.hostname,
+          wasVerified: Boolean(record.verifiedAt),
+          wasActive: record.isActive,
+        },
+      });
 
       return c.json({ success: true });
     },

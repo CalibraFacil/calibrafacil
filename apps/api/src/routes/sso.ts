@@ -21,6 +21,7 @@ import {
   type AuthVariables,
   withLabPermission,
 } from "../middleware/permission";
+import { writeOrganizationAuditEvent } from "../lib/audit";
 
 const createProviderSchema = z.object({
   providerId: z
@@ -252,6 +253,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", createProviderSchema),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const input = c.req.valid("json");
       const normalizedDomain = normalizeDomain(input.domain);
 
@@ -329,6 +331,21 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "sso.provider.created",
+        entityType: "sso_provider",
+        entityId: provider.providerId,
+        details: {
+          providerId: provider.providerId,
+          issuer: provider.issuer,
+          domain: provider.domain,
+          domainVerified: provider.domainVerified ?? false,
+        },
+      });
+
       return c.json(
         {
           provider: serializeProvider(provider),
@@ -347,6 +364,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("param", providerParamSchema),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const { providerId } = c.req.valid("param");
       const provider = await db.query.ssoProvider.findFirst({
         where: and(
@@ -394,6 +412,21 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         domainVerificationToken: string;
       };
 
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "sso.provider.domain_verification.requested",
+        entityType: "sso_provider",
+        entityId: provider.providerId,
+        details: {
+          providerId: provider.providerId,
+          domain: provider.domain,
+          verificationHost: getProviderDnsHost(provider),
+          verificationTokenIssued: Boolean(data.domainVerificationToken),
+        },
+      });
+
       return c.json({
         verificationRecord: buildVerificationRecord(
           provider,
@@ -409,6 +442,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("param", providerParamSchema),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const { providerId } = c.req.valid("param");
       const provider = await db.query.ssoProvider.findFirst({
         where: and(
@@ -466,6 +500,20 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "sso.provider.domain_verified",
+        entityType: "sso_provider",
+        entityId: refreshedProvider.providerId,
+        details: {
+          providerId: refreshedProvider.providerId,
+          domain: refreshedProvider.domain,
+          domainVerified: refreshedProvider.domainVerified ?? false,
+        },
+      });
+
       return c.json({ provider: serializeProvider(refreshedProvider) });
     },
   )
@@ -476,6 +524,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("param", providerParamSchema),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const { providerId } = c.req.valid("param");
       // Intentionally allow deletion after downgrade so organizations can
       // clean up stale SSO configuration even when SSO sign-in is blocked.
@@ -504,6 +553,21 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
           "Falha ao remover provedor SSO",
         );
       }
+
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "sso.provider.deleted",
+        entityType: "sso_provider",
+        entityId: provider.providerId,
+        details: {
+          providerId: provider.providerId,
+          issuer: provider.issuer,
+          domain: provider.domain,
+          domainVerified: provider.domainVerified ?? false,
+        },
+      });
 
       return c.body(null, 204);
     },

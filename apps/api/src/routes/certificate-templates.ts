@@ -24,6 +24,7 @@ import {
   generatePresignedUrl,
   type R2Env,
 } from "../lib/storage";
+import { writeOrganizationAuditEvent } from "../lib/audit";
 import { and, desc, eq, ne } from "drizzle-orm";
 
 const TemplateConfigSchema = z.object({
@@ -221,6 +222,23 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
         })
         .returning();
 
+      if (created) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "certificate_template.created",
+          entityType: "certificate_template",
+          entityId: String(created.id),
+          details: {
+            name: created.name,
+            slug: created.slug,
+            isDefault: created.isDefault,
+            status: created.status,
+          },
+        });
+      }
+
       return c.json(
         {
           item: {
@@ -239,6 +257,7 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
     requireFeature("custom_templates"),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const id = Number.parseInt(c.req.param("id"), 10);
       const env = c.env as R2Env;
 
@@ -305,6 +324,23 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
         .where(eq(certificateTemplate.id, existing.id))
         .returning();
 
+      if (updated) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "certificate_template.logo.uploaded",
+          entityType: "certificate_template",
+          entityId: String(updated.id),
+          details: {
+            name: updated.name,
+            key,
+            contentType: file.type,
+            size: file.size,
+          },
+        });
+      }
+
       return c.json({
         item: {
           ...updated,
@@ -320,6 +356,7 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
     requireFeature("custom_templates"),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const id = Number.parseInt(c.req.param("id"), 10);
 
       if (!Number.isFinite(id)) {
@@ -356,6 +393,20 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
         })
         .where(eq(certificateTemplate.id, existing.id))
         .returning();
+
+      if (updated) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "certificate_template.logo.deleted",
+          entityType: "certificate_template",
+          entityId: String(updated.id),
+          details: {
+            name: updated.name,
+          },
+        });
+      }
 
       return c.json({
         item: {
@@ -396,6 +447,7 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
     zValidator("json", UpdateTemplateSchema),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const id = Number.parseInt(c.req.param("id"), 10);
       const input = c.req.valid("json");
 
@@ -475,6 +527,33 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
         .where(eq(certificateTemplate.id, existing.id))
         .returning();
 
+      if (updated) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "certificate_template.updated",
+          entityType: "certificate_template",
+          entityId: String(updated.id),
+          details: {
+            changedFields: {
+              name: input.name !== undefined && input.name !== existing.name,
+              config: input.config !== undefined,
+            },
+            before: {
+              name: existing.name,
+              slug: existing.slug,
+              version: existing.version,
+            },
+            after: {
+              name: updated.name,
+              slug: updated.slug,
+              version: updated.version,
+            },
+          },
+        });
+      }
+
       return c.json({
         item: {
           ...updated,
@@ -543,6 +622,23 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
         })
         .returning();
 
+      if (created) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "certificate_template.duplicated",
+          entityType: "certificate_template",
+          entityId: String(created.id),
+          details: {
+            sourceTemplateId: existing.id,
+            sourceTemplateName: existing.name,
+            name: created.name,
+            slug: created.slug,
+          },
+        });
+      }
+
       return c.json(
         {
           item: {
@@ -561,6 +657,7 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
     requireFeature("custom_templates"),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const id = Number.parseInt(c.req.param("id"), 10);
 
       if (!Number.isFinite(id)) {
@@ -588,6 +685,19 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
         .set({ isDefault: true, updatedAt: new Date() })
         .where(eq(certificateTemplate.id, existing.id));
 
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "certificate_template.default_set",
+        entityType: "certificate_template",
+        entityId: String(existing.id),
+        details: {
+          name: existing.name,
+          slug: existing.slug,
+        },
+      });
+
       return c.json({ success: true });
     },
   )
@@ -598,6 +708,7 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
     requireFeature("custom_templates"),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const id = Number.parseInt(c.req.param("id"), 10);
 
       if (!Number.isFinite(id)) {
@@ -630,6 +741,19 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
           updatedAt: new Date(),
         })
         .where(eq(certificateTemplate.id, existing.id));
+
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "certificate_template.archived",
+        entityType: "certificate_template",
+        entityId: String(existing.id),
+        details: {
+          name: existing.name,
+          slug: existing.slug,
+        },
+      });
 
       return c.json({ success: true });
     },
