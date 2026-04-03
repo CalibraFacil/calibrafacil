@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import {
   organization,
@@ -429,114 +429,109 @@ export const internalCustomerSuccessRouter = new Hono<{
   .get("/access", (c) => c.json({ allowed: true }))
   .get("/organizations", async (c) => {
     const now = new Date();
-    const rows = await db
+    const dueSoonThreshold = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+    const organizations = await db
       .select({
         id: organization.id,
         name: organization.name,
         slug: organization.slug,
         type: organization.type,
-        successProfileId: organizationSuccessProfile.id,
-        accountOwnerName: organizationSuccessProfile.accountOwnerName,
-        accountOwnerEmail: organizationSuccessProfile.accountOwnerEmail,
-        supportContactEmail: organizationSuccessProfile.supportContactEmail,
-        internalOwnerUserId: organizationSuccessProfile.internalOwnerUserId,
-        prioritySupport: organizationSuccessProfile.prioritySupport,
-        slaTier: organizationSuccessProfile.slaTier,
-        onboardingStatus: organizationSuccessProfile.onboardingStatus,
-        migrationStatus: organizationSuccessProfile.migrationStatus,
-        goLiveStatus: organizationSuccessProfile.goLiveStatus,
-        goLiveTargetDate: organizationSuccessProfile.goLiveTargetDate,
-        goLiveActualDate: organizationSuccessProfile.goLiveActualDate,
-        healthStatus: organizationSuccessProfile.healthStatus,
-        blockers: organizationSuccessProfile.blockers,
-        nextAction: organizationSuccessProfile.nextAction,
-        nextActionDueAt: organizationSuccessProfile.nextActionDueAt,
-        nextActionCompletedAt: organizationSuccessProfile.nextActionCompletedAt,
-        lastTouchedAt: organizationSuccessProfile.lastTouchedAt,
-        updatedAt: organizationSuccessProfile.updatedAt,
-        openRequestsCount: sql<number>`count(case when ${organizationSupportRequest.status} in ('OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER') then 1 end)`,
-        totalRequestsCount: sql<number>`count(${organizationSupportRequest.id})`,
-        urgentRequestsCount: sql<number>`count(case when ${organizationSupportRequest.status} in ('OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER') and ${organizationSupportRequest.priority} in ('HIGH', 'URGENT') then 1 end)`,
-        dueSoonRequestsCount: sql<number>`count(case when ${organizationSupportRequest.status} in ('OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER') and ${organizationSupportRequest.slaTargetAt} > ${now} and ${organizationSupportRequest.slaTargetAt} <= ${new Date(now.getTime() + 4 * 60 * 60 * 1000)} then 1 end)`,
-        breachedRequestsCount: sql<number>`count(case when ${organizationSupportRequest.status} in ('OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER') and ${organizationSupportRequest.slaTargetAt} <= ${now} then 1 end)`,
-        escalatedRequestsCount: sql<number>`count(case when ${organizationSupportRequest.status} in ('OPEN', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER') and ${organizationSupportRequest.escalatedAt} is not null then 1 end)`,
       })
       .from(organization)
-      .leftJoin(
-        organizationSuccessProfile,
-        eq(organizationSuccessProfile.organizationId, organization.id),
-      )
-      .leftJoin(
-        organizationSupportRequest,
-        eq(organizationSupportRequest.organizationId, organization.id),
-      )
       .where(eq(organization.type, "LAB"))
-      .groupBy(
-        organization.id,
-        organization.name,
-        organization.slug,
-        organization.type,
-        organizationSuccessProfile.id,
-        organizationSuccessProfile.accountOwnerName,
-        organizationSuccessProfile.accountOwnerEmail,
-        organizationSuccessProfile.supportContactEmail,
-        organizationSuccessProfile.internalOwnerUserId,
-        organizationSuccessProfile.prioritySupport,
-        organizationSuccessProfile.slaTier,
-        organizationSuccessProfile.onboardingStatus,
-        organizationSuccessProfile.migrationStatus,
-        organizationSuccessProfile.goLiveStatus,
-        organizationSuccessProfile.goLiveTargetDate,
-        organizationSuccessProfile.goLiveActualDate,
-        organizationSuccessProfile.healthStatus,
-        organizationSuccessProfile.blockers,
-        organizationSuccessProfile.nextAction,
-        organizationSuccessProfile.nextActionDueAt,
-        organizationSuccessProfile.nextActionCompletedAt,
-        organizationSuccessProfile.lastTouchedAt,
-        organizationSuccessProfile.updatedAt,
-      )
       .orderBy(asc(organization.name));
+
+    const organizationIds = organizations.map((row) => row.id);
+    const [successProfiles, supportRequests] = await Promise.all([
+      organizationIds.length === 0
+        ? Promise.resolve([])
+        : db
+            .select()
+            .from(organizationSuccessProfile)
+            .where(
+              inArray(organizationSuccessProfile.organizationId, organizationIds),
+            ),
+      organizationIds.length === 0
+        ? Promise.resolve([])
+        : db
+            .select({
+              organizationId: organizationSupportRequest.organizationId,
+              status: organizationSupportRequest.status,
+              priority: organizationSupportRequest.priority,
+              slaTargetAt: organizationSupportRequest.slaTargetAt,
+              escalatedAt: organizationSupportRequest.escalatedAt,
+            })
+            .from(organizationSupportRequest)
+            .where(
+              inArray(organizationSupportRequest.organizationId, organizationIds),
+            ),
+    ]);
+
+    const successProfilesByOrg = new Map(
+      successProfiles.map((profile) => [profile.organizationId, profile] as const),
+    );
+    const requestSummariesByOrg = new Map<
+      string,
+      {
+        openRequestsCount: number;
+        totalRequestsCount: number;
+        urgentRequestsCount: number;
+        dueSoonRequestsCount: number;
+        breachedRequestsCount: number;
+        escalatedRequestsCount: number;
+      }
+    >();
+
+    for (const request of supportRequests) {
+      const summary = requestSummariesByOrg.get(request.organizationId) ?? {
+        openRequestsCount: 0,
+        totalRequestsCount: 0,
+        urgentRequestsCount: 0,
+        dueSoonRequestsCount: 0,
+        breachedRequestsCount: 0,
+        escalatedRequestsCount: 0,
+      };
+
+      summary.totalRequestsCount += 1;
+
+      if (isOpenSupportStatus(request.status)) {
+        summary.openRequestsCount += 1;
+
+        if (request.priority === "HIGH" || request.priority === "URGENT") {
+          summary.urgentRequestsCount += 1;
+        }
+
+        if (request.slaTargetAt) {
+          const targetAt = new Date(request.slaTargetAt);
+          if (targetAt <= now) {
+            summary.breachedRequestsCount += 1;
+          } else if (targetAt <= dueSoonThreshold) {
+            summary.dueSoonRequestsCount += 1;
+          }
+        }
+
+        if (request.escalatedAt) {
+          summary.escalatedRequestsCount += 1;
+        }
+      }
+
+      requestSummariesByOrg.set(request.organizationId, summary);
+    }
 
     const planAccessByOrg = new Map(
       await Promise.all(
-        rows.map(async (row) => [row.id, await getOrganizationPlanAccess(row.id)] as const),
+        organizations.map(
+          async (row) => [row.id, await getOrganizationPlanAccess(row.id)] as const,
+        ),
       ),
     );
 
     const profilesByOrg = new Map(
       await Promise.all(
-        rows.map(async (row) => {
-          if (row.successProfileId) {
-            return [
-              row.id,
-              {
-                id: row.successProfileId,
-                organizationId: row.id,
-                accountOwnerUserId: null,
-                accountOwnerName: row.accountOwnerName,
-                accountOwnerEmail: row.accountOwnerEmail,
-                supportContactEmail: row.supportContactEmail,
-                internalOwnerUserId: row.internalOwnerUserId,
-                prioritySupport: row.prioritySupport ?? false,
-                slaTier: row.slaTier ?? "PLAN_DEFAULT",
-                onboardingStatus: row.onboardingStatus ?? "NOT_STARTED",
-                migrationStatus: row.migrationStatus ?? "NOT_REQUIRED",
-                goLiveStatus: row.goLiveStatus ?? "NOT_SCHEDULED",
-                healthStatus: row.healthStatus ?? "HEALTHY",
-                blockers: row.blockers ?? [],
-                nextAction: row.nextAction,
-                nextActionDueAt: row.nextActionDueAt,
-                nextActionCompletedAt: row.nextActionCompletedAt,
-                goLiveTargetDate: row.goLiveTargetDate,
-                goLiveActualDate: row.goLiveActualDate,
-                publicStatusNote: null,
-                internalNotes: null,
-                lastTouchedAt: row.lastTouchedAt,
-                createdAt: row.updatedAt ?? new Date(),
-                updatedAt: row.updatedAt ?? new Date(),
-              },
-            ] as const;
+        organizations.map(async (row) => {
+          const existingProfile = successProfilesByOrg.get(row.id);
+          if (existingProfile) {
+            return [row.id, existingProfile] as const;
           }
 
           return [row.id, await ensureSuccessProfile(row.id)] as const;
@@ -546,8 +541,8 @@ export const internalCustomerSuccessRouter = new Hono<{
 
     const operatorIds = Array.from(
       new Set(
-        rows
-          .map((row) => row.internalOwnerUserId)
+        organizations
+          .map((row) => profilesByOrg.get(row.id)?.internalOwnerUserId ?? null)
           .filter((value): value is string => Boolean(value)),
       ),
     );
@@ -568,18 +563,19 @@ export const internalCustomerSuccessRouter = new Hono<{
     );
 
     return c.json({
-      data: rows.map((row) => {
+      data: organizations.map((row) => {
         const profile = profilesByOrg.get(row.id)!;
         const planAccess = planAccessByOrg.get(row.id)!;
+        const requestSummary = requestSummariesByOrg.get(row.id);
         const operationalSummary = buildOperationalSummary({
           profile,
           supportPolicy: planAccess.supportPolicy,
-          openRequestsCount: Number(row.openRequestsCount ?? 0),
-          urgentRequestsCount: Number(row.urgentRequestsCount ?? 0),
-          dueSoonRequestsCount: Number(row.dueSoonRequestsCount ?? 0),
-          breachedRequestsCount: Number(row.breachedRequestsCount ?? 0),
-          escalatedRequestsCount: Number(row.escalatedRequestsCount ?? 0),
-          totalRequestsCount: Number(row.totalRequestsCount ?? 0),
+          openRequestsCount: Number(requestSummary?.openRequestsCount ?? 0),
+          urgentRequestsCount: Number(requestSummary?.urgentRequestsCount ?? 0),
+          dueSoonRequestsCount: Number(requestSummary?.dueSoonRequestsCount ?? 0),
+          breachedRequestsCount: Number(requestSummary?.breachedRequestsCount ?? 0),
+          escalatedRequestsCount: Number(requestSummary?.escalatedRequestsCount ?? 0),
+          totalRequestsCount: Number(requestSummary?.totalRequestsCount ?? 0),
         });
 
         return {
