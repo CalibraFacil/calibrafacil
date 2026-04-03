@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useActiveOrganization } from '@calibra-facil/auth/client'
 import {
   ThermometerIcon,
   Add01Icon,
@@ -58,6 +59,7 @@ export const Route = createFileRoute('/dashboard/settings/environment')({
 
 interface EnvironmentalLimit {
   id: number
+  unitId: number
   assetTypeId: number | null
   assetTypeName: string | null
   temperatureMin: number | null
@@ -72,6 +74,18 @@ interface AssetType {
   id: number
   name: string
   slug: string
+}
+
+interface UnitContextResponse {
+  activeUnitId: number | null
+  activeUnitName: string | null
+  selectedUnitScope: 'all' | 'unit'
+  data: Array<{
+    id: number
+    name: string
+    slug: string
+    role: string
+  }>
 }
 
 interface LimitFormState {
@@ -95,19 +109,45 @@ const emptyForm: LimitFormState = {
 }
 
 function EnvironmentSettingsPage() {
+  const { data: activeOrg } = useActiveOrganization()
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState<LimitFormState>(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [dialogMode, setDialogMode] = useState<'default' | 'override'>('default')
 
-  // Fetch all limits
+  const unitContextQuery = useQuery({
+    queryKey: ['dashboard-units', activeOrg?.id ?? 'no-org'],
+    enabled: Boolean(activeOrg?.id),
+    queryFn: async () => {
+      const response = await api.api.units.$get()
+      if (!response.ok) {
+        throw new Error('Falha ao carregar contexto de unidades')
+      }
+
+      return (await response.json()) as UnitContextResponse
+    },
+  })
+
+  const selectedUnit =
+    unitContextQuery.data?.selectedUnitScope === 'unit'
+      ? (unitContextQuery.data.data ?? []).find(
+          (unit) => unit.id === unitContextQuery.data?.activeUnitId,
+        ) ?? null
+      : null
+  const isConsolidated = unitContextQuery.data?.selectedUnitScope === 'all'
+
+  // Fetch all limits for the selected unit
   const { data: limitsData, isLoading } = useQuery({
-    queryKey: ['environmental-limits'],
+    queryKey: ['environmental-limits', selectedUnit?.id ?? 'no-unit'],
+    enabled: Boolean(selectedUnit),
     queryFn: async () => {
       const res = await api.api['environmental-limits'].$get()
       if (!res.ok) throw new Error('Falha ao carregar limites')
-      return res.json() as Promise<{ limits: EnvironmentalLimit[] }>
+      return res.json() as Promise<{
+        limits: EnvironmentalLimit[]
+        unit: { unitId: number; unitName: string | null }
+      }>
     },
   })
 
@@ -125,8 +165,8 @@ function EnvironmentSettingsPage() {
   const limits = limitsData?.limits ?? []
   const assetTypes = assetTypesData?.data ?? []
 
-  // Separate org default from asset-type overrides
-  const orgDefault = limits.find((l) => l.assetTypeId === null)
+  // Separate unit default from asset-type overrides
+  const unitDefault = limits.find((l) => l.assetTypeId === null)
   const overrides = limits.filter((l) => l.assetTypeId !== null)
 
   // Upsert mutation
@@ -147,7 +187,9 @@ function EnvironmentSettingsPage() {
       return res.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['environmental-limits'] })
+      queryClient.invalidateQueries({
+        queryKey: ['environmental-limits', selectedUnit?.id ?? 'no-unit'],
+      })
       toast.success('Limites ambientais salvos')
       setDialogOpen(false)
       setForm(emptyForm)
@@ -168,7 +210,9 @@ function EnvironmentSettingsPage() {
       return res.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['environmental-limits'] })
+      queryClient.invalidateQueries({
+        queryKey: ['environmental-limits', selectedUnit?.id ?? 'no-unit'],
+      })
       toast.success('Limites removidos')
     },
     onError: () => {
@@ -199,8 +243,8 @@ function EnvironmentSettingsPage() {
   }
 
   function openDefaultDialog() {
-    if (orgDefault) {
-      openEditDialog(orgDefault)
+    if (unitDefault) {
+      openEditDialog(unitDefault)
     } else {
       setForm(emptyForm)
       setEditingId(null)
@@ -215,15 +259,56 @@ function EnvironmentSettingsPage() {
     (at) => !usedAssetTypeIds.has(at.id),
   )
 
+  if (unitContextQuery.isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-28 w-full" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-72 w-full" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Escopo das Condições Ambientais</CardTitle>
+          <CardDescription>
+            Os limites ambientais são configurados por unidade operacional e
+            usados nas execuções dos jobs daquela unidade.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isConsolidated ? (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              A visão consolidada está ativa. Selecione uma unidade específica no
+              switcher para editar ou revisar os limites ambientais aplicados a
+              ela.
+            </div>
+          ) : selectedUnit ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">{selectedUnit.name}</Badge>
+              <Badge variant="outline">Escopo operacional ativo</Badge>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              Nenhuma unidade ativa encontrada para esta organização.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {!selectedUnit ? null : (
+        <>
       {/* Default limits */}
       <Card>
         <CardHeader>
           <CardTitle>Limites Padrão</CardTitle>
           <CardDescription>
             Limites ambientais padrão aplicados a todas as calibrações da
-            organização. Tipos de equipamento podem ter limites específicos.
+            unidade selecionada. Tipos de equipamento podem ter limites
+            específicos.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -232,28 +317,28 @@ function EnvironmentSettingsPage() {
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : orgDefault ? (
+          ) : unitDefault ? (
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <LimitDisplay
                   icon={ThermometerIcon}
                   label="Temperatura"
-                  min={orgDefault.temperatureMin}
-                  max={orgDefault.temperatureMax}
+                  min={unitDefault.temperatureMin}
+                  max={unitDefault.temperatureMax}
                   unit="°C"
                 />
                 <LimitDisplay
                   icon={DropletIcon}
                   label="Umidade"
-                  min={orgDefault.humidityMin}
-                  max={orgDefault.humidityMax}
+                  min={unitDefault.humidityMin}
+                  max={unitDefault.humidityMax}
                   unit="%RH"
                 />
                 <LimitDisplay
                   icon={CompassIcon}
                   label="Pressão"
-                  min={orgDefault.pressureMin}
-                  max={orgDefault.pressureMax}
+                  min={unitDefault.pressureMin}
+                  max={unitDefault.pressureMax}
                   unit="hPa"
                 />
               </div>
@@ -265,7 +350,7 @@ function EnvironmentSettingsPage() {
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 Nenhum limite padrão configurado. Calibrações serão realizadas
-                sem verificação de condições ambientais.
+                sem verificação de condições ambientais nesta unidade.
               </p>
               <Button variant="outline" size="sm" onClick={openDefaultDialog}>
                 Configurar limites padrão
@@ -283,7 +368,7 @@ function EnvironmentSettingsPage() {
               <CardTitle>Limites por Tipo de Equipamento</CardTitle>
               <CardDescription>
                 Limites específicos que sobrescrevem os padrão para
-                determinados tipos de instrumento.
+                determinados tipos de instrumento dentro da unidade ativa.
               </CardDescription>
             </div>
             {overrides.length > 0 && (
@@ -317,7 +402,7 @@ function EnvironmentSettingsPage() {
                 <EmptyTitle>Sem limites específicos</EmptyTitle>
                 <EmptyDescription>
                   Todos os tipos de equipamento usarão os limites padrão da
-                  organização.
+                  unidade selecionada.
                 </EmptyDescription>
               </EmptyHeader>
               <Button
@@ -568,6 +653,8 @@ function EnvironmentSettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </>
+      )}
     </div>
   )
 }

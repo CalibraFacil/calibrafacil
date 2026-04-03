@@ -204,6 +204,13 @@
       "when": 1774598400000,
       "tag": "0028_add_custom_integrations",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1775198400000,
+      "tag": "0036_make_operational_settings_unit_aware",
+      "breakpoints": true
     }
   ]
 }

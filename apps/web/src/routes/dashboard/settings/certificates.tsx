@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useActiveOrganization } from '@calibra-facil/auth/client'
 import {
   Add01Icon,
   Certificate01Icon,
@@ -77,6 +78,7 @@ export const Route = createFileRoute('/dashboard/settings/certificates')({
 
 interface Certificate {
   id: number
+  unitId: number
   name: string
   serialNumber: string
   issuerCn: string
@@ -93,16 +95,51 @@ interface Certificate {
   status: 'valid' | 'expired' | 'not_yet_valid' | 'revoked'
 }
 
+interface UnitContextResponse {
+  activeUnitId: number | null
+  activeUnitName: string | null
+  selectedUnitScope: 'all' | 'unit'
+  data: Array<{
+    id: number
+    name: string
+    slug: string
+    role: string
+  }>
+}
+
 function CertificatesSettingsPage() {
+  const { data: activeOrg } = useActiveOrganization()
   const queryClient = useQueryClient()
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null)
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false)
   const [certToRevoke, setCertToRevoke] = useState<Certificate | null>(null)
 
+  const unitContextQuery = useQuery({
+    queryKey: ['dashboard-units', activeOrg?.id ?? 'no-org'],
+    enabled: Boolean(activeOrg?.id),
+    queryFn: async () => {
+      const response = await api.api.units.$get()
+      if (!response.ok) {
+        throw new Error('Falha ao carregar contexto de unidades')
+      }
+
+      return (await response.json()) as UnitContextResponse
+    },
+  })
+
+  const selectedUnit =
+    unitContextQuery.data?.selectedUnitScope === 'unit'
+      ? (unitContextQuery.data.data ?? []).find(
+          (unit) => unit.id === unitContextQuery.data?.activeUnitId,
+        ) ?? null
+      : null
+  const isConsolidated = unitContextQuery.data?.selectedUnitScope === 'all'
+
   // Fetch certificates
   const { data, isLoading, error } = useQuery({
-    queryKey: ['signing-certificates'],
+    queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
+    enabled: Boolean(selectedUnit),
     queryFn: async () => {
       const res = await api.api.signing.certificates.$get()
       if (!res.ok) throw new Error('Failed to fetch certificates')
@@ -122,7 +159,9 @@ function CertificatesSettingsPage() {
       return res.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['signing-certificates'] })
+      queryClient.invalidateQueries({
+        queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
+      })
       toast.success('Certificado definido como padrão')
     },
     onError: (error) => {
@@ -141,7 +180,9 @@ function CertificatesSettingsPage() {
       return res.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['signing-certificates'] })
+      queryClient.invalidateQueries({
+        queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
+      })
       setRevokeDialogOpen(false)
       setCertToRevoke(null)
       toast.success('Certificado revogado')
@@ -151,7 +192,7 @@ function CertificatesSettingsPage() {
     },
   })
 
-  if (isLoading) {
+  if (unitContextQuery.isLoading || (selectedUnit && isLoading)) {
     return <CertificatesSkeleton />
   }
 
@@ -180,6 +221,36 @@ function CertificatesSettingsPage() {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Escopo dos Certificados de Assinatura</CardTitle>
+          <CardDescription>
+            Cada unidade mantém sua própria carteira de certificados ICP-Brasil
+            e define o padrão usado nas emissões daquela unidade.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isConsolidated ? (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              A visão consolidada está ativa. Selecione uma unidade específica no
+              switcher para revisar, enviar ou trocar o certificado padrão
+              daquela unidade.
+            </div>
+          ) : selectedUnit ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">{selectedUnit.name}</Badge>
+              <Badge variant="outline">Pool de assinatura ativo</Badge>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              Nenhuma unidade ativa encontrada para esta organização.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {!selectedUnit ? null : (
+        <>
       {/* Header card */}
       <Card>
         <CardHeader>
@@ -198,7 +269,7 @@ function CertificatesSettingsPage() {
                 onSuccess={() => {
                   setIsUploadOpen(false)
                   queryClient.invalidateQueries({
-                    queryKey: ['signing-certificates'],
+                    queryKey: ['signing-certificates', selectedUnit.id],
                   })
                 }}
               />
@@ -221,7 +292,7 @@ function CertificatesSettingsPage() {
                 <EmptyTitle>Nenhum certificado cadastrado</EmptyTitle>
                 <EmptyDescription>
                   Adicione um certificado ICP-Brasil A1 para assinar seus
-                  certificados de calibração digitalmente.
+                  certificados de calibração digitalmente nesta unidade.
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -306,6 +377,8 @@ function CertificatesSettingsPage() {
         }}
         isLoading={revokeMutation.isPending}
       />
+        </>
+      )}
     </div>
   )
 }
