@@ -75,7 +75,6 @@ function toTemplateConfigRecord(
 ): Record<string, unknown> {
   return config as unknown as Record<string, unknown>;
 }
-
 export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
     const member = c.get("member");

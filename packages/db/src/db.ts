@@ -26,6 +26,15 @@ type Database = NeonDatabase<typeof schema> | ReturnType<typeof drizzlePostgres<
  * @see https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-drivers-and-libraries/drizzle-orm/
  */
 export function getDb(): Database {
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    // Prefer direct DATABASE_URL in development to avoid Hyperdrive local overhead.
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!isProduction && databaseUrl) {
+        const pool = new Pool({ connectionString: databaseUrl });
+        return drizzleNeon(pool, { schema });
+    }
+
     // Hyperdrive - use postgres.js driver (recommended by Cloudflare and Neon)
     const hyperdriveUrl = process.env.HYPERDRIVE_URL;
     if (hyperdriveUrl) {
@@ -38,8 +47,7 @@ export function getDb(): Database {
         return drizzlePostgres(sql, { schema });
     }
 
-    // Fallback to Neon serverless driver for local dev
-    const databaseUrl = process.env.DATABASE_URL;
+    // Fallback to direct DATABASE_URL when Hyperdrive is not available
     if (databaseUrl) {
         const pool = new Pool({ connectionString: databaseUrl });
         return drizzleNeon(pool, { schema });
@@ -48,8 +56,7 @@ export function getDb(): Database {
     throw new Error('No database connection configured. Set HYPERDRIVE_URL or DATABASE_URL.');
 }
 
-// For backwards compatibility - creates fresh connection on each access
-// Note: In CF Workers, always use getDb() to ensure proper initialization
+// For backwards compatibility - creates a fresh request-safe DB instance on access.
 export const db = new Proxy({} as Database, {
     get(_, prop) {
         return getDb()[prop as keyof Database];

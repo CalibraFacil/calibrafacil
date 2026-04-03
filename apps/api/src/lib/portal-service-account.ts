@@ -84,7 +84,7 @@ function getPortalAppUrlFallback(): string {
     return "https://portal.calibrafacil.com";
   }
 
-  return "https://localhost:5174";
+  return "http://localhost:5174";
 }
 
 async function getInvitationUrl(
