@@ -9,7 +9,7 @@ import {
   organizationUnit,
   user,
 } from "@calibra-facil/db/schema";
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import {
   type AuthVariables,
   withLabPermission,
@@ -34,13 +34,53 @@ const UpdateAssignmentsSchema = z.object({
 });
 
 function slugify(name: string) {
-  return name
+  const slug = name
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+  return slug || "unit";
+}
+
+function isUniqueViolation(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "23505"
+  );
+}
+
+async function allocateUnitSlug(params: {
+  organizationId: string;
+  name: string;
+  excludeId?: number;
+}) {
+  const baseSlug = slugify(params.name);
+
+  for (let attempt = 1; attempt <= 100; attempt += 1) {
+    const candidate = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
+    const [existing] = await db
+      .select({ id: organizationUnit.id })
+      .from(organizationUnit)
+      .where(
+        and(
+          eq(organizationUnit.organizationId, params.organizationId),
+          eq(organizationUnit.slug, candidate),
+          params.excludeId ? ne(organizationUnit.id, params.excludeId) : undefined,
+        ),
+      )
+      .limit(1);
+
+    if (!existing) {
+      return candidate;
+    }
+  }
+
+  throw new Error("Nao foi possivel gerar um slug unico para a unidade");
 }
 
 export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
@@ -86,44 +126,49 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       const memberData = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
-      const baseSlug = slugify(input.name);
+      let created: typeof organizationUnit.$inferSelect | undefined;
 
-      const [existingCount] = await db
-        .select({ total: count() })
-        .from(organizationUnit)
-        .where(
-          and(
-            eq(organizationUnit.organizationId, memberData.organizationId),
-            inArray(organizationUnit.slug, [baseSlug, `${baseSlug}-2`]),
-          ),
-        );
-
-      const suffix = (existingCount?.total ?? 0) + 1;
-      const slug = suffix > 1 ? `${baseSlug}-${suffix}` : baseSlug;
-
-      const [created] = await db
-        .insert(organizationUnit)
-        .values({
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const slug = await allocateUnitSlug({
           organizationId: memberData.organizationId,
           name: input.name,
-          slug,
-          status: "ACTIVE",
-          isDefault: false,
-          createdBy: session.user.id,
-        })
-        .returning();
+        });
+
+        try {
+          [created] = await db
+            .insert(organizationUnit)
+            .values({
+              organizationId: memberData.organizationId,
+              name: input.name,
+              slug,
+              status: "ACTIVE",
+              isDefault: false,
+              createdBy: session.user.id,
+            })
+            .returning();
+          break;
+        } catch (error) {
+          if (!isUniqueViolation(error) || attempt === 1) {
+            throw error;
+          }
+        }
+      }
+
+      if (!created) {
+        return c.json({ error: "Falha ao criar unidade" }, 500);
+      }
 
       await db.insert(organizationEventLog).values({
         organizationId: memberData.organizationId,
-        unitId: created?.id ?? null,
+        unitId: created.id,
         actorUserId: session.user.id,
         actorMemberId: memberData.id,
         action: "unit.created",
         entityType: "organization_unit",
-        entityId: String(created?.id ?? ""),
+        entityId: String(created.id),
         details: {
           name: input.name,
-          slug,
+          slug: created.slug,
         },
       });
 
@@ -169,7 +214,11 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       const updateData: Partial<typeof existing> = {};
       if (input.name && input.name !== existing.name) {
         updateData.name = input.name;
-        updateData.slug = slugify(input.name);
+        updateData.slug = await allocateUnitSlug({
+          organizationId: memberData.organizationId,
+          name: input.name,
+          excludeId: id,
+        });
       }
 
       if (input.status && input.status !== existing.status) {
@@ -182,11 +231,30 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json(existing);
       }
 
-      const [updated] = await db
-        .update(organizationUnit)
-        .set(updateData)
-        .where(eq(organizationUnit.id, id))
-        .returning();
+      let updated: typeof existing | undefined;
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          [updated] = await db
+            .update(organizationUnit)
+            .set(updateData)
+            .where(eq(organizationUnit.id, id))
+            .returning();
+          break;
+        } catch (error) {
+          if (!isUniqueViolation(error) || attempt === 1) {
+            throw error;
+          }
+
+          if (input.name && input.name !== existing.name) {
+            updateData.slug = await allocateUnitSlug({
+              organizationId: memberData.organizationId,
+              name: input.name,
+              excludeId: id,
+            });
+          }
+        }
+      }
 
       await db.insert(organizationEventLog).values({
         organizationId: memberData.organizationId,
@@ -234,7 +302,12 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           organizationUnit,
           eq(memberUnitAssignment.unitId, organizationUnit.id),
         )
-        .where(eq(memberUnitAssignment.organizationId, memberData.organizationId))
+        .where(
+          and(
+            eq(memberUnitAssignment.organizationId, memberData.organizationId),
+            eq(organizationUnit.organizationId, memberData.organizationId),
+          ),
+        )
         .orderBy(asc(organizationUnit.name));
 
       const assignmentsByMember = new Map<

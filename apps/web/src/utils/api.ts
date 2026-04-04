@@ -29,15 +29,18 @@ function getApiBaseURL(): string {
 }
 
 export const api = hc<AppType>(getApiBaseURL(), {
-  fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-    fetch(input, {
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers)
+    const activeUnitId = getStoredActiveUnitId()
+
+    if (activeUnitId) {
+      headers.set('x-active-unit-id', activeUnitId)
+    }
+
+    return fetch(input, {
       ...init,
       credentials: 'include',
-      headers: {
-        ...(init?.headers ?? {}),
-        ...(getStoredActiveUnitId()
-          ? { 'x-active-unit-id': getStoredActiveUnitId() as string }
-          : {}),
-      },
-    }),
+      headers,
+    })
+  },
 })

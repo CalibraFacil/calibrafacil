@@ -5,7 +5,7 @@ import {
   type MemberUnitRole,
 } from "@calibra-facil/db/schema";
 import type { RoleName } from "@calibra-facil/auth/access";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 export type UnitScopeMode = "all" | "unit";
 
@@ -27,6 +27,8 @@ export type ResolvedUnitScope = {
 };
 
 const GLOBAL_MULTI_UNIT_ROLES = new Set<RoleName>(["owner", "admin"]);
+const DEFAULT_UNIT_NAME = "Matriz";
+const DEFAULT_UNIT_SLUG = slugifyUnitName(DEFAULT_UNIT_NAME);
 
 function slugifyUnitName(name: string) {
   return name
@@ -52,6 +54,29 @@ export async function ensureDefaultUnitForOrganization(
   organizationId: string,
   userId?: string | null,
 ) {
+  const [created] = await db
+    .insert(organizationUnit)
+    .values({
+      organizationId,
+      name: DEFAULT_UNIT_NAME,
+      slug: DEFAULT_UNIT_SLUG,
+      status: "ACTIVE",
+      isDefault: true,
+      createdBy: userId ?? null,
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (created) {
+    return {
+      id: created.id,
+      name: created.name,
+      slug: created.slug,
+      status: created.status,
+      isDefault: created.isDefault,
+    };
+  }
+
   const [existing] = await db
     .select({
       id: organizationUnit.id,
@@ -61,37 +86,20 @@ export async function ensureDefaultUnitForOrganization(
       isDefault: organizationUnit.isDefault,
     })
     .from(organizationUnit)
-    .where(eq(organizationUnit.organizationId, organizationId))
+    .where(
+      and(
+        eq(organizationUnit.organizationId, organizationId),
+        eq(organizationUnit.slug, DEFAULT_UNIT_SLUG),
+      ),
+    )
     .orderBy(asc(organizationUnit.id))
     .limit(1);
 
-  if (existing) {
-    return existing;
-  }
-
-  const [created] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId,
-      name: "Matriz",
-      slug: slugifyUnitName("Matriz"),
-      status: "ACTIVE",
-      isDefault: true,
-      createdBy: userId ?? null,
-    })
-    .returning();
-
-  if (!created) {
+  if (!existing) {
     throw new Error("Failed to create default organization unit");
   }
 
-  return {
-    id: created.id,
-    name: created.name,
-    slug: created.slug,
-    status: created.status,
-    isDefault: created.isDefault,
-  };
+  return existing;
 }
 
 export async function ensureDefaultUnitAssignment(params: {
@@ -124,6 +132,10 @@ export async function resolveMemberUnitScope(params: {
   userId: string;
   requestedScope?: string | null;
 }): Promise<ResolvedUnitScope> {
+  const requestedScope = params.requestedScope?.trim() ?? "";
+  const hasExplicitScope = requestedScope.length > 0;
+  const wantsAll = requestedScope === "all";
+
   if (GLOBAL_MULTI_UNIT_ROLES.has(params.memberRole)) {
     await ensureDefaultUnitForOrganization(params.organizationId, params.userId);
 
@@ -147,16 +159,19 @@ export async function resolveMemberUnitScope(params: {
       role: "unit_admin" as const,
     }));
     const accessibleUnitIds = accessibleUnits.map((unit) => unit.id);
-    const requestedScope = params.requestedScope?.trim();
-    const wantsAll = requestedScope === "all";
     const requestedUnitId =
       requestedScope && requestedScope !== "all"
         ? Number.parseInt(requestedScope, 10)
         : Number.NaN;
     const activeUnit =
-      Number.isInteger(requestedUnitId) && accessibleUnitIds.includes(requestedUnitId)
-        ? accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null
-        : accessibleUnits[0] ?? null;
+      wantsAll
+        ? null
+        : !hasExplicitScope
+          ? accessibleUnits[0] ?? null
+          : Number.isInteger(requestedUnitId) &&
+              accessibleUnitIds.includes(requestedUnitId)
+            ? accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null
+            : null;
 
     return {
       activeUnitId: wantsAll ? null : activeUnit?.id ?? null,
@@ -182,6 +197,7 @@ export async function resolveMemberUnitScope(params: {
       and(
         eq(memberUnitAssignment.organizationId, params.organizationId),
         eq(memberUnitAssignment.memberId, params.memberId),
+        eq(organizationUnit.organizationId, params.organizationId),
         eq(organizationUnit.status, "ACTIVE"),
       ),
     )
@@ -205,6 +221,7 @@ export async function resolveMemberUnitScope(params: {
         and(
           eq(memberUnitAssignment.organizationId, params.organizationId),
           eq(memberUnitAssignment.memberId, params.memberId),
+          eq(organizationUnit.organizationId, params.organizationId),
           eq(organizationUnit.status, "ACTIVE"),
         ),
       )
@@ -218,13 +235,16 @@ export async function resolveMemberUnitScope(params: {
     role: assignment.role,
   }));
   const accessibleUnitIds = accessibleUnits.map((unit) => unit.id);
-  const requestedUnitId = params.requestedScope
-    ? Number.parseInt(params.requestedScope, 10)
+  const requestedUnitId = requestedScope
+    ? Number.parseInt(requestedScope, 10)
     : Number.NaN;
   const activeUnit =
-    Number.isInteger(requestedUnitId) && accessibleUnitIds.includes(requestedUnitId)
-      ? accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null
-      : accessibleUnits[0] ?? null;
+    !hasExplicitScope
+      ? accessibleUnits[0] ?? null
+      : Number.isInteger(requestedUnitId) &&
+          accessibleUnitIds.includes(requestedUnitId)
+        ? accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null
+        : null;
 
   return {
     activeUnitId: activeUnit?.id ?? null,
@@ -245,7 +265,14 @@ export function buildUnitScopeCondition(
   >,
 ) {
   if (scope.selectedUnitScope === "all") {
+    if (scope.accessibleUnitIds.length === 0) {
+      return sql`false`;
+    }
     return inArray(column as never, scope.accessibleUnitIds);
+  }
+
+  if (scope.activeUnitId === null) {
+    return sql`false`;
   }
 
   return eq(column as never, scope.activeUnitId as never);
