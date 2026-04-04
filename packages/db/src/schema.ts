@@ -4,6 +4,7 @@ import {
   text,
   timestamp,
   boolean,
+  foreignKey,
   index,
   unique,
   uniqueIndex,
@@ -461,6 +462,10 @@ export const organizationIntegration = pgTable(
   (table) => [
     index("organization_integration_org_id_idx").on(table.organizationId),
     index("organization_integration_status_idx").on(table.status),
+    uniqueIndex("organization_integration_id_org_uidx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
@@ -498,6 +503,14 @@ export const integrationConnection = pgTable(
   (table) => [
     uniqueIndex("integration_connection_integration_uidx").on(table.integrationId),
     index("integration_connection_org_id_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [
+        organizationIntegration.id,
+        organizationIntegration.organizationId,
+      ],
+      name: "integration_connection_integration_org_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -533,6 +546,14 @@ export const integrationObjectLink = pgTable(
       table.target,
       table.remoteEntityId,
     ),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [
+        organizationIntegration.id,
+        organizationIntegration.organizationId,
+      ],
+      name: "integration_object_link_integration_org_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -573,6 +594,14 @@ export const integrationSyncRun = pgTable(
     index("integration_sync_run_org_idx").on(table.organizationId),
     index("integration_sync_run_status_idx").on(table.status),
     index("integration_sync_run_created_at_idx").on(table.createdAt),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [
+        organizationIntegration.id,
+        organizationIntegration.organizationId,
+      ],
+      name: "integration_sync_run_integration_org_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -600,6 +629,14 @@ export const integrationEventLog = pgTable(
     index("integration_event_log_org_idx").on(table.organizationId),
     index("integration_event_log_run_idx").on(table.runId),
     index("integration_event_log_created_at_idx").on(table.createdAt),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [
+        organizationIntegration.id,
+        organizationIntegration.organizationId,
+      ],
+      name: "integration_event_log_integration_org_fk",
+    }).onDelete("cascade"),
   ],
 );
 

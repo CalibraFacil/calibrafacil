@@ -1,12 +1,14 @@
 import { Client } from "pg";
 import { decryptPassword } from "@calibra-facil/signing";
-import type {
-    GenericFinancialErpConnectionConfig,
-    IntegrationBillingDocumentPayload,
-    IntegrationCustomerPayload,
-    IntegrationServiceOrderPayload,
-    IntegrationSyncStatus,
-    IntegrationSyncTarget,
+import {
+    formatIntegrationCustomerAddress,
+    normalizeGenericFinancialErpConfig,
+    type GenericFinancialErpConnectionConfig,
+    type IntegrationBillingDocumentPayload,
+    type IntegrationCustomerPayload,
+    type IntegrationServiceOrderPayload,
+    type IntegrationSyncStatus,
+    type IntegrationSyncTarget,
 } from "@calibra-facil/shared";
 
 export interface IntegrationSyncQueueMessage {
@@ -146,7 +148,7 @@ async function fetchRuntime(
 
     const row = result.rows[0];
     return {
-        config: row.config,
+        config: normalizeGenericFinancialErpConfig(row.config),
         encryptedSecret: row.encrypted_secret,
         secretIv: row.secret_iv,
     };
@@ -177,7 +179,7 @@ async function loadPayloads(
             taxId: row.tax_id,
             email: row.email,
             phone: row.phone,
-            address: row.address,
+            address: formatIntegrationCustomerAddress(row.address),
             createdAt: toIso(row.created_at),
             updatedAt: toIso(row.updated_at),
         }));

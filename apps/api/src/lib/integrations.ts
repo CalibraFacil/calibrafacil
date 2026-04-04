@@ -17,6 +17,7 @@ import {
   encryptPassword,
 } from "@calibra-facil/signing";
 import {
+  formatIntegrationCustomerAddress,
   normalizeGenericFinancialErpConfig,
   type GenericFinancialErpConnectionConfig,
   type IntegrationBillingDocumentPayload,
@@ -44,26 +45,6 @@ type GenericConnectionRecord = {
   integration: typeof organizationIntegration.$inferSelect;
   connection: typeof integrationConnection.$inferSelect;
 };
-
-function formatCustomerAddress(
-  address: typeof customer.$inferSelect["address"],
-): string | null {
-  if (!address) return null;
-
-  const parts = [
-    address.street,
-    address.number,
-    address.neighbourhood,
-    address.city,
-    address.state,
-    address.cep,
-  ].filter(
-    (value): value is string =>
-      typeof value === "string" && value.trim().length > 0,
-  );
-
-  return parts.length > 0 ? parts.join(", ") : null;
-}
 
 function getMasterKey(env: IntegrationsEnv) {
   if (!env.INTEGRATIONS_MASTER_KEY) {
@@ -145,10 +126,14 @@ export async function validateGenericConnection(
   config: GenericFinancialErpConnectionConfig,
   secret: string,
 ) {
-  const result = await callRemoteJson(`${config.baseUrl}${config.healthPath}`, {
+  const normalizedConfig = normalizeGenericFinancialErpConfig(config);
+  const result = await callRemoteJson(
+    `${normalizedConfig.baseUrl}${normalizedConfig.healthPath}`,
+    {
     method: "GET",
     headers: buildAuthHeaders(secret),
-  });
+    },
+  );
 
   if (!result.ok) {
     throw new Error(`Conector remoto respondeu ${result.status}`);
@@ -257,10 +242,42 @@ async function loadCustomerPayloads(
     taxId: row.taxId,
     email: row.email,
     phone: row.phone,
-    address: formatCustomerAddress(row.address),
+    address: formatIntegrationCustomerAddress(row.address),
     createdAt: row.createdAt?.toISOString?.() ?? null,
     updatedAt: row.updatedAt?.toISOString?.() ?? null,
   }));
+}
+
+export async function failIntegrationSyncRun(params: {
+  integrationId: string;
+  organizationId: string;
+  runId: string;
+  target: IntegrationSyncTarget;
+  message: string;
+  details?: Record<string, unknown> | null;
+}) {
+  await db
+    .update(integrationSyncRun)
+    .set({
+      status: "FAILED",
+      errorSummary: params.message,
+      finishedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(integrationSyncRun.id, params.runId));
+
+  await writeIntegrationEvent({
+    integrationId: params.integrationId,
+    organizationId: params.organizationId,
+    runId: params.runId,
+    level: "error",
+    event: "sync.failed",
+    message: params.message,
+    details: {
+      target: params.target,
+      ...(params.details ?? {}),
+    },
+  });
 }
 
 async function loadServiceOrderPayloads(
@@ -519,13 +536,6 @@ export async function runIntegrationSync(params: {
     throw new Error("Integração não encontrada");
   }
 
-  const config = record.connection.config;
-  const secret = decryptIntegrationSecret(
-    record.connection.encryptedSecret,
-    record.connection.secretIv,
-    params.env,
-  );
-
   await db
     .update(integrationSyncRun)
     .set({
@@ -535,100 +545,129 @@ export async function runIntegrationSync(params: {
     })
     .where(eq(integrationSyncRun.id, params.runId));
 
-  const payloads = await loadTargetPayloads(
-    params.organizationId,
-    params.target,
-    params.limit,
-  );
-
-  let successCount = 0;
-  let errorCount = 0;
-  let errorSummary: string | null = null;
-
-  for (const payload of payloads) {
-    try {
-      await pushTargetRecord({
-        integrationId: params.integrationId,
-        organizationId: params.organizationId,
-        target: params.target,
-        config,
-        secret,
-        payload,
-      });
-
-      successCount += 1;
-    } catch (error) {
-      errorCount += 1;
-      errorSummary =
-        error instanceof Error ? error.message : "Falha desconhecida";
-
-      await writeIntegrationEvent({
-        integrationId: params.integrationId,
-        organizationId: params.organizationId,
-        runId: params.runId,
-        level: "error",
-        event: "sync.record_failed",
-        message: errorSummary,
-        details: {
-          target: params.target,
-          localEntityId: payload.externalId,
-        },
-      });
+  try {
+    if (record.integration.status !== "ACTIVE") {
+      throw new Error("Integração desativada");
     }
-  }
 
-  const processedCount = payloads.length;
-  const status: IntegrationSyncStatus =
-    errorCount === 0
-      ? "COMPLETED"
-      : successCount === 0
-        ? "FAILED"
-        : "PARTIAL";
+    const config = normalizeGenericFinancialErpConfig(record.connection.config);
+    const secret = decryptIntegrationSecret(
+      record.connection.encryptedSecret,
+      record.connection.secretIv,
+      params.env,
+    );
 
-  await db
-    .update(integrationSyncRun)
-    .set({
-      status,
-      processedCount,
-      successCount,
-      errorCount,
-      errorSummary,
-      summary: {
+    const payloads = await loadTargetPayloads(
+      params.organizationId,
+      params.target,
+      params.limit,
+    );
+
+    let successCount = 0;
+    let errorCount = 0;
+    let errorSummary: string | null = null;
+
+    for (const payload of payloads) {
+      try {
+        await pushTargetRecord({
+          integrationId: params.integrationId,
+          organizationId: params.organizationId,
+          target: params.target,
+          config,
+          secret,
+          payload,
+        });
+
+        successCount += 1;
+      } catch (error) {
+        errorCount += 1;
+        errorSummary =
+          error instanceof Error ? error.message : "Falha desconhecida";
+
+        await writeIntegrationEvent({
+          integrationId: params.integrationId,
+          organizationId: params.organizationId,
+          runId: params.runId,
+          level: "error",
+          event: "sync.record_failed",
+          message: errorSummary,
+          details: {
+            target: params.target,
+            localEntityId: payload.externalId,
+          },
+        });
+      }
+    }
+
+    const processedCount = payloads.length;
+    const status: IntegrationSyncStatus =
+      errorCount === 0
+        ? "COMPLETED"
+        : successCount === 0
+          ? "FAILED"
+          : "PARTIAL";
+
+    await db
+      .update(integrationSyncRun)
+      .set({
+        status,
+        processedCount,
+        successCount,
+        errorCount,
+        errorSummary,
+        summary: {
+          target: params.target,
+          processedCount,
+          successCount,
+          errorCount,
+        },
+        finishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(integrationSyncRun.id, params.runId));
+
+    await writeIntegrationEvent({
+      integrationId: params.integrationId,
+      organizationId: params.organizationId,
+      runId: params.runId,
+      level: status === "COMPLETED" ? "info" : "warning",
+      event: "sync.completed",
+      message:
+        status === "COMPLETED"
+          ? "Sincronização concluída"
+          : "Sincronização concluída com ressalvas",
+      details: {
         target: params.target,
         processedCount,
         successCount,
         errorCount,
       },
-      finishedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(integrationSyncRun.id, params.runId));
+    });
 
-  await writeIntegrationEvent({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    runId: params.runId,
-    level: status === "COMPLETED" ? "info" : "warning",
-    event: "sync.completed",
-    message:
-      status === "COMPLETED"
-        ? "Sincronização concluída"
-        : "Sincronização concluída com ressalvas",
-    details: {
-      target: params.target,
+    return {
+      status,
       processedCount,
       successCount,
       errorCount,
-    },
-  });
+      errorSummary,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Falha ao processar integração";
 
-  return {
-    status,
-    processedCount,
-    successCount,
-    errorCount,
-    errorSummary,
-  };
+    await failIntegrationSyncRun({
+      integrationId: params.integrationId,
+      organizationId: params.organizationId,
+      runId: params.runId,
+      target: params.target,
+      message,
+      details: {
+        phase: "runtime",
+      },
+    });
+
+    throw error;
+  }
 }
 
 export async function createSyncRun(params: {
