@@ -21,6 +21,9 @@ CREATE INDEX "organization_integration_org_id_idx"
 CREATE INDEX "organization_integration_status_idx"
   ON "organization_integration" USING btree ("status");
 --> statement-breakpoint
+CREATE UNIQUE INDEX "organization_integration_id_org_uidx"
+  ON "organization_integration" USING btree ("id", "organization_id");
+--> statement-breakpoint
 
 CREATE TABLE "integration_connection" (
   "id" text PRIMARY KEY NOT NULL,
@@ -43,6 +46,12 @@ CREATE UNIQUE INDEX "integration_connection_integration_uidx"
 CREATE INDEX "integration_connection_org_id_idx"
   ON "integration_connection" USING btree ("organization_id");
 --> statement-breakpoint
+ALTER TABLE "integration_connection"
+  ADD CONSTRAINT "integration_connection_integration_org_fk"
+  FOREIGN KEY ("integration_id", "organization_id")
+  REFERENCES "organization_integration" ("id", "organization_id")
+  ON DELETE cascade;
+--> statement-breakpoint
 
 CREATE TABLE "integration_object_link" (
   "id" text PRIMARY KEY NOT NULL,
@@ -63,6 +72,12 @@ CREATE UNIQUE INDEX "integration_object_link_local_uidx"
 --> statement-breakpoint
 CREATE INDEX "integration_object_link_remote_idx"
   ON "integration_object_link" USING btree ("integration_id", "target", "remote_entity_id");
+--> statement-breakpoint
+ALTER TABLE "integration_object_link"
+  ADD CONSTRAINT "integration_object_link_integration_org_fk"
+  FOREIGN KEY ("integration_id", "organization_id")
+  REFERENCES "organization_integration" ("id", "organization_id")
+  ON DELETE cascade;
 --> statement-breakpoint
 
 CREATE TABLE "integration_sync_run" (
@@ -97,6 +112,12 @@ CREATE INDEX "integration_sync_run_status_idx"
 CREATE INDEX "integration_sync_run_created_at_idx"
   ON "integration_sync_run" USING btree ("created_at");
 --> statement-breakpoint
+ALTER TABLE "integration_sync_run"
+  ADD CONSTRAINT "integration_sync_run_integration_org_fk"
+  FOREIGN KEY ("integration_id", "organization_id")
+  REFERENCES "organization_integration" ("id", "organization_id")
+  ON DELETE cascade;
+--> statement-breakpoint
 
 CREATE TABLE "integration_event_log" (
   "id" serial PRIMARY KEY NOT NULL,
@@ -122,3 +143,9 @@ CREATE INDEX "integration_event_log_run_idx"
 --> statement-breakpoint
 CREATE INDEX "integration_event_log_created_at_idx"
   ON "integration_event_log" USING btree ("created_at");
+--> statement-breakpoint
+ALTER TABLE "integration_event_log"
+  ADD CONSTRAINT "integration_event_log_integration_org_fk"
+  FOREIGN KEY ("integration_id", "organization_id")
+  REFERENCES "organization_integration" ("id", "organization_id")
+  ON DELETE cascade;

@@ -9,12 +9,14 @@ import {
   organizationIntegration,
   integrationConnection,
 } from "@calibra-facil/db/schema";
+import { normalizeIntegrationBaseUrl } from "@calibra-facil/shared";
 import { getOrganizationPlanAccess } from "../lib/organization-plan";
 import {
   buildGenericConnectionConfig,
   createSyncRun,
   decryptIntegrationSecret,
   encryptIntegrationSecret,
+  failIntegrationSyncRun,
   getIntegrationRecord,
   listOrganizationIntegrations,
   runIntegrationSync,
@@ -31,9 +33,21 @@ import {
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
 
+const BaseUrlSchema = z.string().trim().url().transform((value, ctx) => {
+  try {
+    return normalizeIntegrationBaseUrl(value);
+  } catch (error) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: error instanceof Error ? error.message : "Base URL inválida",
+    });
+    return z.NEVER;
+  }
+});
+
 const IntegrationBodySchema = z.object({
   name: z.string().trim().min(3).max(80),
-  baseUrl: z.string().trim().url(),
+  baseUrl: BaseUrlSchema,
   authToken: z.string().trim().min(8),
   healthPath: z.string().trim().optional(),
   customerPath: z.string().trim().optional(),
@@ -41,10 +55,14 @@ const IntegrationBodySchema = z.object({
   billingDocumentPath: z.string().trim().optional(),
 });
 
-const UpdateIntegrationBodySchema = IntegrationBodySchema.partial().extend({
+const UpdateIntegrationBodySchema = z.object({
   name: z.string().trim().min(3).max(80).optional(),
-  baseUrl: z.string().trim().url().optional(),
+  baseUrl: BaseUrlSchema.optional(),
   authToken: z.string().trim().min(8).optional(),
+  healthPath: z.string().trim().optional(),
+  customerPath: z.string().trim().optional(),
+  serviceOrderPath: z.string().trim().optional(),
+  billingDocumentPath: z.string().trim().optional(),
 });
 
 const SyncRequestSchema = z.object({
@@ -379,6 +397,10 @@ export const integrationsRouter = new Hono<{
         return c.json({ error: "Integração não encontrada" }, 404);
       }
 
+      if (record.integration.status !== "ACTIVE") {
+        return c.json({ error: "Integração desativada" }, 409);
+      }
+
       const runId = await createSyncRun({
         integrationId: id,
         organizationId: member.organizationId,
@@ -401,14 +423,34 @@ export const integrationsRouter = new Hono<{
       });
 
       if (c.env.PDF_QUEUE) {
-        await c.env.PDF_QUEUE.send({
-          type: "INTEGRATION_SYNC",
-          integrationId: id,
-          organizationId: member.organizationId,
-          runId,
-          target: input.target,
-          limit: input.limit,
-        });
+        try {
+          await c.env.PDF_QUEUE.send({
+            type: "INTEGRATION_SYNC",
+            integrationId: id,
+            organizationId: member.organizationId,
+            runId,
+            target: input.target,
+            limit: input.limit,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Falha ao enfileirar sincronização";
+
+          await failIntegrationSyncRun({
+            integrationId: id,
+            organizationId: member.organizationId,
+            runId,
+            target: input.target,
+            message,
+            details: {
+              phase: "queue_send",
+            },
+          });
+
+          return c.json({ error: message }, 500);
+        }
 
         return c.json({
           success: true,
@@ -418,14 +460,23 @@ export const integrationsRouter = new Hono<{
         });
       }
 
-      const result = await runIntegrationSync({
-        integrationId: id,
-        organizationId: member.organizationId,
-        runId,
-        target: input.target,
-        limit: input.limit,
-        env: c.env,
-      });
+      let result;
+      try {
+        result = await runIntegrationSync({
+          integrationId: id,
+          organizationId: member.organizationId,
+          runId,
+          target: input.target,
+          limit: input.limit,
+          env: c.env,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Falha ao processar sincronização";
+        return c.json({ error: message }, 500);
+      }
 
       return c.json({
         success: true,

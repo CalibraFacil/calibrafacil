@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { useActiveOrganization } from '@calibra-facil/auth/client'
+import { normalizeIntegrationBaseUrl } from '@calibra-facil/shared'
+import { useActiveOrganization, useSession } from '@calibra-facil/auth/client'
 import { api } from '@/utils/api'
 import {
   Card,
@@ -19,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
@@ -111,15 +113,38 @@ const defaultDraft = {
   billingDocumentPath: '/billing-documents',
 }
 
+function validateBaseUrl(baseUrl: string) {
+  if (!baseUrl.trim()) return null
+
+  try {
+    normalizeIntegrationBaseUrl(baseUrl)
+    return null
+  } catch (error) {
+    return error instanceof Error ? error.message : 'Base URL inválida'
+  }
+}
+
 function IntegrationsSettingsPage() {
   const queryClient = useQueryClient()
+  const { data: session, isPending: isLoadingSession } = useSession()
   const { data: activeOrg, isPending: isLoadingOrg } = useActiveOrganization()
+  const currentUserId = session?.user?.id
+  const currentMember = activeOrg?.members?.find((member) => {
+    const candidate = member as {
+      userId?: string
+      user?: { id?: string }
+      role?: string
+    }
+    return (
+      candidate.userId === currentUserId ||
+      candidate.user?.id === currentUserId
+    )
+  })
   const currentOrgRole =
-    typeof activeOrg?.members?.[0]?.role === 'string'
-      ? activeOrg.members[0].role
-      : 'member'
+    typeof currentMember?.role === 'string' ? currentMember.role : 'member'
   const canManage = currentOrgRole === 'owner' || currentOrgRole === 'admin'
   const [draft, setDraft] = useState(defaultDraft)
+  const [baseUrlError, setBaseUrlError] = useState<string | null>(null)
 
   const integrationsQuery = useQuery({
     queryKey: ['integrations'],
@@ -254,7 +279,7 @@ function IntegrationsSettingsPage() {
     },
   })
 
-  if (isLoadingOrg) {
+  if (isLoadingOrg || isLoadingSession) {
     return <IntegrationsSkeleton />
   }
 
@@ -349,16 +374,20 @@ function IntegrationsSettingsPage() {
               <Input
                 placeholder="https://erp.exemplo.com/api/calibrafacil"
                 value={draft.baseUrl}
-                onChange={(e) =>
+                onBlur={() => setBaseUrlError(validateBaseUrl(draft.baseUrl))}
+                onChange={(e) => {
+                  const nextValue = e.target.value
                   setDraft((current) => ({
                     ...current,
-                    baseUrl: e.target.value,
+                    baseUrl: nextValue,
                   }))
-                }
+                  setBaseUrlError(validateBaseUrl(nextValue))
+                }}
               />
               <FieldDescription>
                 Endpoint base do conector HTTP do ERP.
               </FieldDescription>
+              <FieldError>{baseUrlError}</FieldError>
             </Field>
             <Field>
               <FieldLabel>Token Bearer</FieldLabel>
@@ -430,7 +459,8 @@ function IntegrationsSettingsPage() {
                 !hasEntitlement ||
                 createMutation.isPending ||
                 !draft.baseUrl ||
-                !draft.authToken
+                !draft.authToken ||
+                !!baseUrlError
               }
             >
               {createMutation.isPending ? 'Criando...' : 'Criar integração'}
@@ -514,7 +544,11 @@ function IntegrationsSettingsPage() {
                           target: 'customer',
                         })
                       }
-                      disabled={!hasEntitlement || syncMutation.isPending}
+                      disabled={
+                        !hasEntitlement ||
+                        syncMutation.isPending ||
+                        integration.status !== 'ACTIVE'
+                      }
                     >
                       Sincronizar clientes
                     </Button>
@@ -527,7 +561,11 @@ function IntegrationsSettingsPage() {
                           target: 'service_order',
                         })
                       }
-                      disabled={!hasEntitlement || syncMutation.isPending}
+                      disabled={
+                        !hasEntitlement ||
+                        syncMutation.isPending ||
+                        integration.status !== 'ACTIVE'
+                      }
                     >
                       Sincronizar ordens
                     </Button>
@@ -540,7 +578,11 @@ function IntegrationsSettingsPage() {
                           target: 'billing_document',
                         })
                       }
-                      disabled={!hasEntitlement || syncMutation.isPending}
+                      disabled={
+                        !hasEntitlement ||
+                        syncMutation.isPending ||
+                        integration.status !== 'ACTIVE'
+                      }
                     >
                       Sincronizar faturamento
                     </Button>

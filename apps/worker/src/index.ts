@@ -823,8 +823,15 @@ export default {
 
         for (const msg of integrationMessages) {
             const body = msg.body as IntegrationSyncQueueMessage;
-            await processIntegrationSync(env, body);
-            msg.ack();
+            try {
+                await processIntegrationSync(env, body);
+                msg.ack();
+            } catch (error) {
+                console.error("[INTEGRATION_SYNC] Failed to process message:", {
+                    error,
+                    body,
+                });
+            }
         }
 
         if (documentMessages.length > 0) {
