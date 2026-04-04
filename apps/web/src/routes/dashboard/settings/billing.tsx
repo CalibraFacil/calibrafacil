@@ -96,7 +96,9 @@ function BillingSettingsPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const queryClient = useQueryClient()
   const accessQuery = usePlanAccess()
-  const hasFinancial = accessQuery.data?.hasFinancial ?? false
+  const hasFinancialModule =
+    accessQuery.data?.hasFinancialModule ?? accessQuery.data?.hasFinancial ?? false
+  const canManageBilling = accessQuery.data?.canManageBilling ?? true
 
   // Fetch subscription data
   const subscriptionQuery = useQuery({
@@ -108,7 +110,7 @@ function BillingSettingsPage() {
       }
       return response.json()
     },
-    enabled: hasFinancial,
+    enabled: canManageBilling,
   })
 
   // Fetch payment history
@@ -123,7 +125,7 @@ function BillingSettingsPage() {
       }
       return response.json()
     },
-    enabled: hasFinancial,
+    enabled: canManageBilling,
   })
 
   // Cancel subscription mutation
@@ -179,7 +181,7 @@ function BillingSettingsPage() {
 
   return (
     <div className="space-y-6">
-      {!hasFinancial && accessQuery.data && (
+      {!hasFinancialModule && accessQuery.data && (
         <Card>
           <CardHeader>
             <CardTitle>Módulo Financeiro indisponível</CardTitle>
@@ -191,11 +193,12 @@ function BillingSettingsPage() {
           <CardContent className="flex items-center justify-between gap-4 rounded-lg border p-4">
             <div className="space-y-1">
               <p className="font-medium">
-                Faça upgrade para liberar faturamento e pagamentos
+                Faça upgrade para liberar o módulo financeiro avançado
               </p>
               <p className="text-sm text-muted-foreground">
-                O upgrade libera checkout, histórico de cobranças e gestão da
-                assinatura.
+                Você ainda pode gerenciar sua assinatura e acompanhar cobranças
+                neste painel. O upgrade libera os recursos operacionais do
+                módulo financeiro.
               </p>
             </div>
             <Button onClick={() => setCheckoutOpen(true)}>
@@ -352,7 +355,7 @@ function BillingSettingsPage() {
         </CardContent>
       </Card>
 
-      {hasFinancial && (
+      {canManageBilling && (
         <Card>
           <CardHeader>
             <CardTitle>Histórico de Pagamentos</CardTitle>

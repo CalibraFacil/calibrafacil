@@ -23,6 +23,8 @@ export const billingAccessRouter = new Hono<{ Variables: AuthVariables }>().get(
       limits: plan.limits,
       entitlements: access.entitlements,
       hasFinancial: access.entitlements.includes("financial"),
+      hasFinancialModule: access.entitlements.includes("financial"),
+      canManageBilling: true,
       hasApi: access.entitlements.includes("api"),
       hasCustomDomain: access.entitlements.includes("custom_domain"),
       hasCustomTemplates: access.entitlements.includes("custom_templates"),
