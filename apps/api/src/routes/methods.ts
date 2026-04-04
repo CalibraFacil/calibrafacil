@@ -688,6 +688,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/return-to-draft",
     ...withLabPermission({ template: ["update"] }),
+    requireFeature("approval_workflow"),
     requireRole(["admin", "owner"]),
     withInvalidation("methods"),
     zValidator("json", ReturnMethodToDraftSchema),

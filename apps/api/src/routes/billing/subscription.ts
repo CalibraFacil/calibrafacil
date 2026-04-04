@@ -1,12 +1,21 @@
 import { Hono } from "hono";
 import { db } from "@calibra-facil/db";
-import { subscription, calibrationJob, member } from "@calibra-facil/db/schema";
+import {
+  subscription,
+  calibrationJob,
+  member,
+  organization,
+} from "@calibra-facil/db/schema";
 import { eq, and, gte, count } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-import { getPlan, type PlanId } from "@calibra-facil/shared";
+import {
+  getEffectivePlanLimits,
+  getPlan,
+  type PlanId,
+} from "@calibra-facil/shared";
 import { withInvalidation } from "../../middleware/cache";
 
 // =============================================================================
@@ -42,36 +51,40 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
     "/",
     ...withLabPermission({ billing: ["read"] }),
     async (c) => {
-    const memberData = c.get("member");
+      const memberData = c.get("member");
+      const currentOrganization = await db.query.organization.findFirst({
+        columns: { createdAt: true },
+        where: eq(organization.id, memberData.organizationId),
+      });
 
-    // Get subscription
-    const sub = await db.query.subscription.findFirst({
-      where: eq(subscription.organizationId, memberData.organizationId),
-    });
+      // Get subscription
+      const sub = await db.query.subscription.findFirst({
+        where: eq(subscription.organizationId, memberData.organizationId),
+      });
 
-    if (!sub) {
-      // Return default FREE plan info for organizations without subscription
-      const freePlan = getPlan("FREE");
+      if (!sub) {
+        // Return default FREE plan info for organizations without subscription
+        const freePlan = getPlan("FREE");
+        const usage = await getOrganizationUsage(memberData.organizationId);
+
+        return c.json({
+          subscription: null,
+          plan: freePlan,
+          usage,
+          limits: getEffectivePlanLimits("FREE", currentOrganization?.createdAt),
+        });
+      }
+
+      // Get plan details
+      const plan = getPlan(sub.planId as PlanId);
       const usage = await getOrganizationUsage(memberData.organizationId);
 
       return c.json({
-        subscription: null,
-        plan: freePlan,
+        subscription: serializePublicSubscription(sub),
+        plan,
         usage,
-        limits: freePlan.limits,
+        limits: getEffectivePlanLimits(plan.id, currentOrganization?.createdAt),
       });
-    }
-
-    // Get plan details
-    const plan = getPlan(sub.planId as PlanId);
-    const usage = await getOrganizationUsage(memberData.organizationId);
-
-    return c.json({
-      subscription: serializePublicSubscription(sub),
-      plan,
-      usage,
-      limits: plan.limits,
-    });
     },
   )
 

@@ -52,6 +52,7 @@ import {
   ENTITLEMENT_METADATA,
   formatPrice,
   getEnabledEntitlements,
+  isValidPlanId,
   type FeatureFlag,
   type PlanId,
 } from '@calibra-facil/shared'
@@ -96,9 +97,17 @@ function BillingSettingsPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const queryClient = useQueryClient()
   const accessQuery = usePlanAccess()
-  const hasFinancialModule =
-    accessQuery.data?.hasFinancialModule ?? accessQuery.data?.hasFinancial ?? false
-  const canManageBilling = accessQuery.data?.canManageBilling ?? true
+  const accessReady = accessQuery.isSuccess && !!accessQuery.data
+  const accessPlanId =
+    accessReady && isValidPlanId(accessQuery.data.planId)
+      ? accessQuery.data.planId
+      : undefined
+  const hasFinancialModule = accessReady
+    ? accessQuery.data.hasFinancialModule ?? accessQuery.data.hasFinancial ?? false
+    : false
+  const canManageBilling = accessReady
+    ? accessQuery.data.canManageBilling ?? true
+    : false
 
   // Fetch subscription data
   const subscriptionQuery = useQuery({
@@ -110,7 +119,7 @@ function BillingSettingsPage() {
       }
       return response.json()
     },
-    enabled: canManageBilling,
+    enabled: accessReady && canManageBilling,
   })
 
   // Fetch payment history
@@ -125,7 +134,7 @@ function BillingSettingsPage() {
       }
       return response.json()
     },
-    enabled: canManageBilling,
+    enabled: accessReady && canManageBilling,
   })
 
   // Cancel subscription mutation
@@ -149,7 +158,7 @@ function BillingSettingsPage() {
     subscription: null,
     plan: accessQuery.data
       ? {
-          id: accessQuery.data.planId,
+          id: accessPlanId ?? 'FREE',
           name: accessQuery.data.planName,
           description: '',
         }
@@ -164,8 +173,9 @@ function BillingSettingsPage() {
   }
 
   const payments = paymentsQuery.data?.data || []
-  const enabledEntitlements = plan?.id
-    ? getEnabledEntitlements(plan.id as PlanId)
+  const selectedPlanId = plan?.id && isValidPlanId(plan.id) ? plan.id : undefined
+  const enabledEntitlements = selectedPlanId
+    ? getEnabledEntitlements(selectedPlanId)
     : []
 
   const statusBadge =
@@ -419,7 +429,11 @@ function BillingSettingsPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() =>
-                                window.open(payment.asaasInvoiceUrl!, '_blank')
+                                window.open(
+                                  payment.asaasInvoiceUrl!,
+                                  '_blank',
+                                  'noopener,noreferrer',
+                                )
                               }
                             >
                               <HugeiconsIcon icon={Invoice02Icon} size={14} />
@@ -441,7 +455,14 @@ function BillingSettingsPage() {
       <CheckoutDialog
         open={checkoutOpen}
         onOpenChange={setCheckoutOpen}
-        currentPlanId={(subscription?.planId as PlanId) || 'FREE'}
+        currentPlanId={
+          (subscription?.planId &&
+          isValidPlanId(subscription.planId)
+            ? subscription.planId
+            : undefined) ??
+          accessPlanId ??
+          'FREE'
+        }
       />
     </div>
   )
