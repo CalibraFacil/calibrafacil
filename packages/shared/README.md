@@ -27,17 +27,17 @@ import {
 const plan = getPlan("PROFESSIONAL");
 
 // Check entitlement access
-if (hasEntitlement(userPlan, "approval_workflow")) {
+if (hasEntitlement(plan.id, "approval_workflow")) {
   // Enable review flow
 }
 
 // Legacy helper still works
-if (hasFeature(userPlan, "portal")) {
+if (hasFeature(plan.id, "portal")) {
   // Enable portal feature
 }
 
 // Get resource limits
-const maxCertificates = getLimit(userPlan, "certificates");
+const maxCertificates = getLimit(plan.id, "certificates");
 
 // Check subscription status
 if (isSubscriptionActive(subscription.status)) {
