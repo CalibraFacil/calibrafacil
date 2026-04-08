@@ -2027,9 +2027,6 @@ publicApiV2Router
         slug: organizationUnit.slug,
         status: organizationUnit.status,
         isDefault: organizationUnit.isDefault,
-        city: organizationUnit.city,
-        state: organizationUnit.state,
-        accreditationNumber: organizationUnit.accreditationNumber,
       })
       .from(organizationUnit)
       .where(and(eq(organizationUnit.organizationId, apiKey.organizationId), eq(organizationUnit.status, "ACTIVE")))
