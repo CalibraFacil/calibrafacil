@@ -1,4 +1,5 @@
 import React from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { SparklesIcon, Tick02Icon } from '@hugeicons/core-free-icons'
 import {
@@ -47,6 +48,8 @@ const PLAN_HIGHLIGHTS: Record<PublicPlanId, string[]> = {
 }
 
 const Pricing: React.FC = () => {
+  const navigate = useNavigate()
+
   return (
     <section
       id="pricing"
@@ -157,6 +160,14 @@ const Pricing: React.FC = () => {
                         ? 'bg-sky-600 text-white hover:bg-sky-500'
                         : 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200'
                     }`}
+                    onClick={() =>
+                      navigate({
+                        to: '/sign-up',
+                        search: {
+                          redirect: '/dashboard/settings/billing',
+                        },
+                      })
+                    }
                   >
                     Escolher {plan.name}
                   </Button>
