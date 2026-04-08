@@ -94,6 +94,9 @@ const GB = 1024 * MB;
 const TB = 1024 * GB;
 const UNLIMITED_CERTIFICATES = 999999;
 const UNLIMITED_USERS = 999;
+export const STANDARD_CERTIFICATE_LIMIT_CHANGE_AT = new Date(
+  "2026-04-04T00:00:00.000Z",
+);
 
 /**
  * Catalog of entitlement labels for UI and error messages.
@@ -302,8 +305,18 @@ export function getPlan(planId: PlanId): PlanConfig {
 /**
  * Check if a plan has a specific entitlement.
  */
-export function hasEntitlement(planId: PlanId, feature: FeatureFlag): boolean {
+export function hasEntitlement(
+  planId: PlanId | string,
+  feature: FeatureFlag,
+): boolean {
+  if (!isValidPlanId(planId)) {
+    return false;
+  }
+
   const plan = PLANS[planId];
+  if (!plan?.entitlements) {
+    return false;
+  }
 
   return legacyFeatureMap[feature].some((mappedFeature) =>
     [
@@ -317,7 +330,10 @@ export function hasEntitlement(planId: PlanId, feature: FeatureFlag): boolean {
 /**
  * Check if a plan has a specific feature
  */
-export function hasFeature(planId: PlanId, feature: FeatureFlag): boolean {
+export function hasFeature(
+  planId: PlanId | string,
+  feature: FeatureFlag,
+): boolean {
   return hasEntitlement(planId, feature);
 }
 
@@ -326,6 +342,30 @@ export function hasFeature(planId: PlanId, feature: FeatureFlag): boolean {
  */
 export function getLimit(planId: PlanId, resource: keyof PlanLimits): number {
   return PLANS[planId].limits[resource];
+}
+
+/**
+ * Resolve effective plan limits for a specific organization.
+ *
+ * Standard plan organizations created before the certificate cap change keep
+ * the original 200-certificates quota.
+ */
+export function getEffectivePlanLimits(
+  planId: PlanId,
+  organizationCreatedAt?: Date | string | null,
+): PlanLimits {
+  const limits = { ...PLANS[planId].limits };
+
+  if (
+    planId === "STANDARD" &&
+    organizationCreatedAt &&
+    new Date(organizationCreatedAt).getTime() <
+      STANDARD_CERTIFICATE_LIMIT_CHANGE_AT.getTime()
+  ) {
+    limits.certificates = 200;
+  }
+
+  return limits;
 }
 
 /**

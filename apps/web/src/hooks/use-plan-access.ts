@@ -13,6 +13,8 @@ export interface PlanAccessResponse {
   }
   entitlements: string[]
   hasFinancial: boolean
+  hasFinancialModule: boolean
+  canManageBilling: boolean
   hasApi: boolean
   hasCustomDomain: boolean
   hasCustomTemplates: boolean
