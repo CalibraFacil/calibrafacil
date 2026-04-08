@@ -15,7 +15,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { useSettings } from '@/contexts/settings-context'
-import { api } from '@/utils/api'
+import { api, resolveApiURL } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -203,6 +203,7 @@ function ApiKeysCard() {
   const accessQuery = usePlanAccess()
   const [name, setName] = useState('')
   const [latestSecret, setLatestSecret] = useState<string | null>(null)
+  const apiReferenceUrl = resolveApiURL('/api/public/v2/reference')
 
   const apiKeysQuery = useQuery({
     queryKey: ['api-keys'],
@@ -307,6 +308,27 @@ function ApiKeysCard() {
           <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
             O entitlement de API está disponível a partir do plano
             Professional.
+          </div>
+        )}
+
+        {hasApi && (
+          <div className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <p className="font-medium">Referência da API</p>
+              <p className="text-sm text-muted-foreground">
+                A documentação técnica interativa da API fica disponível apenas
+                para organizações com entitlement ativo e sessão válida.
+              </p>
+            </div>
+            <Button asChild type="button" variant="outline">
+              <a
+                href={apiReferenceUrl}
+                target="_blank"
+                rel="noreferrer nofollow"
+              >
+                Abrir referência
+              </a>
+            </Button>
           </div>
         )}
 

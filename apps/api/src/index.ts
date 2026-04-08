@@ -113,6 +113,8 @@ app.use("*", async (c, next) => {
 
   const requestPath = new URL(c.req.url).pathname;
   const isPublicApiReference = requestPath === "/api/public/v2/reference";
+  const isPublicApiOpenApi = requestPath === "/api/public/v2/openapi";
+  const isPublicApiDocs = isPublicApiReference || isPublicApiOpenApi;
 
   if ((c.env.NODE_ENV ?? "").toLowerCase() === "production") {
     c.header(
@@ -128,6 +130,11 @@ app.use("*", async (c, next) => {
     "Permissions-Policy",
     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
   );
+
+  if (isPublicApiDocs) {
+    c.header("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
+    c.header("Cache-Control", "private, no-store, max-age=0");
+  }
 
   if (isPublicApiReference) {
     c.header(
