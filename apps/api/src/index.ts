@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
+import {
+  createBackofficeAuth,
+  createLabAuth,
+  createPortalAuth,
+} from "@calibra-facil/auth";
 import {
   rateLimitAuth,
   rateLimitInvitations,
@@ -22,6 +26,7 @@ import { jobsRouter } from "./routes/jobs";
 import { calibrationRequestsRouter } from "./routes/calibration-requests";
 import { verifyRouter } from "./routes/verify";
 import { dashboardRouter } from "./routes/dashboard";
+import { reportsRouter } from "./routes/reports";
 import { billingRouter } from "./routes/billing";
 import { webhooksRouter } from "./routes/webhooks";
 import { notificationsRouter } from "./routes/notifications";
@@ -36,11 +41,16 @@ import { sessionsRouter } from "./routes/sessions";
 import { ssoRouter } from "./routes/sso";
 import { apiKeysRouter } from "./routes/api-keys";
 import { publicApiRouter } from "./routes/public-api";
+import { publicApiV2DocsRouter, publicApiV2Router } from "./routes/public-api-v2";
 import { isAllowedPortalOrigin } from "./lib/portal-domains";
 import { portalDomainsRouter } from "./routes/portal-domains";
 import { certificateTemplatesRouter } from "./routes/certificate-templates";
 import { unitsRouter } from "./routes/units";
 import { integrationsRouter } from "./routes/integrations";
+import { customerSuccessRouter } from "./routes/customer-success";
+import { internalCustomerSuccessRouter } from "./routes/internal-customer-success";
+import { backofficeRouter } from "./routes/backoffice";
+import { profileMediaRouter } from "./routes/profile-media";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -54,6 +64,8 @@ interface Env {
   PORTAL_APP_URL?: string;
   PORTAL_INVITATION_EXPIRES_IN?: string;
   DATABASE_URL: string;
+  INTERNAL_OPERATOR_EMAILS?: string;
+  BACKOFFICE_BOOTSTRAP_TOKEN?: string;
   CACHE: KVNamespace;
   [key: string]: unknown;
 }
@@ -61,8 +73,12 @@ interface Env {
 const app = new Hono<{ Bindings: Env }>();
 
 const allowedOrigins = new Set([
+  "http://localhost:5173",
+  "http://localhost:5174",
   "https://localhost:5173",
   "https://localhost:5174",
+  "http://192.168.0.10:5173",
+  "http://192.168.0.10:5174",
   "https://192.168.0.10:5173",
   "https://192.168.0.10:5174",
   "https://calibrafacil.com",
@@ -95,6 +111,9 @@ app.use(
 app.use("*", async (c, next) => {
   await next();
 
+  const requestPath = new URL(c.req.url).pathname;
+  const isPublicApiReference = requestPath === "/api/public/v2/reference";
+
   if ((c.env.NODE_ENV ?? "").toLowerCase() === "production") {
     c.header(
       "Strict-Transport-Security",
@@ -109,10 +128,27 @@ app.use("*", async (c, next) => {
     "Permissions-Policy",
     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
   );
-  c.header(
-    "Content-Security-Policy",
-    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
-  );
+
+  if (isPublicApiReference) {
+    c.header(
+      "Content-Security-Policy",
+      [
+        "default-src 'self' https: data: blob:",
+        "script-src 'self' 'unsafe-inline' https:",
+        "style-src 'self' 'unsafe-inline' https:",
+        "img-src 'self' data: https:",
+        "font-src 'self' data: https:",
+        "connect-src 'self' https:",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+      ].join("; "),
+    );
+  } else {
+    c.header(
+      "Content-Security-Policy",
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    );
+  }
 });
 
 /**
@@ -131,7 +167,21 @@ app.use("*", async (c, next) => {
   const hyperdrive = c.env.HYPERDRIVE as
     | { connectionString?: string }
     | undefined;
-  if (hyperdrive?.connectionString) {
+  if ((c.env.NODE_ENV ?? "").toLowerCase() !== "production") {
+    const localConnectionString =
+      (c.env as Record<string, unknown>)
+        .CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE;
+
+    if (
+      typeof localConnectionString === "string" &&
+      localConnectionString.trim().length > 0
+    ) {
+      process.env.DATABASE_URL = localConnectionString.trim();
+      delete process.env.HYPERDRIVE_URL;
+    } else if (hyperdrive?.connectionString) {
+      process.env.HYPERDRIVE_URL = hyperdrive.connectionString;
+    }
+  } else if (hyperdrive?.connectionString) {
     process.env.HYPERDRIVE_URL = hyperdrive.connectionString;
   }
 
@@ -178,6 +228,12 @@ app.on(["GET", "POST"], "/api/auth/lab/*", async (c) => {
   return await withCors(c, res);
 });
 
+app.on(["GET", "POST"], "/api/auth/backoffice/*", async (c) => {
+  const backofficeAuth = createBackofficeAuth();
+  const res = await backofficeAuth.handler(c.req.raw);
+  return await withCors(c, res);
+});
+
 app.on(["GET", "POST"], "/api/auth/portal/*", async (c) => {
   const portalAuth = createPortalAuth();
   const res = await portalAuth.handler(c.req.raw);
@@ -202,6 +258,7 @@ const routes = app
   .route("/api/calibration-requests", calibrationRequestsRouter)
   .route("/api/verify", verifyRouter)
   .route("/api/dashboard", dashboardRouter)
+  .route("/api/reports", reportsRouter)
   .route("/api/billing", billingRouter)
   .route("/api/webhooks", webhooksRouter)
   .route("/api/notifications", notificationsRouter)
@@ -219,7 +276,13 @@ const routes = app
   .route("/api/certificate-templates", certificateTemplatesRouter)
   .route("/api/units", unitsRouter)
   .route("/api/integrations", integrationsRouter)
-  .route("/api/public/v1", publicApiRouter);
+  .route("/api/customer-success", customerSuccessRouter)
+  .route("/api/backoffice", backofficeRouter)
+  .route("/api/internal/customer-success", internalCustomerSuccessRouter)
+  .route("/api/profile-media", profileMediaRouter)
+  .route("/api/public/v1", publicApiRouter)
+  .route("/api/public/v2", publicApiV2DocsRouter)
+  .route("/api/public/v2", publicApiV2Router);
 
 export type AppType = typeof routes;
 

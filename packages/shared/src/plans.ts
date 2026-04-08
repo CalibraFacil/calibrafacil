@@ -1,3 +1,5 @@
+import type { PlanSupportPolicy } from "./customer-success";
+
 // =============================================================================
 // PLAN CONFIGURATION - SaaS Tiering System
 // =============================================================================
@@ -86,6 +88,7 @@ export interface PlanConfig {
   isPopular?: boolean;
   limits: PlanLimits;
   entitlements: PlanEntitlements;
+  support: PlanSupportPolicy;
 }
 
 // Storage constants for readability
@@ -94,6 +97,44 @@ const GB = 1024 * MB;
 const TB = 1024 * GB;
 const UNLIMITED_CERTIFICATES = 999999;
 const UNLIMITED_USERS = 999;
+export const STANDARD_CERTIFICATE_LIMIT_CHANGE_AT = new Date(
+  "2026-04-04T00:00:00.000Z",
+);
+
+const SUPPORT_POLICIES: Record<PlanId, PlanSupportPolicy> = {
+  FREE: {
+    supportMode: "standard",
+    hasPrioritySupport: false,
+    targetFirstResponseBusinessHours: 48,
+    targetResolutionLabel: "Melhor esforço",
+    includesAssistedOnboarding: false,
+    includesAssistedMigration: false,
+  },
+  STANDARD: {
+    supportMode: "standard",
+    hasPrioritySupport: false,
+    targetFirstResponseBusinessHours: 24,
+    targetResolutionLabel: "Até 3 dias úteis",
+    includesAssistedOnboarding: false,
+    includesAssistedMigration: false,
+  },
+  PROFESSIONAL: {
+    supportMode: "priority",
+    hasPrioritySupport: true,
+    targetFirstResponseBusinessHours: 8,
+    targetResolutionLabel: "Prioridade operacional",
+    includesAssistedOnboarding: false,
+    includesAssistedMigration: false,
+  },
+  ENTERPRISE: {
+    supportMode: "dedicated",
+    hasPrioritySupport: true,
+    targetFirstResponseBusinessHours: 4,
+    targetResolutionLabel: "SLA dedicado",
+    includesAssistedOnboarding: true,
+    includesAssistedMigration: true,
+  },
+};
 
 /**
  * Catalog of entitlement labels for UI and error messages.
@@ -215,6 +256,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       storage: 100 * MB,
     },
     entitlements: createEntitlements([]),
+    support: SUPPORT_POLICIES.FREE,
   },
   STANDARD: {
     id: "STANDARD",
@@ -226,6 +268,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       storage: 5 * GB,
     },
     entitlements: createEntitlements(["math_engine", "portal"]),
+    support: SUPPORT_POLICIES.STANDARD,
   },
   PROFESSIONAL: {
     id: "PROFESSIONAL",
@@ -249,6 +292,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "custom_templates",
       "priority_support",
     ]),
+    support: SUPPORT_POLICIES.PROFESSIONAL,
   },
   ENTERPRISE: {
     id: "ENTERPRISE",
@@ -273,6 +317,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       "multi_unit",
       "custom_integrations",
     ]),
+    support: SUPPORT_POLICIES.ENTERPRISE,
   },
 } as const;
 
@@ -302,8 +347,18 @@ export function getPlan(planId: PlanId): PlanConfig {
 /**
  * Check if a plan has a specific entitlement.
  */
-export function hasEntitlement(planId: PlanId, feature: FeatureFlag): boolean {
+export function hasEntitlement(
+  planId: PlanId | string,
+  feature: FeatureFlag,
+): boolean {
+  if (!isValidPlanId(planId)) {
+    return false;
+  }
+
   const plan = PLANS[planId];
+  if (!plan?.entitlements) {
+    return false;
+  }
 
   return legacyFeatureMap[feature].some((mappedFeature) =>
     [
@@ -317,7 +372,10 @@ export function hasEntitlement(planId: PlanId, feature: FeatureFlag): boolean {
 /**
  * Check if a plan has a specific feature
  */
-export function hasFeature(planId: PlanId, feature: FeatureFlag): boolean {
+export function hasFeature(
+  planId: PlanId | string,
+  feature: FeatureFlag,
+): boolean {
   return hasEntitlement(planId, feature);
 }
 
@@ -326,6 +384,30 @@ export function hasFeature(planId: PlanId, feature: FeatureFlag): boolean {
  */
 export function getLimit(planId: PlanId, resource: keyof PlanLimits): number {
   return PLANS[planId].limits[resource];
+}
+
+/**
+ * Resolve effective plan limits for a specific organization.
+ *
+ * Standard plan organizations created before the certificate cap change keep
+ * the original 200-certificates quota.
+ */
+export function getEffectivePlanLimits(
+  planId: PlanId,
+  organizationCreatedAt?: Date | string | null,
+): PlanLimits {
+  const limits = { ...PLANS[planId].limits };
+
+  if (
+    planId === "STANDARD" &&
+    organizationCreatedAt &&
+    new Date(organizationCreatedAt).getTime() <
+      STANDARD_CERTIFICATE_LIMIT_CHANGE_AT.getTime()
+  ) {
+    limits.certificates = 200;
+  }
+
+  return limits;
 }
 
 /**
@@ -375,6 +457,10 @@ export function getPlanPrice(
   if (planId === "FREE") return 0;
   const prices = PLAN_PRICES[planId];
   return cycle === "MONTHLY" ? prices.monthly : prices.yearly;
+}
+
+export function getPlanSupportPolicy(planId: PlanId): PlanSupportPolicy {
+  return PLANS[planId].support;
 }
 
 /**

@@ -13,7 +13,7 @@ import { and, eq } from "drizzle-orm";
 import { organizationHasEntitlement } from "./organization-plan";
 
 const DEFAULT_PORTAL_URL_PRODUCTION = "https://portal.calibrafacil.com";
-const DEFAULT_PORTAL_URL_DEVELOPMENT = "https://localhost:5174";
+const DEFAULT_PORTAL_URL_DEVELOPMENT = "http://localhost:5174";
 
 export function buildPortalDomainVerificationHost(hostname: string): string {
   return `_calibrafacil-domain.${hostname}`;

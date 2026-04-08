@@ -14,7 +14,11 @@ import {
   real,
 } from "drizzle-orm/pg-core";
 import type {
+  CustomerSuccessBlocker,
+  CustomerSuccessHealthStatus,
+  CustomerSuccessSlaTier,
   GenericFinancialErpConnectionConfig,
+  GoLiveStatus,
   IntegrationCredentialType,
   IntegrationEventLevel,
   IntegrationProvider,
@@ -23,6 +27,16 @@ import type {
   IntegrationSyncTarget,
   IntegrationSyncTrigger,
   IntegrationType,
+  MigrationStatus,
+  OnboardingStatus,
+  PublicApiResourceType,
+  PublicApiWebhookDeliveryStatus,
+  PublicApiWebhookEvent,
+  PublicApiWebhookSubscriptionStatus,
+  SupportEventKind,
+  SupportRequestCategory,
+  SupportRequestPriority,
+  SupportRequestStatus,
 } from "@calibra-facil/shared";
 
 // =============================================================================
@@ -48,6 +62,10 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  role: text("role").default("user").notNull(),
+  banned: boolean("banned").default(false).notNull(),
+  banReason: text("ban_reason"),
+  banExpires: timestamp("ban_expires"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -71,6 +89,9 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    impersonatedBy: text("impersonated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => [index("session_userId_idx").on(table.userId)],
 );
@@ -267,6 +288,192 @@ export const organizationEventLog = pgTable(
   ],
 );
 
+export const platformEventLog = pgTable(
+  "platform_event_log",
+  {
+    id: serial("id").primaryKey(),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    targetUserId: text("target_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("platform_event_log_action_idx").on(table.action),
+    index("platform_event_log_actor_user_idx").on(table.actorUserId),
+    index("platform_event_log_target_user_idx").on(table.targetUserId),
+    index("platform_event_log_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const organizationSuccessProfile = pgTable(
+  "organization_success_profile",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    accountOwnerUserId: text("account_owner_user_id").references(
+      () => user.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    accountOwnerName: text("account_owner_name"),
+    accountOwnerEmail: text("account_owner_email"),
+    supportContactEmail: text("support_contact_email"),
+    internalOwnerUserId: text("internal_owner_user_id").references(
+      () => user.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    prioritySupport: boolean("priority_support").default(false).notNull(),
+    slaTier: text("sla_tier")
+      .$type<CustomerSuccessSlaTier>()
+      .default("PLAN_DEFAULT")
+      .notNull(),
+    onboardingStatus: text("onboarding_status")
+      .$type<OnboardingStatus>()
+      .default("NOT_STARTED")
+      .notNull(),
+    migrationStatus: text("migration_status")
+      .$type<MigrationStatus>()
+      .default("NOT_REQUIRED")
+      .notNull(),
+    goLiveStatus: text("go_live_status")
+      .$type<GoLiveStatus>()
+      .default("NOT_SCHEDULED")
+      .notNull(),
+    healthStatus: text("health_status")
+      .$type<CustomerSuccessHealthStatus>()
+      .default("HEALTHY")
+      .notNull(),
+    blockers: jsonb("blockers").$type<CustomerSuccessBlocker[]>(),
+    nextAction: text("next_action"),
+    nextActionDueAt: timestamp("next_action_due_at"),
+    nextActionCompletedAt: timestamp("next_action_completed_at"),
+    goLiveTargetDate: timestamp("go_live_target_date"),
+    goLiveActualDate: timestamp("go_live_actual_date"),
+    publicStatusNote: text("public_status_note"),
+    internalNotes: text("internal_notes"),
+    lastTouchedAt: timestamp("last_touched_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_success_profile_org_uidx").on(
+      table.organizationId,
+    ),
+    index("organization_success_profile_onboarding_idx").on(
+      table.onboardingStatus,
+    ),
+    index("organization_success_profile_migration_idx").on(
+      table.migrationStatus,
+    ),
+    index("organization_success_profile_go_live_idx").on(table.goLiveStatus),
+    index("organization_success_profile_health_idx").on(table.healthStatus),
+    index("organization_success_profile_priority_support_idx").on(
+      table.prioritySupport,
+    ),
+    index("organization_success_profile_next_action_due_idx").on(
+      table.nextActionDueAt,
+    ),
+  ],
+);
+
+export const organizationSupportRequest = pgTable(
+  "organization_support_request",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    requestedByUserId: text("requested_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    assignedToUserId: text("assigned_to_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    category: text("category").$type<SupportRequestCategory>().notNull(),
+    priority: text("priority")
+      .$type<SupportRequestPriority>()
+      .default("NORMAL")
+      .notNull(),
+    status: text("status")
+      .$type<SupportRequestStatus>()
+      .default("OPEN")
+      .notNull(),
+    subject: text("subject").notNull(),
+    description: text("description").notNull(),
+    publicResponse: text("public_response"),
+    slaTargetAt: timestamp("sla_target_at"),
+    firstResponseAt: timestamp("first_response_at"),
+    escalatedAt: timestamp("escalated_at"),
+    escalatedByUserId: text("escalated_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    escalationReason: text("escalation_reason"),
+    resolvedAt: timestamp("resolved_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("organization_support_request_org_idx").on(table.organizationId),
+    index("organization_support_request_status_idx").on(table.status),
+    index("organization_support_request_priority_idx").on(table.priority),
+    index("organization_support_request_escalated_at_idx").on(
+      table.escalatedAt,
+    ),
+    index("organization_support_request_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const organizationSupportRequestEvent = pgTable(
+  "organization_support_request_event",
+  {
+    id: serial("id").primaryKey(),
+    supportRequestId: integer("support_request_id")
+      .notNull()
+      .references(() => organizationSupportRequest.id, {
+        onDelete: "cascade",
+      }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    kind: text("kind").$type<SupportEventKind>().notNull(),
+    message: text("message").notNull(),
+    publicVisible: boolean("public_visible").default(false).notNull(),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("organization_support_request_event_request_idx").on(
+      table.supportRequestId,
+    ),
+    index("organization_support_request_event_org_idx").on(table.organizationId),
+    index("organization_support_request_event_kind_idx").on(table.kind),
+    index("organization_support_request_event_created_at_idx").on(
+      table.createdAt,
+    ),
+  ],
+);
+
 export const invitation = pgTable(
   "invitation",
   {
@@ -430,6 +637,157 @@ export const organizationApiKeyAuditLog = pgTable(
   (table) => [
     index("organization_api_key_audit_log_key_idx").on(table.apiKeyId),
     index("organization_api_key_audit_log_org_idx").on(table.organizationId),
+  ],
+);
+
+export const publicApiResourceRef = pgTable(
+  "public_api_resource_ref",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    resourceType: text("resource_type").$type<PublicApiResourceType>().notNull(),
+    resourceId: text("resource_id").notNull(),
+    externalId: text("external_id").notNull(),
+    createdByApiKeyId: text("created_by_api_key_id").references(
+      () => organizationApiKey.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("public_api_resource_ref_org_idx").on(table.organizationId),
+    index("public_api_resource_ref_type_idx").on(table.resourceType),
+    uniqueIndex("public_api_resource_ref_external_uidx").on(
+      table.organizationId,
+      table.resourceType,
+      table.externalId,
+    ),
+    uniqueIndex("public_api_resource_ref_resource_uidx").on(
+      table.organizationId,
+      table.resourceType,
+      table.resourceId,
+    ),
+  ],
+);
+
+export const publicApiIdempotencyKey = pgTable(
+  "public_api_idempotency_key",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    apiKeyId: text("api_key_id")
+      .notNull()
+      .references(() => organizationApiKey.id, { onDelete: "cascade" }),
+    requestMethod: text("request_method").notNull(),
+    requestPath: text("request_path").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    responseStatus: integer("response_status").notNull(),
+    responseBody: jsonb("response_body").$type<Record<string, unknown>>().notNull(),
+    resourceType: text("resource_type").$type<PublicApiResourceType>(),
+    resourceId: text("resource_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at"),
+  },
+  (table) => [
+    index("public_api_idempotency_org_idx").on(table.organizationId),
+    index("public_api_idempotency_api_key_idx").on(table.apiKeyId),
+    uniqueIndex("public_api_idempotency_request_uidx").on(
+      table.organizationId,
+      table.apiKeyId,
+      table.requestMethod,
+      table.requestPath,
+      table.idempotencyKey,
+    ),
+  ],
+);
+
+export const publicApiWebhookSubscription = pgTable(
+  "public_api_webhook_subscription",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    targetUrl: text("target_url").notNull(),
+    events: jsonb("events").$type<PublicApiWebhookEvent[]>().default([]).notNull(),
+    status: text("status")
+      .$type<PublicApiWebhookSubscriptionStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    secretPrefix: text("secret_prefix").notNull(),
+    encryptedSecret: text("encrypted_secret").notNull(),
+    secretIv: text("secret_iv").notNull(),
+    lastSuccessAt: timestamp("last_success_at"),
+    lastFailureAt: timestamp("last_failure_at"),
+    consecutiveFailures: integer("consecutive_failures").default(0).notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedBy: text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("public_api_webhook_subscription_org_idx").on(table.organizationId),
+    index("public_api_webhook_subscription_status_idx").on(table.status),
+  ],
+);
+
+export const publicApiWebhookDelivery = pgTable(
+  "public_api_webhook_delivery",
+  {
+    id: text("id").primaryKey(),
+    subscriptionId: text("subscription_id")
+      .notNull()
+      .references(() => publicApiWebhookSubscription.id, {
+        onDelete: "cascade",
+      }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    eventId: text("event_id").notNull(),
+    eventType: text("event_type").$type<PublicApiWebhookEvent>().notNull(),
+    requestUrl: text("request_url").notNull(),
+    requestBody: jsonb("request_body").$type<Record<string, unknown>>().notNull(),
+    responseStatus: integer("response_status"),
+    responseBody: text("response_body"),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    status: text("status")
+      .$type<PublicApiWebhookDeliveryStatus>()
+      .default("PENDING")
+      .notNull(),
+    deliveredAt: timestamp("delivered_at"),
+    failedAt: timestamp("failed_at"),
+    lastError: text("last_error"),
+    replayOfDeliveryId: text("replay_of_delivery_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("public_api_webhook_delivery_subscription_idx").on(
+      table.subscriptionId,
+    ),
+    index("public_api_webhook_delivery_org_idx").on(table.organizationId),
+    index("public_api_webhook_delivery_event_idx").on(table.eventId),
+    index("public_api_webhook_delivery_status_idx").on(table.status),
   ],
 );
 
@@ -778,6 +1136,14 @@ export const userRelations = relations(user, ({ many }) => ({
   customDomains: many(organizationCustomDomain),
   certificateTemplates: many(certificateTemplate),
   apiKeyAuditLogs: many(organizationApiKeyAuditLog),
+  successProfiles: many(organizationSuccessProfile),
+  supportRequestsCreated: many(organizationSupportRequest, {
+    relationName: "supportRequestRequestedBy",
+  }),
+  supportRequestsAssigned: many(organizationSupportRequest, {
+    relationName: "supportRequestAssignedTo",
+  }),
+  supportRequestEvents: many(organizationSupportRequestEvent),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -812,6 +1178,9 @@ export const organizationRelations = relations(
     integrationSyncRuns: many(integrationSyncRun),
     integrationEventLogs: many(integrationEventLog),
     integrationObjectLinks: many(integrationObjectLink),
+    successProfile: one(organizationSuccessProfile),
+    supportRequests: many(organizationSupportRequest),
+    supportRequestEvents: many(organizationSupportRequestEvent),
   }),
 );
 
@@ -867,6 +1236,63 @@ export const organizationEventLogRelations = relations(
     actorMember: one(member, {
       fields: [organizationEventLog.actorMemberId],
       references: [member.id],
+    }),
+  }),
+);
+
+export const organizationSuccessProfileRelations = relations(
+  organizationSuccessProfile,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [organizationSuccessProfile.organizationId],
+      references: [organization.id],
+    }),
+    accountOwnerUser: one(user, {
+      fields: [organizationSuccessProfile.accountOwnerUserId],
+      references: [user.id],
+    }),
+    internalOwnerUser: one(user, {
+      fields: [organizationSuccessProfile.internalOwnerUserId],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const organizationSupportRequestRelations = relations(
+  organizationSupportRequest,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [organizationSupportRequest.organizationId],
+      references: [organization.id],
+    }),
+    requestedByUser: one(user, {
+      fields: [organizationSupportRequest.requestedByUserId],
+      references: [user.id],
+      relationName: "supportRequestRequestedBy",
+    }),
+    assignedToUser: one(user, {
+      fields: [organizationSupportRequest.assignedToUserId],
+      references: [user.id],
+      relationName: "supportRequestAssignedTo",
+    }),
+    events: many(organizationSupportRequestEvent),
+  }),
+);
+
+export const organizationSupportRequestEventRelations = relations(
+  organizationSupportRequestEvent,
+  ({ one }) => ({
+    supportRequest: one(organizationSupportRequest, {
+      fields: [organizationSupportRequestEvent.supportRequestId],
+      references: [organizationSupportRequest.id],
+    }),
+    organization: one(organization, {
+      fields: [organizationSupportRequestEvent.organizationId],
+      references: [organization.id],
+    }),
+    actorUser: one(user, {
+      fields: [organizationSupportRequestEvent.actorUserId],
+      references: [user.id],
     }),
   }),
 );

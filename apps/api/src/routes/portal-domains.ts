@@ -10,6 +10,7 @@ import {
   getPortalBaseUrlForLabOrganization,
   sanitizePortalHostname,
 } from "../lib/portal-domains";
+import { writeOrganizationAuditEvent } from "../lib/audit";
 import {
   type AuthVariables,
   requireLabProtected,
@@ -68,6 +69,99 @@ function serializeDomain(record: typeof organizationCustomDomain.$inferSelect | 
   };
 }
 
+function buildPortalDomainStatusSummary(params: {
+  record: typeof organizationCustomDomain.$inferSelect | null;
+  portalBaseUrl: string;
+  observedTxtValues: string[];
+}) {
+  if (!params.record) {
+    return {
+      status: "not_configured" as const,
+      readiness: "not_ready" as const,
+      canActivate: false,
+      message: "Nenhum domínio personalizado configurado para o portal.",
+      diagnostics: {
+        host: null,
+        expectedValue: null,
+        observedValues: [],
+      },
+    };
+  }
+
+  const host = buildPortalDomainVerificationHost(params.record.hostname);
+  const expectedValue = params.record.verificationToken;
+  const observedValues = params.observedTxtValues;
+  const txtMatched = observedValues.includes(expectedValue);
+
+  if (params.record.isActive && params.record.verifiedAt) {
+    return {
+      status: "active" as const,
+      readiness: "active" as const,
+      canActivate: false,
+      message: `Domínio ativo apontando o portal em ${params.portalBaseUrl}.`,
+      diagnostics: {
+        host,
+        expectedValue,
+        observedValues,
+      },
+    };
+  }
+
+  if (params.record.verifiedAt) {
+    return {
+      status: "verified" as const,
+      readiness: "ready" as const,
+      canActivate: true,
+      message: "Domínio verificado e pronto para ativação.",
+      diagnostics: {
+        host,
+        expectedValue,
+        observedValues,
+      },
+    };
+  }
+
+  if (txtMatched) {
+    return {
+      status: "ready_to_verify" as const,
+      readiness: "not_ready" as const,
+      canActivate: false,
+      message: "TXT encontrado. Confirme a verificação para liberar a ativação.",
+      diagnostics: {
+        host,
+        expectedValue,
+        observedValues,
+      },
+    };
+  }
+
+  if (observedValues.length === 0) {
+    return {
+      status: "waiting_dns" as const,
+      readiness: "not_ready" as const,
+      canActivate: false,
+      message: "O TXT ainda não foi encontrado. Aguarde a propagação do DNS.",
+      diagnostics: {
+        host,
+        expectedValue,
+        observedValues,
+      },
+    };
+  }
+
+  return {
+    status: "token_mismatch" as const,
+    readiness: "not_ready" as const,
+    canActivate: false,
+    message: "O DNS respondeu, mas o TXT encontrado não corresponde ao token esperado.",
+    diagnostics: {
+      host,
+      expectedValue,
+      observedValues,
+    },
+  };
+}
+
 export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
   .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
     const member = c.get("member");
@@ -75,10 +169,18 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     const portalBaseUrl = await getPortalBaseUrlForLabOrganization(
       member.organizationId,
     );
+    const observedTxtValues = record
+      ? await fetchTxtAnswers(buildPortalDomainVerificationHost(record.hostname))
+      : [];
 
     return c.json({
       domain: serializeDomain(record ?? null),
       portalBaseUrl,
+      statusSummary: buildPortalDomainStatusSummary({
+        record: record ?? null,
+        portalBaseUrl,
+        observedTxtValues,
+      }),
     });
   })
   .post(
@@ -126,6 +228,22 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(eq(organizationCustomDomain.id, existing.id))
           .returning();
 
+        if (updated) {
+          await writeOrganizationAuditEvent({
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "portal_domain.updated",
+            entityType: "portal_domain",
+            entityId: updated.id,
+            details: {
+              hostname: updated.hostname,
+              verificationHost: buildPortalDomainVerificationHost(updated.hostname),
+              previousHostname: existing.hostname,
+            },
+          });
+        }
+
         return c.json({ domain: serializeDomain(updated || null) });
       }
 
@@ -140,6 +258,21 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .returning();
 
+      if (created) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "portal_domain.created",
+          entityType: "portal_domain",
+          entityId: created.id,
+          details: {
+            hostname: created.hostname,
+            verificationHost: buildPortalDomainVerificationHost(created.hostname),
+          },
+        });
+      }
+
       return c.json({ domain: serializeDomain(created || null) }, 201);
     },
   )
@@ -150,6 +283,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     requireFeature("custom_domain"),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const record = await getOrganizationCustomDomain(member.organizationId);
 
       if (!record) {
@@ -184,6 +318,21 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         .where(eq(organizationCustomDomain.id, record.id))
         .returning();
 
+      if (updated) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "portal_domain.verified",
+          entityType: "portal_domain",
+          entityId: updated.id,
+          details: {
+            hostname: updated.hostname,
+            verificationHost: buildPortalDomainVerificationHost(updated.hostname),
+          },
+        });
+      }
+
       return c.json({ domain: serializeDomain(updated ?? null) });
     },
   )
@@ -194,6 +343,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     requireFeature("custom_domain"),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const record = await getOrganizationCustomDomain(member.organizationId);
 
       if (!record) {
@@ -214,6 +364,20 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         .where(eq(organizationCustomDomain.id, record.id))
         .returning();
 
+      if (updated) {
+        await writeOrganizationAuditEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "portal_domain.activated",
+          entityType: "portal_domain",
+          entityId: updated.id,
+          details: {
+            hostname: updated.hostname,
+          },
+        });
+      }
+
       return c.json({ domain: serializeDomain(updated ?? null) });
     },
   )
@@ -223,6 +387,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     requireRole(["admin", "owner"]),
     async (c) => {
       const member = c.get("member");
+      const session = c.get("session");
       const record = await getOrganizationCustomDomain(member.organizationId);
 
       if (!record) {
@@ -232,6 +397,20 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       await db
         .delete(organizationCustomDomain)
         .where(eq(organizationCustomDomain.id, record.id));
+
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "portal_domain.deleted",
+        entityType: "portal_domain",
+        entityId: record.id,
+        details: {
+          hostname: record.hostname,
+          wasVerified: Boolean(record.verifiedAt),
+          wasActive: record.isActive,
+        },
+      });
 
       return c.json({ success: true });
     },

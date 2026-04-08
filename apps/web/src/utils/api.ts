@@ -9,23 +9,41 @@ function getStoredActiveUnitId(): string | null {
   const activeOrgId = window.localStorage.getItem('dashboard-active-org')
   if (!activeOrgId) return null
 
-  return window.localStorage.getItem(`${DASHBOARD_UNIT_KEY_PREFIX}${activeOrgId}`)
+  return window.localStorage.getItem(
+    `${DASHBOARD_UNIT_KEY_PREFIX}${activeOrgId}`,
+  )
 }
 
-function getApiBaseURL(): string {
+export function getApiBaseURL(): string {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL
   }
   if (typeof window !== 'undefined') {
     const host = window.location.hostname
     if (host === 'localhost' || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
-      return `https://${host}:3000`
+      return `http://${host}:3000`
     }
 
     return 'https://api.calibrafacil.com'
   }
 
   return 'https://api.calibrafacil.com'
+}
+
+export function resolveApiURL(): string
+export function resolveApiURL(pathOrUrl: string): string
+export function resolveApiURL(pathOrUrl?: string): string {
+  const baseUrl = getApiBaseURL()
+
+  if (!pathOrUrl) {
+    return baseUrl
+  }
+
+  if (/^https?:\/\//.test(pathOrUrl)) {
+    return pathOrUrl
+  }
+
+  return new URL(pathOrUrl, baseUrl).toString()
 }
 
 export const api = hc<AppType>(getApiBaseURL(), {

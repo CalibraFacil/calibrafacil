@@ -13,7 +13,6 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { NotificationBell } from '@/components/notifications/notification-bell'
-import { UnitSwitcher } from '@/components/unit-switcher'
 import { api } from '@/utils/api'
 
 const routeLabels: Record<string, string> = {
@@ -24,14 +23,20 @@ const routeLabels: Record<string, string> = {
   '/dashboard/settings': 'Configurações',
   '/dashboard/settings/profile': 'Perfil',
   '/dashboard/settings/organization': 'Organização',
+  '/dashboard/settings/portal-domain': 'Portal Domain',
+  '/dashboard/settings/branding': 'Branding',
   '/dashboard/settings/billing': 'Faturamento',
   '/dashboard/settings/notifications': 'Notificações',
   '/dashboard/settings/security': 'Segurança',
   '/dashboard/settings/authentication': 'Autenticação',
+  '/dashboard/settings/integrations': 'Integrações',
   '/dashboard/settings/appearance': 'Aparência',
   '/dashboard/settings/signature': 'Assinatura',
   '/dashboard/settings/certificates': 'Certificados ICP',
   '/dashboard/settings/danger': 'Zona de Perigo',
+  '/dashboard/customer-success': 'Customer Success',
+  '/dashboard/internal': 'Operação Interna',
+  '/dashboard/internal/customer-success': 'Customer Success',
 
   // Clients
   '/dashboard/clients': 'Clientes',
@@ -632,7 +637,6 @@ export function DashboardHeader({
         </Breadcrumb>
       </div>
       <div className="flex items-center gap-2">
-        <UnitSwitcher />
         <NotificationBell />
       </div>
     </header>
