@@ -10,7 +10,7 @@ import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
 O **Portal do Cliente** é uma aplicação separada em `portal.calibrafacil.com` que permite aos clientes do laboratório acompanhar suas calibrações de forma autônoma, sem necessidade de contato direto com a equipe.
 
 <Aside type="note">
-  O Portal do Cliente está disponível nos planos **Standard**, **Professional** e **Enterprise**. Laboratórios no plano Free não têm acesso a esta funcionalidade.
+  O Portal do Cliente está disponível nos planos **Standard**, **Professional** e **Enterprise**. O domínio padrão do portal já funciona nesses planos; o uso de **domínio personalizado** fica disponível a partir do **Professional**.
 </Aside>
 
 ## Acesso ao Portal
@@ -24,6 +24,17 @@ O acesso é gerenciado pelo laboratório:
 5. Ao aceitar, cria uma conta e acessa o portal
 
 O portal utiliza autenticação independente do painel do laboratório.
+
+## Domínio do Portal
+
+Por padrão, o portal opera em domínio gerenciado pela CalibraFácil. A partir do plano **Professional**, o laboratório também pode configurar um domínio próprio em **Configurações → Portal Domain** (`/dashboard/settings/portal-domain`).
+
+O lifecycle do domínio segue estas etapas:
+
+1. cadastrar o hostname desejado;
+2. publicar o registro TXT de verificação;
+3. validar o domínio no painel;
+4. ativar o domínio para uso em produção.
 
 ## Funcionalidades
 

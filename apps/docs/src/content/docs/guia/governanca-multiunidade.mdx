@@ -1,0 +1,60 @@
+---
+title: Governança Multiunidade
+description: Operação por unidades, escopo de acesso, atribuições locais e visões consolidadas para organizações enterprise.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A governança multiunidade está disponível no plano **Enterprise** e foi desenhada para organizações que operam mais de uma unidade, filial ou laboratório sob a mesma organização.
+
+## O que a funcionalidade adiciona
+
+- cadastro de **unidades ativas** dentro da organização;
+- definição de unidade padrão;
+- atribuição de membros por unidade;
+- papéis locais, como `unit_admin`;
+- separação entre visão **global** e visão **por unidade**;
+- relatórios consolidados com filtro por unidade;
+- configurações operacionais sensíveis com escopo por unidade.
+
+## Modelo de acesso
+
+Existem dois níveis de administração:
+
+- **gestão global**, com visão consolidada e administração transversal;
+- **gestão local por unidade**, com atuação restrita ao escopo atribuído.
+
+Na prática, isso significa que um membro pode:
+
+- operar apenas uma unidade específica;
+- administrar várias unidades selecionadas;
+- ou atuar como administrador global para toda a organização.
+
+## Configurações sensíveis por unidade
+
+Com o modelo multiunidade ativo, o sistema passa a suportar escopo por unidade para itens operacionais como:
+
+- limites ambientais;
+- certificados de assinatura;
+- leituras e relatórios consolidados.
+
+<Aside type="note">
+  A plataforma preserva a distinção entre configuração global e configuração por unidade. Nem toda tela de configuração é automaticamente compartilhada entre filiais.
+</Aside>
+
+## Visão consolidada
+
+Administradores globais podem acessar:
+
+- indicadores comparativos entre unidades;
+- filtros por períodos e subconjuntos de unidades;
+- leitura consolidada da operação sem perder o recorte por unidade.
+
+## Quando usar
+
+Use multiunidade quando sua organização precisa de pelo menos um dos cenários abaixo:
+
+- mais de um laboratório operacional com equipe própria;
+- filial com ativos, ordens e padrões segregados;
+- governança central com operação local;
+- consolidação executiva sem misturar o escopo operacional das unidades.

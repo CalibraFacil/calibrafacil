@@ -1,6 +1,6 @@
 ---
 title: Configurações e Permissões
-description: Configurações do sistema, papéis de usuário, permissões, assinatura digital e planos de assinatura.
+description: Configurações do sistema, autenticação, permissões, cobrança, domínio do portal e integrações.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -13,11 +13,14 @@ Acesse em **Painel → Configurações** (`/dashboard/settings`). As configuraç
 | :--- | :--- | :--- |
 | **Perfil** | Nome, email, foto do usuário | Todos |
 | **Segurança** | Senha, autenticação de dois fatores, sessões | Todos |
+| **Autenticação** | SSO corporativo e API keys | Admin, Owner |
 | **Aparência** | Tema (claro, escuro, sistema) | Todos |
 | **Organização** | Nome, CNPJ, endereço, dados de acreditação | Admin, Owner |
 | **Certificados** | Templates de certificado, logo, marca | Admin, Owner |
 | **Assinatura** | Imagem da assinatura manuscrita | Admin, Owner |
 | **Condições Ambientais** | Limites de temperatura, umidade e pressão | Admin, Owner |
+| **Portal Domain** | Domínio personalizado do portal do cliente | Admin, Owner |
+| **Integrações** | Conectores ERP e mapeamento operacional | Admin, Owner |
 | **Notificações** | Preferências de email e notificações in-app | Todos |
 | **Cobrança** | Plano de assinatura, pagamentos, faturas | Owner |
 | **Zona de Perigo** | Exportação de dados, exclusão da conta/organização | Owner |
@@ -132,11 +135,21 @@ Opções adicionais:
 
 | Recurso | FREE | STANDARD | PROFESSIONAL | ENTERPRISE |
 | :--- | :--- | :--- | :--- | :--- |
-| **Certificados/mês** | 10 | 200 | 1.000 | Ilimitado |
+| **Certificados/mês** | 10 | 100 | 800 | Ilimitado |
 | **Usuários** | 1 | 5 | Ilimitado | Ilimitado |
 | **Armazenamento** | 100 MB | 5 GB | 50 GB | 1 TB |
 | **Motor Matemático** | — | Sim | Sim | Sim |
-| **Portal do Cliente** | — | — | Sim | Sim |
+| **Portal do Cliente** | — | Sim | Sim | Sim |
 | **Módulo Financeiro** | — | — | Sim | Sim |
-| **Acesso API** | — | — | — | Sim |
-| **Domínio Personalizado** | — | — | — | Sim |
+| **API pública** | — | — | Sim | Sim |
+| **Domínio personalizado do portal** | — | — | Sim | Sim |
+| **Fluxo de aprovação** | — | — | Sim | Sim |
+| **Trilha de auditoria avançada** | — | — | Sim | Sim |
+| **Templates personalizados** | — | — | Sim | Sim |
+| **SSO corporativo** | — | — | — | Sim |
+| **Multiunidade** | — | — | — | Sim |
+| **Integrações personalizadas** | — | — | — | Sim |
+
+<Aside type="note">
+  Organizações Standard legadas podem ter limite histórico de **200 certificados/mês**. Consulte o painel de cobrança para ver o limite efetivo aplicado à sua assinatura.
+</Aside>

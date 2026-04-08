@@ -1,0 +1,76 @@
+---
+title: Integrações e API Pública
+description: Integração com sistemas externos via API pública e conectores enterprise para ERP e automações operacionais.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+O CalibraFácil oferece duas camadas complementares de integração:
+
+- **API pública**, disponível a partir do plano **Professional**;
+- **integrações personalizadas**, disponíveis no plano **Enterprise**.
+
+## API pública
+
+A API pública foi desenhada para integrações orientadas a recurso e uso por conectores externos.
+
+### Recursos cobertos
+
+- clientes;
+- ativos;
+- solicitações de calibração;
+- ordens de serviço;
+- serviços;
+- unidades;
+- relatórios consolidados;
+- certificados;
+- webhooks.
+
+### Características operacionais
+
+- autenticação por **API key** com escopos;
+- OpenAPI e referência interativa;
+- suporte a **idempotency key** em mutações;
+- suporte a `externalId` para reconciliação com sistemas terceiros;
+- webhooks para eventos relevantes do ciclo operacional.
+
+## Integrações personalizadas
+
+As integrações personalizadas são voltadas a cenários enterprise com rollout assistido.
+
+### Casos de uso típicos
+
+- ERP financeiro;
+- sincronização de clientes;
+- sincronização de ordens de serviço;
+- sincronização de documentos financeiros;
+- automações sob medida entre o LIMS e sistemas legados.
+
+### Capacidades do módulo
+
+- criação e atualização da conexão HTTP;
+- validação técnica da conexão;
+- mapeamento de campos por alvo;
+- preview do payload antes da execução;
+- execução manual;
+- agendamento recorrente;
+- retry de runs com falha;
+- trilha de eventos e histórico de runs.
+
+### Alvos padrão do conector
+
+| Alvo | Função |
+| :--- | :--- |
+| **Clientes** | Base mínima para liberar ordens e faturamento |
+| **Ordens de serviço** | Depende de clientes já conciliados |
+| **Documentos financeiros** | Depende de clientes e ordens resolvidos no sistema remoto |
+
+<Aside type="caution">
+  Integrações personalizadas não devem ser tratadas como “plug and play” universal. Elas exigem validação de readiness, dependências entre alvos e, em muitos casos, coordenação de deploy entre API e worker.
+</Aside>
+
+## Onde gerenciar
+
+- **Configurações → Integrações** (`/dashboard/settings/integrations`) para conectores enterprise;
+- **Configurações → Autenticação** (`/dashboard/settings/authentication`) para API keys;
+- referência interativa da API dentro da área autenticada do produto, para organizações com entitlement de API.

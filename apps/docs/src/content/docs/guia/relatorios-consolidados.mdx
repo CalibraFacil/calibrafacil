@@ -1,0 +1,41 @@
+---
+title: Relatórios Consolidados
+description: Visões executivas por unidade e comparativos consolidados para organizações com governança global.
+---
+
+Os **Relatórios Consolidados** ficam em `/dashboard/reports` e são voltados à leitura executiva da operação.
+
+## Quem acessa
+
+O acesso é restrito a quem possui visão consolidada da organização, tipicamente administradores globais.
+
+## O que a tela oferece
+
+- resumo consolidado do período;
+- tendência temporal de aprovados e rejeitados;
+- comparativo entre unidades;
+- filtro por período: `7d`, `30d`, `90d` e `mês atual`;
+- filtro por conjunto de unidades, quando aplicável.
+
+## Métricas acompanhadas
+
+- calibrações pendentes;
+- ordens aprovadas no período;
+- ordens rejeitadas no período;
+- taxa de aprovação;
+- ordens em atraso;
+- padrões próximos do vencimento.
+
+## Quando usar
+
+Os relatórios consolidados são úteis para:
+
+- comparar unidades da mesma organização;
+- acompanhar gargalos de aprovação;
+- medir impacto de atrasos operacionais;
+- identificar unidades com maior rejeição ou backlog;
+- apoiar governança e acompanhamento gerencial.
+
+## API e integração
+
+As mesmas métricas consolidadas podem ser consumidas pela **API pública** quando a organização possuir chave com escopo `reports:read`.

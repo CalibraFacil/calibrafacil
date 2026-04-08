@@ -44,10 +44,34 @@ export default defineConfig({
           label: "Guia do Usuário",
           items: [
             { label: "Painel e Dashboard", slug: "guia/painel" },
+            {
+              label: "Planos, Cobrança e Entitlements",
+              slug: "guia/planos-e-entitlements",
+            },
+            {
+              label: "Autenticação, SSO e API Keys",
+              slug: "guia/autenticacao-sso-api",
+            },
             { label: "Clientes", slug: "guia/clientes" },
             { label: "Ativos e Instrumentos", slug: "guia/ativos" },
             { label: "Padrões de Referência", slug: "guia/padroes" },
             { label: "Catálogo de Serviços", slug: "guia/servicos" },
+            {
+              label: "Governança Multiunidade",
+              slug: "guia/governanca-multiunidade",
+            },
+            {
+              label: "Relatórios Consolidados",
+              slug: "guia/relatorios-consolidados",
+            },
+            {
+              label: "Customer Success",
+              slug: "guia/customer-success",
+            },
+            {
+              label: "Integrações e API Pública",
+              slug: "guia/integracoes-api-publica",
+            },
             {
               label: "Competências do Pessoal",
               slug: "guia/competencias-pessoal",
