@@ -61,8 +61,12 @@ interface Env {
 const app = new Hono<{ Bindings: Env }>();
 
 const allowedOrigins = new Set([
+  "http://localhost:5173",
+  "http://localhost:5174",
   "https://localhost:5173",
   "https://localhost:5174",
+  "http://192.168.0.10:5173",
+  "http://192.168.0.10:5174",
   "https://192.168.0.10:5173",
   "https://192.168.0.10:5174",
   "https://calibrafacil.com",
@@ -131,7 +135,21 @@ app.use("*", async (c, next) => {
   const hyperdrive = c.env.HYPERDRIVE as
     | { connectionString?: string }
     | undefined;
-  if (hyperdrive?.connectionString) {
+  if ((c.env.NODE_ENV ?? "").toLowerCase() !== "production") {
+    const localConnectionString =
+      (c.env as Record<string, unknown>)
+        .CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE;
+
+    if (
+      typeof localConnectionString === "string" &&
+      localConnectionString.trim().length > 0
+    ) {
+      process.env.DATABASE_URL = localConnectionString.trim();
+      delete process.env.HYPERDRIVE_URL;
+    } else if (hyperdrive?.connectionString) {
+      process.env.HYPERDRIVE_URL = hyperdrive.connectionString;
+    }
+  } else if (hyperdrive?.connectionString) {
     process.env.HYPERDRIVE_URL = hyperdrive.connectionString;
   }
 

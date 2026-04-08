@@ -33,6 +33,7 @@ import {
   writeOrganizationIntegrationEvent,
   type IntegrationsEnv,
 } from "../lib/integrations";
+import { validateIntegrationMappings } from "@calibra-facil/shared";
 import {
   type AuthVariables,
   requireLabProtected,
@@ -53,6 +54,40 @@ const BaseUrlSchema = z.string().trim().url().transform((value, ctx) => {
   }
 });
 
+const MappingRuleSchema = z.object({
+  id: z.string().trim().min(1),
+  destinationField: z.string().trim().min(1),
+  enabled: z.boolean(),
+  valueMode: z.enum(["source", "constant"]),
+  sourceField: z
+    .string()
+    .trim()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
+  constantValue: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
+  formatter: z.enum([
+    "none",
+    "string",
+    "number",
+    "boolean",
+    "upper_case",
+    "lower_case",
+    "digits_only",
+    "date_only",
+    "iso_datetime",
+    "currency_major",
+  ]),
+});
+
+const TargetMappingSchema = z.object({
+  fields: z.array(MappingRuleSchema),
+});
+
 const IntegrationBodySchema = z.object({
   name: z.string().trim().min(3).max(80),
   baseUrl: BaseUrlSchema,
@@ -61,6 +96,13 @@ const IntegrationBodySchema = z.object({
   customerPath: z.string().trim().optional(),
   serviceOrderPath: z.string().trim().optional(),
   billingDocumentPath: z.string().trim().optional(),
+  mappings: z
+    .object({
+      customer: TargetMappingSchema.optional(),
+      service_order: TargetMappingSchema.optional(),
+      billing_document: TargetMappingSchema.optional(),
+    })
+    .optional(),
 });
 
 const UpdateIntegrationBodySchema = z.object({
@@ -71,11 +113,25 @@ const UpdateIntegrationBodySchema = z.object({
   customerPath: z.string().trim().optional(),
   serviceOrderPath: z.string().trim().optional(),
   billingDocumentPath: z.string().trim().optional(),
+  mappings: z
+    .object({
+      customer: TargetMappingSchema.optional(),
+      service_order: TargetMappingSchema.optional(),
+      billing_document: TargetMappingSchema.optional(),
+    })
+    .optional(),
 });
 
 const SyncRequestSchema = z.object({
   target: z.enum(["customer", "service_order", "billing_document"]),
   limit: z.coerce.number().min(1).max(250).default(50),
+  mappings: z
+    .object({
+      customer: TargetMappingSchema.optional(),
+      service_order: TargetMappingSchema.optional(),
+      billing_document: TargetMappingSchema.optional(),
+    })
+    .optional(),
 });
 
 const ToggleSchema = z.object({
@@ -262,6 +318,14 @@ export const integrationsRouter = new Hono<{
       const session = c.get("session");
       const input = c.req.valid("json");
       const config = buildGenericConnectionConfig(input);
+      const mappingIssues = validateIntegrationMappings(config.mappings);
+
+      if (mappingIssues.length > 0) {
+        return c.json(
+          { error: mappingIssues.map((issue) => issue.message).join(" ") },
+          400,
+        );
+      }
       const encrypted = encryptIntegrationSecret(input.authToken, c.env);
       const integrationId = crypto.randomUUID();
       const connectionId = crypto.randomUUID();
@@ -349,7 +413,21 @@ export const integrationsRouter = new Hono<{
           input.billingDocumentPath ??
           record.connection.config.billingDocumentPath,
         schedules: record.connection.config.schedules,
+        mappings: input.mappings
+          ? {
+              ...record.connection.config.mappings,
+              ...input.mappings,
+            }
+          : record.connection.config.mappings,
       });
+      const mappingIssues = validateIntegrationMappings(mergedConfig.mappings);
+
+      if (mappingIssues.length > 0) {
+        return c.json(
+          { error: mappingIssues.map((issue) => issue.message).join(" ") },
+          400,
+        );
+      }
 
       await db.transaction(async (tx) => {
         await tx
@@ -498,6 +576,7 @@ export const integrationsRouter = new Hono<{
         record,
         target: input.target,
         limit: input.limit,
+        mappings: input.mappings,
       });
 
       return c.json(preview);

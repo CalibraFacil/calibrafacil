@@ -17,9 +17,14 @@ import {
   encryptPassword,
 } from "@calibra-facil/signing";
 import {
-  formatIntegrationCustomerAddress,
+  applyIntegrationMappings,
   DEFAULT_INTEGRATION_SCHEDULE_FREQUENCY,
+  type IntegrationMappedPreviewSample,
+  type IntegrationMappingsConfig,
+  type IntegrationMappingValidationIssue,
+  formatIntegrationCustomerAddress,
   normalizeGenericFinancialErpConfig,
+  validateIntegrationMappings,
   type GenericFinancialErpConnectionConfig,
   type IntegrationDependencyWarning,
   type IntegrationBillingDocumentPayload,
@@ -124,6 +129,7 @@ export function buildGenericConnectionConfig(input: {
   serviceOrderPath?: string;
   billingDocumentPath?: string;
   schedules?: GenericFinancialErpConnectionConfig["schedules"];
+  mappings?: Partial<IntegrationMappingsConfig>;
 }) {
   return normalizeGenericFinancialErpConfig(input);
 }
@@ -721,12 +727,16 @@ function buildPreviewSampleRecord(
     | IntegrationCustomerPayload
     | IntegrationServiceOrderPayload
     | IntegrationBillingDocumentPayload,
+  mappedPayload: Record<string, unknown>,
+  issues: string[],
 ) {
   if ("name" in payload) {
     return {
       externalId: payload.externalId,
       label: payload.name,
       subtitle: payload.email ?? payload.taxId ?? null,
+      mappedPayload,
+      issues,
     };
   }
 
@@ -740,6 +750,8 @@ function buildPreviewSampleRecord(
         payload.serviceName ??
         payload.unitName ??
         null,
+      mappedPayload,
+      issues,
     };
   }
 
@@ -748,7 +760,43 @@ function buildPreviewSampleRecord(
     label: `Faturamento ${payload.jobId}`,
     subtitle:
       payload.customerName ?? payload.serviceName ?? payload.unitName ?? null,
+    mappedPayload,
+    issues,
   };
+}
+
+function getMappingValidationIssues(
+  config: GenericFinancialErpConnectionConfig,
+  target?: IntegrationSyncTarget,
+): IntegrationMappingValidationIssue[] {
+  const issues = validateIntegrationMappings(config.mappings);
+  if (!target) return issues;
+  return issues.filter((issue) => issue.target === target);
+}
+
+function assertValidMappings(
+  config: GenericFinancialErpConnectionConfig,
+  target?: IntegrationSyncTarget,
+) {
+  const issues = getMappingValidationIssues(config, target);
+  if (issues.length === 0) return;
+
+  throw new Error(issues.map((issue) => issue.message).join(" "));
+}
+
+function buildMappedTargetPayload(params: {
+  config: GenericFinancialErpConnectionConfig;
+  target: IntegrationSyncTarget;
+  payload:
+    | IntegrationCustomerPayload
+    | IntegrationServiceOrderPayload
+    | IntegrationBillingDocumentPayload;
+}) {
+  return applyIntegrationMappings(
+    params.target,
+    params.payload as unknown as Record<string, unknown>,
+    params.config.mappings[params.target],
+  );
 }
 
 function isSuccessfulRun(
@@ -967,7 +1015,21 @@ export async function previewIntegrationSync(params: {
   record: GenericConnectionRecord;
   target: IntegrationSyncTarget;
   limit: number;
+  mappings?: Partial<IntegrationMappingsConfig>;
 }) {
+  const normalizedConfig = normalizeGenericFinancialErpConfig(
+    {
+      ...params.record.connection.config,
+      mappings: params.mappings
+        ? {
+            ...params.record.connection.config.mappings,
+            ...params.mappings,
+          }
+        : params.record.connection.config.mappings,
+    },
+  );
+  assertValidMappings(normalizedConfig, params.target);
+
   const overview = await buildIntegrationOverview(params.record);
   const targetSummary = overview.targets.find(
     (target) => target.target === params.target,
@@ -990,7 +1052,17 @@ export async function previewIntegrationSync(params: {
     warnings: targetSummary.warnings,
     coverage: targetSummary.coverage,
     previewCount: payloads.length,
-    sampleRecords: payloads.slice(0, 5).map(buildPreviewSampleRecord),
+    sampleRecords: payloads
+      .slice(0, 5)
+      .map((payload): IntegrationMappedPreviewSample => {
+        const { mappedPayload, issues } = buildMappedTargetPayload({
+          config: normalizedConfig,
+          target: params.target,
+          payload,
+        });
+
+        return buildPreviewSampleRecord(payload, mappedPayload, issues);
+      }),
   };
 }
 
@@ -1125,6 +1197,18 @@ async function pushTargetRecord(params: {
     | IntegrationServiceOrderPayload
     | IntegrationBillingDocumentPayload;
 }) {
+  const { mappedPayload, issues } = buildMappedTargetPayload({
+    config: params.config,
+    target: params.target,
+    payload: params.payload,
+  });
+
+  if (issues.length > 0) {
+    throw new Error(
+      `Payload inválido para ${params.target}: ${issues.join(" ")}`,
+    );
+  }
+
   const existing = await getExistingLink(
     params.integrationId,
     params.target,
@@ -1140,7 +1224,7 @@ async function pushTargetRecord(params: {
   const result = await callRemoteJson(url, {
     method,
     headers: buildAuthHeaders(params.secret),
-    body: JSON.stringify(params.payload),
+    body: JSON.stringify(mappedPayload),
   });
 
   if (!result.ok) {
@@ -1196,6 +1280,7 @@ export async function runIntegrationSync(params: {
     }
 
     const config = normalizeGenericFinancialErpConfig(record.connection.config);
+    assertValidMappings(config, params.target);
     const secret = decryptIntegrationSecret(
       record.connection.encryptedSecret,
       record.connection.secretIv,
