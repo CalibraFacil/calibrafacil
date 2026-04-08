@@ -20,6 +20,7 @@ import {
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
 import { and, desc, eq, isNull } from "drizzle-orm";
+import { writeOrganizationAuditEvent } from "../lib/audit";
 
 const ScopeSchema = z.enum([
   "customers:read",
@@ -128,6 +129,21 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
         details: { name: input.name, scopes },
       });
 
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "api_key.created",
+        entityType: "api_key",
+        entityId: keyId,
+        details: {
+          name: input.name,
+          keyPrefix: generated.keyPrefix,
+          scopes,
+          ipAddress: getRequestIp(c),
+        },
+      });
+
       return c.json(
         {
           secret: generated.key,
@@ -183,6 +199,22 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
         ipAddress: getRequestIp(c),
       });
 
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "api_key.rotated",
+        entityType: "api_key",
+        entityId: existing.id,
+        details: {
+          name: existing.name,
+          keyPrefix: generated.keyPrefix,
+          previousKeyPrefix: existing.keyPrefix,
+          scopes: existing.scopes,
+          ipAddress: getRequestIp(c),
+        },
+      });
+
       return c.json({
         secret: generated.key,
         key: {
@@ -228,6 +260,22 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
         action: "revoke",
         performedBy: session.user.id,
         ipAddress: getRequestIp(c),
+      });
+
+      await writeOrganizationAuditEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "api_key.revoked",
+        entityType: "api_key",
+        entityId: existing.id,
+        details: {
+          name: existing.name,
+          keyPrefix: existing.keyPrefix,
+          scopes: existing.scopes,
+          alreadyRevoked: Boolean(existing.revokedAt),
+          ipAddress: getRequestIp(c),
+        },
       });
 
       return c.json({ success: true });
