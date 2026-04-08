@@ -17,6 +17,7 @@ import { AppSidebar } from '@/components/app-sidebar'
 import { CommandPalette } from '@/components/command-palette/command-palette'
 import { CommandPaletteProvider } from '@/components/command-palette/command-context'
 import { DashboardHeader } from '@/components/dashboard-header'
+import { UnitScopeBanner } from '@/components/unit-scope-banner'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import {
   Card,
@@ -272,7 +273,8 @@ function DashboardLayout() {
           <AppSidebar />
           <SidebarInset>
             <DashboardHeader suspendEntityQueries={isContextSwitching} />
-            <main className="flex-1 p-4">
+            <main className="flex-1 space-y-4 p-4">
+              <UnitScopeBanner />
               {shouldBlockChildRoutes ? (
                 <div className="space-y-4">
                   <div className="h-10 w-56 rounded-md border bg-card/60 animate-pulse" />

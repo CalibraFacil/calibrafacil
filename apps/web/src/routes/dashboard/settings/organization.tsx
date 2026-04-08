@@ -13,6 +13,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { authClient, useActiveOrganization } from '@calibra-facil/auth/client'
+import { usePlanAccess } from '@/hooks/use-plan-access'
 import { api } from '@/utils/api'
 import {
   Card,
@@ -138,6 +139,48 @@ interface GovernanceMember {
   assignments: GovernanceAssignment[]
 }
 
+interface UnitContextResponse {
+  activeUnitId: number | null
+  activeUnitName: string | null
+  selectedUnitScope: 'all' | 'unit'
+  canAccessAllUnits: boolean
+  viewer: GovernanceViewer
+  scopeSummary: {
+    isConsolidated: boolean
+    activeUnitId: number | null
+    activeUnitName: string | null
+    accessibleUnitsCount: number
+    managedUnitsCount: number
+    effectiveRole: string
+    effectiveRoleLabel: string
+    label: string
+    description: string
+  }
+  data: Array<{
+    id: number
+    name: string
+    slug: string
+    role: string
+  }>
+}
+
+interface GovernanceActivityEntry {
+  id: number
+  action: string
+  entityType: string
+  entityId: string | null
+  createdAt: string
+  details?: Record<string, unknown> | null
+  unit: {
+    id: number
+    name: string
+  } | null
+  actorUser: {
+    id: string
+    name: string
+    email: string | null
+  } | null
+}
 function OrganizationSettingsRoute() {
   const { data: activeOrg, isPending: isLoadingOrg } = useActiveOrganization()
 
@@ -286,6 +329,19 @@ function OrganizationSettingsPage({
     },
   })
 
+  const unitContextQuery = useQuery({
+    queryKey: ['dashboard-units', activeOrg.id],
+    enabled: hasMultiUnit,
+    queryFn: async () => {
+      const response = await api.api.units.$get()
+      if (!response.ok) {
+        throw new Error('Falha ao carregar contexto da unidade')
+      }
+
+      return (await response.json()) as UnitContextResponse
+    },
+  })
+
   const governanceMembersQuery = useQuery({
     queryKey: ['organization-governance-members', activeOrg.id],
     enabled: hasMultiUnit,
@@ -312,6 +368,37 @@ function OrganizationSettingsPage({
 
       return (await response.json()) as {
         data: GovernanceMember[]
+        viewer: GovernanceViewer
+      }
+    },
+  })
+
+  const governanceActivityQuery = useQuery({
+    queryKey: ['organization-governance-activity', activeOrg.id],
+    enabled: hasMultiUnit,
+    queryFn: async () => {
+      const response = await api.api.units.admin.activity.$get()
+      if (response.status === 403) {
+        return {
+          data: [] as GovernanceActivityEntry[],
+          viewer: {
+            isGlobalManager: false,
+            canManageOrganizationUnits: false,
+            canManageAssignments: false,
+            canManageGlobalRoles: false,
+            canViewGovernance: false,
+            canAccessConsolidatedView: false,
+            managedUnitIds: [],
+          } satisfies GovernanceViewer,
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error('Falha ao carregar atividade de governança')
+      }
+
+      return (await response.json()) as {
+        data: GovernanceActivityEntry[]
         viewer: GovernanceViewer
       }
     },
@@ -349,6 +436,9 @@ function OrganizationSettingsPage({
       })
       await queryClient.invalidateQueries({
         queryKey: ['organization-governance-members', activeOrg.id],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['organization-governance-activity', activeOrg.id],
       })
       await queryClient.invalidateQueries({
         queryKey: ['dashboard-units', activeOrg.id],
@@ -393,6 +483,9 @@ function OrganizationSettingsPage({
         queryKey: ['organization-governance-members', activeOrg.id],
       })
       await queryClient.invalidateQueries({
+        queryKey: ['organization-governance-activity', activeOrg.id],
+      })
+      await queryClient.invalidateQueries({
         queryKey: ['dashboard-units', activeOrg.id],
       })
       toast.success('Unidade atualizada com sucesso')
@@ -433,6 +526,9 @@ function OrganizationSettingsPage({
         queryKey: ['organization-governance-members', activeOrg.id],
       })
       await queryClient.invalidateQueries({
+        queryKey: ['organization-governance-activity', activeOrg.id],
+      })
+      await queryClient.invalidateQueries({
         queryKey: ['dashboard-units', activeOrg.id],
       })
       toast.success('Atribuições atualizadas com sucesso')
@@ -470,6 +566,9 @@ function OrganizationSettingsPage({
         loadMembers(),
         queryClient.invalidateQueries({
           queryKey: ['organization-governance-members', activeOrg.id],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['organization-governance-activity', activeOrg.id],
         }),
       ])
       toast.success('Função atualizada com sucesso')
@@ -838,6 +937,65 @@ function OrganizationSettingsPage({
     return labels[role] || role
   }
 
+  const getGovernanceActivityLabel = (event: GovernanceActivityEntry) => {
+    const labels: Record<string, string> = {
+      'unit.created': 'Unidade criada',
+      'unit.updated': 'Perfil de unidade atualizado',
+      'unit.archived': 'Unidade arquivada',
+      'unit.reactivated': 'Unidade reativada',
+      'unit.assignments.updated': 'Atribuições por unidade atualizadas',
+      'member.role.updated': 'Papel global atualizado',
+    }
+
+    return labels[event.action] || event.action
+  }
+
+  const getGovernanceActivityDescription = (event: GovernanceActivityEntry) => {
+    if (event.action === 'unit.assignments.updated') {
+      const after = Array.isArray(event.details?.after)
+        ? (event.details?.after as Array<{ unitId?: number; role?: string }>)
+        : []
+      const scopedUnitIds = Array.isArray(event.details?.scopedUnitIds)
+        ? (event.details?.scopedUnitIds as Array<number | string>)
+        : []
+
+      if (after.length === 0) {
+        return 'As atribuições operacionais foram removidas neste escopo.'
+      }
+
+      return `${after.length} atribuição(ões) ativas em ${scopedUnitIds.length || after.length} unidade(s).`
+    }
+
+    if (event.action === 'member.role.updated') {
+      const afterDetails =
+        event.details &&
+        typeof event.details === 'object' &&
+        'after' in event.details &&
+        event.details.after &&
+        typeof event.details.after === 'object'
+          ? (event.details.after as { role?: string })
+          : null
+
+      const nextRole = afterDetails?.role ?? null
+
+      return nextRole
+        ? `Papel global definido como ${getRoleLabel(nextRole)}.`
+        : 'O papel global do membro foi ajustado.'
+    }
+
+    if (event.unit?.name) {
+      return `Escopo afetado: ${event.unit.name}.`
+    }
+
+    return 'Alteração registrada na governança multiunidade.'
+  }
+
+  const formatGovernanceActivityTime = (value: string) =>
+    new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(value))
+
   const updateAssignmentDraft = (
     memberId: string,
     unitId: number,
@@ -846,7 +1004,7 @@ function OrganizationSettingsPage({
     setAssignmentDrafts((current) => ({
       ...current,
       [memberId]: {
-        ...(current[memberId] ?? {}),
+        ...current[memberId],
         [unitId]: role,
       },
     }))
@@ -972,6 +1130,85 @@ function OrganizationSettingsPage({
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Postura Multiunidade</CardTitle>
+          <CardDescription>
+            Torne explícito o escopo operacional ativo, quem você consegue
+            governar e quando a visão consolidada está em uso.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {unitContextQuery.isPending ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              <Skeleton className="h-28 w-full" />
+              <Skeleton className="h-28 w-full" />
+              <Skeleton className="h-28 w-full" />
+            </div>
+          ) : (
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)_minmax(0,0.85fr)]">
+              <div className="rounded-xl border p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">
+                    {unitContextQuery.data?.scopeSummary.label ?? 'Escopo ativo'}
+                  </Badge>
+                  <Badge variant="outline">
+                    {unitContextQuery.data?.scopeSummary.effectiveRoleLabel ??
+                      'Sem papel operacional'}
+                  </Badge>
+                </div>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {unitContextQuery.data?.scopeSummary.description ??
+                    'O escopo operacional aparece aqui conforme a unidade selecionada.'}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Badge variant="outline">
+                    {unitContextQuery.data?.scopeSummary.accessibleUnitsCount ?? 0}{' '}
+                    unidade(s) acessível(eis)
+                  </Badge>
+                  {governanceViewer?.canAccessConsolidatedView ? (
+                    <Badge variant="outline">Pode abrir consolidado global</Badge>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="rounded-xl border p-4">
+                <p className="text-sm font-medium">Governança efetiva</p>
+                <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  <p>
+                    {governanceViewer?.isGlobalManager
+                      ? 'Você opera como administrador global da organização.'
+                      : governanceViewer?.canManageAssignments
+                        ? 'Você governa apenas as unidades sob sua responsabilidade.'
+                        : 'Você está em um escopo operacional sem poderes de governança.'}
+                  </p>
+                  <p>
+                    {governanceViewer?.managedUnitIds.length ?? 0} unidade(s) sob
+                    gestão
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border p-4">
+                <p className="text-sm font-medium">Fila e visibilidade</p>
+                <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  <p>
+                    {unitContextQuery.data?.selectedUnitScope === 'all'
+                      ? 'Listas e métricas operacionais estão em visão consolidada.'
+                      : 'Listas e aprovações devem respeitar apenas a unidade ativa.'}
+                  </p>
+                  <p>
+                    {governanceViewer?.canAccessConsolidatedView
+                      ? 'Relatórios consolidados ficam disponíveis neste contexto.'
+                      : 'Relatórios consolidados ficam reservados aos administradores globais.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {canManageOrganizationSettings && (
         <>
           {/* Organization Details Card */}
@@ -1569,6 +1806,67 @@ function OrganizationSettingsPage({
             ) : (
               <p className="text-sm text-muted-foreground">
                 Nenhum membro disponível no seu escopo de governança.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {canViewGovernance && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Atividade de Governança</CardTitle>
+            <CardDescription>
+              Histórico recente de mudanças sensíveis em unidades, papéis e
+              atribuições dentro do seu escopo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {governanceActivityQuery.isPending ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((item) => (
+                  <Skeleton key={item} className="h-16 w-full" />
+                ))}
+              </div>
+            ) : governanceActivityQuery.data?.data.length ? (
+              <div className="space-y-3">
+                {governanceActivityQuery.data.data.map((event) => (
+                  <div
+                    key={event.id}
+                    className="rounded-lg border p-4 transition-colors hover:bg-muted/30"
+                  >
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">
+                            {getGovernanceActivityLabel(event)}
+                          </Badge>
+                          {event.unit ? (
+                            <Badge variant="outline">{event.unit.name}</Badge>
+                          ) : (
+                            <Badge variant="outline">Escopo global</Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {getGovernanceActivityDescription(event)}
+                        </p>
+                      </div>
+                      <div className="text-sm text-muted-foreground md:text-right">
+                        <p>{formatGovernanceActivityTime(event.createdAt)}</p>
+                        <p>
+                          {event.actorUser?.name ?? 'Sistema'}
+                          {event.actorUser?.email
+                            ? ` · ${event.actorUser.email}`
+                            : ''}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Ainda não há atividade recente de governança no seu escopo.
               </p>
             )}
           </CardContent>
