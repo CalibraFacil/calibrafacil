@@ -52,7 +52,7 @@ type UnitOption = {
   slug: string
 }
 
-type SummaryResponse = {
+type ExecutiveOverviewResponse = {
   period: ReportPeriod
   label: string
   range: {
@@ -61,6 +61,12 @@ type SummaryResponse = {
   }
   availableUnits: UnitOption[]
   selectedUnits: UnitOption[]
+  scopeSummary: {
+    label: string
+    description: string
+    unitsIncluded: number
+    isAllUnits: boolean
+  }
   metrics: {
     pendingCalibrations: number
     approvedInPeriod: number
@@ -68,7 +74,43 @@ type SummaryResponse = {
     approvalRate: number
     overdueJobs: number
     expiringStandards: number
+    unitsIncluded: number
+    atRiskUnitsCount: number
   }
+  highlights: {
+    highestVolumeUnit: {
+      unitId: number
+      unitName: string
+      jobsCreatedInPeriod: number
+    } | null
+    bestApprovalUnit: {
+      unitId: number
+      unitName: string
+      approvalRate: number
+      approvedInPeriod: number
+    } | null
+    attentionUnit: {
+      unitId: number
+      unitName: string
+      healthStatus: 'healthy' | 'attention' | 'critical'
+      healthReason: string
+      overdueNow: number
+      rejectedInPeriod: number
+      expiringStandardsSoon: number
+    } | null
+  }
+}
+
+function getHealthBadgeVariant(status: ComparisonResponse['rows'][number]['healthStatus']) {
+  if (status === 'critical') return 'destructive' as const
+  if (status === 'attention') return 'secondary' as const
+  return 'outline' as const
+}
+
+function getHealthLabel(status: ComparisonResponse['rows'][number]['healthStatus']) {
+  if (status === 'critical') return 'Crítica'
+  if (status === 'attention') return 'Atenção'
+  return 'Saudável'
 }
 
 type TrendResponse = {
@@ -97,7 +139,10 @@ type ComparisonResponse = {
     rejectedInPeriod: number
     pendingNow: number
     overdueNow: number
+    expiringStandardsSoon: number
     approvalRate: number
+    healthStatus: 'healthy' | 'attention' | 'critical'
+    healthReason: string
   }>
 }
 
@@ -125,17 +170,17 @@ function ConsolidatedReportsPage() {
   const unitIdsParam =
     selectedUnitIds.length > 0 ? selectedUnitIds.join(',') : undefined
 
-  const summaryQuery = useQuery({
+  const executiveQuery = useQuery({
     queryKey: [
       'reports',
-      'summary',
+      'executive-overview',
       activeOrganizationId ?? 'no-org',
       period,
       unitIdsParam ?? 'all',
     ],
     enabled: !isContextSwitching && canAccessReports,
     queryFn: async () => {
-      const res = await api.api.reports.consolidated.summary.$get({
+      const res = await api.api.reports.consolidated['executive-overview'].$get({
         query: {
           period,
           unitIds: unitIdsParam,
@@ -147,11 +192,11 @@ function ConsolidatedReportsPage() {
         throw new Error(
           data && typeof data === 'object' && 'error' in data
             ? String(data.error)
-            : 'Falha ao carregar resumo consolidado',
+            : 'Falha ao carregar visão executiva',
         )
       }
 
-      return res.json() as Promise<SummaryResponse>
+      return res.json() as Promise<ExecutiveOverviewResponse>
     },
   })
 
@@ -215,7 +260,7 @@ function ConsolidatedReportsPage() {
     },
   })
 
-  const availableUnits = summaryQuery.data?.availableUnits ?? []
+  const availableUnits = executiveQuery.data?.availableUnits ?? []
   const effectiveSelectedUnitIds =
     selectedUnitIds.length > 0
       ? selectedUnitIds
@@ -243,7 +288,7 @@ function ConsolidatedReportsPage() {
   }, [comparisonQuery.data?.rows, sortDirection, sortKey])
 
   const isLoading =
-    summaryQuery.isPending || comparisonQuery.isPending || trendQuery.isPending
+    executiveQuery.isPending || comparisonQuery.isPending || trendQuery.isPending
 
   if (isContextSwitching) {
     return (
@@ -271,9 +316,9 @@ function ConsolidatedReportsPage() {
     )
   }
 
-  if (summaryQuery.error || comparisonQuery.error || trendQuery.error) {
+  if (executiveQuery.error || comparisonQuery.error || trendQuery.error) {
     const error =
-      summaryQuery.error ?? comparisonQuery.error ?? trendQuery.error ?? null
+      executiveQuery.error ?? comparisonQuery.error ?? trendQuery.error ?? null
 
     return (
       <Card>
@@ -344,7 +389,8 @@ function ConsolidatedReportsPage() {
             Relatórios Consolidados
           </h1>
           <p className="text-muted-foreground">
-            Visão executiva multiunidade para {summaryQuery.data?.label ?? 'o período selecionado'}
+            Visão executiva multiunidade para{' '}
+            {executiveQuery.data?.label ?? 'o período selecionado'}
           </p>
         </div>
 
@@ -373,7 +419,7 @@ function ConsolidatedReportsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <HugeiconsIcon icon={PieChartIcon} className="size-5" />
-            Unidades no comparativo
+            Recorte executivo
           </CardTitle>
           <CardDescription>
             Compare todas as unidades ou reduza o consolidado para um subconjunto específico.
@@ -423,17 +469,112 @@ function ConsolidatedReportsPage() {
               </Button>
             ) : null}
           </div>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <div className="rounded-xl border p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">
+                  {executiveQuery.data?.scopeSummary.label ?? 'Consolidado'}
+                </Badge>
+                <Badge variant="outline">
+                  {executiveQuery.data?.metrics.unitsIncluded ?? 0} unidade(s)
+                </Badge>
+                <Badge
+                  variant={
+                    (executiveQuery.data?.metrics.atRiskUnitsCount ?? 0) > 0
+                      ? 'destructive'
+                      : 'outline'
+                  }
+                >
+                  {executiveQuery.data?.metrics.atRiskUnitsCount ?? 0} em risco
+                </Badge>
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                {executiveQuery.data?.scopeSummary.description ??
+                  'Leitura gerencial do recorte consolidado atual.'}
+              </p>
+            </div>
+
+            <div className="rounded-xl border p-4">
+              <p className="text-sm font-medium">Janela analisada</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {executiveQuery.data
+                  ? `${new Intl.DateTimeFormat('pt-BR', {
+                      dateStyle: 'medium',
+                    }).format(new Date(executiveQuery.data.range.startDate))} até ${new Intl.DateTimeFormat(
+                      'pt-BR',
+                      {
+                        dateStyle: 'medium',
+                      },
+                    ).format(new Date(executiveQuery.data.range.endDate))}`
+                  : 'Período selecionado'}
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       <SectionCards
-        pendingCalibrations={summaryQuery.data?.metrics.pendingCalibrations ?? 0}
-        approvedThisMonth={summaryQuery.data?.metrics.approvedInPeriod ?? 0}
-        expiringStandards={summaryQuery.data?.metrics.expiringStandards ?? 0}
-        approvalRate={summaryQuery.data?.metrics.approvalRate ?? 0}
-        overdueJobs={summaryQuery.data?.metrics.overdueJobs ?? 0}
+        pendingCalibrations={
+          executiveQuery.data?.metrics.pendingCalibrations ?? 0
+        }
+        approvedThisMonth={executiveQuery.data?.metrics.approvedInPeriod ?? 0}
+        expiringStandards={executiveQuery.data?.metrics.expiringStandards ?? 0}
+        approvalRate={executiveQuery.data?.metrics.approvalRate ?? 0}
+        overdueJobs={executiveQuery.data?.metrics.overdueJobs ?? 0}
         isLoading={isLoading}
       />
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <ExecutiveHighlightCard
+          title="Maior volume"
+          description="Unidade com maior carga de OS no período."
+          value={
+            executiveQuery.data?.highlights.highestVolumeUnit?.unitName ??
+            'Sem destaque'
+          }
+          supporting={
+            executiveQuery.data?.highlights.highestVolumeUnit
+              ? `${executiveQuery.data.highlights.highestVolumeUnit.jobsCreatedInPeriod} OS no período`
+              : 'Nenhuma unidade com volume registrado.'
+          }
+        />
+        <ExecutiveHighlightCard
+          title="Melhor taxa"
+          description="Maior taxa de aprovação dentro do recorte atual."
+          value={
+            executiveQuery.data?.highlights.bestApprovalUnit?.unitName ??
+            'Sem decisões'
+          }
+          supporting={
+            executiveQuery.data?.highlights.bestApprovalUnit
+              ? `${executiveQuery.data.highlights.bestApprovalUnit.approvalRate.toFixed(1)}% · ${executiveQuery.data.highlights.bestApprovalUnit.approvedInPeriod} aprovações`
+              : 'Nenhuma unidade com decisões suficientes.'
+          }
+          tone="positive"
+        />
+        <ExecutiveHighlightCard
+          title="Precisa de atenção"
+          description="Maior foco de risco executivo no consolidado."
+          value={
+            executiveQuery.data?.highlights.attentionUnit?.unitName ??
+            'Sem alertas'
+          }
+          supporting={
+            executiveQuery.data?.highlights.attentionUnit?.healthReason ??
+            'Nenhuma unidade em atenção neste período.'
+          }
+          tone={
+            executiveQuery.data?.highlights.attentionUnit?.healthStatus ===
+            'critical'
+              ? 'critical'
+              : executiveQuery.data?.highlights.attentionUnit?.healthStatus ===
+                  'attention'
+                ? 'warning'
+                : 'default'
+          }
+        />
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <ChartCalibrations
@@ -443,9 +584,9 @@ function ConsolidatedReportsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Resumo do período</CardTitle>
+            <CardTitle>Leitura do período</CardTitle>
             <CardDescription>
-              Corte de {summaryQuery.data?.label ?? 'período selecionado'} com foco em execução e qualidade.
+              Corte de {executiveQuery.data?.label ?? 'período selecionado'} com foco em throughput, risco e qualidade.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -459,23 +600,23 @@ function ConsolidatedReportsPage() {
               <>
                 <SummaryMetric
                   label="Aprovadas no período"
-                  value={summaryQuery.data?.metrics.approvedInPeriod ?? 0}
+                  value={executiveQuery.data?.metrics.approvedInPeriod ?? 0}
                   tone="positive"
                 />
                 <SummaryMetric
                   label="Rejeitadas no período"
-                  value={summaryQuery.data?.metrics.rejectedInPeriod ?? 0}
+                  value={executiveQuery.data?.metrics.rejectedInPeriod ?? 0}
                   tone="critical"
                 />
                 <SummaryMetric
                   label="Pendentes agora"
-                  value={summaryQuery.data?.metrics.pendingCalibrations ?? 0}
+                  value={executiveQuery.data?.metrics.pendingCalibrations ?? 0}
                 />
                 <SummaryMetric
-                  label="Padrões expirando"
-                  value={summaryQuery.data?.metrics.expiringStandards ?? 0}
+                  label="Unidades em risco"
+                  value={executiveQuery.data?.metrics.atRiskUnitsCount ?? 0}
                   tone={
-                    (summaryQuery.data?.metrics.expiringStandards ?? 0) > 0
+                    (executiveQuery.data?.metrics.atRiskUnitsCount ?? 0) > 0
                       ? 'warning'
                       : 'default'
                   }
@@ -490,7 +631,7 @@ function ConsolidatedReportsPage() {
         <CardHeader>
           <CardTitle>Comparativo por Unidade</CardTitle>
           <CardDescription>
-            Ranking operacional do período selecionado com drill-down direto para a unidade.
+            Ranking executivo do período selecionado com estado de saúde por unidade e drill-down direto.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -533,6 +674,42 @@ function SummaryMetric({
         </p>
       </div>
     </div>
+  )
+}
+
+function ExecutiveHighlightCard({
+  title,
+  description,
+  value,
+  supporting,
+  tone = 'default',
+}: {
+  title: string
+  description: string
+  value: string
+  supporting: string
+  tone?: 'default' | 'positive' | 'warning' | 'critical'
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p
+          className={cn(
+            'text-xl font-semibold',
+            tone === 'positive' && 'text-green-600 dark:text-green-500',
+            tone === 'warning' && 'text-amber-600 dark:text-amber-500',
+            tone === 'critical' && 'text-destructive',
+          )}
+        >
+          {value}
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{supporting}</p>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -580,6 +757,7 @@ function ComparisonTable({
             sortDirection={sortDirection}
             onSort={onSort}
           />
+          <TableHead>Saúde</TableHead>
           <SortableHead
             label="Volume"
             column="jobsCreatedInPeriod"
@@ -620,6 +798,7 @@ function ComparisonTable({
             onSort={onSort}
             align="right"
           />
+          <TableHead className="text-right">Padrões</TableHead>
           <SortableHead
             label="Taxa de aprovação"
             column="approvalRate"
@@ -640,6 +819,16 @@ function ComparisonTable({
                 <p className="text-xs text-muted-foreground">{row.unitSlug}</p>
               </div>
             </TableCell>
+            <TableCell>
+              <div className="space-y-1">
+                <Badge variant={getHealthBadgeVariant(row.healthStatus)}>
+                  {getHealthLabel(row.healthStatus)}
+                </Badge>
+                <p className="text-xs text-muted-foreground">
+                  {row.healthReason}
+                </p>
+              </div>
+            </TableCell>
             <TableCell className="text-right tabular-nums">
               {row.jobsCreatedInPeriod}
             </TableCell>
@@ -655,6 +844,15 @@ function ComparisonTable({
             <TableCell className="text-right tabular-nums">
               <Badge variant={row.overdueNow > 0 ? 'destructive' : 'outline'}>
                 {row.overdueNow}
+              </Badge>
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              <Badge
+                variant={
+                  row.expiringStandardsSoon > 0 ? 'secondary' : 'outline'
+                }
+              >
+                {row.expiringStandardsSoon}
               </Badge>
             </TableCell>
             <TableCell className="text-right tabular-nums">
