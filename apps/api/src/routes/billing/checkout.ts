@@ -13,7 +13,6 @@ import {
   type AuthVariables,
 } from "../../middleware/permission";
 import { withInvalidation } from "../../middleware/cache";
-import { requireFeature } from "../../middleware/tier-guard";
 import {
   getPlan,
   getPlanPrice,
@@ -93,7 +92,6 @@ export const checkoutRouter = new Hono<{ Variables: AuthVariables }>();
 checkoutRouter.post(
   "/tokenize",
   ...withLabPermission({ billing: ["update"] }),
-  requireFeature("financial"),
   zValidator("json", TokenizeSchema),
   async (c) => {
     const input = c.req.valid("json");
@@ -148,7 +146,6 @@ checkoutRouter.post(
 checkoutRouter.post(
   "/credit-card",
   ...withLabPermission({ billing: ["update"] }),
-  requireFeature("financial"),
   withInvalidation("subscription"),
   zValidator("json", CreditCardCheckoutSchema),
   async (c) => {
@@ -267,7 +264,6 @@ checkoutRouter.post(
 checkoutRouter.post(
   "/pix",
   ...withLabPermission({ billing: ["update"] }),
-  requireFeature("financial"),
   withInvalidation("subscription"),
   zValidator("json", PixBoletoCheckoutSchema),
   async (c) => {
@@ -445,7 +441,6 @@ checkoutRouter.post(
 checkoutRouter.post(
   "/boleto",
   ...withLabPermission({ billing: ["update"] }),
-  requireFeature("financial"),
   withInvalidation("subscription"),
   zValidator("json", PixBoletoCheckoutSchema),
   async (c) => {
@@ -630,7 +625,6 @@ checkoutRouter.post(
 checkoutRouter.get(
   "/status/:subscriptionId",
   ...withLabPermission({ billing: ["read"] }),
-  requireFeature("financial"),
   async (c) => {
     const subscriptionId = parseInt(c.req.param("subscriptionId"), 10);
     const member = c.get("member");
