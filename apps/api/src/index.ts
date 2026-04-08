@@ -41,6 +41,7 @@ import { sessionsRouter } from "./routes/sessions";
 import { ssoRouter } from "./routes/sso";
 import { apiKeysRouter } from "./routes/api-keys";
 import { publicApiRouter } from "./routes/public-api";
+import { publicApiV2DocsRouter, publicApiV2Router } from "./routes/public-api-v2";
 import { isAllowedPortalOrigin } from "./lib/portal-domains";
 import { portalDomainsRouter } from "./routes/portal-domains";
 import { certificateTemplatesRouter } from "./routes/certificate-templates";
@@ -49,6 +50,7 @@ import { integrationsRouter } from "./routes/integrations";
 import { customerSuccessRouter } from "./routes/customer-success";
 import { internalCustomerSuccessRouter } from "./routes/internal-customer-success";
 import { backofficeRouter } from "./routes/backoffice";
+import { profileMediaRouter } from "./routes/profile-media";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -71,8 +73,12 @@ interface Env {
 const app = new Hono<{ Bindings: Env }>();
 
 const allowedOrigins = new Set([
+  "http://localhost:5173",
+  "http://localhost:5174",
   "https://localhost:5173",
   "https://localhost:5174",
+  "http://192.168.0.10:5173",
+  "http://192.168.0.10:5174",
   "https://192.168.0.10:5173",
   "https://192.168.0.10:5174",
   "https://calibrafacil.com",
@@ -105,6 +111,9 @@ app.use(
 app.use("*", async (c, next) => {
   await next();
 
+  const requestPath = new URL(c.req.url).pathname;
+  const isPublicApiReference = requestPath === "/api/public/v2/reference";
+
   if ((c.env.NODE_ENV ?? "").toLowerCase() === "production") {
     c.header(
       "Strict-Transport-Security",
@@ -119,10 +128,27 @@ app.use("*", async (c, next) => {
     "Permissions-Policy",
     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
   );
-  c.header(
-    "Content-Security-Policy",
-    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
-  );
+
+  if (isPublicApiReference) {
+    c.header(
+      "Content-Security-Policy",
+      [
+        "default-src 'self' https: data: blob:",
+        "script-src 'self' 'unsafe-inline' https:",
+        "style-src 'self' 'unsafe-inline' https:",
+        "img-src 'self' data: https:",
+        "font-src 'self' data: https:",
+        "connect-src 'self' https:",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+      ].join("; "),
+    );
+  } else {
+    c.header(
+      "Content-Security-Policy",
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    );
+  }
 });
 
 /**
@@ -141,7 +167,21 @@ app.use("*", async (c, next) => {
   const hyperdrive = c.env.HYPERDRIVE as
     | { connectionString?: string }
     | undefined;
-  if (hyperdrive?.connectionString) {
+  if ((c.env.NODE_ENV ?? "").toLowerCase() !== "production") {
+    const localConnectionString =
+      (c.env as Record<string, unknown>)
+        .CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE;
+
+    if (
+      typeof localConnectionString === "string" &&
+      localConnectionString.trim().length > 0
+    ) {
+      process.env.DATABASE_URL = localConnectionString.trim();
+      delete process.env.HYPERDRIVE_URL;
+    } else if (hyperdrive?.connectionString) {
+      process.env.HYPERDRIVE_URL = hyperdrive.connectionString;
+    }
+  } else if (hyperdrive?.connectionString) {
     process.env.HYPERDRIVE_URL = hyperdrive.connectionString;
   }
 
@@ -239,7 +279,10 @@ const routes = app
   .route("/api/customer-success", customerSuccessRouter)
   .route("/api/backoffice", backofficeRouter)
   .route("/api/internal/customer-success", internalCustomerSuccessRouter)
-  .route("/api/public/v1", publicApiRouter);
+  .route("/api/profile-media", profileMediaRouter)
+  .route("/api/public/v1", publicApiRouter)
+  .route("/api/public/v2", publicApiV2DocsRouter)
+  .route("/api/public/v2", publicApiV2Router);
 
 export type AppType = typeof routes;
 

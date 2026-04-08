@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -13,7 +13,6 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { authClient, useActiveOrganization } from '@calibra-facil/auth/client'
-import { usePlanAccess } from '@/hooks/use-plan-access'
 import { api } from '@/utils/api'
 import {
   Card,
@@ -97,84 +96,21 @@ interface OrganizationUnit {
   id: number
   name: string
   slug: string
-  legalName: string | null
-  tradeName: string | null
-  cnpj: string | null
-  accreditationNumber: string | null
-  accreditationBody: string | null
-  installationType: 'PERMANENT' | 'TEMPORARY' | 'MOBILE'
-  street: string | null
-  number: string | null
-  complement: string | null
-  neighbourhood: string | null
-  city: string | null
-  state: string | null
-  cep: string | null
-  phone: string | null
-  email: string | null
-  website: string | null
-  technicalManagerName: string | null
-  technicalManagerTitle: string | null
-  scopeSummary: string | null
-  scopeNotes: string | null
   status: 'ACTIVE' | 'ARCHIVED'
   isDefault: boolean
   createdAt: string
   archivedAt: string | null
 }
 
-interface UnitProfileDraft {
-  name: string
-  legalName: string
-  tradeName: string
-  cnpj: string
-  accreditationNumber: string
-  accreditationBody: string
-  installationType: 'PERMANENT' | 'TEMPORARY' | 'MOBILE'
-  street: string
-  number: string
-  complement: string
-  neighbourhood: string
-  city: string
-  state: string
-  cep: string
-  phone: string
-  email: string
-  website: string
-  technicalManagerName: string
-  technicalManagerTitle: string
-  scopeSummary: string
-  scopeNotes: string
-}
-
-function createUnitProfileDraft(unit: OrganizationUnit): UnitProfileDraft {
-  return {
-    name: unit.name,
-    legalName: unit.legalName ?? '',
-    tradeName: unit.tradeName ?? '',
-    cnpj: unit.cnpj ?? '',
-    accreditationNumber: unit.accreditationNumber ?? '',
-    accreditationBody: unit.accreditationBody ?? '',
-    installationType: unit.installationType ?? 'PERMANENT',
-    street: unit.street ?? '',
-    number: unit.number ?? '',
-    complement: unit.complement ?? '',
-    neighbourhood: unit.neighbourhood ?? '',
-    city: unit.city ?? '',
-    state: unit.state ?? '',
-    cep: unit.cep ?? '',
-    phone: unit.phone ?? '',
-    email: unit.email ?? '',
-    website: unit.website ?? '',
-    technicalManagerName: unit.technicalManagerName ?? '',
-    technicalManagerTitle: unit.technicalManagerTitle ?? '',
-    scopeSummary: unit.scopeSummary ?? '',
-    scopeNotes: unit.scopeNotes ?? '',
-  }
-}
-
 type UnitAssignmentRole = 'member' | 'technician' | 'unit_admin'
 type EditableUnitAssignmentRole = UnitAssignmentRole | 'none'
+const GLOBAL_MEMBER_ROLES = ['member', 'technician', 'admin'] as const
+type GlobalMemberRole = (typeof GLOBAL_MEMBER_ROLES)[number]
+const GLOBAL_MEMBER_ROLE_SET = new Set<string>(GLOBAL_MEMBER_ROLES)
+
+function isGlobalMemberRole(value: string): value is GlobalMemberRole {
+  return GLOBAL_MEMBER_ROLE_SET.has(value)
+}
 
 interface GovernanceViewer {
   isGlobalManager: boolean
@@ -200,19 +136,6 @@ interface GovernanceMember {
   email: string
   createdAt: string
   assignments: GovernanceAssignment[]
-}
-
-interface UnitContextResponse {
-  activeUnitId: number | null
-  activeUnitName: string | null
-  selectedUnitScope: 'all' | 'unit'
-  canAccessAllUnits: boolean
-  data: Array<{
-    id: number
-    name: string
-    slug: string
-    role: string
-  }>
 }
 
 function OrganizationSettingsRoute() {
@@ -258,6 +181,36 @@ function OrganizationSettingsPage({
   const [isUpdating, setIsUpdating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
+  // ISO 17025 / RBC compliance fields
+  const [cnpj, setCnpj] = useState((activeOrg as any).cnpj || '')
+  const [accreditationNumber, setAccreditationNumber] = useState(
+    (activeOrg as any).accreditationNumber || '',
+  )
+  const [accreditationBody, setAccreditationBody] = useState(
+    (activeOrg as any).accreditationBody || '',
+  )
+  const [street, setStreet] = useState((activeOrg as any).street || '')
+  const [number, setNumber] = useState((activeOrg as any).number || '')
+  const [complement, setComplement] = useState(
+    (activeOrg as any).complement || '',
+  )
+  const [neighbourhood, setNeighbourhood] = useState(
+    (activeOrg as any).neighbourhood || '',
+  )
+  const [city, setCity] = useState((activeOrg as any).city || '')
+  const [state, setState] = useState((activeOrg as any).state || '')
+  const [cep, setCep] = useState((activeOrg as any).cep || '')
+  const [phone, setPhone] = useState((activeOrg as any).phone || '')
+  const [email, setEmail] = useState((activeOrg as any).email || '')
+  const [website, setWebsite] = useState((activeOrg as any).website || '')
+  const [technicalManagerName, setTechnicalManagerName] = useState(
+    (activeOrg as any).technicalManagerName || '',
+  )
+  const [technicalManagerTitle, setTechnicalManagerTitle] = useState(
+    (activeOrg as any).technicalManagerTitle || '',
+  )
+  const [isUpdatingIso, setIsUpdatingIso] = useState(false)
+
   const [members, setMembers] = useState<Array<Member>>([])
   const [membersLoading, setMembersLoading] = useState(false)
 
@@ -283,9 +236,7 @@ function OrganizationSettingsPage({
     Record<string, Record<number, EditableUnitAssignmentRole>>
   >({})
   const [editingUnitId, setEditingUnitId] = useState<number | null>(null)
-  const [unitProfileDrafts, setUnitProfileDrafts] = useState<
-    Record<number, UnitProfileDraft>
-  >({})
+  const [unitNameDrafts, setUnitNameDrafts] = useState<Record<number, string>>({})
   const [updatingUnitId, setUpdatingUnitId] = useState<number | null>(null)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -297,10 +248,17 @@ function OrganizationSettingsPage({
     { value: 'member', label: 'Membro' },
     { value: 'technician', label: 'Técnico' },
     { value: 'admin', label: 'Administrador' },
-  ] as const
+  ] as const satisfies ReadonlyArray<{
+    value: GlobalMemberRole
+    label: string
+  }>
+  const accessQuery = usePlanAccess()
+  const hasMultiUnit =
+    accessQuery.data?.entitlements.includes('multi_unit') ?? false
 
   const unitsQuery = useQuery({
     queryKey: ['organization-units', activeOrg.id],
+    enabled: hasMultiUnit,
     queryFn: async () => {
       const response = await api.api.units.admin.units.$get()
       if (response.status === 403) {
@@ -317,7 +275,6 @@ function OrganizationSettingsPage({
           } satisfies GovernanceViewer,
         }
       }
-
       if (!response.ok) {
         throw new Error('Falha ao carregar unidades')
       }
@@ -329,20 +286,9 @@ function OrganizationSettingsPage({
     },
   })
 
-  const unitContextQuery = useQuery({
-    queryKey: ['dashboard-units', activeOrg.id],
-    queryFn: async () => {
-      const response = await api.api.units.$get()
-      if (!response.ok) {
-        throw new Error('Falha ao carregar contexto da unidade')
-      }
-
-      return (await response.json()) as UnitContextResponse
-    },
-  })
-
   const governanceMembersQuery = useQuery({
     queryKey: ['organization-governance-members', activeOrg.id],
+    enabled: hasMultiUnit,
     queryFn: async () => {
       const response = await api.api.units.admin.members.$get()
       if (response.status === 403) {
@@ -379,12 +325,6 @@ function OrganizationSettingsPage({
   const canManageGlobalRoles =
     governanceViewer?.canManageGlobalRoles ?? canManageOrganizationSettings
   const canViewGovernance = governanceViewer?.canViewGovernance ?? false
-  const selectedUnit =
-    unitContextQuery.data?.selectedUnitScope === 'unit'
-      ? (unitsQuery.data?.data ?? []).find(
-          (unit) => unit.id === unitContextQuery.data?.activeUnitId,
-        ) ?? null
-      : null
 
   const createUnitMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -426,9 +366,7 @@ function OrganizationSettingsPage({
       payload,
     }: {
       unitId: number
-      payload: Partial<UnitProfileDraft> & {
-        status?: 'ACTIVE' | 'ARCHIVED'
-      }
+      payload: { name?: string; status?: 'ACTIVE' | 'ARCHIVED' }
     }) => {
       const response = await api.api.units.admin.units[':id'].$patch({
         param: { id: String(unitId) },
@@ -620,14 +558,14 @@ function OrganizationSettingsPage({
 
     if (units.length === 0 || governanceMembers.length === 0) {
       setAssignmentDrafts({})
-      setUnitProfileDrafts(
-        Object.fromEntries(units.map((unit) => [unit.id, createUnitProfileDraft(unit)])),
+      setUnitNameDrafts(
+        Object.fromEntries(units.map((unit) => [unit.id, unit.name])),
       )
       return
     }
 
-    setUnitProfileDrafts(
-      Object.fromEntries(units.map((unit) => [unit.id, createUnitProfileDraft(unit)])),
+    setUnitNameDrafts(
+      Object.fromEntries(units.map((unit) => [unit.id, unit.name])),
     )
     setAssignmentDrafts(
       Object.fromEntries(
@@ -722,6 +660,42 @@ function OrganizationSettingsPage({
     }
   }
 
+  const handleUpdateIso17025 = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsUpdatingIso(true)
+    try {
+      const result = await authClient.organization.update({
+        data: {
+          cnpj: cnpj.trim() || undefined,
+          accreditationNumber: accreditationNumber.trim() || undefined,
+          accreditationBody: accreditationBody.trim() || undefined,
+          street: street.trim() || undefined,
+          number: number.trim() || undefined,
+          complement: complement.trim() || undefined,
+          neighbourhood: neighbourhood.trim() || undefined,
+          city: city.trim() || undefined,
+          state: state.trim() || undefined,
+          cep: cep.trim() || undefined,
+          phone: phone.trim() || undefined,
+          email: email.trim() || undefined,
+          website: website.trim() || undefined,
+          technicalManagerName: technicalManagerName.trim() || undefined,
+          technicalManagerTitle: technicalManagerTitle.trim() || undefined,
+        },
+      })
+      if (result.error) {
+        throw new Error(result.error.message ?? 'Falha ao atualizar informações')
+      }
+      toast.success('Informações ISO 17025 atualizadas com sucesso!')
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Falha ao atualizar informações'
+      toast.error(message)
+    } finally {
+      setIsUpdatingIso(false)
+    }
+  }
+
   const handleInviteMember = async (e: React.FormEvent) => {
     e.preventDefault()
     setInviteError(null)
@@ -780,11 +754,16 @@ function OrganizationSettingsPage({
 
   const handleUpdateMemberRole = async (memberId: string, newRole: string) => {
     if (!canManageGlobalRoles) return
+    if (!isGlobalMemberRole(newRole)) {
+      toast.error('Função inválida')
+      return
+    }
+
     setUpdatingRoleFor(memberId)
     try {
       await updateGlobalRoleMutation.mutateAsync({
         memberId,
-        role: newRole as 'member' | 'technician' | 'admin',
+        role: newRole,
       })
     } catch {
       // Mutation handles user-facing errors.
@@ -910,12 +889,10 @@ function OrganizationSettingsPage({
     }
   }
 
-  const handleSaveUnitProfile = async (unit: OrganizationUnit) => {
-    const draft = unitProfileDrafts[unit.id]
-    const nextName = draft?.name.trim()
-
-    if (!draft || !nextName) {
-      toast.error('Nome da unidade é obrigatório')
+  const handleRenameUnit = async (unit: OrganizationUnit) => {
+    const nextName = unitNameDrafts[unit.id]?.trim()
+    if (!nextName || nextName === unit.name) {
+      setEditingUnitId(null)
       return
     }
 
@@ -923,10 +900,7 @@ function OrganizationSettingsPage({
     try {
       await updateUnitMutation.mutateAsync({
         unitId: unit.id,
-        payload: {
-          ...draft,
-          name: nextName,
-        },
+        payload: { name: nextName },
       })
     } catch {
       setUpdatingUnitId(null)
@@ -1003,9 +977,9 @@ function OrganizationSettingsPage({
           {/* Organization Details Card */}
           <Card>
             <CardHeader>
-              <CardTitle>Conta da Organização</CardTitle>
+              <CardTitle>Detalhes da Organização</CardTitle>
               <CardDescription>
-                Dados globais da conta comercial e do tenant do CalibraFácil.
+                Atualize as informações da sua organização.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1050,134 +1024,246 @@ function OrganizationSettingsPage({
             </CardContent>
           </Card>
 
-          {/* Selected Unit Institutional Profile */}
+          {/* ISO 17025 / RBC Compliance Card */}
           <Card>
             <CardHeader>
-              <CardTitle>Perfil Institucional da Unidade Selecionada</CardTitle>
+              <CardTitle>Informações ISO 17025</CardTitle>
               <CardDescription>
-                Identidade jurídica, técnica e de acreditação da matriz ou
-                filial ativa no contexto atual.
+                Dados do laboratório para certificados de calibração conforme ISO/IEC
+                17025 e RBC/Inmetro.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {unitContextQuery.isPending || unitsQuery.isPending ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : unitContextQuery.data?.selectedUnitScope === 'all' ? (
-                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  A visão consolidada está ativa. Selecione uma matriz ou filial
-                  específica no switcher para visualizar o perfil institucional
-                  correto daquela unidade.
-                </div>
-              ) : !selectedUnit ? (
-                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  Nenhuma unidade ativa encontrada.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{selectedUnit.name}</Badge>
-                    <Badge variant="outline">
-                      {selectedUnit.installationType === 'PERMANENT'
-                        ? 'Instalação permanente'
-                        : selectedUnit.installationType === 'TEMPORARY'
-                          ? 'Instalação temporária'
-                          : 'Unidade móvel'}
-                    </Badge>
-                  </div>
+              <form onSubmit={handleUpdateIso17025}>
+                <FieldGroup>
+              {/* Identification */}
+              <Field>
+                <FieldLabel htmlFor="org-cnpj">CNPJ</FieldLabel>
+                <Input
+                  id="org-cnpj"
+                  value={cnpj}
+                  onChange={(e) => setCnpj(e.target.value)}
+                  disabled={isUpdatingIso}
+                  placeholder="00.000.000/0000-00"
+                />
+              </Field>
 
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <Field>
-                      <FieldLabel>CNPJ</FieldLabel>
-                      <Input value={selectedUnit.cnpj ?? 'Não informado'} disabled />
-                    </Field>
-                    <Field>
-                      <FieldLabel>Número de acreditação</FieldLabel>
-                      <Input
-                        value={selectedUnit.accreditationNumber ?? 'Não informado'}
-                        disabled
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>Órgão acreditador</FieldLabel>
-                      <Input
-                        value={selectedUnit.accreditationBody ?? 'Não informado'}
-                        disabled
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>Razão social</FieldLabel>
-                      <Input value={selectedUnit.legalName ?? 'Não informado'} disabled />
-                    </Field>
-                    <Field>
-                      <FieldLabel>Nome fantasia</FieldLabel>
-                      <Input value={selectedUnit.tradeName ?? 'Não informado'} disabled />
-                    </Field>
-                    <Field>
-                      <FieldLabel>Responsável técnico</FieldLabel>
-                      <Input
-                        value={
-                          selectedUnit.technicalManagerName
-                            ? `${selectedUnit.technicalManagerName}${
-                                selectedUnit.technicalManagerTitle
-                                  ? ` · ${selectedUnit.technicalManagerTitle}`
-                                  : ''
-                              }`
-                            : 'Não informado'
-                        }
-                        disabled
-                      />
-                    </Field>
-                    <Field className="lg:col-span-2">
-                      <FieldLabel>Endereço</FieldLabel>
-                      <Input
-                        value={
-                          [
-                            selectedUnit.street,
-                            selectedUnit.number,
-                            selectedUnit.complement,
-                            selectedUnit.neighbourhood,
-                            selectedUnit.city,
-                            selectedUnit.state,
-                            selectedUnit.cep,
-                          ]
-                            .filter(Boolean)
-                            .join(', ') || 'Não informado'
-                        }
-                        disabled
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel>Contato</FieldLabel>
-                      <Input
-                        value={
-                          [selectedUnit.email, selectedUnit.phone]
-                            .filter(Boolean)
-                            .join(' · ') || 'Não informado'
-                        }
-                        disabled
-                      />
-                    </Field>
-                    <Field className="lg:col-span-3">
-                      <FieldLabel>Resumo do escopo</FieldLabel>
-                      <Input
-                        value={selectedUnit.scopeSummary ?? 'Não informado'}
-                        disabled
-                      />
-                      <FieldDescription>
-                        A edição continua na seção de Unidades logo abaixo.
-                      </FieldDescription>
-                    </Field>
-                  </div>
-                </div>
-              )}
-            </CardContent>
+              {/* Accreditation */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="org-accreditation-number">
+                    Número de Acreditação
+                  </FieldLabel>
+                  <Input
+                    id="org-accreditation-number"
+                    value={accreditationNumber}
+                    onChange={(e) => setAccreditationNumber(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="RBC 0123"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-accreditation-body">
+                    Órgão Acreditador
+                  </FieldLabel>
+                  <Input
+                    id="org-accreditation-body"
+                    value={accreditationBody}
+                    onChange={(e) => setAccreditationBody(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="CGCRE/Inmetro"
+                  />
+                </Field>
+              </div>
+
+              <Separator />
+
+              {/* Address */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field className="sm:col-span-2">
+                  <FieldLabel htmlFor="org-street">Rua</FieldLabel>
+                  <Input
+                    id="org-street"
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="Rua das Calibrações"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-number">Número</FieldLabel>
+                  <Input
+                    id="org-number"
+                    value={number}
+                    onChange={(e) => setNumber(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="123"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="org-complement">Complemento</FieldLabel>
+                  <Input
+                    id="org-complement"
+                    value={complement}
+                    onChange={(e) => setComplement(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="Sala 101"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-neighbourhood">Bairro</FieldLabel>
+                  <Input
+                    id="org-neighbourhood"
+                    value={neighbourhood}
+                    onChange={(e) => setNeighbourhood(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="Centro"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field>
+                  <FieldLabel htmlFor="org-city">Cidade</FieldLabel>
+                  <Input
+                    id="org-city"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="São Paulo"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-state">Estado</FieldLabel>
+                  <Input
+                    id="org-state"
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="SP"
+                    maxLength={2}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-cep">CEP</FieldLabel>
+                  <Input
+                    id="org-cep"
+                    value={cep}
+                    onChange={(e) => setCep(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="00000-000"
+                  />
+                </Field>
+              </div>
+
+              <Separator />
+
+              {/* Contact */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field>
+                  <FieldLabel htmlFor="org-phone">Telefone</FieldLabel>
+                  <Input
+                    id="org-phone"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="(11) 99999-9999"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-email">Email</FieldLabel>
+                  <Input
+                    id="org-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="contato@lab.com.br"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-website">Website</FieldLabel>
+                  <Input
+                    id="org-website"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="https://lab.com.br"
+                  />
+                </Field>
+              </div>
+
+              <Separator />
+
+              {/* Technical Manager */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor="org-technical-manager-name">
+                    Responsável Técnico
+                  </FieldLabel>
+                  <Input
+                    id="org-technical-manager-name"
+                    value={technicalManagerName}
+                    onChange={(e) => setTechnicalManagerName(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="Dr. João Silva"
+                  />
+                  <FieldDescription>
+                    Nome que aparecerá nos certificados de calibração.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="org-technical-manager-title">
+                    Cargo/Título
+                  </FieldLabel>
+                  <Input
+                    id="org-technical-manager-title"
+                    value={technicalManagerTitle}
+                    onChange={(e) => setTechnicalManagerTitle(e.target.value)}
+                    disabled={isUpdatingIso}
+                    placeholder="Responsável Técnico"
+                  />
+                </Field>
+              </div>
+
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isUpdatingIso}>
+                  {isUpdatingIso ? 'Salvando...' : 'Salvar informações'}
+                </Button>
+              </div>
+            </FieldGroup>
+          </form>
+        </CardContent>
           </Card>
 
-          <CustomPortalDomainCard />
+          <Card>
+            <CardHeader>
+              <CardTitle>Portal Domain</CardTitle>
+              <CardDescription>
+                O domínio do portal ganhou um workspace próprio, com lifecycle
+                de DNS, verificação e ativação separado da governança da
+                organização.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <p className="font-medium">Gerencie hostname e readiness no lugar certo</p>
+                <p className="text-sm text-muted-foreground">
+                  Esta página continua focada em identidade jurídica e estrutura
+                  multiunidade. A operação do portal segue em Configurações →
+                  Portal Domain.
+                </p>
+              </div>
+              <Button asChild variant="outline">
+                <Link to="/dashboard/settings/portal-domain">
+                  Abrir Portal Domain
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         </>
       )}
 
@@ -1185,20 +1271,23 @@ function OrganizationSettingsPage({
         <CardHeader>
           <CardTitle>Unidades</CardTitle>
           <CardDescription>
-            Estruture a operação por matriz, filial ou instalação acreditável,
-            com identidade técnica e jurídica própria.
+            Estruture a operação do laboratório por unidade operacional.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!canManageOrganizationUnits && (
+          {!hasMultiUnit ? (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              A operação multi-unidade fica disponível no plano Enterprise.
+            </div>
+          ) : !canManageOrganizationUnits ? (
             <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
               Você pode consultar as unidades e gerenciar atribuições dentro do
               seu escopo, mas a criação, edição estrutural e arquivamento de
               unidades ficam disponíveis apenas para administradores globais.
             </div>
-          )}
+          ) : null}
 
-          {unitsQuery.isPending ? (
+          {hasMultiUnit && unitsQuery.isPending ? (
             <div className="space-y-2">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
@@ -1213,328 +1302,26 @@ function OrganizationSettingsPage({
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-2">
                       {editingUnitId === unit.id ? (
-                        <div className="space-y-4">
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.name ?? unit.name}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    name: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Nome da unidade"
-                            />
-                            <Select
-                              value={
-                                unitProfileDrafts[unit.id]?.installationType ??
-                                unit.installationType
-                              }
-                              onValueChange={(value) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    installationType:
-                                      value as UnitProfileDraft['installationType'],
-                                  },
-                                }))
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Tipo de instalação" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="PERMANENT">Instalação permanente</SelectItem>
-                                <SelectItem value="TEMPORARY">Instalação temporária</SelectItem>
-                                <SelectItem value="MOBILE">Unidade móvel</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.tradeName ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    tradeName: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Nome fantasia"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.legalName ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    legalName: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Razão social"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.cnpj ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    cnpj: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="CNPJ"
-                            />
-                            <Input
-                              value={
-                                unitProfileDrafts[unit.id]?.accreditationNumber ?? ''
-                              }
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    accreditationNumber: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Número da acreditação"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.accreditationBody ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    accreditationBody: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Organismo acreditador"
-                            />
-                            <Input
-                              value={
-                                unitProfileDrafts[unit.id]?.technicalManagerName ?? ''
-                              }
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    technicalManagerName: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Responsável técnico"
-                            />
-                            <Input
-                              value={
-                                unitProfileDrafts[unit.id]?.technicalManagerTitle ?? ''
-                              }
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    technicalManagerTitle: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Cargo do responsável técnico"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.email ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    email: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Email da unidade"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.phone ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    phone: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Telefone"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.website ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    website: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Website"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.street ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    street: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Logradouro"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.number ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    number: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Número"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.complement ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    complement: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Complemento"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.neighbourhood ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    neighbourhood: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Bairro"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.city ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    city: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Cidade"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.state ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    state: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="UF"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.cep ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    cep: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="CEP"
-                            />
-                            <Input
-                              value={unitProfileDrafts[unit.id]?.scopeSummary ?? ''}
-                              onChange={(event) =>
-                                setUnitProfileDrafts((current) => ({
-                                  ...current,
-                                  [unit.id]: {
-                                    ...current[unit.id],
-                                    scopeSummary: event.target.value,
-                                  },
-                                }))
-                              }
-                              disabled={updatingUnitId === unit.id}
-                              placeholder="Resumo do escopo acreditado"
-                            />
-                          </div>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                           <Input
-                            value={unitProfileDrafts[unit.id]?.scopeNotes ?? ''}
+                            value={unitNameDrafts[unit.id] ?? unit.name}
                             onChange={(event) =>
-                              setUnitProfileDrafts((current) => ({
+                              setUnitNameDrafts((current) => ({
                                 ...current,
-                                [unit.id]: {
-                                  ...current[unit.id],
-                                  scopeNotes: event.target.value,
-                                },
+                                [unit.id]: event.target.value,
                               }))
                             }
                             disabled={updatingUnitId === unit.id}
-                            placeholder="Observações complementares sobre escopo e instalação"
+                            className="sm:w-72"
                           />
                           <div className="flex gap-2">
                             <Button
                               type="button"
                               size="sm"
                               disabled={updatingUnitId === unit.id}
-                              onClick={() => handleSaveUnitProfile(unit)}
+                              onClick={() => handleRenameUnit(unit)}
                             >
-                              Salvar perfil
+                              Salvar
                             </Button>
                             <Button
                               type="button"
@@ -1543,9 +1330,9 @@ function OrganizationSettingsPage({
                               disabled={updatingUnitId === unit.id}
                               onClick={() => {
                                 setEditingUnitId(null)
-                                setUnitProfileDrafts((current) => ({
+                                setUnitNameDrafts((current) => ({
                                   ...current,
-                                  [unit.id]: createUnitProfileDraft(unit),
+                                  [unit.id]: unit.name,
                                 }))
                               }}
                             >
@@ -1557,32 +1344,8 @@ function OrganizationSettingsPage({
                         <div>
                           <p className="font-medium">{unit.name}</p>
                           <p className="text-sm text-muted-foreground">
-                            {unit.tradeName || unit.legalName || unit.slug}
+                            {unit.slug}
                           </p>
-                          <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                            {unit.cnpj ? <p>CNPJ: {unit.cnpj}</p> : null}
-                            {unit.accreditationNumber ? (
-                              <p>
-                                Acreditação: {unit.accreditationNumber}
-                                {unit.accreditationBody
-                                  ? ` · ${unit.accreditationBody}`
-                                  : ''}
-                              </p>
-                            ) : null}
-                            {unit.city || unit.state ? (
-                              <p>
-                                {[unit.city, unit.state].filter(Boolean).join(' / ')}
-                              </p>
-                            ) : null}
-                            {unit.technicalManagerName ? (
-                              <p>
-                                Responsável técnico: {unit.technicalManagerName}
-                                {unit.technicalManagerTitle
-                                  ? ` · ${unit.technicalManagerTitle}`
-                                  : ''}
-                              </p>
-                            ) : null}
-                          </div>
                         </div>
                       )}
                     </div>
@@ -1609,14 +1372,13 @@ function OrganizationSettingsPage({
                             }
                             onClick={() => {
                               setEditingUnitId(unit.id)
-                              setUnitProfileDrafts((current) => ({
+                              setUnitNameDrafts((current) => ({
                                 ...current,
-                                [unit.id]:
-                                  current[unit.id] ?? createUnitProfileDraft(unit),
+                                [unit.id]: current[unit.id] ?? unit.name,
                               }))
                             }}
                           >
-                            Editar perfil
+                            Renomear
                           </Button>
                           {!unit.isDefault && (
                             <Button
@@ -1641,33 +1403,31 @@ function OrganizationSettingsPage({
             </div>
           )}
 
-          {canManageOrganizationUnits && (
-            <>
-              <Separator />
+          {hasMultiUnit ? <Separator /> : null}
 
-              <form
-                className="flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  if (!newUnitName.trim()) return
-                  createUnitMutation.mutate(newUnitName.trim())
-                }}
+          {hasMultiUnit && canManageOrganizationUnits ? (
+            <form
+              className="flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!newUnitName.trim()) return
+                createUnitMutation.mutate(newUnitName.trim())
+              }}
+            >
+              <Input
+                value={newUnitName}
+                onChange={(e) => setNewUnitName(e.target.value)}
+                placeholder="Nova unidade"
+                disabled={createUnitMutation.isPending}
+              />
+              <Button
+                type="submit"
+                disabled={createUnitMutation.isPending || !newUnitName.trim()}
               >
-                <Input
-                  value={newUnitName}
-                  onChange={(e) => setNewUnitName(e.target.value)}
-                  placeholder="Nova unidade"
-                  disabled={createUnitMutation.isPending}
-                />
-                <Button
-                  type="submit"
-                  disabled={createUnitMutation.isPending || !newUnitName.trim()}
-                >
-                  {createUnitMutation.isPending ? 'Criando...' : 'Criar unidade'}
-                </Button>
-              </form>
-            </>
-          )}
+                {createUnitMutation.isPending ? 'Criando...' : 'Criar unidade'}
+              </Button>
+            </form>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -2135,236 +1895,6 @@ function OrganizationSettingsPage({
         </CardContent>
       </Card>}
     </div>
-  )
-}
-
-function CustomPortalDomainCard() {
-  const queryClient = useQueryClient()
-  const accessQuery = usePlanAccess()
-  const [hostname, setHostname] = useState('')
-
-  const domainQuery = useQuery({
-    queryKey: ['portal-domain'],
-    queryFn: async () => {
-      const res = await api.api['portal-domains'].$get()
-      if (!res.ok) {
-        throw new Error('Falha ao carregar domínio do portal')
-      }
-      return res.json() as Promise<{
-        portalBaseUrl: string
-        domain: {
-          id: string
-          hostname: string
-          verifiedAt: string | null
-          activatedAt: string | null
-          lastVerifiedAt: string | null
-          isActive: boolean
-          verification: { type: 'TXT'; host: string; value: string }
-        } | null
-      }>
-    },
-  })
-
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api['portal-domains'].$post({
-        json: { hostname },
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao salvar domínio',
-        )
-      }
-      return res.json()
-    },
-    onSuccess: async () => {
-      toast.success('Domínio salvo. Configure o TXT e verifique.')
-      await queryClient.invalidateQueries({ queryKey: ['portal-domain'] })
-    },
-    onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao salvar domínio')
-    },
-  })
-
-  const verifyMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api['portal-domains'].verify.$post()
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao verificar domínio',
-        )
-      }
-      return res.json()
-    },
-    onSuccess: async () => {
-      toast.success('Domínio verificado')
-      await queryClient.invalidateQueries({ queryKey: ['portal-domain'] })
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Falha ao verificar domínio',
-      )
-    },
-  })
-
-  const activateMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api['portal-domains'].activate.$post()
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao ativar domínio',
-        )
-      }
-      return res.json()
-    },
-    onSuccess: async () => {
-      toast.success('Domínio ativado')
-      await queryClient.invalidateQueries({ queryKey: ['portal-domain'] })
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Falha ao ativar domínio',
-      )
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api['portal-domains'].$delete()
-      if (!res.ok) {
-        throw new Error('Falha ao remover domínio')
-      }
-    },
-    onSuccess: async () => {
-      toast.success('Domínio removido')
-      setHostname('')
-      await queryClient.invalidateQueries({ queryKey: ['portal-domain'] })
-    },
-    onError: () => {
-      toast.error('Falha ao remover domínio')
-    },
-  })
-
-  const hasCustomDomain = accessQuery.data?.hasCustomDomain ?? false
-  const domain = domainQuery.data?.domain ?? null
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Domínio do Portal</CardTitle>
-        <CardDescription>
-          Configure um domínio próprio para o portal do cliente. Esta entrega
-          cobre o portal; o dashboard continua no domínio principal.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {!hasCustomDomain && (
-          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            O domínio personalizado do portal fica disponível a partir do plano
-            Professional.
-          </div>
-        )}
-
-        <div className="rounded-lg border p-4">
-          <p className="font-medium">URL atual do portal</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {domainQuery.data?.portalBaseUrl ?? 'https://portal.calibrafacil.com'}
-          </p>
-        </div>
-
-        <form
-          className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-end"
-          onSubmit={(event) => {
-            event.preventDefault()
-            createMutation.mutate()
-          }}
-        >
-          <Field className="flex-1">
-            <FieldLabel htmlFor="portal-domain-hostname">Hostname</FieldLabel>
-            <Input
-              id="portal-domain-hostname"
-              value={hostname}
-              onChange={(event) => setHostname(event.target.value)}
-              placeholder="portal.suaempresa.com.br"
-              disabled={!hasCustomDomain || createMutation.isPending}
-            />
-            <FieldDescription>
-              Use apenas o hostname. Exemplo: <code>portal.suaempresa.com.br</code>.
-            </FieldDescription>
-          </Field>
-          <Button
-            type="submit"
-            disabled={!hasCustomDomain || !hostname.trim() || createMutation.isPending}
-          >
-            Salvar domínio
-          </Button>
-        </form>
-
-        {domain && (
-          <div className="space-y-4 rounded-lg border p-4">
-            <div className="flex flex-wrap gap-2">
-              <Badge variant={domain.verifiedAt ? 'default' : 'secondary'}>
-                {domain.verifiedAt ? 'Verificado' : 'Aguardando DNS'}
-              </Badge>
-              <Badge variant={domain.isActive ? 'default' : 'secondary'}>
-                {domain.isActive ? 'Ativo' : 'Inativo'}
-              </Badge>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <p className="text-sm text-muted-foreground">Hostname</p>
-                <p className="font-medium">{domain.hostname}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Registro TXT</p>
-                <p className="font-mono text-sm">{domain.verification.host}</p>
-              </div>
-              <div className="md:col-span-2">
-                <p className="text-sm text-muted-foreground">Token</p>
-                <p className="font-mono text-sm">{domain.verification.value}</p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => verifyMutation.mutate()}
-                disabled={!hasCustomDomain || verifyMutation.isPending}
-              >
-                Verificar DNS
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => activateMutation.mutate()}
-                disabled={!hasCustomDomain || !domain.verifiedAt || activateMutation.isPending}
-              >
-                Ativar domínio
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending}
-              >
-                Remover
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   )
 }
 

@@ -23,9 +23,18 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 
 const ScopeSchema = z.enum([
   "customers:read",
+  "customers:write",
   "assets:read",
+  "assets:write",
+  "requests:read",
+  "requests:write",
   "jobs:read",
+  "jobs:write",
+  "services:read",
+  "units:read",
+  "reports:read",
   "certificates:read",
+  "webhooks:manage",
 ]);
 
 const CreateApiKeySchema = z.object({

@@ -30,6 +30,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
+import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { DataTable } from '@/components/ui/data-table'
 import {
   type ReferenceStandard,
@@ -53,6 +54,9 @@ type StatusFilter =
 
 function StandardsListPage() {
   const queryClient = useQueryClient()
+  const { activeOrganizationId, isContextSwitching } =
+    useDashboardContextState()
+  const organizationQueryKey = activeOrganizationId ?? 'no-org'
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
@@ -60,7 +64,8 @@ function StandardsListPage() {
   const limit = 20
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['standards', page, search, statusFilter],
+    queryKey: ['standards', organizationQueryKey, page, search, statusFilter],
+    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
       const res = await api.api.standards.$get({
         query: {

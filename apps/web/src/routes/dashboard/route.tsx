@@ -5,7 +5,7 @@ import {
   useMatches,
   useNavigate,
 } from '@tanstack/react-router'
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   organization,
@@ -27,26 +27,18 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { authClient } from '@calibra-facil/auth/client'
+import {
+  DashboardContextStateContext,
+  useDashboardContextState,
+} from '@/contexts/dashboard-context'
+
+export { useDashboardContextState }
 
 const DASHBOARD_ORG_KEY = 'dashboard-active-org'
 const DASHBOARD_LAYOUT_MOUNT_MARK = 'dashboard:layout:mount'
 const DASHBOARD_LAYOUT_READY_MARK = 'dashboard:layout:ready'
 const DASHBOARD_CONTEXT_START_MARK = 'dashboard:context:start'
 const DASHBOARD_CONTEXT_END_MARK = 'dashboard:context:end'
-
-type DashboardContextState = {
-  isContextSwitching: boolean
-  activeOrganizationId: string | null
-}
-
-const DashboardContextStateContext = createContext<DashboardContextState>({
-  isContextSwitching: false,
-  activeOrganizationId: null,
-})
-
-export function useDashboardContextState() {
-  return useContext(DashboardContextStateContext)
-}
 
 function mark(name: string) {
   if (typeof window === 'undefined' || !window.performance) return
@@ -64,11 +56,14 @@ function measure(name: string, startMark: string, endMark: string) {
 }
 
 export const Route = createFileRoute('/dashboard')({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const { data: session } = await authClient.getSession()
 
     if (!session) {
-      throw redirect({ to: '/sign-in' })
+      throw redirect({
+        to: '/sign-in',
+        search: { redirect: location.pathname },
+      })
     }
 
     if (
@@ -84,14 +79,16 @@ export const Route = createFileRoute('/dashboard')({
 function DashboardLayout() {
   const navigate = useNavigate()
   const matches = useMatches()
-  const { data: organizations, isPending: orgsLoading } = useListOrganizations()
+  const { data: organizations, isPending: organizationsLoading } =
+    useListOrganizations()
   const { data: activeOrg, isPending: activeOrgLoading } =
     useActiveOrganization()
 
-  // Track if we've already done initial context setup
-  const hasSetupContext = useRef(false)
   const hasMarkedReady = useRef(false)
   const [isSettingUp, setIsSettingUp] = useState(false)
+  const [resolvedDashboardOrgId, setResolvedDashboardOrgId] = useState<
+    string | null
+  >(null)
 
   useEffect(() => {
     mark(DASHBOARD_LAYOUT_MOUNT_MARK)
@@ -101,55 +98,63 @@ function DashboardLayout() {
   // The 'type' field is a direct column on organization table (not in metadata)
   const labOrganizations =
     organizations?.filter((org) => org.type !== 'CLIENT') ?? []
+  const storedOrgId =
+    typeof window !== 'undefined'
+      ? window.localStorage.getItem(DASHBOARD_ORG_KEY)
+      : null
+  const storedLabOrg = storedOrgId
+    ? (labOrganizations.find((org) => org.id === storedOrgId) ?? null)
+    : null
+  const activeLabOrg =
+    activeOrg?.type !== 'CLIENT'
+      ? (labOrganizations.find((org) => org.id === activeOrg?.id) ?? null)
+      : null
 
   const pathname = matches[matches.length - 1]?.pathname ?? ''
   const isDashboardHome =
     pathname === '/dashboard' || pathname === '/dashboard/'
   const hasLabAccess = labOrganizations.length > 0
   const hasAnyOrganizations = (organizations?.length ?? 0) > 0
-  const isBootstrappingContext = orgsLoading || activeOrgLoading
-  const shouldBlockChildRoutes =
-    !isDashboardHome && (isBootstrappingContext || isSettingUp)
+  const hasLoadedOrganizations = !organizationsLoading
+  const preferredDashboardOrg =
+    storedLabOrg ?? activeLabOrg ?? labOrganizations[0] ?? null
+  const needsInitialDashboardOrg =
+    hasLoadedOrganizations &&
+    hasLabAccess &&
+    !resolvedDashboardOrgId &&
+    (activeOrgLoading || Boolean(preferredDashboardOrg))
+  const isBootstrappingContext =
+    !hasLoadedOrganizations || needsInitialDashboardOrg
+  const isContextSwitching = isBootstrappingContext || isSettingUp
+  const shouldBlockChildRoutes = !isDashboardHome && isContextSwitching
+  const effectiveActiveOrganizationId = hasLabAccess
+    ? resolvedDashboardOrgId
+    : null
 
-  // Context Setup: Only runs once on initial load
-  // Uses localStorage to remember preferred org, avoiding conflicts with portal
   useEffect(() => {
     async function setupDashboardContext() {
-      if (orgsLoading || activeOrgLoading) return
+      if (!hasLoadedOrganizations || activeOrgLoading || isSettingUp) return
 
       if (!hasLabAccess) {
+        setResolvedDashboardOrgId(null)
         setIsSettingUp(false)
         return
       }
 
-      if (hasSetupContext.current) return
+      const targetOrg = preferredDashboardOrg
 
-      hasSetupContext.current = true
-
-      // Get stored preference for dashboard
-      const storedOrgId = localStorage.getItem(DASHBOARD_ORG_KEY)
-
-      // Check if stored org is a valid LAB org
-      const storedOrg = storedOrgId
-        ? labOrganizations.find((org) => org.id === storedOrgId)
-        : null
-
-      // Determine target org: stored preference > current if LAB > first LAB
-      let targetOrg = storedOrg
-      if (!targetOrg && activeOrg?.type !== 'CLIENT') {
-        targetOrg = labOrganizations.find((org) => org.id === activeOrg?.id)
-      }
       if (!targetOrg) {
-        targetOrg = labOrganizations[0]
+        setResolvedDashboardOrgId(null)
+        return
       }
 
-      // Only switch if needed
-      if (targetOrg && activeOrg?.id !== targetOrg.id) {
+      if (activeOrg?.id !== targetOrg.id) {
         setIsSettingUp(true)
         mark(DASHBOARD_CONTEXT_START_MARK)
         try {
           await organization.setActive({ organizationId: targetOrg.id })
           localStorage.setItem(DASHBOARD_ORG_KEY, targetOrg.id)
+          setResolvedDashboardOrgId(targetOrg.id)
         } finally {
           mark(DASHBOARD_CONTEXT_END_MARK)
           measure(
@@ -159,22 +164,36 @@ function DashboardLayout() {
           )
           setIsSettingUp(false)
         }
-      } else if (targetOrg) {
+      } else {
         // Store current selection
         localStorage.setItem(DASHBOARD_ORG_KEY, targetOrg.id)
+        setResolvedDashboardOrgId(targetOrg.id)
       }
     }
 
     setupDashboardContext()
-  }, [orgsLoading, activeOrgLoading, hasLabAccess, activeOrg, labOrganizations])
+  }, [
+    activeOrgLoading,
+    hasLoadedOrganizations,
+    hasLabAccess,
+    isSettingUp,
+    preferredDashboardOrg,
+    activeOrg?.id,
+  ])
 
   useEffect(() => {
-    if (
-      !orgsLoading &&
-      !activeOrgLoading &&
-      !isSettingUp &&
-      !hasMarkedReady.current
-    ) {
+    if (!hasLabAccess) {
+      setResolvedDashboardOrgId(null)
+      return
+    }
+
+    if (activeLabOrg?.id) {
+      setResolvedDashboardOrgId(activeLabOrg.id)
+    }
+  }, [activeLabOrg?.id, hasLabAccess])
+
+  useEffect(() => {
+    if (!isContextSwitching && !hasMarkedReady.current) {
       hasMarkedReady.current = true
       mark(DASHBOARD_LAYOUT_READY_MARK)
       measure(
@@ -183,7 +202,7 @@ function DashboardLayout() {
         DASHBOARD_LAYOUT_READY_MARK,
       )
     }
-  }, [orgsLoading, activeOrgLoading, isSettingUp])
+  }, [isContextSwitching])
 
   // No LAB access but no organizations yet - send to onboarding
   if (!isBootstrappingContext && !hasLabAccess && !hasAnyOrganizations) {
@@ -227,7 +246,7 @@ function DashboardLayout() {
               onClick={() => {
                 // Redirect to portal
                 const host = window.location.hostname
-                window.location.href = `https://${host}:5174`
+                window.location.href = `${window.location.protocol}//${host}:5174`
               }}
             >
               Acessar Portal do Cliente
@@ -242,20 +261,18 @@ function DashboardLayout() {
   }
 
   return (
-    <CommandPaletteProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <DashboardHeader
-            suspendEntityQueries={isBootstrappingContext || isSettingUp}
-          />
-          <main className="flex-1 p-4">
-            <DashboardContextStateContext.Provider
-              value={{
-                isContextSwitching: isBootstrappingContext || isSettingUp,
-                activeOrganizationId: activeOrg?.id ?? null,
-              }}
-            >
+    <DashboardContextStateContext.Provider
+      value={{
+        isContextSwitching,
+        activeOrganizationId: effectiveActiveOrganizationId,
+      }}
+    >
+      <CommandPaletteProvider>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <DashboardHeader suspendEntityQueries={isContextSwitching} />
+            <main className="flex-1 p-4">
               {shouldBlockChildRoutes ? (
                 <div className="space-y-4">
                   <div className="h-10 w-56 rounded-md border bg-card/60 animate-pulse" />
@@ -264,11 +281,11 @@ function DashboardLayout() {
               ) : (
                 <Outlet />
               )}
-            </DashboardContextStateContext.Provider>
-          </main>
-        </SidebarInset>
-      </SidebarProvider>
-      <CommandPalette />
-    </CommandPaletteProvider>
+            </main>
+          </SidebarInset>
+        </SidebarProvider>
+        <CommandPalette />
+      </CommandPaletteProvider>
+    </DashboardContextStateContext.Provider>
   )
 }
