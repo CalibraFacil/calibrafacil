@@ -6,6 +6,7 @@ import React from "react";
 import QRCode from "qrcode";
 import { processScheduledNotifications } from "./scheduled.js";
 import { signPdf, decryptPassword, decryptBinary, type SignatureMetadata } from "@calibra-facil/signing";
+import { DEFAULT_CERTIFICATE_TEMPLATE_CONFIG } from "@calibra-facil/shared";
 
 interface Env {
     BROWSER: Fetcher;
@@ -91,6 +92,8 @@ async function fetchJobData(
       cj.method_snapshot,
       cj.standards_snapshot,
       cj.environmental_snapshot,
+      cj.certificate_template_id,
+      cj.certificate_template_snapshot,
       cj.results,
       cj.data,
       cj.organization_id,
@@ -148,6 +151,52 @@ async function fetchJobData(
     if (result.rows.length === 0) return null;
 
     const row = result.rows[0];
+
+    let certificateTemplateSnapshot = row.certificate_template_snapshot;
+    let certificateTemplateId = row.certificate_template_id;
+
+    if (!certificateTemplateSnapshot) {
+        const templateResult = await client.query(
+            `
+            SELECT id, name, slug, version, config
+            FROM certificate_template
+            WHERE organization_id = $1
+              AND is_default = true
+              AND status = 'ACTIVE'
+            LIMIT 1
+            `,
+            [row.organization_id]
+        );
+
+        const templateRow = templateResult.rows[0];
+        certificateTemplateSnapshot = templateRow
+            ? {
+                id: templateRow.id,
+                name: templateRow.name,
+                slug: templateRow.slug,
+                version: templateRow.version,
+                config: templateRow.config,
+            }
+            : {
+                id: null,
+                name: "Padrão do Sistema",
+                slug: "padrao-sistema",
+                version: 1,
+                config: DEFAULT_CERTIFICATE_TEMPLATE_CONFIG,
+            };
+
+        certificateTemplateId = templateRow?.id ?? null;
+
+        await client.query(
+            `
+            UPDATE calibration_job
+            SET certificate_template_id = $2,
+                certificate_template_snapshot = $3::jsonb
+            WHERE id = $1
+            `,
+            [jobId, certificateTemplateId, JSON.stringify(certificateTemplateSnapshot)]
+        );
+    }
 
     // Fetch approver's visual signature if exists
     let approverSignatureUrl: string | null = null;
@@ -218,6 +267,7 @@ async function fetchJobData(
         methodSnapshot: row.method_snapshot,
         standardsSnapshot: row.standards_snapshot,
         environmentalSnapshot: row.environmental_snapshot,
+        certificateTemplateSnapshot,
         data: row.data,
         results: row.results,
         approverName: row.approver_name,

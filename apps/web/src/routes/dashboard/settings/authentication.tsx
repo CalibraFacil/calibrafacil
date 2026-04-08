@@ -13,6 +13,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useActiveOrganization } from '@calibra-facil/auth/client'
+import { usePlanAccess } from '@/hooks/use-plan-access'
 import { useSettings } from '@/contexts/settings-context'
 import { api } from '@/utils/api'
 import {
@@ -98,6 +99,16 @@ interface SsoSettingsResponse {
   }
 }
 
+interface ApiKeySummary {
+  id: string
+  name: string
+  keyPrefix: string
+  scopes: string[]
+  lastUsedAt: string | null
+  createdAt: string
+  revokedAt: string | null
+}
+
 async function parseApiError(res: Response, fallback: string) {
   const data = await res.json().catch(() => null)
 
@@ -168,7 +179,10 @@ function AuthenticationSettingsPage() {
       </Card>
 
       {organizationType === 'LAB' ? (
-        <SsoSettingsCard activeOrganizationSlug={activeOrg?.slug ?? null} />
+        <>
+          <SsoSettingsCard activeOrganizationSlug={activeOrg?.slug ?? null} />
+          <ApiKeysCard />
+        </>
       ) : (
         <Card>
           <CardHeader>
@@ -181,6 +195,218 @@ function AuthenticationSettingsPage() {
         </Card>
       )}
     </div>
+  )
+}
+
+function ApiKeysCard() {
+  const queryClient = useQueryClient()
+  const accessQuery = usePlanAccess()
+  const [name, setName] = useState('')
+  const [latestSecret, setLatestSecret] = useState<string | null>(null)
+
+  const apiKeysQuery = useQuery({
+    queryKey: ['api-keys'],
+    queryFn: async () => {
+      const res = await api.api['api-keys'].$get()
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao carregar API keys'))
+      }
+      return res.json() as Promise<{ data: ApiKeySummary[] }>
+    },
+  })
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.api['api-keys'].$post({
+        json: { name },
+      })
+
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao criar API key'))
+      }
+
+      return res.json() as Promise<{ secret: string }>
+    },
+    onSuccess: async (data) => {
+      setLatestSecret(data.secret)
+      setName('')
+      toast.success('API key criada')
+      await queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Falha ao criar API key')
+    },
+  })
+
+  const rotateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.api['api-keys'][':id'].rotate.$post({
+        param: { id },
+      })
+
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao rotacionar API key'))
+      }
+
+      return res.json() as Promise<{ secret: string }>
+    },
+    onSuccess: async (data) => {
+      setLatestSecret(data.secret)
+      toast.success('API key rotacionada')
+      await queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao rotacionar API key',
+      )
+    },
+  })
+
+  const revokeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.api['api-keys'][':id'].revoke.$post({
+        param: { id },
+      })
+
+      if (!res.ok) {
+        throw new Error(await parseApiError(res, 'Falha ao revogar API key'))
+      }
+    },
+    onSuccess: async () => {
+      toast.success('API key revogada')
+      await queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao revogar API key',
+      )
+    },
+  })
+
+  const hasApi = accessQuery.data?.hasApi ?? false
+  const apiKeys = apiKeysQuery.data?.data ?? []
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle>API Keys</CardTitle>
+            <CardDescription>
+              Crie chaves para integrar sistemas externos à API pública do
+              laboratório.
+            </CardDescription>
+          </div>
+          <Badge variant={hasApi ? 'default' : 'secondary'}>
+            {accessQuery.data?.planName ?? 'Plano atual'}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {!hasApi && (
+          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            O entitlement de API está disponível a partir do plano
+            Professional.
+          </div>
+        )}
+
+        {latestSecret && (
+          <div className="rounded-lg border p-4">
+            <p className="font-medium">Guarde esta chave agora</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Este segredo é exibido apenas uma vez.
+            </p>
+            <pre className="mt-3 overflow-x-auto rounded-md bg-muted p-3 text-xs">
+              {latestSecret}
+            </pre>
+          </div>
+        )}
+
+        <form
+          className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-end"
+          onSubmit={(event) => {
+            event.preventDefault()
+            createMutation.mutate()
+          }}
+        >
+          <Field className="flex-1">
+            <FieldLabel htmlFor="apiKeyName">Nome da chave</FieldLabel>
+            <Input
+              id="apiKeyName"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="ERP principal"
+              disabled={!hasApi || createMutation.isPending}
+            />
+            <FieldDescription>
+              A chave nasce com escopos de leitura para clientes, ativos,
+              ordens e certificados.
+            </FieldDescription>
+          </Field>
+          <Button
+            type="submit"
+            disabled={!hasApi || !name.trim() || createMutation.isPending}
+          >
+            Criar API key
+          </Button>
+        </form>
+
+        <div className="space-y-3">
+          {apiKeys.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              Nenhuma API key criada até o momento.
+            </div>
+          ) : (
+            apiKeys.map((key) => (
+              <div
+                key={key.id}
+                className="flex flex-col gap-4 rounded-lg border p-4 md:flex-row md:items-center md:justify-between"
+              >
+                <div className="space-y-1">
+                  <p className="font-medium">{key.name}</p>
+                  <p className="font-mono text-sm text-muted-foreground">
+                    {key.keyPrefix}...
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Escopos: {key.scopes.join(', ')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Último uso:{' '}
+                    {key.lastUsedAt
+                      ? new Date(key.lastUsedAt).toLocaleString('pt-BR')
+                      : 'Nunca utilizada'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {key.revokedAt ? (
+                    <Badge variant="secondary">Revogada</Badge>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => rotateMutation.mutate(key.id)}
+                        disabled={!hasApi || rotateMutation.isPending}
+                      >
+                        Rotacionar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => revokeMutation.mutate(key.id)}
+                        disabled={revokeMutation.isPending}
+                      >
+                        Revogar
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

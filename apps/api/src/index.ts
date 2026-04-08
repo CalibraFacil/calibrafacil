@@ -4,6 +4,7 @@ import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
 import {
   rateLimitAuth,
   rateLimitInvitations,
+  rateLimitPublicApi,
   rateLimitVerify,
   rateLimitWebhooks,
 } from "./middleware/rate-limit";
@@ -33,6 +34,9 @@ import { competencesRouter } from "./routes/competences";
 import { trainingRecordsRouter } from "./routes/training-records";
 import { sessionsRouter } from "./routes/sessions";
 import { ssoRouter } from "./routes/sso";
+import { apiKeysRouter } from "./routes/api-keys";
+import { publicApiRouter } from "./routes/public-api";
+import { certificateTemplatesRouter } from "./routes/certificate-templates";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -137,6 +141,7 @@ app.use("/api/sso/start", rateLimitAuth);
 app.use("/api/invitations/*", rateLimitInvitations);
 app.use("/api/verify/*", rateLimitVerify);
 app.use("/api/webhooks/asaas", rateLimitWebhooks);
+app.use("/api/public/*", rateLimitPublicApi);
 
 /**
  * Helper: attach CORS headers to Better Auth responses
@@ -201,7 +206,10 @@ const routes = app
   .route("/api/competences", competencesRouter)
   .route("/api/training-records", trainingRecordsRouter)
   .route("/api/sessions", sessionsRouter)
-  .route("/api/sso", ssoRouter);
+  .route("/api/sso", ssoRouter)
+  .route("/api/api-keys", apiKeysRouter)
+  .route("/api/certificate-templates", certificateTemplatesRouter)
+  .route("/api/public/v1", publicApiRouter);
 
 export type AppType = typeof routes;
 

@@ -1,3 +1,8 @@
+import {
+    type CertificateTemplateSnapshot,
+    normalizeCertificateTemplateConfig,
+} from "@calibra-facil/shared";
+
 // Types for certificate generation (standalone, does not depend on @calibra-facil/db)
 
 export type CustomerAddress = {
@@ -118,6 +123,7 @@ export type JobData = {
     data: Record<string, unknown> | null;
     results: Record<string, unknown> | null;
     approverName: string | null;
+    certificateTemplateSnapshot?: CertificateTemplateSnapshot | null;
     // Visual signature image URL (presigned URL) - ISO 17025 Clause 7.8.2.1(q)
     approverSignatureUrl?: string | null;
     // Amendment fields - ISO 17025 Clause 7.8.4.1
@@ -153,7 +159,7 @@ const styles = `
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    border-bottom: 2px solid #0066cc;
+    border-bottom: 2px solid var(--template-primary);
     padding-bottom: 12px;
     margin-bottom: 16px;
   }
@@ -165,7 +171,7 @@ const styles = `
   .logo-placeholder {
     width: 60px;
     height: 60px;
-    background: #0066cc;
+    background: var(--template-primary);
     border-radius: 8px;
     display: flex;
     align-items: center;
@@ -176,7 +182,7 @@ const styles = `
   }
   .lab-info h1 {
     font-size: 16pt;
-    color: #0066cc;
+    color: var(--template-primary);
     margin-bottom: 2px;
   }
   .lab-info p {
@@ -194,7 +200,7 @@ const styles = `
   .cert-number .number {
     font-size: 14pt;
     font-weight: bold;
-    color: #0066cc;
+    color: var(--template-primary);
   }
   .section {
     margin-bottom: 16px;
@@ -202,7 +208,7 @@ const styles = `
   .section-title {
     font-size: 11pt;
     font-weight: 600;
-    color: #0066cc;
+    color: var(--template-primary);
     border-bottom: 1px solid #ccc;
     padding-bottom: 4px;
     margin-bottom: 8px;
@@ -236,7 +242,7 @@ const styles = `
     white-space: pre-line;
   }
   th {
-    background: #f5f5f5;
+    background: var(--template-accent);
     font-weight: 600;
     color: #333;
   }
@@ -453,6 +459,10 @@ function DataTable({
 }
 
 export function CertificateHtml({ job }: { job: JobData }) {
+    const templateSnapshot = job.certificateTemplateSnapshot ?? null;
+    const templateConfig = normalizeCertificateTemplateConfig(
+        templateSnapshot?.config
+    );
     const dataFields = job.methodSnapshot?.dataFields || [];
     const formulas = job.methodSnapshot?.formulas || [];
 
@@ -479,35 +489,69 @@ export function CertificateHtml({ job }: { job: JobData }) {
         }
     }
 
+    const dynamicStyles = `
+      :root {
+        --template-primary: ${templateConfig.theme.primaryColor};
+        --template-accent: ${templateConfig.theme.accentColor};
+      }
+      .logo-image {
+        max-width: 72px;
+        max-height: 72px;
+        object-fit: contain;
+      }
+      .intro {
+        margin-bottom: 16px;
+        padding: 12px;
+        background: color-mix(in srgb, var(--template-accent) 75%, white);
+        border-left: 4px solid var(--template-primary);
+        font-size: 9pt;
+      }
+    `;
+
     return (
         <html lang="pt-BR">
             <head>
                 <meta charSet="UTF-8" />
                 <title>Certificado de Calibração - {job.jobId}</title>
-                <style dangerouslySetInnerHTML={{ __html: styles }} />
+                <style
+                    dangerouslySetInnerHTML={{
+                        __html: `${dynamicStyles}\n${styles}`,
+                    }}
+                />
             </head>
             <body>
                 <div className="certificate">
                     {/* Header */}
                     <div className="header">
                         <div className="logo-section">
-                            <div className="logo-placeholder">LAB</div>
+                            {templateConfig.theme.logoUrl ? (
+                                <img
+                                    src={templateConfig.theme.logoUrl}
+                                    alt={job.lab.name}
+                                    className="logo-image"
+                                />
+                            ) : (
+                                <div className="logo-placeholder">LAB</div>
+                            )}
                             <div className="lab-info">
                                 <h1>{job.lab.name}</h1>
-                                {job.lab.cnpj && (
+                                {job.lab.cnpj && templateConfig.sections.showAccreditation && (
                                     <p>CNPJ: {formatTaxId(job.lab.cnpj)}</p>
                                 )}
-                                {job.lab.accreditationNumber && (
+                                {job.lab.accreditationNumber &&
+                                    templateConfig.sections.showAccreditation && (
                                     <p>
                                         {job.lab.accreditationNumber}
                                         {job.lab.accreditationBody &&
                                             ` - ${job.lab.accreditationBody}`}
                                     </p>
                                 )}
-                                {formatLabAddress(job.lab) && (
+                                {formatLabAddress(job.lab) &&
+                                    templateConfig.sections.showLabAddress && (
                                     <p>{formatLabAddress(job.lab)}</p>
                                 )}
-                                {(job.lab.phone || job.lab.email) && (
+                                {(job.lab.phone || job.lab.email) &&
+                                    templateConfig.sections.showLabContact && (
                                     <p>
                                         {job.lab.phone}
                                         {job.lab.phone && job.lab.email && " | "}
@@ -517,13 +561,13 @@ export function CertificateHtml({ job }: { job: JobData }) {
                             </div>
                         </div>
                         <div className="cert-number">
-                            <h2>CERTIFICADO DE CALIBRAÇÃO</h2>
+                            <h2>{templateConfig.content.documentTitle}</h2>
                             <div className="number">{job.jobId}</div>
                         </div>
                     </div>
 
                     {/* Amendment Notice - ISO 17025 Clause 7.8.4.1 */}
-                    {job.supersedesId && (
+                    {job.supersedesId && templateConfig.sections.showAmendmentNotice && (
                         <div className="amendment-notice">
                             <h3>CERTIFICADO RETIFICADO</h3>
                             <p>
@@ -544,6 +588,10 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                 </p>
                             )}
                         </div>
+                    )}
+
+                    {templateConfig.content.introText && (
+                        <div className="intro">{templateConfig.content.introText}</div>
                     )}
 
                     {/* Superseded Watermark - appears on all pages */}
@@ -573,7 +621,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                     {formatAddress(job.customer.address)}
                                 </span>
                             </div>
-                            {job.customer.phone && (
+                            {job.customer.phone && templateConfig.sections.showCustomerContact && (
                                 <div className="info-row">
                                     <span className="info-label">Telefone:</span>
                                     <span className="info-value">{job.customer.phone}</span>
@@ -632,7 +680,8 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     </div>
 
                     {/* Environment */}
-                    {(envTemperature != null || envHumidity != null || envPressure != null) && (
+                    {templateConfig.sections.showEnvironmental &&
+                        (envTemperature != null || envHumidity != null || envPressure != null) && (
                         <div className="section">
                             <div className="section-title">Condições Ambientais</div>
                             <div className="info-grid">
@@ -665,7 +714,9 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     )}
 
                     {/* Standards Used */}
-                    {job.standardsSnapshot && job.standardsSnapshot.length > 0 && (
+                    {templateConfig.sections.showStandards &&
+                        job.standardsSnapshot &&
+                        job.standardsSnapshot.length > 0 && (
                         <div className="section">
                             <div className="section-title">Padrões Utilizados</div>
                             <table>
@@ -774,7 +825,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     )}
 
                     {/* Results */}
-                    {resultEntries.length > 0 && (
+                    {templateConfig.sections.showResults && resultEntries.length > 0 && (
                         <div className="section">
                             <div className="section-title">Resultados</div>
                             <table>
@@ -800,8 +851,9 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     )}
 
                     {/* Signature - ISO 17025 Clause 7.8.2.1(q) */}
-                    <div className="signature-section">
-                        <div className="signature-box">
+                    {templateConfig.sections.showSignature && (
+                        <div className="signature-section">
+                            <div className="signature-box">
                             {/* Visual signature image */}
                             {job.approverSignatureUrl && (
                                 <img
@@ -831,10 +883,14 @@ export function CertificateHtml({ job }: { job: JobData }) {
                             </div>
                         </div>
                     </div>
+                    )}
 
                     {/* Footer */}
                     <div className="footer">
                         <div>Emitido em: {formatDate(new Date())}</div>
+                        {templateConfig.content.footerNote && (
+                            <div>{templateConfig.content.footerNote}</div>
+                        )}
                     </div>
 
                     {/* End of Document Marker (ISO requirement) */}

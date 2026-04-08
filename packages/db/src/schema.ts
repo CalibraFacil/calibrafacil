@@ -187,16 +187,136 @@ export const ssoProvider = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     providerId: text("provider_id").notNull().unique(),
-    organizationId: text("organization_id").references(() => organization.id, {
-      onDelete: "cascade",
-    }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, {
+        onDelete: "cascade",
+      }),
     domain: text("domain").notNull(),
     domainVerified: boolean("domain_verified").default(false),
   },
   (table) => [
     index("sso_provider_user_id_idx").on(table.userId),
     index("sso_provider_org_id_idx").on(table.organizationId),
-    uniqueIndex("sso_provider_provider_id_uidx").on(table.providerId),
+    uniqueIndex("sso_provider_org_id_uidx").on(table.organizationId),
+  ],
+);
+
+export const organizationCustomDomain = pgTable(
+  "organization_custom_domain",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    hostname: text("hostname").notNull().unique(),
+    verificationToken: text("verification_token").notNull(),
+    verifiedAt: timestamp("verified_at"),
+    activatedAt: timestamp("activated_at"),
+    lastVerifiedAt: timestamp("last_verified_at"),
+    isActive: boolean("is_active").default(false).notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("org_custom_domain_org_uidx").on(table.organizationId),
+    uniqueIndex("org_custom_domain_hostname_uidx").on(table.hostname),
+    index("org_custom_domain_active_idx").on(table.isActive),
+  ],
+);
+
+export const certificateTemplate = pgTable(
+  "certificate_template",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    version: integer("version").default(1).notNull(),
+    status: text("status").default("ACTIVE").notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    config: jsonb("config").$type<Record<string, unknown>>().notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("certificate_template_org_id_idx").on(table.organizationId),
+    index("certificate_template_status_idx").on(table.status),
+    uniqueIndex("certificate_template_org_slug_uidx").on(
+      table.organizationId,
+      table.slug,
+    ),
+  ],
+);
+
+export const organizationApiKey = pgTable(
+  "organization_api_key",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull().unique(),
+    scopes: jsonb("scopes").$type<string[]>().default([]).notNull(),
+    lastUsedAt: timestamp("last_used_at"),
+    lastUsedIp: text("last_used_ip"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    revokedAt: timestamp("revoked_at"),
+    revokedBy: text("revoked_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("organization_api_key_org_id_idx").on(table.organizationId),
+    uniqueIndex("organization_api_key_hash_uidx").on(table.keyHash),
+  ],
+);
+
+export const organizationApiKeyAuditLog = pgTable(
+  "organization_api_key_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    apiKeyId: text("api_key_id")
+      .notNull()
+      .references(() => organizationApiKey.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    performedBy: text("performed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ipAddress: text("ip_address"),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("organization_api_key_audit_log_key_idx").on(table.apiKeyId),
+    index("organization_api_key_audit_log_org_idx").on(table.organizationId),
   ],
 );
 
@@ -335,6 +455,9 @@ export const userRelations = relations(user, ({ many }) => ({
   members: many(member),
   invitations: many(invitation),
   ssoProviders: many(ssoProvider),
+  customDomains: many(organizationCustomDomain),
+  certificateTemplates: many(certificateTemplate),
+  apiKeyAuditLogs: many(organizationApiKeyAuditLog),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -358,6 +481,9 @@ export const organizationRelations = relations(
     invitations: many(invitation),
     subscription: one(subscription),
     ssoProviders: many(ssoProvider),
+    customDomain: one(organizationCustomDomain),
+    certificateTemplates: many(certificateTemplate),
+    apiKeys: many(organizationApiKey),
   }),
 );
 
@@ -393,6 +519,72 @@ export const ssoProviderRelations = relations(ssoProvider, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const organizationCustomDomainRelations = relations(
+  organizationCustomDomain,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [organizationCustomDomain.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationCustomDomain.createdBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const certificateTemplateRelations = relations(
+  certificateTemplate,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [certificateTemplate.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [certificateTemplate.createdBy],
+      references: [user.id],
+    }),
+    jobs: many(calibrationJob),
+  }),
+);
+
+export const organizationApiKeyRelations = relations(
+  organizationApiKey,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [organizationApiKey.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationApiKey.createdBy],
+      references: [user.id],
+    }),
+    revokedByUser: one(user, {
+      fields: [organizationApiKey.revokedBy],
+      references: [user.id],
+    }),
+    auditLogs: many(organizationApiKeyAuditLog),
+  }),
+);
+
+export const organizationApiKeyAuditLogRelations = relations(
+  organizationApiKeyAuditLog,
+  ({ one }) => ({
+    apiKey: one(organizationApiKey, {
+      fields: [organizationApiKeyAuditLog.apiKeyId],
+      references: [organizationApiKey.id],
+    }),
+    organization: one(organization, {
+      fields: [organizationApiKeyAuditLog.organizationId],
+      references: [organization.id],
+    }),
+    performedByUser: one(user, {
+      fields: [organizationApiKeyAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const customerRelations = relations(customer, ({ one, many }) => ({
   organization: one(organization, {
@@ -1172,6 +1364,13 @@ export const calibrationJob = pgTable(
     environmentalSnapshot: jsonb(
       "environmental_snapshot",
     ).$type<EnvironmentalSnapshot>(),
+    certificateTemplateId: integer("certificate_template_id").references(
+      () => certificateTemplate.id,
+      { onDelete: "set null" },
+    ),
+    certificateTemplateSnapshot: jsonb("certificate_template_snapshot").$type<
+      Record<string, unknown>
+    >(),
     // Certificate URL (populated after approval and PDF generation)
     certificateUrl: text("certificate_url"),
     // Label URL for thermal printer sticker (populated after label generation)
@@ -1280,6 +1479,7 @@ export const calibrationJob = pgTable(
     // Amendment tracking indexes for efficient chain lookups
     index("job_supersedes_id_idx").on(table.supersedesId),
     index("job_superseded_by_id_idx").on(table.supersededById),
+    index("job_certificate_template_id_idx").on(table.certificateTemplateId),
   ],
 );
 
@@ -1478,6 +1678,10 @@ export const calibrationJobRelations = relations(
       relationName: "jobRejecter",
     }),
     auditLogs: many(jobAuditLog),
+    certificateTemplate: one(certificateTemplate, {
+      fields: [calibrationJob.certificateTemplateId],
+      references: [certificateTemplate.id],
+    }),
     // Amendment tracking - ISO 17025:2017 Clause 7.8.4.1
     // The job that this one supersedes (original certificate being corrected)
     supersedes: one(calibrationJob, {

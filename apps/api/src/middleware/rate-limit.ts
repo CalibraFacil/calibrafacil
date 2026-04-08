@@ -108,3 +108,9 @@ export const rateLimitWebhooks = withRateLimit({
   limit: 300,
   windowSec: 60,
 });
+
+export const rateLimitPublicApi = withRateLimit({
+  keyPrefix: "public-api",
+  limit: 180,
+  windowSec: 60,
+});

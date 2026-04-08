@@ -413,6 +413,9 @@ importers:
       '@calibra-facil/documents':
         specifier: workspace:^
         version: link:../../packages/documents
+      '@calibra-facil/shared':
+        specifier: workspace:^
+        version: link:../../packages/shared
       '@calibra-facil/signing':
         specifier: workspace:^
         version: link:../../packages/signing
@@ -518,6 +521,9 @@ importers:
 
   packages/documents:
     dependencies:
+      '@calibra-facil/shared':
+        specifier: workspace:^
+        version: link:../shared
       react:
         specifier: ^19.2.3
         version: 19.2.3
