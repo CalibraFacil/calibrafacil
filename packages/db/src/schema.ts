@@ -14,7 +14,10 @@ import {
   real,
 } from "drizzle-orm/pg-core";
 import type {
+  CustomerSuccessHealthStatus,
+  CustomerSuccessSlaTier,
   GenericFinancialErpConnectionConfig,
+  GoLiveStatus,
   IntegrationCredentialType,
   IntegrationEventLevel,
   IntegrationProvider,
@@ -324,6 +327,17 @@ export const organizationSuccessProfile = pgTable(
     accountOwnerName: text("account_owner_name"),
     accountOwnerEmail: text("account_owner_email"),
     supportContactEmail: text("support_contact_email"),
+    internalOwnerUserId: text("internal_owner_user_id").references(
+      () => user.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    prioritySupport: boolean("priority_support").default(false).notNull(),
+    slaTier: text("sla_tier")
+      .$type<CustomerSuccessSlaTier>()
+      .default("PLAN_DEFAULT")
+      .notNull(),
     onboardingStatus: text("onboarding_status")
       .$type<OnboardingStatus>()
       .default("NOT_STARTED")
@@ -332,10 +346,21 @@ export const organizationSuccessProfile = pgTable(
       .$type<MigrationStatus>()
       .default("NOT_REQUIRED")
       .notNull(),
+    goLiveStatus: text("go_live_status")
+      .$type<GoLiveStatus>()
+      .default("NOT_SCHEDULED")
+      .notNull(),
+    healthStatus: text("health_status")
+      .$type<CustomerSuccessHealthStatus>()
+      .default("HEALTHY")
+      .notNull(),
+    nextAction: text("next_action"),
+    nextActionDueAt: timestamp("next_action_due_at"),
     goLiveTargetDate: timestamp("go_live_target_date"),
     goLiveActualDate: timestamp("go_live_actual_date"),
     publicStatusNote: text("public_status_note"),
     internalNotes: text("internal_notes"),
+    lastTouchedAt: timestamp("last_touched_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -351,6 +376,11 @@ export const organizationSuccessProfile = pgTable(
     ),
     index("organization_success_profile_migration_idx").on(
       table.migrationStatus,
+    ),
+    index("organization_success_profile_go_live_idx").on(table.goLiveStatus),
+    index("organization_success_profile_health_idx").on(table.healthStatus),
+    index("organization_success_profile_priority_support_idx").on(
+      table.prioritySupport,
     ),
   ],
 );
@@ -1205,6 +1235,10 @@ export const organizationSuccessProfileRelations = relations(
     }),
     accountOwnerUser: one(user, {
       fields: [organizationSuccessProfile.accountOwnerUserId],
+      references: [user.id],
+    }),
+    internalOwnerUser: one(user, {
+      fields: [organizationSuccessProfile.internalOwnerUserId],
       references: [user.id],
     }),
   }),

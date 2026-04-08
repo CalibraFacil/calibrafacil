@@ -27,6 +27,12 @@ import {
 } from "../middleware/permission";
 import { internalCustomerSuccessRouter } from "./internal-customer-success";
 import { getOrganizationPlanAccess } from "../lib/organization-plan";
+import {
+  deriveDefaultSlaTier,
+  deriveGoLiveStatus,
+  deriveHealthStatus,
+  getSupportRequestSlaStatus,
+} from "../lib/customer-success";
 
 const SetPlatformRoleSchema = z.object({
   role: z.enum(["user", "platform_operator", "platform_admin"]),
@@ -621,7 +627,90 @@ export const backofficeRouter = new Hono<{
       limit: 100,
     });
 
-    return c.json({ data: rows });
+    const organizationIds = Array.from(
+      new Set(rows.map((row) => row.organizationId)),
+    );
+
+    const [profiles, planAccessEntries] = await Promise.all([
+      organizationIds.length === 0
+        ? Promise.resolve([])
+        : db.query.organizationSuccessProfile.findMany({
+            where: inArray(organizationSuccessProfile.organizationId, organizationIds),
+          }),
+      Promise.all(
+        organizationIds.map(async (organizationId) => [
+          organizationId,
+          await getOrganizationPlanAccess(organizationId),
+        ] as const),
+      ),
+    ]);
+
+    const profilesByOrg = new Map(
+      profiles.map((profile) => [profile.organizationId, profile] as const),
+    );
+    const planAccessByOrg = new Map(planAccessEntries);
+
+    const data = rows.map((row) => {
+      const profile = profilesByOrg.get(row.organizationId);
+      const planAccess = planAccessByOrg.get(row.organizationId);
+      const effectiveSlaTier =
+        profile && planAccess
+          ? profile.slaTier === "PLAN_DEFAULT"
+            ? deriveDefaultSlaTier(planAccess.supportPolicy)
+            : profile.slaTier
+          : "PLAN_DEFAULT";
+      const goLiveStatus =
+        profile && planAccess
+          ? deriveGoLiveStatus({
+              currentStatus: profile.goLiveStatus,
+              goLiveActualDate: profile.goLiveActualDate,
+              goLiveTargetDate: profile.goLiveTargetDate,
+            })
+          : "NOT_SCHEDULED";
+      const healthStatus =
+        profile && planAccess
+          ? deriveHealthStatus({
+              currentStatus: profile.healthStatus,
+              onboardingStatus: profile.onboardingStatus,
+              migrationStatus: profile.migrationStatus,
+              goLiveStatus,
+              breachedRequestsCount:
+                getSupportRequestSlaStatus({
+                  status: row.status,
+                  slaTargetAt: row.slaTargetAt,
+                }) === "BREACHED"
+                  ? 1
+                  : 0,
+              dueSoonRequestsCount:
+                getSupportRequestSlaStatus({
+                  status: row.status,
+                  slaTargetAt: row.slaTargetAt,
+                }) === "DUE_SOON"
+                  ? 1
+                  : 0,
+            })
+          : "HEALTHY";
+      const slaStatus = getSupportRequestSlaStatus({
+        status: row.status,
+        slaTargetAt: row.slaTargetAt,
+      });
+
+      return {
+        ...row,
+        slaStatus,
+        timeToSlaMs: row.slaTargetAt
+          ? row.slaTargetAt.getTime() - Date.now()
+          : null,
+        organizationHealth: healthStatus,
+        prioritySupport:
+          (profile?.prioritySupport ?? false) ||
+          effectiveSlaTier !== "PLAN_DEFAULT" ||
+          (planAccess?.supportPolicy.hasPrioritySupport ?? false),
+        effectiveSlaTier,
+      };
+    });
+
+    return c.json({ data });
   })
   .get("/users", zValidator("query", ListBackofficeUsersQuerySchema), async (c) => {
     const input = c.req.valid("query");

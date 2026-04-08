@@ -232,6 +232,13 @@
       "when": 1775115600000,
       "tag": "0033_add_backoffice_admin_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1774933200000,
+      "tag": "0032_add_customer_success_workspace",
+      "breakpoints": true
     }
   ]
 }

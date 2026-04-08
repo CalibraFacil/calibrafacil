@@ -50,6 +50,8 @@ type MigrationStatus =
   | 'COMPLETED'
   | 'BLOCKED'
 
+type GoLiveStatus = 'NOT_SCHEDULED' | 'SCHEDULED' | 'AT_RISK' | 'LIVE'
+
 type SupportPolicy = {
   supportMode: 'standard' | 'priority' | 'dedicated'
   hasPrioritySupport: boolean
@@ -68,6 +70,7 @@ type SuccessProfileResponse = {
     supportContactEmail: string | null
     onboardingStatus: OnboardingStatus
     migrationStatus: MigrationStatus
+    goLiveStatus: GoLiveStatus
     goLiveTargetDate: string | null
     goLiveActualDate: string | null
     publicStatusNote: string | null
@@ -92,6 +95,9 @@ type SupportRequest = {
   slaTargetAt: string | null
   firstResponseAt: string | null
   resolvedAt: string | null
+  slaStatus: 'ON_TRACK' | 'DUE_SOON' | 'BREACHED' | 'RESOLVED'
+  timeToSlaMs: number | null
+  prioritySupport: boolean
   createdAt: string
   requestedByUser: {
     id: string
@@ -157,6 +163,20 @@ const migrationLabels: Record<MigrationStatus, string> = {
   BLOCKED: 'Bloqueado',
 }
 
+const goLiveLabels: Record<GoLiveStatus, string> = {
+  NOT_SCHEDULED: 'Sem data',
+  SCHEDULED: 'Agendado',
+  AT_RISK: 'Em risco',
+  LIVE: 'Em produção',
+}
+
+const slaStatusLabels: Record<SupportRequest['slaStatus'], string> = {
+  ON_TRACK: 'Dentro do SLA',
+  DUE_SOON: 'SLA vencendo',
+  BREACHED: 'SLA violado',
+  RESOLVED: 'Resolvido',
+}
+
 const requestStatusLabels: Record<SupportRequest['status'], string> = {
   OPEN: 'Aberto',
   IN_PROGRESS: 'Em andamento',
@@ -191,6 +211,15 @@ function formatDate(value: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
+}
+
+function formatRelativeSla(value: number | null) {
+  if (value === null) return 'Sem SLA definido'
+
+  const absoluteHours = Math.round(Math.abs(value) / (60 * 60 * 1000))
+  if (value <= 0) return `${absoluteHours}h em atraso`
+  if (absoluteHours < 24) return `${absoluteHours}h restantes`
+  return `${Math.round(absoluteHours / 24)}d restantes`
 }
 
 function CustomerSuccessPage() {
@@ -332,6 +361,9 @@ function CustomerSuccessPage() {
                     ? 'Suporte prioritário'
                     : 'Suporte padrão'}
               </Badge>
+              {payload.supportPolicy.hasPrioritySupport ? (
+                <Badge>Priority support</Badge>
+              ) : null}
             </div>
             <p className="text-sm text-muted-foreground">
               Primeira resposta alvo em até{' '}
@@ -408,6 +440,11 @@ function CustomerSuccessPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">
+                {goLiveLabels[payload.profile.goLiveStatus]}
+              </Badge>
+            </div>
             <p>
               <strong>Meta:</strong>{' '}
               {formatDate(payload.profile.goLiveTargetDate)}
@@ -483,22 +520,31 @@ function CustomerSuccessPage() {
                         #{request.id} • {request.category}
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline">
-                        {requestStatusLabels[request.status]}
-                      </Badge>
-                      <Badge>{priorityLabels[request.priority]}</Badge>
-                    </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">
+                      {requestStatusLabels[request.status]}
+                    </Badge>
+                    <Badge>{priorityLabels[request.priority]}</Badge>
+                    <Badge variant="outline">
+                      {slaStatusLabels[request.slaStatus]}
+                    </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {request.description}
-                  </p>
-                  <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-3">
-                    <span>SLA alvo: {formatDate(request.slaTargetAt)}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {request.description}
+                </p>
+                <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-3">
+                    <span>
+                      SLA alvo: {formatDate(request.slaTargetAt)} ·{' '}
+                      {formatRelativeSla(request.timeToSlaMs)}
+                    </span>
                     <span>
                       Primeira resposta: {formatDate(request.firstResponseAt)}
                     </span>
-                    <span>Resolvido: {formatDate(request.resolvedAt)}</span>
+                    <span>
+                      Resolvido: {formatDate(request.resolvedAt)}
+                      {request.prioritySupport ? ' · Priority support' : ''}
+                    </span>
                   </div>
                   {request.events.length > 0 ? (
                     <div className="space-y-2 border-t pt-3">
