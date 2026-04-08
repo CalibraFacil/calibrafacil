@@ -253,9 +253,13 @@ function OrganizationSettingsPage({
     value: GlobalMemberRole
     label: string
   }>
+  const accessQuery = usePlanAccess()
+  const hasMultiUnit =
+    accessQuery.data?.entitlements.includes('multi_unit') ?? false
 
   const unitsQuery = useQuery({
     queryKey: ['organization-units', activeOrg.id],
+    enabled: hasMultiUnit,
     queryFn: async () => {
       const response = await api.api.units.admin.units.$get()
       if (response.status === 403) {
@@ -272,7 +276,6 @@ function OrganizationSettingsPage({
           } satisfies GovernanceViewer,
         }
       }
-
       if (!response.ok) {
         throw new Error('Falha ao carregar unidades')
       }
@@ -286,6 +289,7 @@ function OrganizationSettingsPage({
 
   const governanceMembersQuery = useQuery({
     queryKey: ['organization-governance-members', activeOrg.id],
+    enabled: hasMultiUnit,
     queryFn: async () => {
       const response = await api.api.units.admin.members.$get()
       if (response.status === 403) {
@@ -1248,15 +1252,19 @@ function OrganizationSettingsPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!canManageOrganizationUnits && (
+          {!hasMultiUnit ? (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              A operação multi-unidade fica disponível no plano Enterprise.
+            </div>
+          ) : !canManageOrganizationUnits ? (
             <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
               Você pode consultar as unidades e gerenciar atribuições dentro do
               seu escopo, mas a criação, edição estrutural e arquivamento de
               unidades ficam disponíveis apenas para administradores globais.
             </div>
-          )}
+          ) : null}
 
-          {unitsQuery.isPending ? (
+          {hasMultiUnit && unitsQuery.isPending ? (
             <div className="space-y-2">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
@@ -1372,33 +1380,31 @@ function OrganizationSettingsPage({
             </div>
           )}
 
-          {canManageOrganizationUnits && (
-            <>
-              <Separator />
+          {hasMultiUnit ? <Separator /> : null}
 
-              <form
-                className="flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  if (!newUnitName.trim()) return
-                  createUnitMutation.mutate(newUnitName.trim())
-                }}
+          {hasMultiUnit && canManageOrganizationUnits ? (
+            <form
+              className="flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!newUnitName.trim()) return
+                createUnitMutation.mutate(newUnitName.trim())
+              }}
+            >
+              <Input
+                value={newUnitName}
+                onChange={(e) => setNewUnitName(e.target.value)}
+                placeholder="Nova unidade"
+                disabled={createUnitMutation.isPending}
+              />
+              <Button
+                type="submit"
+                disabled={createUnitMutation.isPending || !newUnitName.trim()}
               >
-                <Input
-                  value={newUnitName}
-                  onChange={(e) => setNewUnitName(e.target.value)}
-                  placeholder="Nova unidade"
-                  disabled={createUnitMutation.isPending}
-                />
-                <Button
-                  type="submit"
-                  disabled={createUnitMutation.isPending || !newUnitName.trim()}
-                >
-                  {createUnitMutation.isPending ? 'Criando...' : 'Criar unidade'}
-                </Button>
-              </form>
-            </>
-          )}
+                {createUnitMutation.isPending ? 'Criando...' : 'Criar unidade'}
+              </Button>
+            </form>
+          ) : null}
         </CardContent>
       </Card>
 
