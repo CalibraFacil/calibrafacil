@@ -13,6 +13,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { NotificationBell } from '@/components/notifications/notification-bell'
+import { UnitSwitcher } from '@/components/unit-switcher'
 import { api } from '@/utils/api'
 
 const routeLabels: Record<string, string> = {
@@ -631,6 +632,7 @@ export function DashboardHeader({
         </Breadcrumb>
       </div>
       <div className="flex items-center gap-2">
+        <UnitSwitcher />
         <NotificationBell />
       </div>
     </header>

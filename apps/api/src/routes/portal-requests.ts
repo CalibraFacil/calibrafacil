@@ -275,6 +275,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       const assets = await db
         .select({
           id: asset.id,
+          unitId: asset.unitId,
         })
         .from(asset)
         .innerJoin(customer, eq(asset.customerId, customer.id))
@@ -291,6 +292,17 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       if (assets.length !== input.assetIds.length) {
         return c.json(
           { error: "Um ou mais ativos selecionados nao pertencem ao cliente" },
+          400,
+        );
+      }
+
+      const unitIds = [...new Set(assets.map((item) => item.unitId))];
+      if (unitIds.length !== 1) {
+        return c.json(
+          {
+            error:
+              "Selecione ativos da mesma unidade para enviar a solicitacao",
+          },
           400,
         );
       }
@@ -337,6 +349,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           .insert(calibrationRequest)
           .values({
             organizationId: linkedCustomer.labOrganizationId,
+            unitId: unitIds[0]!,
             customerId: linkedCustomer.id,
             authOrganizationId: member.organizationId,
             observations: input.observations || null,

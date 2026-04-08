@@ -6,6 +6,7 @@ import {
   customer,
   jobAuditLog,
   member,
+  memberUnitAssignment,
   personnelCompetence,
   service,
   type MethodSnapshot,
@@ -20,6 +21,7 @@ type JobDbExecutor = Pick<
 
 type CreateCalibrationJobParams = {
   organizationId: string;
+  unitId: number;
   createdBy: string;
   assetId: number;
   serviceId: number;
@@ -36,7 +38,9 @@ export const jobCreationClientErrors = new Set([
   "Ativo nao encontrado",
   "Ativo foi removido",
   "Ativo nao pertence a esta organizacao",
+  "Ativo nao pertence a esta unidade",
   "Servico nao encontrado",
+  "Servico nao pertence a esta unidade",
   "Servico esta inativo",
   "Servico nao possui metodo vinculado",
   "Metodo do servico nao encontrado",
@@ -69,6 +73,7 @@ async function persistCalibrationJob(
   const [assetData] = await executor
     .select({
       id: asset.id,
+      unitId: asset.unitId,
       customerId: asset.customerId,
       assetTypeId: asset.assetTypeId,
       deletedAt: asset.deletedAt,
@@ -91,6 +96,10 @@ async function persistCalibrationJob(
     throw new Error("Ativo nao pertence a esta organizacao");
   }
 
+  if (assetData.unitId !== params.unitId) {
+    throw new Error("Ativo nao pertence a esta unidade");
+  }
+
   const [serviceData] = await executor
     .select()
     .from(service)
@@ -104,6 +113,10 @@ async function persistCalibrationJob(
 
   if (!serviceData) {
     throw new Error("Servico nao encontrado");
+  }
+
+  if (serviceData.unitId !== params.unitId) {
+    throw new Error("Servico nao pertence a esta unidade");
   }
 
   if (!serviceData.isActive) {
@@ -150,13 +163,31 @@ async function persistCalibrationJob(
         and(
           eq(member.userId, params.technicianId),
           eq(member.organizationId, params.organizationId),
-          inArray(member.role, ["technician", "admin", "owner"]),
         ),
       )
       .limit(1);
 
     if (!techMember) {
       throw new Error("Tecnico nao encontrado ou sem permissao");
+    }
+
+    if (!["admin", "owner"].includes(techMember.role)) {
+      const [techAssignment] = await executor
+        .select({ id: memberUnitAssignment.id })
+        .from(memberUnitAssignment)
+        .where(
+          and(
+            eq(memberUnitAssignment.memberId, techMember.id),
+            eq(memberUnitAssignment.organizationId, params.organizationId),
+            eq(memberUnitAssignment.unitId, params.unitId),
+            inArray(memberUnitAssignment.role, ["technician", "unit_admin"]),
+          ),
+        )
+        .limit(1);
+
+      if (!techAssignment) {
+        throw new Error("Tecnico nao encontrado ou sem permissao");
+      }
     }
 
     const [competenceCount] = await executor
@@ -232,6 +263,7 @@ async function persistCalibrationJob(
     .values({
       jobId,
       organizationId: params.organizationId,
+      unitId: params.unitId,
       customerId: assetData.customerId,
       assetId: params.assetId,
       serviceId: params.serviceId,

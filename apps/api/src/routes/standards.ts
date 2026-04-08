@@ -18,6 +18,7 @@ import {
 } from "../middleware/permission";
 import { withCache, withInvalidation } from "../middleware/cache";
 import { eq, and, or, ilike, desc, count, isNull, lte, gte } from "drizzle-orm";
+import { buildUnitScopeCondition } from "../lib/units";
 
 const CommandPaletteStandardSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -67,6 +68,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(referenceStandard.organizationId, member.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, member),
               isNull(referenceStandard.deletedAt),
               or(
                 ilike(referenceStandard.name, `%${query}%`),
@@ -105,6 +107,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
       // Build conditions - always scope to organization and exclude soft-deleted
       const conditions = [
         eq(referenceStandard.organizationId, member.organizationId),
+        buildUnitScopeCondition(referenceStandard.unitId, member),
         isNull(referenceStandard.deletedAt),
       ];
 
@@ -215,6 +218,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(referenceStandard.id, id),
             eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
             isNull(referenceStandard.deletedAt),
           ),
         )
@@ -246,6 +250,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
         and(
           eq(referenceStandard.id, id),
           eq(referenceStandard.organizationId, member.organizationId),
+          buildUnitScopeCondition(referenceStandard.unitId, member),
           isNull(referenceStandard.deletedAt),
         ),
       )
@@ -282,10 +287,18 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
 
+      if (!member.activeUnitId) {
+        return c.json(
+          { error: "Selecione uma unidade específica para criar padrões" },
+          400,
+        );
+      }
+
       // Create the reference standard
       const [newStandard] = await db
         .insert(referenceStandard)
         .values({
+          unitId: member.activeUnitId,
           organizationId: member.organizationId,
           name: input.name,
           type: input.type || null,
@@ -316,7 +329,15 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
       await db.insert(referenceStandardAuditLog).values({
         standardId: newStandard.id,
         action: "create",
-        changes: { initial: input },
+        changes: {
+          initial: {
+            ...input,
+            id: newStandard.id,
+            unitId: newStandard.unitId,
+            organizationId: newStandard.organizationId,
+            createdBy: newStandard.createdBy,
+          },
+        },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
@@ -351,6 +372,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(referenceStandard.id, id),
             eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
             isNull(referenceStandard.deletedAt),
           ),
         )
@@ -556,6 +578,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(referenceStandard.id, id),
             eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
             isNull(referenceStandard.deletedAt),
           ),
         )
@@ -615,6 +638,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(referenceStandard.id, id),
             eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
             isNull(referenceStandard.deletedAt),
           ),
         )
@@ -749,6 +773,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(referenceStandard.id, id),
             eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
           ),
         )
         .limit(1);

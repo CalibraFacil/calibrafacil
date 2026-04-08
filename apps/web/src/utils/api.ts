@@ -1,6 +1,17 @@
 import { hc } from 'hono/client'
 import type { AppType } from '@calibra-facil/api'
 
+const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
+
+function getStoredActiveUnitId(): string | null {
+  if (typeof window === 'undefined') return null
+
+  const activeOrgId = window.localStorage.getItem('dashboard-active-org')
+  if (!activeOrgId) return null
+
+  return window.localStorage.getItem(`${DASHBOARD_UNIT_KEY_PREFIX}${activeOrgId}`)
+}
+
 function getApiBaseURL(): string {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL
@@ -18,9 +29,18 @@ function getApiBaseURL(): string {
 }
 
 export const api = hc<AppType>(getApiBaseURL(), {
-  fetch: (input: RequestInfo | URL, init?: RequestInit) =>
-    fetch(input, {
+  fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers)
+    const activeUnitId = getStoredActiveUnitId()
+
+    if (activeUnitId) {
+      headers.set('x-active-unit-id', activeUnitId)
+    }
+
+    return fetch(input, {
       ...init,
       credentials: 'include',
-    }),
+      headers,
+    })
+  },
 })

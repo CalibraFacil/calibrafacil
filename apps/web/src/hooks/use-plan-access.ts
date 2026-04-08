@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
+import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { api } from '@/utils/api'
 
 export interface PlanAccessResponse {
@@ -22,8 +23,11 @@ export interface PlanAccessResponse {
 }
 
 export function usePlanAccess() {
+  const { data: activeOrg } = useActiveOrganization()
+
   return useQuery({
-    queryKey: ['billing', 'access'],
+    queryKey: ['billing', 'access', activeOrg?.id ?? 'no-org'],
+    enabled: Boolean(activeOrg?.id),
     queryFn: async () => {
       const response = await api.api.billing.access.$get()
       if (!response.ok) {

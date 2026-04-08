@@ -39,6 +39,7 @@ import { publicApiRouter } from "./routes/public-api";
 import { isAllowedPortalOrigin } from "./lib/portal-domains";
 import { portalDomainsRouter } from "./routes/portal-domains";
 import { certificateTemplatesRouter } from "./routes/certificate-templates";
+import { unitsRouter } from "./routes/units";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -83,7 +84,7 @@ app.use(
     origin: (origin) => getCorsOrigin(origin),
     credentials: true,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "x-active-unit-id"],
   }),
 );
 
@@ -215,6 +216,7 @@ const routes = app
   .route("/api/api-keys", apiKeysRouter)
   .route("/api/portal-domains", portalDomainsRouter)
   .route("/api/certificate-templates", certificateTemplatesRouter)
+  .route("/api/units", unitsRouter)
   .route("/api/public/v1", publicApiRouter);
 
 export type AppType = typeof routes;
