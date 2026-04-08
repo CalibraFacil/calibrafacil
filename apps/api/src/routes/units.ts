@@ -19,6 +19,7 @@ import {
   requireOrgType,
   withLabPermission,
 } from "../middleware/permission";
+import { requireFeature } from "../middleware/tier-guard";
 
 const CreateUnitSchema = z.object({
   name: z.string().trim().min(2, "Nome da unidade é obrigatório"),
@@ -111,22 +112,28 @@ function dedupeUnitAssignments(
 }
 
 export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
-  .get("/", ...withLabPermission({ calibration: ["read"] }), async (c) => {
-    const { memberData, viewer } = getViewerAccess(c);
+  .get(
+    "/",
+    ...withLabPermission({ calibration: ["read"] }),
+    requireFeature("multi_unit"),
+    async (c) => {
+      const { memberData, viewer } = getViewerAccess(c);
 
-    return c.json({
-      activeUnitId: memberData.activeUnitId,
-      activeUnitName: memberData.activeUnitName,
-      selectedUnitScope: memberData.selectedUnitScope,
-      canAccessAllUnits: memberData.canAccessAllUnits,
-      viewer,
-      data: memberData.accessibleUnits,
-    });
-  })
+      return c.json({
+        activeUnitId: memberData.activeUnitId,
+        activeUnitName: memberData.activeUnitName,
+        selectedUnitScope: memberData.selectedUnitScope,
+        canAccessAllUnits: memberData.canAccessAllUnits,
+        viewer,
+        data: memberData.accessibleUnits,
+      });
+    },
+  )
   .get(
     "/admin/units",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
 
@@ -162,6 +169,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/units",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     zValidator("json", CreateUnitSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
@@ -224,6 +232,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/units/:id",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     zValidator("json", UpdateUnitSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
@@ -339,6 +348,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/members",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
 
@@ -427,6 +437,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/members/:memberId/assignments",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     zValidator("json", UpdateAssignmentsSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
@@ -563,6 +574,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/members/:memberId/role",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     zValidator("json", UpdateMemberRoleSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);

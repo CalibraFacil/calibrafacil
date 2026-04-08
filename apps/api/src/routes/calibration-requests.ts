@@ -10,6 +10,7 @@ import {
   calibrationRequestAuditLog,
   calibrationRequestItem,
   customer,
+  organization,
   service,
   subscription,
   user,
@@ -22,7 +23,7 @@ import {
   ReviewCalibrationRequestSchema,
 } from "@calibra-facil/schemas";
 import {
-  getLimit,
+  getEffectivePlanLimits,
   getPlan,
   isSubscriptionActive,
   type PlanId,
@@ -746,6 +747,11 @@ export const calibrationRequestsRouter = new Hono<{
           const planId: PlanId =
             (activeSubscription?.planId as PlanId | undefined) ?? "FREE";
           const subscriptionStatus = activeSubscription?.status ?? "TRIAL";
+          const [currentOrganization] = await tx
+            .select({ createdAt: organization.createdAt })
+            .from(organization)
+            .where(eq(organization.id, member.organizationId))
+            .limit(1);
 
           if (
             activeSubscription &&
@@ -760,7 +766,10 @@ export const calibrationRequestsRouter = new Hono<{
             };
           }
 
-          const limit = getLimit(planId, "certificates");
+          const limit = getEffectivePlanLimits(
+            planId,
+            currentOrganization?.createdAt,
+          ).certificates;
           const plan = getPlan(planId);
           const startOfMonth = new Date();
           startOfMonth.setDate(1);
