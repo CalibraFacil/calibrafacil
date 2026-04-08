@@ -1,6 +1,7 @@
 /// <reference path="./vite-env.d.ts" />
 import { organizationClient } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
+import { ssoClient } from "@better-auth/sso/client";
 import { ac, roles } from "./access";
 
 function getApiBaseURL(): string {
@@ -12,7 +13,6 @@ function getApiBaseURL(): string {
   // Fallback for local development
   return "https://localhost:3000";
 }
-
 
 // Shared organization plugin config
 const organizationPluginConfig = organizationClient({
@@ -57,7 +57,10 @@ export const labAuthClient = createBetterAuthClient({
   fetchOptions: {
     credentials: "include",
   },
-  plugins: [organizationPluginConfig],
+  plugins: [
+    organizationPluginConfig,
+    ssoClient({ domainVerification: { enabled: true } }),
+  ],
 });
 
 /**

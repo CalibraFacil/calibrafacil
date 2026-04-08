@@ -32,6 +32,7 @@ import { environmentalLimitsRouter } from "./routes/environmental-limits";
 import { competencesRouter } from "./routes/competences";
 import { trainingRecordsRouter } from "./routes/training-records";
 import { sessionsRouter } from "./routes/sessions";
+import { ssoRouter } from "./routes/sso";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -132,6 +133,7 @@ app.use("*", async (c, next) => {
  * RATE LIMITING
  */
 app.use("/api/auth/*", rateLimitAuth);
+app.use("/api/sso/start", rateLimitAuth);
 app.use("/api/invitations/*", rateLimitInvitations);
 app.use("/api/verify/*", rateLimitVerify);
 app.use("/api/webhooks/asaas", rateLimitWebhooks);
@@ -198,7 +200,8 @@ const routes = app
   .route("/api/environmental-limits", environmentalLimitsRouter)
   .route("/api/competences", competencesRouter)
   .route("/api/training-records", trainingRecordsRouter)
-  .route("/api/sessions", sessionsRouter);
+  .route("/api/sessions", sessionsRouter)
+  .route("/api/sso", ssoRouter);
 
 export type AppType = typeof routes;
 

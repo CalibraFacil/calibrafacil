@@ -12,6 +12,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@better-auth/sso": "^1.4.18",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/email": "workspace:^",
     "better-auth": "^1.4.18",

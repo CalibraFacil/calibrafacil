@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
 import { organization } from "better-auth/plugins";
+import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
 import { OrganizationInvitationEmail } from "@calibra-facil/email";
 import { ac, roles } from "./access";
@@ -56,6 +57,105 @@ function resolveAuthSecret(isProduction: boolean): string {
   }
 
   return getDevFallbackAuthSecret();
+}
+
+const DEV_TRUSTED_ORIGINS = [
+  "https://localhost:5173",
+  "https://localhost:5174",
+  "https://192.168.0.10:5173",
+  "https://192.168.0.10:5174",
+];
+
+const PROD_TRUSTED_ORIGINS = [
+  "https://calibrafacil.com",
+  "https://portal.calibrafacil.com",
+];
+
+function isIpv4Address(hostname: string): boolean {
+  const parts = hostname.split(".");
+
+  if (parts.length !== 4) {
+    return false;
+  }
+
+  return parts.every((part) => {
+    if (!/^\d+$/.test(part)) {
+      return false;
+    }
+
+    const value = Number(part);
+    return value >= 0 && value <= 255;
+  });
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+  if (!isIpv4Address(hostname)) return false;
+
+  const [first = -1, second = -1] = hostname
+    .split(".")
+    .map((segment) => Number(segment));
+
+  return (
+    first === 10 ||
+    first === 127 ||
+    first === 0 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
+}
+
+function normalizeDynamicTrustedOrigin(
+  candidate: string | null,
+  isProduction: boolean,
+): string | null {
+  if (!candidate) return null;
+
+  try {
+    const url = new URL(candidate);
+    const hostname = url.hostname.toLowerCase();
+
+    if (
+      url.protocol !== "https:" &&
+      (isProduction || url.protocol !== "http:")
+    ) {
+      return null;
+    }
+
+    if (isProduction) {
+      if (
+        hostname === "localhost" ||
+        hostname.endsWith(".local") ||
+        isPrivateIpv4(hostname)
+      ) {
+        return null;
+      }
+    }
+
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function createTrustedOrigins(
+  isProduction: boolean,
+): string[] | ((request?: Request) => Promise<string[]>) {
+  const baseOrigins = isProduction ? PROD_TRUSTED_ORIGINS : DEV_TRUSTED_ORIGINS;
+
+  return async (request?: Request) => {
+    const origins = new Set(baseOrigins);
+    const issuerOrigin = normalizeDynamicTrustedOrigin(
+      request?.headers.get("x-sso-issuer-origin") ?? null,
+      isProduction,
+    );
+
+    if (issuerOrigin) {
+      origins.add(issuerOrigin);
+    }
+
+    return [...origins];
+  };
 }
 
 // Organization plugin configuration factory
@@ -162,14 +262,7 @@ function createSharedConfig() {
         enabled: true,
       },
     },
-    trustedOrigins: isProduction
-      ? ["https://calibrafacil.com", "https://portal.calibrafacil.com"]
-      : [
-          "https://localhost:5173",
-          "https://localhost:5174",
-          "https://192.168.0.10:5173",
-          "https://192.168.0.10:5174",
-        ],
+    trustedOrigins: createTrustedOrigins(isProduction),
     advanced: {
       crossSubDomainCookies: isProduction
         ? {
@@ -204,7 +297,19 @@ export function createLabAuth() {
       ...sharedConfig.advanced,
       cookiePrefix: "lab",
     },
-    plugins: [createOrganizationPlugin()],
+    plugins: [
+      createOrganizationPlugin(),
+      sso({
+        providersLimit: 1,
+        disableImplicitSignUp: true,
+        organizationProvisioning: {
+          disabled: true,
+        },
+        domainVerification: {
+          enabled: true,
+        },
+      }),
+    ],
   });
 }
 

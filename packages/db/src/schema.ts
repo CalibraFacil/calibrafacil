@@ -176,6 +176,30 @@ export const invitation = pgTable(
   ],
 );
 
+export const ssoProvider = pgTable(
+  "sso_provider",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    oidcConfig: text("oidc_config"),
+    samlConfig: text("saml_config"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull().unique(),
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "cascade",
+    }),
+    domain: text("domain").notNull(),
+    domainVerified: boolean("domain_verified").default(false),
+  },
+  (table) => [
+    index("sso_provider_user_id_idx").on(table.userId),
+    index("sso_provider_org_id_idx").on(table.organizationId),
+    uniqueIndex("sso_provider_provider_id_uidx").on(table.providerId),
+  ],
+);
+
 // =============================================================================
 // ASSET TYPE - Instrument Classification Blueprint
 // =============================================================================
@@ -310,6 +334,7 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   members: many(member),
   invitations: many(invitation),
+  ssoProviders: many(ssoProvider),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -332,6 +357,7 @@ export const organizationRelations = relations(
     members: many(member),
     invitations: many(invitation),
     subscription: one(subscription),
+    ssoProviders: many(ssoProvider),
   }),
 );
 
@@ -353,6 +379,17 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
   }),
   user: one(user, {
     fields: [invitation.inviterId],
+    references: [user.id],
+  }),
+}));
+
+export const ssoProviderRelations = relations(ssoProvider, ({ one }) => ({
+  organization: one(organization, {
+    fields: [ssoProvider.organizationId],
+    references: [organization.id],
+  }),
+  user: one(user, {
+    fields: [ssoProvider.userId],
     references: [user.id],
   }),
 }));
