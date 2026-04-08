@@ -30,7 +30,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
-import { useDashboardContextState } from '../route'
+import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { type Job, jobsColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/jobs/')({
@@ -60,7 +60,8 @@ const statusLabels: Record<JobStatus, string> = {
 }
 
 function JobsListPage() {
-  const { activeOrganizationId, isContextSwitching } = useDashboardContextState()
+  const { activeOrganizationId, isContextSwitching } =
+    useDashboardContextState()
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('')
