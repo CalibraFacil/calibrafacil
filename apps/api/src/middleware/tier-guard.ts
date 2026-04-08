@@ -2,11 +2,17 @@ import type { Context } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import { db } from "@calibra-facil/db";
-import { subscription, calibrationJob, member } from "@calibra-facil/db/schema";
+import {
+  subscription,
+  calibrationJob,
+  member,
+  organization,
+} from "@calibra-facil/db/schema";
 import { eq, and, gte, count } from "drizzle-orm";
 import {
+  ENTITLEMENT_METADATA,
   getPlan,
-  getLimit,
+  getEffectivePlanLimits,
   hasFeature,
   isSubscriptionActive,
   type PlanId,
@@ -79,7 +85,15 @@ export async function assertPlanLimit(
   }
 
   // Get plan limits
-  const limit = getLimit(planId, resource);
+  const currentOrganization = await db.query.organization.findFirst({
+    columns: { createdAt: true },
+    where: eq(organization.id, memberData.organizationId),
+  });
+
+  const limit = getEffectivePlanLimits(
+    planId,
+    currentOrganization?.createdAt,
+  )[resource];
 
   // Get current usage (cached)
   const usage = await getCachedResourceUsage(
@@ -328,20 +342,7 @@ function getResourceLabel(resource: LimitResource): string {
  * Get human-readable label for feature
  */
 function getFeatureLabel(feature: FeatureFlag): string {
-  switch (feature) {
-    case "math_engine":
-      return "Calculo avancado de incerteza";
-    case "portal":
-      return "Portal do cliente";
-    case "financial":
-      return "Modulo financeiro";
-    case "api":
-      return "Acesso via API";
-    case "custom_domain":
-      return "Dominio personalizado";
-    default:
-      return feature;
-  }
+  return ENTITLEMENT_METADATA[feature]?.name ?? feature;
 }
 
 // =============================================================================

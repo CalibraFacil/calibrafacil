@@ -19,6 +19,7 @@ import {
   type AuthVariables,
   requireRole,
 } from "../middleware/permission";
+import { requireFeature } from "../middleware/tier-guard";
 import { withCache, withInvalidation } from "../middleware/cache";
 import { CACHE_TTL } from "../lib/cache";
 import { alias } from "drizzle-orm/pg-core";
@@ -433,6 +434,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/request-approval",
     ...withLabPermission({ template: ["update"] }),
+    requireFeature("approval_workflow"),
     withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
@@ -508,6 +510,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/technical-review",
     ...withLabPermission({ template: ["publish"] }),
+    requireFeature("approval_workflow"),
     requireRole(["admin"]),
     withInvalidation("methods"),
     async (c) => {
@@ -576,6 +579,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/quality-approve",
     ...withLabPermission({ template: ["publish"] }),
+    requireFeature("approval_workflow"),
     requireRole(["owner"]),
     withInvalidation("methods"),
     async (c) => {
@@ -684,6 +688,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/return-to-draft",
     ...withLabPermission({ template: ["update"] }),
+    requireFeature("approval_workflow"),
     requireRole(["admin", "owner"]),
     withInvalidation("methods"),
     zValidator("json", ReturnMethodToDraftSchema),
@@ -758,6 +763,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/publish",
     ...withLabPermission({ template: ["publish"] }),
+    requireFeature("approval_workflow"),
     requireRole(["owner"]),
     withInvalidation("methods"),
     async (c) => {
@@ -1168,6 +1174,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/:id/audit",
     ...withLabPermission({ template: ["read"] }),
+    requireFeature("advanced_audit_trail"),
     async (c) => {
       const member = c.get("member");
       const id = parseInt(c.req.param("id"), 10);

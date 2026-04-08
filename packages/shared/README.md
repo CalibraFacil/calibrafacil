@@ -15,18 +15,29 @@ pnpm add @calibra-facil/shared
 ## Usage
 
 ```typescript
-import { getPlan, hasFeature, getLimit, isSubscriptionActive } from "@calibra-facil/shared";
+import {
+  getPlan,
+  hasFeature,
+  hasEntitlement,
+  getLimit,
+  isSubscriptionActive,
+} from "@calibra-facil/shared";
 
 // Get plan details
 const plan = getPlan("PROFESSIONAL");
 
-// Check feature access
-if (hasFeature(userPlan, "portal")) {
+// Check entitlement access
+if (hasEntitlement(plan.id, "approval_workflow")) {
+  // Enable review flow
+}
+
+// Legacy helper still works
+if (hasFeature(plan.id, "portal")) {
   // Enable portal feature
 }
 
 // Get resource limits
-const maxCertificates = getLimit(userPlan, "certificatesPerMonth");
+const maxCertificates = getLimit(plan.id, "certificates");
 
 // Check subscription status
 if (isSubscriptionActive(subscription.status)) {
@@ -36,28 +47,37 @@ if (isSubscriptionActive(subscription.status)) {
 
 ## Plans
 
-| Plan | Certificates/mo | Users | Storage | Features |
-|------|-----------------|-------|---------|----------|
-| FREE | 10 | 1 | 100MB | - |
-| STANDARD | 200 | 5 | 5GB | math_engine |
-| PROFESSIONAL | 1000 | 999 | 50GB | +portal, +financial |
-| ENTERPRISE | Unlimited | 999 | 1TB | +api, +custom_domain |
+| Plan         | Certificates/mo | Users | Storage | Features                                                                                             |
+| ------------ | --------------- | ----- | ------- | ---------------------------------------------------------------------------------------------------- |
+| FREE         | 10              | 1     | 100MB   | -                                                                                                    |
+| STANDARD     | 100             | 5     | 5GB     | math_engine, portal                                                                                  |
+| PROFESSIONAL | 800             | 999   | 50GB    | +financial, +api, +custom_domain, +approval_workflow                                                 |
+| ENTERPRISE   | Unlimited       | 999   | 1TB     | +advanced_audit_trail, +custom_templates, +priority_support, +sso, +multi_unit, +custom_integrations |
 
 ## Feature Flags
 
-| Feature | Description | Available |
-|---------|-------------|-----------|
-| `math_engine` | GUM uncertainty calculations | Standard+ |
-| `portal` | Client portal access | Professional+ |
-| `financial` | Invoicing and payments | Professional+ |
-| `api` | API access | Enterprise |
-| `custom_domain` | Custom domain support | Enterprise |
+| Feature                | Description                         | Available     |
+| ---------------------- | ----------------------------------- | ------------- |
+| `math_engine`          | GUM uncertainty calculations        | Standard+     |
+| `portal`               | Client portal access                | Standard+     |
+| `financial`            | Invoicing and payments              | Professional+ |
+| `api`                  | API access                          | Professional+ |
+| `custom_domain`        | Custom domain support               | Professional+ |
+| `sso`                  | Corporate SSO for the lab dashboard | Enterprise    |
+| `approval_workflow`    | Review and approval flows           | Professional+ |
+| `advanced_audit_trail` | Detailed compliance history         | Professional+ |
+| `custom_templates`     | Custom certificate templates        | Professional+ |
+| `priority_support`     | Priority operational support        | Professional+ |
+| `multi_unit`           | Multi-unit operations               | Enterprise    |
+| `custom_integrations`  | Tailored integrations               | Enterprise    |
 
 ## Helper Functions
 
 - `getPlan(planId)` - Get full plan configuration
+- `hasEntitlement(planId, feature)` - Check if plan has entitlement
 - `hasFeature(planId, feature)` - Check if plan has feature
 - `getLimit(planId, resource)` - Get resource limit for plan
+- `getEnabledEntitlements(planId)` - List enabled plan entitlements
 - `isValidPlanId(id)` - Type guard for plan IDs
 - `isSubscriptionActive(status)` - Check if subscription is active/trial
 - `getPlanPrice(planId, cycle)` - Get pricing for plan
