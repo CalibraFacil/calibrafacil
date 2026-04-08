@@ -204,6 +204,20 @@
       "when": 1774598400000,
       "tag": "0028_add_custom_integrations",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1775101200000,
+      "tag": "0030_add_public_api_platform",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1775104800000,
+      "tag": "0031_add_personnel_competence",
+      "breakpoints": true
     }
   ]
 }
