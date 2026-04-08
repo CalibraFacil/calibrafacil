@@ -329,7 +329,15 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
       await db.insert(referenceStandardAuditLog).values({
         standardId: newStandard.id,
         action: "create",
-        changes: { initial: input },
+        changes: {
+          initial: {
+            ...input,
+            id: newStandard.id,
+            unitId: newStandard.unitId,
+            organizationId: newStandard.organizationId,
+            createdBy: newStandard.createdBy,
+          },
+        },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
       });

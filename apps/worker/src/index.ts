@@ -7,7 +7,11 @@ import QRCode from "qrcode";
 import { processScheduledNotifications } from "./scheduled.js";
 import { signPdf, decryptPassword, decryptBinary, type SignatureMetadata } from "@calibra-facil/signing";
 import { DEFAULT_CERTIFICATE_TEMPLATE_CONFIG } from "@calibra-facil/shared";
-import { processIntegrationSync, type IntegrationSyncQueueMessage } from "./integrations.js";
+import {
+    processIntegrationSync,
+    processScheduledIntegrationSyncs,
+    type IntegrationSyncQueueMessage,
+} from "./integrations.js";
 
 interface Env {
     BROWSER: Fetcher;
@@ -99,30 +103,29 @@ async function fetchJobData(
       cj.results,
       cj.data,
       cj.organization_id,
-      cj.unit_id,
       cj.approved_by,
       -- Amendment fields - ISO 17025 Clause 7.8.4.1
       cj.supersedes_id,
       cj.superseded_by_id,
       cj.amendment_number,
       cj.amendment_reason,
-      -- Resolved lab identity: unit first, organization fallback
-      COALESCE(ou.trade_name, ou.legal_name, ou.name, o.name) as lab_name,
-      COALESCE(ou.cnpj, o.cnpj) as lab_cnpj,
-      COALESCE(ou.accreditation_number, o.accreditation_number) as lab_accreditation_number,
-      COALESCE(ou.accreditation_body, o.accreditation_body) as lab_accreditation_body,
-      COALESCE(ou.street, o.street) as lab_street,
-      COALESCE(ou.number, o.number) as lab_number,
-      COALESCE(ou.complement, o.complement) as lab_complement,
-      COALESCE(ou.neighbourhood, o.neighbourhood) as lab_neighbourhood,
-      COALESCE(ou.city, o.city) as lab_city,
-      COALESCE(ou.state, o.state) as lab_state,
-      COALESCE(ou.cep, o.cep) as lab_cep,
-      COALESCE(ou.phone, o.phone) as lab_phone,
-      COALESCE(ou.email, o.email) as lab_email,
-      COALESCE(ou.website, o.website) as lab_website,
-      COALESCE(ou.technical_manager_name, o.technical_manager_name) as lab_technical_manager_name,
-      COALESCE(ou.technical_manager_title, o.technical_manager_title) as lab_technical_manager_title,
+      -- Organization (Lab) info
+      o.name as lab_name,
+      o.cnpj as lab_cnpj,
+      o.accreditation_number as lab_accreditation_number,
+      o.accreditation_body as lab_accreditation_body,
+      o.street as lab_street,
+      o.number as lab_number,
+      o.complement as lab_complement,
+      o.neighbourhood as lab_neighbourhood,
+      o.city as lab_city,
+      o.state as lab_state,
+      o.cep as lab_cep,
+      o.phone as lab_phone,
+      o.email as lab_email,
+      o.website as lab_website,
+      o.technical_manager_name as lab_technical_manager_name,
+      o.technical_manager_title as lab_technical_manager_title,
       -- Customer info (complete)
       c.name as customer_name,
       c.tax_id as customer_tax_id,
@@ -142,7 +145,6 @@ async function fetchJobData(
       original.approved_at as original_approved_at
     FROM calibration_job cj
     LEFT JOIN organization o ON cj.organization_id = o.id
-    LEFT JOIN organization_unit ou ON cj.unit_id = ou.id
     LEFT JOIN customer c ON cj.customer_id = c.id
     LEFT JOIN asset a ON cj.asset_id = a.id
     LEFT JOIN "user" u ON cj.approved_by = u.id
@@ -908,12 +910,31 @@ export default {
         });
     },
 
-    // Scheduled handler for compliance notifications (runs daily at 08:00 UTC)
+    // Scheduled handlers for compliance notifications and integration syncs
     async scheduled(
-        _event: ScheduledEvent,
+        event: ScheduledEvent,
         env: Env,
-        ctx: ExecutionContext
+        _ctx: ExecutionContext
     ): Promise<void> {
+        if (event.cron === "*/30 * * * *") {
+            console.log("[Scheduled] Starting integration scheduler");
+            const start = performance.now();
+
+            try {
+                const result = await processScheduledIntegrationSyncs(env);
+                const duration = Math.round(performance.now() - start);
+                console.log(
+                    `[Scheduled] Integration scheduler completed in ${duration}ms: ` +
+                    `${result.scheduledRuns} run(s) dispatched`
+                );
+            } catch (error) {
+                console.error("[Scheduled] Error processing integrations:", error);
+                throw error;
+            }
+
+            return;
+        }
+
         console.log("[Scheduled] Starting daily compliance notification check");
         const start = performance.now();
 

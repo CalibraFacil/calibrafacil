@@ -201,29 +201,36 @@
     {
       "idx": 28,
       "version": "7",
-      "when": 1774591200000,
-      "tag": "0028_add_unit_institutional_profile",
-      "breakpoints": true
-    },
-    {
-      "idx": 29,
-      "version": "7",
       "when": 1774598400000,
-      "tag": "0029_add_custom_integrations",
+      "tag": "0028_add_custom_integrations",
       "breakpoints": true
     },
     {
       "idx": 30,
       "version": "7",
-      "when": 1774605600000,
-      "tag": "0030_add_enterprise_ops_workflows",
+      "when": 1775101200000,
+      "tag": "0030_add_public_api_platform",
       "breakpoints": true
     },
     {
       "idx": 31,
       "version": "7",
-      "when": 1774677600000,
-      "tag": "0031_add_backoffice_admin_fields",
+      "when": 1775104800000,
+      "tag": "0031_add_personnel_competence",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1775112000000,
+      "tag": "0032_add_enterprise_ops_workflows",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1775115600000,
+      "tag": "0033_add_backoffice_admin_fields",
       "breakpoints": true
     }
   ]

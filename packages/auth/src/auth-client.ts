@@ -11,7 +11,7 @@ function getApiBaseURL(): string {
   }
 
   // Fallback for local development
-  return "https://localhost:3000";
+  return "http://localhost:3000";
 }
 
 // Shared organization plugin config
@@ -57,6 +57,9 @@ export const labAuthClient = createBetterAuthClient({
   fetchOptions: {
     credentials: "include",
   },
+  sessionOptions: {
+    refetchOnWindowFocus: false,
+  },
   plugins: [
     adminClient({
       ac: platformAc,
@@ -76,6 +79,9 @@ export const portalAuthClient = createBetterAuthClient({
   basePath: "/api/auth/portal",
   fetchOptions: {
     credentials: "include",
+  },
+  sessionOptions: {
+    refetchOnWindowFocus: false,
   },
   plugins: [organizationPluginConfig],
 });

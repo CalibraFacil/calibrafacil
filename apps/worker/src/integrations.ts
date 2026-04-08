@@ -1,14 +1,24 @@
 import { Client } from "pg";
 import { decryptPassword } from "@calibra-facil/signing";
 import {
+    applyIntegrationMappings,
     formatIntegrationCustomerAddress,
     normalizeGenericFinancialErpConfig,
-    type GenericFinancialErpConnectionConfig,
-    type IntegrationBillingDocumentPayload,
-    type IntegrationCustomerPayload,
-    type IntegrationServiceOrderPayload,
-    type IntegrationSyncStatus,
-    type IntegrationSyncTarget,
+    validateIntegrationMappings,
+} from "@calibra-facil/shared";
+import type {
+    IntegrationMappingValidationIssue,
+    GenericFinancialErpConnectionConfig,
+    IntegrationDependencyWarning,
+    IntegrationBillingDocumentPayload,
+    IntegrationCustomerPayload,
+    IntegrationScheduleFrequency,
+    IntegrationServiceOrderPayload,
+    IntegrationSyncStatus,
+    IntegrationSyncTarget,
+    IntegrationSyncTrigger,
+    IntegrationTargetCoverageSummary,
+    IntegrationTargetScheduleConfig,
 } from "@calibra-facil/shared";
 
 export interface IntegrationSyncQueueMessage {
@@ -18,6 +28,7 @@ export interface IntegrationSyncQueueMessage {
     runId: string;
     target: IntegrationSyncTarget;
     limit: number;
+    trigger: IntegrationSyncTrigger;
 }
 
 interface IntegrationWorkerEnv {
@@ -30,6 +41,14 @@ type SyncPayload =
     | IntegrationServiceOrderPayload
     | IntegrationBillingDocumentPayload;
 
+const INTEGRATION_TARGETS = [
+    "customer",
+    "service_order",
+    "billing_document",
+] as const satisfies readonly IntegrationSyncTarget[];
+
+const DEFAULT_SYNC_LIMIT = 50;
+
 function toIso(value: unknown): string | null {
     if (!value) return null;
     if (value instanceof Date) return value.toISOString();
@@ -38,6 +57,65 @@ function toIso(value: unknown): string | null {
         return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
     }
     return null;
+}
+
+function parseDate(value: string | null | undefined): Date | null {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function calculateNextScheduledRunAt(
+    frequency: IntegrationScheduleFrequency,
+    from: Date
+): string {
+    const next = new Date(from);
+    next.setMilliseconds(0);
+
+    if (frequency === "weekly") {
+        next.setDate(next.getDate() + 7);
+    } else {
+        next.setDate(next.getDate() + 1);
+    }
+
+    return next.toISOString();
+}
+
+function getTargetSchedule(
+    config: GenericFinancialErpConnectionConfig,
+    target: IntegrationSyncTarget
+): IntegrationTargetScheduleConfig {
+    return config.schedules[target];
+}
+
+function getMappingValidationIssues(
+    config: GenericFinancialErpConnectionConfig,
+    target?: IntegrationSyncTarget
+): IntegrationMappingValidationIssue[] {
+    const issues = validateIntegrationMappings(config.mappings);
+    if (!target) return issues;
+    return issues.filter((issue) => issue.target === target);
+}
+
+function assertValidMappings(
+    config: GenericFinancialErpConnectionConfig,
+    target?: IntegrationSyncTarget
+) {
+    const issues = getMappingValidationIssues(config, target);
+    if (issues.length === 0) return;
+    throw new Error(issues.map((issue) => issue.message).join(" "));
+}
+
+function buildMappedTargetPayload(
+    config: GenericFinancialErpConnectionConfig,
+    target: IntegrationSyncTarget,
+    payload: SyncPayload
+) {
+    return applyIntegrationMappings(
+        target,
+        payload as unknown as Record<string, unknown>,
+        config.mappings[target]
+    );
 }
 
 async function withDbClient<T>(
@@ -122,6 +200,24 @@ async function updateRun(client: Client, params: {
     );
 }
 
+async function updateIntegrationConfig(
+    client: Client,
+    params: {
+        integrationId: string;
+        config: GenericFinancialErpConnectionConfig;
+    }
+) {
+    await client.query(
+        `
+        UPDATE integration_connection
+        SET config = $2::jsonb,
+            updated_at = NOW()
+        WHERE integration_id = $1
+        `,
+        [params.integrationId, JSON.stringify(params.config)]
+    );
+}
+
 async function fetchRuntime(
     client: Client,
     integrationId: string,
@@ -130,15 +226,23 @@ async function fetchRuntime(
     config: GenericFinancialErpConnectionConfig;
     encryptedSecret: string;
     secretIv: string;
+    status: "ACTIVE" | "DISABLED";
+    lastValidatedAt: string | null;
+    lastValidationError: string | null;
 } | null> {
     const result = await client.query(
         `
-        SELECT ic.config, ic.encrypted_secret, ic.secret_iv
+        SELECT
+          ic.config,
+          ic.encrypted_secret,
+          ic.secret_iv,
+          oi.status,
+          oi.last_validated_at,
+          oi.last_validation_error
         FROM organization_integration oi
         INNER JOIN integration_connection ic ON ic.integration_id = oi.id
         WHERE oi.id = $1
           AND oi.organization_id = $2
-          AND oi.status = 'ACTIVE'
         LIMIT 1
         `,
         [integrationId, organizationId]
@@ -151,6 +255,9 @@ async function fetchRuntime(
         config: normalizeGenericFinancialErpConfig(row.config),
         encryptedSecret: row.encrypted_secret,
         secretIv: row.secret_iv,
+        status: row.status,
+        lastValidatedAt: toIso(row.last_validated_at),
+        lastValidationError: row.last_validation_error ?? null,
     };
 }
 
@@ -282,6 +389,153 @@ async function loadPayloads(
     }));
 }
 
+async function countLocalTargetRecords(
+    client: Client,
+    organizationId: string,
+    target: IntegrationSyncTarget
+): Promise<number> {
+    if (target === "customer") {
+        const result = await client.query(
+            `SELECT COUNT(*)::int AS total FROM customer WHERE lab_organization_id = $1`,
+            [organizationId]
+        );
+        return Number(result.rows[0]?.total ?? 0);
+    }
+
+    if (target === "service_order") {
+        const result = await client.query(
+            `
+            SELECT COUNT(*)::int AS total
+            FROM calibration_job
+            WHERE organization_id = $1
+              AND status IN ('DRAFT', 'IN_PROGRESS', 'REVIEW', 'APPROVED', 'SUPERSEDED')
+            `,
+            [organizationId]
+        );
+        return Number(result.rows[0]?.total ?? 0);
+    }
+
+    const result = await client.query(
+        `
+        SELECT COUNT(*)::int AS total
+        FROM calibration_job cj
+        LEFT JOIN service s ON cj.service_id = s.id
+        WHERE cj.organization_id = $1
+          AND cj.status IN ('APPROVED', 'SUPERSEDED')
+          AND s.price IS NOT NULL
+          AND s.price > 0
+        `,
+        [organizationId]
+    );
+
+    return Number(result.rows[0]?.total ?? 0);
+}
+
+async function countLinkedTargetRecords(
+    client: Client,
+    integrationId: string,
+    target: IntegrationSyncTarget
+): Promise<number> {
+    const result = await client.query(
+        `
+        SELECT COUNT(*)::int AS total
+        FROM integration_object_link
+        WHERE integration_id = $1
+          AND target = $2
+        `,
+        [integrationId, target]
+    );
+
+    return Number(result.rows[0]?.total ?? 0);
+}
+
+function buildDependencyWarnings(params: {
+    target: IntegrationSyncTarget;
+    validated: boolean;
+    integrationStatus: "ACTIVE" | "DISABLED";
+    coverageByTarget: Record<IntegrationSyncTarget, IntegrationTargetCoverageSummary>;
+}): IntegrationDependencyWarning[] {
+    const warnings: IntegrationDependencyWarning[] = [];
+
+    if (params.integrationStatus !== "ACTIVE") {
+        warnings.push({
+            code: "INTEGRATION_DISABLED",
+            target: params.target,
+            severity: "error",
+            message: "Ative a integração antes de sincronizar este alvo.",
+        });
+    }
+
+    if (!params.validated) {
+        warnings.push({
+            code: "VALIDATION_REQUIRED",
+            target: params.target,
+            severity: "error",
+            message: "Valide a conexão antes de executar sincronizações.",
+        });
+    }
+
+    if (params.target === "service_order") {
+        const customerCoverage = params.coverageByTarget.customer;
+        if (customerCoverage.localCount > customerCoverage.linkedCount) {
+            warnings.push({
+                code: "CUSTOMERS_NOT_SYNCED",
+                target: params.target,
+                severity: "error",
+                message:
+                    "Existem clientes locais sem vínculo remoto. Sincronize clientes antes das ordens de serviço.",
+            });
+        }
+    }
+
+    if (params.target === "billing_document") {
+        const customerCoverage = params.coverageByTarget.customer;
+        const serviceOrderCoverage = params.coverageByTarget.service_order;
+
+        if (customerCoverage.localCount > customerCoverage.linkedCount) {
+            warnings.push({
+                code: "CUSTOMERS_NOT_SYNCED",
+                target: params.target,
+                severity: "error",
+                message:
+                    "Existem clientes locais sem vínculo remoto. Sincronize clientes antes do faturamento.",
+            });
+        }
+
+        if (serviceOrderCoverage.localCount > serviceOrderCoverage.linkedCount) {
+            warnings.push({
+                code: "SERVICE_ORDERS_NOT_SYNCED",
+                target: params.target,
+                severity: "error",
+                message:
+                    "Existem ordens de serviço sem vínculo remoto. Sincronize ordens antes do faturamento.",
+            });
+        }
+    }
+
+    return warnings;
+}
+
+function buildRunSummary(params: {
+    target: IntegrationSyncTarget;
+    requestedLimit?: number;
+    processedCount?: number;
+    successCount?: number;
+    errorCount?: number;
+    blocked?: boolean;
+    retryOfRunId?: string | null;
+}) {
+    return {
+        target: params.target,
+        requestedLimit: params.requestedLimit ?? DEFAULT_SYNC_LIMIT,
+        processedCount: params.processedCount ?? 0,
+        successCount: params.successCount ?? 0,
+        errorCount: params.errorCount ?? 0,
+        blocked: params.blocked ?? false,
+        retryOfRunId: params.retryOfRunId ?? null,
+    };
+}
+
 function getTargetPath(config: GenericFinancialErpConnectionConfig, target: IntegrationSyncTarget) {
     if (target === "customer") return config.customerPath;
     if (target === "service_order") return config.serviceOrderPath;
@@ -389,6 +643,16 @@ async function pushRecord(
         payload: SyncPayload;
     }
 ) {
+    const { mappedPayload, issues } = buildMappedTargetPayload(
+        params.config,
+        params.target,
+        params.payload
+    );
+
+    if (issues.length > 0) {
+        throw new Error(`Payload inválido para ${params.target}: ${issues.join(" ")}`);
+    }
+
     const existingRemoteId = await getExistingRemoteId(
         client,
         params.integrationId,
@@ -404,7 +668,7 @@ async function pushRecord(
     const result = await callRemoteJson(url, {
         method,
         headers: buildHeaders(params.secret),
-        body: JSON.stringify(params.payload),
+        body: JSON.stringify(mappedPayload),
     });
 
     if (!result.ok) {
@@ -419,6 +683,191 @@ async function pushRecord(
         target: params.target,
         localEntityId: params.payload.externalId,
         remoteEntityId: remoteId,
+    });
+}
+
+async function createSyncRun(
+    client: Client,
+    params: {
+        integrationId: string;
+        organizationId: string;
+        target: IntegrationSyncTarget;
+        trigger: IntegrationSyncTrigger;
+        requestedLimit: number;
+    }
+): Promise<string> {
+    const id = crypto.randomUUID();
+    await client.query(
+        `
+        INSERT INTO integration_sync_run
+          (id, integration_id, organization_id, trigger, target, status, summary)
+        VALUES ($1, $2, $3, $4, $5, 'PENDING', $6::jsonb)
+        `,
+        [
+            id,
+            params.integrationId,
+            params.organizationId,
+            params.trigger,
+            params.target,
+            JSON.stringify(
+                buildRunSummary({
+                    target: params.target,
+                    requestedLimit: params.requestedLimit,
+                })
+            ),
+        ]
+    );
+
+    return id;
+}
+
+async function hasActiveTargetRun(
+    client: Client,
+    params: {
+        integrationId: string;
+        organizationId: string;
+        target: IntegrationSyncTarget;
+    }
+): Promise<boolean> {
+    const result = await client.query(
+        `
+        SELECT 1
+        FROM integration_sync_run
+        WHERE integration_id = $1
+          AND organization_id = $2
+          AND target = $3
+          AND status IN ('PENDING', 'RUNNING')
+        LIMIT 1
+        `,
+        [params.integrationId, params.organizationId, params.target]
+    );
+
+    return result.rows.length > 0;
+}
+
+type DueScheduledRun = {
+    integrationId: string;
+    organizationId: string;
+    target: IntegrationSyncTarget;
+    limit: number;
+    trigger: "scheduled";
+};
+
+export async function processScheduledIntegrationSyncs(
+    env: IntegrationWorkerEnv
+): Promise<{ scheduledRuns: number }> {
+    return withDbClient(env, async (client) => {
+        const integrations = await client.query(
+            `
+            SELECT
+              oi.id,
+              oi.organization_id,
+              ic.config
+            FROM organization_integration oi
+            INNER JOIN integration_connection ic ON ic.integration_id = oi.id
+            WHERE oi.status = 'ACTIVE'
+            `
+        );
+
+        const now = new Date();
+        const dueRuns: DueScheduledRun[] = [];
+
+        for (const row of integrations.rows) {
+            const config = normalizeGenericFinancialErpConfig(row.config);
+
+            for (const target of INTEGRATION_TARGETS) {
+                const schedule = getTargetSchedule(config, target);
+                const nextRun = parseDate(schedule.nextScheduledRunAt);
+
+                if (schedule.mode !== "scheduled" || !nextRun) {
+                    continue;
+                }
+
+                if (nextRun.getTime() > now.getTime()) {
+                    continue;
+                }
+
+                const active = await hasActiveTargetRun(client, {
+                    integrationId: row.id,
+                    organizationId: row.organization_id,
+                    target,
+                });
+
+                if (active) {
+                    continue;
+                }
+
+                dueRuns.push({
+                    integrationId: row.id,
+                    organizationId: row.organization_id,
+                    target,
+                    limit: DEFAULT_SYNC_LIMIT,
+                    trigger: "scheduled",
+                });
+            }
+        }
+
+        for (const dueRun of dueRuns) {
+            const runtime = await fetchRuntime(
+                client,
+                dueRun.integrationId,
+                dueRun.organizationId
+            );
+
+            if (!runtime) {
+                continue;
+            }
+
+            const advancedConfig = normalizeGenericFinancialErpConfig({
+                ...runtime.config,
+                schedules: {
+                    ...runtime.config.schedules,
+                    [dueRun.target]: {
+                        ...runtime.config.schedules[dueRun.target],
+                        lastScheduledRunAt: now.toISOString(),
+                        nextScheduledRunAt: calculateNextScheduledRunAt(
+                            runtime.config.schedules[dueRun.target].frequency,
+                            now
+                        ),
+                    },
+                },
+            });
+
+            await updateIntegrationConfig(client, {
+                integrationId: dueRun.integrationId,
+                config: advancedConfig,
+            });
+
+            const runId = await createSyncRun(client, {
+                integrationId: dueRun.integrationId,
+                organizationId: dueRun.organizationId,
+                target: dueRun.target,
+                trigger: "scheduled",
+                requestedLimit: dueRun.limit,
+            });
+
+            try {
+                await processIntegrationSync(env, {
+                    type: "INTEGRATION_SYNC",
+                    integrationId: dueRun.integrationId,
+                    organizationId: dueRun.organizationId,
+                    runId,
+                    target: dueRun.target,
+                    limit: dueRun.limit,
+                    trigger: dueRun.trigger,
+                });
+            } catch (error) {
+                console.error("[IntegrationScheduler] Failed scheduled run", {
+                    integrationId: dueRun.integrationId,
+                    organizationId: dueRun.organizationId,
+                    target: dueRun.target,
+                    runId,
+                    error,
+                });
+            }
+        }
+
+        return { scheduledRuns: dueRuns.length };
     });
 }
 
@@ -441,11 +890,74 @@ export async function processIntegrationSync(
             );
 
             if (!runtime) {
-                throw new Error("Integração ativa não encontrada");
+                throw new Error("Integração não encontrada");
             }
             if (!env.INTEGRATIONS_MASTER_KEY) {
                 throw new Error("INTEGRATIONS_MASTER_KEY não configurada");
             }
+
+            const validated =
+                Boolean(runtime.lastValidatedAt) && !runtime.lastValidationError;
+            const coverageByTarget = Object.fromEntries(
+                await Promise.all(
+                    INTEGRATION_TARGETS.map(async (target) => {
+                        const [localCount, linkedCount] = await Promise.all([
+                            countLocalTargetRecords(client, message.organizationId, target),
+                            countLinkedTargetRecords(client, message.integrationId, target),
+                        ]);
+
+                        return [
+                            target,
+                            {
+                                target,
+                                localCount,
+                                linkedCount,
+                                unlinkedCount: Math.max(localCount - linkedCount, 0),
+                            } satisfies IntegrationTargetCoverageSummary,
+                        ] as const;
+                    })
+                )
+            ) as Record<IntegrationSyncTarget, IntegrationTargetCoverageSummary>;
+            const blockingWarnings = buildDependencyWarnings({
+                target: message.target,
+                validated,
+                integrationStatus: runtime.status,
+                coverageByTarget,
+            }).filter((warning) => warning.severity === "error");
+
+            if (blockingWarnings.length > 0) {
+                const blockedMessage = blockingWarnings[0]?.message ?? "Sincronização bloqueada";
+
+                await updateRun(client, {
+                    runId: message.runId,
+                    status: "FAILED",
+                    errorSummary: blockedMessage,
+                    summary: buildRunSummary({
+                        target: message.target,
+                        requestedLimit: message.limit,
+                        blocked: true,
+                    }),
+                    finishedAt: new Date(),
+                });
+
+                await insertEvent(client, {
+                    integrationId: message.integrationId,
+                    organizationId: message.organizationId,
+                    runId: message.runId,
+                    level: "warning",
+                    event: "sync.blocked",
+                    message: blockedMessage,
+                    details: {
+                        target: message.target,
+                        warnings: blockingWarnings,
+                        trigger: message.trigger,
+                    },
+                });
+
+                return;
+            }
+
+            assertValidMappings(runtime.config, message.target);
 
             const secret = decryptPassword(
                 runtime.encryptedSecret,
@@ -510,12 +1022,13 @@ export async function processIntegrationSync(
                 successCount,
                 errorCount,
                 errorSummary,
-                summary: {
+                summary: buildRunSummary({
                     target: message.target,
+                    requestedLimit: message.limit,
                     processedCount,
                     successCount,
                     errorCount,
-                },
+                }),
                 finishedAt: new Date(),
             });
 
@@ -544,6 +1057,10 @@ export async function processIntegrationSync(
                 runId: message.runId,
                 status: "FAILED",
                 errorSummary: messageText,
+                summary: buildRunSummary({
+                    target: message.target,
+                    requestedLimit: message.limit,
+                }),
                 finishedAt: new Date(),
             });
 

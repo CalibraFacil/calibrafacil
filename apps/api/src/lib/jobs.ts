@@ -163,7 +163,6 @@ async function persistCalibrationJob(
         and(
           eq(member.userId, params.technicianId),
           eq(member.organizationId, params.organizationId),
-          inArray(member.role, ["technician", "admin", "owner"]),
         ),
       )
       .limit(1);

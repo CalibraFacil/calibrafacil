@@ -47,6 +47,12 @@ export function withCache(resource: string, ttl: number) {
     url.searchParams.forEach((value, key) => {
       filters[key] = value;
     });
+    filters.__unitScope =
+      member.selectedUnitScope === "all"
+        ? "all"
+        : member.activeUnitId !== null
+          ? `unit:${member.activeUnitId}`
+          : "none";
 
     const cacheKey = buildCacheKey(orgId, resource, filters);
 

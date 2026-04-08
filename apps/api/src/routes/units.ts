@@ -6,12 +6,11 @@ import {
   member,
   memberUnitAssignment,
   type MemberUnitRole,
-  type OrganizationInstallationType,
   organizationEventLog,
   organizationUnit,
   user,
 } from "@calibra-facil/db/schema";
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import {
   type AuthVariables,
   type MemberData,
@@ -20,38 +19,14 @@ import {
   requireOrgType,
   withLabPermission,
 } from "../middleware/permission";
+import { requireFeature } from "../middleware/tier-guard";
 
-const optionalText = z.string().trim().max(255).optional();
-const optionalLongText = z.string().trim().max(4000).optional();
-const installationTypeSchema = z.enum(["PERMANENT", "TEMPORARY", "MOBILE"]);
-
-const UnitProfileSchema = z.object({
+const CreateUnitSchema = z.object({
   name: z.string().trim().min(2, "Nome da unidade é obrigatório"),
-  legalName: optionalText,
-  tradeName: optionalText,
-  cnpj: optionalText,
-  accreditationNumber: optionalText,
-  accreditationBody: optionalText,
-  installationType: installationTypeSchema.optional(),
-  street: optionalText,
-  number: optionalText,
-  complement: optionalText,
-  neighbourhood: optionalText,
-  city: optionalText,
-  state: optionalText,
-  cep: optionalText,
-  phone: optionalText,
-  email: optionalText,
-  website: optionalText,
-  technicalManagerName: optionalText,
-  technicalManagerTitle: optionalText,
-  scopeSummary: optionalLongText,
-  scopeNotes: optionalLongText,
 });
 
-const CreateUnitSchema = UnitProfileSchema;
-
-const UpdateUnitSchema = UnitProfileSchema.partial().extend({
+const UpdateUnitSchema = z.object({
+  name: z.string().trim().min(2).optional(),
   status: z.enum(["ACTIVE", "ARCHIVED"]).optional(),
 });
 
@@ -69,78 +44,54 @@ const UpdateMemberRoleSchema = z.object({
 });
 
 function slugify(name: string) {
-  return name
+  const slug = name
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+  return slug || "unit";
 }
 
-function normalizeNullableText(value?: string) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
+function isUniqueViolation(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "23505"
+  );
 }
 
-function buildUnitProfileValues(
-  input: z.infer<typeof UnitProfileSchema> | z.infer<typeof UpdateUnitSchema>,
-) {
-  return {
-    legalName: normalizeNullableText(input.legalName),
-    tradeName: normalizeNullableText(input.tradeName),
-    cnpj: normalizeNullableText(input.cnpj),
-    accreditationNumber: normalizeNullableText(input.accreditationNumber),
-    accreditationBody: normalizeNullableText(input.accreditationBody),
-    installationType:
-      (input.installationType as OrganizationInstallationType | undefined) ??
-      "PERMANENT",
-    street: normalizeNullableText(input.street),
-    number: normalizeNullableText(input.number),
-    complement: normalizeNullableText(input.complement),
-    neighbourhood: normalizeNullableText(input.neighbourhood),
-    city: normalizeNullableText(input.city),
-    state: normalizeNullableText(input.state),
-    cep: normalizeNullableText(input.cep),
-    phone: normalizeNullableText(input.phone),
-    email: normalizeNullableText(input.email),
-    website: normalizeNullableText(input.website),
-    technicalManagerName: normalizeNullableText(input.technicalManagerName),
-    technicalManagerTitle: normalizeNullableText(input.technicalManagerTitle),
-    scopeSummary: normalizeNullableText(input.scopeSummary),
-    scopeNotes: normalizeNullableText(input.scopeNotes),
-  };
-}
+async function allocateUnitSlug(params: {
+  organizationId: string;
+  name: string;
+  excludeId?: number;
+}) {
+  const baseSlug = slugify(params.name);
 
-const unitSelectFields = {
-  id: organizationUnit.id,
-  name: organizationUnit.name,
-  slug: organizationUnit.slug,
-  legalName: organizationUnit.legalName,
-  tradeName: organizationUnit.tradeName,
-  cnpj: organizationUnit.cnpj,
-  accreditationNumber: organizationUnit.accreditationNumber,
-  accreditationBody: organizationUnit.accreditationBody,
-  installationType: organizationUnit.installationType,
-  street: organizationUnit.street,
-  number: organizationUnit.number,
-  complement: organizationUnit.complement,
-  neighbourhood: organizationUnit.neighbourhood,
-  city: organizationUnit.city,
-  state: organizationUnit.state,
-  cep: organizationUnit.cep,
-  phone: organizationUnit.phone,
-  email: organizationUnit.email,
-  website: organizationUnit.website,
-  technicalManagerName: organizationUnit.technicalManagerName,
-  technicalManagerTitle: organizationUnit.technicalManagerTitle,
-  scopeSummary: organizationUnit.scopeSummary,
-  scopeNotes: organizationUnit.scopeNotes,
-  status: organizationUnit.status,
-  isDefault: organizationUnit.isDefault,
-  createdAt: organizationUnit.createdAt,
-  archivedAt: organizationUnit.archivedAt,
-} as const;
+  for (let attempt = 1; attempt <= 100; attempt += 1) {
+    const candidate = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
+    const [existing] = await db
+      .select({ id: organizationUnit.id })
+      .from(organizationUnit)
+      .where(
+        and(
+          eq(organizationUnit.organizationId, params.organizationId),
+          eq(organizationUnit.slug, candidate),
+          params.excludeId ? ne(organizationUnit.id, params.excludeId) : undefined,
+        ),
+      )
+      .limit(1);
+
+    if (!existing) {
+      return candidate;
+    }
+  }
+
+  throw new Error("Nao foi possivel gerar um slug unico para a unidade");
+}
 
 function getViewerAccess(c: {
   get: (key: string) => unknown;
@@ -161,22 +112,28 @@ function dedupeUnitAssignments(
 }
 
 export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
-  .get("/", ...withLabPermission({ calibration: ["read"] }), async (c) => {
-    const { memberData, viewer } = getViewerAccess(c);
+  .get(
+    "/",
+    ...withLabPermission({ calibration: ["read"] }),
+    requireFeature("multi_unit"),
+    async (c) => {
+      const { memberData, viewer } = getViewerAccess(c);
 
-    return c.json({
-      activeUnitId: memberData.activeUnitId,
-      activeUnitName: memberData.activeUnitName,
-      selectedUnitScope: memberData.selectedUnitScope,
-      canAccessAllUnits: memberData.canAccessAllUnits,
-      viewer,
-      data: memberData.accessibleUnits,
-    });
-  })
+      return c.json({
+        activeUnitId: memberData.activeUnitId,
+        activeUnitName: memberData.activeUnitName,
+        selectedUnitScope: memberData.selectedUnitScope,
+        canAccessAllUnits: memberData.canAccessAllUnits,
+        viewer,
+        data: memberData.accessibleUnits,
+      });
+    },
+  )
   .get(
     "/admin/units",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
 
@@ -185,7 +142,15 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const units = await db
-        .select(unitSelectFields)
+        .select({
+          id: organizationUnit.id,
+          name: organizationUnit.name,
+          slug: organizationUnit.slug,
+          status: organizationUnit.status,
+          isDefault: organizationUnit.isDefault,
+          createdAt: organizationUnit.createdAt,
+          archivedAt: organizationUnit.archivedAt,
+        })
         .from(organizationUnit)
         .where(
           and(
@@ -204,59 +169,59 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/units",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     zValidator("json", CreateUnitSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
       const session = c.get("session");
       const input = c.req.valid("json");
+      let created: typeof organizationUnit.$inferSelect | undefined;
 
       if (!viewer.canManageOrganizationUnits) {
         return c.json({ error: "Apenas administradores globais podem criar unidades" }, 403);
       }
 
-      const baseSlug = slugify(input.name);
-      const profileValues = buildUnitProfileValues(input);
-
-      const [existingCount] = await db
-        .select({ total: count() })
-        .from(organizationUnit)
-        .where(
-          and(
-            eq(organizationUnit.organizationId, memberData.organizationId),
-            inArray(organizationUnit.slug, [baseSlug, `${baseSlug}-2`]),
-          ),
-        );
-
-      const suffix = (existingCount?.total ?? 0) + 1;
-      const slug = suffix > 1 ? `${baseSlug}-${suffix}` : baseSlug;
-
-      const [created] = await db
-        .insert(organizationUnit)
-        .values({
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const slug = await allocateUnitSlug({
           organizationId: memberData.organizationId,
           name: input.name,
-          slug,
-          ...profileValues,
-          status: "ACTIVE",
-          isDefault: false,
-          createdBy: session.user.id,
-        })
-        .returning();
+        });
+
+        try {
+          [created] = await db
+            .insert(organizationUnit)
+            .values({
+              organizationId: memberData.organizationId,
+              name: input.name,
+              slug,
+              status: "ACTIVE",
+              isDefault: false,
+              createdBy: session.user.id,
+            })
+            .returning();
+          break;
+        } catch (error) {
+          if (!isUniqueViolation(error) || attempt === 1) {
+            throw error;
+          }
+        }
+      }
+
+      if (!created) {
+        return c.json({ error: "Falha ao criar unidade" }, 500);
+      }
 
       await db.insert(organizationEventLog).values({
         organizationId: memberData.organizationId,
-        unitId: created?.id ?? null,
+        unitId: created.id,
         actorUserId: session.user.id,
         actorMemberId: memberData.id,
         action: "unit.created",
         entityType: "organization_unit",
-        entityId: String(created?.id ?? ""),
+        entityId: String(created.id),
         details: {
           name: input.name,
-          slug,
-          installationType: profileValues.installationType,
-          cnpj: profileValues.cnpj,
-          accreditationNumber: profileValues.accreditationNumber,
+          slug: created.slug,
         },
       });
 
@@ -267,6 +232,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/units/:id",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     zValidator("json", UpdateUnitSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
@@ -310,97 +276,11 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       const updateData: Partial<typeof existing> = {};
       if (input.name && input.name !== existing.name) {
         updateData.name = input.name;
-        updateData.slug = slugify(input.name);
-      }
-
-      const profileUpdates = buildUnitProfileValues(input);
-
-      if ("legalName" in input && profileUpdates.legalName !== existing.legalName) {
-        updateData.legalName = profileUpdates.legalName;
-      }
-      if ("tradeName" in input && profileUpdates.tradeName !== existing.tradeName) {
-        updateData.tradeName = profileUpdates.tradeName;
-      }
-      if ("cnpj" in input && profileUpdates.cnpj !== existing.cnpj) {
-        updateData.cnpj = profileUpdates.cnpj;
-      }
-      if (
-        "accreditationNumber" in input &&
-        profileUpdates.accreditationNumber !== existing.accreditationNumber
-      ) {
-        updateData.accreditationNumber = profileUpdates.accreditationNumber;
-      }
-      if (
-        "accreditationBody" in input &&
-        profileUpdates.accreditationBody !== existing.accreditationBody
-      ) {
-        updateData.accreditationBody = profileUpdates.accreditationBody;
-      }
-      if (
-        input.installationType &&
-        profileUpdates.installationType !== existing.installationType
-      ) {
-        updateData.installationType = profileUpdates.installationType;
-      }
-      if ("street" in input && profileUpdates.street !== existing.street) {
-        updateData.street = profileUpdates.street;
-      }
-      if ("number" in input && profileUpdates.number !== existing.number) {
-        updateData.number = profileUpdates.number;
-      }
-      if (
-        "complement" in input &&
-        profileUpdates.complement !== existing.complement
-      ) {
-        updateData.complement = profileUpdates.complement;
-      }
-      if (
-        "neighbourhood" in input &&
-        profileUpdates.neighbourhood !== existing.neighbourhood
-      ) {
-        updateData.neighbourhood = profileUpdates.neighbourhood;
-      }
-      if ("city" in input && profileUpdates.city !== existing.city) {
-        updateData.city = profileUpdates.city;
-      }
-      if ("state" in input && profileUpdates.state !== existing.state) {
-        updateData.state = profileUpdates.state;
-      }
-      if ("cep" in input && profileUpdates.cep !== existing.cep) {
-        updateData.cep = profileUpdates.cep;
-      }
-      if ("phone" in input && profileUpdates.phone !== existing.phone) {
-        updateData.phone = profileUpdates.phone;
-      }
-      if ("email" in input && profileUpdates.email !== existing.email) {
-        updateData.email = profileUpdates.email;
-      }
-      if ("website" in input && profileUpdates.website !== existing.website) {
-        updateData.website = profileUpdates.website;
-      }
-      if (
-        "technicalManagerName" in input &&
-        profileUpdates.technicalManagerName !== existing.technicalManagerName
-      ) {
-        updateData.technicalManagerName = profileUpdates.technicalManagerName;
-      }
-      if (
-        "technicalManagerTitle" in input &&
-        profileUpdates.technicalManagerTitle !== existing.technicalManagerTitle
-      ) {
-        updateData.technicalManagerTitle = profileUpdates.technicalManagerTitle;
-      }
-      if (
-        "scopeSummary" in input &&
-        profileUpdates.scopeSummary !== existing.scopeSummary
-      ) {
-        updateData.scopeSummary = profileUpdates.scopeSummary;
-      }
-      if (
-        "scopeNotes" in input &&
-        profileUpdates.scopeNotes !== existing.scopeNotes
-      ) {
-        updateData.scopeNotes = profileUpdates.scopeNotes;
+        updateData.slug = await allocateUnitSlug({
+          organizationId: memberData.organizationId,
+          name: input.name,
+          excludeId: id,
+        });
       }
 
       if (input.status && input.status !== existing.status) {
@@ -413,11 +293,30 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json(existing);
       }
 
-      const [updated] = await db
-        .update(organizationUnit)
-        .set(updateData)
-        .where(eq(organizationUnit.id, id))
-        .returning();
+      let updated: typeof existing | undefined;
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          [updated] = await db
+            .update(organizationUnit)
+            .set(updateData)
+            .where(eq(organizationUnit.id, id))
+            .returning();
+          break;
+        } catch (error) {
+          if (!isUniqueViolation(error) || attempt === 1) {
+            throw error;
+          }
+
+          if (input.name && input.name !== existing.name) {
+            updateData.slug = await allocateUnitSlug({
+              organizationId: memberData.organizationId,
+              name: input.name,
+              excludeId: id,
+            });
+          }
+        }
+      }
 
       await db.insert(organizationEventLog).values({
         organizationId: memberData.organizationId,
@@ -436,17 +335,9 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           before: {
             name: existing.name,
             slug: existing.slug,
-            legalName: existing.legalName,
-            tradeName: existing.tradeName,
-            cnpj: existing.cnpj,
-            accreditationNumber: existing.accreditationNumber,
-            accreditationBody: existing.accreditationBody,
-            installationType: existing.installationType,
-            technicalManagerName: existing.technicalManagerName,
-            technicalManagerTitle: existing.technicalManagerTitle,
             status: existing.status,
           },
-          after: updated,
+          after: updateData,
         },
       });
 
@@ -457,6 +348,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/members",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
 
@@ -479,6 +371,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(memberUnitAssignment.organizationId, memberData.organizationId),
+            eq(organizationUnit.organizationId, memberData.organizationId),
             viewer.isGlobalManager
               ? undefined
               : inArray(memberUnitAssignment.unitId, viewer.managedUnitIds),
@@ -544,6 +437,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/members/:memberId/assignments",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     zValidator("json", UpdateAssignmentsSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);
@@ -624,10 +518,15 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           ),
         );
 
+      // Global managers can remove assignments that already exist as well as any
+      // units included in the incoming payload. Scoped managers can only delete
+      // assignments for units they manage.
       const editableUnitIds = viewer.isGlobalManager
         ? existingAssignments.map((assignment) => assignment.unitId).concat(unitIds)
         : viewer.managedUnitIds;
 
+      // Deduping here keeps the subsequent inArray delete filter scoped to the
+      // unique set of unit IDs this viewer is allowed to affect.
       const scopedEditableUnitIds = Array.from(new Set(editableUnitIds));
 
       if (scopedEditableUnitIds.length > 0) {
@@ -675,6 +574,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/members/:memberId/role",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    requireFeature("multi_unit"),
     zValidator("json", UpdateMemberRoleSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);

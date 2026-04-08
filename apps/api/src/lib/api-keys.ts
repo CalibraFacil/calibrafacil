@@ -8,15 +8,44 @@ const API_KEY_PREFIX = "cf_live";
 
 export type PublicApiScope =
   | "customers:read"
+  | "customers:write"
   | "assets:read"
+  | "assets:write"
+  | "requests:read"
+  | "requests:write"
   | "jobs:read"
-  | "certificates:read";
+  | "jobs:write"
+  | "services:read"
+  | "units:read"
+  | "reports:read"
+  | "certificates:read"
+  | "webhooks:manage";
 
 export const DEFAULT_PUBLIC_API_SCOPES: PublicApiScope[] = [
   "customers:read",
   "assets:read",
+  "requests:read",
   "jobs:read",
+  "services:read",
+  "units:read",
+  "reports:read",
   "certificates:read",
+];
+
+export const ALL_PUBLIC_API_SCOPES: PublicApiScope[] = [
+  "customers:read",
+  "customers:write",
+  "assets:read",
+  "assets:write",
+  "requests:read",
+  "requests:write",
+  "jobs:read",
+  "jobs:write",
+  "services:read",
+  "units:read",
+  "reports:read",
+  "certificates:read",
+  "webhooks:manage",
 ];
 
 export function createApiKeySecret() {
