@@ -23,10 +23,16 @@ import type {
   IntegrationSyncTarget,
   IntegrationSyncTrigger,
   IntegrationType,
+  MigrationStatus,
+  OnboardingStatus,
   PublicApiResourceType,
   PublicApiWebhookDeliveryStatus,
   PublicApiWebhookEvent,
   PublicApiWebhookSubscriptionStatus,
+  SupportEventKind,
+  SupportRequestCategory,
+  SupportRequestPriority,
+  SupportRequestStatus,
 } from "@calibra-facil/shared";
 
 // =============================================================================
@@ -52,6 +58,10 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  role: text("role").default("user").notNull(),
+  banned: boolean("banned").default(false).notNull(),
+  banReason: text("ban_reason"),
+  banExpires: timestamp("ban_expires"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -75,6 +85,9 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    impersonatedBy: text("impersonated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => [index("session_userId_idx").on(table.userId)],
 );
@@ -268,6 +281,152 @@ export const organizationEventLog = pgTable(
     index("organization_event_log_unit_id_idx").on(table.unitId),
     index("organization_event_log_action_idx").on(table.action),
     index("organization_event_log_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const platformEventLog = pgTable(
+  "platform_event_log",
+  {
+    id: serial("id").primaryKey(),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    targetUserId: text("target_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("platform_event_log_action_idx").on(table.action),
+    index("platform_event_log_actor_user_idx").on(table.actorUserId),
+    index("platform_event_log_target_user_idx").on(table.targetUserId),
+    index("platform_event_log_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const organizationSuccessProfile = pgTable(
+  "organization_success_profile",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    accountOwnerUserId: text("account_owner_user_id").references(
+      () => user.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    accountOwnerName: text("account_owner_name"),
+    accountOwnerEmail: text("account_owner_email"),
+    supportContactEmail: text("support_contact_email"),
+    onboardingStatus: text("onboarding_status")
+      .$type<OnboardingStatus>()
+      .default("NOT_STARTED")
+      .notNull(),
+    migrationStatus: text("migration_status")
+      .$type<MigrationStatus>()
+      .default("NOT_REQUIRED")
+      .notNull(),
+    goLiveTargetDate: timestamp("go_live_target_date"),
+    goLiveActualDate: timestamp("go_live_actual_date"),
+    publicStatusNote: text("public_status_note"),
+    internalNotes: text("internal_notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_success_profile_org_uidx").on(
+      table.organizationId,
+    ),
+    index("organization_success_profile_onboarding_idx").on(
+      table.onboardingStatus,
+    ),
+    index("organization_success_profile_migration_idx").on(
+      table.migrationStatus,
+    ),
+  ],
+);
+
+export const organizationSupportRequest = pgTable(
+  "organization_support_request",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    requestedByUserId: text("requested_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    assignedToUserId: text("assigned_to_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    category: text("category").$type<SupportRequestCategory>().notNull(),
+    priority: text("priority")
+      .$type<SupportRequestPriority>()
+      .default("NORMAL")
+      .notNull(),
+    status: text("status")
+      .$type<SupportRequestStatus>()
+      .default("OPEN")
+      .notNull(),
+    subject: text("subject").notNull(),
+    description: text("description").notNull(),
+    publicResponse: text("public_response"),
+    slaTargetAt: timestamp("sla_target_at"),
+    firstResponseAt: timestamp("first_response_at"),
+    resolvedAt: timestamp("resolved_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("organization_support_request_org_idx").on(table.organizationId),
+    index("organization_support_request_status_idx").on(table.status),
+    index("organization_support_request_priority_idx").on(table.priority),
+    index("organization_support_request_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const organizationSupportRequestEvent = pgTable(
+  "organization_support_request_event",
+  {
+    id: serial("id").primaryKey(),
+    supportRequestId: integer("support_request_id")
+      .notNull()
+      .references(() => organizationSupportRequest.id, {
+        onDelete: "cascade",
+      }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    kind: text("kind").$type<SupportEventKind>().notNull(),
+    message: text("message").notNull(),
+    publicVisible: boolean("public_visible").default(false).notNull(),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("organization_support_request_event_request_idx").on(
+      table.supportRequestId,
+    ),
+    index("organization_support_request_event_org_idx").on(table.organizationId),
+    index("organization_support_request_event_kind_idx").on(table.kind),
+    index("organization_support_request_event_created_at_idx").on(
+      table.createdAt,
+    ),
   ],
 );
 
@@ -933,6 +1092,14 @@ export const userRelations = relations(user, ({ many }) => ({
   customDomains: many(organizationCustomDomain),
   certificateTemplates: many(certificateTemplate),
   apiKeyAuditLogs: many(organizationApiKeyAuditLog),
+  successProfiles: many(organizationSuccessProfile),
+  supportRequestsCreated: many(organizationSupportRequest, {
+    relationName: "supportRequestRequestedBy",
+  }),
+  supportRequestsAssigned: many(organizationSupportRequest, {
+    relationName: "supportRequestAssignedTo",
+  }),
+  supportRequestEvents: many(organizationSupportRequestEvent),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -967,6 +1134,9 @@ export const organizationRelations = relations(
     integrationSyncRuns: many(integrationSyncRun),
     integrationEventLogs: many(integrationEventLog),
     integrationObjectLinks: many(integrationObjectLink),
+    successProfile: one(organizationSuccessProfile),
+    supportRequests: many(organizationSupportRequest),
+    supportRequestEvents: many(organizationSupportRequestEvent),
   }),
 );
 
@@ -1022,6 +1192,59 @@ export const organizationEventLogRelations = relations(
     actorMember: one(member, {
       fields: [organizationEventLog.actorMemberId],
       references: [member.id],
+    }),
+  }),
+);
+
+export const organizationSuccessProfileRelations = relations(
+  organizationSuccessProfile,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [organizationSuccessProfile.organizationId],
+      references: [organization.id],
+    }),
+    accountOwnerUser: one(user, {
+      fields: [organizationSuccessProfile.accountOwnerUserId],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const organizationSupportRequestRelations = relations(
+  organizationSupportRequest,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [organizationSupportRequest.organizationId],
+      references: [organization.id],
+    }),
+    requestedByUser: one(user, {
+      fields: [organizationSupportRequest.requestedByUserId],
+      references: [user.id],
+      relationName: "supportRequestRequestedBy",
+    }),
+    assignedToUser: one(user, {
+      fields: [organizationSupportRequest.assignedToUserId],
+      references: [user.id],
+      relationName: "supportRequestAssignedTo",
+    }),
+    events: many(organizationSupportRequestEvent),
+  }),
+);
+
+export const organizationSupportRequestEventRelations = relations(
+  organizationSupportRequestEvent,
+  ({ one }) => ({
+    supportRequest: one(organizationSupportRequest, {
+      fields: [organizationSupportRequestEvent.supportRequestId],
+      references: [organizationSupportRequest.id],
+    }),
+    organization: one(organization, {
+      fields: [organizationSupportRequestEvent.organizationId],
+      references: [organization.id],
+    }),
+    actorUser: one(user, {
+      fields: [organizationSupportRequestEvent.actorUserId],
+      references: [user.id],
     }),
   }),
 );

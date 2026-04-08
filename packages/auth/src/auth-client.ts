@@ -1,8 +1,8 @@
 /// <reference path="./vite-env.d.ts" />
-import { organizationClient } from "better-auth/client/plugins";
+import { adminClient, organizationClient } from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ssoClient } from "@better-auth/sso/client";
-import { ac, roles } from "./access";
+import { ac, platformAc, platformRoles, roles } from "./access";
 
 function getApiBaseURL(): string {
   // Primary source of truth (Cloudflare Pages, Vite)
@@ -61,6 +61,10 @@ export const labAuthClient = createBetterAuthClient({
     refetchOnWindowFocus: false,
   },
   plugins: [
+    adminClient({
+      ac: platformAc,
+      roles: platformRoles,
+    }),
     organizationPluginConfig,
     ssoClient({ domainVerification: { enabled: true } }),
   ],
@@ -82,6 +86,24 @@ export const portalAuthClient = createBetterAuthClient({
   plugins: [organizationPluginConfig],
 });
 
+/**
+ * Backoffice Auth Client - for the internal operations workspace (apps/web /backoffice)
+ * Connects to: /api/auth/backoffice/*
+ */
+export const backofficeAuthClient = createBetterAuthClient({
+  baseURL: getApiBaseURL(),
+  basePath: "/api/auth/backoffice",
+  fetchOptions: {
+    credentials: "include",
+  },
+  plugins: [
+    adminClient({
+      ac: platformAc,
+      roles: platformRoles,
+    }),
+  ],
+});
+
 // Keep the original 'authClient' export for backwards compatibility (uses lab auth)
 export const authClient = labAuthClient;
 
@@ -97,6 +119,8 @@ export const {
   // Settings page methods
   updateUser,
   changePassword,
+  requestPasswordReset,
+  resetPassword,
   listSessions,
   revokeSession,
   revokeOtherSessions,
@@ -113,6 +137,14 @@ export const usePortalListOrganizations = portalAuthClient.useListOrganizations;
 export const usePortalActiveOrganization =
   portalAuthClient.useActiveOrganization;
 export const portalOrganization = portalAuthClient.organization;
+export const labAdmin = labAuthClient.admin;
+
+// Backoffice-specific exports (for apps/web /backoffice)
+export const backofficeSignIn = backofficeAuthClient.signIn;
+export const backofficeSignOut = backofficeAuthClient.signOut;
+export const useBackofficeSession = backofficeAuthClient.useSession;
+export const getBackofficeSession = () => backofficeAuthClient.getSession();
+export const backofficeAdmin = backofficeAuthClient.admin;
 
 // =============================================================================
 // PERMISSION CHECKING UTILITIES

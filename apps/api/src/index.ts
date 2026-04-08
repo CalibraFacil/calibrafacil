@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
+import {
+  createBackofficeAuth,
+  createLabAuth,
+  createPortalAuth,
+} from "@calibra-facil/auth";
 import {
   rateLimitAuth,
   rateLimitInvitations,
@@ -22,6 +26,7 @@ import { jobsRouter } from "./routes/jobs";
 import { calibrationRequestsRouter } from "./routes/calibration-requests";
 import { verifyRouter } from "./routes/verify";
 import { dashboardRouter } from "./routes/dashboard";
+import { reportsRouter } from "./routes/reports";
 import { billingRouter } from "./routes/billing";
 import { webhooksRouter } from "./routes/webhooks";
 import { notificationsRouter } from "./routes/notifications";
@@ -42,6 +47,9 @@ import { portalDomainsRouter } from "./routes/portal-domains";
 import { certificateTemplatesRouter } from "./routes/certificate-templates";
 import { unitsRouter } from "./routes/units";
 import { integrationsRouter } from "./routes/integrations";
+import { customerSuccessRouter } from "./routes/customer-success";
+import { internalCustomerSuccessRouter } from "./routes/internal-customer-success";
+import { backofficeRouter } from "./routes/backoffice";
 import { profileMediaRouter } from "./routes/profile-media";
 
 // Environment variables type for Cloudflare Workers
@@ -56,6 +64,8 @@ interface Env {
   PORTAL_APP_URL?: string;
   PORTAL_INVITATION_EXPIRES_IN?: string;
   DATABASE_URL: string;
+  INTERNAL_OPERATOR_EMAILS?: string;
+  BACKOFFICE_BOOTSTRAP_TOKEN?: string;
   CACHE: KVNamespace;
   [key: string]: unknown;
 }
@@ -218,6 +228,12 @@ app.on(["GET", "POST"], "/api/auth/lab/*", async (c) => {
   return await withCors(c, res);
 });
 
+app.on(["GET", "POST"], "/api/auth/backoffice/*", async (c) => {
+  const backofficeAuth = createBackofficeAuth();
+  const res = await backofficeAuth.handler(c.req.raw);
+  return await withCors(c, res);
+});
+
 app.on(["GET", "POST"], "/api/auth/portal/*", async (c) => {
   const portalAuth = createPortalAuth();
   const res = await portalAuth.handler(c.req.raw);
@@ -242,6 +258,7 @@ const routes = app
   .route("/api/calibration-requests", calibrationRequestsRouter)
   .route("/api/verify", verifyRouter)
   .route("/api/dashboard", dashboardRouter)
+  .route("/api/reports", reportsRouter)
   .route("/api/billing", billingRouter)
   .route("/api/webhooks", webhooksRouter)
   .route("/api/notifications", notificationsRouter)
@@ -259,6 +276,9 @@ const routes = app
   .route("/api/certificate-templates", certificateTemplatesRouter)
   .route("/api/units", unitsRouter)
   .route("/api/integrations", integrationsRouter)
+  .route("/api/customer-success", customerSuccessRouter)
+  .route("/api/backoffice", backofficeRouter)
+  .route("/api/internal/customer-success", internalCustomerSuccessRouter)
   .route("/api/profile-media", profileMediaRouter)
   .route("/api/public/v1", publicApiRouter)
   .route("/api/public/v2", publicApiV2DocsRouter)

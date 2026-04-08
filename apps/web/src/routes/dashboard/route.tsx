@@ -12,6 +12,7 @@ import {
   useActiveOrganization,
   useListOrganizations,
 } from '@calibra-facil/auth/client'
+import { canAccessBackoffice } from '@calibra-facil/auth/access'
 import { AppSidebar } from '@/components/app-sidebar'
 import { CommandPalette } from '@/components/command-palette/command-palette'
 import { CommandPaletteProvider } from '@/components/command-palette/command-context'
@@ -26,7 +27,12 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { authClient } from '@calibra-facil/auth/client'
-import { DashboardContextStateContext } from '@/contexts/dashboard-context'
+import {
+  DashboardContextStateContext,
+  useDashboardContextState,
+} from '@/contexts/dashboard-context'
+
+export { useDashboardContextState }
 
 const DASHBOARD_ORG_KEY = 'dashboard-active-org'
 const DASHBOARD_LAYOUT_MOUNT_MARK = 'dashboard:layout:mount'
@@ -58,6 +64,13 @@ export const Route = createFileRoute('/dashboard')({
         to: '/sign-in',
         search: { redirect: location.pathname },
       })
+    }
+
+    if (
+      canAccessBackoffice(session.user.role) &&
+      !session.session.impersonatedBy
+    ) {
+      throw redirect({ to: '/backoffice' })
     }
   },
   component: DashboardLayout,
@@ -101,6 +114,7 @@ function DashboardLayout() {
   const isDashboardHome =
     pathname === '/dashboard' || pathname === '/dashboard/'
   const hasLabAccess = labOrganizations.length > 0
+  const hasAnyOrganizations = (organizations?.length ?? 0) > 0
   const hasLoadedOrganizations = !organizationsLoading
   const preferredDashboardOrg =
     storedLabOrg ?? activeLabOrg ?? labOrganizations[0] ?? null
@@ -190,7 +204,32 @@ function DashboardLayout() {
     }
   }, [isContextSwitching])
 
-  // No LAB access - show error page
+  // No LAB access but no organizations yet - send to onboarding
+  if (!isBootstrappingContext && !hasLabAccess && !hasAnyOrganizations) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Complete o onboarding</CardTitle>
+            <CardDescription>
+              Sua conta foi criada, mas você ainda não configurou um laboratório
+              para acessar o dashboard.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <Button onClick={() => navigate({ to: '/onboarding/organization' })}>
+              Criar laboratório
+            </Button>
+            <Button variant="outline" onClick={() => navigate({ to: '/' })}>
+              Voltar para o início
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // No LAB access - show restricted page for portal-only users
   if (!isBootstrappingContext && !hasLabAccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">

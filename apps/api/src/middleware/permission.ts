@@ -1,6 +1,10 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
+import {
+  createBackofficeAuth,
+  createLabAuth,
+  createPortalAuth,
+} from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
   member as memberTable,
@@ -13,8 +17,15 @@ import type {
   CalibrationState,
   CalibrationAction,
   RoleName,
+  PlatformRole,
 } from "@calibra-facil/auth/access";
-import { canPerformCalibrationAction, roles } from "@calibra-facil/auth/access";
+import {
+  canAccessBackoffice,
+  canPerformCalibrationAction,
+  hasPlatformRole,
+  parsePlatformRoles,
+  roles,
+} from "@calibra-facil/auth/access";
 import {
   resolveMemberUnitScope,
   type ResolvedUnit,
@@ -35,6 +46,10 @@ export interface SessionData {
     name: string;
     email: string;
     emailVerified: boolean;
+    role?: string | null;
+    banned?: boolean | null;
+    banReason?: string | null;
+    banExpires?: Date | null;
     image?: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -47,6 +62,7 @@ export interface SessionData {
     createdAt: Date;
     updatedAt: Date;
     token: string;
+    impersonatedBy?: string | null;
   };
 }
 
@@ -70,7 +86,7 @@ export interface MemberData {
 
 export type GovernanceAccess = UnitGovernanceAccess;
 
-export type AuthSource = "lab" | "portal";
+export type AuthSource = "lab" | "backoffice" | "portal";
 
 /**
  * Context type extension for authenticated requests
@@ -79,8 +95,10 @@ export interface AuthVariables {
   session: SessionData;
   member: MemberData;
   authSource: AuthSource;
+  platformRoles?: PlatformRole[];
   serverTiming?: ServerTimingMetric[];
   requestLabAuth?: ReturnType<typeof createLabAuth>;
+  requestBackofficeAuth?: ReturnType<typeof createBackofficeAuth>;
   requestPortalAuth?: ReturnType<typeof createPortalAuth>;
 }
 
@@ -117,6 +135,20 @@ function getRequestPortalAuth(c: {
 
   const auth = createPortalAuth();
   c.set("requestPortalAuth", auth);
+  return auth;
+}
+
+function getRequestBackofficeAuth(c: {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+}) {
+  const existing = c.get("requestBackofficeAuth") as
+    | ReturnType<typeof createBackofficeAuth>
+    | undefined;
+  if (existing) return existing;
+
+  const auth = createBackofficeAuth();
+  c.set("requestBackofficeAuth", auth);
   return auth;
 }
 
@@ -164,6 +196,20 @@ function applyServerTimingHeader(c: {
     .join(", ");
 
   c.header("Server-Timing", value);
+}
+
+export function isInternalOperatorEmail(
+  email: string | null | undefined,
+  rawAllowlist: string | null | undefined,
+) {
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail || !rawAllowlist) return false;
+
+  return rawAllowlist
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(normalizedEmail);
 }
 
 function hasPermissionLocally(role: RoleName, permissions: PermissionCheck) {
@@ -308,6 +354,34 @@ export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
     await next();
   },
 );
+
+/**
+ * Middleware to require authentication using Backoffice auth.
+ * For use on internal backoffice routes.
+ * Sets `session` in the context.
+ *
+ * @example
+ * app.use("*", requireBackofficeAuthSession);
+ */
+export const requireBackofficeAuthSession = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const authStartedAt = performance.now();
+  const backofficeAuth = getRequestBackofficeAuth(c);
+  const session = await backofficeAuth.api.getSession({
+    headers: c.req.raw.headers,
+  });
+
+  if (!session) {
+    throw new HTTPException(401, { message: "Unauthorized" });
+  }
+
+  c.set("session", session as SessionData);
+  c.set("authSource", "backoffice");
+  addServerTiming(c, "auth", authStartedAt, "backoffice");
+
+  await next();
+});
 
 /**
  * Middleware to require authentication (tries both auth instances).
@@ -517,6 +591,10 @@ export function requirePermission(permissions: PermissionCheck) {
         headers: c.req.raw.headers,
         body: { permission: permissions },
       });
+    } else if (authSource === "backoffice") {
+      throw new HTTPException(403, {
+        message: "Organization permissions are unavailable in backoffice auth",
+      });
     } else {
       // Fallback for legacy/misconfigured middleware chains
       const labAuth = getRequestLabAuth(c);
@@ -694,6 +772,60 @@ export const requirePortalProtected = [
   requirePortalAuth,
   requireOrganization,
 ] as const;
+
+export const requireInternalOperator = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const session = c.get("session");
+  const envAllowlist =
+    (c.env as Record<string, unknown> | undefined)?.INTERNAL_OPERATOR_EMAILS ??
+    process.env.INTERNAL_OPERATOR_EMAILS;
+
+  if (
+    !isInternalOperatorEmail(
+      session?.user?.email,
+      typeof envAllowlist === "string" ? envAllowlist : undefined,
+    )
+  ) {
+    throw new HTTPException(403, {
+      message: "Internal operator access required",
+    });
+  }
+
+  await next();
+});
+
+export const requireBackofficeAccess = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const session = c.get("session");
+  const roles = parsePlatformRoles(session?.user?.role);
+
+  if (!canAccessBackoffice(session?.user?.role)) {
+    throw new HTTPException(403, {
+      message: "Backoffice access required",
+    });
+  }
+
+  c.set("platformRoles", roles);
+  await next();
+});
+
+export const requirePlatformAdmin = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const session = c.get("session");
+  const roles = parsePlatformRoles(session?.user?.role);
+
+  if (!hasPlatformRole(session?.user?.role, "platform_admin")) {
+    throw new HTTPException(403, {
+      message: "Platform admin access required",
+    });
+  }
+
+  c.set("platformRoles", roles);
+  await next();
+});
 
 /**
  * Create a protected route handler with permission check.

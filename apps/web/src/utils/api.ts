@@ -14,7 +14,7 @@ function getStoredActiveUnitId(): string | null {
   )
 }
 
-export function resolveApiURL(): string {
+export function getApiBaseURL(): string {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL
   }
@@ -30,7 +30,23 @@ export function resolveApiURL(): string {
   return 'https://api.calibrafacil.com'
 }
 
-export const api = hc<AppType>(resolveApiURL(), {
+export function resolveApiURL(): string
+export function resolveApiURL(pathOrUrl: string): string
+export function resolveApiURL(pathOrUrl?: string): string {
+  const baseUrl = getApiBaseURL()
+
+  if (!pathOrUrl) {
+    return baseUrl
+  }
+
+  if (/^https?:\/\//.test(pathOrUrl)) {
+    return pathOrUrl
+  }
+
+  return new URL(pathOrUrl, baseUrl).toString()
+}
+
+export const api = hc<AppType>(getApiBaseURL(), {
   fetch: (input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers)
     const activeUnitId = getStoredActiveUnitId()
