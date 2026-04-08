@@ -4,3 +4,4 @@ export * from "./customer-success";
 export * from "./certificate-templates";
 export * from "./domain-utils";
 export * from "./integrations";
+export * from "./public-api";
