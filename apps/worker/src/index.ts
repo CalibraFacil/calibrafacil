@@ -236,6 +236,7 @@ async function fetchJobData(
     return {
         jobId: row.job_id,
         organizationId: row.organization_id,
+        unitId: row.unit_id,
         performedAt: row.performed_at,
         approvedAt: row.approved_at,
         lab: {
@@ -315,19 +316,21 @@ interface SigningCertificateData {
  */
 async function fetchSigningCertificate(
     client: Client,
-    organizationId: string
+    organizationId: string,
+    unitId: number
 ): Promise<SigningCertificateData | null> {
     const result = await client.query(
         `
         SELECT encrypted_p12, encrypted_password, password_iv, subject_cn
         FROM organization_signing_certificate
         WHERE organization_id = $1
+          AND unit_id = $2
           AND is_active = true
           AND is_default = true
           AND valid_until > NOW()
         LIMIT 1
         `,
-        [organizationId]
+        [organizationId, unitId]
     );
 
     if (result.rows.length === 0) return null;
@@ -721,12 +724,16 @@ async function processJob(
         if (env.SIGNING_MASTER_KEY) {
             const signStart = performance.now();
             const organizationId = job.organizationId;
+            const unitId = job.unitId;
             if (!organizationId) {
                 console.warn(`[JOB ${jobId}] Missing organization_id for signing`);
             }
-            const signingCert = organizationId
+            if (!unitId) {
+                console.warn(`[JOB ${jobId}] Missing unit_id for signing`);
+            }
+            const signingCert = organizationId && unitId
                 ? await withDbClient(env, (client) =>
-                      fetchSigningCertificate(client, organizationId)
+                      fetchSigningCertificate(client, organizationId, unitId)
                   )
                 : null;
 

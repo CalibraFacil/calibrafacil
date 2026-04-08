@@ -46,6 +46,7 @@ import {
 } from "../middleware/permission";
 import { requirePlanLimit } from "../middleware/tier-guard";
 import { withCache, withInvalidation } from "../middleware/cache";
+import { selectEffectiveEnvironmentalLimits } from "../lib/unit-operational-settings";
 import {
   eq,
   and,
@@ -1076,18 +1077,16 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(eq(asset.id, existing.assetId))
           .limit(1);
 
-        // Fetch limits: asset-type-specific first, then org default
+        // Fetch limits: unit asset-type-specific first, then unit default
         let frozenLimits: EnvironmentalLimitsSnapshot | null = null;
-        if (jobAsset) {
+        if (jobAsset && existing.unitId) {
           const limits = await db
             .select()
             .from(environmentalLimits)
             .where(
               and(
-                eq(
-                  environmentalLimits.organizationId,
-                  memberData.organizationId,
-                ),
+                eq(environmentalLimits.organizationId, memberData.organizationId),
+                eq(environmentalLimits.unitId, existing.unitId),
                 or(
                   eq(environmentalLimits.assetTypeId, jobAsset.assetTypeId),
                   isNull(environmentalLimits.assetTypeId),
@@ -1096,7 +1095,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             )
             .orderBy(desc(environmentalLimits.assetTypeId)); // non-null first
 
-          const effectiveLimits = limits[0] ?? null;
+          const { limits: effectiveLimits } =
+            selectEffectiveEnvironmentalLimits(limits);
           if (effectiveLimits) {
             frozenLimits = {
               ...(effectiveLimits.temperatureMin != null &&

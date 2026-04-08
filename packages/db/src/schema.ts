@@ -2763,7 +2763,10 @@ export const environmentalLimits = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    // NULL = org-wide default; specific assetTypeId = override for that instrument type
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "cascade" }),
+    // NULL = unit default; specific assetTypeId = override for that instrument type
     assetTypeId: integer("asset_type_id").references(() => assetType.id, {
       onDelete: "cascade",
     }),
@@ -2786,8 +2789,9 @@ export const environmentalLimits = pgTable(
   },
   (table) => [
     index("env_limits_organization_id_idx").on(table.organizationId),
-    unique("env_limits_org_asset_type_uidx")
-      .on(table.organizationId, table.assetTypeId)
+    index("env_limits_unit_id_idx").on(table.unitId),
+    unique("env_limits_org_unit_asset_type_uidx")
+      .on(table.organizationId, table.unitId, table.assetTypeId)
       .nullsNotDistinct(),
   ],
 );
@@ -2798,6 +2802,10 @@ export const environmentalLimitsRelations = relations(
     organization: one(organization, {
       fields: [environmentalLimits.organizationId],
       references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [environmentalLimits.unitId],
+      references: [organizationUnit.id],
     }),
     assetType: one(assetType, {
       fields: [environmentalLimits.assetTypeId],
@@ -3258,6 +3266,9 @@ export const organizationSigningCertificate = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "cascade" }),
     // Certificate identification
     name: text("name").notNull(), // Display name, e.g., "Certificado Principal"
     serialNumber: text("serial_number").notNull(), // Certificate serial from ICP-Brasil
@@ -3285,9 +3296,11 @@ export const organizationSigningCertificate = pgTable(
   },
   (table) => [
     index("org_signing_cert_org_id_idx").on(table.organizationId),
+    index("org_signing_cert_unit_id_idx").on(table.unitId),
     index("org_signing_cert_valid_until_idx").on(table.validUntil),
     index("org_signing_cert_is_default_idx").on(
       table.organizationId,
+      table.unitId,
       table.isDefault,
     ),
   ],
@@ -3299,6 +3312,10 @@ export const organizationSigningCertificateRelations = relations(
     organization: one(organization, {
       fields: [organizationSigningCertificate.organizationId],
       references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [organizationSigningCertificate.unitId],
+      references: [organizationUnit.id],
     }),
     createdByUser: one(user, {
       fields: [organizationSigningCertificate.createdBy],

@@ -1,29 +1,35 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
-import {
-  environmentalLimits,
-  assetType,
-} from "@calibra-facil/db/schema";
+import { environmentalLimits, assetType } from "@calibra-facil/db/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { EnvironmentalLimitsSchema } from "@calibra-facil/schemas";
 import {
-  withLabPermission,
+  requireLabProtected,
+  requireOrgType,
   type AuthVariables,
 } from "../middleware/permission";
+import {
+  requireUnitOperationalSettingsManager,
+  resolveAccessibleUnitContext,
+  selectEffectiveEnvironmentalLimits,
+} from "../lib/unit-operational-settings";
 
 export const environmentalLimitsRouter = new Hono<{
   Variables: AuthVariables;
 }>()
   // ===========================================================================
-  // GET / - List all environmental limits for the organization
+  // GET / - List environmental limits for the selected unit
   // ===========================================================================
-  .get("/", ...withLabPermission({ organization: ["update"] }), async (c) => {
+  .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
     const memberData = c.get("member");
+    requireUnitOperationalSettingsManager(memberData);
+    const unit = resolveAccessibleUnitContext(memberData);
 
     const limits = await db
       .select({
         id: environmentalLimits.id,
+        unitId: environmentalLimits.unitId,
         assetTypeId: environmentalLimits.assetTypeId,
         assetTypeName: assetType.name,
         temperatureMin: environmentalLimits.temperatureMin,
@@ -38,67 +44,74 @@ export const environmentalLimitsRouter = new Hono<{
       .from(environmentalLimits)
       .leftJoin(assetType, eq(environmentalLimits.assetTypeId, assetType.id))
       .where(
-        eq(environmentalLimits.organizationId, memberData.organizationId),
+        and(
+          eq(environmentalLimits.organizationId, memberData.organizationId),
+          eq(environmentalLimits.unitId, unit.unitId),
+        ),
       )
       .orderBy(desc(environmentalLimits.assetTypeId));
 
-    return c.json({ limits });
+    return c.json({
+      limits,
+      unit,
+    });
   })
 
   // ===========================================================================
   // GET /effective/:assetTypeId - Get effective limits for an asset type
-  // Resolves hierarchy: asset-type-specific > org default
+  // Resolves hierarchy: unit asset-type-specific > unit default
   // ===========================================================================
   .get(
     "/effective/:assetTypeId",
-    ...withLabPermission({ calibration: ["read"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     async (c) => {
       const memberData = c.get("member");
       const assetTypeId = parseInt(c.req.param("assetTypeId"), 10);
+      const queryUnitId = c.req.query("unitId");
 
       if (isNaN(assetTypeId)) {
         return c.json({ error: "ID inválido" }, 400);
       }
 
-      // Try asset-type-specific first
-      const [specific] = await db
+      const unit = resolveAccessibleUnitContext(
+        memberData,
+        queryUnitId ? Number.parseInt(queryUnitId, 10) : null,
+      );
+
+      const candidateLimits = await db
         .select()
         .from(environmentalLimits)
         .where(
           and(
-            eq(
-              environmentalLimits.organizationId,
-              memberData.organizationId,
-            ),
-            eq(environmentalLimits.assetTypeId, assetTypeId),
-          ),
-        )
-        .limit(1);
-
-      if (specific) {
-        return c.json({ limits: specific, source: "asset_type" });
-      }
-
-      // Fall back to org default
-      const [orgDefault] = await db
-        .select()
-        .from(environmentalLimits)
-        .where(
-          and(
-            eq(
-              environmentalLimits.organizationId,
-              memberData.organizationId,
-            ),
+            eq(environmentalLimits.organizationId, memberData.organizationId),
+            eq(environmentalLimits.unitId, unit.unitId),
             isNull(environmentalLimits.assetTypeId),
           ),
         )
         .limit(1);
 
-      if (orgDefault) {
-        return c.json({ limits: orgDefault, source: "organization" });
-      }
+      const specificLimits = await db
+        .select()
+        .from(environmentalLimits)
+        .where(
+          and(
+            eq(environmentalLimits.organizationId, memberData.organizationId),
+            eq(environmentalLimits.unitId, unit.unitId),
+            eq(environmentalLimits.assetTypeId, assetTypeId),
+          ),
+        )
+        .limit(1);
 
-      return c.json({ limits: null, source: null });
+      const { limits: resolvedLimits, source } = selectEffectiveEnvironmentalLimits(
+        [...specificLimits, ...candidateLimits],
+      );
+
+      return c.json({
+        limits: resolvedLimits,
+        source,
+        unit,
+      });
     },
   )
 
@@ -107,18 +120,21 @@ export const environmentalLimitsRouter = new Hono<{
   // ===========================================================================
   .put(
     "/",
-    ...withLabPermission({ organization: ["update"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     zValidator("json", EnvironmentalLimitsSchema),
     async (c) => {
       const input = c.req.valid("json");
       const memberData = c.get("member");
       const session = c.get("session");
+      requireUnitOperationalSettingsManager(memberData);
+      const unit = resolveAccessibleUnitContext(memberData);
 
-      // Upsert using the unique constraint on (organization_id, asset_type_id)
       const [result] = await db
         .insert(environmentalLimits)
         .values({
           organizationId: memberData.organizationId,
+          unitId: unit.unitId,
           assetTypeId: input.assetTypeId,
           temperatureMin: input.temperatureMin,
           temperatureMax: input.temperatureMax,
@@ -131,6 +147,7 @@ export const environmentalLimitsRouter = new Hono<{
         .onConflictDoUpdate({
           target: [
             environmentalLimits.organizationId,
+            environmentalLimits.unitId,
             environmentalLimits.assetTypeId,
           ],
           set: {
@@ -148,6 +165,7 @@ export const environmentalLimitsRouter = new Hono<{
       return c.json({
         message: "Limites ambientais atualizados",
         data: result,
+        unit,
       });
     },
   )
@@ -157,10 +175,13 @@ export const environmentalLimitsRouter = new Hono<{
   // ===========================================================================
   .delete(
     "/:id",
-    ...withLabPermission({ organization: ["update"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     async (c) => {
       const memberData = c.get("member");
       const id = parseInt(c.req.param("id"), 10);
+      requireUnitOperationalSettingsManager(memberData);
+      const unit = resolveAccessibleUnitContext(memberData);
 
       if (isNaN(id)) {
         return c.json({ error: "ID inválido" }, 400);
@@ -171,10 +192,8 @@ export const environmentalLimitsRouter = new Hono<{
         .where(
           and(
             eq(environmentalLimits.id, id),
-            eq(
-              environmentalLimits.organizationId,
-              memberData.organizationId,
-            ),
+            eq(environmentalLimits.organizationId, memberData.organizationId),
+            eq(environmentalLimits.unitId, unit.unitId),
           ),
         )
         .returning();

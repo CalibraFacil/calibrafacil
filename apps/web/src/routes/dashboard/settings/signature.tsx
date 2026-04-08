@@ -53,7 +53,9 @@ function SignatureSettingsPage() {
       formData.append('signature', file)
 
       // Use native fetch for FormData uploads - Hono RPC client doesn't handle FormData properly
-      const apiUrl = import.meta.env.VITE_API_URL || `https://${window.location.hostname}:3000`
+      const apiUrl =
+        import.meta.env.VITE_API_URL ||
+        `${window.location.protocol}//${window.location.hostname}:3000`
       const res = await fetch(`${apiUrl}/api/signatures/my-signature`, {
         method: 'POST',
         body: formData,

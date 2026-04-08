@@ -126,6 +126,7 @@ interface JobData {
     customerName: string
     assetName: string
     assetTag: string
+    unitId: number | null
     assetTypeId: number
     serviceName: string
     methodSnapshot: {
@@ -181,15 +182,16 @@ function ExecuteJobPage() {
 
     // Fetch effective environmental limits for this job's asset type
     const { data: envLimitsData } = useQuery({
-        queryKey: ['environmental-limits', 'effective', job?.assetTypeId],
+        queryKey: ['environmental-limits', 'effective', job?.assetTypeId, job?.unitId],
         queryFn: async () => {
             const res = await api.api['environmental-limits'].effective[':assetTypeId'].$get({
                 param: { assetTypeId: String(job!.assetTypeId) },
+                query: { unitId: String(job!.unitId) },
             })
             if (!res.ok) return { limits: null, source: null }
             return res.json() as Promise<{ limits: EffectiveLimits | null; source: string | null }>
         },
-        enabled: !!job?.assetTypeId,
+        enabled: !!job?.assetTypeId && !!job?.unitId,
         staleTime: 60000,
     })
 

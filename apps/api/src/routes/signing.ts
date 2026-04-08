@@ -5,7 +5,8 @@ import { db } from "@calibra-facil/db";
 import { organizationSigningCertificate, user } from "@calibra-facil/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import {
-  withLabPermission,
+  requireLabProtected,
+  requireOrgType,
   type AuthVariables,
 } from "../middleware/permission";
 import {
@@ -14,6 +15,10 @@ import {
   encryptPassword,
   SigningError,
 } from "@calibra-facil/signing";
+import {
+  requireUnitOperationalSettingsManager,
+  resolveAccessibleUnitContext,
+} from "../lib/unit-operational-settings";
 
 // =============================================================================
 // VALIDATION SCHEMAS
@@ -47,13 +52,17 @@ export const signingRouter = new Hono<{
   // ===========================================================================
   .get(
     "/certificates",
-    ...withLabPermission({ organization: ["update"] }), // Admin/owner only
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     async (c) => {
       const memberData = c.get("member");
+      requireUnitOperationalSettingsManager(memberData);
+      const unit = resolveAccessibleUnitContext(memberData);
 
       const certificates = await db
         .select({
           id: organizationSigningCertificate.id,
+          unitId: organizationSigningCertificate.unitId,
           name: organizationSigningCertificate.name,
           serialNumber: organizationSigningCertificate.serialNumber,
           issuerCn: organizationSigningCertificate.issuerCn,
@@ -71,9 +80,12 @@ export const signingRouter = new Hono<{
         .from(organizationSigningCertificate)
         .leftJoin(user, eq(organizationSigningCertificate.createdBy, user.id))
         .where(
-          eq(
-            organizationSigningCertificate.organizationId,
-            memberData.organizationId,
+          and(
+            eq(
+              organizationSigningCertificate.organizationId,
+              memberData.organizationId,
+            ),
+            eq(organizationSigningCertificate.unitId, unit.unitId),
           ),
         )
         .orderBy(desc(organizationSigningCertificate.createdAt));
@@ -91,7 +103,7 @@ export const signingRouter = new Hono<{
               : "valid",
       }));
 
-      return c.json({ certificates: certificatesWithStatus });
+      return c.json({ certificates: certificatesWithStatus, unit });
     },
   )
 
@@ -100,13 +112,16 @@ export const signingRouter = new Hono<{
   // ===========================================================================
   .post(
     "/certificates",
-    ...withLabPermission({ organization: ["update"] }), // Admin/owner only
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     zValidator("json", UploadCertificateSchema),
     async (c) => {
       const input = c.req.valid("json");
       const memberData = c.get("member");
       const session = c.get("session");
       const env = c.env as SigningEnv;
+      requireUnitOperationalSettingsManager(memberData);
+      const unit = resolveAccessibleUnitContext(memberData);
 
       if (!env.SIGNING_MASTER_KEY) {
         console.error("SIGNING_MASTER_KEY not configured");
@@ -154,6 +169,7 @@ export const signingRouter = new Hono<{
                 organizationSigningCertificate.organizationId,
                 memberData.organizationId,
               ),
+              eq(organizationSigningCertificate.unitId, unit.unitId),
               eq(
                 organizationSigningCertificate.serialNumber,
                 certInfo.serialNumber,
@@ -189,6 +205,7 @@ export const signingRouter = new Hono<{
                     organizationSigningCertificate.organizationId,
                     memberData.organizationId,
                   ),
+                  eq(organizationSigningCertificate.unitId, unit.unitId),
                   eq(organizationSigningCertificate.isDefault, true),
                 ),
               );
@@ -198,6 +215,7 @@ export const signingRouter = new Hono<{
             .insert(organizationSigningCertificate)
             .values({
               organizationId: memberData.organizationId,
+              unitId: unit.unitId,
               name: input.name,
               serialNumber: certInfo.serialNumber,
               issuerCn: certInfo.issuerCn,
@@ -224,6 +242,7 @@ export const signingRouter = new Hono<{
           message: "Certificado adicionado com sucesso",
           certificate: {
             id: newCert.id,
+            unitId: newCert.unitId,
             name: newCert.name,
             serialNumber: newCert.serialNumber,
             issuerCn: newCert.issuerCn,
@@ -245,10 +264,13 @@ export const signingRouter = new Hono<{
   // ===========================================================================
   .post(
     "/certificates/:id/set-default",
-    ...withLabPermission({ organization: ["update"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     async (c) => {
       const id = parseInt(c.req.param("id"));
       const memberData = c.get("member");
+      requireUnitOperationalSettingsManager(memberData);
+      const unit = resolveAccessibleUnitContext(memberData);
 
       if (isNaN(id)) {
         return c.json({ error: "ID inválido" }, 400);
@@ -268,6 +290,7 @@ export const signingRouter = new Hono<{
               organizationSigningCertificate.organizationId,
               memberData.organizationId,
             ),
+            eq(organizationSigningCertificate.unitId, unit.unitId),
           ),
         )
         .limit(1);
@@ -290,13 +313,14 @@ export const signingRouter = new Hono<{
           .set({ isDefault: false })
           .where(
             and(
-              eq(
-                organizationSigningCertificate.organizationId,
-                memberData.organizationId,
-              ),
-              eq(organizationSigningCertificate.isDefault, true),
-            ),
-          );
+                  eq(
+                    organizationSigningCertificate.organizationId,
+                    memberData.organizationId,
+                  ),
+                  eq(organizationSigningCertificate.unitId, unit.unitId),
+                  eq(organizationSigningCertificate.isDefault, true),
+                ),
+              );
 
         await tx
           .update(organizationSigningCertificate)
@@ -313,7 +337,8 @@ export const signingRouter = new Hono<{
   // ===========================================================================
   .delete(
     "/certificates/:id",
-    ...withLabPermission({ organization: ["update"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     zValidator(
       "json",
       z.object({
@@ -325,6 +350,8 @@ export const signingRouter = new Hono<{
       const { reason } = c.req.valid("json");
       const memberData = c.get("member");
       const session = c.get("session");
+      requireUnitOperationalSettingsManager(memberData);
+      const unit = resolveAccessibleUnitContext(memberData);
 
       if (isNaN(id)) {
         return c.json({ error: "ID inválido" }, 400);
@@ -345,6 +372,7 @@ export const signingRouter = new Hono<{
               organizationSigningCertificate.organizationId,
               memberData.organizationId,
             ),
+            eq(organizationSigningCertificate.unitId, unit.unitId),
           ),
         )
         .limit(1);
@@ -378,10 +406,13 @@ export const signingRouter = new Hono<{
   // ===========================================================================
   .get(
     "/certificates/:id",
-    ...withLabPermission({ organization: ["update"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     async (c) => {
       const id = parseInt(c.req.param("id"));
       const memberData = c.get("member");
+      requireUnitOperationalSettingsManager(memberData);
+      const unit = resolveAccessibleUnitContext(memberData);
 
       if (isNaN(id)) {
         return c.json({ error: "ID inválido" }, 400);
@@ -390,6 +421,7 @@ export const signingRouter = new Hono<{
       const [cert] = await db
         .select({
           id: organizationSigningCertificate.id,
+          unitId: organizationSigningCertificate.unitId,
           name: organizationSigningCertificate.name,
           serialNumber: organizationSigningCertificate.serialNumber,
           issuerCn: organizationSigningCertificate.issuerCn,
@@ -413,6 +445,7 @@ export const signingRouter = new Hono<{
               organizationSigningCertificate.organizationId,
               memberData.organizationId,
             ),
+            eq(organizationSigningCertificate.unitId, unit.unitId),
           ),
         )
         .limit(1);
@@ -433,6 +466,7 @@ export const signingRouter = new Hono<{
       return c.json({
         ...cert,
         status,
+        unit,
         daysUntilExpiry: Math.ceil(
           (cert.validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
         ),
