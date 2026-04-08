@@ -14,6 +14,7 @@ import {
   type AuthVariables,
   withLabPermission,
 } from "../middleware/permission";
+import { requireFeature } from "../middleware/tier-guard";
 
 const CreateUnitSchema = z.object({
   name: z.string().trim().min(2, "Nome da unidade é obrigatório"),
@@ -84,7 +85,11 @@ async function allocateUnitSlug(params: {
 }
 
 export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
-  .get("/", ...withLabPermission({ calibration: ["read"] }), async (c) => {
+  .get(
+    "/",
+    ...withLabPermission({ calibration: ["read"] }),
+    requireFeature("multi_unit"),
+    async (c) => {
     const memberData = c.get("member");
 
     return c.json({
@@ -94,10 +99,12 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       canAccessAllUnits: memberData.canAccessAllUnits,
       data: memberData.accessibleUnits,
     });
-  })
+    },
+  )
   .get(
     "/admin/units",
     ...withLabPermission({ settings: ["update"] }),
+    requireFeature("multi_unit"),
     async (c) => {
       const memberData = c.get("member");
 
@@ -121,6 +128,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/admin/units",
     ...withLabPermission({ settings: ["update"] }),
+    requireFeature("multi_unit"),
     zValidator("json", CreateUnitSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -178,6 +186,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
   .patch(
     "/admin/units/:id",
     ...withLabPermission({ settings: ["update"] }),
+    requireFeature("multi_unit"),
     zValidator("json", UpdateUnitSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -273,6 +282,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/admin/members",
     ...withLabPermission({ settings: ["update"] }),
+    requireFeature("multi_unit"),
     async (c) => {
       const memberData = c.get("member");
 
@@ -340,6 +350,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/admin/members/:memberId/assignments",
     ...withLabPermission({ settings: ["update"] }),
+    requireFeature("multi_unit"),
     zValidator("json", UpdateAssignmentsSchema),
     async (c) => {
       const memberData = c.get("member");
