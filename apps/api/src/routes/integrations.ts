@@ -12,13 +12,19 @@ import {
 import { normalizeIntegrationBaseUrl } from "@calibra-facil/shared";
 import { getOrganizationPlanAccess } from "../lib/organization-plan";
 import {
+  buildInitialNextScheduledRunAt,
   buildIntegrationOverview,
   buildGenericConnectionConfig,
   createSyncRun,
   decryptIntegrationSecret,
   encryptIntegrationSecret,
   failIntegrationSyncRun,
+  failSyncRunAsBlocked,
   getIntegrationRecord,
+  getRequestedLimitFromRun,
+  hasActiveSyncRun,
+  getTargetScheduleConfig,
+  updateTargetScheduleConfig,
   listOrganizationIntegrations,
   previewIntegrationSync,
   runIntegrationSync,
@@ -76,6 +82,12 @@ const ToggleSchema = z.object({
   enabled: z.boolean(),
 });
 
+const ScheduleSchema = z.object({
+  target: z.enum(["customer", "service_order", "billing_document"]),
+  mode: z.enum(["disabled", "manual_only", "scheduled"]),
+  frequency: z.enum(["daily", "weekly"]).optional(),
+});
+
 type QueueMessage = {
   type: "INTEGRATION_SYNC";
   integrationId: string;
@@ -83,6 +95,7 @@ type QueueMessage = {
   runId: string;
   target: "customer" | "service_order" | "billing_document";
   limit: number;
+  trigger: "manual" | "event" | "scheduled" | "retry";
 };
 
 type IntegrationsBindings = IntegrationsEnv & {
@@ -145,7 +158,9 @@ async function buildListPayload(organizationId: string) {
         connection: {
           id: integration.connection?.id ?? null,
           credentialType: integration.connection?.credentialType ?? "bearer",
-          config: integration.connection?.config ?? null,
+          config: integration.connection?.config
+            ? buildGenericConnectionConfig(integration.connection.config)
+            : null,
         },
         recentRuns,
         recentEvents,
@@ -163,6 +178,62 @@ async function buildListPayload(organizationId: string) {
     },
     data,
   };
+}
+
+async function dispatchSyncRun(params: {
+  env: IntegrationsBindings;
+  integrationId: string;
+  organizationId: string;
+  runId: string;
+  target: "customer" | "service_order" | "billing_document";
+  limit: number;
+  trigger: "manual" | "event" | "scheduled" | "retry";
+}) {
+  if (params.env.PDF_QUEUE) {
+    try {
+      await params.env.PDF_QUEUE.send({
+        type: "INTEGRATION_SYNC",
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        runId: params.runId,
+        target: params.target,
+        limit: params.limit,
+        trigger: params.trigger,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Falha ao enfileirar sincronização";
+
+      await failIntegrationSyncRun({
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        runId: params.runId,
+        target: params.target,
+        message,
+        details: {
+          phase: "queue_send",
+          trigger: params.trigger,
+        },
+      });
+
+      throw new Error(message);
+    }
+
+    return { queued: true as const, status: "PENDING" as const };
+  }
+
+  const result = await runIntegrationSync({
+    integrationId: params.integrationId,
+    organizationId: params.organizationId,
+    runId: params.runId,
+    target: params.target,
+    limit: params.limit,
+    env: params.env,
+  });
+
+  return { queued: false as const, status: result.status };
 }
 
 export const integrationsRouter = new Hono<{
@@ -277,6 +348,7 @@ export const integrationsRouter = new Hono<{
         billingDocumentPath:
           input.billingDocumentPath ??
           record.connection.config.billingDocumentPath,
+        schedules: record.connection.config.schedules,
       });
 
       await db.transaction(async (tx) => {
@@ -473,12 +545,29 @@ export const integrationsRouter = new Hono<{
         );
       }
 
+      const activeRun = await hasActiveSyncRun({
+        integrationId: id,
+        organizationId: member.organizationId,
+        target: input.target,
+      });
+
+      if (activeRun) {
+        return c.json(
+          {
+            error: "Já existe uma sincronização em andamento para este alvo",
+            runId: activeRun.id,
+          },
+          409,
+        );
+      }
+
       const runId = await createSyncRun({
         integrationId: id,
         organizationId: member.organizationId,
         trigger: "manual",
         target: input.target,
         initiatedBy: session.user.id,
+        requestedLimit: input.limit,
       });
 
       await writeIntegrationEvent({
@@ -494,53 +583,16 @@ export const integrationsRouter = new Hono<{
         },
       });
 
-      if (c.env.PDF_QUEUE) {
-        try {
-          await c.env.PDF_QUEUE.send({
-            type: "INTEGRATION_SYNC",
-            integrationId: id,
-            organizationId: member.organizationId,
-            runId,
-            target: input.target,
-            limit: input.limit,
-          });
-        } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : "Falha ao enfileirar sincronização";
-
-          await failIntegrationSyncRun({
-            integrationId: id,
-            organizationId: member.organizationId,
-            runId,
-            target: input.target,
-            message,
-            details: {
-              phase: "queue_send",
-            },
-          });
-
-          return c.json({ error: message }, 500);
-        }
-
-        return c.json({
-          success: true,
-          queued: true,
-          runId,
-          status: "PENDING",
-        });
-      }
-
       let result;
       try {
-        result = await runIntegrationSync({
+        result = await dispatchSyncRun({
+          env: c.env,
           integrationId: id,
           organizationId: member.organizationId,
           runId,
           target: input.target,
           limit: input.limit,
-          env: c.env,
+          trigger: "manual",
         });
       } catch (error) {
         const message =
@@ -552,11 +604,94 @@ export const integrationsRouter = new Hono<{
 
       return c.json({
         success: true,
-        queued: false,
+        queued: result.queued,
         runId,
         status: result.status,
         warnings: preview.warnings,
       });
+    },
+  )
+  .post(
+    "/:id/schedule",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    requireRole(["admin", "owner"]),
+    requireFeature("custom_integrations"),
+    zValidator("json", ScheduleSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+      const record = await getIntegrationRecord(member.organizationId, id);
+
+      if (!record) {
+        return c.json({ error: "Integração não encontrada" }, 404);
+      }
+
+      const nextScheduledRunAt =
+        input.mode === "scheduled"
+          ? buildInitialNextScheduledRunAt(input.frequency)
+          : null;
+      const currentSchedule = getTargetScheduleConfig(
+        record.connection.config,
+        input.target,
+      );
+      const updatedConfig = updateTargetScheduleConfig({
+        config: record.connection.config,
+        target: input.target,
+        mode: input.mode,
+        frequency:
+          input.mode === "scheduled"
+            ? (input.frequency ?? currentSchedule.frequency)
+            : undefined,
+        nextScheduledRunAt,
+        lastScheduledRunAt: currentSchedule.lastScheduledRunAt,
+      });
+
+      await db
+        .update(integrationConnection)
+        .set({
+          config: updatedConfig,
+          updatedBy: session.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(integrationConnection.integrationId, id));
+
+      await writeIntegrationEvent({
+        integrationId: id,
+        organizationId: member.organizationId,
+        level: "info",
+        event: "integration.schedule_updated",
+        message: "Agendamento do alvo atualizado",
+        details: {
+          target: input.target,
+          mode: input.mode,
+          frequency:
+            input.mode === "scheduled"
+              ? updatedConfig.schedules[input.target].frequency
+              : null,
+          nextScheduledRunAt,
+        },
+      });
+
+      await writeOrganizationIntegrationEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "integration.schedule.updated",
+        entityId: id,
+        details: {
+          target: input.target,
+          mode: input.mode,
+          frequency:
+            input.mode === "scheduled"
+              ? updatedConfig.schedules[input.target].frequency
+              : null,
+        },
+      });
+
+      return c.json(await buildListPayload(member.organizationId));
     },
   )
   .post(
@@ -641,6 +776,141 @@ export const integrationsRouter = new Hono<{
       });
 
       return c.json({ data: runs });
+    },
+  )
+  .post(
+    "/:id/runs/:runId/retry",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    requireRole(["admin", "owner"]),
+    requireFeature("custom_integrations"),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = c.req.param("id");
+      const runId = c.req.param("runId");
+      const record = await getIntegrationRecord(member.organizationId, id);
+
+      if (!record) {
+        return c.json({ error: "Integração não encontrada" }, 404);
+      }
+
+      const originalRun = await db.query.integrationSyncRun.findFirst({
+        where: and(
+          eq(integrationSyncRun.id, runId),
+          eq(integrationSyncRun.integrationId, id),
+          eq(integrationSyncRun.organizationId, member.organizationId),
+        ),
+      });
+
+      if (!originalRun) {
+        return c.json({ error: "Execução não encontrada" }, 404);
+      }
+
+      if (originalRun.status === "PENDING" || originalRun.status === "RUNNING") {
+        return c.json(
+          { error: "Não é possível reprocessar uma execução ainda em andamento" },
+          409,
+        );
+      }
+
+      const activeRun = await hasActiveSyncRun({
+        integrationId: id,
+        organizationId: member.organizationId,
+        target: originalRun.target,
+      });
+
+      if (activeRun) {
+        return c.json(
+          {
+            error: "Já existe uma sincronização em andamento para este alvo",
+            runId: activeRun.id,
+          },
+          409,
+        );
+      }
+
+      const requestedLimit = getRequestedLimitFromRun(originalRun);
+      const preview = await previewIntegrationSync({
+        record,
+        target: originalRun.target,
+        limit: requestedLimit,
+      });
+
+      const retryRunId = await createSyncRun({
+        integrationId: id,
+        organizationId: member.organizationId,
+        trigger: "retry",
+        target: originalRun.target,
+        initiatedBy: session.user.id,
+        requestedLimit,
+        retryOfRunId: originalRun.id,
+      });
+
+      if (preview.blocked) {
+        const message =
+          preview.warnings[0]?.message ??
+          "A integração ainda não está pronta para este alvo";
+
+        await failSyncRunAsBlocked({
+          integrationId: id,
+          organizationId: member.organizationId,
+          runId: retryRunId,
+          target: originalRun.target,
+          requestedLimit,
+          message,
+        });
+
+        return c.json(
+          {
+            error: message,
+            blocked: true,
+            warnings: preview.warnings,
+            runId: retryRunId,
+          },
+          409,
+        );
+      }
+
+      await writeIntegrationEvent({
+        integrationId: id,
+        organizationId: member.organizationId,
+        runId: retryRunId,
+        level: "info",
+        event: "sync.retry_requested",
+        message: "Reprocessamento solicitado",
+        details: {
+          target: originalRun.target,
+          requestedLimit,
+          retryOfRunId: originalRun.id,
+        },
+      });
+
+      let result;
+      try {
+        result = await dispatchSyncRun({
+          env: c.env,
+          integrationId: id,
+          organizationId: member.organizationId,
+          runId: retryRunId,
+          target: originalRun.target,
+          limit: requestedLimit,
+          trigger: "retry",
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Falha ao processar sincronização";
+        return c.json({ error: message }, 500);
+      }
+
+      return c.json({
+        success: true,
+        queued: result.queued,
+        runId: retryRunId,
+        status: result.status,
+      });
     },
   )
   .get(

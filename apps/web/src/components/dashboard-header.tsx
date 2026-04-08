@@ -28,6 +28,7 @@ const routeLabels: Record<string, string> = {
   '/dashboard/settings/notifications': 'Notificações',
   '/dashboard/settings/security': 'Segurança',
   '/dashboard/settings/authentication': 'Autenticação',
+  '/dashboard/settings/integrations': 'Integrações',
   '/dashboard/settings/appearance': 'Aparência',
   '/dashboard/settings/signature': 'Assinatura',
   '/dashboard/settings/certificates': 'Certificados ICP',
