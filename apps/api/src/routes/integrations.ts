@@ -12,6 +12,7 @@ import {
 import { normalizeIntegrationBaseUrl } from "@calibra-facil/shared";
 import { getOrganizationPlanAccess } from "../lib/organization-plan";
 import {
+  buildIntegrationOverview,
   buildGenericConnectionConfig,
   createSyncRun,
   decryptIntegrationSecret,
@@ -19,6 +20,7 @@ import {
   failIntegrationSyncRun,
   getIntegrationRecord,
   listOrganizationIntegrations,
+  previewIntegrationSync,
   runIntegrationSync,
   validateGenericConnection,
   writeIntegrationEvent,
@@ -106,6 +108,29 @@ async function buildListPayload(organizationId: string) {
         orderBy: [desc(integrationEventLog.createdAt)],
         limit: 5,
       });
+      const overview = integration.connection
+        ? await buildIntegrationOverview({
+            integration,
+            connection: integration.connection,
+          })
+        : {
+            readiness: {
+              setupStatus: "NOT_CONFIGURED" as const,
+              readinessStatus: "NOT_READY" as const,
+              validationRequired: true,
+              canSync: false,
+              lastValidatedAt: null,
+              lastValidationError: integration.lastValidationError,
+              dependencyWarnings: [],
+            },
+            targets: [],
+            syncSummary: {
+              lastRunAt: null,
+              lastSuccessfulRunAt: null,
+              lastErrorAt: null,
+              hasRecentFailures: false,
+            },
+          };
 
       return {
         id: integration.id,
@@ -124,6 +149,7 @@ async function buildListPayload(organizationId: string) {
         },
         recentRuns,
         recentEvents,
+        overview,
       };
     }),
   );
@@ -380,6 +406,32 @@ export const integrationsRouter = new Hono<{
     },
   )
   .post(
+    "/:id/sync/preview",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    requireRole(["admin", "owner"]),
+    requireFeature("custom_integrations"),
+    zValidator("json", SyncRequestSchema),
+    async (c) => {
+      const member = c.get("member");
+      const id = c.req.param("id");
+      const input = c.req.valid("json");
+      const record = await getIntegrationRecord(member.organizationId, id);
+
+      if (!record) {
+        return c.json({ error: "Integração não encontrada" }, 404);
+      }
+
+      const preview = await previewIntegrationSync({
+        record,
+        target: input.target,
+        limit: input.limit,
+      });
+
+      return c.json(preview);
+    },
+  )
+  .post(
     "/:id/sync",
     ...requireLabProtected,
     requireOrgType("LAB"),
@@ -399,6 +451,26 @@ export const integrationsRouter = new Hono<{
 
       if (record.integration.status !== "ACTIVE") {
         return c.json({ error: "Integração desativada" }, 409);
+      }
+
+      const preview = await previewIntegrationSync({
+        record,
+        target: input.target,
+        limit: input.limit,
+      });
+
+      if (preview.blocked) {
+        return c.json(
+          {
+            error:
+              preview.warnings[0]?.message ??
+              "A integração ainda não está pronta para este alvo",
+            blocked: true,
+            warnings: preview.warnings,
+            coverage: preview.coverage,
+          },
+          409,
+        );
       }
 
       const runId = await createSyncRun({
@@ -483,6 +555,7 @@ export const integrationsRouter = new Hono<{
         queued: false,
         runId,
         status: result.status,
+        warnings: preview.warnings,
       });
     },
   )
@@ -523,6 +596,25 @@ export const integrationsRouter = new Hono<{
       });
 
       return c.json(await buildListPayload(member.organizationId));
+    },
+  )
+  .get(
+    "/:id/overview",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    requireRole(["admin", "owner"]),
+    async (c) => {
+      const member = c.get("member");
+      const id = c.req.param("id");
+      const record = await getIntegrationRecord(member.organizationId, id);
+
+      if (!record) {
+        return c.json({ error: "Integração não encontrada" }, 404);
+      }
+
+      return c.json({
+        data: await buildIntegrationOverview(record),
+      });
     },
   )
   .get(

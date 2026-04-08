@@ -4,6 +4,17 @@ export type IntegrationProvider = "generic_http";
 
 export type IntegrationStatus = "ACTIVE" | "DISABLED";
 
+export type IntegrationSetupStatus =
+  | "NOT_CONFIGURED"
+  | "CONFIGURED"
+  | "READY"
+  | "ACTION_REQUIRED";
+
+export type IntegrationReadinessStatus =
+  | "NOT_READY"
+  | "READY"
+  | "DEGRADED";
+
 export type IntegrationSyncTarget =
   | "customer"
   | "service_order"
@@ -21,6 +32,12 @@ export type IntegrationSyncStatus =
 export type IntegrationEventLevel = "info" | "warning" | "error";
 
 export type IntegrationCredentialType = "bearer";
+
+export type IntegrationDependencyWarningCode =
+  | "CUSTOMERS_NOT_SYNCED"
+  | "SERVICE_ORDERS_NOT_SYNCED"
+  | "VALIDATION_REQUIRED"
+  | "INTEGRATION_DISABLED";
 
 export const DEFAULT_GENERIC_ERP_PATHS = {
   health: "/health",
@@ -83,6 +100,43 @@ export interface IntegrationBillingDocumentPayload {
   issuedAt: string | null;
   dueAt: string | null;
   status: "pending" | "ready";
+}
+
+export interface IntegrationDependencyWarning {
+  code: IntegrationDependencyWarningCode;
+  target: IntegrationSyncTarget;
+  severity: "warning" | "error";
+  message: string;
+}
+
+export interface IntegrationTargetCoverageSummary {
+  target: IntegrationSyncTarget;
+  localCount: number;
+  linkedCount: number;
+  unlinkedCount: number;
+}
+
+export interface IntegrationTargetSyncSummary {
+  target: IntegrationSyncTarget;
+  lastRunAt: string | null;
+  lastSuccessfulRunAt: string | null;
+  lastStatus: IntegrationSyncStatus | null;
+  processedCount: number;
+  successCount: number;
+  errorCount: number;
+  blocked: boolean;
+  warnings: IntegrationDependencyWarning[];
+  coverage: IntegrationTargetCoverageSummary;
+}
+
+export interface IntegrationReadinessSummary {
+  setupStatus: IntegrationSetupStatus;
+  readinessStatus: IntegrationReadinessStatus;
+  validationRequired: boolean;
+  canSync: boolean;
+  lastValidatedAt: string | null;
+  lastValidationError: string | null;
+  dependencyWarnings: IntegrationDependencyWarning[];
 }
 
 function parseIpv4Address(hostname: string): number[] | null {
