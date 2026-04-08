@@ -507,10 +507,15 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           ),
         );
 
+      // Global managers can remove assignments that already exist as well as any
+      // units included in the incoming payload. Scoped managers can only delete
+      // assignments for units they manage.
       const editableUnitIds = viewer.isGlobalManager
         ? existingAssignments.map((assignment) => assignment.unitId).concat(unitIds)
         : viewer.managedUnitIds;
 
+      // Deduping here keeps the subsequent inArray delete filter scoped to the
+      // unique set of unit IDs this viewer is allowed to affect.
       const scopedEditableUnitIds = Array.from(new Set(editableUnitIds));
 
       if (scopedEditableUnitIds.length > 0) {

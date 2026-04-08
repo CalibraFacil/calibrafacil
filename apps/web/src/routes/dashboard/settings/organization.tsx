@@ -105,6 +105,13 @@ interface OrganizationUnit {
 
 type UnitAssignmentRole = 'member' | 'technician' | 'unit_admin'
 type EditableUnitAssignmentRole = UnitAssignmentRole | 'none'
+const GLOBAL_MEMBER_ROLES = ['member', 'technician', 'admin'] as const
+type GlobalMemberRole = (typeof GLOBAL_MEMBER_ROLES)[number]
+const GLOBAL_MEMBER_ROLE_SET = new Set<string>(GLOBAL_MEMBER_ROLES)
+
+function isGlobalMemberRole(value: string): value is GlobalMemberRole {
+  return GLOBAL_MEMBER_ROLE_SET.has(value)
+}
 
 interface GovernanceViewer {
   isGlobalManager: boolean
@@ -242,7 +249,10 @@ function OrganizationSettingsPage({
     { value: 'member', label: 'Membro' },
     { value: 'technician', label: 'Técnico' },
     { value: 'admin', label: 'Administrador' },
-  ] as const
+  ] as const satisfies ReadonlyArray<{
+    value: GlobalMemberRole
+    label: string
+  }>
 
   const unitsQuery = useQuery({
     queryKey: ['organization-units', activeOrg.id],
@@ -741,11 +751,16 @@ function OrganizationSettingsPage({
 
   const handleUpdateMemberRole = async (memberId: string, newRole: string) => {
     if (!canManageGlobalRoles) return
+    if (!isGlobalMemberRole(newRole)) {
+      toast.error('Função inválida')
+      return
+    }
+
     setUpdatingRoleFor(memberId)
     try {
       await updateGlobalRoleMutation.mutateAsync({
         memberId,
-        role: newRole as 'member' | 'technician' | 'admin',
+        role: newRole,
       })
     } catch {
       // Mutation handles user-facing errors.
