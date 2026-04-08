@@ -40,12 +40,14 @@ import { Route as DashboardStandardsNewRouteImport } from './routes/dashboard/st
 import { Route as DashboardSettingsSignatureRouteImport } from './routes/dashboard/settings/signature'
 import { Route as DashboardSettingsSecurityRouteImport } from './routes/dashboard/settings/security'
 import { Route as DashboardSettingsProfileRouteImport } from './routes/dashboard/settings/profile'
+import { Route as DashboardSettingsPortalDomainRouteImport } from './routes/dashboard/settings/portal-domain'
 import { Route as DashboardSettingsOrganizationRouteImport } from './routes/dashboard/settings/organization'
 import { Route as DashboardSettingsNotificationsRouteImport } from './routes/dashboard/settings/notifications'
 import { Route as DashboardSettingsIntegrationsRouteImport } from './routes/dashboard/settings/integrations'
 import { Route as DashboardSettingsEnvironmentRouteImport } from './routes/dashboard/settings/environment'
 import { Route as DashboardSettingsDangerRouteImport } from './routes/dashboard/settings/danger'
 import { Route as DashboardSettingsCertificatesRouteImport } from './routes/dashboard/settings/certificates'
+import { Route as DashboardSettingsBrandingRouteImport } from './routes/dashboard/settings/branding'
 import { Route as DashboardSettingsBillingRouteImport } from './routes/dashboard/settings/billing'
 import { Route as DashboardSettingsAuthenticationRouteImport } from './routes/dashboard/settings/authentication'
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
@@ -241,6 +243,12 @@ const DashboardSettingsProfileRoute =
     path: '/profile',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
+const DashboardSettingsPortalDomainRoute =
+  DashboardSettingsPortalDomainRouteImport.update({
+    id: '/portal-domain',
+    path: '/portal-domain',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
 const DashboardSettingsOrganizationRoute =
   DashboardSettingsOrganizationRouteImport.update({
     id: '/organization',
@@ -274,6 +282,12 @@ const DashboardSettingsCertificatesRoute =
   DashboardSettingsCertificatesRouteImport.update({
     id: '/certificates',
     path: '/certificates',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
+const DashboardSettingsBrandingRoute =
+  DashboardSettingsBrandingRouteImport.update({
+    id: '/branding',
+    path: '/branding',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
 const DashboardSettingsBillingRoute =
@@ -503,12 +517,14 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
+  '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
   '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
+  '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
@@ -564,12 +580,14 @@ export interface FileRoutesByTo {
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
+  '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
   '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
+  '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
@@ -640,12 +658,14 @@ export interface FileRoutesById {
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
+  '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
   '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
+  '/dashboard/settings/portal-domain': typeof DashboardSettingsPortalDomainRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
@@ -717,12 +737,14 @@ export interface FileRouteTypes {
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
+    | '/dashboard/settings/branding'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
     | '/dashboard/settings/integrations'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
+    | '/dashboard/settings/portal-domain'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
     | '/dashboard/settings/signature'
@@ -778,12 +800,14 @@ export interface FileRouteTypes {
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
+    | '/dashboard/settings/branding'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
     | '/dashboard/settings/integrations'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
+    | '/dashboard/settings/portal-domain'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
     | '/dashboard/settings/signature'
@@ -853,12 +877,14 @@ export interface FileRouteTypes {
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
+    | '/dashboard/settings/branding'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
     | '/dashboard/settings/integrations'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
+    | '/dashboard/settings/portal-domain'
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
     | '/dashboard/settings/signature'
@@ -1124,6 +1150,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsProfileRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
+    '/dashboard/settings/portal-domain': {
+      id: '/dashboard/settings/portal-domain'
+      path: '/portal-domain'
+      fullPath: '/dashboard/settings/portal-domain'
+      preLoaderRoute: typeof DashboardSettingsPortalDomainRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
     '/dashboard/settings/organization': {
       id: '/dashboard/settings/organization'
       path: '/organization'
@@ -1164,6 +1197,13 @@ declare module '@tanstack/react-router' {
       path: '/certificates'
       fullPath: '/dashboard/settings/certificates'
       preLoaderRoute: typeof DashboardSettingsCertificatesRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
+    '/dashboard/settings/branding': {
+      id: '/dashboard/settings/branding'
+      path: '/branding'
+      fullPath: '/dashboard/settings/branding'
+      preLoaderRoute: typeof DashboardSettingsBrandingRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
     '/dashboard/settings/billing': {
@@ -1635,12 +1675,14 @@ interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsAppearanceRoute: typeof DashboardSettingsAppearanceRoute
   DashboardSettingsAuthenticationRoute: typeof DashboardSettingsAuthenticationRoute
   DashboardSettingsBillingRoute: typeof DashboardSettingsBillingRoute
+  DashboardSettingsBrandingRoute: typeof DashboardSettingsBrandingRoute
   DashboardSettingsCertificatesRoute: typeof DashboardSettingsCertificatesRoute
   DashboardSettingsDangerRoute: typeof DashboardSettingsDangerRoute
   DashboardSettingsEnvironmentRoute: typeof DashboardSettingsEnvironmentRoute
   DashboardSettingsIntegrationsRoute: typeof DashboardSettingsIntegrationsRoute
   DashboardSettingsNotificationsRoute: typeof DashboardSettingsNotificationsRoute
   DashboardSettingsOrganizationRoute: typeof DashboardSettingsOrganizationRoute
+  DashboardSettingsPortalDomainRoute: typeof DashboardSettingsPortalDomainRoute
   DashboardSettingsProfileRoute: typeof DashboardSettingsProfileRoute
   DashboardSettingsSecurityRoute: typeof DashboardSettingsSecurityRoute
   DashboardSettingsSignatureRoute: typeof DashboardSettingsSignatureRoute
@@ -1651,12 +1693,14 @@ const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
     DashboardSettingsAppearanceRoute: DashboardSettingsAppearanceRoute,
     DashboardSettingsAuthenticationRoute: DashboardSettingsAuthenticationRoute,
     DashboardSettingsBillingRoute: DashboardSettingsBillingRoute,
+    DashboardSettingsBrandingRoute: DashboardSettingsBrandingRoute,
     DashboardSettingsCertificatesRoute: DashboardSettingsCertificatesRoute,
     DashboardSettingsDangerRoute: DashboardSettingsDangerRoute,
     DashboardSettingsEnvironmentRoute: DashboardSettingsEnvironmentRoute,
     DashboardSettingsIntegrationsRoute: DashboardSettingsIntegrationsRoute,
     DashboardSettingsNotificationsRoute: DashboardSettingsNotificationsRoute,
     DashboardSettingsOrganizationRoute: DashboardSettingsOrganizationRoute,
+    DashboardSettingsPortalDomainRoute: DashboardSettingsPortalDomainRoute,
     DashboardSettingsProfileRoute: DashboardSettingsProfileRoute,
     DashboardSettingsSecurityRoute: DashboardSettingsSecurityRoute,
     DashboardSettingsSignatureRoute: DashboardSettingsSignatureRoute,

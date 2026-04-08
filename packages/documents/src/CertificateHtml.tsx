@@ -151,9 +151,38 @@ const styles = `
     line-height: 1.4;
     color: #1a1a1a;
   }
+  @media screen {
+    body {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      padding: 15mm;
+      background: white;
+      box-shadow: 0 18px 48px rgba(15, 23, 42, 0.12);
+    }
+    .certificate {
+      max-width: none;
+      width: 100%;
+    }
+  }
   .certificate {
     max-width: 210mm;
     margin: 0 auto;
+  }
+  .certificate.density-compact {
+    font-size: 9pt;
+    line-height: 1.32;
+  }
+  .certificate.density-compact .section {
+    margin-bottom: 12px;
+  }
+  .certificate.density-compact .header {
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+  .certificate.density-compact th,
+  .certificate.density-compact td {
+    padding: 4px 6px;
   }
   .header {
     display: flex;
@@ -167,6 +196,26 @@ const styles = `
     display: flex;
     align-items: center;
     gap: 12px;
+  }
+  .header-style-minimal .header {
+    display: block;
+  }
+  .header-style-minimal .logo-section {
+    margin-bottom: 10px;
+  }
+  .header-style-minimal .cert-number {
+    text-align: left;
+  }
+  .header-style-split .header {
+    align-items: stretch;
+    gap: 18px;
+  }
+  .header-style-split .cert-number {
+    min-width: 220px;
+    padding: 12px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--template-accent) 65%, white);
+    border: 1px solid color-mix(in srgb, var(--template-primary) 20%, white);
   }
   .logo-placeholder {
     width: 60px;
@@ -201,6 +250,22 @@ const styles = `
     font-size: 14pt;
     font-weight: bold;
     color: var(--template-primary);
+  }
+  .emphasis-formal .section-title,
+  .emphasis-formal .lab-info h1,
+  .emphasis-formal .cert-number .number {
+    color: #223047;
+  }
+  .emphasis-formal .header {
+    border-bottom-color: #223047;
+  }
+  .emphasis-neutral .section-title,
+  .emphasis-neutral .lab-info h1,
+  .emphasis-neutral .cert-number .number {
+    color: #374151;
+  }
+  .emphasis-neutral .header {
+    border-bottom-color: #d1d5db;
   }
   .section {
     margin-bottom: 16px;
@@ -520,7 +585,9 @@ export function CertificateHtml({ job }: { job: JobData }) {
                 />
             </head>
             <body>
-                <div className="certificate">
+                <div
+                    className={`certificate density-${templateConfig.layout.density} header-style-${templateConfig.layout.headerStyle} emphasis-${templateConfig.layout.emphasis}`}
+                >
                     {/* Header */}
                     <div className="header">
                         <div className="logo-section">
