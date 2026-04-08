@@ -76,6 +76,14 @@ type SuccessProfileResponse = {
     publicStatusNote: string | null
     internalNotes: string | null
   }
+  publicSummary: {
+    healthStatus: 'HEALTHY' | 'ATTENTION' | 'CRITICAL'
+    onboardingStatus: OnboardingStatus
+    migrationStatus: MigrationStatus
+    goLiveStatus: GoLiveStatus
+    nextActionStatus: 'NONE' | 'PENDING' | 'DUE_SOON' | 'OVERDUE' | 'COMPLETED'
+    hasActiveBlockers: boolean
+  }
   supportPolicy: SupportPolicy
   plan: {
     id: string
@@ -168,6 +176,20 @@ const goLiveLabels: Record<GoLiveStatus, string> = {
   SCHEDULED: 'Agendado',
   AT_RISK: 'Em risco',
   LIVE: 'Em produção',
+}
+
+const healthLabels: Record<SuccessProfileResponse['publicSummary']['healthStatus'], string> = {
+  HEALTHY: 'Saudável',
+  ATTENTION: 'Atenção',
+  CRITICAL: 'Crítico',
+}
+
+const nextActionLabels: Record<SuccessProfileResponse['publicSummary']['nextActionStatus'], string> = {
+  NONE: 'Sem próximo passo público',
+  PENDING: 'Próximo passo em andamento',
+  DUE_SOON: 'Próximo passo em vencimento',
+  OVERDUE: 'Próximo passo atrasado',
+  COMPLETED: 'Último passo concluído',
 }
 
 const slaStatusLabels: Record<SupportRequest['slaStatus'], string> = {
@@ -343,7 +365,7 @@ function CustomerSuccessPage() {
 
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle>Plano e SLA</CardTitle>
@@ -429,6 +451,32 @@ function CustomerSuccessPage() {
                 </p>
               </>
             ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Postura da Conta</CardTitle>
+            <CardDescription>
+              Resumo público do momento operacional do laboratório.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">
+                {healthLabels[payload.publicSummary.healthStatus]}
+              </Badge>
+              <Badge variant="outline">
+                {nextActionLabels[payload.publicSummary.nextActionStatus]}
+              </Badge>
+              {payload.publicSummary.hasActiveBlockers ? (
+                <Badge>Existem dependências ativas</Badge>
+              ) : null}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Onboarding: {onboardingLabels[payload.publicSummary.onboardingStatus]} ·
+              Migração: {migrationLabels[payload.publicSummary.migrationStatus]}
+            </p>
           </CardContent>
         </Card>
 

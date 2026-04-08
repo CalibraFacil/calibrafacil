@@ -239,6 +239,13 @@
       "when": 1774933200000,
       "tag": "0032_add_customer_success_workspace",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1775097600000,
+      "tag": "0033_add_customer_success_automation",
+      "breakpoints": true
     }
   ]
 }

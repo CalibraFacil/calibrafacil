@@ -30,6 +30,32 @@ export type CustomerSuccessSlaTier =
   | "PRIORITY"
   | "DEDICATED";
 
+export type CustomerSuccessNextActionStatus =
+  | "NONE"
+  | "PENDING"
+  | "DUE_SOON"
+  | "OVERDUE"
+  | "COMPLETED";
+
+export type CustomerSuccessBlockerScope =
+  | "ONBOARDING"
+  | "MIGRATION"
+  | "GO_LIVE"
+  | "SUPPORT";
+
+export type CustomerSuccessBlockerStatus = "ACTIVE" | "RESOLVED";
+
+export interface CustomerSuccessBlocker {
+  id: string;
+  scope: CustomerSuccessBlockerScope;
+  status: CustomerSuccessBlockerStatus;
+  reason: string;
+  createdAt: string;
+  createdByUserId: string | null;
+  resolvedAt: string | null;
+  resolvedByUserId: string | null;
+}
+
 export type SupportRequestCategory =
   | "GENERAL"
   | "TRAINING"
@@ -52,7 +78,8 @@ export type SupportEventKind =
   | "status_changed"
   | "assigned"
   | "public_reply"
-  | "resolved";
+  | "resolved"
+  | "escalated";
 
 export type SupportRequestSlaStatus =
   | "ON_TRACK"
