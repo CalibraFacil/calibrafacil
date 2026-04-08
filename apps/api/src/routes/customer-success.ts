@@ -11,13 +11,18 @@ import {
 } from "@calibra-facil/db/schema";
 import { getOrganizationPlanAccess } from "../lib/organization-plan";
 import {
+  buildCustomerSuccessWorkflow,
   calculateSlaTargetAt,
   deriveDefaultSlaTier,
   deriveGoLiveStatus,
+  deriveHealthStatus,
   deriveNextActionStatus,
+  emitCustomerSuccessAutomationSignals,
   ensureSuccessProfile,
+  getCustomerSuccessAutomationSnapshot,
   getActiveCustomerSuccessBlockers,
   getSupportRequestSlaStatus,
+  resolveDueSoonThresholdHours,
   resolveEffectiveSlaHours,
   writeOrganizationCustomerSuccessEvent,
   writeSupportRequestEvent,
@@ -47,6 +52,16 @@ async function listSupportRequests(organizationId: string, publicOnly: boolean) 
     ensureSuccessProfile(organizationId),
     getOrganizationPlanAccess(organizationId),
   ]);
+  const effectiveSlaTier =
+    profile.slaTier === "PLAN_DEFAULT"
+      ? deriveDefaultSlaTier(planAccess.supportPolicy)
+      : profile.slaTier;
+  const dueSoonThresholdHours = resolveDueSoonThresholdHours(
+    resolveEffectiveSlaHours(
+      planAccess.supportPolicy.targetFirstResponseBusinessHours,
+      effectiveSlaTier,
+    ),
+  );
   const requests = await db.query.organizationSupportRequest.findMany({
     where: eq(organizationSupportRequest.organizationId, organizationId),
     with: {
@@ -87,13 +102,14 @@ async function listSupportRequests(organizationId: string, publicOnly: boolean) 
     slaStatus: getSupportRequestSlaStatus({
       status: request.status,
       slaTargetAt: request.slaTargetAt,
+      dueSoonThresholdHours,
     }),
     timeToSlaMs: request.slaTargetAt
       ? request.slaTargetAt.getTime() - Date.now()
       : null,
     prioritySupport:
       profile.prioritySupport ||
-      deriveDefaultSlaTier(planAccess.supportPolicy) !== "PLAN_DEFAULT" ||
+      effectiveSlaTier !== "PLAN_DEFAULT" ||
       planAccess.supportPolicy.hasPrioritySupport,
     events: eventsByRequest.get(request.id) ?? [],
   }));
@@ -103,32 +119,81 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
   .use("*", ...requireLabProtected, requireOrgType("LAB"))
   .get("/profile", async (c) => {
     const member = c.get("member");
-    const planAccess = await getOrganizationPlanAccess(member.organizationId);
-    const profile = await ensureSuccessProfile(member.organizationId);
+    const [planAccess, profile, requests] = await Promise.all([
+      getOrganizationPlanAccess(member.organizationId),
+      ensureSuccessProfile(member.organizationId),
+      listSupportRequests(member.organizationId, true),
+    ]);
+    const goLiveStatus = deriveGoLiveStatus({
+      currentStatus: profile.goLiveStatus,
+      goLiveActualDate: profile.goLiveActualDate,
+      goLiveTargetDate: profile.goLiveTargetDate,
+    });
+    const nextActionStatus = deriveNextActionStatus({
+      nextAction: profile.nextAction,
+      nextActionDueAt: profile.nextActionDueAt,
+      nextActionCompletedAt: profile.nextActionCompletedAt,
+    });
+    const openRequests = requests.filter(
+      (request) =>
+        request.status === "OPEN" ||
+        request.status === "IN_PROGRESS" ||
+        request.status === "WAITING_ON_CUSTOMER",
+    );
+    const effectiveSlaTier =
+      profile.slaTier === "PLAN_DEFAULT"
+        ? deriveDefaultSlaTier(planAccess.supportPolicy)
+        : profile.slaTier;
+    const prioritySupport =
+      profile.prioritySupport ||
+      effectiveSlaTier !== "PLAN_DEFAULT" ||
+      planAccess.supportPolicy.hasPrioritySupport;
+    const healthStatus = deriveHealthStatus({
+      currentStatus: profile.healthStatus,
+      onboardingStatus: profile.onboardingStatus,
+      migrationStatus: profile.migrationStatus,
+      goLiveStatus,
+      breachedRequestsCount: openRequests.filter(
+        (request) => request.slaStatus === "BREACHED",
+      ).length,
+      dueSoonRequestsCount: openRequests.filter(
+        (request) => request.slaStatus === "DUE_SOON",
+      ).length,
+    });
+    const workflow = buildCustomerSuccessWorkflow({
+      supportPolicy: planAccess.supportPolicy,
+      effectiveSlaTier,
+      prioritySupport,
+      onboardingStatus: profile.onboardingStatus,
+      migrationStatus: profile.migrationStatus,
+      goLiveStatus,
+      nextActionStatus,
+      nextAction: profile.nextAction,
+      internalOwnerUserId: profile.internalOwnerUserId,
+      blockers: profile.blockers,
+      openRequestsCount: openRequests.length,
+      dueSoonRequestsCount: openRequests.filter(
+        (request) => request.slaStatus === "DUE_SOON",
+      ).length,
+      breachedRequestsCount: openRequests.filter(
+        (request) => request.slaStatus === "BREACHED",
+      ).length,
+      escalatedRequestsCount: openRequests.filter(
+        (request) => request.escalatedAt !== null,
+      ).length,
+    });
 
     return c.json({
       profile: {
         ...profile,
-        goLiveStatus: deriveGoLiveStatus({
-          currentStatus: profile.goLiveStatus,
-          goLiveActualDate: profile.goLiveActualDate,
-          goLiveTargetDate: profile.goLiveTargetDate,
-        }),
+        goLiveStatus,
       },
       publicSummary: {
-        healthStatus: profile.healthStatus,
+        healthStatus,
         onboardingStatus: profile.onboardingStatus,
         migrationStatus: profile.migrationStatus,
-        goLiveStatus: deriveGoLiveStatus({
-          currentStatus: profile.goLiveStatus,
-          goLiveActualDate: profile.goLiveActualDate,
-          goLiveTargetDate: profile.goLiveTargetDate,
-        }),
-        nextActionStatus: deriveNextActionStatus({
-          nextAction: profile.nextAction,
-          nextActionDueAt: profile.nextActionDueAt,
-          nextActionCompletedAt: profile.nextActionCompletedAt,
-        }),
+        goLiveStatus,
+        nextActionStatus,
         hasActiveBlockers: getActiveCustomerSuccessBlockers(profile.blockers).length > 0,
       },
       supportPolicy: planAccess.supportPolicy,
@@ -137,6 +202,10 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
         name: planAccess.planName,
         status: planAccess.status,
       },
+      workflow,
+      workflowWarnings: workflow.warnings,
+      workflowViolations: workflow.violations,
+      policy: workflow.policy,
     });
   })
   .get("/support-policy", async (c) => {
@@ -165,6 +234,9 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
       const input = c.req.valid("json");
       const planAccess = await getOrganizationPlanAccess(member.organizationId);
       const profile = await ensureSuccessProfile(member.organizationId);
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(
+        member.organizationId,
+      );
       const effectiveSlaTier =
         profile.slaTier === "PLAN_DEFAULT"
           ? deriveDefaultSlaTier(planAccess.supportPolicy)
@@ -219,6 +291,16 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
           priority: input.priority,
           subject: input.subject,
         },
+      });
+
+      const nextAutomation = await getCustomerSuccessAutomationSnapshot(
+        member.organizationId,
+      );
+      await emitCustomerSuccessAutomationSignals({
+        organizationId: member.organizationId,
+        previous: previousAutomation,
+        next: nextAutomation,
+        actorUserId: session.user.id,
       });
 
       await db
