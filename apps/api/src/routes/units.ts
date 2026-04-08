@@ -5,6 +5,7 @@ import { db } from "@calibra-facil/db";
 import {
   member,
   memberUnitAssignment,
+  type MemberUnitRole,
   organizationEventLog,
   organizationUnit,
   user,
@@ -12,6 +13,10 @@ import {
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import {
   type AuthVariables,
+  type MemberData,
+  getGovernanceAccess,
+  requireLabProtected,
+  requireOrgType,
   withLabPermission,
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
@@ -32,6 +37,10 @@ const UpdateAssignmentsSchema = z.object({
       role: z.enum(["member", "technician", "unit_admin"]),
     }),
   ),
+});
+
+const UpdateMemberRoleSchema = z.object({
+  role: z.enum(["member", "technician", "admin"]),
 });
 
 function slugify(name: string) {
@@ -84,29 +93,53 @@ async function allocateUnitSlug(params: {
   throw new Error("Nao foi possivel gerar um slug unico para a unidade");
 }
 
+function getViewerAccess(c: {
+  get: (key: string) => unknown;
+}) {
+  const memberData = c.get("member") as MemberData;
+  return {
+    memberData,
+    viewer: getGovernanceAccess(memberData),
+  };
+}
+
+function dedupeUnitAssignments(
+  assignments: Array<{ unitId: number; role: MemberUnitRole }>,
+) {
+  return Array.from(
+    new Map(assignments.map((assignment) => [assignment.unitId, assignment])).values(),
+  );
+}
+
 export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...withLabPermission({ calibration: ["read"] }),
     requireFeature("multi_unit"),
     async (c) => {
-    const memberData = c.get("member");
+      const { memberData, viewer } = getViewerAccess(c);
 
-    return c.json({
-      activeUnitId: memberData.activeUnitId,
-      activeUnitName: memberData.activeUnitName,
-      selectedUnitScope: memberData.selectedUnitScope,
-      canAccessAllUnits: memberData.canAccessAllUnits,
-      data: memberData.accessibleUnits,
-    });
+      return c.json({
+        activeUnitId: memberData.activeUnitId,
+        activeUnitName: memberData.activeUnitName,
+        selectedUnitScope: memberData.selectedUnitScope,
+        canAccessAllUnits: memberData.canAccessAllUnits,
+        viewer,
+        data: memberData.accessibleUnits,
+      });
     },
   )
   .get(
     "/admin/units",
-    ...withLabPermission({ settings: ["update"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     requireFeature("multi_unit"),
     async (c) => {
-      const memberData = c.get("member");
+      const { memberData, viewer } = getViewerAccess(c);
+
+      if (!viewer.canViewGovernance) {
+        return c.json({ error: "Permissão insuficiente" }, 403);
+      }
 
       const units = await db
         .select({
@@ -119,22 +152,34 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           archivedAt: organizationUnit.archivedAt,
         })
         .from(organizationUnit)
-        .where(eq(organizationUnit.organizationId, memberData.organizationId))
+        .where(
+          and(
+            eq(organizationUnit.organizationId, memberData.organizationId),
+            viewer.isGlobalManager
+              ? undefined
+              : inArray(organizationUnit.id, viewer.managedUnitIds),
+          ),
+        )
         .orderBy(asc(organizationUnit.name));
 
-      return c.json({ data: units });
+      return c.json({ data: units, viewer });
     },
   )
   .post(
     "/admin/units",
-    ...withLabPermission({ settings: ["update"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     requireFeature("multi_unit"),
     zValidator("json", CreateUnitSchema),
     async (c) => {
-      const memberData = c.get("member");
+      const { memberData, viewer } = getViewerAccess(c);
       const session = c.get("session");
       const input = c.req.valid("json");
       let created: typeof organizationUnit.$inferSelect | undefined;
+
+      if (!viewer.canManageOrganizationUnits) {
+        return c.json({ error: "Apenas administradores globais podem criar unidades" }, 403);
+      }
 
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const slug = await allocateUnitSlug({
@@ -185,14 +230,22 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
   )
   .patch(
     "/admin/units/:id",
-    ...withLabPermission({ settings: ["update"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     requireFeature("multi_unit"),
     zValidator("json", UpdateUnitSchema),
     async (c) => {
-      const memberData = c.get("member");
+      const { memberData, viewer } = getViewerAccess(c);
       const session = c.get("session");
       const id = Number.parseInt(c.req.param("id"), 10);
       const input = c.req.valid("json");
+
+      if (!viewer.canManageOrganizationUnits) {
+        return c.json(
+          { error: "Apenas administradores globais podem atualizar unidades" },
+          403,
+        );
+      }
 
       if (!Number.isInteger(id)) {
         return c.json({ error: "ID inválido" }, 400);
@@ -270,10 +323,22 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         unitId: id,
         actorUserId: session.user.id,
         actorMemberId: memberData.id,
-        action: "unit.updated",
+        action:
+          input.status === "ARCHIVED"
+            ? "unit.archived"
+            : input.status === "ACTIVE" && existing.status === "ARCHIVED"
+              ? "unit.reactivated"
+              : "unit.updated",
         entityType: "organization_unit",
         entityId: String(id),
-        details: updateData,
+        details: {
+          before: {
+            name: existing.name,
+            slug: existing.slug,
+            status: existing.status,
+          },
+          after: updateData,
+        },
       });
 
       return c.json(updated);
@@ -281,24 +346,15 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
   )
   .get(
     "/admin/members",
-    ...withLabPermission({ settings: ["update"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     requireFeature("multi_unit"),
     async (c) => {
-      const memberData = c.get("member");
+      const { memberData, viewer } = getViewerAccess(c);
 
-      const members = await db
-        .select({
-          id: member.id,
-          userId: member.userId,
-          role: member.role,
-          name: user.name,
-          email: user.email,
-          createdAt: member.createdAt,
-        })
-        .from(member)
-        .innerJoin(user, eq(member.userId, user.id))
-        .where(eq(member.organizationId, memberData.organizationId))
-        .orderBy(asc(user.name));
+      if (!viewer.canViewGovernance) {
+        return c.json({ error: "Permissão insuficiente" }, 403);
+      }
 
       const assignments = await db
         .select({
@@ -316,9 +372,38 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(memberUnitAssignment.organizationId, memberData.organizationId),
             eq(organizationUnit.organizationId, memberData.organizationId),
+            viewer.isGlobalManager
+              ? undefined
+              : inArray(memberUnitAssignment.unitId, viewer.managedUnitIds),
           ),
         )
         .orderBy(asc(organizationUnit.name));
+
+      const visibleMemberIds = viewer.isGlobalManager
+        ? null
+        : Array.from(new Set(assignments.map((assignment) => assignment.memberId)));
+
+      const members =
+        visibleMemberIds && visibleMemberIds.length === 0
+          ? []
+          : await db
+              .select({
+                id: member.id,
+                userId: member.userId,
+                role: member.role,
+                name: user.name,
+                email: user.email,
+                createdAt: member.createdAt,
+              })
+              .from(member)
+              .innerJoin(user, eq(member.userId, user.id))
+              .where(
+                and(
+                  eq(member.organizationId, memberData.organizationId),
+                  visibleMemberIds ? inArray(member.id, visibleMemberIds) : undefined,
+                ),
+              )
+              .orderBy(asc(user.name));
 
       const assignmentsByMember = new Map<
         string,
@@ -340,6 +425,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       return c.json({
+        viewer,
         data: members.map((item) => ({
           ...item,
           assignments: assignmentsByMember.get(item.id) ?? [],
@@ -349,17 +435,24 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
   )
   .put(
     "/admin/members/:memberId/assignments",
-    ...withLabPermission({ settings: ["update"] }),
+    ...requireLabProtected,
+    requireOrgType("LAB"),
     requireFeature("multi_unit"),
     zValidator("json", UpdateAssignmentsSchema),
     async (c) => {
-      const memberData = c.get("member");
+      const { memberData, viewer } = getViewerAccess(c);
       const session = c.get("session");
       const targetMemberId = c.req.param("memberId");
       const input = c.req.valid("json");
 
+      if (!viewer.canManageAssignments) {
+        return c.json({ error: "Permissão insuficiente para editar atribuições" }, 403);
+      }
+
+      const dedupedAssignments = dedupeUnitAssignments(input.assignments);
+
       const [targetMember] = await db
-        .select({ id: member.id })
+        .select({ id: member.id, role: member.role })
         .from(member)
         .where(
           and(
@@ -373,16 +466,37 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Membro não encontrado" }, 404);
       }
 
-      const unitIds = input.assignments.map((assignment) => assignment.unitId);
-      const units = await db
-        .select({ id: organizationUnit.id })
-        .from(organizationUnit)
-        .where(
-          and(
-            eq(organizationUnit.organizationId, memberData.organizationId),
-            inArray(organizationUnit.id, unitIds),
-          ),
+      if (!viewer.isGlobalManager && ["owner", "admin"].includes(targetMember.role)) {
+        return c.json(
+          { error: "Papéis globais não podem ser gerenciados por administradores de unidade" },
+          403,
         );
+      }
+
+      const unitIds = dedupedAssignments.map((assignment) => assignment.unitId);
+
+      if (
+        !viewer.isGlobalManager &&
+        unitIds.some((unitId) => !viewer.managedUnitIds.includes(unitId))
+      ) {
+        return c.json(
+          { error: "Uma ou mais unidades estão fora do seu escopo de gestão" },
+          403,
+        );
+      }
+
+      const units =
+        unitIds.length === 0
+          ? []
+          : await db
+              .select({ id: organizationUnit.id })
+              .from(organizationUnit)
+              .where(
+                and(
+                  eq(organizationUnit.organizationId, memberData.organizationId),
+                  inArray(organizationUnit.id, unitIds),
+                ),
+              );
 
       if (units.length !== unitIds.length) {
         return c.json(
@@ -391,13 +505,45 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      await db
-        .delete(memberUnitAssignment)
-        .where(eq(memberUnitAssignment.memberId, targetMemberId));
+      const existingAssignments = await db
+        .select({
+          unitId: memberUnitAssignment.unitId,
+          role: memberUnitAssignment.role,
+        })
+        .from(memberUnitAssignment)
+        .where(
+          and(
+            eq(memberUnitAssignment.organizationId, memberData.organizationId),
+            eq(memberUnitAssignment.memberId, targetMemberId),
+          ),
+        );
 
-      if (input.assignments.length > 0) {
+      // Global managers can remove assignments that already exist as well as any
+      // units included in the incoming payload. Scoped managers can only delete
+      // assignments for units they manage.
+      const editableUnitIds = viewer.isGlobalManager
+        ? existingAssignments.map((assignment) => assignment.unitId).concat(unitIds)
+        : viewer.managedUnitIds;
+
+      // Deduping here keeps the subsequent inArray delete filter scoped to the
+      // unique set of unit IDs this viewer is allowed to affect.
+      const scopedEditableUnitIds = Array.from(new Set(editableUnitIds));
+
+      if (scopedEditableUnitIds.length > 0) {
+        await db
+          .delete(memberUnitAssignment)
+          .where(
+            and(
+              eq(memberUnitAssignment.memberId, targetMemberId),
+              eq(memberUnitAssignment.organizationId, memberData.organizationId),
+              inArray(memberUnitAssignment.unitId, scopedEditableUnitIds),
+            ),
+          );
+      }
+
+      if (dedupedAssignments.length > 0) {
         await db.insert(memberUnitAssignment).values(
-          input.assignments.map((assignment) => ({
+          dedupedAssignments.map((assignment) => ({
             organizationId: memberData.organizationId,
             memberId: targetMemberId,
             unitId: assignment.unitId,
@@ -415,7 +561,75 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         entityType: "member",
         entityId: targetMemberId,
         details: {
-          assignments: input.assignments,
+          managedUnitIds: viewer.managedUnitIds,
+          before: existingAssignments,
+          after: dedupedAssignments,
+        },
+      });
+
+      return c.json({ success: true });
+    },
+  )
+  .patch(
+    "/admin/members/:memberId/role",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    requireFeature("multi_unit"),
+    zValidator("json", UpdateMemberRoleSchema),
+    async (c) => {
+      const { memberData, viewer } = getViewerAccess(c);
+      const session = c.get("session");
+      const targetMemberId = c.req.param("memberId");
+      const input = c.req.valid("json");
+
+      if (!viewer.canManageGlobalRoles) {
+        return c.json(
+          { error: "Apenas administradores globais podem alterar papéis globais" },
+          403,
+        );
+      }
+
+      const [targetMember] = await db
+        .select({ id: member.id, role: member.role })
+        .from(member)
+        .where(
+          and(
+            eq(member.id, targetMemberId),
+            eq(member.organizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!targetMember) {
+        return c.json({ error: "Membro não encontrado" }, 404);
+      }
+
+      if (targetMember.role === "owner") {
+        return c.json(
+          { error: "O proprietário da organização não pode ser alterado aqui" },
+          400,
+        );
+      }
+
+      if (targetMember.role === input.role) {
+        return c.json({ success: true });
+      }
+
+      await db
+        .update(member)
+        .set({ role: input.role })
+        .where(eq(member.id, targetMemberId));
+
+      await db.insert(organizationEventLog).values({
+        organizationId: memberData.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: memberData.id,
+        action: "member.role.updated",
+        entityType: "member",
+        entityId: targetMemberId,
+        details: {
+          before: { role: targetMember.role },
+          after: { role: input.role },
         },
       });
 
