@@ -4,7 +4,7 @@ import { APIError } from "better-auth/api";
 import { randomBytes } from "node:crypto";
 import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { organization } from "better-auth/plugins";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
@@ -62,8 +62,12 @@ function resolveAuthSecret(isProduction: boolean): string {
 }
 
 const DEV_TRUSTED_ORIGINS = [
+  "http://localhost:5173",
+  "http://localhost:5174",
   "https://localhost:5173",
   "https://localhost:5174",
+  "http://192.168.0.10:5173",
+  "http://192.168.0.10:5174",
   "https://192.168.0.10:5173",
   "https://192.168.0.10:5174",
 ];
@@ -174,7 +178,10 @@ async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {
     const url = new URL(origin);
     const record = await getDb().query.organizationCustomDomain.findFirst({
       where: and(
-        eq(schema.organizationCustomDomain.hostname, url.hostname.toLowerCase()),
+        eq(
+          schema.organizationCustomDomain.hostname,
+          url.hostname.toLowerCase(),
+        ),
         eq(schema.organizationCustomDomain.isActive, true),
       ),
     });
@@ -254,7 +261,7 @@ function createOrganizationPlugin() {
       },
     },
     async sendInvitationEmail(data) {
-      const appUrl = process.env.APP_URL || "https://localhost:5173";
+      const appUrl = process.env.APP_URL || "http://localhost:5173";
       const inviteLink = `${appUrl}/accept-invitation/${data.id}`;
       const apiKey = process.env.RESEND_API_KEY;
       if (!apiKey) {
@@ -283,6 +290,8 @@ function createOrganizationPlugin() {
 function createSharedConfig() {
   const isProduction = process.env.NODE_ENV === "production";
   const authSecret = resolveAuthSecret(isProduction);
+  const defaultSameSite: "lax" | "none" = isProduction ? "none" : "lax";
+  const sessionCookieStrategy: "jwe" = "jwe";
 
   return {
     secret: authSecret,
@@ -299,6 +308,14 @@ function createSharedConfig() {
       },
     },
     trustedOrigins: createTrustedOrigins(isProduction),
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 60 * 5,
+        strategy: sessionCookieStrategy,
+        refreshCache: false,
+      },
+    },
     advanced: {
       crossSubDomainCookies: isProduction
         ? {
@@ -307,11 +324,36 @@ function createSharedConfig() {
           }
         : { enabled: false },
       defaultCookieAttributes: {
-        sameSite: "none" as const,
-        secure: true,
+        sameSite: defaultSameSite,
+        secure: isProduction,
       },
     },
   };
+}
+
+async function findDefaultActiveOrganizationId(
+  userId: string,
+  organizationType: "CLIENT" | "LAB",
+): Promise<string | null> {
+  const [membership] = await getDb()
+    .select({
+      organizationId: schema.member.organizationId,
+    })
+    .from(schema.member)
+    .innerJoin(
+      schema.organization,
+      eq(schema.member.organizationId, schema.organization.id),
+    )
+    .where(
+      and(
+        eq(schema.member.userId, userId),
+        eq(schema.organization.type, organizationType),
+      ),
+    )
+    .orderBy(asc(schema.member.createdAt))
+    .limit(1);
+
+  return membership?.organizationId ?? null;
 }
 
 /**
@@ -323,12 +365,38 @@ export function createLabAuth() {
   const baseURL =
     process.env.NODE_ENV === "production"
       ? getRequiredEnv("API_URL")
-      : "https://localhost:3000";
+      : "http://localhost:3000";
 
   return betterAuth({
     ...sharedConfig,
     basePath: "/api/auth/lab",
     baseURL,
+    databaseHooks: {
+      session: {
+        create: {
+          async before(session) {
+            if (session.activeOrganizationId) {
+              return;
+            }
+
+            const activeOrganizationId = await findDefaultActiveOrganizationId(
+              session.userId,
+              "LAB",
+            );
+
+            if (!activeOrganizationId) {
+              return;
+            }
+
+            return {
+              data: {
+                activeOrganizationId,
+              },
+            };
+          },
+        },
+      },
+    },
     advanced: {
       ...sharedConfig.advanced,
       cookiePrefix: "lab",
@@ -358,12 +426,38 @@ export function createPortalAuth() {
   const baseURL =
     process.env.NODE_ENV === "production"
       ? getRequiredEnv("API_URL")
-      : "https://localhost:3000";
+      : "http://localhost:3000";
 
   return betterAuth({
     ...sharedConfig,
     basePath: "/api/auth/portal",
     baseURL,
+    databaseHooks: {
+      session: {
+        create: {
+          async before(session) {
+            if (session.activeOrganizationId) {
+              return;
+            }
+
+            const activeOrganizationId = await findDefaultActiveOrganizationId(
+              session.userId,
+              "CLIENT",
+            );
+
+            if (!activeOrganizationId) {
+              return;
+            }
+
+            return {
+              data: {
+                activeOrganizationId,
+              },
+            };
+          },
+        },
+      },
+    },
     advanced: {
       ...sharedConfig.advanced,
       cookiePrefix: "portal",
