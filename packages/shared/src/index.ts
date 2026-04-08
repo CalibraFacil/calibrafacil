@@ -2,3 +2,4 @@
 export * from "./plans";
 export * from "./certificate-templates";
 export * from "./domain-utils";
+export * from "./integrations";

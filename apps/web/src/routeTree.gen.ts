@@ -42,6 +42,7 @@ import { Route as DashboardSettingsSecurityRouteImport } from './routes/dashboar
 import { Route as DashboardSettingsProfileRouteImport } from './routes/dashboard/settings/profile'
 import { Route as DashboardSettingsOrganizationRouteImport } from './routes/dashboard/settings/organization'
 import { Route as DashboardSettingsNotificationsRouteImport } from './routes/dashboard/settings/notifications'
+import { Route as DashboardSettingsIntegrationsRouteImport } from './routes/dashboard/settings/integrations'
 import { Route as DashboardSettingsEnvironmentRouteImport } from './routes/dashboard/settings/environment'
 import { Route as DashboardSettingsDangerRouteImport } from './routes/dashboard/settings/danger'
 import { Route as DashboardSettingsCertificatesRouteImport } from './routes/dashboard/settings/certificates'
@@ -250,6 +251,12 @@ const DashboardSettingsNotificationsRoute =
   DashboardSettingsNotificationsRouteImport.update({
     id: '/notifications',
     path: '/notifications',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
+const DashboardSettingsIntegrationsRoute =
+  DashboardSettingsIntegrationsRouteImport.update({
+    id: '/integrations',
+    path: '/integrations',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
 const DashboardSettingsEnvironmentRoute =
@@ -499,6 +506,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
+  '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
@@ -559,6 +567,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
+  '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
@@ -634,6 +643,7 @@ export interface FileRoutesById {
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
+  '/dashboard/settings/integrations': typeof DashboardSettingsIntegrationsRoute
   '/dashboard/settings/notifications': typeof DashboardSettingsNotificationsRoute
   '/dashboard/settings/organization': typeof DashboardSettingsOrganizationRoute
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
@@ -710,6 +720,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
+    | '/dashboard/settings/integrations'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
     | '/dashboard/settings/profile'
@@ -770,6 +781,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
+    | '/dashboard/settings/integrations'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
     | '/dashboard/settings/profile'
@@ -844,6 +856,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
+    | '/dashboard/settings/integrations'
     | '/dashboard/settings/notifications'
     | '/dashboard/settings/organization'
     | '/dashboard/settings/profile'
@@ -1123,6 +1136,13 @@ declare module '@tanstack/react-router' {
       path: '/notifications'
       fullPath: '/dashboard/settings/notifications'
       preLoaderRoute: typeof DashboardSettingsNotificationsRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
+    '/dashboard/settings/integrations': {
+      id: '/dashboard/settings/integrations'
+      path: '/integrations'
+      fullPath: '/dashboard/settings/integrations'
+      preLoaderRoute: typeof DashboardSettingsIntegrationsRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
     '/dashboard/settings/environment': {
@@ -1618,6 +1638,7 @@ interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsCertificatesRoute: typeof DashboardSettingsCertificatesRoute
   DashboardSettingsDangerRoute: typeof DashboardSettingsDangerRoute
   DashboardSettingsEnvironmentRoute: typeof DashboardSettingsEnvironmentRoute
+  DashboardSettingsIntegrationsRoute: typeof DashboardSettingsIntegrationsRoute
   DashboardSettingsNotificationsRoute: typeof DashboardSettingsNotificationsRoute
   DashboardSettingsOrganizationRoute: typeof DashboardSettingsOrganizationRoute
   DashboardSettingsProfileRoute: typeof DashboardSettingsProfileRoute
@@ -1633,6 +1654,7 @@ const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
     DashboardSettingsCertificatesRoute: DashboardSettingsCertificatesRoute,
     DashboardSettingsDangerRoute: DashboardSettingsDangerRoute,
     DashboardSettingsEnvironmentRoute: DashboardSettingsEnvironmentRoute,
+    DashboardSettingsIntegrationsRoute: DashboardSettingsIntegrationsRoute,
     DashboardSettingsNotificationsRoute: DashboardSettingsNotificationsRoute,
     DashboardSettingsOrganizationRoute: DashboardSettingsOrganizationRoute,
     DashboardSettingsProfileRoute: DashboardSettingsProfileRoute,

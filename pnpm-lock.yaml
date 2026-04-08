@@ -493,6 +493,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@calibra-facil/shared':
+        specifier: workspace:^
+        version: link:../shared
       '@neondatabase/serverless':
         specifier: ^1.0.2
         version: 1.0.2
