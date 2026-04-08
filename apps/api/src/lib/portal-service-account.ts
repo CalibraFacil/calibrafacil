@@ -13,6 +13,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, lt, ne, or, SQL } from "drizzle-orm";
 import { Resend } from "resend";
+import { getPortalBaseUrlForClientOrganization } from "./portal-domains";
 
 const DEFAULT_INVITATION_EXPIRATION_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
@@ -65,7 +66,7 @@ function getInvitationExpirationSeconds(): number {
   return Math.floor(value);
 }
 
-function getPortalAppUrl(): string {
+function getPortalAppUrlFallback(): string {
   const explicit = process.env.PORTAL_APP_URL?.trim();
   if (explicit) {
     return explicit.replace(/\/+$/, "");
@@ -86,8 +87,15 @@ function getPortalAppUrl(): string {
   return "https://localhost:5174";
 }
 
-function getInvitationUrl(invitationId: string): string {
-  return `${getPortalAppUrl()}/accept-invite?token=${invitationId}`;
+async function getInvitationUrl(
+  organizationId: string,
+  invitationId: string,
+): Promise<string> {
+  const baseUrl =
+    (await getPortalBaseUrlForClientOrganization(organizationId).catch(() => null)) ??
+    getPortalAppUrlFallback();
+
+  return `${baseUrl}/accept-invite?token=${invitationId}`;
 }
 
 async function getPortalServiceUser() {
@@ -111,6 +119,7 @@ async function getPortalServiceUser() {
 
 async function sendPortalInvitationEmail(params: {
   invitationId: string;
+  organizationId: string;
   recipientEmail: string;
   organizationName: string;
   role: string;
@@ -130,7 +139,10 @@ async function sendPortalInvitationEmail(params: {
     process.env.RESEND_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
     "Calibra Facil <noreply@calibrafacil.com>";
-  const invitationUrl = getInvitationUrl(params.invitationId);
+  const invitationUrl = await getInvitationUrl(
+    params.organizationId,
+    params.invitationId,
+  );
   const escapedOrganizationName = escapeHtml(params.organizationName);
   const escapedRole = escapeHtml(params.role);
   const escapedInviterName = escapeHtml(params.inviterName);
@@ -376,6 +388,7 @@ export async function createPortalInvitationAsService(params: {
 
   await sendPortalInvitationEmail({
     invitationId,
+    organizationId: params.organizationId,
     recipientEmail: normalizedEmail,
     organizationName: org.name,
     role,

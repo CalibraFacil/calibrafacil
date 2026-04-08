@@ -13,5 +13,10 @@ export function getApiBaseUrl(): string {
   }
   const host =
     typeof window !== "undefined" ? window.location.hostname : "localhost";
-  return `https://${host}:3000`;
+
+  if (host === "localhost" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+    return `https://${host}:3000`;
+  }
+
+  return "https://api.calibrafacil.com";
 }

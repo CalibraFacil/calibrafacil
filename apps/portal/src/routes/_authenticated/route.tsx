@@ -39,7 +39,10 @@ function getWebAppUrl(): string {
   }
   const host =
     typeof window !== "undefined" ? window.location.hostname : "localhost";
-  return `https://${host}:5173`;
+  if (host === "localhost" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+    return `https://${host}:5173`;
+  }
+  return "https://calibrafacil.com";
 }
 
 type PortalOrganization = {

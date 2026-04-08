@@ -477,7 +477,8 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const { providerId } = c.req.valid("param");
-      // Allow cleanup after downgrade even when new SSO logins are blocked.
+      // Intentionally allow deletion after downgrade so organizations can
+      // clean up stale SSO configuration even when SSO sign-in is blocked.
       const provider = await db.query.ssoProvider.findFirst({
         where: and(
           eq(ssoProvider.organizationId, member.organizationId),

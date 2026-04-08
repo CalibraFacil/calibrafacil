@@ -36,6 +36,8 @@ import { sessionsRouter } from "./routes/sessions";
 import { ssoRouter } from "./routes/sso";
 import { apiKeysRouter } from "./routes/api-keys";
 import { publicApiRouter } from "./routes/public-api";
+import { isAllowedPortalOrigin } from "./lib/portal-domains";
+import { portalDomainsRouter } from "./routes/portal-domains";
 import { certificateTemplatesRouter } from "./routes/certificate-templates";
 
 // Environment variables type for Cloudflare Workers
@@ -66,9 +68,10 @@ const allowedOrigins = new Set([
   "https://api.calibrafacil.com",
 ]);
 
-function getCorsOrigin(origin?: string) {
+async function getCorsOrigin(origin?: string) {
   if (!origin) return undefined;
-  return allowedOrigins.has(origin) ? origin : undefined;
+  if (allowedOrigins.has(origin)) return origin;
+  return (await isAllowedPortalOrigin(origin)) ? origin : undefined;
 }
 
 /**
@@ -147,19 +150,21 @@ app.use("/api/public/*", rateLimitPublicApi);
  * Helper: attach CORS headers to Better Auth responses
  */
 function withCors(c: any, res: Response) {
-  const origin = getCorsOrigin(c.req.header("Origin"));
-  if (!origin) return res;
+  return (async () => {
+    const origin = await getCorsOrigin(c.req.header("Origin"));
+    if (!origin) return res;
 
-  const headers = new Headers(res.headers);
-  headers.set("Access-Control-Allow-Origin", origin);
-  headers.set("Access-Control-Allow-Credentials", "true");
-  headers.append("Vary", "Origin");
+    const headers = new Headers(res.headers);
+    headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Access-Control-Allow-Credentials", "true");
+    headers.append("Vary", "Origin");
 
-  return new Response(res.body, {
-    status: res.status,
-    statusText: res.statusText,
-    headers,
-  });
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
+  })();
 }
 
 /**
@@ -168,13 +173,13 @@ function withCors(c: any, res: Response) {
 app.on(["GET", "POST"], "/api/auth/lab/*", async (c) => {
   const labAuth = createLabAuth();
   const res = await labAuth.handler(c.req.raw);
-  return withCors(c, res);
+  return await withCors(c, res);
 });
 
 app.on(["GET", "POST"], "/api/auth/portal/*", async (c) => {
   const portalAuth = createPortalAuth();
   const res = await portalAuth.handler(c.req.raw);
-  return withCors(c, res);
+  return await withCors(c, res);
 });
 
 /**
@@ -208,6 +213,7 @@ const routes = app
   .route("/api/sessions", sessionsRouter)
   .route("/api/sso", ssoRouter)
   .route("/api/api-keys", apiKeysRouter)
+  .route("/api/portal-domains", portalDomainsRouter)
   .route("/api/certificate-templates", certificateTemplatesRouter)
   .route("/api/public/v1", publicApiRouter);
 
