@@ -6,7 +6,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-import { requireFeature } from "../../middleware/tier-guard";
 
 // =============================================================================
 // PAYMENTS ROUTES - Payment history for organization
@@ -19,7 +18,6 @@ export const paymentsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...withLabPermission({ billing: ["read"] }),
-    requireFeature("financial"),
     async (c) => {
     const memberData = c.get("member");
     const rawLimit = Number(c.req.query("limit") ?? "20");
@@ -50,7 +48,6 @@ export const paymentsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/:paymentId",
     ...withLabPermission({ billing: ["read"] }),
-    requireFeature("financial"),
     async (c) => {
       const paymentId = parseInt(c.req.param("paymentId"));
       const memberData = c.get("member");
