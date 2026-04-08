@@ -6,6 +6,7 @@ import {
   LinkSquare02Icon,
   Notification01Icon,
   PaintBoardIcon,
+  Settings02Icon,
   ShieldKeyIcon,
   UserIcon,
   PenTool01Icon,
@@ -38,6 +39,18 @@ const settingsNavItems: Array<SettingsNavItem> = [
     label: 'Organização',
     href: '/dashboard/settings/organization',
     icon: <HugeiconsIcon icon={Building06Icon} className="size-4" />,
+  },
+  {
+    value: 'portal-domain',
+    label: 'Portal Domain',
+    href: '/dashboard/settings/portal-domain',
+    icon: <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" />,
+  },
+  {
+    value: 'branding',
+    label: 'Branding',
+    href: '/dashboard/settings/branding',
+    icon: <HugeiconsIcon icon={PaintBoardIcon} className="size-4" />,
   },
   {
     value: 'signature',
@@ -79,7 +92,7 @@ const settingsNavItems: Array<SettingsNavItem> = [
     value: 'appearance',
     label: 'Aparência',
     href: '/dashboard/settings/appearance',
-    icon: <HugeiconsIcon icon={PaintBoardIcon} className="size-4" />,
+    icon: <HugeiconsIcon icon={Settings02Icon} className="size-4" />,
   },
   {
     value: 'billing',

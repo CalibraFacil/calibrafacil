@@ -734,7 +734,6 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(member.userId, input.technicianId),
             eq(member.organizationId, memberData.organizationId),
-            inArray(member.role, ["technician", "admin", "owner"]),
           ),
         )
         .limit(1);
@@ -755,7 +754,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
                 .from(memberUnitAssignment)
                 .where(
                   and(
-                    eq(memberUnitAssignment.memberId, input.technicianId),
+                    eq(memberUnitAssignment.memberId, techMember.id),
                     eq(
                       memberUnitAssignment.organizationId,
                       memberData.organizationId,
@@ -1006,7 +1005,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               inArray(referenceStandard.id, input.selectedStandardIds),
               eq(referenceStandard.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(referenceStandard.unitId, memberData),
+              eq(referenceStandard.unitId, existing.unitId),
             ),
           );
 

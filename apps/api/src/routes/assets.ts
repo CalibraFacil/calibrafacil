@@ -18,6 +18,7 @@ import { eq, ilike, or, count, and, isNull, desc } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
+  type MemberData,
 } from "../middleware/permission";
 import { withCache, withInvalidation } from "../middleware/cache";
 import { buildUnitScopeCondition } from "../lib/units";
@@ -26,6 +27,12 @@ const CommandPaletteAssetSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
   limit: z.coerce.number().min(1).max(10).default(5),
 });
+
+function getAssetScopeCondition(member: MemberData) {
+  return member.organizationType === "LAB"
+    ? buildUnitScopeCondition(asset.unitId, member)
+    : undefined;
+}
 
 export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -222,7 +229,10 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Build conditions array - always exclude soft-deleted assets
         const conditions = [isNull(asset.deletedAt)];
-        conditions.push(buildUnitScopeCondition(asset.unitId, member));
+        const assetScopeCondition = getAssetScopeCondition(member);
+        if (assetScopeCondition) {
+          conditions.push(assetScopeCondition);
+        }
 
         // If user is a client_user, they can only see their organization's assets
         if (member.organizationType === "CLIENT") {
@@ -349,14 +359,17 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         .select({
           id: asset.id,
           label: asset.name,
+          customerId: asset.customerId,
         })
         .from(asset)
         .innerJoin(customer, eq(asset.customerId, customer.id))
         .where(
           and(
             eq(asset.id, id),
-            eq(customer.labOrganizationId, member.organizationId),
-            buildUnitScopeCondition(asset.unitId, member),
+            member.organizationType === "LAB"
+              ? eq(customer.labOrganizationId, member.organizationId)
+              : undefined,
+            getAssetScopeCondition(member),
             isNull(asset.deletedAt),
           ),
         )
@@ -366,7 +379,22 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Ativo não encontrado" }, 404);
       }
 
-      return c.json(foundAsset);
+      if (member.organizationType === "CLIENT") {
+        const [linkedCustomer] = await db
+          .select({ id: customer.id })
+          .from(customer)
+          .where(eq(customer.authOrganizationId, member.organizationId))
+          .limit(1);
+
+        if (!linkedCustomer || linkedCustomer.id !== foundAsset.customerId) {
+          return c.json({ error: "Acesso negado" }, 403);
+        }
+      }
+
+      return c.json({
+        id: foundAsset.id,
+        label: foundAsset.label,
+      });
     },
   )
 
@@ -410,7 +438,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         .where(
           and(
             eq(asset.id, id),
-            buildUnitScopeCondition(asset.unitId, member),
+            getAssetScopeCondition(member),
             isNull(asset.deletedAt),
           ),
         )
@@ -466,7 +494,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(asset.id, id),
-              buildUnitScopeCondition(asset.unitId, member),
+              getAssetScopeCondition(member),
               isNull(asset.deletedAt),
             ),
           )
@@ -475,6 +503,8 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         if (!existingAsset) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
+
+        let linkedCustomerId: number | null = null;
 
         // If user is a client_user, verify they can update this asset
         if (member.organizationType === "CLIENT") {
@@ -490,6 +520,8 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           ) {
             return c.json({ error: "Acesso negado" }, 403);
           }
+
+          linkedCustomerId = linkedCustomer.id;
         }
 
         // Check if tag is being changed and if it's unique
@@ -549,8 +581,21 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const [updatedAsset] = await db
           .update(asset)
           .set(updateData)
-          .where(eq(asset.id, id))
+          .where(
+            and(
+              eq(asset.id, id),
+              getAssetScopeCondition(member),
+              isNull(asset.deletedAt),
+              linkedCustomerId !== null
+                ? eq(asset.customerId, linkedCustomerId)
+                : undefined,
+            ),
+          )
           .returning();
+
+        if (!updatedAsset) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
 
         // Log audit entry if there were changes
         if (Object.keys(changes).length > 0) {
@@ -598,13 +643,51 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(asset.id, id),
-              buildUnitScopeCondition(asset.unitId, member),
+              getAssetScopeCondition(member),
               isNull(asset.deletedAt),
             ),
           )
           .limit(1);
 
         if (!existingAsset) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        let linkedCustomerId: number | null = null;
+
+        if (member.organizationType === "CLIENT") {
+          const [linkedCustomer] = await db
+            .select()
+            .from(customer)
+            .where(eq(customer.authOrganizationId, member.organizationId))
+            .limit(1);
+
+          if (
+            !linkedCustomer ||
+            linkedCustomer.id !== existingAsset.customerId
+          ) {
+            return c.json({ error: "Acesso negado" }, 403);
+          }
+
+          linkedCustomerId = linkedCustomer.id;
+        }
+
+        const [deletedAsset] = await db
+          .update(asset)
+          .set({ deletedAt: new Date() })
+          .where(
+            and(
+              eq(asset.id, id),
+              getAssetScopeCondition(member),
+              isNull(asset.deletedAt),
+              linkedCustomerId !== null
+                ? eq(asset.customerId, linkedCustomerId)
+                : undefined,
+            ),
+          )
+          .returning();
+
+        if (!deletedAsset) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
 
@@ -621,12 +704,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             c.req.header("x-real-ip") ??
             null,
         });
-
-        // Soft delete the asset (preserves audit logs for ISO 17025 compliance)
-        await db
-          .update(asset)
-          .set({ deletedAt: new Date() })
-          .where(eq(asset.id, id));
 
         return c.json({ success: true });
       } catch (error) {
@@ -658,7 +735,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(asset.id, id),
-              buildUnitScopeCondition(asset.unitId, member),
+              getAssetScopeCondition(member),
             ),
           )
           .limit(1);

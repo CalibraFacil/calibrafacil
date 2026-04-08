@@ -233,7 +233,6 @@ const UNIT_SCOPED_RESOURCES = new Set([
   "request",
   "standard",
   "equipment",
-  "client",
   "certificate",
   "report",
   "audit",

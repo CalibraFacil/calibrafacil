@@ -19,14 +19,21 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { api } from '@/utils/api'
 import { cn } from '@/lib/utils'
+import { useDashboardContextState } from '@/contexts/dashboard-context'
 
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
   const queryClient = useQueryClient()
+  const { activeOrganizationId, isContextSwitching } =
+    useDashboardContextState()
+  const organizationQueryKey = activeOrganizationId ?? 'no-org'
+  const canQueryNotifications =
+    Boolean(activeOrganizationId) && !isContextSwitching
 
   // Fetch unread count (polls every 30 seconds)
   const { data: countData } = useQuery({
-    queryKey: ['notifications', 'unread-count'],
+    queryKey: ['notifications', organizationQueryKey, 'unread-count'],
+    enabled: canQueryNotifications,
     queryFn: async () => {
       const res = await api.api.notifications['unread-count'].$get()
       if (!res.ok) throw new Error('Failed to fetch unread count')
@@ -38,7 +45,7 @@ export function NotificationBell() {
 
   // Fetch recent notifications when popover opens
   const { data: notificationsData, isLoading } = useQuery({
-    queryKey: ['notifications', 'recent'],
+    queryKey: ['notifications', organizationQueryKey, 'recent'],
     queryFn: async () => {
       const res = await api.api.notifications.$get({
         query: { page: '1', limit: '5' },
@@ -46,7 +53,7 @@ export function NotificationBell() {
       if (!res.ok) throw new Error('Failed to fetch notifications')
       return res.json()
     },
-    enabled: isOpen,
+    enabled: canQueryNotifications && isOpen,
     staleTime: 5000,
   })
 

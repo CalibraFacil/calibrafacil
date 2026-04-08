@@ -51,13 +51,13 @@ type SsoProviderRow = typeof ssoProvider.$inferSelect;
 function getApiBaseURL() {
   return process.env.NODE_ENV === "production"
     ? process.env.API_URL || "https://api.calibrafacil.com"
-    : "https://localhost:3000";
+    : "http://localhost:3000";
 }
 
 function getDashboardBaseURL() {
   return process.env.NODE_ENV === "production"
     ? process.env.APP_URL || "https://calibrafacil.com"
-    : "https://localhost:5173";
+    : "http://localhost:5173";
 }
 
 function normalizeDomain(value: string): string | null {

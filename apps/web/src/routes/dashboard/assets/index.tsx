@@ -42,8 +42,13 @@ import {
   ComboboxItem,
   ComboboxList,
 } from '@/components/ui/combobox'
+import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { DataTable } from '@/components/ui/data-table'
-import { type Asset, type AssetsTableMeta, assetsColumns } from './-components/columns'
+import {
+  type Asset,
+  type AssetsTableMeta,
+  assetsColumns,
+} from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/assets/')({
   head: () => ({
@@ -63,6 +68,9 @@ const statusLabels: Record<AssetStatus, string> = {
 
 function AssetsPage() {
   const navigate = useNavigate()
+  const { activeOrganizationId, isContextSwitching } =
+    useDashboardContextState()
+  const organizationQueryKey = activeOrganizationId ?? 'no-org'
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [page, setPage] = useState(1)
@@ -75,7 +83,8 @@ function AssetsPage() {
   const [customerSearch, setCustomerSearch] = useState('')
 
   const { data: customersData, isLoading: customersLoading } = useQuery({
-    queryKey: ['customers', 'search', customerSearch],
+    queryKey: ['customers', organizationQueryKey, 'search', customerSearch],
+    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
       const res = await api.api.customers.$get({
         query: {
@@ -99,7 +108,16 @@ function AssetsPage() {
   }, [customerIdParam, customersData?.data])
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['assets', page, limit, search, statusFilter, customerIdParam],
+    queryKey: [
+      'assets',
+      organizationQueryKey,
+      page,
+      limit,
+      search,
+      statusFilter,
+      customerIdParam,
+    ],
+    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
       const res = await api.api.assets.$get({
         query: {
@@ -318,11 +336,7 @@ function AssetsPage() {
 
           {/* Loading state when no data yet */}
           {isLoading && !data && (
-            <DataTable
-              columns={assetsColumns}
-              data={[]}
-              isLoading={true}
-            />
+            <DataTable columns={assetsColumns} data={[]} isLoading={true} />
           )}
         </CardContent>
       </Card>

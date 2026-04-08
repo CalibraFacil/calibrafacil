@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
-import { useDashboardContextState } from '../../route'
+import { useDashboardContextState } from '@/contexts/dashboard-context'
 
 export const Route = createFileRoute('/dashboard/requests/$id/')({
   head: () => ({
@@ -127,7 +127,8 @@ function formatDate(date: string | null | undefined) {
 function CalibrationRequestDetailPage() {
   const { id } = Route.useParams()
   const queryClient = useQueryClient()
-  const { activeOrganizationId } = useDashboardContextState()
+  const { activeOrganizationId, isContextSwitching } =
+    useDashboardContextState()
   const organizationQueryKey = activeOrganizationId ?? 'no-org'
   const [internalNotes, setInternalNotes] = useState('')
   const [rejectionReason, setRejectionReason] = useState('')
@@ -137,6 +138,7 @@ function CalibrationRequestDetailPage() {
 
   const detailQuery = useQuery({
     queryKey: ['calibration-request', organizationQueryKey, id],
+    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
       const res = await api.api['calibration-requests'][':id'].$get({
         param: { id },
@@ -152,6 +154,7 @@ function CalibrationRequestDetailPage() {
 
   const servicesQuery = useQuery({
     queryKey: ['services', organizationQueryKey, 'request-conversion'],
+    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
       const firstPageResponse = await api.api.services.$get({
         query: {
@@ -215,6 +218,7 @@ function CalibrationRequestDetailPage() {
 
   const techniciansQuery = useQuery({
     queryKey: ['jobs', organizationQueryKey, 'technicians'],
+    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
       const res = await api.api.jobs.technicians.list.$get()
 
@@ -278,10 +282,7 @@ function CalibrationRequestDetailPage() {
             (!service.assetTypeId || service.assetTypeId === item.assetTypeId),
         )
 
-        if (
-          compatibleServices.length === 1 &&
-          !next[item.id]?.serviceId
-        ) {
+        if (compatibleServices.length === 1 && !next[item.id]?.serviceId) {
           next[item.id] = {
             serviceId: String(compatibleServices[0].id),
             technicianId: next[item.id]?.technicianId || '',
