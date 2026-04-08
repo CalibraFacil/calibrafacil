@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useActiveOrganization } from '@calibra-facil/auth/client'
+import { usePlanAccess } from '@/hooks/use-plan-access'
 import { api } from '@/utils/api'
 import {
   Select,
@@ -31,12 +32,18 @@ type UnitsResponse = {
 export function UnitSwitcher() {
   const queryClient = useQueryClient()
   const { data: activeOrg } = useActiveOrganization()
+  const accessQuery = usePlanAccess()
+  const hasMultiUnit =
+    accessQuery.data?.entitlements.includes('multi_unit') ?? false
 
   const unitsQuery = useQuery({
-    queryKey: ['dashboard-units', activeOrg?.id ?? 'no-org'],
-    enabled: Boolean(activeOrg?.id),
+    queryKey: ['dashboard-units', activeOrg?.id ?? 'no-org', hasMultiUnit],
+    enabled: Boolean(activeOrg?.id && hasMultiUnit),
     queryFn: async () => {
       const response = await api.api.units.$get()
+      if (response.status === 403) {
+        return null
+      }
       if (!response.ok) {
         throw new Error('Falha ao carregar unidades')
       }
@@ -51,7 +58,11 @@ export function UnitSwitcher() {
     return unitsQuery.data.activeUnitId ? String(unitsQuery.data.activeUnitId) : ''
   }, [unitsQuery.data])
 
-  if (!activeOrg?.id || unitsQuery.isPending || !unitsQuery.data) {
+  if (!activeOrg?.id || accessQuery.isPending || !hasMultiUnit) {
+    return null
+  }
+
+  if (unitsQuery.isPending || !unitsQuery.data) {
     return null
   }
 
