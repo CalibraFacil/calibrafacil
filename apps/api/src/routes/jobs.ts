@@ -72,6 +72,7 @@ import {
   jobCreationClientErrors,
 } from "../lib/jobs";
 import { alias } from "drizzle-orm/pg-core";
+import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
 
 // Aliases for multiple user joins
@@ -1782,7 +1783,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       `);
         addServerTiming(c, "amendment_chain_db", dbStartedAt);
 
-        const chainRows = chainResult as unknown as Array<{
+        const chainRows = getExecuteRows<{
           id: number;
           job_id: string;
           status: string;
@@ -1790,7 +1791,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           amendment_reason: string | null;
           approved_at: Date | string | null;
           superseded_at: Date | string | null;
-        }>;
+        }>(chainResult);
 
         const chain = chainRows.map((row) => ({
           id: Number(row.id),

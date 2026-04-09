@@ -16,6 +16,7 @@ import {
   requireLabProtected,
   requireOrgType,
 } from "../middleware/permission";
+import { getExecuteRows } from "../lib/db";
 
 const ReportQuerySchema = z.object({
   period: z.enum(["7d", "30d", "90d", "month"]).optional().default("30d"),
@@ -845,7 +846,11 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
           });
         }
 
-        const rows = (await db.execute(sql`
+        const rows = getExecuteRows<{
+          date: string;
+          approved: string;
+          rejected: string;
+        }>(await db.execute(sql`
           SELECT
             DATE(COALESCE(approved_at, rejected_at)) as date,
             COUNT(*) FILTER (WHERE status = 'APPROVED') as approved,
@@ -862,11 +867,7 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
             )
           GROUP BY DATE(COALESCE(approved_at, rejected_at))
           ORDER BY date ASC
-        `)) as unknown as Array<{
-          date: string;
-          approved: string;
-          rejected: string;
-        }>;
+        `));
 
         return c.json({
           period: range.period,
