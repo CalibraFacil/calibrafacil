@@ -466,6 +466,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "Job nao encontrado" }, 404);
     }
 
+    const financialContextMap = await loadJobFinancialContexts(
+      memberData.organizationId,
+      [job.id],
+    );
+
     // Add computed fields
     const now = new Date();
     const result = {
@@ -479,6 +484,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
           )
         : null,
+      ...financialContextMap.get(job.id),
     };
 
     return c.json(result);

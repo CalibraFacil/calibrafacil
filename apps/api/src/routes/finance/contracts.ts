@@ -59,6 +59,27 @@ const ListContractsQuerySchema = z.object({
   status: z.enum(COMMERCIAL_AGREEMENT_STATUSES).optional(),
 });
 
+type FinanceContractsDbExecutor = Pick<typeof db, "select">;
+
+async function customerBelongsToOrganization(
+  executor: FinanceContractsDbExecutor,
+  organizationId: string,
+  customerId: number,
+) {
+  const [ownedCustomer] = await executor
+    .select({ id: customer.id })
+    .from(customer)
+    .where(
+      and(
+        eq(customer.id, customerId),
+        eq(customer.labOrganizationId, organizationId),
+      ),
+    )
+    .limit(1);
+
+  return ownedCustomer ?? null;
+}
+
 async function getAgreementById(organizationId: string, agreementId: number) {
   const [agreement] = await db
     .select({
@@ -85,6 +106,7 @@ async function getAgreementById(organizationId: string, agreementId: number) {
       and(
         eq(commercialAgreement.id, agreementId),
         eq(commercialAgreement.organizationId, organizationId),
+        eq(customer.labOrganizationId, organizationId),
       ),
     )
     .limit(1);
@@ -173,7 +195,10 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const query = c.req.valid("query");
-      const conditions = [eq(commercialAgreement.organizationId, member.organizationId)];
+      const conditions = [
+        eq(commercialAgreement.organizationId, member.organizationId),
+        eq(customer.labOrganizationId, member.organizationId),
+      ];
 
       if (query.customerId) {
         conditions.push(eq(commercialAgreement.customerId, query.customerId));
@@ -224,6 +249,15 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
+
+      const ownedCustomer = await customerBelongsToOrganization(
+        db,
+        member.organizationId,
+        input.customerId,
+      );
+      if (!ownedCustomer) {
+        return c.json({ error: "Cliente nao encontrado" }, 404);
+      }
 
       const [created] = await db.transaction(async (tx) => {
         const [agreement] = await tx
@@ -315,6 +349,15 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
       const existing = await getAgreementById(member.organizationId, id);
       if (!existing) {
         return c.json({ error: "Contrato nao encontrado" }, 404);
+      }
+
+      const ownedCustomer = await customerBelongsToOrganization(
+        db,
+        member.organizationId,
+        input.customerId,
+      );
+      if (!ownedCustomer) {
+        return c.json({ error: "Cliente nao encontrado" }, 404);
       }
 
       const [updated] = await db.transaction(async (tx) => {

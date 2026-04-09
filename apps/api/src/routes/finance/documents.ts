@@ -177,6 +177,13 @@ async function getDocumentById(organizationId: string, documentId: number) {
   };
 }
 
+function isDocumentOutsideActiveUnitScope(
+  member: AuthVariables["member"],
+  unitId: number,
+) {
+  return member.selectedUnitScope !== "all" && unitId !== member.activeUnitId;
+}
+
 export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
@@ -531,10 +538,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Documento nao encontrado" }, 404);
       }
 
-      if (
-        member.selectedUnitScope !== "all" &&
-        document.unitId !== member.activeUnitId
-      ) {
+      if (isDocumentOutsideActiveUnitScope(member, document.unitId)) {
         return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
       }
 
@@ -560,6 +564,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       const existing = await getDocumentById(member.organizationId, id);
       if (!existing) {
         return c.json({ error: "Documento nao encontrado" }, 404);
+      }
+
+      if (isDocumentOutsideActiveUnitScope(member, existing.unitId)) {
+        return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
       }
 
       if (existing.status !== "DRAFT") {
@@ -676,6 +684,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Documento nao encontrado" }, 404);
       }
 
+      if (isDocumentOutsideActiveUnitScope(member, existing.unitId)) {
+        return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
+      }
+
       if (existing.status !== "DRAFT") {
         return c.json({ error: "Documento ja foi emitido ou encerrado" }, 400);
       }
@@ -758,6 +770,10 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       const existing = await getDocumentById(member.organizationId, id);
       if (!existing) {
         return c.json({ error: "Documento nao encontrado" }, 404);
+      }
+
+      if (isDocumentOutsideActiveUnitScope(member, existing.unitId)) {
+        return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
       }
 
       if (existing.status === "VOID") {
