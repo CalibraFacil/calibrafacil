@@ -46,7 +46,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
 import {
   Table,
@@ -109,7 +108,6 @@ function parseCurrencyInputToCents(value: string) {
 }
 
 const FINANCE_CURRENCY = 'BRL'
-const FINANCE_CURRENCY_LABEL = 'R$'
 
 export const Route = createFileRoute('/dashboard/finance/documents')({
   head: () => ({

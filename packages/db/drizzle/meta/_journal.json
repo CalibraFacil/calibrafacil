@@ -31,10 +31,10 @@
       "breakpoints": true
     },
     {
-      "idx": 34,
+      "idx": 4,
       "version": "7",
-      "when": 1775698319000,
-      "tag": "0034_add_operational_finance",
+      "when": 1775770648853,
+      "tag": "0004_operational_finance",
       "breakpoints": true
     }
   ]

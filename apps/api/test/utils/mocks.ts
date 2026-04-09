@@ -178,7 +178,7 @@ export function createMockDbSubscription(overrides: Record<string, unknown> = {}
     planId: "STANDARD",
     billingCycle: "MONTHLY",
     status: "TRIAL",
-    asaasSubscriptionId: null,
+    providerSubscriptionId: null,
     asaasCustomerId: null,
     currentPeriodStart: new Date("2024-01-15"),
     currentPeriodEnd: new Date("2024-02-14"),
@@ -192,15 +192,15 @@ export function createMockDbSubscription(overrides: Record<string, unknown> = {}
 export function createMockPaymentHistory(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
-    subscriptionId: 1,
+    commercialOfferId: "offer_abc123def456",
     organizationId: "org_test123",
-    asaasPaymentId: "pay_abc123def456",
+    providerPaymentId: "pay_abc123def456",
+    providerSubscriptionId: "sub_abc123def456",
     amount: 9990, // centavos
     netAmount: null,
     currency: "BRL",
     paymentMethod: "CREDIT_CARD",
     status: "PENDING",
-    source: "CHECKOUT",
     dueDate: new Date("2024-02-15"),
     paidAt: null,
     createdAt: new Date("2024-01-15"),
