@@ -1,11 +1,21 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { ClipboardIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
 
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
 import {
   Card,
   CardContent,
@@ -193,10 +203,13 @@ function RequestsPage() {
             </div>
             <Button
               variant="outline"
-              render={<Link to="/dashboard/jobs/new" />}
-            >
-              Nova OS Manual
-            </Button>
+              render={
+                <Link to="/dashboard/jobs/new">
+                  <HugeiconsIcon icon={PlusSignIcon} className="mr-2 h-4 w-4" />
+                  Nova OS Manual
+                </Link>
+              }
+            ></Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -234,13 +247,53 @@ function RequestsPage() {
             </div>
           </div>
 
-          <DataTable
-            columns={columns}
-            data={data?.data ?? []}
-            isLoading={isLoading}
-            pagination={data?.pagination}
-            onPageChange={setPage}
-          />
+          {!isLoading && data?.data.length === 0 ? (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={ClipboardIcon} />
+                </EmptyMedia>
+                <EmptyTitle>
+                  Nenhuma solicitação de calibração encontrada
+                </EmptyTitle>
+                <EmptyDescription>
+                  {search || statusFilter
+                    ? 'Nenhuma solicitação encontrada para os filtros aplicados.'
+                    : 'As solicitações enviadas pelos clientes aparecerão aqui para revisão.'}
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                {search || statusFilter ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearch('')
+                      setStatusFilter('')
+                      setPage(1)
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                ) : (
+                  <Button render={<Link to="/dashboard/jobs/new" />}>
+                    <HugeiconsIcon
+                      icon={PlusSignIcon}
+                      className="mr-2 size-4"
+                    />
+                    Nova OS Manual
+                  </Button>
+                )}
+              </EmptyContent>
+            </Empty>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={data?.data ?? []}
+              isLoading={isLoading}
+              pagination={data?.pagination}
+              onPageChange={setPage}
+            />
+          )}
         </CardContent>
       </Card>
     </div>
