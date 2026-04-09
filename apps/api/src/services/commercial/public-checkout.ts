@@ -284,6 +284,19 @@ function normalizePixImage(input: string | null | undefined) {
   return `data:image/png;base64,${input}`;
 }
 
+function getSnapshotPixValue(
+  payment: PaymentRecordRow | null,
+  key: "qrCode" | "qrCodePayload" | "expirationDate",
+) {
+  const snapshotPix = getProviderSnapshotValue<Record<string, unknown>>(
+    payment,
+    "pixTransaction",
+  );
+
+  const value = snapshotPix?.[key];
+  return typeof value === "string" ? value : null;
+}
+
 function buildPresentation(
   offer: OfferRow | null,
   latestPayment: PaymentRecordRow | null,
@@ -297,10 +310,12 @@ function buildPresentation(
   const dueDate = latestPayment?.dueDate?.toISOString() ?? offer.dueDate?.toISOString() ?? null;
 
   if (paymentMethod === "PIX" && latestPayment) {
-    const snapshotPix = getProviderSnapshotValue<Record<string, unknown>>(
-      latestPayment,
-      "pixTransaction",
+    const qrCodeImage = normalizePixImage(
+      latestPayment.pixQrCodeUrl ?? getSnapshotPixValue(latestPayment, "qrCode"),
     );
+    const payload =
+      latestPayment.pixPayload ??
+      getSnapshotPixValue(latestPayment, "qrCodePayload");
 
     return {
       type: "PIX" as const,
@@ -308,12 +323,10 @@ function buildPresentation(
       providerPaymentId: latestPayment.providerPaymentId ?? null,
       providerUrl: latestPayment.invoiceUrl ?? offer.checkoutUrl ?? null,
       pix: {
-        qrCodeImage: normalizePixImage(latestPayment.pixQrCodeUrl),
-        payload: latestPayment.pixPayload ?? null,
+        qrCodeImage,
+        payload,
         expirationDate:
-          typeof snapshotPix?.expirationDate === "string"
-            ? snapshotPix.expirationDate
-            : dueDate,
+          getSnapshotPixValue(latestPayment, "expirationDate") ?? dueDate,
       },
       boleto: null,
     };
@@ -464,6 +477,14 @@ async function loadOfferContextByTokenHash(tokenHash: string) {
   });
 
   if (!offer) {
+    return null;
+  }
+
+  if (
+    offer.status === "PAID" ||
+    offer.status === "ACTIVATED" ||
+    offer.status === "CANCELED"
+  ) {
     return null;
   }
 
@@ -677,10 +698,13 @@ async function createLazyArtifactForOffer(params: {
     dueDate: formatAsaasDate(params.offer.dueDate ?? new Date()),
     description,
     externalReference,
-    callback: {
-      ...callbacks,
-      autoRedirect: true,
-    },
+    callback:
+      paymentMethod === "CREDIT_CARD"
+        ? {
+            ...callbacks,
+            autoRedirect: true,
+          }
+        : undefined,
   });
 
   return buildPaymentArtifactResult({

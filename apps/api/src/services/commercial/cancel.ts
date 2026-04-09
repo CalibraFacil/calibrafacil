@@ -2,7 +2,12 @@ import { db } from "@calibra-facil/db";
 import { commercialOffer } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { cancelCheckout, cancelPayment, cancelSubscription } from "../../services/asaas";
-import { getOfferById, insertOfferHistory } from "./common";
+import {
+  getOfferById,
+  insertOfferHistory,
+  invalidateCommercialPublicToken,
+  markOfferPaymentsDeleted,
+} from "./common";
 
 export async function cancelCommercialOffer(
   offerId: string,
@@ -40,6 +45,13 @@ export async function cancelCommercialOffer(
       })
       .where(eq(commercialOffer.id, offerId))
       .returning();
+
+    await invalidateCommercialPublicToken(tx, offerId);
+    await markOfferPaymentsDeleted(tx, offerId, null, {
+      reason,
+      canceledBy: actorUserId,
+      source: "USER",
+    });
 
     await insertOfferHistory(tx, {
       offerId,

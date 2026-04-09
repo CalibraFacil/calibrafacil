@@ -86,6 +86,7 @@ const PAYMENT_STATUS: Record<
   PENDING: { label: 'Pendente', variant: 'secondary' },
   OVERDUE: { label: 'Vencido', variant: 'destructive' },
   REFUNDED: { label: 'Reembolsado', variant: 'outline' },
+  DELETED: { label: 'Cancelado', variant: 'outline' },
 }
 
 function BillingSettingsPage() {
@@ -356,6 +357,8 @@ function BillingSettingsPage() {
                       label: payment.status,
                       variant: 'outline' as const,
                     }
+                    const canDownloadInvoice =
+                      Boolean(payment.invoiceUrl) && payment.status !== 'DELETED'
                     return (
                       <TableRow key={payment.id}>
                         <TableCell>
@@ -373,7 +376,7 @@ function BillingSettingsPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          {payment.invoiceUrl && (
+                          {canDownloadInvoice ? (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -388,7 +391,11 @@ function BillingSettingsPage() {
                               <HugeiconsIcon icon={Invoice02Icon} size={14} />
                               Baixar
                             </Button>
-                          )}
+                          ) : payment.status === 'DELETED' ? (
+                            <span className="text-sm text-muted-foreground">
+                              Indisponível
+                            </span>
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     )

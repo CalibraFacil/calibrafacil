@@ -50,6 +50,55 @@ export function buildCustomerCheckoutUrlPath(token: string) {
   return `/checkout/${token}`;
 }
 
+export async function invalidateCommercialPublicToken(
+  tx: DbTx,
+  offerId: string,
+) {
+  await tx
+    .update(commercialOffer)
+    .set({
+      publicTokenHash: null,
+      publicTokenRevokedAt: new Date(),
+      customerCheckoutUrlPath: null,
+    })
+    .where(eq(commercialOffer.id, offerId));
+}
+
+export async function markOfferPaymentsDeleted(
+  tx: DbTx,
+  offerId: string,
+  sourceEventId?: string | null,
+  payload?: Record<string, unknown> | null,
+) {
+  const payments = await tx.query.paymentRecord.findMany({
+    where: eq(paymentRecord.commercialOfferId, offerId),
+  });
+
+  for (const payment of payments) {
+    if (
+      payment.status === "CONFIRMED" ||
+      payment.status === "RECEIVED" ||
+      payment.status === "DELETED"
+    ) {
+      continue;
+    }
+
+    await tx
+      .update(paymentRecord)
+      .set({ status: "DELETED" })
+      .where(eq(paymentRecord.id, payment.id));
+
+    await insertPaymentStatusHistoryEntry(tx, {
+      paymentRecordId: payment.id,
+      commercialOfferId: offerId,
+      fromStatus: payment.status,
+      toStatus: "DELETED",
+      sourceEventId: sourceEventId ?? null,
+      payload: payload ?? null,
+    });
+  }
+}
+
 export async function getOrganizationOrThrow(organizationId: string) {
   const org = await db.query.organization.findFirst({
     where: eq(organization.id, organizationId),

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -247,8 +248,14 @@ export const backofficeRouter = new Hono<{
   .get("/access", async (c) => {
     const session = c.get("session");
     const roles = parsePlatformRoles(session.user.role);
-    const bootstrapAvailable =
-      Boolean(readBootstrapToken(c)) && !(await hasAnyPlatformAdmin());
+    let bootstrapAvailable = false;
+
+    try {
+      bootstrapAvailable =
+        Boolean(readBootstrapToken(c)) && !(await hasAnyPlatformAdmin());
+    } catch (error) {
+      console.error("Failed to resolve backoffice bootstrap availability", error);
+    }
 
     return c.json({
       allowed: canAccessBackoffice(session.user.role),
@@ -1161,6 +1168,15 @@ export const backofficeRouter = new Hono<{
   .onError((error, c) => {
     if (error instanceof Response) {
       return error;
+    }
+
+    if (error instanceof HTTPException) {
+      return c.json(
+        {
+          error: error.message,
+        },
+        error.status,
+      );
     }
 
     return c.json(

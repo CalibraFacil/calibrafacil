@@ -1,7 +1,12 @@
 import { db } from "@calibra-facil/db";
 import { commercialOffer } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
-import { insertOfferHistory, upsertSubscriptionFromOffer, type DbTx } from "./common";
+import {
+  insertOfferHistory,
+  invalidateCommercialPublicToken,
+  upsertSubscriptionFromOffer,
+  type DbTx,
+} from "./common";
 
 export async function activateOfferFromConfirmedPayment(
   tx: DbTx,
@@ -36,6 +41,8 @@ export async function activateOfferFromConfirmedPayment(
     })
     .where(eq(commercialOffer.id, offer.id))
     .returning();
+
+  await invalidateCommercialPublicToken(tx, offer.id);
 
   await insertOfferHistory(tx, {
     offerId,

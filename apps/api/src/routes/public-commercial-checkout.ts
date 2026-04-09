@@ -75,6 +75,7 @@ export const publicCommercialCheckoutRouter = new Hono()
 
       return c.json(payload);
     } catch (error) {
+      console.error("Public commercial checkout start failed", error);
       const mapped = mapStartError(error);
       return c.json(mapped.body, mapped.status);
     }

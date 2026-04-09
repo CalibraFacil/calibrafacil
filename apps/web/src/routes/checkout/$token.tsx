@@ -235,6 +235,28 @@ const STATE_BADGE_CLASS: Record<CheckoutState, string> = {
     'border-zinc-500/20 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300',
 }
 
+function formatPhone(value: string | null | undefined): string | null {
+  if (!value) return null
+
+  const digits = value.replace(/\D/g, '')
+  const localDigits = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits
+  const trimmed = localDigits.slice(0, 11)
+
+  if (trimmed.length < 10) {
+    return value
+  }
+
+  if (trimmed.length <= 10) {
+    return trimmed
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2')
+  }
+
+  return trimmed
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2')
+}
+
 export const Route = createFileRoute('/checkout/$token')({
   validateSearch: (search: Record<string, unknown>): CheckoutSearch => ({
     providerOutcome:
@@ -562,7 +584,7 @@ function PublicCheckoutPage() {
                     offer.seller.cnpj ? `CNPJ ${offer.seller.cnpj}` : null,
                     formatLocation(offer.seller.city, offer.seller.state),
                     offer.seller.email,
-                    offer.seller.phone,
+                    formatPhone(offer.seller.phone),
                   ]}
                 />
                 <IdentityCard
@@ -571,7 +593,7 @@ function PublicCheckoutPage() {
                     offer.payer.name,
                     offer.payer.taxId ? `CPF/CNPJ ${offer.payer.taxId}` : null,
                     offer.payer.email,
-                    offer.payer.phone,
+                    formatPhone(offer.payer.phone),
                   ]}
                 />
               </CardContent>
@@ -683,7 +705,7 @@ function PublicCheckoutPage() {
               <CardContent className="space-y-3 text-sm text-muted-foreground">
                 <SupportRow label="Time responsável" value={offer.seller.name} />
                 <SupportRow label="Email" value={offer.seller.email} />
-                <SupportRow label="Telefone" value={offer.seller.phone} />
+                <SupportRow label="Telefone" value={formatPhone(offer.seller.phone)} />
                 <SupportRow
                   label="Observação"
                   value="Este checkout é somente leitura para preservar o snapshot emitido."

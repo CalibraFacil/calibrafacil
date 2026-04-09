@@ -13,8 +13,10 @@ import {
 } from "./activation";
 import {
   createCommercialExternalReference,
+  invalidateCommercialPublicToken,
   insertOfferHistory,
   insertPaymentStatusHistoryEntry,
+  markOfferPaymentsDeleted,
 } from "./common";
 
 function isUniqueConstraintError(error: unknown): boolean {
@@ -28,6 +30,30 @@ function isUniqueConstraintError(error: unknown): boolean {
 
 function mapPaymentStatus(status: string): PaymentStatus {
   return status as PaymentStatus;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function getExistingPixSnapshot(existing: typeof paymentRecord.$inferSelect | null) {
+  const providerSnapshot = asRecord(existing?.providerSnapshot);
+  const pixTransaction = asRecord(providerSnapshot?.pixTransaction);
+
+  return {
+    qrCode:
+      typeof pixTransaction?.qrCode === "string" ? pixTransaction.qrCode : null,
+    qrCodePayload:
+      typeof pixTransaction?.qrCodePayload === "string"
+        ? pixTransaction.qrCodePayload
+        : null,
+    expirationDate:
+      typeof pixTransaction?.expirationDate === "string"
+        ? pixTransaction.expirationDate
+        : null,
+    providerSnapshot,
+    pixTransaction,
+  };
 }
 
 export function resolveProviderSubscriptionId(
@@ -95,6 +121,33 @@ async function upsertPaymentFromWebhook(
   const existing = await tx.query.paymentRecord.findFirst({
     where: eq(paymentRecord.providerPaymentId, payment.id),
   });
+  const existingPix = getExistingPixSnapshot(existing ?? null);
+  const nextPixQrCodeUrl =
+    payment.pixTransaction?.qrCode ??
+    existing?.pixQrCodeUrl ??
+    existingPix.qrCode ??
+    null;
+  const nextPixPayload =
+    payment.pixTransaction?.qrCodePayload ??
+    existing?.pixPayload ??
+    existingPix.qrCodePayload ??
+    null;
+  const providerSnapshot = {
+    ...(existingPix.providerSnapshot ?? {}),
+    ...(payment as unknown as Record<string, unknown>),
+    pixTransaction: {
+      ...(existingPix.pixTransaction ?? {}),
+      ...(payment.pixTransaction ?? {}),
+      ...(nextPixQrCodeUrl ? { qrCode: nextPixQrCodeUrl } : {}),
+      ...(nextPixPayload ? { qrCodePayload: nextPixPayload } : {}),
+      ...(payment.pixTransaction?.expirationDate || existingPix.expirationDate
+        ? {
+            expirationDate:
+              payment.pixTransaction?.expirationDate ?? existingPix.expirationDate,
+          }
+        : {}),
+    },
+  };
 
   const values = {
     commercialOfferId: offer.id,
@@ -114,11 +167,11 @@ async function upsertPaymentFromWebhook(
     paidAt: payment.paymentDate ? new Date(payment.paymentDate) : null,
     invoiceUrl: payment.invoiceUrl ?? null,
     bankSlipUrl: payment.bankSlipUrl ?? null,
-    pixQrCodeUrl: payment.pixTransaction?.qrCode ?? null,
-    pixPayload: payment.pixTransaction?.qrCodePayload ?? null,
+    pixQrCodeUrl: nextPixQrCodeUrl,
+    pixPayload: nextPixPayload,
     cardLast4: payment.creditCard?.creditCardNumber?.slice(-4) ?? null,
     cardBrand: payment.creditCard?.creditCardBrand ?? null,
-    providerSnapshot: payment as unknown as Record<string, unknown>,
+    providerSnapshot,
   };
 
   if (existing) {
@@ -217,6 +270,10 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
           })
           .where(eq(commercialOffer.id, offer.id));
 
+        if (nextOfferStatus === "PAID") {
+          await invalidateCommercialPublicToken(tx, offer.id);
+        }
+
         await insertOfferHistory(tx, {
           offerId: offer.id,
           fromStatus: offer.status,
@@ -254,6 +311,19 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
           .update(commercialOffer)
           .set({ status: nextStatus })
           .where(eq(commercialOffer.id, offer.id));
+
+        if (nextStatus === "PAID" || nextStatus === "CANCELED") {
+          await invalidateCommercialPublicToken(tx, offer.id);
+        }
+
+        if (nextStatus === "CANCELED") {
+          await markOfferPaymentsDeleted(
+            tx,
+            offer.id,
+            eventId,
+            payload as unknown as Record<string, unknown>,
+          );
+        }
 
         await insertOfferHistory(tx, {
           offerId: offer.id,
