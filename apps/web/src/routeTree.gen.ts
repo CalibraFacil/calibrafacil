@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermosDeUsoRouteImport } from './routes/termos-de-uso'
+import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as BackofficeRouteRouteImport } from './routes/backoffice/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -101,6 +103,16 @@ import { Route as DashboardClientsIdCalibrationsRouteImport } from './routes/das
 import { Route as DashboardClientsIdAssetsRouteImport } from './routes/dashboard/clients/$id/assets'
 import { Route as DashboardAssetsIdEditRouteImport } from './routes/dashboard/assets/$id/edit'
 
+const TermosDeUsoRoute = TermosDeUsoRouteImport.update({
+  id: '/termos-de-uso',
+  path: '/termos-de-uso',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadeRoute = PrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRouteRoute = DashboardRouteRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -591,6 +603,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/backoffice': typeof BackofficeRouteRouteWithChildren
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/privacidade': typeof PrivacidadeRoute
+  '/termos-de-uso': typeof TermosDeUsoRoute
   '/backoffice/organizations': typeof BackofficeOrganizationsRouteRouteWithChildren
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
   '/dashboard/capa': typeof DashboardCapaRouteRouteWithChildren
@@ -682,6 +696,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/privacidade': typeof PrivacidadeRoute
+  '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/internal': typeof DashboardInternalRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
@@ -762,6 +778,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/backoffice': typeof BackofficeRouteRouteWithChildren
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/privacidade': typeof PrivacidadeRoute
+  '/termos-de-uso': typeof TermosDeUsoRoute
   '/backoffice/organizations': typeof BackofficeOrganizationsRouteRouteWithChildren
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
   '/dashboard/capa': typeof DashboardCapaRouteRouteWithChildren
@@ -857,6 +875,8 @@ export interface FileRouteTypes {
     | '/'
     | '/backoffice'
     | '/dashboard'
+    | '/privacidade'
+    | '/termos-de-uso'
     | '/backoffice/organizations'
     | '/dashboard/assets'
     | '/dashboard/capa'
@@ -948,6 +968,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/privacidade'
+    | '/termos-de-uso'
     | '/dashboard/internal'
     | '/dashboard/settings'
     | '/accept-invitation/$id'
@@ -1027,6 +1049,8 @@ export interface FileRouteTypes {
     | '/'
     | '/backoffice'
     | '/dashboard'
+    | '/privacidade'
+    | '/termos-de-uso'
     | '/backoffice/organizations'
     | '/dashboard/assets'
     | '/dashboard/capa'
@@ -1121,6 +1145,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BackofficeRouteRoute: typeof BackofficeRouteRouteWithChildren
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
+  PrivacidadeRoute: typeof PrivacidadeRoute
+  TermosDeUsoRoute: typeof TermosDeUsoRoute
   AcceptInvitationIdRoute: typeof AcceptInvitationIdRoute
   OnboardingOrganizationRoute: typeof OnboardingOrganizationRoute
   ResetPasswordIndexRoute: typeof ResetPasswordIndexRoute
@@ -1130,6 +1156,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/termos-de-uso': {
+      id: '/termos-de-uso'
+      path: '/termos-de-uso'
+      fullPath: '/termos-de-uso'
+      preLoaderRoute: typeof TermosDeUsoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidade': {
+      id: '/privacidade'
+      path: '/privacidade'
+      fullPath: '/privacidade'
+      preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -2140,6 +2180,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BackofficeRouteRoute: BackofficeRouteRouteWithChildren,
   DashboardRouteRoute: DashboardRouteRouteWithChildren,
+  PrivacidadeRoute: PrivacidadeRoute,
+  TermosDeUsoRoute: TermosDeUsoRoute,
   AcceptInvitationIdRoute: AcceptInvitationIdRoute,
   OnboardingOrganizationRoute: OnboardingOrganizationRoute,
   ResetPasswordIndexRoute: ResetPasswordIndexRoute,

@@ -3,6 +3,20 @@ import { Link } from '@tanstack/react-router'
 import { BrandLockup } from '@/components/brand'
 import { ModeToggle } from '@/components/mode-toggle'
 
+type FooterLink =
+  | {
+      external?: boolean
+      href: string
+      label: string
+      to?: never
+    }
+  | {
+      external?: never
+      href?: never
+      label: string
+      to: '/privacidade' | '/termos-de-uso'
+    }
+
 const footerLinks = {
   Produto: [
     { label: 'Desafios', href: '#desafios' },
@@ -29,10 +43,10 @@ const footerLinks = {
     },
   ],
   Legal: [
-    { label: 'Termos de Uso', href: '#' },
-    { label: 'Política de Privacidade', href: '#' },
+    { label: 'Termos de Uso', to: '/termos-de-uso' },
+    { label: 'Política de Privacidade', to: '/privacidade' },
   ],
-}
+} satisfies Record<string, FooterLink[]>
 
 export function Footer() {
   return (
@@ -57,7 +71,14 @@ export function Footer() {
               <ul className="space-y-2.5">
                 {links.map((link) => (
                   <li key={link.label}>
-                    {'external' in link && link.external ? (
+                    {'to' in link ? (
+                      <Link
+                        to={link.to}
+                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        {link.label}
+                      </Link>
+                    ) : 'external' in link && link.external ? (
                       <a
                         href={link.href}
                         target="_blank"
