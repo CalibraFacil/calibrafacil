@@ -15,7 +15,10 @@ import {
 } from "drizzle-orm/pg-core";
 import type {
   BillingCustomerStatus,
+  BillingDocumentExportStatus,
+  BillingDocumentStatus,
   CommercialActivationBehavior,
+  CommercialAgreementStatus,
   CommercialDealStatus,
   CommercialHistorySource,
   CommercialOfferItemType,
@@ -30,6 +33,7 @@ import type {
   CustomerSuccessBlocker,
   CustomerSuccessHealthStatus,
   CustomerSuccessSlaTier,
+  FinancialPaymentMethod,
   GenericFinancialErpConnectionConfig,
   GoLiveStatus,
   IntegrationCredentialType,
@@ -40,6 +44,7 @@ import type {
   IntegrationSyncTarget,
   IntegrationSyncTrigger,
   IntegrationType,
+  JobCommercialSnapshotSource,
   MigrationStatus,
   OnboardingStatus,
   PublicApiResourceType,
@@ -50,6 +55,7 @@ import type {
   SupportRequestCategory,
   SupportRequestPriority,
   SupportRequestStatus,
+  ReceivableInstallmentStatus,
 } from "@calibra-facil/shared";
 
 // =============================================================================
@@ -2455,6 +2461,342 @@ export const jobAuditLog = pgTable(
     index("job_audit_log_job_id_idx").on(table.jobId),
     index("job_audit_log_performed_at_idx").on(table.performedAt),
     index("job_audit_log_action_idx").on(table.action),
+  ],
+);
+
+// =============================================================================
+// OPERATIONAL FINANCE - Contracts, snapshots, receivables and receipts
+// =============================================================================
+
+export type FinancialAuditEntityType =
+  | "agreement"
+  | "snapshot"
+  | "document"
+  | "installment"
+  | "receipt";
+
+export const commercialAgreement = pgTable(
+  "commercial_agreement",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "cascade" }),
+    status: text("status")
+      .$type<CommercialAgreementStatus>()
+      .default("DRAFT")
+      .notNull(),
+    agreementCode: text("agreement_code"),
+    title: text("title").notNull(),
+    externalReference: text("external_reference"),
+    currency: text("currency").default("BRL").notNull(),
+    effectiveFrom: timestamp("effective_from").notNull(),
+    effectiveTo: timestamp("effective_to"),
+    defaultPaymentTermDays: integer("default_payment_term_days")
+      .default(28)
+      .notNull(),
+    notes: text("notes"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    updatedBy: text("updated_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("commercial_agreement_org_idx").on(table.organizationId),
+    index("commercial_agreement_customer_idx").on(table.customerId),
+    index("commercial_agreement_status_idx").on(table.status),
+    index("commercial_agreement_effective_from_idx").on(table.effectiveFrom),
+    uniqueIndex("commercial_agreement_org_code_uidx").on(
+      table.organizationId,
+      table.agreementCode,
+    ),
+  ],
+);
+
+export const commercialAgreementUnitScope = pgTable(
+  "commercial_agreement_unit_scope",
+  {
+    id: serial("id").primaryKey(),
+    agreementId: integer("agreement_id")
+      .notNull()
+      .references(() => commercialAgreement.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("commercial_agreement_unit_scope_uidx").on(
+      table.agreementId,
+      table.unitId,
+    ),
+    index("commercial_agreement_unit_scope_unit_idx").on(table.unitId),
+  ],
+);
+
+export const commercialAgreementServiceTerm = pgTable(
+  "commercial_agreement_service_term",
+  {
+    id: serial("id").primaryKey(),
+    agreementId: integer("agreement_id")
+      .notNull()
+      .references(() => commercialAgreement.id, { onDelete: "cascade" }),
+    serviceId: integer("service_id")
+      .notNull()
+      .references(() => service.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "cascade",
+    }),
+    priceCents: integer("price_cents").notNull(),
+    currency: text("currency").default("BRL").notNull(),
+    tatDays: integer("tat_days"),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("commercial_agreement_service_term_agreement_idx").on(
+      table.agreementId,
+    ),
+    index("commercial_agreement_service_term_service_idx").on(table.serviceId),
+    index("commercial_agreement_service_term_unit_idx").on(table.unitId),
+  ],
+);
+
+export const jobCommercialSnapshot = pgTable(
+  "job_commercial_snapshot",
+  {
+    id: serial("id").primaryKey(),
+    jobId: integer("job_id")
+      .notNull()
+      .unique()
+      .references(() => calibrationJob.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "restrict" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
+    serviceId: integer("service_id")
+      .notNull()
+      .references(() => service.id, { onDelete: "restrict" }),
+    agreementId: integer("agreement_id").references(() => commercialAgreement.id, {
+      onDelete: "set null",
+    }),
+    sourceType: text("source_type").$type<JobCommercialSnapshotSource>().notNull(),
+    serviceName: text("service_name").notNull(),
+    priceCents: integer("price_cents"),
+    currency: text("currency").default("BRL").notNull(),
+    paymentTermDays: integer("payment_term_days").default(28).notNull(),
+    capturedAt: timestamp("captured_at").defaultNow().notNull(),
+    capturedBySystemVersion: text("captured_by_system_version").notNull(),
+  },
+  (table) => [
+    index("job_commercial_snapshot_org_idx").on(table.organizationId),
+    index("job_commercial_snapshot_customer_idx").on(table.customerId),
+    index("job_commercial_snapshot_service_idx").on(table.serviceId),
+    index("job_commercial_snapshot_agreement_idx").on(table.agreementId),
+  ],
+);
+
+export const billingDocument = pgTable(
+  "billing_document",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "restrict" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
+    agreementId: integer("agreement_id").references(() => commercialAgreement.id, {
+      onDelete: "set null",
+    }),
+    documentNumber: text("document_number"),
+    status: text("status")
+      .$type<BillingDocumentStatus>()
+      .default("DRAFT")
+      .notNull(),
+    issueDate: timestamp("issue_date"),
+    dueDate: timestamp("due_date").notNull(),
+    currency: text("currency").default("BRL").notNull(),
+    subtotalCents: integer("subtotal_cents").notNull(),
+    discountCents: integer("discount_cents").default(0).notNull(),
+    totalCents: integer("total_cents").notNull(),
+    notes: text("notes"),
+    issuedBy: text("issued_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    voidedBy: text("voided_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    voidReason: text("void_reason"),
+    exportStatus: text("export_status")
+      .$type<BillingDocumentExportStatus>()
+      .default("NOT_EXPORTED")
+      .notNull(),
+    exportedAt: timestamp("exported_at"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    updatedBy: text("updated_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("billing_document_org_idx").on(table.organizationId),
+    index("billing_document_customer_idx").on(table.customerId),
+    index("billing_document_unit_idx").on(table.unitId),
+    index("billing_document_status_idx").on(table.status),
+    index("billing_document_due_date_idx").on(table.dueDate),
+    index("billing_document_agreement_idx").on(table.agreementId),
+    uniqueIndex("billing_document_org_number_uidx").on(
+      table.organizationId,
+      table.documentNumber,
+    ),
+  ],
+);
+
+export const billingDocumentItem = pgTable(
+  "billing_document_item",
+  {
+    id: serial("id").primaryKey(),
+    documentId: integer("document_id")
+      .notNull()
+      .references(() => billingDocument.id, { onDelete: "cascade" }),
+    jobId: integer("job_id").references(() => calibrationJob.id, {
+      onDelete: "set null",
+    }),
+    jobCommercialSnapshotId: integer("job_commercial_snapshot_id").references(
+      () => jobCommercialSnapshot.id,
+      { onDelete: "set null" },
+    ),
+    description: text("description").notNull(),
+    quantity: integer("quantity").default(1).notNull(),
+    unitPriceCents: integer("unit_price_cents").notNull(),
+    totalCents: integer("total_cents").notNull(),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("billing_document_item_document_idx").on(table.documentId),
+    index("billing_document_item_job_idx").on(table.jobId),
+    index("billing_document_item_snapshot_idx").on(table.jobCommercialSnapshotId),
+  ],
+);
+
+export const receivableInstallment = pgTable(
+  "receivable_installment",
+  {
+    id: serial("id").primaryKey(),
+    documentId: integer("document_id")
+      .notNull()
+      .references(() => billingDocument.id, { onDelete: "cascade" }),
+    installmentNumber: integer("installment_number").default(1).notNull(),
+    status: text("status")
+      .$type<ReceivableInstallmentStatus>()
+      .default("OPEN")
+      .notNull(),
+    dueDate: timestamp("due_date").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").default("BRL").notNull(),
+    paidAt: timestamp("paid_at"),
+    paymentMethod: text("payment_method").$type<FinancialPaymentMethod>(),
+    paymentReference: text("payment_reference"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("receivable_installment_document_number_uidx").on(
+      table.documentId,
+      table.installmentNumber,
+    ),
+    index("receivable_installment_status_idx").on(table.status),
+    index("receivable_installment_due_date_idx").on(table.dueDate),
+  ],
+);
+
+export const paymentReceipt = pgTable(
+  "payment_receipt",
+  {
+    id: serial("id").primaryKey(),
+    installmentId: integer("installment_id")
+      .notNull()
+      .references(() => receivableInstallment.id, { onDelete: "cascade" }),
+    recordedBy: text("recorded_by")
+      .notNull()
+      .references(() => user.id),
+    receivedAt: timestamp("received_at").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    paymentMethod: text("payment_method")
+      .$type<FinancialPaymentMethod>()
+      .notNull(),
+    reference: text("reference"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("payment_receipt_installment_idx").on(table.installmentId),
+    index("payment_receipt_received_at_idx").on(table.receivedAt),
+  ],
+);
+
+export const financialAuditLog = pgTable(
+  "financial_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    entityType: text("entity_type").$type<FinancialAuditEntityType>().notNull(),
+    entityId: text("entity_id").notNull(),
+    action: text("action").notNull(),
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("financial_audit_log_org_idx").on(table.organizationId),
+    index("financial_audit_log_entity_idx").on(table.entityType, table.entityId),
+    index("financial_audit_log_performed_at_idx").on(table.performedAt),
   ],
 );
 

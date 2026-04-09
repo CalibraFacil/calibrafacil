@@ -3,6 +3,7 @@ import {
   Book02Icon,
   Building02Icon,
   ClipboardIcon,
+  CreditCardIcon,
   CustomerSupportIcon,
   Home01Icon,
   PieChartIcon,
@@ -19,6 +20,7 @@ import { OrganizationSwitcher } from './organization-switcher'
 import { NavMain } from './nav-main'
 import { NavUser } from './nav-user'
 import { SidebarSearch } from './sidebar-search'
+import { usePlanAccess } from '@/hooks/use-plan-access'
 
 import {
   Sidebar,
@@ -97,14 +99,26 @@ const data = {
 
 export function AppSidebar() {
   const { data: activeOrg } = useActiveOrganization()
+  const accessQuery = usePlanAccess()
   const currentRole =
     typeof activeOrg?.members?.[0]?.role === 'string'
       ? activeOrg.members[0].role
       : 'member'
   const canAccessConsolidatedReports =
     currentRole === 'owner' || currentRole === 'admin'
+  const canAccessFinance =
+    (currentRole === 'owner' || currentRole === 'admin') &&
+    Boolean(accessQuery.data?.hasFinancialModule)
 
   const navMain = [...data.navMain]
+
+  if (canAccessFinance) {
+    navMain.push({
+      title: 'Financeiro',
+      url: '/dashboard/finance',
+      icon: <HugeiconsIcon icon={CreditCardIcon} />,
+    })
+  }
 
   const navSecondary = [...data.navSecondary]
   const managementItems = [

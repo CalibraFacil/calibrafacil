@@ -28,6 +28,7 @@ import { verifyRouter } from "./routes/verify";
 import { dashboardRouter } from "./routes/dashboard";
 import { reportsRouter } from "./routes/reports";
 import { billingRouter } from "./routes/billing";
+import { financeRouter } from "./routes/finance";
 import { webhooksRouter } from "./routes/webhooks";
 import { notificationsRouter } from "./routes/notifications";
 import { signaturesRouter } from "./routes/signatures";
@@ -268,6 +269,7 @@ const routes = app
   .route("/api/dashboard", dashboardRouter)
   .route("/api/reports", reportsRouter)
   .route("/api/billing", billingRouter)
+  .route("/api/finance", financeRouter)
   .route("/api/webhooks", webhooksRouter)
   .route("/api/notifications", notificationsRouter)
   .route("/api/signatures", signaturesRouter)

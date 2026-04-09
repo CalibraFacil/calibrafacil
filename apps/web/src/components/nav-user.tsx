@@ -169,7 +169,7 @@ export function NavUser() {
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <HugeiconsIcon icon={CreditCardIcon} />
-                <Link to="/dashboard/settings/billing">Faturamento</Link>
+                <Link to="/dashboard/settings/subscription">Assinatura</Link>
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <HugeiconsIcon icon={Notification02Icon} />

@@ -29,6 +29,13 @@
       "when": 1775738222864,
       "tag": "0003_redundant_madrox",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1775698319000,
+      "tag": "0034_add_operational_finance",
+      "breakpoints": true
     }
   ]
 }

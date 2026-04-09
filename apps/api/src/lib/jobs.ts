@@ -13,6 +13,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
 import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
+import { ensureJobCommercialSnapshot } from "./finance";
 
 type JobDbExecutor = Pick<
   typeof db,
@@ -278,6 +279,18 @@ async function persistCalibrationJob(
   if (!newJob) {
     throw new Error("Falha ao criar job");
   }
+
+  await ensureJobCommercialSnapshot(
+    {
+      actorUserId: params.createdBy,
+      jobId: newJob.id,
+      organizationId: params.organizationId,
+      customerId: assetData.customerId,
+      unitId: params.unitId,
+      serviceId: params.serviceId,
+    },
+    executor,
+  );
 
   await executor.insert(jobAuditLog).values({
     jobId: newJob.id,

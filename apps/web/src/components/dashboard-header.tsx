@@ -25,7 +25,8 @@ const routeLabels: Record<string, string> = {
   '/dashboard/settings/organization': 'Organização',
   '/dashboard/settings/portal-domain': 'Portal Domain',
   '/dashboard/settings/branding': 'Branding',
-  '/dashboard/settings/billing': 'Faturamento',
+  '/dashboard/settings/billing': 'Assinatura',
+  '/dashboard/settings/subscription': 'Assinatura',
   '/dashboard/settings/notifications': 'Notificações',
   '/dashboard/settings/security': 'Segurança',
   '/dashboard/settings/authentication': 'Autenticação',
@@ -37,6 +38,13 @@ const routeLabels: Record<string, string> = {
   '/dashboard/customer-success': 'Customer Success',
   '/dashboard/internal': 'Operação Interna',
   '/dashboard/internal/customer-success': 'Customer Success',
+  '/dashboard/finance': 'Financeiro',
+  '/dashboard/finance/documents': 'Documentos financeiros',
+  '/dashboard/finance/documents/$id': 'Documento financeiro',
+  '/dashboard/finance/receipts': 'Recebimentos',
+  '/dashboard/finance/contracts': 'Contratos comerciais',
+  '/dashboard/finance/contracts/$id': 'Contrato comercial',
+  '/dashboard/finance/erp': 'ERP financeiro',
 
   // Clients
   '/dashboard/clients': 'Clientes',

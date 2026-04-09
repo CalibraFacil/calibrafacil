@@ -171,6 +171,7 @@ export const INVALIDATION_MAP: Record<string, string[]> = {
   "asset-types": ["asset-types"],
   members: ["usage:users"],
   subscription: ["subscription"],
+  finance: ["finance-overview", "customers", "jobs"],
 };
 
 /**

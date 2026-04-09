@@ -71,6 +71,7 @@ import {
   generateJobId,
   jobCreationClientErrors,
 } from "../lib/jobs";
+import { loadJobFinancialContexts } from "../lib/finance";
 import { alias } from "drizzle-orm/pg-core";
 import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
@@ -307,6 +308,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Add computed fields
       const now = new Date();
+      const financialContexts = await loadJobFinancialContexts(
+        memberData.organizationId,
+        jobs.map((job) => job.id),
+      );
       const jobsWithComputedFields = jobs.map((job) => ({
         ...job,
         isOverdue:
@@ -321,6 +326,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         // Extract method name from snapshot for display
         methodName: (job.methodSnapshot as MethodSnapshot)?.methodName,
         methodVersion: (job.methodSnapshot as MethodSnapshot)?.methodVersion,
+        ...financialContexts.get(job.id),
       }));
 
       return c.json({
@@ -368,7 +374,15 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      return c.json(job);
+      const financialContextMap = await loadJobFinancialContexts(
+        memberData.organizationId,
+        [job.id],
+      );
+
+      return c.json({
+        ...job,
+        ...financialContextMap.get(job.id),
+      });
     },
   )
 

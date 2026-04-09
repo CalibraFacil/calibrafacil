@@ -49,14 +49,12 @@ import {
   getEnabledEntitlements,
   isValidPlanId,
   type FeatureFlag,
-  type PlanId,
 } from '@calibra-facil/shared'
 
 export const Route = createFileRoute('/dashboard/settings/billing')({
-  head: () => ({
-    meta: [{ title: 'Faturamento | Configuracoes | CalibraFacil' }],
-  }),
-  component: BillingSettingsPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/dashboard/settings/subscription' })
+  },
 })
 
 // Status badge variants
@@ -89,7 +87,7 @@ const PAYMENT_STATUS: Record<
   DELETED: { label: 'Cancelado', variant: 'outline' },
 }
 
-function BillingSettingsPage() {
+export function BillingSettingsPage() {
   const accessQuery = usePlanAccess()
   const accessReady = accessQuery.isSuccess && !!accessQuery.data
   const accessPlanId =

@@ -95,9 +95,9 @@ const settingsNavItems: Array<SettingsNavItem> = [
     icon: <HugeiconsIcon icon={Settings02Icon} className="size-4" />,
   },
   {
-    value: 'billing',
-    label: 'Faturamento',
-    href: '/dashboard/settings/billing',
+    value: 'subscription',
+    label: 'Assinatura',
+    href: '/dashboard/settings/subscription',
     icon: <HugeiconsIcon icon={CreditCardIcon} className="size-4" />,
   },
   {

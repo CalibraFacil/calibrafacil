@@ -44,6 +44,7 @@ import {
   type IntegrationSyncTrigger,
 } from "@calibra-facil/shared";
 import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { loadBillingDocumentPayloadsForIntegration } from "./finance";
 
 export interface IntegrationsEnv {
   INTEGRATIONS_MASTER_KEY?: string;
@@ -469,50 +470,7 @@ async function loadBillingDocumentPayloads(
   organizationId: string,
   limit: number,
 ): Promise<IntegrationBillingDocumentPayload[]> {
-  const rows = await db
-    .select({
-      id: calibrationJob.id,
-      unitId: calibrationJob.unitId,
-      unitName: organizationUnit.name,
-      jobId: calibrationJob.jobId,
-      customerId: customer.id,
-      customerName: customer.name,
-      serviceName: service.name,
-      amount: service.price,
-      currency: service.currency,
-      approvedAt: calibrationJob.approvedAt,
-      dueDate: calibrationJob.dueDate,
-    })
-    .from(calibrationJob)
-    .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
-    .leftJoin(service, eq(calibrationJob.serviceId, service.id))
-    .leftJoin(organizationUnit, eq(calibrationJob.unitId, organizationUnit.id))
-    .where(
-      and(
-        eq(calibrationJob.organizationId, organizationId),
-        inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-      ),
-    )
-    .limit(limit)
-    .orderBy(desc(calibrationJob.approvedAt));
-
-  return rows
-    .filter((row) => typeof row.amount === "number" && row.amount > 0)
-    .map((row) => ({
-      externalId: `billing_document:${row.id}`,
-      organizationId,
-      unitId: row.unitId,
-      unitName: row.unitName ?? null,
-      jobId: row.jobId,
-      customerExternalId: row.customerId ? `customer:${row.customerId}` : null,
-      customerName: row.customerName ?? null,
-      serviceName: row.serviceName ?? null,
-      amountCents: row.amount as number,
-      currency: row.currency ?? "BRL",
-      issuedAt: row.approvedAt?.toISOString?.() ?? null,
-      dueAt: row.dueDate?.toISOString?.() ?? null,
-      status: "ready",
-    }));
+  return loadBillingDocumentPayloadsForIntegration(organizationId, limit);
 }
 
 async function loadTargetPayloads(
@@ -561,20 +519,11 @@ async function countLocalTargetRecords(
       return Number(row?.total ?? 0);
     }
     case "billing_document": {
-      const rows = await db
-        .select({
-          amount: service.price,
-        })
-        .from(calibrationJob)
-        .leftJoin(service, eq(calibrationJob.serviceId, service.id))
-        .where(
-          and(
-            eq(calibrationJob.organizationId, organizationId),
-            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-          ),
-        );
-      return rows.filter((row) => typeof row.amount === "number" && row.amount > 0)
-        .length;
+      const payloads = await loadBillingDocumentPayloadsForIntegration(
+        organizationId,
+        500,
+      );
+      return payloads.length;
     }
   }
 }
@@ -757,9 +706,10 @@ function buildPreviewSampleRecord(
 
   return {
     externalId: payload.externalId,
-    label: `Faturamento ${payload.jobId}`,
-    subtitle:
-      payload.customerName ?? payload.serviceName ?? payload.unitName ?? null,
+    label: payload.documentNumber
+      ? `Faturamento ${payload.documentNumber}`
+      : `Faturamento ${payload.externalId}`,
+    subtitle: payload.customerName ?? payload.unitName ?? null,
     mappedPayload,
     issues,
   };

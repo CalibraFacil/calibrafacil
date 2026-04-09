@@ -159,18 +159,25 @@ export interface IntegrationServiceOrderPayload {
 
 export interface IntegrationBillingDocumentPayload {
   externalId: string;
+  documentNumber: string | null;
   organizationId: string;
   unitId: number | null;
   unitName: string | null;
-  jobId: string;
   customerExternalId: string | null;
   customerName: string | null;
-  serviceName: string | null;
-  amountCents: number;
+  totalCents: number;
   currency: string;
-  issuedAt: string | null;
-  dueAt: string | null;
-  status: "pending" | "ready";
+  issueDate: string | null;
+  dueDate: string | null;
+  status: "draft" | "issued" | "paid" | "overdue" | "void";
+  items: Array<{
+    lineId: string;
+    jobId: string | null;
+    description: string;
+    quantity: number;
+    unitPriceCents: number;
+    totalCents: number;
+  }>;
 }
 
 export interface IntegrationDependencyWarning {
@@ -266,18 +273,18 @@ export const INTEGRATION_CANONICAL_FIELDS: Record<
   ],
   billing_document: [
     "externalId",
+    "documentNumber",
     "organizationId",
     "unitId",
     "unitName",
-    "jobId",
     "customerExternalId",
     "customerName",
-    "serviceName",
-    "amountCents",
+    "totalCents",
     "currency",
-    "issuedAt",
-    "dueAt",
+    "issueDate",
+    "dueDate",
     "status",
+    "items",
   ],
 };
 
@@ -287,7 +294,7 @@ export const INTEGRATION_REQUIRED_DESTINATION_FIELDS: Record<
 > = {
   customer: ["externalId", "name"],
   service_order: ["externalId", "jobId", "status"],
-  billing_document: ["externalId", "jobId", "amountCents", "currency", "status"],
+  billing_document: ["externalId", "totalCents", "currency", "status"],
 };
 
 function parseIpv4Address(hostname: string): number[] | null {
