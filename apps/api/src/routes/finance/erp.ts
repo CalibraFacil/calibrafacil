@@ -78,6 +78,13 @@ export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Documento nao encontrado" }, 404);
       }
 
+      if (
+        member.selectedUnitScope !== "all" &&
+        payload.unitId !== member.activeUnitId
+      ) {
+        return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
+      }
+
       try {
         const exported = await exportBillingDocumentToPrimaryIntegration({
           organizationId: member.organizationId,

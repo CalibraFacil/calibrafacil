@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import {
   billingDocument,
@@ -27,7 +27,43 @@ export const financeOverviewRouter = new Hono<{ Variables: AuthVariables }>().ge
   withCache("finance-overview", 60),
   async (c) => {
     const member = c.get("member");
-    const documents = await db
+    const [documentSummary] = await db
+      .select({
+        issuedCents:
+          sql<number>`coalesce(sum(case when ${billingDocument.status} in ('ISSUED', 'OVERDUE', 'PAID') then ${billingDocument.totalCents} else 0 end), 0)`.mapWith(
+            Number,
+          ),
+        draftDocuments:
+          sql<number>`count(*) filter (where ${billingDocument.status} = 'DRAFT')`.mapWith(
+            Number,
+          ),
+        issuedDocuments:
+          sql<number>`count(*) filter (where ${billingDocument.status} = 'ISSUED')`.mapWith(
+            Number,
+          ),
+        overdueDocuments:
+          sql<number>`count(*) filter (where ${billingDocument.status} = 'OVERDUE')`.mapWith(
+            Number,
+          ),
+        paidDocuments:
+          sql<number>`count(*) filter (where ${billingDocument.status} = 'PAID')`.mapWith(
+            Number,
+          ),
+        pendingExports:
+          sql<number>`count(*) filter (where ${billingDocument.exportStatus} = 'NOT_EXPORTED')`.mapWith(
+            Number,
+          ),
+      })
+      .from(billingDocument)
+      .where(
+        and(
+          eq(billingDocument.organizationId, member.organizationId),
+          buildUnitScopeCondition(billingDocument.unitId, member),
+          inArray(billingDocument.status, ["DRAFT", "ISSUED", "PAID", "OVERDUE"]),
+        ),
+      );
+
+    const recentDocuments = await db
       .select({
         id: billingDocument.id,
         documentNumber: billingDocument.documentNumber,
@@ -51,7 +87,7 @@ export const financeOverviewRouter = new Hono<{ Variables: AuthVariables }>().ge
         ),
       )
       .orderBy(desc(billingDocument.createdAt))
-      .limit(200);
+      .limit(8);
 
     const openInstallments = await db
       .select({
@@ -112,11 +148,7 @@ export const financeOverviewRouter = new Hono<{ Variables: AuthVariables }>().ge
 
     return c.json({
       totals: {
-        issuedCents: documents
-          .filter((document) =>
-            ["ISSUED", "OVERDUE", "PAID"].includes(document.status),
-          )
-          .reduce((sum, document) => sum + document.totalCents, 0),
+        issuedCents: documentSummary?.issuedCents ?? 0,
         openCents: openInstallments.reduce(
           (sum, installment) => sum + installment.amountCents,
           0,
@@ -130,20 +162,14 @@ export const financeOverviewRouter = new Hono<{ Variables: AuthVariables }>().ge
         ),
       },
       counts: {
-        draftDocuments: documents.filter((document) => document.status === "DRAFT")
-          .length,
-        issuedDocuments: documents.filter((document) => document.status === "ISSUED")
-          .length,
-        overdueDocuments: documents.filter((document) => document.status === "OVERDUE")
-          .length,
-        paidDocuments: documents.filter((document) => document.status === "PAID")
-          .length,
+        draftDocuments: documentSummary?.draftDocuments ?? 0,
+        issuedDocuments: documentSummary?.issuedDocuments ?? 0,
+        overdueDocuments: documentSummary?.overdueDocuments ?? 0,
+        paidDocuments: documentSummary?.paidDocuments ?? 0,
       },
       aging,
-      recentDocuments: documents.slice(0, 8),
-      pendingExports: documents.filter(
-        (document) => document.exportStatus === "NOT_EXPORTED",
-      ).length,
+      recentDocuments,
+      pendingExports: documentSummary?.pendingExports ?? 0,
     });
   },
 );
