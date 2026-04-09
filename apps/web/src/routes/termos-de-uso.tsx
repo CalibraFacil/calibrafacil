@@ -30,7 +30,7 @@ function TermsOfUsePage() {
       subtitle="Termos e condições gerais para contratação e uso da plataforma CalibraFácil, com foco em operação SaaS, LGPD e conformidade técnica para laboratórios."
       title="Termos de Uso"
     >
-      <div className="prose prose-slate max-w-none dark:prose-invert prose-headings:scroll-mt-24">
+      <div className="max-w-none text-foreground [&>section:first-child]:border-t-0 [&>section:first-child]:pt-0 [&_h2]:mb-4 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:tracking-tight [&_h2]:text-foreground [&_h3]:mt-6 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-foreground [&_li]:my-2 [&_ol]:my-4 [&_ol]:pl-6 [&_p]:text-[15px] [&_p]:leading-8 [&_p]:text-foreground [&_p+ol]:mt-4 [&_p+ul]:mt-4 [&_p+p]:mt-4 [&_section]:border-t [&_section]:border-border/60 [&_section]:pt-8 [&_strong]:font-semibold [&_strong]:text-foreground [&_ul]:my-4 [&_ul]:pl-6">
         <section>
           <h2>Preâmbulo</h2>
           <p>
@@ -251,7 +251,7 @@ function TermsOfUsePage() {
           </ol>
         </section>
 
-        <section className="rounded-3xl border border-amber-500/30 bg-amber-500/8 px-6 py-5">
+        <section className="rounded-2xl border border-border/60 bg-muted/25 px-6 py-5">
           <h2>6. Da Limitação de Responsabilidade</h2>
           <h3>6.1. Da Natureza da Ferramenta</h3>
           <p>
@@ -549,10 +549,10 @@ function TermsOfUsePage() {
           </p>
         </section>
 
-        <section className="not-prose mt-10 rounded-3xl border border-border/70 bg-muted/30 p-6">
+        <section className="not-prose mt-10 rounded-2xl border border-border/60 bg-background/70 p-6">
           <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
             <div>
-              <p className="font-medium text-foreground">
+              <p className="font-semibold uppercase tracking-[0.14em] text-foreground/70">
                 Dados da licenciante
               </p>
               <p>{LEGAL_ENTITY.legalName}</p>

@@ -31,7 +31,7 @@ function PrivacyPolicyPage() {
       subtitle="Como a CalibraFácil coleta, utiliza, compartilha e protege dados pessoais em conformidade com a Lei Geral de Proteção de Dados."
       title="Política de Privacidade"
     >
-      <div className="prose prose-slate max-w-none dark:prose-invert prose-headings:scroll-mt-24">
+      <div className="max-w-none text-foreground [&>section:first-child]:border-t-0 [&>section:first-child]:pt-0 [&_h2]:mb-4 [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:tracking-tight [&_h2]:text-foreground [&_h3]:mt-6 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-foreground [&_li]:my-2 [&_ol]:my-4 [&_ol]:pl-6 [&_p]:text-[15px] [&_p]:leading-8 [&_p]:text-foreground [&_p+ol]:mt-4 [&_p+ul]:mt-4 [&_p+p]:mt-4 [&_section]:border-t [&_section]:border-border/60 [&_section]:pt-8 [&_strong]:font-semibold [&_strong]:text-foreground [&_ul]:my-4 [&_ul]:pl-6">
         <section>
           <h2>Introdução</h2>
           <p>
@@ -53,7 +53,7 @@ function PrivacyPolicyPage() {
           </p>
         </section>
 
-        <section className="rounded-3xl border border-sky-500/30 bg-sky-500/8 px-6 py-5">
+        <section className="rounded-2xl border border-border/60 bg-muted/25 px-6 py-5">
           <h2>1. Dos Agentes de Tratamento de Dados</h2>
           <h3>1.1. CalibraFácil como Controlador</h3>
           <p>
@@ -129,13 +129,13 @@ function PrivacyPolicyPage() {
         <section>
           <h2>3. Das Finalidades do Tratamento</h2>
           <div className="not-prose overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-2xl border border-border/70 text-sm">
+            <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-2xl border border-border/70 bg-background/40 text-sm">
               <thead className="bg-muted/40">
                 <tr>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Finalidade
                   </th>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Base legal
                   </th>
                 </tr>
@@ -168,10 +168,10 @@ function PrivacyPolicyPage() {
                   ],
                 ].map(([purpose, basis]) => (
                   <tr key={purpose}>
-                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                    <td className="border-b border-border/50 px-4 py-3 align-top text-foreground">
                       {purpose}
                     </td>
-                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                    <td className="border-b border-border/50 px-4 py-3 align-top text-muted-foreground">
                       {basis}
                     </td>
                   </tr>
@@ -193,16 +193,16 @@ function PrivacyPolicyPage() {
             necessários à operação da plataforma:
           </p>
           <div className="not-prose overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-2xl border border-border/70 text-sm">
+            <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-2xl border border-border/70 bg-background/40 text-sm">
               <thead className="bg-muted/40">
                 <tr>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Provedor
                   </th>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Função
                   </th>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Dados compartilhados
                   </th>
                 </tr>
@@ -210,13 +210,13 @@ function PrivacyPolicyPage() {
               <tbody>
                 {LEGAL_SUBPROCESSORS.map((processor) => (
                   <tr key={processor.name}>
-                    <td className="border-b border-border/50 px-4 py-3 align-top font-medium">
+                    <td className="border-b border-border/50 px-4 py-3 align-top font-semibold text-foreground">
                       {processor.name}
                     </td>
-                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                    <td className="border-b border-border/50 px-4 py-3 align-top text-muted-foreground">
                       {processor.role}
                     </td>
-                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                    <td className="border-b border-border/50 px-4 py-3 align-top text-muted-foreground">
                       {processor.sharedData}
                     </td>
                   </tr>
@@ -284,16 +284,16 @@ function PrivacyPolicyPage() {
             contratuais, legais e regulatórios.
           </p>
           <div className="not-prose overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-2xl border border-border/70 text-sm">
+            <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-2xl border border-border/70 bg-background/40 text-sm">
               <thead className="bg-muted/40">
                 <tr>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Tipo de dado
                   </th>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Período de retenção
                   </th>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Justificativa
                   </th>
                 </tr>
@@ -327,13 +327,13 @@ function PrivacyPolicyPage() {
                   ],
                 ].map(([dataType, retention, reason]) => (
                   <tr key={dataType}>
-                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                    <td className="border-b border-border/50 px-4 py-3 align-top text-foreground">
                       {dataType}
                     </td>
-                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                    <td className="border-b border-border/50 px-4 py-3 align-top text-muted-foreground">
                       {retention}
                     </td>
-                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                    <td className="border-b border-border/50 px-4 py-3 align-top text-muted-foreground">
                       {reason}
                     </td>
                   </tr>
@@ -356,16 +356,16 @@ function PrivacyPolicyPage() {
             estabilidade e continuidade do serviço.
           </p>
           <div className="not-prose overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-2xl border border-border/70 text-sm">
+            <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-2xl border border-border/70 bg-background/40 text-sm">
               <thead className="bg-muted/40">
                 <tr>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Tipo
                   </th>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Finalidade
                   </th>
-                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-semibold text-foreground">
                     Duração
                   </th>
                 </tr>
@@ -384,13 +384,13 @@ function PrivacyPolicyPage() {
                   ],
                 ].map(([kind, purpose, duration]) => (
                   <tr key={kind}>
-                    <td className="border-b border-border/50 px-4 py-3 align-top font-medium">
+                    <td className="border-b border-border/50 px-4 py-3 align-top font-semibold text-foreground">
                       {kind}
                     </td>
-                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                    <td className="border-b border-border/50 px-4 py-3 align-top text-muted-foreground">
                       {purpose}
                     </td>
-                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                    <td className="border-b border-border/50 px-4 py-3 align-top text-muted-foreground">
                       {duration}
                     </td>
                   </tr>
@@ -404,7 +404,7 @@ function PrivacyPolicyPage() {
           </p>
         </section>
 
-        <section className="rounded-3xl border border-emerald-500/30 bg-emerald-500/8 px-6 py-5">
+        <section className="rounded-2xl border border-border/60 bg-muted/25 px-6 py-5">
           <h2>8. Dos Direitos dos Titulares de Dados</h2>
           <p>
             Em conformidade com a LGPD, você pode solicitar confirmação do
@@ -413,7 +413,7 @@ function PrivacyPolicyPage() {
             consentimento e oposição ao tratamento, quando cabível.
           </p>
           <p>Para exercer seus direitos, entre em contato com:</p>
-          <div className="not-prose rounded-2xl border border-border/70 bg-background/85 p-4 text-sm text-muted-foreground">
+          <div className="not-prose rounded-2xl border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground">
             <p>
               <strong className="text-foreground">Encarregado:</strong>{' '}
               {LEGAL_ENTITY.dpoName}
@@ -491,8 +491,8 @@ function PrivacyPolicyPage() {
             Política de Privacidade ou ao tratamento de seus dados pessoais,
             entre em contato com:
           </p>
-          <div className="not-prose rounded-2xl border border-border/70 bg-muted/30 p-4 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">
+          <div className="not-prose rounded-2xl border border-border/60 bg-background/70 p-4 text-sm text-muted-foreground">
+            <p className="font-semibold text-foreground">
               {LEGAL_ENTITY.legalName}
             </p>
             <p>CNPJ: {LEGAL_ENTITY.cnpj}</p>
