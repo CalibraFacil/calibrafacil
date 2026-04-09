@@ -5,6 +5,19 @@ import { eq } from "drizzle-orm";
 import { issueCommercialOffer } from "./issue";
 import { getOfferById, insertOfferHistory } from "./common";
 
+export function resolveReissueItems(
+  overrides: ReissueCommercialOfferInput["overrides"],
+  termsSnapshot: Record<string, unknown>,
+) {
+  const originalItems = Array.isArray(termsSnapshot.items)
+    ? (termsSnapshot.items as NonNullable<
+        ReissueCommercialOfferInput["overrides"]["items"]
+      >)
+    : [];
+
+  return overrides.items ?? originalItems;
+}
+
 export async function reissueCommercialOffer(
   offerId: string,
   input: ReissueCommercialOfferInput,
@@ -52,7 +65,7 @@ export async function reissueCommercialOffer(
     customerVisibleDescription:
       input.overrides.customerVisibleDescription ?? current.customerVisibleDescription ?? undefined,
     internalNotes: input.overrides.internalNotes ?? current.internalNotes ?? undefined,
-    items: (input.overrides.items as any[]) ?? [],
+    items: resolveReissueItems(input.overrides, terms),
   };
 
   const reissued = await issueCommercialOffer(

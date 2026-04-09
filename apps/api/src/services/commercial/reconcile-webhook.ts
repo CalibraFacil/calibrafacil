@@ -30,6 +30,18 @@ function mapPaymentStatus(status: string): PaymentStatus {
   return status as PaymentStatus;
 }
 
+export function resolveProviderSubscriptionId(
+  payload: AsaasWebhookPayload,
+  currentProviderSubscriptionId: string | null | undefined,
+) {
+  return (
+    payload.subscription?.id ??
+    payload.payment?.subscription ??
+    currentProviderSubscriptionId ??
+    null
+  );
+}
+
 async function findOfferForPayload(payload: AsaasWebhookPayload) {
   const payment = payload.payment;
   const checkout = payload.checkout;
@@ -176,6 +188,11 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
   }
 
   await db.transaction(async (tx) => {
+    const providerSubscriptionId = resolveProviderSubscriptionId(
+      payload,
+      offer.providerSubscriptionId,
+    );
+
     if (payload.payment) {
       const payment = await upsertPaymentFromWebhook(tx, offer, payload.payment, eventId);
 
@@ -249,14 +266,25 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
       }
     }
 
-    if (payload.subscription?.id) {
+    if (providerSubscriptionId) {
       await tx
         .update(commercialOffer)
         .set({
-          providerSubscriptionId:
-            offer.providerSubscriptionId ?? payload.subscription.id,
+          providerSubscriptionId,
         })
         .where(eq(commercialOffer.id, offer.id));
+
+      await tx
+        .update(subscription)
+        .set({
+          providerSubscriptionId,
+        })
+        .where(
+          and(
+            eq(subscription.organizationId, offer.organizationId),
+            eq(subscription.sourceCommercialOfferId, offer.id),
+          ),
+        );
     }
 
     await tx
