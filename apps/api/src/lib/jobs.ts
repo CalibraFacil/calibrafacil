@@ -9,10 +9,12 @@ import {
   memberUnitAssignment,
   personnelCompetence,
   service,
+  type CustomerCompliance,
   type MethodSnapshot,
 } from "@calibra-facil/db/schema";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
 import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
+import { ensureJobCommercialSnapshot } from "./finance";
 
 type JobDbExecutor = Pick<
   typeof db,
@@ -48,6 +50,7 @@ export const jobCreationClientErrors = new Set([
   "Tipo do ativo nao e compativel com o servico selecionado",
   "Tecnico nao encontrado ou sem permissao",
   "Técnico não possui competência ativa para este tipo de instrumento",
+  "Cliente suspenso. Reative a qualificação antes de criar novas ordens de serviço.",
 ]);
 
 function addBusinessDays(startDate: Date, businessDays: number) {
@@ -78,6 +81,7 @@ async function persistCalibrationJob(
       assetTypeId: asset.assetTypeId,
       deletedAt: asset.deletedAt,
       labOrganizationId: customer.labOrganizationId,
+      customerCompliance: customer.compliance,
     })
     .from(asset)
     .innerJoin(customer, eq(asset.customerId, customer.id))
@@ -98,6 +102,17 @@ async function persistCalibrationJob(
 
   if (assetData.unitId !== params.unitId) {
     throw new Error("Ativo nao pertence a esta unidade");
+  }
+
+  const customerCompliance = assetData.customerCompliance as
+    | CustomerCompliance
+    | null
+    | undefined;
+
+  if (customerCompliance?.qualificationStatus === "suspended") {
+    throw new Error(
+      "Cliente suspenso. Reative a qualificação antes de criar novas ordens de serviço.",
+    );
   }
 
   const [serviceData] = await executor
@@ -278,6 +293,18 @@ async function persistCalibrationJob(
   if (!newJob) {
     throw new Error("Falha ao criar job");
   }
+
+  await ensureJobCommercialSnapshot(
+    {
+      actorUserId: params.createdBy,
+      jobId: newJob.id,
+      organizationId: params.organizationId,
+      customerId: assetData.customerId,
+      unitId: params.unitId,
+      serviceId: params.serviceId,
+    },
+    executor,
+  );
 
   await executor.insert(jobAuditLog).values({
     jobId: newJob.id,

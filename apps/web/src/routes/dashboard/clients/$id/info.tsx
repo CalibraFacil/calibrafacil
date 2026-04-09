@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
+import { formatMoney } from '@calibra-facil/shared'
 import { api } from '@/utils/api'
 import {
   Card,
@@ -42,6 +43,14 @@ type CustomerAddress = {
   state?: string
 }
 
+type CustomerFinancialSummary = {
+  openDocumentsCount: number
+  overdueDocumentsCount: number
+  openBalanceCents: number
+  overdueBalanceCents: number
+  overdueBalanceFlag: boolean
+}
+
 function ClientInfoTab() {
   const { id } = useParams({ from: '/dashboard/clients/$id/info' })
 
@@ -61,6 +70,7 @@ function ClientInfoTab() {
         email?: string
         phone?: string
         address?: CustomerAddress
+        financialSummary?: CustomerFinancialSummary
       }>
     },
   })
@@ -95,6 +105,7 @@ function ClientInfoForm({
     email?: string
     phone?: string
     address?: CustomerAddress
+    financialSummary?: CustomerFinancialSummary
   }
   customerId: string
 }) {
@@ -164,16 +175,45 @@ function ClientInfoForm({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Informações do Cliente</CardTitle>
-        <CardDescription>
-          Dados cadastrais e informações de contato.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit}>
-          <FieldGroup>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Resumo financeiro</CardTitle>
+          <CardDescription>
+            Contexto operacional de aberto e vencido para atendimento e gestão
+            comercial.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <SummaryItem
+            label="Documentos em aberto"
+            value={String(customer.financialSummary?.openDocumentsCount ?? 0)}
+          />
+          <SummaryItem
+            label="Documentos vencidos"
+            value={String(customer.financialSummary?.overdueDocumentsCount ?? 0)}
+          />
+          <SummaryItem
+            label="Saldo em aberto"
+            value={formatMoney(customer.financialSummary?.openBalanceCents ?? 0)}
+          />
+          <SummaryItem
+            label="Saldo vencido"
+            value={formatMoney(customer.financialSummary?.overdueBalanceCents ?? 0)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Informações do Cliente</CardTitle>
+          <CardDescription>
+            Dados cadastrais e informações de contato.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit}>
+            <FieldGroup>
             <Field>
               <FieldLabel htmlFor="name">Nome / Razão Social</FieldLabel>
               <Input
@@ -320,15 +360,27 @@ function ClientInfoForm({
               </CollapsibleContent>
             </Collapsible>
 
-            <div className="flex justify-end pt-4">
-              <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? 'Salvando...' : 'Salvar alterações'}
-              </Button>
-            </div>
-          </FieldGroup>
-        </form>
-      </CardContent>
-    </Card>
+              <div className="flex justify-end pt-4">
+                <Button type="submit" disabled={updateMutation.isPending}>
+                  {updateMutation.isPending ? 'Salvando...' : 'Salvar alterações'}
+                </Button>
+              </div>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function SummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border p-4">
+      <div className="text-muted-foreground text-xs uppercase tracking-wide">
+        {label}
+      </div>
+      <div className="mt-2 font-medium">{value}</div>
+    </div>
   )
 }
 

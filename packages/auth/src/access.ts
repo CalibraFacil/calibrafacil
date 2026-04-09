@@ -191,6 +191,20 @@ export const statements = {
   billing: ["read", "update"],
 
   // ---------------------------------------------------------------------------
+  // FINANCIAL - Operational finance for lab contracts, documents and receipts
+  // ---------------------------------------------------------------------------
+  financial: [
+    "read",
+    "contract_create",
+    "contract_update",
+    "document_create",
+    "document_issue",
+    "document_void",
+    "receipt_record",
+    "export",
+  ],
+
+  // ---------------------------------------------------------------------------
   // SERVICE - Commercial service catalog / product registry
   // ---------------------------------------------------------------------------
   /**
@@ -404,6 +418,17 @@ export const admin = ac.newRole({
   // Read-only billing (cannot modify subscription)
   billing: ["read"],
 
+  financial: [
+    "read",
+    "contract_create",
+    "contract_update",
+    "document_create",
+    "document_issue",
+    "document_void",
+    "receipt_record",
+    "export",
+  ],
+
   // Full service catalog management
   service: ["create", "read", "update", "delete"],
 
@@ -472,6 +497,17 @@ export const owner = ac.newRole({
 
   // Full billing access (owner-only)
   billing: ["read", "update"],
+
+  financial: [
+    "read",
+    "contract_create",
+    "contract_update",
+    "document_create",
+    "document_issue",
+    "document_void",
+    "receipt_record",
+    "export",
+  ],
 
   // Full service catalog management
   service: ["create", "read", "update", "delete"],

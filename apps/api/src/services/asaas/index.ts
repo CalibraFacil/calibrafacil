@@ -17,16 +17,27 @@ export {
 
 // Subscription operations
 export {
+  createCheckout,
+  getCheckout,
+  cancelCheckout,
+} from "./checkouts";
+
+export {
+  createPayment,
+  getPayment,
+  listPayments,
+  cancelPayment,
+} from "./payments";
+
+export {
   createSubscription,
   createCreditCardSubscription,
   getSubscription,
   updateSubscription,
   cancelSubscription,
   getSubscriptionPayments,
-  getPayment,
   getPaymentPixQrCode,
   getPaymentBoletoLine,
-  listPayments,
   formatAsaasDate,
   calculateNextBillingDate,
   calculatePeriodEnd,
@@ -40,15 +51,22 @@ export type {
   AsaasCycle,
   AsaasSubscriptionStatus,
   AsaasPaymentStatus,
+  AsaasCheckoutChargeType,
   AsaasCustomer,
   CreateCustomerInput,
   AsaasSubscription,
   CreateSubscriptionInput,
+  CreatePaymentInput,
   CreditCardInput,
   CreditCardHolderInfo,
   CreateCreditCardSubscriptionInput,
   AsaasPayment,
   AsaasPaymentList,
+  AsaasCheckoutItem,
+  AsaasCheckoutCustomerData,
+  AsaasCheckoutCallback,
+  CreateCheckoutInput,
+  AsaasCheckout,
   AsaasWebhookEventType,
   AsaasWebhookPayload,
   AsaasErrorDetail,

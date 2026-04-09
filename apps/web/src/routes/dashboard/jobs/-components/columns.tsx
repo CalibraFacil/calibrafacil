@@ -17,6 +17,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { getFinancialStatusLabel } from "@calibra-facil/shared"
 
 // Animated dots for loading states
 function LoadingDots() {
@@ -61,6 +62,10 @@ export interface Job {
     methodVersion: number | null
     isOverdue: boolean | null
     daysUntilDue: number | null
+    financialStatus?: "UNBILLED" | "DRAFT" | "ISSUED" | "PAID" | "OVERDUE"
+    invoiceDocumentNumber?: string | null
+    invoiceEligibility?: boolean
+    overdueBalanceFlag?: boolean
 }
 
 const statusLabels: Record<JobStatus, string> = {
@@ -91,6 +96,22 @@ const statusVariants: Record<
 function formatDate(dateString: string | null): string {
     if (!dateString) return "-"
     return new Date(dateString).toLocaleDateString("pt-BR")
+}
+
+function getFinancialVariant(status: Job["financialStatus"]) {
+    switch (status) {
+        case "PAID":
+            return "outline"
+        case "OVERDUE":
+            return "destructive"
+        case "ISSUED":
+            return "default"
+        case "DRAFT":
+            return "secondary"
+        case "UNBILLED":
+        default:
+            return "secondary"
+    }
 }
 
 export const jobsColumns: ColumnDef<Job>[] = [
@@ -175,6 +196,26 @@ export const jobsColumns: ColumnDef<Job>[] = [
                     )}
             </div>
         ),
+    },
+    {
+        accessorKey: "financialStatus",
+        header: "Financeiro",
+        cell: ({ row }) => {
+            const financialStatus = row.original.financialStatus ?? "UNBILLED"
+
+            return (
+                <div>
+                    <Badge variant={getFinancialVariant(financialStatus)}>
+                        {getFinancialStatusLabel(financialStatus)}
+                    </Badge>
+                    {row.original.invoiceDocumentNumber && (
+                        <span className="block text-xs text-muted-foreground mt-1">
+                            {row.original.invoiceDocumentNumber}
+                        </span>
+                    )}
+                </div>
+            )
+        },
     },
     {
         accessorKey: "status",

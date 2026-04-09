@@ -1,6 +1,10 @@
 import { db } from "@calibra-facil/db";
 import { customer } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
+import {
+  loadCustomerActiveCommercialAgreement,
+  loadCustomerFinancialSummary,
+} from "./finance";
 
 export async function getLabCustomerById(
   customerId: number,
@@ -17,5 +21,18 @@ export async function getLabCustomerById(
     )
     .limit(1);
 
-  return foundCustomer ?? null;
+  if (!foundCustomer) {
+    return null;
+  }
+
+  const [financialSummary, activeCommercialAgreement] = await Promise.all([
+    loadCustomerFinancialSummary(labOrganizationId, foundCustomer.id),
+    loadCustomerActiveCommercialAgreement(labOrganizationId, foundCustomer.id),
+  ]);
+
+  return {
+    ...foundCustomer,
+    financialSummary,
+    activeCommercialAgreement,
+  };
 }

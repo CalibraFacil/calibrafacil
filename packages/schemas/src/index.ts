@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./commercial";
 
 export const TaskSchema = z.object({
   id: z.string().optional(),
@@ -109,6 +110,7 @@ export const CustomerComplianceSchema = z.object({
   qualificationStatus: QualificationStatusSchema.optional(),
   qualificationDate: z.string().optional(),
   qualificationExpiresAt: z.string().optional(),
+  contractAgreementId: z.number().int().positive().optional(),
   contractNumber: z.string().optional(),
   contractSignedAt: z.string().optional(),
   contractExpiresAt: z.string().optional(),

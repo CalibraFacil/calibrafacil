@@ -32,6 +32,10 @@ import { requireFeature } from "../middleware/tier-guard";
 import { withCache, withInvalidation } from "../middleware/cache";
 import { getLabCustomerById } from "../lib/customer-access";
 import {
+  loadCustomerActiveCommercialAgreement,
+  syncComplianceWithActiveAgreement,
+} from "../lib/finance";
+import {
   cancelPortalInvitationAsService,
   createClientOrganizationAsServiceOwner,
   createPortalInvitationAsService,
@@ -933,7 +937,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           qualityRequirementsAcknowledged: false,
         };
 
-        const updatedCompliance = {
+        const mergedCompliance = {
           ...baseCompliance,
           ...compliance,
           // Ensure qualificationStatus has a value
@@ -951,6 +955,16 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             ? { qualityRequirementsAcknowledgedAt: new Date().toISOString() }
             : {}),
         };
+
+        const activeCommercialAgreement =
+          await loadCustomerActiveCommercialAgreement(
+            memberData.organizationId,
+            id,
+          );
+        const updatedCompliance = syncComplianceWithActiveAgreement(
+          mergedCompliance,
+          activeCommercialAgreement,
+        );
 
         // Update customer
         const [updatedCustomer] = await db

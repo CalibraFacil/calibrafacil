@@ -1,4 +1,4 @@
-import { createFileRoute, useParams } from '@tanstack/react-router'
+import { Link, createFileRoute, useParams } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -68,12 +68,23 @@ type CustomerCompliance = {
   qualificationStatus?: 'pending' | 'qualified' | 'suspended' | 'expired'
   qualificationDate?: string
   qualificationExpiresAt?: string
+  contractAgreementId?: number
   contractNumber?: string
   contractSignedAt?: string
   contractExpiresAt?: string
   qualityRequirementsAcknowledged?: boolean
   qualityRequirementsAcknowledgedAt?: string
   notes?: string
+}
+
+type ActiveCommercialAgreement = {
+  id: number
+  title: string
+  agreementCode: string | null
+  effectiveFrom: string
+  effectiveTo: string | null
+  currency: string
+  defaultPaymentTermDays: number
 }
 
 type AuditLogEntry = {
@@ -101,6 +112,7 @@ function ClientComplianceTab() {
       return res.json() as Promise<{
         id: number
         compliance?: CustomerCompliance
+        activeCommercialAgreement?: ActiveCommercialAgreement | null
       }>
     },
   })
@@ -197,7 +209,11 @@ function ClientComplianceForm({
   formatDate,
   getStatusLabel,
 }: {
-  customer: { id: number; compliance?: CustomerCompliance }
+  customer: {
+    id: number
+    compliance?: CustomerCompliance
+    activeCommercialAgreement?: ActiveCommercialAgreement | null
+  }
   customerId: string
   auditLogData?:
     | {
@@ -221,6 +237,7 @@ function ClientComplianceForm({
   const [reasonError, setReasonError] = useState<string | null>(null)
 
   const compliance = customer.compliance as CustomerCompliance | undefined
+  const activeCommercialAgreement = customer.activeCommercialAgreement ?? null
 
   // Form state
   const [qualificationStatus, setQualificationStatus] = useState<string>(
@@ -232,14 +249,8 @@ function ClientComplianceForm({
   const [qualificationExpiresAt, setQualificationExpiresAt] = useState(
     compliance?.qualificationExpiresAt || '',
   )
-  const [contractNumber, setContractNumber] = useState(
-    compliance?.contractNumber || '',
-  )
   const [contractSignedAt, setContractSignedAt] = useState(
     compliance?.contractSignedAt || '',
-  )
-  const [contractExpiresAt, setContractExpiresAt] = useState(
-    compliance?.contractExpiresAt || '',
   )
   const [qualityRequirementsAcknowledged, setQualityRequirementsAcknowledged] =
     useState(compliance?.qualityRequirementsAcknowledged || false)
@@ -285,9 +296,8 @@ function ClientComplianceForm({
           qualificationStatus as CustomerCompliance['qualificationStatus'],
         qualificationDate: qualificationDate || undefined,
         qualificationExpiresAt: qualificationExpiresAt || undefined,
-        contractNumber: contractNumber || undefined,
+        contractAgreementId: activeCommercialAgreement?.id,
         contractSignedAt: contractSignedAt || undefined,
-        contractExpiresAt: contractExpiresAt || undefined,
         qualityRequirementsAcknowledged,
         notes: notes || undefined,
       },
@@ -363,27 +373,74 @@ function ClientComplianceForm({
         <CardHeader>
           <CardTitle>Contrato e Acordos</CardTitle>
           <CardDescription>
-            Informações contratuais e reconhecimento de requisitos.
+            O contrato comercial ativo vem do módulo Financeiro; aqui ficam o
+            reconhecimento do cliente e o controle de qualificação.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <FieldGroup>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Field>
-                <FieldLabel htmlFor="contract-number">
-                  Número do Contrato
-                </FieldLabel>
-                <Input
-                  id="contract-number"
-                  value={contractNumber}
-                  onChange={(e) => setContractNumber(e.target.value)}
-                  placeholder="CT-2024-001"
-                />
+                <FieldLabel>Contrato ativo</FieldLabel>
+                <div className="rounded-md border px-3 py-2 text-sm">
+                  {activeCommercialAgreement ? (
+                    <div className="space-y-1">
+                      <div className="font-medium">
+                        {activeCommercialAgreement.agreementCode ||
+                          `Contrato #${activeCommercialAgreement.id}`}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {activeCommercialAgreement.title}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Nenhum contrato comercial ativo
+                    </span>
+                  )}
+                </div>
+                {activeCommercialAgreement && (
+                  <FieldDescription>
+                    <Link
+                      to="/dashboard/finance/contracts/$id"
+                      params={{ id: String(activeCommercialAgreement.id) }}
+                      className="underline underline-offset-4"
+                    >
+                      Abrir contrato no Financeiro
+                    </Link>
+                  </FieldDescription>
+                )}
+              </Field>
+
+              <Field>
+                <FieldLabel>Vigência contratual</FieldLabel>
+                <div className="rounded-md border px-3 py-2 text-sm">
+                  {activeCommercialAgreement ? (
+                    <div className="space-y-1">
+                      <div>
+                        Início:{' '}
+                        {new Date(
+                          activeCommercialAgreement.effectiveFrom,
+                        ).toLocaleDateString('pt-BR')}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {activeCommercialAgreement.effectiveTo
+                          ? `Fim: ${new Date(activeCommercialAgreement.effectiveTo).toLocaleDateString('pt-BR')}`
+                          : 'Sem término definido'}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Defina e ative um contrato no Financeiro para refletir
+                      a vigência aqui.
+                    </span>
+                  )}
+                </div>
               </Field>
 
               <Field>
                 <FieldLabel htmlFor="contract-signed">
-                  Data de Assinatura
+                  Reconhecimento do cliente
                 </FieldLabel>
                 <Input
                   id="contract-signed"
@@ -391,18 +448,10 @@ function ClientComplianceForm({
                   value={contractSignedAt}
                   onChange={(e) => setContractSignedAt(e.target.value)}
                 />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="contract-expires">
-                  Validade do Contrato
-                </FieldLabel>
-                <Input
-                  id="contract-expires"
-                  type="date"
-                  value={contractExpiresAt}
-                  onChange={(e) => setContractExpiresAt(e.target.value)}
-                />
+                <FieldDescription>
+                  Data em que o cliente reconheceu formalmente os requisitos
+                  de qualidade do contrato ativo.
+                </FieldDescription>
               </Field>
             </div>
 
@@ -411,11 +460,18 @@ function ClientComplianceForm({
                 id="quality-ack"
                 checked={qualityRequirementsAcknowledged}
                 onCheckedChange={setQualityRequirementsAcknowledged}
+                disabled={!activeCommercialAgreement}
               />
               <Label htmlFor="quality-ack" className="cursor-pointer">
                 Requisitos de qualidade reconhecidos pelo cliente
               </Label>
             </div>
+            {!activeCommercialAgreement && (
+              <FieldDescription>
+                Ative primeiro um contrato comercial no Financeiro para poder
+                registrar o reconhecimento formal do cliente.
+              </FieldDescription>
+            )}
 
             <Field>
               <FieldLabel htmlFor="notes">Observações</FieldLabel>

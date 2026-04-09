@@ -41,6 +41,7 @@ import {
     SelectTrigger,
 } from '@/components/ui/select'
 import { Field, FieldLabel } from '@/components/ui/field'
+import { getFinancialStatusLabel } from '@calibra-facil/shared'
 import { ApprovedJobRecord } from './-components/approved-job-record'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/')({
@@ -103,6 +104,22 @@ function formatDateTime(dateString: string | null | undefined): string {
         hour: '2-digit',
         minute: '2-digit',
     })
+}
+
+function getFinancialVariant(status: string | null | undefined) {
+    switch (status) {
+        case 'PAID':
+            return 'outline'
+        case 'OVERDUE':
+            return 'destructive'
+        case 'ISSUED':
+            return 'default'
+        case 'DRAFT':
+            return 'secondary'
+        case 'UNBILLED':
+        default:
+            return 'secondary'
+    }
 }
 
 interface Technician {
@@ -299,6 +316,8 @@ function JobDetailPage() {
     const canReject = job.status === 'REVIEW'
     const canCancel = ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'REJECTED'].includes(job.status)
     const canAssign = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
+    const financialStatus =
+        typeof job.financialStatus === 'string' ? job.financialStatus : 'UNBILLED'
 
     // APPROVED or SUPERSEDED status: Show immutable Quality Record view
     if (job.status === 'APPROVED' || job.status === 'SUPERSEDED') {
@@ -447,12 +466,65 @@ function JobDetailPage() {
                                     Atrasado
                                 </Badge>
                             )}
+                            <Badge
+                                variant={getFinancialVariant(financialStatus)}
+                                className="ml-2"
+                            >
+                                {getFinancialStatusLabel(
+                                    financialStatus as
+                                        | 'UNBILLED'
+                                        | 'DRAFT'
+                                        | 'ISSUED'
+                                        | 'PAID'
+                                        | 'OVERDUE',
+                                )}
+                            </Badge>
                         </div>
                     </div>
                 </CardHeader>
             </Card>
 
             <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Contexto Financeiro</CardTitle>
+                        <CardDescription>
+                            Visibilidade operacional da cobrança vinculada à OS.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div>
+                            <label className="text-sm font-medium text-muted-foreground">
+                                Status financeiro
+                            </label>
+                            <p className="text-sm">
+                                {getFinancialStatusLabel(
+                                    financialStatus as
+                                        | 'UNBILLED'
+                                        | 'DRAFT'
+                                        | 'ISSUED'
+                                        | 'PAID'
+                                        | 'OVERDUE',
+                                )}
+                            </p>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-muted-foreground">
+                                Elegível para cobrança
+                            </label>
+                            <p className="text-sm">{job.invoiceEligibility ? 'Sim' : 'Não'}</p>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-muted-foreground">
+                                Documento vinculado
+                            </label>
+                            <p className="text-sm">
+                                {job.invoiceDocumentNumber || 'Ainda não faturada'}
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 {/* Customer & Asset */}
                 <Card>
                     <CardHeader>

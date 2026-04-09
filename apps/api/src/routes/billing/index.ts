@@ -3,7 +3,6 @@ import type { AuthVariables } from "../../middleware/permission";
 import { plansRouter } from "./plans";
 import { billingAccessRouter } from "./access";
 import { subscriptionRouter } from "./subscription";
-import { checkoutRouter } from "./checkout";
 import { paymentsRouter } from "./payments";
 
 // =============================================================================
@@ -14,7 +13,6 @@ export const billingRouter = new Hono<{ Variables: AuthVariables }>()
   .route("/plans", plansRouter)
   .route("/access", billingAccessRouter)
   .route("/subscription", subscriptionRouter)
-  .route("/checkout", checkoutRouter)
   .route("/payments", paymentsRouter);
 
 // Re-export helpers

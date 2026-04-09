@@ -28,6 +28,21 @@ function getRequiredEnv(name: string): string {
   return value;
 }
 
+function resolveApiBaseUrl(fallback: string): string {
+  return readEnv("API_URL") ?? fallback;
+}
+
+function getCookieDomainFromApiUrl(apiUrl: string | undefined): string | null {
+  if (!apiUrl) return null;
+
+  try {
+    const { hostname } = new URL(apiUrl);
+    return hostname.endsWith(".calibrafacil.com") ? ".calibrafacil.com" : null;
+  } catch {
+    return null;
+  }
+}
+
 function getDevFallbackAuthSecret(): string {
   if (devFallbackAuthSecret) {
     return devFallbackAuthSecret;
@@ -293,8 +308,16 @@ function createOrganizationPlugin() {
 // Shared configuration factory - reads env at call time, not module load time
 function createSharedConfig() {
   const isProduction = process.env.NODE_ENV === "production";
+  const configuredApiUrl = readEnv("API_URL");
+  const crossSubDomainCookieDomain = getCookieDomainFromApiUrl(configuredApiUrl);
+  const useCrossSubDomainCookies =
+    isProduction || Boolean(crossSubDomainCookieDomain);
+  const useSecureCookies =
+    isProduction || configuredApiUrl?.startsWith("https://") === true;
   const authSecret = resolveAuthSecret(isProduction);
-  const defaultSameSite: "lax" | "none" = isProduction ? "none" : "lax";
+  const defaultSameSite: "lax" | "none" = useCrossSubDomainCookies
+    ? "none"
+    : "lax";
   const sessionCookieStrategy: "jwe" = "jwe";
 
   return {
@@ -378,15 +401,15 @@ function createSharedConfig() {
       },
     },
     advanced: {
-      crossSubDomainCookies: isProduction
+      crossSubDomainCookies: useCrossSubDomainCookies
         ? {
             enabled: true,
-            domain: ".calibrafacil.com",
+            domain: crossSubDomainCookieDomain ?? ".calibrafacil.com",
           }
         : { enabled: false },
       defaultCookieAttributes: {
         sameSite: defaultSameSite,
-        secure: isProduction,
+        secure: useSecureCookies,
       },
     },
   };
@@ -426,7 +449,7 @@ export function createLabAuth() {
   const baseURL =
     process.env.NODE_ENV === "production"
       ? getRequiredEnv("API_URL")
-      : "http://localhost:3000";
+      : resolveApiBaseUrl("http://localhost:3000");
 
   return betterAuth({
     ...sharedConfig,
@@ -497,7 +520,7 @@ export function createBackofficeAuth() {
   const baseURL =
     process.env.NODE_ENV === "production"
       ? getRequiredEnv("API_URL")
-      : "https://localhost:3000";
+      : resolveApiBaseUrl("https://localhost:3000");
 
   return betterAuth({
     ...sharedConfig,
@@ -531,7 +554,7 @@ export function createPortalAuth() {
   const baseURL =
     process.env.NODE_ENV === "production"
       ? getRequiredEnv("API_URL")
-      : "http://localhost:3000";
+      : resolveApiBaseUrl("http://localhost:3000");
 
   return betterAuth({
     ...sharedConfig,
