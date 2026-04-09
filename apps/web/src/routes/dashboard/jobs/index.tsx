@@ -35,7 +35,7 @@ import { type Job, jobsColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/jobs/')({
   head: () => ({
-    meta: [{ title: 'Ordens de Servico | CalibraFacil' }],
+    meta: [{ title: 'Ordens de Serviço | CalibraFacil' }],
   }),
   component: JobsListPage,
 })
@@ -51,8 +51,8 @@ type JobStatus =
 
 const statusLabels: Record<JobStatus, string> = {
   DRAFT: 'Rascunho',
-  IN_PROGRESS: 'Em Execucao',
-  REVIEW: 'Em Revisao',
+  IN_PROGRESS: 'Em Execução',
+  REVIEW: 'Em Revisão',
   GENERATING_PDF: 'Gerando PDF',
   APPROVED: 'Aprovado',
   REJECTED: 'Rejeitado',
@@ -91,7 +91,7 @@ function JobsListPage() {
       })
 
       if (!res.ok) {
-        throw new Error('Falha ao carregar ordens de servico')
+        throw new Error('Falha ao carregar ordens de serviço')
       }
 
       return res.json() as Promise<{
@@ -128,7 +128,7 @@ function JobsListPage() {
       <Card>
         <CardContent className="pt-6">
           <p className="text-red-500">
-            Erro ao carregar ordens de servico: {error.message}
+            Erro ao carregar ordens de serviço: {error.message}
           </p>
         </CardContent>
       </Card>
@@ -140,9 +140,9 @@ function JobsListPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Ordens de Servico</CardTitle>
+            <CardTitle>Ordens de Serviço</CardTitle>
             <CardDescription>
-              Gerencie as calibracoes do laboratorio
+              Gerencie as calibrações do laboratório
             </CardDescription>
           </div>
           <Button
@@ -158,7 +158,7 @@ function JobsListPage() {
           {/* Filters */}
           <form onSubmit={handleSearch} className="flex gap-4 mb-6">
             <Input
-              placeholder="Buscar por numero da OS..."
+              placeholder="Buscar por número da OS..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-xs"
@@ -178,8 +178,8 @@ function JobsListPage() {
               <SelectContent>
                 <SelectItem value="">Todos</SelectItem>
                 <SelectItem value="DRAFT">Rascunho</SelectItem>
-                <SelectItem value="IN_PROGRESS">Em Execucao</SelectItem>
-                <SelectItem value="REVIEW">Em Revisao</SelectItem>
+                <SelectItem value="IN_PROGRESS">Em Execução</SelectItem>
+                <SelectItem value="REVIEW">Em Revisão</SelectItem>
                 <SelectItem value="GENERATING_PDF">Gerando PDF</SelectItem>
                 <SelectItem value="APPROVED">Aprovado</SelectItem>
                 <SelectItem value="REJECTED">Rejeitado</SelectItem>
@@ -198,11 +198,11 @@ function JobsListPage() {
                 <EmptyMedia variant="icon">
                   <HugeiconsIcon icon={ClipboardIcon} />
                 </EmptyMedia>
-                <EmptyTitle>Nenhuma ordem de servico encontrada</EmptyTitle>
+                <EmptyTitle>Nenhuma ordem de serviço encontrada</EmptyTitle>
                 <EmptyDescription>
                   {search || statusFilter
                     ? 'Nenhuma ordem encontrada para os filtros aplicados.'
-                    : 'Comece criando sua primeira ordem de servico'}
+                    : 'Comece criando sua primeira ordem de serviço'}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
