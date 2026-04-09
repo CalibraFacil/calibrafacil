@@ -26,6 +26,7 @@ import {
 import { FAQ as LandingFAQ } from '@/components/faq'
 import { Footer } from '@/components/footer'
 import { Navbar } from '@/components/navbar'
+import Pricing from '@/components/pricing'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -294,6 +295,7 @@ function LandingPage() {
         <ComparisonSection />
         <WorkflowCardsSection />
         <PlatformSection />
+        <Pricing />
         <LandingFAQ />
         <FinalCtaSection />
       </main>

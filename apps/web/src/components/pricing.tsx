@@ -1,178 +1,180 @@
 import React from 'react'
-import { useNavigate } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { SparklesIcon, Tick02Icon } from '@hugeicons/core-free-icons'
+import {
+  ArrowRight01Icon,
+  Cancel01Icon,
+  SparklesIcon,
+  Tick02Icon,
+} from '@hugeicons/core-free-icons'
+
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
   ENTITLEMENT_METADATA,
   PLANS,
-  PLAN_PRICES,
-  formatPrice,
-  getEnabledEntitlements,
+  hasFeature,
+  type FeatureFlag,
   type PlanId,
 } from '@calibra-facil/shared'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 
-type PublicPlanId = Exclude<PlanId, 'FREE'>
+type LandingPlanId = Exclude<PlanId, 'FREE'>
 
-const PUBLIC_PLANS: PublicPlanId[] = ['STANDARD', 'PROFESSIONAL', 'ENTERPRISE']
+const LANDING_PLANS: Array<LandingPlanId> = [
+  'STANDARD',
+  'PROFESSIONAL',
+  'ENTERPRISE',
+]
 
-const PLAN_HIGHLIGHTS: Record<PublicPlanId, string[]> = {
+const ALL_FEATURES: FeatureFlag[] = [
+  'math_engine',
+  'portal',
+  'financial',
+  'api',
+  'custom_domain',
+  'sso',
+  'approval_workflow',
+  'advanced_audit_trail',
+  'custom_templates',
+  'priority_support',
+  'multi_unit',
+  'custom_integrations',
+]
+
+const PLAN_HIGHLIGHTS: Record<LandingPlanId, string[]> = {
   STANDARD: [
-    'Até 100 certificados por mês',
-    'Até 5 usuários',
     'Portal do cliente incluído',
     'Templates padrão de certificado',
+    'Suporte padrão',
   ],
   PROFESSIONAL: [
-    'Até 800 certificados por mês',
-    'Usuários ilimitados',
-    'API, domínio personalizado e módulo financeiro',
-    'Fluxo de aprovação e trilha de auditoria avançada',
+    'Fluxo de revisão e aprovação',
+    'Templates personalizados',
+    'Suporte prioritário',
   ],
   ENTERPRISE: [
-    'Certificados e usuários ilimitados',
-    'Multiunidade e integrações personalizadas',
-    'SSO corporativo para o dashboard',
-    'Suporte dedicado e onboarding assistido',
-    'Escopo operacional sob consulta',
+    'SSO corporativo via OIDC',
+    'Suporte dedicado sob consulta',
+    'Onboarding assistido',
+    'Soluções customizadas para operação complexa',
   ],
 }
 
-const Pricing: React.FC = () => {
-  const navigate = useNavigate()
+const CONTACT_URL = 'https://cal.com/calibrafacil/30min?user=calibrafacil'
 
+const Pricing: React.FC = () => {
   return (
-    <section
-      id="pricing"
-      className="border-t border-slate-100 bg-white py-24 dark:border-slate-900 dark:bg-slate-950"
-    >
+    <section id="pricing" className="border-t bg-background py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto mb-16 max-w-3xl text-center">
-          <h2 className="mb-4 text-3xl font-bold text-slate-900 dark:text-white md:text-4xl">
-            Escolha seu plano
+        <div className="mx-auto mb-12 max-w-3xl text-center">
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            Planos para diferentes estágios da operação
           </h2>
-          <p className="text-lg text-slate-600 dark:text-slate-400">
-            O núcleo metrológico permanece em todos os planos. O que muda é a
-            capacidade operacional, governança e escala.
+          <p className="mt-4 text-lg text-muted-foreground">
+            A base técnica permanece consistente. O que evolui é a governança,
+            a extensibilidade e o nível de suporte para o laboratório.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-          {PUBLIC_PLANS.map((planId) => {
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {LANDING_PLANS.map((planId) => {
             const plan = PLANS[planId]
-            const monthlyPrice = formatPrice(PLAN_PRICES[planId].monthly)
+            const isPopular = Boolean(plan.isPopular)
 
             return (
-              <Card
+              <div
                 key={planId}
-                className={`relative flex flex-col ${
-                  plan.isPopular
-                    ? 'z-10 scale-105 border-sky-500 bg-white shadow-xl shadow-sky-900/10 dark:bg-slate-900 dark:shadow-sky-900/20'
-                    : 'border-slate-200 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50'
-                }`}
+                className={cn(
+                  'relative flex flex-col rounded-xl border p-4 transition-all',
+                  'border-border bg-background',
+                  isPopular && 'border-primary/30',
+                )}
               >
-                {plan.isPopular && (
-                  <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
-                    <Badge className="rounded-full bg-sky-500 font-bold uppercase tracking-wide text-white hover:bg-sky-500">
-                      <HugeiconsIcon
-                        icon={SparklesIcon}
-                        className="mr-1 size-3"
-                      />
+                {isPopular && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
+                      <HugeiconsIcon icon={SparklesIcon} className="size-3" />
                       Mais Popular
-                    </Badge>
+                    </span>
                   </div>
                 )}
 
-                <CardHeader>
-                  <CardTitle className="mb-2 text-xl font-bold text-slate-900 dark:text-white">
-                    {plan.name}
-                  </CardTitle>
-                  <div className="mb-4 flex items-baseline gap-1">
-                    <span className="text-4xl font-bold text-slate-900 dark:text-white">
-                      {monthlyPrice}
-                    </span>
-                    <span className="text-slate-500 dark:text-slate-400">
-                      /mês
-                    </span>
-                  </div>
-                  <CardDescription className="text-sm text-slate-600 dark:text-slate-400">
+                <div className={cn('text-center', isPopular && 'mt-2')}>
+                  <h3 className="text-lg font-semibold">{plan.name}</h3>
+                  <p className="text-xs text-muted-foreground">
                     {plan.description}
-                  </CardDescription>
+                  </p>
                   {plan.recommendedFor && (
-                    <p className="mt-3 text-sm font-medium text-sky-600 dark:text-sky-400">
+                    <p className="mt-2 text-xs font-medium text-primary">
                       {plan.recommendedFor}
                     </p>
                   )}
-                </CardHeader>
+                </div>
 
-                <CardContent className="flex-1 space-y-6">
-                  <ul className="space-y-4">
-                    {PLAN_HIGHLIGHTS[planId].map((feature) => (
-                      <li
+                <div className="mt-4 space-y-2 border-t pt-4">
+                  {PLAN_HIGHLIGHTS[planId].map((highlight) => (
+                    <div
+                      key={highlight}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <HugeiconsIcon
+                        icon={Tick02Icon}
+                        className="size-4 shrink-0 text-primary"
+                      />
+                      <span>{highlight}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex-1 space-y-2 border-t pt-4">
+                  {ALL_FEATURES.map((feature) => {
+                    const has = hasFeature(planId, feature)
+                    const label = ENTITLEMENT_METADATA[feature]
+
+                    return (
+                      <div
                         key={feature}
-                        className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300"
+                        className={cn(
+                          'flex items-center gap-2 text-sm',
+                          !has && 'text-muted-foreground/50',
+                        )}
                       >
                         <HugeiconsIcon
-                          icon={Tick02Icon}
-                          className="shrink-0 text-sky-500"
-                          size={18}
+                          icon={has ? Tick02Icon : Cancel01Icon}
+                          className={cn(
+                            'size-4 shrink-0',
+                            has ? 'text-green-600' : 'text-muted-foreground/30',
+                          )}
                         />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
+                        <span className={cn(!has && 'line-through')}>
+                          {label.name}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
 
-                  <div className="border-t border-slate-200 pt-6 dark:border-slate-800">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Recursos incluídos
-                    </p>
-                    <ul className="space-y-3">
-                      {getEnabledEntitlements(planId).map((feature) => (
-                        <li
-                          key={feature}
-                          className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300"
-                        >
-                          <HugeiconsIcon
-                            icon={Tick02Icon}
-                            className="shrink-0 text-sky-500"
-                            size={16}
-                          />
-                          <span>{ENTITLEMENT_METADATA[feature].name}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </CardContent>
-
-                <CardFooter>
+                <div className="mt-4 border-t pt-4">
                   <Button
-                    className={`w-full font-semibold ${
-                      plan.isPopular
-                        ? 'bg-sky-600 text-white hover:bg-sky-500'
-                        : 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200'
-                    }`}
-                    onClick={() =>
-                      navigate({
-                        to: '/sign-up',
-                        search: {
-                          redirect: '/dashboard/settings/billing',
-                        },
-                      })
-                    }
+                    asChild
+                    variant={isPopular ? 'default' : 'outline'}
+                    className="w-full"
                   >
-                    Escolher {plan.name}
+                    <a
+                      href={CONTACT_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <span>Falar com Especialista</span>
+                        <HugeiconsIcon
+                          icon={ArrowRight01Icon}
+                          className="size-4 shrink-0"
+                        />
+                      </span>
+                    </a>
                   </Button>
-                </CardFooter>
-              </Card>
+                </div>
+              </div>
             )
           })}
         </div>
