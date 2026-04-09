@@ -65,7 +65,9 @@ export function UnitScopeBanner() {
   const currentValue = useMemo(() => {
     if (!unitsQuery.data) return ''
     if (unitsQuery.data.selectedUnitScope === 'all') return 'all'
-    return unitsQuery.data.activeUnitId ? String(unitsQuery.data.activeUnitId) : ''
+    return unitsQuery.data.activeUnitId
+      ? String(unitsQuery.data.activeUnitId)
+      : ''
   }, [unitsQuery.data])
 
   if (!activeOrg?.id) {
@@ -82,7 +84,9 @@ export function UnitScopeBanner() {
 
   const { data, scopeSummary, viewer } = unitsQuery.data
   const shouldRender =
-    data.length > 1 || viewer.canViewGovernance || unitsQuery.data.canAccessAllUnits
+    data.length > 1 ||
+    viewer.canViewGovernance ||
+    unitsQuery.data.canAccessAllUnits
 
   if (!shouldRender) {
     return null
@@ -157,13 +161,19 @@ export function UnitScopeBanner() {
                 variant={isActive ? 'default' : 'outline'}
                 onClick={() => handleChange(String(unit.id))}
                 className={cn(
-                  'h-auto rounded-full px-3 py-2 text-left',
+                  'rounded-full px-3 text-left',
                   isActive && 'shadow-sm',
                 )}
               >
-                <span className="flex flex-col items-start leading-tight">
+                <span className="flex items-center gap-2">
                   <span>{unit.name}</span>
-                  <span className="text-[11px] opacity-80">{roleLabel}</span>
+                  <span
+                    aria-hidden="true"
+                    className="size-1 rounded-full bg-current/45"
+                  />
+                  <span className="text-xs font-normal opacity-80">
+                    {roleLabel}
+                  </span>
                 </span>
               </Button>
             )
