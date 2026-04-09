@@ -95,10 +95,12 @@ export function BillingSettingsPage() {
       ? accessQuery.data.planId
       : undefined
   const hasFinancialModule = accessReady
-    ? accessQuery.data.hasFinancialModule ?? accessQuery.data.hasFinancial ?? false
+    ? (accessQuery.data.hasFinancialModule ??
+      accessQuery.data.hasFinancial ??
+      false)
     : false
   const canManageBilling = accessReady
-    ? accessQuery.data.canManageBilling ?? true
+    ? (accessQuery.data.canManageBilling ?? true)
     : false
 
   // Fetch subscription data
@@ -139,16 +141,16 @@ export function BillingSettingsPage() {
         }
       : null,
     usage: { jobsCreated: 0, users: 0, storage: 0 },
-    limits:
-      accessQuery.data?.limits ?? {
-        certificates: 10,
-        users: 1,
-        storage: 100 * 1024 * 1024,
-      },
+    limits: accessQuery.data?.limits ?? {
+      certificates: 10,
+      users: 1,
+      storage: 100 * 1024 * 1024,
+    },
   }
 
   const payments = paymentsQuery.data?.data || []
-  const selectedPlanId = plan?.id && isValidPlanId(plan.id) ? plan.id : undefined
+  const selectedPlanId =
+    plan?.id && isValidPlanId(plan.id) ? plan.id : undefined
   const enabledEntitlements = selectedPlanId
     ? getEnabledEntitlements(selectedPlanId)
     : []
@@ -208,7 +210,9 @@ export function BillingSettingsPage() {
                 <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
               </div>
               {plan?.description && (
-                <p className="text-sm text-muted-foreground">{plan.description}</p>
+                <p className="text-sm text-muted-foreground">
+                  {plan.description}
+                </p>
               )}
               {plan?.recommendedFor && (
                 <p className="text-sm font-medium text-primary">
@@ -237,24 +241,6 @@ export function BillingSettingsPage() {
                 </p>
               )}
             </div>
-            <AlertDialog>
-              <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
-                Como alterar o plano?
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Alterações comerciais são internas</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    O ambiente beta usa emissão comercial interna. Solicite a
-                    mudança de plano, renovação ou nova cobrança ao time da
-                    CalibraFácil.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <Button variant="outline">Entendi</Button>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
 
           {/* Usage Meters */}
@@ -356,7 +342,8 @@ export function BillingSettingsPage() {
                       variant: 'outline' as const,
                     }
                     const canDownloadInvoice =
-                      Boolean(payment.invoiceUrl) && payment.status !== 'DELETED'
+                      Boolean(payment.invoiceUrl) &&
+                      payment.status !== 'DELETED'
                     return (
                       <TableRow key={payment.id}>
                         <TableCell>
@@ -404,7 +391,6 @@ export function BillingSettingsPage() {
           </CardContent>
         </Card>
       )}
-
     </div>
   )
 }
