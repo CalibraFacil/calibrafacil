@@ -201,7 +201,9 @@ describe("Data Flattening", () => {
       expect(readings).toContain(30);
     });
 
-    it("should deduplicate readings", () => {
+    it("should preserve duplicate reading values", () => {
+      // In metrology, repeated identical readings are valid and statistically significant
+      // e.g., 4 measurements all reading 10.00 means n=4, not n=1
       const data = {
         reading1: 10,
         reading2: 10,
@@ -210,8 +212,21 @@ describe("Data Flattening", () => {
 
       const readings = extractReadings(data);
 
-      // Should only have one 10
-      expect(readings.filter((r) => r === 10).length).toBe(1);
+      // All 3 readings should be preserved (they come from different sources)
+      expect(readings.filter((r) => r === 10).length).toBe(3);
+    });
+
+    it("should preserve repeated array readings", () => {
+      // Common in calibration: multiple identical measurements
+      const data = {
+        readings: [10, 10, 10, 10],
+      };
+
+      const readings = extractReadings(data);
+
+      // All 4 readings should be preserved for proper Type A uncertainty
+      expect(readings).toEqual([10, 10, 10, 10]);
+      expect(readings.length).toBe(4);
     });
 
     it("should handle empty data", () => {

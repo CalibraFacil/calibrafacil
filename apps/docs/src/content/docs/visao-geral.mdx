@@ -1,0 +1,100 @@
+---
+title: Visão Geral da Plataforma
+description: Conheça os módulos e funcionalidades do CalibraFácil — sistema de gestão laboratorial para laboratórios de calibração.
+---
+
+import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
+
+O **CalibraFácil** organiza as atividades do laboratório de calibração em módulos integrados, cobrindo desde o cadastro de clientes até a emissão de certificados com assinatura digital.
+
+## Módulos da Plataforma
+
+<CardGrid>
+  <Card title="Painel de Controle" icon="laptop">
+    Visão em tempo real das calibrações pendentes, aprovações, padrões vencendo e indicadores de desempenho do laboratório.
+  </Card>
+  <Card title="Clientes" icon="add-document">
+    Cadastro de clientes com rastreabilidade de dados, controle de qualificação e convite para acesso ao portal.
+  </Card>
+  <Card title="Ativos e Instrumentos" icon="setting">
+    Registro de instrumentos com especificações técnicas, status e histórico de calibração.
+  </Card>
+  <Card title="Padrões de Referência" icon="approve-check">
+    Gestão de padrões com controle de validade, alertas de vencimento e registro de certificados.
+  </Card>
+</CardGrid>
+
+<CardGrid>
+  <Card title="Ordens de Serviço" icon="document">
+    Fluxo completo: criação, execução, revisão, aprovação e emissão de certificado. Com controle de status e separação de responsabilidades.
+  </Card>
+  <Card title="Métodos de Calibração" icon="pencil">
+    Construtor visual de métodos reutilizáveis com campos de entrada, fórmulas, critérios de aceitação e incerteza Tipo B.
+  </Card>
+  <Card title="Qualidade (NC e CAPA)" icon="warning">
+    Registro e acompanhamento de não conformidades com escalonamento para ações corretivas e preventivas.
+  </Card>
+  <Card title="Competências do Pessoal" icon="approve-check">
+    Qualificação técnica por tipo de instrumento, com trilha de auditoria e controle de validade (ISO 17025 §6.2.3).
+  </Card>
+  <Card title="Portal do Cliente" icon="external">
+    Acesso exclusivo para clientes acompanharem serviços, consultarem ativos e baixarem certificados.
+  </Card>
+  <Card title="Governança Multiunidade" icon="list">
+    Estruture unidades operacionais, atribuições locais, escopo global e visões consolidadas para grupos e redes.
+  </Card>
+  <Card title="API Pública e Integrações" icon="set-square">
+    Exponha dados operacionais para integrações via API key, webhooks e conectores enterprise com mapeamento de campos.
+  </Card>
+  <Card title="Customer Success" icon="open-book">
+    Acompanhe onboarding, migração, go-live, bloqueios e SLAs em uma camada operacional dedicada.
+  </Card>
+</CardGrid>
+
+## Fluxo de Trabalho Principal
+
+O fluxo típico de uma calibração no CalibraFácil segue estas etapas:
+
+```
+Recebimento     Execução da       Revisão e        Certificado
+do instrumento → calibração      → aprovação      → digital
+(Ordem de        (Medições +       (Responsável     (PDF + assinatura
+ Serviço)         incerteza)        técnico)         ICP-Brasil)
+```
+
+1. **Recebimento:** O instrumento do cliente é recebido e uma ordem de serviço é criada com os dados do cliente, instrumento e serviço solicitado.
+2. **Execução:** O técnico seleciona o método de calibração, registra as leituras e o sistema calcula automaticamente os resultados e a incerteza de medição conforme o GUM.
+3. **Revisão:** O responsável técnico revisa os dados, resultados e critérios de aceitação. A plataforma garante que o técnico executor não pode aprovar a própria calibração.
+4. **Certificado:** Após a aprovação, o certificado de calibração é gerado automaticamente em PDF, com opção de assinatura digital ICP-Brasil e verificação pública via QR code.
+
+## Cálculos de Incerteza
+
+O CalibraFácil realiza cálculos de incerteza de medição em conformidade com o **GUM (JCGM 100:2008)**:
+
+- **Tipo A** — avaliação estatística a partir de séries de leituras
+- **Tipo B** — contribuições de certificados de padrões, resolução e especificações
+- **Incerteza combinada** — soma em quadratura (RSS) de todas as contribuições
+- **Incerteza expandida** — com fator de abrangência $k$ determinado pela tabela t-Student
+
+Os cálculos são realizados automaticamente durante a execução da calibração. Para mais detalhes, consulte [Cálculos de Incerteza](/motor-matematico).
+
+## Conformidade ISO/IEC 17025
+
+A plataforma foi projetada para apoiar laboratórios na conformidade com a **ISO/IEC 17025:2017**:
+
+- **Rastreabilidade** de cada medição e cálculo realizado
+- **Separação de responsabilidades** entre execução e aprovação
+- **Gestão de competência do pessoal** com workflow, evidências de treinamento e validade (Cláusula 6.2.3)
+- **Gestão de não conformidades** com fluxos NC e CAPA
+- **Controle de validade** de padrões de referência
+- **Trilha de auditoria** completa em todas as operações
+- **Entitlements por plano** para governança comercial e liberação de recursos
+- **Escopo multiunidade** para organizações enterprise
+- **Autenticação corporativa (SSO)** para dashboard enterprise
+- **Integrações externas** via API pública e conectores dedicados
+
+Para o mapeamento detalhado de cláusulas, consulte [Conformidade ISO 17025](/rastreabilidade-iso17025).
+
+<Aside type="tip">
+  Explore o [Guia do Usuário](/guia/painel) para instruções detalhadas sobre cada funcionalidade da plataforma.
+</Aside>

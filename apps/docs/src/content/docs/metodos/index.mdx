@@ -1,0 +1,102 @@
+---
+title: Métodos de Calibração
+description: Guia completo para criação e gestão de métodos de calibração no CalibraFácil — campos de entrada, fórmulas, critérios de aceitação e incerteza.
+---
+
+import { Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+## O Que é um Método de Calibração?
+
+Um **método de calibração** é um modelo reutilizável que define como uma calibração deve ser executada. Ele especifica:
+
+- **Campos de entrada** — quais dados o técnico deve coletar (leituras, padrões, condições ambientais)
+- **Fórmulas** — como os resultados são calculados a partir dos dados coletados
+- **Critérios de aceitação** — regras de aprovação/reprovação do instrumento
+- **Componentes de incerteza Tipo B** — contribuições de incerteza provenientes de certificados, especificações e resolução
+
+Cada método possui versionamento e ciclo de vida controlado (Rascunho → Em aprovação → Revisão técnica → Publicado → Arquivado), garantindo rastreabilidade conforme ISO/IEC 17025:2017.
+
+## O Construtor de Métodos
+
+O Construtor de Métodos é acessado em **Painel → Métodos**. A interface é dividida em dois painéis:
+
+| Painel | Posição | Função |
+| :--- | :--- | :--- |
+| **Configuração** | Esquerda | Edição dos campos, fórmulas, validações e incerteza |
+| **Pré-visualização** | Direita | Simulação em tempo real do formulário de calibração |
+
+A pré-visualização atualiza automaticamente conforme você adiciona ou modifica campos, permitindo validar o formulário antes de publicá-lo.
+
+## Início Rápido: Termômetro Digital
+
+<Steps>
+
+1. **Criar o método**
+
+   Acesse **Painel → Métodos** e clique em **Novo Método**. Preencha:
+   - **Nome:** Calibração de Termômetro Digital
+   - **Tipo de ativo:** Termômetro
+
+2. **Adicionar campos de entrada**
+
+   Adicione os seguintes campos numéricos:
+
+   | Rótulo | Chave | Tipo | Unidade |
+   | :--- | :--- | :--- | :--- |
+   | Temperatura Padrão | `temp_padrao` | Número | °C |
+   | Temperatura Instrumento | `temp_instrumento` | Número | °C |
+   | Tolerância | `tolerancia` | Número | °C |
+
+3. **Criar fórmulas**
+
+   Adicione uma fórmula para calcular o erro:
+   - **Rótulo:** Erro de Medição
+   - **Chave de saída:** `erro`
+   - **Expressão:** `temp_instrumento - temp_padrao`
+   - **Unidade:** °C
+
+4. **Definir critério de aceitação**
+
+   Adicione um critério de aprovação:
+   - **Expressão:** `abs(erro) <= tolerancia`
+   - **Mensagem:** Erro excede a tolerância permitida
+   - **Severidade:** Erro (Reprova)
+
+5. **Adicionar incerteza Tipo B**
+
+   Adicione a incerteza do padrão de referência:
+   - **Nome:** Incerteza do padrão
+   - **Valor:** 0.05
+   - **Distribuição:** Normal
+   - **Fator de abrangência:** 2
+
+6. **Solicitar aprovação**
+
+   Revise a pré-visualização e clique em **Solicitar aprovação**. O método passará por **revisão técnica** e **aprovação da qualidade** antes de ser publicado.
+
+</Steps>
+
+<Aside type="tip">
+  A pré-visualização ao lado direito mostra exatamente como o formulário aparecerá para o técnico durante a calibração. Use-a para verificar se os campos, fórmulas e critérios estão corretos antes de publicar.
+</Aside>
+
+## Estrutura desta Seção
+
+<CardGrid>
+  <Card title="Campos de Entrada" icon="pencil">
+    Tipos de campo (texto, número, seleção, tabela), regras de nomenclatura e configuração.
+    [Ir para Campos →](/metodos/campos-de-entrada)
+  </Card>
+  <Card title="Fórmulas" icon="approve-check">
+    Linguagem de expressões, encadeamento, operações vetoriais e exemplo completo.
+    [Ir para Fórmulas →](/metodos/formulas)
+  </Card>
+  <Card title="Critérios e Incerteza" icon="warning">
+    Critérios de aceitação (aprovado/reprovado) e configuração de incerteza Tipo B.
+    [Ir para Critérios →](/metodos/criterios-de-aceitacao)
+  </Card>
+  <Card title="Ciclo de Vida" icon="document">
+    Versionamento, publicação, arquivamento e trilha de auditoria.
+    [Ir para Ciclo de Vida →](/metodos/ciclo-de-vida)
+  </Card>
+</CardGrid>

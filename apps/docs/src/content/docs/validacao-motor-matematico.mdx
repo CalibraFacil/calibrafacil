@@ -1,0 +1,151 @@
+---
+title: Validação do Motor Matemático (GUM)
+description: Protocolo e relatório de validação do cálculo de incerteza conforme ISO/IEC 17025 e JCGM 100:2008.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A validação formal do motor matemático garante rastreabilidade aos requisitos de **ISO/IEC 17025:2017, cláusula 7.2.1.3**, comprovando que os cálculos de incerteza seguem o **GUM (JCGM 100:2008)**.
+
+<Aside type="note">
+  Esta documentação é pública e orientada a auditorias. Os documentos assinados (quando disponíveis) podem ser apresentados mediante solicitação.
+</Aside>
+
+**Última atualização:** 10/02/2026  
+**Escopo de acesso:** Público (audit.calibrafacil.com)
+
+---
+
+## Identificação dos Documentos
+
+| Documento | ID | Versão | Data |
+| :--- | :--- | :--- | :--- |
+| Protocolo de validação | VAL-MATH-001 | 2.0 | 10/02/2026 |
+| Relatório de validação | VAL-MATH-REPORT-001 | 2.0 | 10/02/2026 |
+
+**Software validado:** `@calibra-facil/math-engine` v1.0.0 (`packages/math-engine/src/gum.ts`)
+
+---
+
+## Escopo
+
+### Funções Cobertas
+
+- `calculateTypeA()` — incerteza estatística (Tipo A)
+- `calculateTypeB()` — incerteza sistemática (Tipo B)
+- `calculateCombinedUncertainty()` — combinação RSS e DOF efetivo
+- Tabela t-Student — fator de abrangência `k`
+
+### Limitações Documentadas
+
+- **Correlação:** entradas assumidas como não correlacionadas (r = 0)
+- **Níveis de confiança:** 95%, 95,45% (padrão) e 99%
+- **DOF elevado:** para DOF >= 500, `k` aproxima a distribuição normal
+
+---
+
+## Referências Normativas
+
+- **JCGM 100:2008 (GUM)** — exemplos do Anexo H e tabelas G/F
+- **ISO/IEC 17025:2017** — cláusula 7.2.1.3 (validação de métodos)
+- **NIST/SEMATECH e-Handbook** — tabelas t-Student
+
+---
+
+## Metodologia de Validação
+
+A validação foi executada por comparação direta com referências oficiais e evidências rastreáveis:
+
+1. **Exemplos do GUM Anexo H** (valores de referência)
+2. **Tabelas t-Student NIST/SEMATECH** (fator de abrangência)
+3. **Suíte automatizada de testes** (`gum-reference.spec.ts`)
+4. **Comparação com NIST Uncertainty Machine** (Monte Carlo, evidência complementar)
+
+---
+
+## Critérios de Aceitação
+
+| Categoria | Critério | Tolerância |
+| :--- | :--- | :--- |
+| Tipo A | Valores do GUM Anexo H | < 0,1% de desvio |
+| Tipo B | Divisores (√3, √6, √2) | 5 casas decimais |
+| Incerteza combinada | RSS (Equação 10 do GUM) | < 0,1% de desvio |
+| DOF efetivo | Welch-Satterthwaite | Arredondamento inteiro |
+| Fator `k` | Tabela t-Student | ± 0,01 |
+
+---
+
+## Resultados (Resumo Executivo)
+
+**Resultado final:** PASS
+
+- **177** testes automatizados executados no pacote
+- **52** testes de validação GUM (arquivo `gum-reference.spec.ts`)
+- **100%** de aprovação em todas as categorias
+
+### Resumo por Categoria
+
+| Categoria | Testes | Passaram | Taxa |
+| :--- | :--- | :--- | :--- |
+| GUM H.1 (Tipo A, B e combinado) | 6 | 6 | 100% |
+| Tabela t (95,45%) | 16 | 16 | 100% |
+| Tabela t (95%) | 6 | 6 | 100% |
+| Tabela t (99%) | 6 | 6 | 100% |
+| DOF e bordas | 2 | 2 | 100% |
+| Divisores de distribuição | 4 | 4 | 100% |
+| Testes de referência adicionais | 12 | 12 | 100% |
+
+---
+
+## Evidências Principais
+
+### 1) GUM Anexo H (End-gauge)
+
+- **Média**: 0,197 um (GUM H.1.2)
+- **Desvio padrão**: 0,0135 um
+- **Incerteza Tipo A**: 0,00604 um
+- **DOF efetivo**: 35 (faixa esperada: 25–45)
+
+### 2) Tabela t-Student (95,45%)
+
+| DOF | Valor NIST | CalibraFácil |
+| :--- | :--- | :--- |
+| 1 | 13,97 | 13,97 |
+| 4 | 2,87 | 2,87 |
+| 10 | 2,28 | 2,28 |
+| 50 | 2,05 | 2,05 |
+| 100 | 2,03 | 2,03 |
+| 500+ | 2,00 | 2,00 |
+
+### 3) Divisores (GUM Tabela F.1)
+
+| Distribuição | Esperado | CalibraFácil |
+| :--- | :--- | :--- |
+| Retangular | 1/√3 = 0,57735 | 0,57735 |
+| Triangular | 1/√6 = 0,40825 | 0,40825 |
+| U-shaped | 1/√2 = 0,70711 | 0,70711 |
+
+### 4) NIST Uncertainty Machine (Monte Carlo)
+
+- **u_c (Monte Carlo)**: 33,9 nm
+- **u_c (GUM linear)**: 31,7 nm
+- **Cobertura**: k ≈ 2 para ~95% (compatível com 95,45%)
+
+A diferença (~7%) é esperada para modelos com termos não lineares e está documentada no GUM Supplement 1. O comportamento é consistente e aceitável para aplicações de calibração.
+
+---
+
+## Rastreabilidade dos Documentos
+
+Os documentos oficiais e evidências estão publicados para auditoria no domínio `audit.calibrafacil.com`:
+
+- [Protocolo de Validação (VAL-MATH-001)](https://audit.calibrafacil.com/validation/math-engine/VAL-MATH-001/2026-02-10/VAL-MATH-001-Protocol-ptBR.pdf)
+- [Relatório de Validação (VAL-MATH-REPORT-001)](https://audit.calibrafacil.com/validation/math-engine/VAL-MATH-001/2026-02-10/VAL-MATH-REPORT-001-ptBR.pdf)
+- [Evidência — Cálculo Manual GUM H.1](https://audit.calibrafacil.com/validation/math-engine/VAL-MATH-001/2026-02-10/gum-h1-manual-calculation-ptBR.pdf)
+- [Evidência — Verificação da Tabela t-Student](https://audit.calibrafacil.com/validation/math-engine/VAL-MATH-001/2026-02-10/ttable-verification-ptBR.pdf)
+- [Evidência — NIST Uncertainty Machine](https://audit.calibrafacil.com/validation/math-engine/VAL-MATH-001/2026-02-10/nist-uncertainty-machine-ptBR.pdf)
+- [Arquivo de configuração NIST (.um)](https://audit.calibrafacil.com/validation/math-engine/VAL-MATH-001/2026-02-10/config.um)
+- [Resultados numéricos NIST (.txt)](https://audit.calibrafacil.com/validation/math-engine/VAL-MATH-001/2026-02-10/results.txt)
+- [Gráfico de densidade (JPEG)](https://audit.calibrafacil.com/validation/math-engine/VAL-MATH-001/2026-02-10/density.jpg)
+
+---

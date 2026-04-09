@@ -58,6 +58,7 @@ type JobStatus =
     | 'APPROVED'
     | 'REJECTED'
     | 'CANCELED'
+    | 'SUPERSEDED'
 
 const statusLabels: Record<JobStatus, string> = {
     DRAFT: 'Rascunho',
@@ -67,6 +68,7 @@ const statusLabels: Record<JobStatus, string> = {
     APPROVED: 'Aprovado',
     REJECTED: 'Rejeitado',
     CANCELED: 'Cancelado',
+    SUPERSEDED: 'Retificado',
 }
 
 const statusVariants: Record<
@@ -80,6 +82,7 @@ const statusVariants: Record<
     APPROVED: 'default',
     REJECTED: 'destructive',
     CANCELED: 'secondary',
+    SUPERSEDED: 'outline',
 }
 
 function formatDate(dateString: string | null | undefined): string {
@@ -122,6 +125,7 @@ function JobDetailPage() {
     const [rejectReason, setRejectReason] = useState('')
     const [cancelReason, setCancelReason] = useState('')
     const [selectedTechnician, setSelectedTechnician] = useState<string>('')
+    const [envJustification, setEnvJustification] = useState('')
 
     // Stable callback for refreshing job data (used by ApprovedJobRecord for label polling)
     const refreshJob = useCallback(() => {
@@ -168,7 +172,10 @@ function JobDetailPage() {
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].approve.$post({
                 param: { id },
-                json: { reason: 'Aprovado' },
+                json: {
+                    reason: 'Aprovado',
+                    environmentalJustification: envJustification || undefined,
+                },
             })
             if (!res.ok) {
                 const error = await res.json()
@@ -180,6 +187,7 @@ function JobDetailPage() {
             queryClient.invalidateQueries({ queryKey: ['jobs'] })
             toast.success('Job aprovado com sucesso!')
             setApproveDialogOpen(false)
+            setEnvJustification('')
         },
         onError: (error) => {
             toast.error(error.message)
@@ -292,8 +300,8 @@ function JobDetailPage() {
     const canCancel = ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'REJECTED'].includes(job.status)
     const canAssign = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
 
-    // APPROVED status: Show immutable Quality Record view
-    if (job.status === 'APPROVED') {
+    // APPROVED or SUPERSEDED status: Show immutable Quality Record view
+    if (job.status === 'APPROVED' || job.status === 'SUPERSEDED') {
         return (
             <ApprovedJobRecord
                 job={job as Parameters<typeof ApprovedJobRecord>[0]['job']}
@@ -381,6 +389,29 @@ function JobDetailPage() {
                     )}
                 </div>
             </div>
+
+            {/* Amendment Info Banner - ISO 17025 Clause 7.8.4.1 */}
+            {job.supersedesId && (
+                <Card className="border-amber-300 bg-amber-50">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2 text-amber-700">
+                            <HugeiconsIcon icon={Edit02Icon} className="h-5 w-5" />
+                            Retificação de Certificado
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        <p className="text-sm text-amber-700">
+                            Esta ordem de serviço é uma <strong>retificação</strong> (versão {job.amendmentNumber || 1}) que substituirá o certificado original após aprovação.
+                        </p>
+                        {job.amendmentReason && (
+                            <div className="mt-3 p-3 bg-white/60 rounded-md border border-amber-200">
+                                <p className="text-xs font-medium text-amber-800 mb-1">Motivo da retificação:</p>
+                                <p className="text-sm text-amber-900">{job.amendmentReason}</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Job Header Card */}
             <Card>
@@ -589,6 +620,47 @@ function JobDetailPage() {
                             Tem certeza que deseja aprovar este job? Esta ação não pode ser desfeita.
                         </DialogDescription>
                     </DialogHeader>
+
+                    {/* Environmental out-of-limits warning */}
+                    {job?.environmentalSnapshot && !job.environmentalSnapshot.withinLimits && (
+                        <div className="space-y-3">
+                            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
+                                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                                    Condições ambientais fora dos limites
+                                </p>
+                                <div className="mt-1 text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
+                                    {job.environmentalSnapshot.temperature != null && job.environmentalSnapshot.limits?.temperature && (
+                                        <p>
+                                            Temperatura: {job.environmentalSnapshot.temperature} °C
+                                            (limite: {job.environmentalSnapshot.limits.temperature.min}–{job.environmentalSnapshot.limits.temperature.max} °C)
+                                        </p>
+                                    )}
+                                    {job.environmentalSnapshot.humidity != null && job.environmentalSnapshot.limits?.humidity && (
+                                        <p>
+                                            Umidade: {job.environmentalSnapshot.humidity} %RH
+                                            (limite: {job.environmentalSnapshot.limits.humidity.min}–{job.environmentalSnapshot.limits.humidity.max} %RH)
+                                        </p>
+                                    )}
+                                    {job.environmentalSnapshot.pressure != null && job.environmentalSnapshot.limits?.pressure && (
+                                        <p>
+                                            Pressão: {job.environmentalSnapshot.pressure} hPa
+                                            (limite: {job.environmentalSnapshot.limits.pressure.min}–{job.environmentalSnapshot.limits.pressure.max} hPa)
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                            <Field>
+                                <FieldLabel>Justificativa (obrigatória)</FieldLabel>
+                                <Textarea
+                                    placeholder="Justifique a aprovação com condições fora dos limites..."
+                                    value={envJustification}
+                                    onChange={(e) => setEnvJustification(e.target.value)}
+                                    rows={3}
+                                />
+                            </Field>
+                        </div>
+                    )}
+
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setApproveDialogOpen(false)}>
                             Cancelar
@@ -596,7 +668,13 @@ function JobDetailPage() {
                         <Button
                             className="bg-green-600 hover:bg-green-700"
                             onClick={() => approveMutation.mutate()}
-                            disabled={approveMutation.isPending}
+                            disabled={
+                                approveMutation.isPending ||
+                                (!!job?.environmentalSnapshot &&
+                                    !job.environmentalSnapshot.withinLimits &&
+                                    !job.environmentalSnapshot.outOfLimitsJustification &&
+                                    !envJustification.trim())
+                            }
                         >
                             {approveMutation.isPending && <Spinner className="mr-2" />}
                             {approveMutation.isPending ? 'Aprovando...' : 'Aprovar'}

@@ -46,8 +46,16 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { CheckoutDialog } from '@/components/billing'
+import { usePlanAccess } from '@/hooks/use-plan-access'
 import { api } from '@/utils/api'
-import { formatPrice, type PlanId } from '@calibra-facil/shared'
+import {
+  ENTITLEMENT_METADATA,
+  formatPrice,
+  getEnabledEntitlements,
+  isValidPlanId,
+  type FeatureFlag,
+  type PlanId,
+} from '@calibra-facil/shared'
 
 export const Route = createFileRoute('/dashboard/settings/billing')({
   head: () => ({
@@ -88,6 +96,18 @@ const PAYMENT_STATUS: Record<
 function BillingSettingsPage() {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const queryClient = useQueryClient()
+  const accessQuery = usePlanAccess()
+  const accessReady = accessQuery.isSuccess && !!accessQuery.data
+  const accessPlanId =
+    accessReady && isValidPlanId(accessQuery.data.planId)
+      ? accessQuery.data.planId
+      : undefined
+  const hasFinancialModule = accessReady
+    ? accessQuery.data.hasFinancialModule ?? accessQuery.data.hasFinancial ?? false
+    : false
+  const canManageBilling = accessReady
+    ? accessQuery.data.canManageBilling ?? true
+    : false
 
   // Fetch subscription data
   const subscriptionQuery = useQuery({
@@ -99,6 +119,7 @@ function BillingSettingsPage() {
       }
       return response.json()
     },
+    enabled: accessReady && canManageBilling,
   })
 
   // Fetch payment history
@@ -113,6 +134,7 @@ function BillingSettingsPage() {
       }
       return response.json()
     },
+    enabled: accessReady && canManageBilling,
   })
 
   // Cancel subscription mutation
@@ -134,19 +156,34 @@ function BillingSettingsPage() {
 
   const { subscription, plan, usage, limits } = subscriptionQuery.data || {
     subscription: null,
-    plan: null,
-    usage: { certificates: 0, users: 0, storage: 0 },
-    limits: { certificates: 10, users: 1, storage: 100 * 1024 * 1024 },
+    plan: accessQuery.data
+      ? {
+          id: accessPlanId ?? 'FREE',
+          name: accessQuery.data.planName,
+          description: '',
+        }
+      : null,
+    usage: { jobsCreated: 0, users: 0, storage: 0 },
+    limits:
+      accessQuery.data?.limits ?? {
+        certificates: 10,
+        users: 1,
+        storage: 100 * 1024 * 1024,
+      },
   }
 
   const payments = paymentsQuery.data?.data || []
+  const selectedPlanId = plan?.id && isValidPlanId(plan.id) ? plan.id : undefined
+  const enabledEntitlements = selectedPlanId
+    ? getEnabledEntitlements(selectedPlanId)
+    : []
 
   const statusBadge =
     STATUS_BADGES[subscription?.status || 'TRIAL'] || STATUS_BADGES.TRIAL
 
   // Calculate usage percentages
-  const certificatePercentage = limits?.certificates
-    ? Math.min(100, (usage.certificates / limits.certificates) * 100)
+  const jobsCreatedPercentage = limits?.certificates
+    ? Math.min(100, (usage.jobsCreated / limits.certificates) * 100)
     : 0
   const userPercentage = limits?.users
     ? Math.min(100, (usage.users / limits.users) * 100)
@@ -154,6 +191,34 @@ function BillingSettingsPage() {
 
   return (
     <div className="space-y-6">
+      {!hasFinancialModule && accessQuery.data && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Módulo Financeiro indisponível</CardTitle>
+            <CardDescription>
+              Seu plano atual é {accessQuery.data.planName}. O módulo financeiro
+              fica disponível a partir do plano Professional.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between gap-4 rounded-lg border p-4">
+            <div className="space-y-1">
+              <p className="font-medium">
+                Faça upgrade para liberar o módulo financeiro avançado
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Você ainda pode gerenciar sua assinatura e acompanhar cobranças
+                neste painel. O upgrade libera os recursos operacionais do
+                módulo financeiro.
+              </p>
+            </div>
+            <Button onClick={() => setCheckoutOpen(true)}>
+              <HugeiconsIcon icon={Rocket01Icon} size={16} />
+              Fazer upgrade
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Current Plan */}
       <Card>
         <CardHeader>
@@ -172,6 +237,14 @@ function BillingSettingsPage() {
                 </span>
                 <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
               </div>
+              {plan?.description && (
+                <p className="text-sm text-muted-foreground">{plan.description}</p>
+              )}
+              {plan?.recommendedFor && (
+                <p className="text-sm font-medium text-primary">
+                  {plan.recommendedFor}
+                </p>
+              )}
               {subscription?.billingCycle && (
                 <p className="text-sm text-muted-foreground">
                   Ciclo:{' '}
@@ -241,16 +314,16 @@ function BillingSettingsPage() {
             {/* Certificates Usage */}
             <div className="p-4 border rounded-lg space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="font-medium">Certificados este mês</span>
+                <span className="font-medium">Ordens criadas este mês</span>
                 <span className="text-muted-foreground">
-                  {usage.certificates} /{' '}
+                  {usage.jobsCreated} /{' '}
                   {limits?.certificates === 999999
                     ? 'Ilimitado'
                     : limits?.certificates}
                 </span>
               </div>
-              <Progress value={certificatePercentage} className="h-2" />
-              {certificatePercentage >= 80 &&
+              <Progress value={jobsCreatedPercentage} className="h-2" />
+              {jobsCreatedPercentage >= 80 &&
                 limits?.certificates !== 999999 && (
                   <p className="text-xs text-amber-600">
                     Você está próximo do limite. Considere fazer upgrade.
@@ -277,11 +350,11 @@ function BillingSettingsPage() {
           </div>
 
           {/* Features List */}
-          {plan?.features && plan.features.length > 0 && (
+          {enabledEntitlements.length > 0 && (
             <div className="p-4 border rounded-lg">
               <p className="text-sm font-medium mb-2">Recursos inclusos:</p>
               <div className="flex flex-wrap gap-2">
-                {plan.features.map((feature: string) => (
+                {enabledEntitlements.map((feature) => (
                   <Badge key={feature} variant="secondary">
                     {getFeatureLabel(feature)}
                   </Badge>
@@ -292,92 +365,104 @@ function BillingSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Payment History */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Histórico de Pagamentos</CardTitle>
-          <CardDescription>
-            Visualize e baixe suas faturas anteriores.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {paymentsQuery.isLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            </div>
-          ) : payments.length === 0 ? (
-            <Empty className="border">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <HugeiconsIcon icon={Invoice02Icon} />
-                </EmptyMedia>
-                <EmptyTitle>Nenhum pagamento</EmptyTitle>
-                <EmptyDescription>
-                  Seus pagamentos aparecerão aqui após a primeira cobrança.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Valor</TableHead>
-                  <TableHead>Metodo</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Fatura</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payments.map((payment: PaymentRecord) => {
-                  const paymentStatus = PAYMENT_STATUS[payment.status] || {
-                    label: payment.status,
-                    variant: 'outline' as const,
-                  }
-                  return (
-                    <TableRow key={payment.id}>
-                      <TableCell>
-                        {new Date(payment.createdAt).toLocaleDateString(
-                          'pt-BR',
-                        )}
-                      </TableCell>
-                      <TableCell>{formatPrice(payment.amount)}</TableCell>
-                      <TableCell>
-                        {getPaymentMethodLabel(payment.paymentMethod)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={paymentStatus.variant}>
-                          {paymentStatus.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {payment.asaasInvoiceUrl && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              window.open(payment.asaasInvoiceUrl!, '_blank')
-                            }
-                          >
-                            <HugeiconsIcon icon={Invoice02Icon} size={14} />
-                            Baixar
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {canManageBilling && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Histórico de Pagamentos</CardTitle>
+            <CardDescription>
+              Visualize e baixe suas faturas anteriores.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {paymentsQuery.isLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              </div>
+            ) : payments.length === 0 ? (
+              <Empty className="border">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <HugeiconsIcon icon={Invoice02Icon} />
+                  </EmptyMedia>
+                  <EmptyTitle>Nenhum pagamento</EmptyTitle>
+                  <EmptyDescription>
+                    Seus pagamentos aparecerão aqui após a primeira cobrança.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Metodo</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Fatura</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payments.map((payment: PaymentRecord) => {
+                    const paymentStatus = PAYMENT_STATUS[payment.status] || {
+                      label: payment.status,
+                      variant: 'outline' as const,
+                    }
+                    return (
+                      <TableRow key={payment.id}>
+                        <TableCell>
+                          {new Date(payment.createdAt).toLocaleDateString(
+                            'pt-BR',
+                          )}
+                        </TableCell>
+                        <TableCell>{formatPrice(payment.amount)}</TableCell>
+                        <TableCell>
+                          {getPaymentMethodLabel(payment.paymentMethod)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={paymentStatus.variant}>
+                            {paymentStatus.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {payment.asaasInvoiceUrl && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                window.open(
+                                  payment.asaasInvoiceUrl!,
+                                  '_blank',
+                                  'noopener,noreferrer',
+                                )
+                              }
+                            >
+                              <HugeiconsIcon icon={Invoice02Icon} size={14} />
+                              Baixar
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Checkout Dialog */}
       <CheckoutDialog
         open={checkoutOpen}
         onOpenChange={setCheckoutOpen}
-        currentPlanId={(subscription?.planId as PlanId) || 'FREE'}
+        currentPlanId={
+          (subscription?.planId &&
+          isValidPlanId(subscription.planId)
+            ? subscription.planId
+            : undefined) ??
+          accessPlanId ??
+          'FREE'
+        }
       />
     </div>
   )
@@ -385,14 +470,8 @@ function BillingSettingsPage() {
 
 // Helper functions
 function getFeatureLabel(feature: string): string {
-  const labels: Record<string, string> = {
-    math_engine: 'Cálculo de incerteza',
-    portal: 'Portal do cliente',
-    financial: 'Módulo financeiro',
-    api: 'Acesso API',
-    custom_domain: 'Dominio personalizado',
-  }
-  return labels[feature] || feature
+  const metadata = ENTITLEMENT_METADATA[feature as FeatureFlag]
+  return metadata?.name || feature
 }
 
 function getPaymentMethodLabel(method: string): string {

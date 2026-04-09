@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -88,15 +88,7 @@ interface Service {
 }
 
 function EditServicePage() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const { id } = Route.useParams()
-
-  const [formData, setFormData] = useState<FormData | null>(null)
-  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
-    {},
-  )
-  const [isAssetTypeLocked, setIsAssetTypeLocked] = useState(false)
 
   // Fetch service data
   const {
@@ -173,74 +165,111 @@ function EditServicePage() {
     },
   })
 
-  // Initialize form data when service loads
-  useEffect(() => {
-    if (serviceData && !formData) {
-      setFormData({
-        name: serviceData.name,
-        description: serviceData.description || '',
-        methodId: serviceData.methodId,
-        assetTypeId: serviceData.assetTypeId,
-        price:
-          serviceData.price !== null
-            ? (serviceData.price / 100).toFixed(2).replace('.', ',')
-            : '',
-        tat: serviceData.tat !== null ? String(serviceData.tat) : '',
-        isActive: serviceData.isActive,
-      })
-
-      // Check if asset type should be locked based on method
-      if (serviceData.methodId && methodsData?.data) {
-        const method = methodsData.data.find(
-          (m) => m.id === serviceData.methodId,
-        )
-        if (method?.assetTypeId) {
-          setIsAssetTypeLocked(true)
-        }
-      }
-    }
-  }, [serviceData, formData, methodsData?.data])
-
-  // Handle method selection - auto-fill and lock asset type
-  useEffect(() => {
-    if (formData?.methodId && methodsData?.data) {
-      const selectedMethod = methodsData.data.find(
-        (m) => m.id === formData.methodId,
-      )
-      if (selectedMethod?.assetTypeId) {
-        setFormData((prev) =>
-          prev
-            ? {
-                ...prev,
-                assetTypeId: selectedMethod.assetTypeId,
-              }
-            : null,
-        )
-        setIsAssetTypeLocked(true)
-      } else {
-        setIsAssetTypeLocked(false)
-      }
-    } else if (formData) {
-      setIsAssetTypeLocked(false)
-    }
-  }, [formData?.methodId, methodsData?.data])
-
-  // Computed display values for combobox inputs
-  const selectedMethodName = useMemo(() => {
-    if (!formData?.methodId || !methodsData?.data) return ''
-    const method = methodsData.data.find((m) => m.id === formData.methodId)
-    return method?.name || ''
-  }, [formData?.methodId, methodsData?.data])
-
-  const selectedAssetTypeName = useMemo(() => {
-    if (!formData?.assetTypeId || !assetTypesData?.data) return ''
-    const assetType = assetTypesData.data.find(
-      (at) => at.id === formData.assetTypeId,
+  if (serviceError) {
+    return (
+      <div className="space-y-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate({ to: '/dashboard/services' })}
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
+          Voltar
+        </Button>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-red-500">
+              Erro ao carregar serviço: {serviceError.message}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     )
-    return assetType?.name || ''
-  }, [formData?.assetTypeId, assetTypesData?.data])
+  }
 
-  // Update mutation
+  if (serviceLoading || methodsLoading || assetTypesLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-24" />
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!serviceData) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="py-8 text-center text-destructive">
+            Erro ao carregar serviço. Tente novamente.
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <EditServiceForm
+      key={serviceData.id}
+      serviceData={serviceData}
+      methodsData={methodsData?.data ?? []}
+      assetTypesData={assetTypesData?.data ?? []}
+      methodsLoading={methodsLoading}
+      assetTypesLoading={assetTypesLoading}
+      auditLogData={auditLogData?.data ?? []}
+    />
+  )
+}
+
+function EditServiceForm({
+  serviceData,
+  methodsData,
+  assetTypesData,
+  methodsLoading,
+  assetTypesLoading,
+  auditLogData,
+}: {
+  serviceData: Service
+  methodsData: Array<Method>
+  assetTypesData: Array<AssetType>
+  methodsLoading: boolean
+  assetTypesLoading: boolean
+  auditLogData: Array<AuditLogRecord>
+}) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const [formData, setFormData] = useState<FormData>({
+    name: serviceData.name,
+    description: serviceData.description || '',
+    methodId: serviceData.methodId,
+    assetTypeId: serviceData.assetTypeId,
+    price:
+      serviceData.price !== null
+        ? (serviceData.price / 100).toFixed(2).replace('.', ',')
+        : '',
+    tat: serviceData.tat !== null ? String(serviceData.tat) : '',
+    isActive: serviceData.isActive,
+  })
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof FormData, string>>
+  >({})
+  const [isAssetTypeLocked, setIsAssetTypeLocked] = useState(() => {
+    const method = methodsData.find((m) => m.id === serviceData.methodId)
+    return !!method?.assetTypeId
+  })
+
   const updateMutation = useMutation({
     mutationFn: async (data: FormData) => {
       // Convert price from BRL string to cents
@@ -262,7 +291,7 @@ function EditServicePage() {
       }
 
       const res = await api.api.services[':id'].$put({
-        param: { id },
+        param: { id: String(serviceData.id) },
         json: {
           name: data.name,
           description: data.description || undefined,
@@ -285,6 +314,7 @@ function EditServicePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] })
+      queryClient.invalidateQueries({ queryKey: ['services', serviceData.id] })
       toast.success('Serviço atualizado com sucesso!')
       navigate({ to: '/dashboard/services' })
     },
@@ -293,10 +323,21 @@ function EditServicePage() {
     },
   })
 
+  // Computed display values for combobox inputs
+  const selectedMethodName = useMemo(() => {
+    if (!formData.methodId) return ''
+    const method = methodsData.find((m) => m.id === formData.methodId)
+    return method?.name || ''
+  }, [formData.methodId, methodsData])
+
+  const selectedAssetTypeName = useMemo(() => {
+    if (!formData.assetTypeId) return ''
+    const assetType = assetTypesData.find((at) => at.id === formData.assetTypeId)
+    return assetType?.name || ''
+  }, [formData.assetTypeId, assetTypesData])
+
   // Validation
   const validate = (): boolean => {
-    if (!formData) return false
-
     const newErrors: Partial<Record<keyof FormData, string>> = {}
 
     if (!formData.name.trim()) {
@@ -325,7 +366,7 @@ function EditServicePage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData || !validate()) return
+    if (!validate()) return
     updateMutation.mutate(formData)
   }
 
@@ -333,52 +374,21 @@ function EditServicePage() {
     field: TKey,
     value: FormData[TKey],
   ) => {
-    setFormData((prev) => (prev ? { ...prev, [field]: value } : null))
+    if (field === 'methodId') {
+      const methodId = value as FormData['methodId']
+      const selectedMethod = methodsData.find((m) => m.id === methodId)
+      setIsAssetTypeLocked(!!selectedMethod?.assetTypeId)
+      setFormData((prev) => ({
+        ...prev,
+        methodId,
+        assetTypeId: selectedMethod?.assetTypeId ?? prev.assetTypeId,
+      }))
+    } else {
+      setFormData((prev) => ({ ...prev, [field]: value }))
+    }
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
-  }
-
-  if (serviceError) {
-    return (
-      <div className="space-y-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate({ to: '/dashboard/services' })}
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-red-500">
-              Erro ao carregar serviço: {serviceError.message}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (serviceLoading || !formData) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-24" />
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-64" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </CardContent>
-        </Card>
-      </div>
-    )
   }
 
   return (
@@ -455,7 +465,7 @@ function EditServicePage() {
                           ? 'Carregando...'
                           : 'Nenhum método publicado encontrado'}
                       </ComboboxEmpty>
-                      {methodsData?.data?.map((method) => (
+                      {methodsData.map((method) => (
                         <ComboboxItem key={method.id} value={String(method.id)}>
                           <div className="flex flex-col">
                             <span>{method.name}</span>
@@ -506,7 +516,7 @@ function EditServicePage() {
                           ? 'Carregando...'
                           : 'Nenhum tipo encontrado'}
                       </ComboboxEmpty>
-                      {assetTypesData?.data?.map((assetType) => (
+                      {assetTypesData.map((assetType) => (
                         <ComboboxItem
                           key={assetType.id}
                           value={String(assetType.id)}
@@ -621,9 +631,9 @@ function EditServicePage() {
       </Card>
 
       {/* Audit Log - ISO 17025 Clause 8.4 (Control of Records) */}
-      {auditLogData?.data && auditLogData.data.length > 0 && (
+      {auditLogData.length > 0 && (
         <AuditTimeline
-          events={buildAuditTimelineEvents(auditLogData.data)}
+          events={buildAuditTimelineEvents(auditLogData)}
           title="Histórico de Alterações (ISO 17025)"
         />
       )}

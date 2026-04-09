@@ -1,12 +1,14 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute } from '@tanstack/react-router'
 import { useTheme } from 'next-themes'
-import { toast } from 'sonner'
 import {
+  PaintBoardIcon,
+  LinkSquare02Icon,
   Moon01Icon,
   Settings02Icon,
   Sun01Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import { toast } from 'sonner'
 
 import {
   Card,
@@ -15,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/dashboard/settings/appearance')({
@@ -57,7 +60,7 @@ function AppearanceSettingsPage() {
 
   const handleThemeChange = (newTheme: string) => {
     setTheme(newTheme)
-    const option = themeOptions.find((o) => o.value === newTheme)
+    const option = themeOptions.find((item) => item.value === newTheme)
     if (option) {
       toast.success(`Tema alterado para ${option.label}`)
     }
@@ -67,9 +70,11 @@ function AppearanceSettingsPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Tema</CardTitle>
+          <CardTitle>Tema do dashboard</CardTitle>
           <CardDescription>
-            Selecione o tema da interface que você prefere.
+            Ajuste apenas a aparência da interface interna. Branding de
+            certificados e domínio do portal agora ficam em superfícies
+            dedicadas.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -108,18 +113,64 @@ function AppearanceSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Theme Preview */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Branding e Portal</CardTitle>
+          <CardDescription>
+            A gestão de templates de certificado e do domínio do portal foi
+            separada em workspaces próprios para dar mais clareza ao lifecycle.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border bg-muted/20 p-5">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                <HugeiconsIcon icon={PaintBoardIcon} className="size-5" />
+              </div>
+              <div>
+                <p className="font-medium">Branding</p>
+                <p className="text-sm text-muted-foreground">
+                  Templates estruturados, preview e gestão do template padrão.
+                </p>
+              </div>
+            </div>
+            <Button asChild className="mt-4" variant="outline">
+              <Link to="/dashboard/settings/branding">Abrir branding</Link>
+            </Button>
+          </div>
+
+          <div className="rounded-xl border bg-muted/20 p-5">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                <HugeiconsIcon icon={LinkSquare02Icon} className="size-5" />
+              </div>
+              <div>
+                <p className="font-medium">Portal Domain</p>
+                <p className="text-sm text-muted-foreground">
+                  Configure hostname, DNS, verificação e ativação do portal do
+                  cliente.
+                </p>
+              </div>
+            </div>
+            <Button asChild className="mt-4" variant="outline">
+              <Link to="/dashboard/settings/portal-domain">
+                Abrir domínio do portal
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Visualização</CardTitle>
           <CardDescription>
-            Veja como a interface aparece com o tema selecionado.
+            Prévia rápida de como a interface aparece com o tema selecionado.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border p-4">
             <div className="space-y-4">
-              {/* Preview Header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-full bg-primary" />
@@ -136,33 +187,26 @@ function AppearanceSettingsPage() {
                 </div>
               </div>
 
-              {/* Preview Content */}
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border bg-card p-3">
-                  <div className="h-2 w-16 rounded bg-muted-foreground/20" />
-                  <div className="mt-2 h-8 w-full rounded bg-muted" />
-                </div>
-                <div className="rounded-lg border bg-card p-3">
-                  <div className="h-2 w-20 rounded bg-muted-foreground/20" />
-                  <div className="mt-2 h-8 w-full rounded bg-muted" />
-                </div>
-                <div className="rounded-lg border bg-card p-3">
-                  <div className="h-2 w-12 rounded bg-muted-foreground/20" />
-                  <div className="mt-2 h-8 w-full rounded bg-muted" />
-                </div>
+                {['Ordens', 'Solicitações', 'Clientes'].map((label) => (
+                  <div key={label} className="rounded-lg border bg-card p-3">
+                    <div className="h-2 w-20 rounded bg-muted-foreground/20" />
+                    <div className="mt-2 h-8 w-full rounded bg-muted" />
+                    <p className="mt-3 text-xs text-muted-foreground">{label}</p>
+                  </div>
+                ))}
               </div>
 
-              {/* Preview Table */}
               <div className="rounded-lg border">
                 <div className="flex items-center gap-4 border-b bg-muted/50 px-4 py-2">
                   <div className="h-3 w-24 rounded bg-muted-foreground/30" />
                   <div className="h-3 w-20 rounded bg-muted-foreground/30" />
                   <div className="h-3 w-16 rounded bg-muted-foreground/30" />
                 </div>
-                {[1, 2, 3].map((i) => (
+                {[1, 2, 3].map((row) => (
                   <div
-                    key={i}
-                    className="flex items-center gap-4 border-b last:border-0 px-4 py-3"
+                    key={row}
+                    className="flex items-center gap-4 border-b px-4 py-3 last:border-0"
                   >
                     <div className="h-3 w-24 rounded bg-muted" />
                     <div className="h-3 w-20 rounded bg-muted" />

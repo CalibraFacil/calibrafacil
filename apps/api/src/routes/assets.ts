@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -17,7 +18,21 @@ import { eq, ilike, or, count, and, isNull, desc } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
+  type MemberData,
 } from "../middleware/permission";
+import { withCache, withInvalidation } from "../middleware/cache";
+import { buildUnitScopeCondition } from "../lib/units";
+
+const CommandPaletteAssetSearchQuerySchema = z.object({
+  query: z.string().trim().min(2),
+  limit: z.coerce.number().min(1).max(10).default(5),
+});
+
+function getAssetScopeCondition(member: MemberData) {
+  return member.organizationType === "LAB"
+    ? buildUnitScopeCondition(asset.unitId, member)
+    : undefined;
+}
 
 export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -26,17 +41,31 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ equipment: ["create"] }),
+    withInvalidation("assets"),
     zValidator("json", CreateAssetSchema),
     async (c) => {
       const input = c.req.valid("json");
       const session = c.get("session");
+      const member = c.get("member");
+
+      if (!member.activeUnitId) {
+        return c.json(
+          { error: "Selecione uma unidade específica para criar ativos" },
+          400,
+        );
+      }
 
       try {
         // Validate that customer exists
         const [foundCustomer] = await db
           .select()
           .from(customer)
-          .where(eq(customer.id, input.customerId))
+          .where(
+            and(
+              eq(customer.id, input.customerId),
+              eq(customer.labOrganizationId, member.organizationId),
+            ),
+          )
           .limit(1);
 
         if (!foundCustomer) {
@@ -96,6 +125,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const [newAsset] = await db
           .insert(asset)
           .values({
+            unitId: member.activeUnitId,
             customerId: input.customerId,
             assetTypeId: input.assetTypeId,
             name: input.name,
@@ -136,6 +166,53 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /search - Lightweight search for command palette
+  // =========================================================================
+  .get(
+    "/search",
+    ...withLabPermission({ equipment: ["read"] }),
+    withCache("assets-search", 30),
+    zValidator("query", CommandPaletteAssetSearchQuerySchema),
+    async (c) => {
+      const member = c.get("member");
+      const { query, limit } = c.req.valid("query");
+
+      try {
+        const results = await db
+          .select({
+            id: asset.id,
+            tag: asset.tag,
+            serialNumber: asset.serialNumber,
+            assetTypeName: assetType.name,
+            customerName: customer.name,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
+          .where(
+            and(
+              buildUnitScopeCondition(asset.unitId, member),
+              isNull(asset.deletedAt),
+              eq(customer.labOrganizationId, member.organizationId),
+              or(
+                ilike(asset.tag, `%${query}%`),
+                ilike(asset.serialNumber, `%${query}%`),
+                ilike(asset.name, `%${query}%`),
+              )!,
+            ),
+          )
+          .orderBy(asset.tag)
+          .limit(limit);
+
+        return c.json(results);
+      } catch (error) {
+        console.error("Error searching assets:", error);
+        return c.json({ error: "Erro ao buscar ativos" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
   // GET / - List assets with pagination and filtering
   // =========================================================================
   .get(
@@ -152,6 +229,10 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Build conditions array - always exclude soft-deleted assets
         const conditions = [isNull(asset.deletedAt)];
+        const assetScopeCondition = getAssetScopeCondition(member);
+        if (assetScopeCondition) {
+          conditions.push(assetScopeCondition);
+        }
 
         // If user is a client_user, they can only see their organization's assets
         if (member.organizationType === "CLIENT") {
@@ -261,6 +342,63 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /:id/label - Get asset label by ID
+  // =========================================================================
+  .get(
+    "/:id/label",
+    ...withLabPermission({ equipment: ["read"] }),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const member = c.get("member");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID inválido" }, 400);
+      }
+
+      const [foundAsset] = await db
+        .select({
+          id: asset.id,
+          label: asset.name,
+          customerId: asset.customerId,
+        })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .where(
+          and(
+            eq(asset.id, id),
+            member.organizationType === "LAB"
+              ? eq(customer.labOrganizationId, member.organizationId)
+              : undefined,
+            getAssetScopeCondition(member),
+            isNull(asset.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!foundAsset) {
+        return c.json({ error: "Ativo não encontrado" }, 404);
+      }
+
+      if (member.organizationType === "CLIENT") {
+        const [linkedCustomer] = await db
+          .select({ id: customer.id })
+          .from(customer)
+          .where(eq(customer.authOrganizationId, member.organizationId))
+          .limit(1);
+
+        if (!linkedCustomer || linkedCustomer.id !== foundAsset.customerId) {
+          return c.json({ error: "Acesso negado" }, 403);
+        }
+      }
+
+      return c.json({
+        id: foundAsset.id,
+        label: foundAsset.label,
+      });
+    },
+  )
+
+  // =========================================================================
   // GET /:id - Get asset by ID
   // =========================================================================
   .get("/:id", ...withLabPermission({ equipment: ["read"] }), async (c) => {
@@ -297,7 +435,13 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         .from(asset)
         .innerJoin(customer, eq(asset.customerId, customer.id))
         .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
-        .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
+        .where(
+          and(
+            eq(asset.id, id),
+            getAssetScopeCondition(member),
+            isNull(asset.deletedAt),
+          ),
+        )
         .limit(1);
 
       if (!foundAsset) {
@@ -330,6 +474,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ equipment: ["update"] }),
+    withInvalidation("assets"),
     zValidator("json", UpdateAssetSchema),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
@@ -346,12 +491,20 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const [existingAsset] = await db
           .select()
           .from(asset)
-          .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
+          .where(
+            and(
+              eq(asset.id, id),
+              getAssetScopeCondition(member),
+              isNull(asset.deletedAt),
+            ),
+          )
           .limit(1);
 
         if (!existingAsset) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
+
+        let linkedCustomerId: number | null = null;
 
         // If user is a client_user, verify they can update this asset
         if (member.organizationType === "CLIENT") {
@@ -367,6 +520,8 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           ) {
             return c.json({ error: "Acesso negado" }, 403);
           }
+
+          linkedCustomerId = linkedCustomer.id;
         }
 
         // Check if tag is being changed and if it's unique
@@ -426,8 +581,21 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const [updatedAsset] = await db
           .update(asset)
           .set(updateData)
-          .where(eq(asset.id, id))
+          .where(
+            and(
+              eq(asset.id, id),
+              getAssetScopeCondition(member),
+              isNull(asset.deletedAt),
+              linkedCustomerId !== null
+                ? eq(asset.customerId, linkedCustomerId)
+                : undefined,
+            ),
+          )
           .returning();
+
+        if (!updatedAsset) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
 
         // Log audit entry if there were changes
         if (Object.keys(changes).length > 0) {
@@ -458,9 +626,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   .delete(
     "/:id",
     ...withLabPermission({ equipment: ["delete"] }),
+    withInvalidation("assets"),
     async (c) => {
       const id = parseInt(c.req.param("id"), 10);
       const session = c.get("session");
+      const member = c.get("member");
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
@@ -470,10 +640,54 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const [existingAsset] = await db
           .select()
           .from(asset)
-          .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
+          .where(
+            and(
+              eq(asset.id, id),
+              getAssetScopeCondition(member),
+              isNull(asset.deletedAt),
+            ),
+          )
           .limit(1);
 
         if (!existingAsset) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        let linkedCustomerId: number | null = null;
+
+        if (member.organizationType === "CLIENT") {
+          const [linkedCustomer] = await db
+            .select()
+            .from(customer)
+            .where(eq(customer.authOrganizationId, member.organizationId))
+            .limit(1);
+
+          if (
+            !linkedCustomer ||
+            linkedCustomer.id !== existingAsset.customerId
+          ) {
+            return c.json({ error: "Acesso negado" }, 403);
+          }
+
+          linkedCustomerId = linkedCustomer.id;
+        }
+
+        const [deletedAsset] = await db
+          .update(asset)
+          .set({ deletedAt: new Date() })
+          .where(
+            and(
+              eq(asset.id, id),
+              getAssetScopeCondition(member),
+              isNull(asset.deletedAt),
+              linkedCustomerId !== null
+                ? eq(asset.customerId, linkedCustomerId)
+                : undefined,
+            ),
+          )
+          .returning();
+
+        if (!deletedAsset) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
 
@@ -490,12 +704,6 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             c.req.header("x-real-ip") ??
             null,
         });
-
-        // Soft delete the asset (preserves audit logs for ISO 17025 compliance)
-        await db
-          .update(asset)
-          .set({ deletedAt: new Date() })
-          .where(eq(asset.id, id));
 
         return c.json({ success: true });
       } catch (error) {
@@ -524,7 +732,12 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const [existingAsset] = await db
           .select({ id: asset.id, customerId: asset.customerId })
           .from(asset)
-          .where(eq(asset.id, id))
+          .where(
+            and(
+              eq(asset.id, id),
+              getAssetScopeCondition(member),
+            ),
+          )
           .limit(1);
 
         if (!existingAsset) {
@@ -539,7 +752,10 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             .where(eq(customer.authOrganizationId, member.organizationId))
             .limit(1);
 
-          if (!linkedCustomer || linkedCustomer.id !== existingAsset.customerId) {
+          if (
+            !linkedCustomer ||
+            linkedCustomer.id !== existingAsset.customerId
+          ) {
             return c.json({ error: "Acesso negado" }, 403);
           }
         }

@@ -1,10 +1,15 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
+import {
+  createBackofficeAuth,
+  createLabAuth,
+  createPortalAuth,
+} from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
   member as memberTable,
   organization as organizationTable,
+  type MemberUnitRole,
 } from "@calibra-facil/db/schema";
 import { eq, and } from "drizzle-orm";
 import type {
@@ -12,8 +17,21 @@ import type {
   CalibrationState,
   CalibrationAction,
   RoleName,
+  PlatformRole,
 } from "@calibra-facil/auth/access";
-import { canPerformCalibrationAction } from "@calibra-facil/auth/access";
+import {
+  canAccessBackoffice,
+  canPerformCalibrationAction,
+  hasPlatformRole,
+  parsePlatformRoles,
+  roles,
+} from "@calibra-facil/auth/access";
+import {
+  resolveMemberUnitScope,
+  type ResolvedUnit,
+  getUnitGovernanceAccess as getGovernanceAccessFromScope,
+  type UnitGovernanceAccess,
+} from "../lib/units";
 
 // =============================================================================
 // CONTEXT TYPES
@@ -28,6 +46,10 @@ export interface SessionData {
     name: string;
     email: string;
     emailVerified: boolean;
+    role?: string | null;
+    banned?: boolean | null;
+    banReason?: string | null;
+    banExpires?: Date | null;
     image?: string | null;
     createdAt: Date;
     updatedAt: Date;
@@ -40,6 +62,7 @@ export interface SessionData {
     createdAt: Date;
     updatedAt: Date;
     token: string;
+    impersonatedBy?: string | null;
   };
 }
 
@@ -52,7 +75,18 @@ export interface MemberData {
   organizationId: string;
   organizationType: OrgType;
   userId: string;
+  activeUnitId: number | null;
+  activeUnitName: string | null;
+  accessibleUnitIds: number[];
+  accessibleUnits: ResolvedUnit[];
+  selectedUnitScope: "all" | "unit";
+  canAccessAllUnits: boolean;
+  unitRole: MemberUnitRole | null;
 }
+
+export type GovernanceAccess = UnitGovernanceAccess;
+
+export type AuthSource = "lab" | "backoffice" | "portal";
 
 /**
  * Context type extension for authenticated requests
@@ -60,6 +94,207 @@ export interface MemberData {
 export interface AuthVariables {
   session: SessionData;
   member: MemberData;
+  authSource: AuthSource;
+  platformRoles?: PlatformRole[];
+  serverTiming?: ServerTimingMetric[];
+  requestLabAuth?: ReturnType<typeof createLabAuth>;
+  requestBackofficeAuth?: ReturnType<typeof createBackofficeAuth>;
+  requestPortalAuth?: ReturnType<typeof createPortalAuth>;
+}
+
+export interface ServerTimingMetric {
+  name: string;
+  dur: number;
+  desc?: string;
+}
+
+const SERVER_TIMING_KEY = "serverTiming";
+
+function getRequestLabAuth(c: {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+}) {
+  const existing = c.get("requestLabAuth") as
+    | ReturnType<typeof createLabAuth>
+    | undefined;
+  if (existing) return existing;
+
+  const auth = createLabAuth();
+  c.set("requestLabAuth", auth);
+  return auth;
+}
+
+function getRequestPortalAuth(c: {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+}) {
+  const existing = c.get("requestPortalAuth") as
+    | ReturnType<typeof createPortalAuth>
+    | undefined;
+  if (existing) return existing;
+
+  const auth = createPortalAuth();
+  c.set("requestPortalAuth", auth);
+  return auth;
+}
+
+function getRequestBackofficeAuth(c: {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+}) {
+  const existing = c.get("requestBackofficeAuth") as
+    | ReturnType<typeof createBackofficeAuth>
+    | undefined;
+  if (existing) return existing;
+
+  const auth = createBackofficeAuth();
+  c.set("requestBackofficeAuth", auth);
+  return auth;
+}
+
+function getServerTimingBuffer(c: {
+  get: (key: string) => unknown;
+  set: (key: string, value: unknown) => void;
+}): ServerTimingMetric[] {
+  const existing = c.get(SERVER_TIMING_KEY) as ServerTimingMetric[] | undefined;
+  if (existing) return existing;
+
+  const created: ServerTimingMetric[] = [];
+  c.set(SERVER_TIMING_KEY, created);
+  return created;
+}
+
+export function addServerTiming(
+  c: {
+    get: (key: string) => unknown;
+    set: (key: string, value: unknown) => void;
+  },
+  name: string,
+  startedAt: number,
+  desc?: string,
+) {
+  const dur = Math.max(0, performance.now() - startedAt);
+  getServerTimingBuffer(c).push({ name, dur, desc });
+}
+
+function applyServerTimingHeader(c: {
+  get: (key: string) => unknown;
+  header?: (name: string, value: string) => void;
+}) {
+  if (!c.header) return;
+
+  const entries =
+    (c.get(SERVER_TIMING_KEY) as ServerTimingMetric[] | undefined) ?? [];
+  if (entries.length === 0) return;
+
+  const value = entries
+    .map((entry) => {
+      const durPart = `dur=${entry.dur.toFixed(2)}`;
+      const descPart = entry.desc ? `;desc="${entry.desc}"` : "";
+      return `${entry.name};${durPart}${descPart}`;
+    })
+    .join(", ");
+
+  c.header("Server-Timing", value);
+}
+
+export function isInternalOperatorEmail(
+  email: string | null | undefined,
+  rawAllowlist: string | null | undefined,
+) {
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail || !rawAllowlist) return false;
+
+  return rawAllowlist
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(normalizedEmail);
+}
+
+function hasPermissionLocally(role: RoleName, permissions: PermissionCheck) {
+  const roleAccess = roles[role] as
+    | {
+        authorize?: (input: PermissionCheck) => { success: boolean };
+      }
+    | undefined;
+
+  if (!roleAccess?.authorize) return false;
+
+  try {
+    return roleAccess.authorize(permissions).success;
+  } catch {
+    return false;
+  }
+}
+
+const UNIT_SCOPED_RESOURCES = new Set([
+  "calibration",
+  "request",
+  "standard",
+  "equipment",
+  "certificate",
+  "report",
+  "audit",
+  "service",
+  "non_conformance",
+  "capa",
+  "competence",
+]);
+
+function getEffectivePermissionRole(
+  member: Pick<MemberData, "role" | "unitRole">,
+  permissions: PermissionCheck,
+): RoleName {
+  if (member.role === "owner" || member.role === "admin") {
+    return member.role;
+  }
+
+  const resources = Object.keys(permissions);
+  const isUnitScopedOnly = resources.every((resource) =>
+    UNIT_SCOPED_RESOURCES.has(resource),
+  );
+
+  if (!isUnitScopedOnly) {
+    return member.role;
+  }
+
+  if (member.unitRole === "unit_admin") {
+    return "admin";
+  }
+
+  if (member.unitRole === "technician") {
+    return "technician";
+  }
+
+  return member.role;
+}
+
+function getCalibrationAuthorizationRole(
+  member: Pick<MemberData, "role" | "unitRole">,
+): RoleName {
+  if (member.role === "owner" || member.role === "admin") {
+    return member.role;
+  }
+
+  if (member.unitRole === "unit_admin") {
+    return "admin";
+  }
+
+  if (member.unitRole === "technician") {
+    return "technician";
+  }
+
+  return member.role;
+}
+
+export function getGovernanceAccess(
+  member: Pick<
+    MemberData,
+    "role" | "unitRole" | "accessibleUnitIds" | "canAccessAllUnits"
+  >,
+): GovernanceAccess {
+  return getGovernanceAccessFromScope(member);
 }
 
 // =============================================================================
@@ -76,7 +311,8 @@ export interface AuthVariables {
  */
 export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
-    const labAuth = createLabAuth();
+    const authStartedAt = performance.now();
+    const labAuth = getRequestLabAuth(c);
     const session = await labAuth.api.getSession({
       headers: c.req.raw.headers,
     });
@@ -86,6 +322,8 @@ export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
     }
 
     c.set("session", session as SessionData);
+    c.set("authSource", "lab");
+    addServerTiming(c, "auth", authStartedAt, "lab");
 
     await next();
   },
@@ -101,7 +339,7 @@ export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
  */
 export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
-    const portalAuth = createPortalAuth();
+    const portalAuth = getRequestPortalAuth(c);
     const session = await portalAuth.api.getSession({
       headers: c.req.raw.headers,
     });
@@ -111,10 +349,39 @@ export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
     }
 
     c.set("session", session as SessionData);
+    c.set("authSource", "portal");
 
     await next();
   },
 );
+
+/**
+ * Middleware to require authentication using Backoffice auth.
+ * For use on internal backoffice routes.
+ * Sets `session` in the context.
+ *
+ * @example
+ * app.use("*", requireBackofficeAuthSession);
+ */
+export const requireBackofficeAuthSession = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const authStartedAt = performance.now();
+  const backofficeAuth = getRequestBackofficeAuth(c);
+  const session = await backofficeAuth.api.getSession({
+    headers: c.req.raw.headers,
+  });
+
+  if (!session) {
+    throw new HTTPException(401, { message: "Unauthorized" });
+  }
+
+  c.set("session", session as SessionData);
+  c.set("authSource", "backoffice");
+  addServerTiming(c, "auth", authStartedAt, "backoffice");
+
+  await next();
+});
 
 /**
  * Middleware to require authentication (tries both auth instances).
@@ -126,16 +393,18 @@ export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
  */
 export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
   async (c, next) => {
-    const portalAuth = createPortalAuth();
-    const labAuth = createLabAuth();
+    const portalAuth = getRequestPortalAuth(c);
 
     // Try portal auth first (portal_session cookie)
+    let authSource: AuthSource = "portal";
     let session = await portalAuth.api.getSession({
       headers: c.req.raw.headers,
     });
 
     // If no portal session, try lab auth (lab_session cookie)
     if (!session) {
+      authSource = "lab";
+      const labAuth = getRequestLabAuth(c);
       session = await labAuth.api.getSession({
         headers: c.req.raw.headers,
       });
@@ -146,6 +415,7 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
     }
 
     c.set("session", session as SessionData);
+    c.set("authSource", authSource);
 
     await next();
   },
@@ -179,6 +449,7 @@ export type OrgType = "LAB" | "CLIENT";
 export const requireOrganization = createMiddleware<{
   Variables: AuthVariables;
 }>(async (c, next) => {
+  const orgStartedAt = performance.now();
   const session = c.get("session");
 
   if (!session?.session?.activeOrganizationId) {
@@ -221,13 +492,41 @@ export const requireOrganization = createMiddleware<{
 
   const orgType = (memberInfo.orgType as OrgType) ?? "LAB";
 
+  const unitScope =
+    orgType === "LAB"
+      ? await resolveMemberUnitScope({
+          organizationId: activeOrgId,
+          memberId: memberInfo.memberId,
+          memberRole: memberInfo.memberRole as RoleName,
+          userId,
+          requestedScope: c.req.header("x-active-unit-id") ?? null,
+        })
+      : {
+          activeUnitId: null,
+          activeUnitName: null,
+          accessibleUnitIds: [],
+          accessibleUnits: [],
+          selectedUnitScope: "unit" as const,
+          canAccessAllUnits: false,
+          unitRole: null,
+        };
+
   c.set("member", {
     id: memberInfo.memberId,
     role: memberInfo.memberRole as RoleName,
     organizationId: activeOrgId,
     organizationType: orgType,
     userId: userId,
+    activeUnitId: unitScope.activeUnitId,
+    activeUnitName: unitScope.activeUnitName,
+    accessibleUnitIds: unitScope.accessibleUnitIds,
+    accessibleUnits: unitScope.accessibleUnits,
+    selectedUnitScope: unitScope.selectedUnitScope,
+    canAccessAllUnits: unitScope.canAccessAllUnits,
+    unitRole: unitScope.unitRole,
   });
+
+  addServerTiming(c, "org", orgStartedAt);
 
   await next();
 });
@@ -251,18 +550,55 @@ export const requireOrganization = createMiddleware<{
  */
 export function requirePermission(permissions: PermissionCheck) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
-    const labAuth = createLabAuth();
-    const portalAuth = createPortalAuth();
+    const permStartedAt = performance.now();
+    const authSource = c.get("authSource") as AuthSource;
+    const member = c.get("member") as MemberData | undefined;
 
-    // Try lab auth first
-    let result = await labAuth.api.hasPermission({
-      headers: c.req.raw.headers,
-      body: { permission: permissions },
-    });
+    if (member) {
+      const hasPermission = hasPermissionLocally(
+        getEffectivePermissionRole(member, permissions),
+        permissions,
+      );
 
-    // If no result from lab, try portal
-    if (!result?.success) {
+      if (!hasPermission) {
+        throw new HTTPException(403, {
+          message: "Insufficient permissions",
+        });
+      }
+
+      addServerTiming(c, "perm", permStartedAt, `${authSource}-local`);
+
+      try {
+        await next();
+      } finally {
+        applyServerTimingHeader(c);
+      }
+
+      return;
+    }
+
+    let result: { success?: boolean } | null = null;
+
+    if (authSource === "lab") {
+      const labAuth = getRequestLabAuth(c);
+      result = await labAuth.api.hasPermission({
+        headers: c.req.raw.headers,
+        body: { permission: permissions },
+      });
+    } else if (authSource === "portal") {
+      const portalAuth = getRequestPortalAuth(c);
       result = await portalAuth.api.hasPermission({
+        headers: c.req.raw.headers,
+        body: { permission: permissions },
+      });
+    } else if (authSource === "backoffice") {
+      throw new HTTPException(403, {
+        message: "Organization permissions are unavailable in backoffice auth",
+      });
+    } else {
+      // Fallback for legacy/misconfigured middleware chains
+      const labAuth = getRequestLabAuth(c);
+      result = await labAuth.api.hasPermission({
         headers: c.req.raw.headers,
         body: { permission: permissions },
       });
@@ -274,7 +610,13 @@ export function requirePermission(permissions: PermissionCheck) {
       });
     }
 
-    await next();
+    addServerTiming(c, "perm", permStartedAt, authSource);
+
+    try {
+      await next();
+    } finally {
+      applyServerTimingHeader(c);
+    }
   });
 }
 
@@ -385,9 +727,11 @@ export function requireCalibrationAction<
     const member = c.get("member") as MemberData;
     const state = await getState(c);
 
-    if (!canPerformCalibrationAction(member.role, state, action)) {
+    const effectiveRole = getCalibrationAuthorizationRole(member);
+
+    if (!canPerformCalibrationAction(effectiveRole, state, action)) {
       throw new HTTPException(403, {
-        message: `Cannot ${action} calibration in '${state}' state with role '${member.role}'`,
+        message: `Cannot ${action} calibration in '${state}' state with role '${effectiveRole}'`,
       });
     }
 
@@ -428,6 +772,60 @@ export const requirePortalProtected = [
   requirePortalAuth,
   requireOrganization,
 ] as const;
+
+export const requireInternalOperator = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const session = c.get("session");
+  const envAllowlist =
+    (c.env as Record<string, unknown> | undefined)?.INTERNAL_OPERATOR_EMAILS ??
+    process.env.INTERNAL_OPERATOR_EMAILS;
+
+  if (
+    !isInternalOperatorEmail(
+      session?.user?.email,
+      typeof envAllowlist === "string" ? envAllowlist : undefined,
+    )
+  ) {
+    throw new HTTPException(403, {
+      message: "Internal operator access required",
+    });
+  }
+
+  await next();
+});
+
+export const requireBackofficeAccess = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const session = c.get("session");
+  const roles = parsePlatformRoles(session?.user?.role);
+
+  if (!canAccessBackoffice(session?.user?.role)) {
+    throw new HTTPException(403, {
+      message: "Backoffice access required",
+    });
+  }
+
+  c.set("platformRoles", roles);
+  await next();
+});
+
+export const requirePlatformAdmin = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const session = c.get("session");
+  const roles = parsePlatformRoles(session?.user?.role);
+
+  if (!hasPlatformRole(session?.user?.role, "platform_admin")) {
+    throw new HTTPException(403, {
+      message: "Platform admin access required",
+    });
+  }
+
+  c.set("platformRoles", roles);
+  await next();
+});
 
 /**
  * Create a protected route handler with permission check.

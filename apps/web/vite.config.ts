@@ -9,9 +9,11 @@ import fs from 'node:fs'
 // Only load HTTPS certs in dev (they don't exist in CI)
 const keyPath = path.resolve(__dirname, './certs/localhost+1-key.pem')
 const certPath = path.resolve(__dirname, './certs/localhost+1.pem')
-const httpsConfig = fs.existsSync(keyPath) && fs.existsSync(certPath)
-  ? { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }
-  : undefined
+const useHttpsInDev = process.env.VITE_DEV_HTTPS === 'true'
+const httpsConfig =
+  useHttpsInDev && fs.existsSync(keyPath) && fs.existsSync(certPath)
+    ? { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) }
+    : undefined
 
 export default defineConfig({
   server: {
@@ -27,8 +29,9 @@ export default defineConfig({
       projects: ['./tsconfig.json'],
     }),
     tailwindcss(),
-    tanstackRouter(),
+    tanstackRouter({
+      autoCodeSplitting: true,
+    }),
     viteReact(),
   ],
 })
-

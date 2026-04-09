@@ -98,7 +98,7 @@ function NewClientPage() {
     if (!invitationId) return ''
     // Use the portal URL (port 5174)
     const host = window.location.hostname
-    return `https://${host}:5174/accept-invite?token=${invitationId}`
+    return `${window.location.protocol}//${host}:5174/accept-invite?token=${invitationId}`
   }
 
   const handleCopyLink = async () => {

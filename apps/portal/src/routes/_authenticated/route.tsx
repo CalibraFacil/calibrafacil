@@ -1,4 +1,9 @@
-import { Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  Navigate,
+  Outlet,
+  createFileRoute,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -34,7 +39,10 @@ function getWebAppUrl(): string {
   }
   const host =
     typeof window !== "undefined" ? window.location.hostname : "localhost";
-  return `https://${host}:5173`;
+  if (host === "localhost" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+    return `https://${host}:5173`;
+  }
+  return "https://calibrafacil.com";
 }
 
 type PortalOrganization = {
@@ -57,7 +65,7 @@ function PortalLayout() {
   const hasSetupContext = useRef(false);
   const [isSettingUp, setIsSettingUp] = useState(true);
 
-  // Fetch CLIENT organizations where user is a client_user (not owner/admin)
+  // Fetch CLIENT organizations where user has an external portal role
   const { data: clientOrganizations = [], isPending: orgsLoading } = useQuery({
     queryKey: ["portal-organizations"],
     queryFn: async (): Promise<Array<PortalOrganization>> => {
@@ -76,13 +84,6 @@ function PortalLayout() {
   });
 
   const hasClientAccess = clientOrganizations.length > 0;
-
-  // Redirect to sign-in if not authenticated
-  useEffect(() => {
-    if (!sessionPending && !session) {
-      navigate({ to: "/sign-in" });
-    }
-  }, [sessionPending, session, navigate]);
 
   // Context Setup: Only runs once on initial load
   // Uses localStorage to remember preferred org, avoiding conflicts with dashboard
@@ -142,13 +143,19 @@ function PortalLayout() {
   ]);
 
   // Show loading state
-  if (
-    sessionPending ||
-    !session ||
-    orgsLoading ||
-    activeOrgLoading ||
-    isSettingUp
-  ) {
+  if (sessionPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Spinner className="size-8" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Navigate to="/sign-in" />;
+  }
+
+  if (orgsLoading || activeOrgLoading || isSettingUp) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Spinner className="size-8" />

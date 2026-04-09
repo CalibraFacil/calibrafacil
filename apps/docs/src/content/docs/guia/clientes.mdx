@@ -1,0 +1,94 @@
+---
+title: Clientes
+description: Gestão de clientes — cadastro, conformidade, usuários do portal e trilha de auditoria.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## Visão Geral
+
+A seção **Clientes** (`/dashboard/clients`) gerencia as empresas ou pessoas que enviam instrumentos para calibração. Cada cliente possui cadastro completo, controle de conformidade e acesso opcional ao [Portal do Cliente](/portal).
+
+## Cadastro de Cliente
+
+<Steps>
+
+1. **Dados básicos**
+
+   - **Nome:** Razão social ou nome completo
+   - **CNPJ/CPF:** Identificação fiscal (validado automaticamente)
+   - **Email:** Endereço de contato principal
+   - **Telefone:** Número de contato
+
+2. **Endereço**
+
+   - CEP (preenche automaticamente rua, bairro, cidade e estado)
+   - Número e complemento
+
+3. **Salvar**
+
+   Ao salvar, o sistema cria automaticamente uma organização do tipo CLIENT vinculada ao cliente. Essa organização é usada para o acesso ao portal.
+
+</Steps>
+
+## Abas do Cliente
+
+A página de detalhes do cliente possui 5 abas:
+
+| Aba | Conteúdo |
+| :--- | :--- |
+| **Info** | Dados cadastrais, endereço, informações fiscais |
+| **Ativos** | Lista de instrumentos/equipamentos do cliente |
+| **Calibrações** | Histórico de calibrações realizadas |
+| **Usuários** | Usuários com acesso ao portal do cliente |
+| **Compliance** | Status de conformidade, contratos e qualificação |
+
+## Conformidade do Cliente
+
+O sistema rastreia o status de qualificação de cada cliente conforme os requisitos da **ISO/IEC 17025:2017, Cláusula 7.1** (Análise de pedidos, propostas e contratos).
+
+### Status de Qualificação
+
+| Status | Descrição |
+| :--- | :--- |
+| **Pendente** | Cliente recém-cadastrado, ainda não qualificado |
+| **Qualificado** | Requisitos atendidos, autorizado para calibrações |
+| **Suspenso** | Qualificação temporariamente suspensa |
+| **Expirado** | Qualificação vencida, necessita renovação |
+
+### Controle de Contratos
+
+- **Data de assinatura do contrato**
+- **Data de expiração do contrato**
+- **Reconhecimento de requisitos de qualidade**
+
+<Aside type="note">
+  Alterações no status de compliance exigem **motivo obrigatório**, registrado na trilha de auditoria para conformidade ISO.
+</Aside>
+
+## Usuários do Portal
+
+Na aba **Usuários**, administradores podem gerenciar o acesso ao [Portal do Cliente](/portal):
+
+- **Convidar usuário:** Envia um convite por email para acessar o portal
+- **Remover usuário:** Revoga o acesso ao portal
+- **Reenviar convite:** Para convites pendentes
+- **Cancelar convite:** Remove convites não aceitos
+
+<Aside type="caution">
+  O Portal do Cliente está disponível nos planos **Standard**, **Professional** e **Enterprise**. Apenas laboratórios no plano Free não podem convidar usuários para o portal.
+</Aside>
+
+## Trilha de Auditoria
+
+Todas as alterações nos dados do cliente são registradas automaticamente:
+
+| Informação | Descrição |
+| :--- | :--- |
+| **Ação** | Tipo de alteração (criação, atualização, alteração de compliance, convite, remoção) |
+| **Alterações** | Detalhamento do que mudou (antes/depois) |
+| **Responsável** | Usuário que realizou a ação |
+| **Data/hora** | Timestamp da alteração |
+| **Motivo** | Justificativa (obrigatória para alterações de compliance) |
+
+Este registro atende à **ISO/IEC 17025:2017, Cláusula 8.4** (Controle de registros).

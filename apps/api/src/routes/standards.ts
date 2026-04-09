@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
   referenceStandard,
@@ -15,7 +16,14 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { withCache, withInvalidation } from "../middleware/cache";
 import { eq, and, or, ilike, desc, count, isNull, lte, gte } from "drizzle-orm";
+import { buildUnitScopeCondition } from "../lib/units";
+
+const CommandPaletteStandardSearchQuerySchema = z.object({
+  query: z.string().trim().min(2),
+  limit: z.coerce.number().min(1).max(10).default(5),
+});
 
 /**
  * Reference Standards Router - Lab's Own Calibration Equipment (ISO 17025 Clause 6.4)
@@ -37,6 +45,53 @@ import { eq, and, or, ilike, desc, count, isNull, lte, gte } from "drizzle-orm";
  */
 export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
+  // GET /search - Lightweight search for command palette
+  // =========================================================================
+  .get(
+    "/search",
+    ...withLabPermission({ standard: ["read"] }),
+    withCache("standards-search", 30),
+    zValidator("query", CommandPaletteStandardSearchQuerySchema),
+    async (c) => {
+      const member = c.get("member");
+      const { query, limit } = c.req.valid("query");
+
+      try {
+        const results = await db
+          .select({
+            id: referenceStandard.id,
+            name: referenceStandard.name,
+            serialNumber: referenceStandard.serialNumber,
+            manufacturer: referenceStandard.manufacturer,
+          })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.organizationId, member.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, member),
+              isNull(referenceStandard.deletedAt),
+              or(
+                ilike(referenceStandard.name, `%${query}%`),
+                ilike(referenceStandard.serialNumber, `%${query}%`),
+                ilike(referenceStandard.certificateNumber, `%${query}%`),
+                ilike(referenceStandard.manufacturer, `%${query}%`),
+                ilike(referenceStandard.model, `%${query}%`),
+                ilike(referenceStandard.type, `%${query}%`),
+              )!,
+            ),
+          )
+          .orderBy(referenceStandard.name)
+          .limit(limit);
+
+        return c.json(results);
+      } catch (error) {
+        console.error("Error searching standards:", error);
+        return c.json({ error: "Erro ao buscar padrões" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
   // GET / - List reference standards with pagination and filtering
   // =========================================================================
   .get(
@@ -52,6 +107,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
       // Build conditions - always scope to organization and exclude soft-deleted
       const conditions = [
         eq(referenceStandard.organizationId, member.organizationId),
+        buildUnitScopeCondition(referenceStandard.unitId, member),
         isNull(referenceStandard.deletedAt),
       ];
 
@@ -139,6 +195,44 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /:id/label - Get reference standard label by ID
+  // =========================================================================
+  .get(
+    "/:id/label",
+    ...withLabPermission({ standard: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [found] = await db
+        .select({
+          id: referenceStandard.id,
+          label: referenceStandard.name,
+        })
+        .from(referenceStandard)
+        .where(
+          and(
+            eq(referenceStandard.id, id),
+            eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
+            isNull(referenceStandard.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!found) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
+      }
+
+      return c.json(found);
+    },
+  )
+
+  // =========================================================================
   // GET /:id - Get single reference standard by ID
   // =========================================================================
   .get("/:id", ...withLabPermission({ standard: ["read"] }), async (c) => {
@@ -156,6 +250,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
         and(
           eq(referenceStandard.id, id),
           eq(referenceStandard.organizationId, member.organizationId),
+          buildUnitScopeCondition(referenceStandard.unitId, member),
           isNull(referenceStandard.deletedAt),
         ),
       )
@@ -185,16 +280,25 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ standard: ["create"] }),
+    withInvalidation("standards"),
     zValidator("json", CreateReferenceStandardSchema),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
 
+      if (!member.activeUnitId) {
+        return c.json(
+          { error: "Selecione uma unidade específica para criar padrões" },
+          400,
+        );
+      }
+
       // Create the reference standard
       const [newStandard] = await db
         .insert(referenceStandard)
         .values({
+          unitId: member.activeUnitId,
           organizationId: member.organizationId,
           name: input.name,
           type: input.type || null,
@@ -225,7 +329,15 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
       await db.insert(referenceStandardAuditLog).values({
         standardId: newStandard.id,
         action: "create",
-        changes: { initial: input },
+        changes: {
+          initial: {
+            ...input,
+            id: newStandard.id,
+            unitId: newStandard.unitId,
+            organizationId: newStandard.organizationId,
+            createdBy: newStandard.createdBy,
+          },
+        },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
@@ -240,6 +352,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ standard: ["update"] }),
+    withInvalidation("standards"),
     zValidator("json", UpdateReferenceStandardSchema),
     async (c) => {
       const member = c.get("member");
@@ -259,6 +372,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(referenceStandard.id, id),
             eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
             isNull(referenceStandard.deletedAt),
           ),
         )
@@ -444,52 +558,58 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Soft delete reference standard
   // =========================================================================
-  .delete("/:id", ...withLabPermission({ standard: ["delete"] }), async (c) => {
-    const member = c.get("member");
-    const session = c.get("session");
-    const id = parseInt(c.req.param("id"), 10);
+  .delete(
+    "/:id",
+    ...withLabPermission({ standard: ["delete"] }),
+    withInvalidation("standards"),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
 
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
 
-    const [existing] = await db
-      .select()
-      .from(referenceStandard)
-      .where(
-        and(
-          eq(referenceStandard.id, id),
-          eq(referenceStandard.organizationId, member.organizationId),
-          isNull(referenceStandard.deletedAt),
-        ),
-      )
-      .limit(1);
+      const [existing] = await db
+        .select()
+        .from(referenceStandard)
+        .where(
+          and(
+            eq(referenceStandard.id, id),
+            eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
+            isNull(referenceStandard.deletedAt),
+          ),
+        )
+        .limit(1);
 
-    if (!existing) {
-      return c.json({ error: "Padrão não encontrado" }, 404);
-    }
+      if (!existing) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
+      }
 
-    // Soft delete
-    const [updated] = await db
-      .update(referenceStandard)
-      .set({ deletedAt: new Date(), status: "INACTIVE" })
-      .where(eq(referenceStandard.id, id))
-      .returning();
+      // Soft delete
+      const [updated] = await db
+        .update(referenceStandard)
+        .set({ deletedAt: new Date(), status: "INACTIVE" })
+        .where(eq(referenceStandard.id, id))
+        .returning();
 
-    // Audit log
-    await db.insert(referenceStandardAuditLog).values({
-      standardId: id,
-      action: "delete",
-      changes: { deletedAt: { old: null, new: new Date().toISOString() } },
-      performedBy: session.user.id,
-      ipAddress: c.req.header("x-forwarded-for") || null,
-    });
+      // Audit log
+      await db.insert(referenceStandardAuditLog).values({
+        standardId: id,
+        action: "delete",
+        changes: { deletedAt: { old: null, new: new Date().toISOString() } },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
 
-    return c.json({
-      message: "Padrão removido com sucesso",
-      data: updated,
-    });
-  })
+      return c.json({
+        message: "Padrão removido com sucesso",
+        data: updated,
+      });
+    },
+  )
 
   // =========================================================================
   // POST /:id/renew - Renew calibration certificate
@@ -498,6 +618,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/renew",
     ...withLabPermission({ standard: ["renew"] }),
+    withInvalidation("standards"),
     zValidator("json", RenewCertificateSchema),
     async (c) => {
       const member = c.get("member");
@@ -517,6 +638,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(referenceStandard.id, id),
             eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
             isNull(referenceStandard.deletedAt),
           ),
         )
@@ -651,6 +773,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(referenceStandard.id, id),
             eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
           ),
         )
         .limit(1);

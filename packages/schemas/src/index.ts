@@ -36,7 +36,7 @@ export type Address = z.infer<typeof AddressSchema>;
 export const CreateCustomerSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   taxId: z.string().optional(),
-  email: z.string().email("Email invalido").optional().or(z.literal("")),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
   phone: z.string().optional(),
   address: AddressSchema.optional(),
 });
@@ -257,13 +257,137 @@ export const ListAssetsQuerySchema = z.object({
 export type ListAssetsQuery = z.infer<typeof ListAssetsQuerySchema>;
 
 // =============================================================================
+// CALIBRATION REQUEST SCHEMAS - Portal Intake Queue
+// =============================================================================
+
+export const CalibrationRequestStatusSchema = z.enum([
+  "PENDING",
+  "UNDER_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "CONVERTED",
+]);
+
+export type CalibrationRequestStatus = z.infer<
+  typeof CalibrationRequestStatusSchema
+>;
+
+export const CreateCalibrationRequestSchema = z.object({
+  assetIds: z
+    .array(z.coerce.number().min(1, "Ativo inválido"))
+    .min(1, "Selecione pelo menos um ativo")
+    .max(100, "Selecione no máximo 100 ativos por solicitação")
+    .refine((assetIds) => new Set(assetIds).size === assetIds.length, {
+      message: "Não repita ativos na mesma solicitação",
+    }),
+  observations: z.string().trim().max(2000).optional(),
+  requestedDueDate: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Prazo solicitado inválido",
+    })
+    .optional()
+    .nullable(),
+});
+
+export type CreateCalibrationRequestInput = z.infer<
+  typeof CreateCalibrationRequestSchema
+>;
+
+export const ListCalibrationRequestsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  query: z.string().optional(),
+  status: CalibrationRequestStatusSchema.optional(),
+  customerId: z.coerce.number().optional(),
+  dateFrom: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data inicial invalida",
+    })
+    .optional(),
+  dateTo: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data final invalida",
+    })
+    .optional(),
+});
+
+export type ListCalibrationRequestsQuery = z.infer<
+  typeof ListCalibrationRequestsQuerySchema
+>;
+
+export const ReviewCalibrationRequestSchema = z.object({
+  internalNotes: z.string().trim().max(2000).optional(),
+});
+
+export type ReviewCalibrationRequestInput = z.infer<
+  typeof ReviewCalibrationRequestSchema
+>;
+
+export const ApproveCalibrationRequestSchema = z.object({
+  internalNotes: z.string().trim().max(2000).optional(),
+});
+
+export type ApproveCalibrationRequestInput = z.infer<
+  typeof ApproveCalibrationRequestSchema
+>;
+
+export const RejectCalibrationRequestSchema = z.object({
+  reason: z.string().trim().min(3, "Motivo e obrigatorio"),
+  internalNotes: z.string().trim().max(2000).optional(),
+});
+
+export type RejectCalibrationRequestInput = z.infer<
+  typeof RejectCalibrationRequestSchema
+>;
+
+export const ConvertCalibrationRequestItemSchema = z.object({
+  itemId: z.coerce.number().min(1, "Item invalido"),
+  serviceId: z.coerce.number().min(1, "Servico e obrigatorio"),
+  technicianId: z.string().optional().nullable(),
+  dueDate: z
+    .string()
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data prevista invalida",
+    })
+    .optional()
+    .nullable(),
+});
+
+export const ConvertCalibrationRequestSchema = z.object({
+  items: z
+    .array(ConvertCalibrationRequestItemSchema)
+    .min(1, "Informe ao menos um item para conversao")
+    .max(100, "Converta no maximo 100 itens por vez")
+    .refine(
+      (items) =>
+        new Set(items.map((item) => item.itemId)).size === items.length,
+      {
+        message: "Nao repita itens na conversao",
+      },
+    ),
+});
+
+export type ConvertCalibrationRequestInput = z.infer<
+  typeof ConvertCalibrationRequestSchema
+>;
+
+// =============================================================================
 // CALIBRATION METHOD SCHEMAS - ISO 17025 Validated Templates
 // =============================================================================
 
 /**
  * Method status values
  */
-export const MethodStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]);
+export const MethodStatusSchema = z.enum([
+  "DRAFT",
+  "PENDING_APPROVAL",
+  "TECHNICAL_REVIEWED",
+  "PUBLISHED",
+  "ARCHIVED",
+]);
 export type MethodStatus = z.infer<typeof MethodStatusSchema>;
 
 /**
@@ -275,9 +399,9 @@ export const MethodTableColumnSchema = z.object({
     .min(1, "Chave é obrigatória")
     .regex(
       /^[a-zA-Z][a-zA-Z0-9_]*$/,
-      "Chave deve comecar com letra e conter apenas letras, numeros e underscore",
+      "Chave deve começar com letra e conter apenas letras, números e underscore",
     ),
-  label: z.string().min(1, "Rotulo é obrigatório"),
+  label: z.string().min(1, "Rótulo é obrigatório"),
   type: z.enum(["text", "number"]),
   unit: z.string().optional(),
 });
@@ -294,7 +418,7 @@ export const MethodInputFieldSchema = z
       .min(1, "Chave é obrigatória")
       .regex(
         /^[a-zA-Z][a-zA-Z0-9_]*$/,
-        "Chave deve comecar com letra e conter apenas letras, numeros e underscore",
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
       ),
     label: z.string().min(1, "Rótulo é obrigatório"),
     type: z.enum(["text", "number", "select", "table"]),
@@ -315,7 +439,7 @@ export const MethodInputFieldSchema = z
       }
       return true;
     },
-    { message: "Opcoes sao obrigatorias para campos do tipo 'select'" },
+    { message: "Opções são obrigatórias para campos do tipo 'select'" },
   )
   .refine(
     (data) => {
@@ -328,7 +452,7 @@ export const MethodInputFieldSchema = z
       }
       return true;
     },
-    { message: "Colunas sao obrigatorias para campos do tipo 'table'" },
+    { message: "Colunas são obrigatórias para campos do tipo 'table'" },
   );
 
 export type MethodInputField = z.infer<typeof MethodInputFieldSchema>;
@@ -342,7 +466,7 @@ export const MethodFormulaSchema = z.object({
     .min(1, "Chave de saida é obrigatória")
     .regex(
       /^[a-zA-Z][a-zA-Z0-9_]*$/,
-      "Chave deve comecar com letra e conter apenas letras, numeros e underscore",
+      "Chave deve começar com letra e conter apenas letras, números e underscore",
     ),
   expression: z.string().min(1, "Expressão é obrigatória"),
   label: z.string().optional(),
@@ -366,7 +490,7 @@ export type MethodValidation = z.infer<typeof MethodValidationSchema>;
  * Type B uncertainty component for method defaults
  */
 export const MethodTypeBComponentSchema = z.object({
-  name: z.string().min(1, "Nome e obrigatorio"),
+  name: z.string().min(1, "Nome é obrigatório"),
   value: z.number().positive("Valor deve ser positivo"),
   distribution: z.enum(["normal", "rectangular", "triangular", "u-shaped"]),
   coverageFactor: z.number().positive().optional(),
@@ -413,6 +537,17 @@ export const ListMethodsQuerySchema = z.object({
 });
 
 export type ListMethodsQuery = z.infer<typeof ListMethodsQuerySchema>;
+
+/**
+ * Schema for returning a method to draft with optional reason
+ */
+export const ReturnMethodToDraftSchema = z.object({
+  reason: z.string().trim().min(3, "Motivo é obrigatório"),
+});
+
+export type ReturnMethodToDraftInput = z.infer<
+  typeof ReturnMethodToDraftSchema
+>;
 
 // =============================================================================
 // SERVICE SCHEMAS - Commercial Service Catalog (Product Registry)
@@ -553,7 +688,7 @@ export const CreateReferenceStandardSchema = z
     },
     {
       message:
-        "Informe o valor de referencia e incerteza, ou os valores certificados do conjunto",
+        "Informe o valor de referência e incerteza, ou os valores certificados do conjunto",
     },
   );
 
@@ -604,7 +739,7 @@ export const RenewCertificateSchema = z.object({
   coverageFactor: z.coerce.number().positive().optional(),
   certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
   // Required for audit trail (ISO 17025)
-  reason: z.string().min(1, "Motivo da renovacao e obrigatorio"),
+  reason: z.string().min(1, "Motivo da renovação é obrigatório"),
 });
 
 export type RenewCertificateInput = z.infer<typeof RenewCertificateSchema>;
@@ -630,6 +765,7 @@ export type ListReferenceStandardsQuery = z.infer<
 
 /**
  * Job status values for workflow tracking
+ * - SUPERSEDED: Certificate was amended and replaced (ISO 17025 Clause 7.8.4.1)
  */
 export const JobStatusSchema = z.enum([
   "DRAFT",
@@ -639,6 +775,7 @@ export const JobStatusSchema = z.enum([
   "APPROVED",
   "REJECTED",
   "CANCELED",
+  "SUPERSEDED",
 ]);
 
 export type JobStatus = z.infer<typeof JobStatusSchema>;
@@ -664,8 +801,8 @@ export type MethodSnapshot = z.infer<typeof MethodSnapshotSchema>;
  * The method snapshot is created server-side from the service's linked method
  */
 export const CreateJobSchema = z.object({
-  assetId: z.coerce.number().min(1, "Ativo e obrigatorio"),
-  serviceId: z.coerce.number().min(1, "Servico e obrigatorio"),
+  assetId: z.coerce.number().min(1, "Ativo é obrigatório"),
+  serviceId: z.coerce.number().min(1, "Serviço é obrigatório"),
   technicianId: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(), // ISO date string
 });
@@ -717,6 +854,7 @@ export type SubmitForReviewInput = z.infer<typeof SubmitForReviewSchema>;
  */
 export const ApproveJobSchema = z.object({
   reason: z.string().optional(), // Optional approval notes
+  environmentalJustification: z.string().optional(), // Required if env conditions out of limits
 });
 
 export type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
@@ -725,7 +863,7 @@ export type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
  * Schema for rejecting a job
  */
 export const RejectJobSchema = z.object({
-  reason: z.string().min(1, "Motivo da rejeicao e obrigatorio"),
+  reason: z.string().min(1, "Motivo da rejeição é obrigatório"),
 });
 
 export type RejectJobInput = z.infer<typeof RejectJobSchema>;
@@ -734,10 +872,22 @@ export type RejectJobInput = z.infer<typeof RejectJobSchema>;
  * Schema for canceling a job
  */
 export const CancelJobSchema = z.object({
-  reason: z.string().min(1, "Motivo do cancelamento e obrigatorio"),
+  reason: z.string().min(1, "Motivo do cancelamento é obrigatório"),
 });
 
 export type CancelJobInput = z.infer<typeof CancelJobSchema>;
+
+/**
+ * Schema for amending a job (ISO 17025 Clause 7.8.4.1)
+ * Creates a corrected version of an approved certificate
+ */
+export const AmendJobSchema = z.object({
+  reason: z
+    .string()
+    .min(10, "Motivo da retificação deve ter pelo menos 10 caracteres"),
+});
+
+export type AmendJobInput = z.infer<typeof AmendJobSchema>;
 
 /**
  * Standard Snapshot schema - Frozen copy of reference standard at execution
@@ -759,6 +909,35 @@ export const StandardSnapshotSchema = z.object({
 export type StandardSnapshot = z.infer<typeof StandardSnapshotSchema>;
 
 /**
+ * Environmental data input - ISO 17025:2017 Clause 7.1.2
+ * Captured during job execution for environmental conditions monitoring
+ */
+export const EnvironmentalDataSchema = z.object({
+  temperature: z.number().nullable(),
+  humidity: z.number().nullable(),
+  pressure: z.number().nullable(),
+});
+
+export type EnvironmentalDataInput = z.infer<typeof EnvironmentalDataSchema>;
+
+/**
+ * Environmental limits configuration - per org or per asset type
+ */
+export const EnvironmentalLimitsSchema = z.object({
+  assetTypeId: z.number().nullable(),
+  temperatureMin: z.number().nullable(),
+  temperatureMax: z.number().nullable(),
+  humidityMin: z.number().nullable(),
+  humidityMax: z.number().nullable(),
+  pressureMin: z.number().nullable(),
+  pressureMax: z.number().nullable(),
+});
+
+export type EnvironmentalLimitsInput = z.infer<
+  typeof EnvironmentalLimitsSchema
+>;
+
+/**
  * Schema for executing a job (saving worksheet data)
  * Includes selected reference standards for ISO 17025 traceability
  */
@@ -766,6 +945,7 @@ export const ExecuteJobSchema = z.object({
   selectedStandardIds: z.array(z.number()).optional(),
   data: z.record(z.string(), z.unknown()),
   results: z.record(z.string(), z.unknown()).optional(),
+  environment: EnvironmentalDataSchema.optional(),
 });
 
 export type ExecuteJobInput = z.infer<typeof ExecuteJobSchema>;
@@ -789,3 +969,616 @@ export const ListJobsQuerySchema = z.object({
 });
 
 export type ListJobsQuery = z.infer<typeof ListJobsQuerySchema>;
+
+// =============================================================================
+// NOTIFICATION SCHEMAS - In-App & Email Notifications (ISO 17025 Compliance)
+// =============================================================================
+
+/**
+ * Notification type enum
+ */
+export const NotificationTypeSchema = z.enum([
+  "JOB_SUBMITTED_FOR_REVIEW",
+  "JOB_APPROVED",
+  "JOB_REJECTED",
+  "JOB_ASSIGNED",
+  "CERTIFICATE_READY",
+  "CERTIFICATE_AMENDED", // ISO 17025 Clause 7.8.4.1 - Certificate amendment notification
+  "ASSET_DUE_FOR_RECALIBRATION",
+  "STANDARD_EXPIRING",
+  "JOB_OVERDUE",
+  "PAYMENT_RECEIVED",
+  "PAYMENT_FAILED",
+  "NC_CREATED", // ISO 17025 Clause 8.7 - New non-conformance registered
+  "NC_ESCALATED_TO_CAPA", // ISO 17025 Clause 8.7 - NC escalated to CAPA
+  "COMPETENCE_EXPIRING", // ISO 17025 Clause 6.2.3
+  "COMPETENCE_EXPIRED", // ISO 17025 Clause 6.2.3
+  "COMPETENCE_REQUESTED", // ISO 17025 Clause 6.2.3
+  "COMPETENCE_APPROVED", // ISO 17025 Clause 6.2.3
+  "CUSTOMER_SUCCESS_WORKFLOW_BLOCKED",
+  "CUSTOMER_SUCCESS_GO_LIVE_AT_RISK",
+  "CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE",
+  "CUSTOMER_SUCCESS_SLA_DUE_SOON",
+  "CUSTOMER_SUCCESS_SLA_BREACHED",
+  "CUSTOMER_SUCCESS_ESCALATION_REQUIRED",
+]);
+
+export type NotificationType = z.infer<typeof NotificationTypeSchema>;
+
+/**
+ * Notification status values
+ */
+export const NotificationStatusSchema = z.enum(["UNREAD", "READ", "ARCHIVED"]);
+
+export type NotificationStatus = z.infer<typeof NotificationStatusSchema>;
+
+/**
+ * Notification priority levels
+ */
+export const NotificationPrioritySchema = z.enum(["HIGH", "MEDIUM", "LOW"]);
+
+export type NotificationPriority = z.infer<typeof NotificationPrioritySchema>;
+
+/**
+ * Schema for listing notifications with pagination and filters
+ */
+export const ListNotificationsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  status: NotificationStatusSchema.optional(),
+  type: NotificationTypeSchema.optional(),
+  priority: NotificationPrioritySchema.optional(),
+});
+
+export type ListNotificationsQuery = z.infer<
+  typeof ListNotificationsQuerySchema
+>;
+
+/**
+ * Schema for marking notifications as read
+ */
+export const MarkNotificationsReadSchema = z.object({
+  notificationIds: z
+    .array(z.number())
+    .min(1, "Selecione ao menos uma notificação"),
+});
+
+export type MarkNotificationsReadInput = z.infer<
+  typeof MarkNotificationsReadSchema
+>;
+
+/**
+ * Individual notification channel preference
+ */
+export const NotificationChannelPreferenceSchema = z.object({
+  inApp: z.boolean().default(true),
+  email: z.boolean().default(true),
+});
+
+export type NotificationChannelPreference = z.infer<
+  typeof NotificationChannelPreferenceSchema
+>;
+
+/**
+ * Full notification preferences map
+ * Note: Using z.string() for keys to avoid z.record(enum, ...) validation issues
+ * The application layer handles unknown keys gracefully
+ */
+export const NotificationPreferencesMapSchema = z.record(
+  z.string(),
+  NotificationChannelPreferenceSchema,
+);
+
+export type NotificationPreferencesMap = z.infer<
+  typeof NotificationPreferencesMapSchema
+>;
+
+/**
+ * Digest frequency options
+ */
+export const DigestFrequencySchema = z.enum(["NONE", "DAILY", "WEEKLY"]);
+
+export type DigestFrequency = z.infer<typeof DigestFrequencySchema>;
+
+/**
+ * Schema for updating notification preferences
+ */
+export const UpdateNotificationPreferencesSchema = z.object({
+  preferences: NotificationPreferencesMapSchema.optional(),
+  emailEnabled: z.boolean().optional(),
+  notifySelfActions: z.boolean().optional(),
+  digestFrequency: DigestFrequencySchema.optional(),
+});
+
+export type UpdateNotificationPreferencesInput = z.infer<
+  typeof UpdateNotificationPreferencesSchema
+>;
+
+// =============================================================================
+// NON-CONFORMANCE SCHEMAS - ISO 17025:2017 Clause 8.7
+// =============================================================================
+
+/**
+ * NC type values
+ */
+export const NonConformanceTypeSchema = z.enum([
+  "work",
+  "equipment",
+  "documentation",
+]);
+
+export type NonConformanceType = z.infer<typeof NonConformanceTypeSchema>;
+
+/**
+ * NC disposition values
+ */
+export const NonConformanceDispositionSchema = z.enum([
+  "rework",
+  "scrap",
+  "use_as_is",
+  "concession",
+]);
+
+export type NonConformanceDisposition = z.infer<
+  typeof NonConformanceDispositionSchema
+>;
+
+/**
+ * NC status values
+ */
+export const NonConformanceStatusSchema = z.enum([
+  "open",
+  "under_review",
+  "resolved",
+]);
+
+export type NonConformanceStatus = z.infer<typeof NonConformanceStatusSchema>;
+
+/**
+ * Schema for creating a new non-conformance
+ */
+export const CreateNonConformanceSchema = z.object({
+  jobId: z.coerce.number().optional().nullable(),
+  type: NonConformanceTypeSchema,
+  description: z
+    .string()
+    .min(10, "Descrição deve ter pelo menos 10 caracteres"),
+  detectedAt: z.string().min(1, "Data de detecção é obrigatória"),
+});
+
+export type CreateNonConformanceInput = z.infer<
+  typeof CreateNonConformanceSchema
+>;
+
+/**
+ * Schema for setting disposition on an NC
+ * "use_as_is" and "concession" require justification
+ */
+export const SetDispositionSchema = z
+  .object({
+    disposition: NonConformanceDispositionSchema,
+    justification: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (
+        (data.disposition === "use_as_is" ||
+          data.disposition === "concession") &&
+        (!data.justification || data.justification.length < 10)
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message:
+        "Justificativa com pelo menos 10 caracteres é obrigatória para disposição 'uso como esta' ou 'concessão'",
+    },
+  );
+
+export type SetDispositionInput = z.infer<typeof SetDispositionSchema>;
+
+/**
+ * Schema for resolving an NC
+ */
+export const ResolveNonConformanceSchema = z.object({
+  correctionTaken: z
+    .string()
+    .min(10, "Correção tomada deve ter pelo menos 10 caracteres"),
+});
+
+export type ResolveNonConformanceInput = z.infer<
+  typeof ResolveNonConformanceSchema
+>;
+
+/**
+ * Schema for escalating NC to CAPA
+ */
+export const EscalateToCapaSchema = z.object({
+  rootCauseAnalysis: z.string().optional(),
+  actionPlan: z.string().optional(),
+  dueDate: z.string().optional().nullable(),
+  responsibleId: z.string().optional().nullable(),
+});
+
+export type EscalateToCapaInput = z.infer<typeof EscalateToCapaSchema>;
+
+/**
+ * Schema for listing NCs with pagination and filtering
+ */
+export const ListNonConformancesQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  query: z.string().optional(),
+  status: NonConformanceStatusSchema.optional(),
+  type: NonConformanceTypeSchema.optional(),
+  jobId: z.coerce.number().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+});
+
+export type ListNonConformancesQuery = z.infer<
+  typeof ListNonConformancesQuerySchema
+>;
+
+// =============================================================================
+// CORRECTIVE ACTION (CAPA) SCHEMAS - ISO 17025:2017 Clause 8.7 / 8.9
+// =============================================================================
+
+/**
+ * CAPA status values
+ */
+export const CorrectiveActionStatusSchema = z.enum([
+  "OPEN",
+  "INVESTIGATION",
+  "IMPLEMENTATION",
+  "VERIFICATION",
+  "CLOSED",
+]);
+
+export type CorrectiveActionStatus = z.infer<
+  typeof CorrectiveActionStatusSchema
+>;
+
+/**
+ * CAPA source - where the CAPA originated from
+ */
+export const CorrectiveActionSourceSchema = z.enum([
+  "internal_audit",
+  "customer_complaint",
+  "nc_detection",
+  "external_audit",
+  "management_review",
+]);
+
+export type CorrectiveActionSource = z.infer<
+  typeof CorrectiveActionSourceSchema
+>;
+
+/**
+ * CAPA type - corrective vs preventive
+ */
+export const CorrectiveActionTypeSchema = z.enum(["corrective", "preventive"]);
+
+export type CorrectiveActionType = z.infer<typeof CorrectiveActionTypeSchema>;
+
+/**
+ * CAPA severity classification
+ */
+export const CorrectiveActionSeveritySchema = z.enum([
+  "minor",
+  "major",
+  "critical",
+]);
+
+export type CorrectiveActionSeverity = z.infer<
+  typeof CorrectiveActionSeveritySchema
+>;
+
+/**
+ * CAPA category - affected area
+ */
+export const CorrectiveActionCategorySchema = z.enum([
+  "method",
+  "equipment",
+  "personnel",
+  "procedure",
+  "environment",
+  "other",
+]);
+
+export type CorrectiveActionCategory = z.infer<
+  typeof CorrectiveActionCategorySchema
+>;
+
+/**
+ * Root cause analysis method
+ */
+export const RootCauseAnalysisMethodSchema = z.enum([
+  "5_whys",
+  "fishbone",
+  "pareto",
+  "other",
+]);
+
+export type RootCauseAnalysisMethod = z.infer<
+  typeof RootCauseAnalysisMethodSchema
+>;
+
+/**
+ * Schema for creating a new CAPA
+ */
+export const CreateCorrectiveActionSchema = z.object({
+  title: z.string().min(5, "Título deve ter pelo menos 5 caracteres"),
+  description: z
+    .string()
+    .min(10, "Descrição deve ter pelo menos 10 caracteres"),
+  source: CorrectiveActionSourceSchema,
+  sourceReference: z.string().optional().nullable(),
+  detectionDate: z.string().min(1, "Data de detecção é obrigatória"),
+  type: CorrectiveActionTypeSchema,
+  severity: CorrectiveActionSeveritySchema,
+  category: CorrectiveActionCategorySchema,
+  actionPlan: z
+    .string()
+    .min(10, "Plano de acão deve ter pelo menos 10 caracteres"),
+  responsibleId: z.string().min(1, "Responsavel é obrigatório"),
+  dueDate: z.string().min(1, "Data alvo é obrigatória"),
+  rootCauseAnalysis: z.string().optional().nullable(),
+  rootCauseAnalysisMethod: RootCauseAnalysisMethodSchema.optional().nullable(),
+  preventiveMeasures: z.string().optional().nullable(),
+});
+
+export type CreateCorrectiveActionInput = z.infer<
+  typeof CreateCorrectiveActionSchema
+>;
+
+/**
+ * Schema for updating a CAPA
+ */
+export const UpdateCorrectiveActionSchema = z.object({
+  title: z.string().min(5).optional(),
+  description: z.string().min(10).optional(),
+  source: CorrectiveActionSourceSchema.optional(),
+  sourceReference: z.string().optional().nullable(),
+  type: CorrectiveActionTypeSchema.optional(),
+  severity: CorrectiveActionSeveritySchema.optional(),
+  category: CorrectiveActionCategorySchema.optional(),
+  actionPlan: z.string().min(10).optional(),
+  responsibleId: z.string().min(1).optional(),
+  dueDate: z.string().optional().nullable(),
+  rootCauseAnalysis: z.string().optional().nullable(),
+  rootCauseAnalysisMethod: RootCauseAnalysisMethodSchema.optional().nullable(),
+  preventiveMeasures: z.string().optional().nullable(),
+});
+
+export type UpdateCorrectiveActionInput = z.infer<
+  typeof UpdateCorrectiveActionSchema
+>;
+
+/**
+ * Schema for marking a CAPA as implemented
+ */
+export const ImplementCorrectiveActionSchema = z.object({
+  implementationEvidence: z
+    .string()
+    .min(10, "Evidencia de implementação deve ter pelo menos 10 caracteres"),
+});
+
+export type ImplementCorrectiveActionInput = z.infer<
+  typeof ImplementCorrectiveActionSchema
+>;
+
+/**
+ * Schema for verifying CAPA effectiveness
+ */
+export const VerifyCorrectiveActionSchema = z.object({
+  effectivenessConfirmed: z.boolean(),
+  verificationNotes: z
+    .string()
+    .min(10, "Notas de verificação devem ter pelo menos 10 caracteres"),
+});
+
+export type VerifyCorrectiveActionInput = z.infer<
+  typeof VerifyCorrectiveActionSchema
+>;
+
+/**
+ * Schema for closing a CAPA
+ */
+export const CloseCorrectiveActionSchema = z.object({
+  reason: z.string().optional(),
+});
+
+export type CloseCorrectiveActionInput = z.infer<
+  typeof CloseCorrectiveActionSchema
+>;
+
+/**
+ * Schema for listing CAPAs with pagination and filtering
+ */
+export const ListCorrectiveActionsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  query: z.string().optional(),
+  status: CorrectiveActionStatusSchema.optional(),
+  severity: CorrectiveActionSeveritySchema.optional(),
+  category: CorrectiveActionCategorySchema.optional(),
+  source: CorrectiveActionSourceSchema.optional(),
+  type: CorrectiveActionTypeSchema.optional(),
+  responsibleId: z.string().optional(),
+  overdue: z.coerce.boolean().optional(),
+});
+
+export type ListCorrectiveActionsQuery = z.infer<
+  typeof ListCorrectiveActionsQuerySchema
+>;
+
+// =============================================================================
+// PERSONNEL COMPETENCE SCHEMAS - ISO 17025:2017 Clause 6.2.3
+// =============================================================================
+
+/**
+ * Competence workflow status values
+ */
+export const CompetenceStatusSchema = z.enum([
+  "REQUESTED",
+  "TRAINING_ASSIGNED",
+  "IN_TRAINING",
+  "PENDING_EVALUATION",
+  "ACTIVE",
+  "SUSPENDED",
+  "EXPIRED",
+]);
+
+export type CompetenceStatus = z.infer<typeof CompetenceStatusSchema>;
+
+/**
+ * Training type values
+ */
+export const TrainingTypeSchema = z.enum([
+  "internal",
+  "external",
+  "ojt",
+  "proficiency_test",
+]);
+
+export type TrainingType = z.infer<typeof TrainingTypeSchema>;
+
+/**
+ * Training status values
+ */
+export const TrainingStatusSchema = z.enum([
+  "planned",
+  "in_progress",
+  "completed",
+  "failed",
+]);
+
+export type TrainingStatus = z.infer<typeof TrainingStatusSchema>;
+
+/**
+ * Schema for creating a new competence request
+ */
+export const CreateCompetenceRequestSchema = z.object({
+  userId: z.string().min(1, "Técnico é obrigatório"),
+  assetTypeId: z.coerce.number().optional().nullable(),
+  scopeDescription: z
+    .string()
+    .min(5, "Descrição do escopo deve ter pelo menos 5 caracteres"),
+});
+
+export type CreateCompetenceRequestInput = z.infer<
+  typeof CreateCompetenceRequestSchema
+>;
+
+/**
+ * Schema for updating a personnel competence record
+ */
+export const UpdatePersonnelCompetenceSchema = z.object({
+  scopeDescription: z.string().min(5).optional(),
+  notes: z.string().optional().nullable(),
+  expiresAt: z.string().optional().nullable(),
+});
+
+export type UpdatePersonnelCompetenceInput = z.infer<
+  typeof UpdatePersonnelCompetenceSchema
+>;
+
+/**
+ * Schema for assigning training to a competence record
+ */
+export const AssignTrainingSchema = z.object({
+  trainingRecordIds: z
+    .array(z.number())
+    .min(1, "Selecione pelo menos um treinamento"),
+});
+
+export type AssignTrainingInput = z.infer<typeof AssignTrainingSchema>;
+
+/**
+ * Schema for evaluating a competence
+ */
+export const EvaluateCompetenceSchema = z.object({
+  passed: z.boolean(),
+  notes: z.string().optional().nullable(),
+  qualifiedAt: z.string().optional().nullable(),
+  expiresAt: z.string().optional().nullable(),
+});
+
+export type EvaluateCompetenceInput = z.infer<typeof EvaluateCompetenceSchema>;
+
+/**
+ * Schema for listing personnel competences with filters
+ */
+export const ListPersonnelCompetenceQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  userId: z.string().optional(),
+  assetTypeId: z.coerce.number().optional(),
+  status: CompetenceStatusSchema.optional(),
+  expiringWithinDays: z.coerce.number().optional(),
+});
+
+export type ListPersonnelCompetenceQuery = z.infer<
+  typeof ListPersonnelCompetenceQuerySchema
+>;
+
+// =============================================================================
+// TRAINING RECORD SCHEMAS - ISO 17025:2017 Clause 6.2.3
+// =============================================================================
+
+/**
+ * Schema for creating a new training record
+ */
+export const CreateTrainingRecordSchema = z.object({
+  userId: z.string().min(1, "Técnico é obrigatório"),
+  competenceId: z.coerce.number().optional().nullable(),
+  title: z.string().min(3, "Título deve ter pelo menos 3 caracteres"),
+  type: TrainingTypeSchema,
+  provider: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  startDate: z.string().min(1, "Data de início é obrigatória"),
+  endDate: z.string().optional().nullable(),
+  hoursCompleted: z.coerce.number().int().min(0).optional().nullable(),
+  score: z.coerce.number().optional().nullable(),
+  passingScore: z.coerce.number().optional().nullable(),
+  passed: z.boolean().optional().nullable(),
+});
+
+export type CreateTrainingRecordInput = z.infer<
+  typeof CreateTrainingRecordSchema
+>;
+
+/**
+ * Schema for updating a training record
+ */
+export const UpdateTrainingRecordSchema = z.object({
+  title: z.string().min(3).optional(),
+  type: TrainingTypeSchema.optional(),
+  status: TrainingStatusSchema.optional(),
+  provider: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional().nullable(),
+  hoursCompleted: z.coerce.number().int().min(0).optional().nullable(),
+  score: z.coerce.number().optional().nullable(),
+  passingScore: z.coerce.number().optional().nullable(),
+  passed: z.boolean().optional().nullable(),
+});
+
+export type UpdateTrainingRecordInput = z.infer<
+  typeof UpdateTrainingRecordSchema
+>;
+
+/**
+ * Schema for listing training records with filters
+ */
+export const ListTrainingRecordsQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  userId: z.string().optional(),
+  competenceId: z.coerce.number().optional(),
+  status: TrainingStatusSchema.optional(),
+  type: TrainingTypeSchema.optional(),
+});

@@ -1,5 +1,5 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -88,23 +88,6 @@ type AuditLogEntry = {
 
 function ClientComplianceTab() {
   const { id } = useParams({ from: '/dashboard/clients/$id/compliance' })
-  const queryClient = useQueryClient()
-
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
-  const [reason, setReason] = useState('')
-  const [reasonError, setReasonError] = useState<string | null>(null)
-
-  // Form state
-  const [qualificationStatus, setQualificationStatus] =
-    useState<string>('pending')
-  const [qualificationDate, setQualificationDate] = useState('')
-  const [qualificationExpiresAt, setQualificationExpiresAt] = useState('')
-  const [contractNumber, setContractNumber] = useState('')
-  const [contractSignedAt, setContractSignedAt] = useState('')
-  const [contractExpiresAt, setContractExpiresAt] = useState('')
-  const [qualityRequirementsAcknowledged, setQualityRequirementsAcknowledged] =
-    useState(false)
-  const [notes, setNotes] = useState('')
 
   const { data: customer, isLoading: customerLoading } = useQuery({
     queryKey: ['customer', id],
@@ -115,7 +98,10 @@ function ClientComplianceTab() {
       if (!res.ok) {
         throw new Error('Falha ao carregar cliente')
       }
-      return res.json()
+      return res.json() as Promise<{
+        id: number
+        compliance?: CustomerCompliance
+      }>
     },
   })
 
@@ -140,73 +126,6 @@ function ClientComplianceTab() {
       }>
     },
   })
-
-  // Populate form when customer loads
-  useEffect(() => {
-    if (customer?.compliance) {
-      const c = customer.compliance as CustomerCompliance
-      setQualificationStatus(c.qualificationStatus || 'pending')
-      setQualificationDate(c.qualificationDate || '')
-      setQualificationExpiresAt(c.qualificationExpiresAt || '')
-      setContractNumber(c.contractNumber || '')
-      setContractSignedAt(c.contractSignedAt || '')
-      setContractExpiresAt(c.contractExpiresAt || '')
-      setQualityRequirementsAcknowledged(
-        c.qualityRequirementsAcknowledged || false,
-      )
-      setNotes(c.notes || '')
-    }
-  }, [customer])
-
-  const updateComplianceMutation = useMutation({
-    mutationFn: async (data: {
-      compliance: CustomerCompliance
-      reason: string
-    }) => {
-      const res = await api.api.customers[':id'].compliance.$put({
-        param: { id },
-        json: data,
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao atualizar conformidade')
-      }
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer', id] })
-      queryClient.invalidateQueries({ queryKey: ['customer-audit-log', id] })
-      toast.success('Conformidade atualizada!')
-      setSaveDialogOpen(false)
-      setReason('')
-    },
-    onError: (error) => {
-      toast.error(error.message)
-    },
-  })
-
-  const handleSave = () => {
-    setReasonError(null)
-
-    if (!reason.trim()) {
-      setReasonError('Motivo e obrigatorio para alteracoes de conformidade')
-      return
-    }
-
-    updateComplianceMutation.mutate({
-      compliance: {
-        qualificationStatus:
-          qualificationStatus as CustomerCompliance['qualificationStatus'],
-        qualificationDate: qualificationDate || undefined,
-        qualificationExpiresAt: qualificationExpiresAt || undefined,
-        contractNumber: contractNumber || undefined,
-        contractSignedAt: contractSignedAt || undefined,
-        contractExpiresAt: contractExpiresAt || undefined,
-        qualityRequirementsAcknowledged,
-        notes: notes || undefined,
-      },
-      reason: reason.trim(),
-    })
-  }
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
@@ -243,6 +162,137 @@ function ClientComplianceTab() {
 
   if (customerLoading) {
     return <ComplianceSkeleton />
+  }
+
+  if (!customer) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          Cliente não encontrado
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <ClientComplianceForm
+      key={customer.id}
+      customer={customer}
+      customerId={id}
+      auditLogData={auditLogData}
+      auditLoading={auditLoading}
+      formatAction={formatAction}
+      formatDate={formatDate}
+      getStatusLabel={getStatusLabel}
+    />
+  )
+}
+
+function ClientComplianceForm({
+  customer,
+  customerId,
+  auditLogData,
+  auditLoading,
+  formatAction,
+  formatDate,
+  getStatusLabel,
+}: {
+  customer: { id: number; compliance?: CustomerCompliance }
+  customerId: string
+  auditLogData?:
+    | {
+        data: Array<AuditLogEntry>
+        pagination: {
+          page: number
+          limit: number
+          total: number
+          totalPages: number
+        }
+      }
+    | undefined
+  auditLoading: boolean
+  formatAction: (action: string) => string
+  formatDate: (dateString: string) => string
+  getStatusLabel: (status: string) => string
+}) {
+  const queryClient = useQueryClient()
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [reasonError, setReasonError] = useState<string | null>(null)
+
+  const compliance = customer.compliance as CustomerCompliance | undefined
+
+  // Form state
+  const [qualificationStatus, setQualificationStatus] = useState<string>(
+    compliance?.qualificationStatus || 'pending',
+  )
+  const [qualificationDate, setQualificationDate] = useState(
+    compliance?.qualificationDate || '',
+  )
+  const [qualificationExpiresAt, setQualificationExpiresAt] = useState(
+    compliance?.qualificationExpiresAt || '',
+  )
+  const [contractNumber, setContractNumber] = useState(
+    compliance?.contractNumber || '',
+  )
+  const [contractSignedAt, setContractSignedAt] = useState(
+    compliance?.contractSignedAt || '',
+  )
+  const [contractExpiresAt, setContractExpiresAt] = useState(
+    compliance?.contractExpiresAt || '',
+  )
+  const [qualityRequirementsAcknowledged, setQualityRequirementsAcknowledged] =
+    useState(compliance?.qualityRequirementsAcknowledged || false)
+  const [notes, setNotes] = useState(compliance?.notes || '')
+
+  const updateComplianceMutation = useMutation({
+    mutationFn: async (data: {
+      compliance: CustomerCompliance
+      reason: string
+    }) => {
+      const res = await api.api.customers[':id'].compliance.$put({
+        param: { id: customerId },
+        json: data,
+      })
+      if (!res.ok) {
+        throw new Error('Falha ao atualizar conformidade')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer', customerId] })
+      queryClient.invalidateQueries({ queryKey: ['customer-audit-log', customerId] })
+      toast.success('Conformidade atualizada!')
+      setSaveDialogOpen(false)
+      setReason('')
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const handleSave = () => {
+    setReasonError(null)
+
+    if (!reason.trim()) {
+      setReasonError('Motivo e obrigatorio para alteracoes de conformidade')
+      return
+    }
+
+    updateComplianceMutation.mutate({
+      compliance: {
+        qualificationStatus:
+          qualificationStatus as CustomerCompliance['qualificationStatus'],
+        qualificationDate: qualificationDate || undefined,
+        qualificationExpiresAt: qualificationExpiresAt || undefined,
+        contractNumber: contractNumber || undefined,
+        contractSignedAt: contractSignedAt || undefined,
+        contractExpiresAt: contractExpiresAt || undefined,
+        qualityRequirementsAcknowledged,
+        notes: notes || undefined,
+      },
+      reason: reason.trim(),
+    })
   }
 
   return (

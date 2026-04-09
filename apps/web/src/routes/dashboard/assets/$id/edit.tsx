@@ -5,7 +5,7 @@ import {
   useParams,
 } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -68,17 +68,21 @@ interface FormData {
   specifications: Record<string, unknown>
 }
 
-const initialFormData: FormData = {
-  name: '',
-  manufacturer: '',
-  model: '',
-  serialNumber: '',
-  tag: '',
-  status: 'ACTIVE',
-  lastCalibrationDate: undefined,
-  nextCalibrationDate: undefined,
-  comments: '',
-  specifications: {},
+type AssetData = {
+  id: number | string
+  name: string
+  manufacturer?: string | null
+  model?: string | null
+  serialNumber: string
+  tag: string
+  status: string
+  customerName?: string | null
+  assetTypeName?: string | null
+  lastCalibrationDate?: string | Date | null
+  nextCalibrationDate?: string | Date | null
+  comments?: string | null
+  specifications?: Record<string, unknown> | null
+  assetTypeDefinition?: SpecFieldDefinition[] | null
 }
 
 function parseDate(date: string | Date | null | undefined): Date | undefined {
@@ -88,14 +92,7 @@ function parseDate(date: string | Date | null | undefined): Date | undefined {
 }
 
 function EditAssetPage() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const { id } = useParams({ from: '/dashboard/assets/$id/edit' })
-
-  const [formData, setFormData] = useState<FormData>(initialFormData)
-  const [errors, setErrors] = useState<
-    Partial<Record<keyof FormData | string, string>>
-  >({})
 
   // Fetch the asset data
   const {
@@ -111,38 +108,99 @@ function EditAssetPage() {
       if (!res.ok) {
         throw new Error('Falha ao carregar ativo')
       }
-      return res.json()
+      return res.json() as Promise<AssetData>
     },
   })
 
-  // Populate form with asset data when loaded
-  useEffect(() => {
-    if (asset) {
-      setFormData({
-        name: asset.name,
-        manufacturer: asset.manufacturer || '',
-        model: asset.model || '',
-        serialNumber: asset.serialNumber,
-        tag: asset.tag,
-        status: asset.status as FormData['status'],
-        lastCalibrationDate: parseDate(asset.lastCalibrationDate),
-        nextCalibrationDate: parseDate(asset.nextCalibrationDate),
-        comments: asset.comments || '',
-        specifications: (asset.specifications as Record<string, unknown>) || {},
-      })
-    }
-  }, [asset])
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Button variant="ghost" size="sm" disabled className="mb-4">
+            <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
+            Voltar
+          </Button>
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (fetchError || !asset) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            render={<Link to="/dashboard/assets" />}
+            className="mb-4"
+          >
+            <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
+            Voltar
+          </Button>
+        </div>
+        <Card>
+          <CardContent className="py-8 text-center text-destructive">
+            Erro ao carregar ativo. Tente novamente.
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return <EditAssetForm key={asset.id} asset={asset} assetId={id} />
+}
+
+function EditAssetForm({
+  asset,
+  assetId,
+}: {
+  asset: AssetData
+  assetId: string
+}) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const [formData, setFormData] = useState<FormData>({
+    name: asset.name,
+    manufacturer: asset.manufacturer || '',
+    model: asset.model || '',
+    serialNumber: asset.serialNumber,
+    tag: asset.tag,
+    status: asset.status as FormData['status'],
+    lastCalibrationDate: parseDate(asset.lastCalibrationDate),
+    nextCalibrationDate: parseDate(asset.nextCalibrationDate),
+    comments: asset.comments || '',
+    specifications: (asset.specifications as Record<string, unknown>) || {},
+  })
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof FormData | string, string>>
+  >({})
 
   // Get the asset type definition from the asset data
   const assetTypeDefinition = useMemo(() => {
-    if (!asset?.assetTypeDefinition) return []
+    if (!asset.assetTypeDefinition) return []
     return asset.assetTypeDefinition as SpecFieldDefinition[]
-  }, [asset?.assetTypeDefinition])
+  }, [asset.assetTypeDefinition])
 
   const updateMutation = useMutation({
     mutationFn: async (data: FormData) => {
       const res = await api.api.assets[':id'].$put({
-        param: { id },
+        param: { id: assetId },
         json: {
           name: data.name,
           manufacturer: data.manufacturer || undefined,
@@ -173,9 +231,9 @@ function EditAssetPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assets'] })
-      queryClient.invalidateQueries({ queryKey: ['asset', id] })
+      queryClient.invalidateQueries({ queryKey: ['asset', assetId] })
       toast.success('Ativo atualizado com sucesso!')
-      navigate({ to: '/dashboard/assets/$id', params: { id } })
+      navigate({ to: '/dashboard/assets/$id', params: { id: assetId } })
     },
     onError: (error) => {
       toast.error(error.message)
@@ -246,63 +304,13 @@ function EditAssetPage() {
     return result
   }, [errors])
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <Button variant="ghost" size="sm" disabled className="mb-4">
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
-            Voltar
-          </Button>
-        </div>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-32" />
-            <Skeleton className="h-4 w-64" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (fetchError || !asset) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            render={<Link to="/dashboard/assets" />}
-            className="mb-4"
-          >
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
-            Voltar
-          </Button>
-        </div>
-        <Card>
-          <CardContent className="py-8 text-center text-destructive">
-            Erro ao carregar ativo. Tente novamente.
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <div>
         <Button
           variant="ghost"
           size="sm"
-          render={<Link to="/dashboard/assets/$id" params={{ id }} />}
+          render={<Link to="/dashboard/assets/$id" params={{ id: assetId }} />}
           className="mb-4"
         >
           <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
@@ -492,7 +500,7 @@ function EditAssetPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  render={<Link to="/dashboard/assets/$id" params={{ id }} />}
+                  render={<Link to="/dashboard/assets/$id" params={{ id: assetId }} />}
                   disabled={updateMutation.isPending}
                 >
                   Cancelar

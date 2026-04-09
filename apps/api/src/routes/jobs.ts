@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
@@ -11,9 +12,21 @@ import {
   referenceStandard,
   user,
   member,
+  memberUnitAssignment,
+  environmentalLimits,
+  personnelCompetence,
   type MethodSnapshot,
   type StandardSnapshot,
+  type EnvironmentalSnapshot,
+  type EnvironmentalLimitsSnapshot,
 } from "@calibra-facil/db/schema";
+import {
+  notifyJobSubmittedForReview,
+  notifyJobApproved,
+  notifyJobRejected,
+  notifyJobAssigned,
+  notifyCertificateAmended,
+} from "@calibra-facil/notifications";
 import {
   CreateJobSchema,
   UpdateJobSchema,
@@ -24,55 +37,88 @@ import {
   RejectJobSchema,
   CancelJobSchema,
   ExecuteJobSchema,
+  AmendJobSchema,
 } from "@calibra-facil/schemas";
 import {
+  addServerTiming,
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
 import { requirePlanLimit } from "../middleware/tier-guard";
-import { eq, and, ilike, desc, count, lte, gte, inArray } from "drizzle-orm";
+import { withCache, withInvalidation } from "../middleware/cache";
+import { selectEffectiveEnvironmentalLimits } from "../lib/unit-operational-settings";
+import {
+  eq,
+  and,
+  ilike,
+  desc,
+  count,
+  lte,
+  gte,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import {
   createR2Client,
   generatePresignedUrl,
   extractKeyFromUrl,
   type R2Env,
 } from "../lib/storage";
+import {
+  createCalibrationJob,
+  generateJobId,
+  jobCreationClientErrors,
+} from "../lib/jobs";
 import { alias } from "drizzle-orm/pg-core";
+import { getExecuteRows } from "../lib/db";
+import { buildUnitScopeCondition } from "../lib/units";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
 
+const CommandPaletteJobSearchQuerySchema = z.object({
+  query: z.string().trim().min(2),
+  limit: z.coerce.number().min(1).max(10).default(5),
+});
+
 /**
- * Generates a unique job ID for the organization.
- * Format: CAL-YYYY-XXXX (per organization per year)
+ * Check if environmental readings are within configured limits.
  */
-async function generateJobId(
-  organizationId: string,
-  year: number,
-): Promise<string> {
-  const prefix = `CAL-${year}-`;
-
-  const sequence = await db.transaction(async (tx) => {
-    const [result] = await tx
-      .select({ jobId: calibrationJob.jobId })
-      .from(calibrationJob)
-      .where(
-        and(
-          eq(calibrationJob.organizationId, organizationId),
-          ilike(calibrationJob.jobId, `${prefix}%`),
-        ),
-      )
-      .orderBy(desc(calibrationJob.jobId))
-      .limit(1)
-      .for("update");
-
-    if (!result?.jobId) return 1;
-    const match = result.jobId.match(/(\d+)$/);
-    return match?.[1] ? parseInt(match[1], 10) + 1 : 1;
-  });
-
-  return `${prefix}${sequence.toString().padStart(4, "0")}`;
+function checkEnvironmentWithinLimits(
+  env: {
+    temperature: number | null;
+    humidity: number | null;
+    pressure: number | null;
+  },
+  limits: EnvironmentalLimitsSnapshot | null,
+): boolean {
+  if (!limits) return true; // No limits configured = always within
+  if (
+    limits.temperature &&
+    env.temperature != null &&
+    (env.temperature < limits.temperature.min ||
+      env.temperature > limits.temperature.max)
+  ) {
+    return false;
+  }
+  if (
+    limits.humidity &&
+    env.humidity != null &&
+    (env.humidity < limits.humidity.min || env.humidity > limits.humidity.max)
+  ) {
+    return false;
+  }
+  if (
+    limits.pressure &&
+    env.pressure != null &&
+    (env.pressure < limits.pressure.min || env.pressure > limits.pressure.max)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -98,6 +144,44 @@ async function generateJobId(
  * - POST /:id/reject: calibration:reject (admin, owner only)
  */
 export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
+  // =========================================================================
+  // GET /search - Lightweight search for command palette
+  // =========================================================================
+  .get(
+    "/search",
+    ...withLabPermission({ calibration: ["read"] }),
+    withCache("jobs-search", 30),
+    zValidator("query", CommandPaletteJobSearchQuerySchema),
+    async (c) => {
+      const memberData = c.get("member");
+      const { query, limit } = c.req.valid("query");
+
+      try {
+        const results = await db
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            status: calibrationJob.status,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+              ilike(calibrationJob.jobId, `%${query}%`),
+            ),
+          )
+          .orderBy(desc(calibrationJob.createdAt))
+          .limit(limit);
+
+        return c.json(results);
+      } catch (error) {
+        console.error("Error searching jobs:", error);
+        return c.json({ error: "Erro ao buscar ordens de serviço" }, 500);
+      }
+    },
+  )
+
   // =========================================================================
   // GET / - List jobs with pagination and filtering
   // =========================================================================
@@ -126,6 +210,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       // Build conditions - always scope to organization
       const conditions = [
         eq(calibrationJob.organizationId, memberData.organizationId),
+        buildUnitScopeCondition(calibrationJob.unitId, memberData),
       ];
 
       if (query) {
@@ -230,8 +315,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
         daysUntilDue: job.dueDate
           ? Math.ceil(
-            (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-          )
+              (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+            )
           : null,
         // Extract method name from snapshot for display
         methodName: (job.methodSnapshot as MethodSnapshot)?.methodName,
@@ -247,6 +332,43 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           totalPages: Math.ceil((countResult?.total ?? 0) / limit),
         },
       });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/label - Get job label by ID
+  // =========================================================================
+  .get(
+    "/:id/label",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const memberData = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [job] = await db
+        .select({
+          id: calibrationJob.id,
+          label: calibrationJob.jobId,
+        })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1);
+
+      if (!job) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      return c.json(job);
     },
   )
 
@@ -271,6 +393,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         performedAt: calibrationJob.performedAt,
         data: calibrationJob.data,
         results: calibrationJob.results,
+        standardsSnapshot: calibrationJob.standardsSnapshot,
+        environmentalSnapshot: calibrationJob.environmentalSnapshot,
         certificateUrl: calibrationJob.certificateUrl,
         labelUrl: calibrationJob.labelUrl,
         methodSnapshot: calibrationJob.methodSnapshot,
@@ -282,6 +406,12 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         rejectedBy: calibrationJob.rejectedBy,
         rejectedAt: calibrationJob.rejectedAt,
         rejectionReason: calibrationJob.rejectionReason,
+        // Amendment fields - ISO 17025 Clause 7.8.4.1
+        supersedesId: calibrationJob.supersedesId,
+        supersededById: calibrationJob.supersededById,
+        amendmentNumber: calibrationJob.amendmentNumber,
+        amendmentReason: calibrationJob.amendmentReason,
+        supersededAt: calibrationJob.supersededAt,
         // Related entities
         customerId: calibrationJob.customerId,
         customerName: customer.name,
@@ -289,6 +419,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         assetId: calibrationJob.assetId,
         assetName: asset.name,
         assetTag: asset.tag,
+        assetTypeId: asset.assetTypeId,
         assetSerialNumber: asset.serialNumber,
         assetManufacturer: asset.manufacturer,
         assetModel: asset.model,
@@ -312,6 +443,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         and(
           eq(calibrationJob.id, id),
           eq(calibrationJob.organizationId, memberData.organizationId),
+          buildUnitScopeCondition(calibrationJob.unitId, memberData),
         ),
       )
       .limit(1);
@@ -330,8 +462,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
       daysUntilDue: job.dueDate
         ? Math.ceil(
-          (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-        )
+            (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+          )
         : null,
     };
 
@@ -345,194 +477,53 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     "/",
     ...withLabPermission({ calibration: ["create"] }),
     requirePlanLimit("certificates"), // Check plan limit before creating job
+    withInvalidation("jobs"),
     zValidator("json", CreateJobSchema),
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
 
+      if (!memberData.activeUnitId) {
+        return c.json(
+          { error: "Selecione uma unidade específica para criar ordens" },
+          400,
+        );
+      }
+
       try {
-        // 1. Validate Asset exists and belongs to organization (via customer)
-        const [assetData] = await db
-          .select({
-            id: asset.id,
-            name: asset.name,
-            customerId: asset.customerId,
-            assetTypeId: asset.assetTypeId,
-            deletedAt: asset.deletedAt,
-            labOrganizationId: customer.labOrganizationId, // UPDATED: Check labOrg, not authOrg
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .where(eq(asset.id, input.assetId))
-          .limit(1);
-
-        if (!assetData) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
-
-        if (assetData.deletedAt) {
-          return c.json({ error: "Ativo foi removido" }, 400);
-        }
-
-        // Verify that the customer is managed by THIS lab
-        if (assetData.labOrganizationId !== memberData.organizationId) {
-          return c.json(
-            { error: "Ativo nao pertence a esta organizacao" },
-            403,
-          );
-        }
-
-        // 2. Validate Service exists, is active, and belongs to organization
-        const [serviceData] = await db
-          .select()
-          .from(service)
-          .where(
-            and(
-              eq(service.id, input.serviceId),
-              eq(service.organizationId, memberData.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!serviceData) {
-          return c.json({ error: "Servico nao encontrado" }, 404);
-        }
-
-        if (!serviceData.isActive) {
-          return c.json({ error: "Servico esta inativo" }, 400);
-        }
-
-        // 3. Validate Service has a linked Method that is PUBLISHED
-        if (!serviceData.methodId) {
-          return c.json({ error: "Servico nao possui metodo vinculado" }, 400);
-        }
-
-        const [methodData] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(eq(calibrationMethod.id, serviceData.methodId))
-          .limit(1);
-
-        if (!methodData) {
-          return c.json({ error: "Metodo do servico nao encontrado" }, 404);
-        }
-
-        if (methodData.status !== "PUBLISHED") {
-          return c.json(
-            {
-              error:
-                "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
-            },
-            400,
-          );
-        }
-
-        // 4. Validate asset type compatibility
-        if (
-          serviceData.assetTypeId &&
-          serviceData.assetTypeId !== assetData.assetTypeId
-        ) {
-          return c.json(
-            {
-              error: "Tipo do ativo nao e compativel com o servico selecionado",
-            },
-            400,
-          );
-        }
-
-        // 5. Validate technician if provided
-        if (input.technicianId) {
-          const [techMember] = await db
-            .select()
-            .from(member)
-            .where(
-              and(
-                eq(member.userId, input.technicianId),
-                eq(member.organizationId, memberData.organizationId),
-                inArray(member.role, ["technician", "admin", "owner"]),
-              ),
-            )
-            .limit(1);
-
-          if (!techMember) {
-            return c.json(
-              { error: "Tecnico nao encontrado ou sem permissao" },
-              400,
-            );
-          }
-        }
-
-        // 6. Generate Job ID (per organization per year)
-        const year = new Date().getFullYear();
-        const jobId = await generateJobId(memberData.organizationId, year);
-
-        // 7. Create Method Snapshot (THE CRITICAL PART)
-        // This freezes the method configuration at job creation time
-        const methodSnapshot: MethodSnapshot = {
-          methodId: methodData.id,
-          methodName: methodData.name,
-          methodVersion: methodData.version,
-          dataFields: methodData.dataFields,
-          formulas: methodData.formulas,
-          validations: methodData.validations,
-          uncertaintyParams: methodData.uncertaintyParams,
-        };
-
-        // 8. Calculate due date based on service TAT if not provided
-        let dueDate: Date | null = null;
-        if (input.dueDate) {
-          dueDate = new Date(input.dueDate);
-        } else if (serviceData.tat) {
-          dueDate = new Date();
-          dueDate.setDate(dueDate.getDate() + serviceData.tat);
-        }
-
-        // 9. Insert Job
-        const [newJob] = await db
-          .insert(calibrationJob)
-          .values({
-            jobId,
-            organizationId: memberData.organizationId,
-            customerId: assetData.customerId,
-            assetId: input.assetId,
-            serviceId: input.serviceId,
-            technicianId: input.technicianId || null,
-            methodSnapshot,
-            status: "DRAFT",
-            dueDate,
-            createdBy: session.user.id,
-          })
-          .returning();
-
-        if (!newJob) {
-          return c.json({ error: "Falha ao criar job" }, 500);
-        }
-
-        // 10. Audit Log
-        await db.insert(jobAuditLog).values({
-          jobId: newJob.id,
-          action: "create",
-          changes: {
-            initial: {
-              assetId: input.assetId,
-              serviceId: input.serviceId,
-              technicianId: input.technicianId,
-              dueDate: dueDate?.toISOString(),
-              methodSnapshot: {
-                methodId: methodSnapshot.methodId,
-                methodName: methodSnapshot.methodName,
-                methodVersion: methodSnapshot.methodVersion,
-              },
-            },
-          },
-          performedBy: session.user.id,
+        const newJob = await createCalibrationJob({
+          organizationId: memberData.organizationId,
+          unitId: memberData.activeUnitId,
+          createdBy: session.user.id,
+          assetId: input.assetId,
+          serviceId: input.serviceId,
+          technicianId: input.technicianId,
+          dueDate: input.dueDate,
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
 
         return c.json(newJob, 201);
       } catch (error) {
         console.error("Error creating job:", error);
+        const message =
+          error instanceof Error ? error.message : "Erro ao criar job";
+
+        if (
+          message === "Ativo nao encontrado" ||
+          message === "Servico nao encontrado"
+        ) {
+          return c.json({ error: message }, 404);
+        }
+
+        if (message === "Ativo nao pertence a esta organizacao") {
+          return c.json({ error: message }, 403);
+        }
+
+        if (jobCreationClientErrors.has(message)) {
+          return c.json({ error: message }, 400);
+        }
+
         return c.json({ error: "Erro ao criar job" }, 500);
       }
     },
@@ -544,6 +535,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ calibration: ["update"] }),
+    withInvalidation("jobs"),
     zValidator("json", UpdateJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -563,6 +555,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -609,6 +602,37 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
               400,
             );
           }
+
+          if (
+            existing.unitId &&
+            !["admin", "owner"].includes(techMember.role)
+          ) {
+            const [assignment] = await db
+              .select({ id: memberUnitAssignment.id })
+              .from(memberUnitAssignment)
+              .where(
+                and(
+                  eq(memberUnitAssignment.memberId, techMember.id),
+                  eq(
+                    memberUnitAssignment.organizationId,
+                    memberData.organizationId,
+                  ),
+                  eq(memberUnitAssignment.unitId, existing.unitId),
+                  inArray(memberUnitAssignment.role, [
+                    "technician",
+                    "unit_admin",
+                  ]),
+                ),
+              )
+              .limit(1);
+
+            if (!assignment) {
+              return c.json(
+                { error: "Tecnico nao encontrado ou sem permissao" },
+                400,
+              );
+            }
+          }
         }
 
         changes.technicianId = {
@@ -650,6 +674,15 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
 
+      // Notify technician if changed
+      if (changes.technicianId && input.technicianId) {
+        try {
+          await notifyJobAssigned(id, input.technicianId, session.user.id);
+        } catch (err) {
+          console.error("[Jobs] Failed to send assignment notification:", err);
+        }
+      }
+
       return c.json(updated);
     },
   )
@@ -660,6 +693,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/assign",
     ...withLabPermission({ calibration: ["update"] }),
+    withInvalidation("jobs"),
     zValidator("json", AssignTechnicianSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -679,6 +713,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -689,14 +724,18 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Validate technician
       const [techMember] = await db
-        .select({ userId: member.userId, userName: user.name })
+        .select({
+          id: member.id,
+          userId: member.userId,
+          userName: user.name,
+          role: member.role,
+        })
         .from(member)
         .innerJoin(user, eq(member.userId, user.id))
         .where(
           and(
             eq(member.userId, input.technicianId),
             eq(member.organizationId, memberData.organizationId),
-            inArray(member.role, ["technician", "admin", "owner"]),
           ),
         )
         .limit(1);
@@ -706,6 +745,93 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           { error: "Tecnico nao encontrado ou sem permissao" },
           400,
         );
+      }
+
+      if (existing.unitId) {
+        const [assignment] =
+          techMember.role === "admin" || techMember.role === "owner"
+            ? [{ id: 1 }]
+            : await db
+                .select({ id: memberUnitAssignment.id })
+                .from(memberUnitAssignment)
+                .where(
+                  and(
+                    eq(memberUnitAssignment.memberId, techMember.id),
+                    eq(
+                      memberUnitAssignment.organizationId,
+                      memberData.organizationId,
+                    ),
+                    eq(memberUnitAssignment.unitId, existing.unitId),
+                    inArray(memberUnitAssignment.role, [
+                      "technician",
+                      "unit_admin",
+                    ]),
+                  ),
+                )
+                .limit(1);
+
+        if (!assignment) {
+          return c.json(
+            { error: "Tecnico nao encontrado ou sem permissao" },
+            400,
+          );
+        }
+      }
+
+      // Validate competence (auto-detect enforcement)
+      // Get asset type from the job's service
+      const [jobService] = await db
+        .select({ assetTypeId: service.assetTypeId })
+        .from(service)
+        .where(eq(service.id, existing.serviceId))
+        .limit(1);
+
+      if (jobService?.assetTypeId) {
+        const [competenceCount] = await db
+          .select({ total: count() })
+          .from(personnelCompetence)
+          .where(
+            and(
+              eq(personnelCompetence.organizationId, memberData.organizationId),
+              isNull(personnelCompetence.deletedAt),
+            ),
+          );
+
+        if ((competenceCount?.total ?? 0) > 0) {
+          const [activeCompetence] = await db
+            .select({
+              id: personnelCompetence.id,
+              expiresAt: personnelCompetence.expiresAt,
+            })
+            .from(personnelCompetence)
+            .where(
+              and(
+                eq(personnelCompetence.userId, input.technicianId),
+                eq(
+                  personnelCompetence.organizationId,
+                  memberData.organizationId,
+                ),
+                eq(personnelCompetence.assetTypeId, jobService.assetTypeId),
+                eq(personnelCompetence.status, "ACTIVE"),
+                isNull(personnelCompetence.deletedAt),
+              ),
+            )
+            .limit(1);
+
+          if (
+            !activeCompetence ||
+            (activeCompetence.expiresAt &&
+              activeCompetence.expiresAt < new Date())
+          ) {
+            return c.json(
+              {
+                error:
+                  "Técnico não possui competência ativa para este tipo de instrumento",
+              },
+              400,
+            );
+          }
+        }
       }
 
       // Update job
@@ -727,6 +853,13 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
 
+      // Send notification to assigned technician
+      try {
+        await notifyJobAssigned(id, input.technicianId, session.user.id);
+      } catch (err) {
+        console.error("[Jobs] Failed to send assignment notification:", err);
+      }
+
       return c.json({
         message: `Job atribuido a ${techMember.userName}`,
         data: updated,
@@ -740,6 +873,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/submit",
     ...withLabPermission({ calibration: ["submit"] }),
+    withInvalidation("jobs"),
     zValidator("json", SubmitForReviewSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -759,6 +893,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -798,6 +933,16 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
+        reason:
+          existing.environmentalSnapshot &&
+          !existing.environmentalSnapshot.withinLimits
+            ? "Submetido com condições ambientais fora dos limites"
+            : undefined,
+      });
+
+      // Send notifications to admins/owners (fire and forget)
+      notifyJobSubmittedForReview(id, session.user.id).catch((err) => {
+        console.error("[Jobs] Failed to send submit notification:", err);
       });
 
       return c.json({
@@ -813,6 +958,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/execute",
     ...withLabPermission({ calibration: ["update"] }),
+    withInvalidation("jobs"),
     zValidator("json", ExecuteJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -832,6 +978,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -860,8 +1007,23 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               inArray(referenceStandard.id, input.selectedStandardIds),
               eq(referenceStandard.organizationId, memberData.organizationId),
+              eq(referenceStandard.unitId, existing.unitId),
             ),
           );
+
+        // Validate all requested standards were found
+        if (standards.length !== input.selectedStandardIds.length) {
+          const foundIds = new Set(standards.map((s) => s.id));
+          const missingIds = input.selectedStandardIds.filter(
+            (id) => !foundIds.has(id),
+          );
+          return c.json(
+            {
+              error: `Padroes nao encontrados ou nao pertencem a organizacao: ${missingIds.join(", ")}`,
+            },
+            400,
+          );
+        }
 
         // Validate all standards are ACTIVE
         const inactiveStandards = standards.filter(
@@ -905,8 +1067,91 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         }));
       }
 
+      // Build environmental snapshot if environment data was provided
+      let environmentalSnapshot: EnvironmentalSnapshot | null =
+        existing.environmentalSnapshot;
+      if (input.environment) {
+        // Look up the asset's assetTypeId
+        const [jobAsset] = await db
+          .select({ assetTypeId: asset.assetTypeId })
+          .from(asset)
+          .where(eq(asset.id, existing.assetId))
+          .limit(1);
+
+        // Fetch limits: unit asset-type-specific first, then unit default
+        let frozenLimits: EnvironmentalLimitsSnapshot | null = null;
+        if (jobAsset && existing.unitId) {
+          const limits = await db
+            .select()
+            .from(environmentalLimits)
+            .where(
+              and(
+                eq(environmentalLimits.organizationId, memberData.organizationId),
+                eq(environmentalLimits.unitId, existing.unitId),
+                or(
+                  eq(environmentalLimits.assetTypeId, jobAsset.assetTypeId),
+                  isNull(environmentalLimits.assetTypeId),
+                ),
+              ),
+            )
+            .orderBy(desc(environmentalLimits.assetTypeId)); // non-null first
+
+          const { limits: effectiveLimits } =
+            selectEffectiveEnvironmentalLimits(limits);
+          if (effectiveLimits) {
+            frozenLimits = {
+              ...(effectiveLimits.temperatureMin != null &&
+              effectiveLimits.temperatureMax != null
+                ? {
+                    temperature: {
+                      min: effectiveLimits.temperatureMin,
+                      max: effectiveLimits.temperatureMax,
+                    },
+                  }
+                : {}),
+              ...(effectiveLimits.humidityMin != null &&
+              effectiveLimits.humidityMax != null
+                ? {
+                    humidity: {
+                      min: effectiveLimits.humidityMin,
+                      max: effectiveLimits.humidityMax,
+                    },
+                  }
+                : {}),
+              ...(effectiveLimits.pressureMin != null &&
+              effectiveLimits.pressureMax != null
+                ? {
+                    pressure: {
+                      min: effectiveLimits.pressureMin,
+                      max: effectiveLimits.pressureMax,
+                    },
+                  }
+                : {}),
+            };
+          }
+        }
+
+        // Check if within limits
+        const withinLimits = checkEnvironmentWithinLimits(
+          input.environment,
+          frozenLimits,
+        );
+
+        environmentalSnapshot = {
+          temperature: input.environment.temperature,
+          humidity: input.environment.humidity,
+          pressure: input.environment.pressure,
+          recordedAt: new Date().toISOString(),
+          recordedBy: session.user.id,
+          limits: frozenLimits,
+          withinLimits,
+          outOfLimitsJustification: null,
+        };
+      }
+
       // Determine new status
-      const newStatus = existing.status === "DRAFT" ? "IN_PROGRESS" : existing.status;
+      const newStatus =
+        existing.status === "DRAFT" ? "IN_PROGRESS" : existing.status;
 
       // Update job with execution data
       const [updated] = await db
@@ -915,6 +1160,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           data: input.data,
           results: input.results || null,
           standardsSnapshot: standardsSnapshot || existing.standardsSnapshot,
+          environmentalSnapshot:
+            environmentalSnapshot || existing.environmentalSnapshot,
           status: newStatus,
         })
         .where(eq(calibrationJob.id, id))
@@ -925,10 +1172,19 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         jobId: id,
         action: "execute",
         changes: {
-          status: existing.status !== newStatus ? { old: existing.status, new: newStatus } : undefined,
+          status:
+            existing.status !== newStatus
+              ? { old: existing.status, new: newStatus }
+              : undefined,
           data: { old: existing.data, new: input.data },
           standardsSnapshot: standardsSnapshot
             ? { old: existing.standardsSnapshot, new: standardsSnapshot }
+            : undefined,
+          environmentalSnapshot: environmentalSnapshot
+            ? {
+                old: existing.environmentalSnapshot,
+                new: environmentalSnapshot,
+              }
             : undefined,
         },
         performedBy: session.user.id,
@@ -949,6 +1205,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/approve",
     ...withLabPermission({ calibration: ["approve"] }),
+    withInvalidation("jobs"),
     zValidator("json", ApproveJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -968,6 +1225,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -984,6 +1242,40 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           },
           400,
         );
+      }
+
+      // Check environmental conditions - block approval if out of limits without justification
+      if (
+        existing.environmentalSnapshot &&
+        !existing.environmentalSnapshot.withinLimits &&
+        !existing.environmentalSnapshot.outOfLimitsJustification &&
+        !input.environmentalJustification
+      ) {
+        return c.json(
+          {
+            error:
+              "Condições ambientais fora dos limites. Forneça uma justificativa para aprovar.",
+            environmentalSnapshot: existing.environmentalSnapshot,
+          },
+          400,
+        );
+      }
+
+      // Save environmental justification if provided
+      if (
+        input.environmentalJustification &&
+        existing.environmentalSnapshot &&
+        !existing.environmentalSnapshot.withinLimits
+      ) {
+        await db
+          .update(calibrationJob)
+          .set({
+            environmentalSnapshot: {
+              ...existing.environmentalSnapshot,
+              outOfLimitsJustification: input.environmentalJustification,
+            },
+          })
+          .where(eq(calibrationJob.id, id));
       }
 
       // Update job status to GENERATING_PDF and set approver info
@@ -1026,6 +1318,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
+      // Send notification to technician (fire and forget)
+      notifyJobApproved(id, session.user.id).catch((err) => {
+        console.error("[Jobs] Failed to send approval notification:", err);
+      });
+
       return c.json({
         message: "Gerando certificado...",
         data: updated,
@@ -1039,6 +1336,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/reject",
     ...withLabPermission({ calibration: ["reject"] }),
+    withInvalidation("jobs"),
     zValidator("json", RejectJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -1058,6 +1356,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1100,6 +1399,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         reason: input.reason,
       });
 
+      // Send notification to technician (fire and forget)
+      notifyJobRejected(id, session.user.id, input.reason).catch((err) => {
+        console.error("[Jobs] Failed to send rejection notification:", err);
+      });
+
       return c.json({
         message: "Job rejeitado",
         data: updated,
@@ -1113,6 +1417,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   .delete(
     "/:id",
     ...withLabPermission({ calibration: ["delete"] }),
+    withInvalidation("jobs"),
     zValidator("json", CancelJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -1132,6 +1437,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1183,6 +1489,335 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // POST /:id/amend - Create an amended version of an approved certificate
+  // ISO 17025:2017 Clause 7.8.4.1 - Amendments to reports and certificates
+  // =========================================================================
+  .post(
+    "/:id/amend",
+    ...withLabPermission({ calibration: ["approve"] }), // Only admin/owner can amend
+    withInvalidation("jobs"),
+    zValidator("json", AmendJobSchema),
+    async (c) => {
+      const memberData = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      const input = c.req.valid("json");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      // Get existing job
+      const [originalJob] = await db
+        .select()
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1);
+
+      if (!originalJob) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      // Can only amend APPROVED jobs
+      if (originalJob.status !== "APPROVED") {
+        return c.json(
+          {
+            error: `Apenas certificados aprovados podem ser retificados. Status atual: ${originalJob.status}`,
+          },
+          400,
+        );
+      }
+
+      // Check if already superseded
+      if (originalJob.supersededById) {
+        return c.json(
+          {
+            error: "Este certificado ja foi retificado",
+            supersededBy: originalJob.supersededById,
+          },
+          400,
+        );
+      }
+
+      // Calculate amendment number
+      let amendmentNumber = 1;
+      if (originalJob.supersedesId) {
+        // This is already an amendment, increment
+        amendmentNumber = (originalJob.amendmentNumber || 0) + 1;
+      }
+
+      // Generate new Job ID for the amended job
+      const year = new Date().getFullYear();
+      const newJobId = await generateJobId(memberData.organizationId, year);
+
+      // Create new job as a clone of the original
+      const [amendedJob] = await db
+        .insert(calibrationJob)
+        .values({
+          jobId: newJobId,
+          organizationId: originalJob.organizationId,
+          unitId: originalJob.unitId,
+          customerId: originalJob.customerId,
+          assetId: originalJob.assetId,
+          serviceId: originalJob.serviceId,
+          technicianId: originalJob.technicianId,
+          methodSnapshot: originalJob.methodSnapshot,
+          standardsSnapshot: originalJob.standardsSnapshot,
+          status: "DRAFT", // Start in DRAFT for corrections
+          dueDate: originalJob.dueDate,
+          data: originalJob.data, // Clone calibration data
+          results: originalJob.results, // Clone results
+          supersedesId: originalJob.id, // Link to original
+          amendmentNumber,
+          amendmentReason: input.reason,
+          createdBy: session.user.id,
+        })
+        .returning();
+
+      if (!amendedJob) {
+        return c.json({ error: "Falha ao criar retificacao" }, 500);
+      }
+
+      // Update original job to SUPERSEDED
+      // Store the reason on the original job so it's visible when viewing the superseded certificate
+      await db
+        .update(calibrationJob)
+        .set({
+          status: "SUPERSEDED",
+          supersededById: amendedJob.id,
+          supersededAt: new Date(),
+          amendmentReason: input.reason, // Store reason on original job too
+        })
+        .where(eq(calibrationJob.id, originalJob.id));
+
+      // Queue original job for PDF regeneration with CANCELADO watermark
+      type CloudflareQueue = { send: (body: unknown) => Promise<void> };
+      const env = c.env as { PDF_QUEUE?: CloudflareQueue };
+      if (env.PDF_QUEUE) {
+        await env.PDF_QUEUE.send({
+          jobId: originalJob.id,
+          userId: session.user.id,
+        });
+      } else {
+        console.warn(
+          `[Jobs] PDF_QUEUE not available. Superseded job ${originalJob.id} needs manual PDF regeneration.`,
+        );
+      }
+
+      // Audit log for original job (superseded)
+      await db.insert(jobAuditLog).values({
+        jobId: originalJob.id,
+        action: "supersede",
+        changes: {
+          status: { old: "APPROVED", new: "SUPERSEDED" },
+          supersededById: amendedJob.id,
+        },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+        reason: `Certificado retificado. Novo: ${amendedJob.jobId}. Motivo: ${input.reason}`,
+      });
+
+      // Audit log for amended job (created)
+      await db.insert(jobAuditLog).values({
+        jobId: amendedJob.id,
+        action: "create_amendment",
+        changes: {
+          supersedesId: originalJob.id,
+          amendmentNumber,
+          reason: input.reason,
+        },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+        reason: input.reason,
+      });
+
+      // Notify customer (async)
+      notifyCertificateAmended(
+        originalJob.id,
+        amendedJob.id,
+        input.reason,
+      ).catch((err) => {
+        console.error("[Jobs] Failed to send amendment notification:", err);
+      });
+
+      return c.json(
+        {
+          message: "Retificacao criada com sucesso",
+          originalJob: {
+            id: originalJob.id,
+            jobId: originalJob.jobId,
+            status: "SUPERSEDED",
+          },
+          amendedJob: {
+            id: amendedJob.id,
+            jobId: amendedJob.jobId,
+            status: "DRAFT",
+            amendmentNumber,
+          },
+        },
+        201,
+      );
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/amendment-chain - Get the full amendment history for a job
+  // ISO 17025:2017 Clause 7.8.4.1 - Traceability of amendments
+  // =========================================================================
+  .get(
+    "/:id/amendment-chain",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const handlerStartedAt = performance.now();
+      const memberData = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      try {
+        if (isNaN(id)) {
+          return c.json({ error: "ID invalido" }, 400);
+        }
+
+        // Verify job exists and belongs to organization
+        const [job] = await db
+          .select({ id: calibrationJob.id })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          )
+          .limit(1);
+
+        if (!job) {
+          return c.json({ error: "Job nao encontrado" }, 404);
+        }
+
+        // Safety limit to prevent infinite loops from corrupted data
+        const MAX_CHAIN_LENGTH = 100;
+
+        const dbStartedAt = performance.now();
+        const chainResult = await db.execute(sql`
+        WITH RECURSIVE ancestors AS (
+          SELECT
+            id,
+            supersedes_id,
+            0::integer AS depth,
+            ARRAY[id]::integer[] AS path
+          FROM calibration_job
+          WHERE id = ${id}
+            AND organization_id = ${memberData.organizationId}
+
+          UNION ALL
+
+          SELECT
+            parent.id,
+            parent.supersedes_id,
+            ancestors.depth + 1,
+            ancestors.path || parent.id
+          FROM calibration_job parent
+          INNER JOIN ancestors ON parent.id = ancestors.supersedes_id
+          WHERE parent.organization_id = ${memberData.organizationId}
+            AND ancestors.depth < ${MAX_CHAIN_LENGTH}
+            AND NOT (parent.id = ANY(ancestors.path))
+        ),
+        root_job AS (
+          SELECT id
+          FROM ancestors
+          ORDER BY depth DESC
+          LIMIT 1
+        ),
+        chain AS (
+          SELECT
+            job.id,
+            job.job_id,
+            job.status,
+            job.amendment_number,
+            job.amendment_reason,
+            job.approved_at,
+            job.superseded_at,
+            job.superseded_by_id,
+            0::integer AS depth,
+            ARRAY[job.id]::integer[] AS path
+          FROM calibration_job job
+          INNER JOIN root_job ON root_job.id = job.id
+          WHERE job.organization_id = ${memberData.organizationId}
+
+          UNION ALL
+
+          SELECT
+            child.id,
+            child.job_id,
+            child.status,
+            child.amendment_number,
+            child.amendment_reason,
+            child.approved_at,
+            child.superseded_at,
+            child.superseded_by_id,
+            chain.depth + 1,
+            chain.path || child.id
+          FROM calibration_job child
+          INNER JOIN chain ON child.id = chain.superseded_by_id
+          WHERE child.organization_id = ${memberData.organizationId}
+            AND chain.depth < ${MAX_CHAIN_LENGTH}
+            AND NOT (child.id = ANY(chain.path))
+        )
+        SELECT
+          id,
+          job_id,
+          status,
+          amendment_number,
+          amendment_reason,
+          approved_at,
+          superseded_at,
+          depth
+        FROM chain
+        ORDER BY depth ASC;
+      `);
+        addServerTiming(c, "amendment_chain_db", dbStartedAt);
+
+        const chainRows = getExecuteRows<{
+          id: number;
+          job_id: string;
+          status: string;
+          amendment_number: number | null;
+          amendment_reason: string | null;
+          approved_at: Date | string | null;
+          superseded_at: Date | string | null;
+        }>(chainResult);
+
+        const chain = chainRows.map((row) => ({
+          id: Number(row.id),
+          jobId: row.job_id,
+          status: row.status,
+          amendmentNumber:
+            row.amendment_number === null ? null : Number(row.amendment_number),
+          amendmentReason: row.amendment_reason,
+          approvedAt: row.approved_at ? new Date(row.approved_at) : null,
+          supersededAt: row.superseded_at ? new Date(row.superseded_at) : null,
+          isCurrent: Number(row.id) === job.id,
+        }));
+
+        return c.json({
+          data: chain,
+          originalJobId: chain[0]?.id,
+          latestJobId: chain[chain.length - 1]?.id,
+          totalAmendments: chain.length - 1,
+        });
+      } finally {
+        addServerTiming(c, "amendment_chain_handler", handlerStartedAt);
+      }
+    },
+  )
+
+  // =========================================================================
   // GET /:id/audit-log - Get audit log for a job
   // =========================================================================
   .get(
@@ -1204,6 +1839,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1242,8 +1878,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
 
-      // Get all members with technical roles
-      const technicians = await db
+      const baseQuery = db
         .select({
           id: user.id,
           name: user.name,
@@ -1251,14 +1886,39 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           role: member.role,
         })
         .from(member)
-        .innerJoin(user, eq(member.userId, user.id))
-        .where(
-          and(
-            eq(member.organizationId, memberData.organizationId),
-            inArray(member.role, ["technician", "admin", "owner"]),
-          ),
-        )
-        .orderBy(user.name);
+        .innerJoin(user, eq(member.userId, user.id));
+
+      const technicians = memberData.activeUnitId
+        ? await baseQuery
+            .leftJoin(
+              memberUnitAssignment,
+              eq(memberUnitAssignment.memberId, member.id),
+            )
+            .where(
+              and(
+                eq(member.organizationId, memberData.organizationId),
+                inArray(member.role, ["technician", "admin", "owner"]),
+                or(
+                  inArray(member.role, ["admin", "owner"]),
+                  and(
+                    eq(memberUnitAssignment.unitId, memberData.activeUnitId),
+                    inArray(memberUnitAssignment.role, [
+                      "technician",
+                      "unit_admin",
+                    ]),
+                  ),
+                ),
+              ),
+            )
+            .orderBy(user.name)
+        : await baseQuery
+            .where(
+              and(
+                eq(member.organizationId, memberData.organizationId),
+                inArray(member.role, ["technician", "admin", "owner"]),
+              ),
+            )
+            .orderBy(user.name);
 
       return c.json({ data: technicians });
     },
@@ -1285,6 +1945,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1332,6 +1993,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);
@@ -1391,6 +2053,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           and(
             eq(calibrationJob.id, id),
             eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
           ),
         )
         .limit(1);

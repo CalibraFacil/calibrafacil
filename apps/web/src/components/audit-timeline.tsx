@@ -49,6 +49,12 @@ export interface TimelineEvent {
     | 'archived'
     | 'new_version'
     | 'deactivate'
+    | 'superseded'
+    | 'amendment_created'
+    | 'request_approval'
+    | 'technical_review'
+    | 'quality_approve'
+    | 'return_to_draft'
     | 'custom'
     label: string
     timestamp: string | null
@@ -139,6 +145,36 @@ const eventConfig: Record<
     },
     deactivate: {
         icon: Cancel01Icon,
+        bgColor: 'bg-gray-100',
+        iconColor: 'text-gray-600',
+    },
+    superseded: {
+        icon: RefreshIcon,
+        bgColor: 'bg-amber-100',
+        iconColor: 'text-amber-600',
+    },
+    amendment_created: {
+        icon: PlusSignIcon,
+        bgColor: 'bg-amber-100',
+        iconColor: 'text-amber-600',
+    },
+    request_approval: {
+        icon: SentIcon,
+        bgColor: 'bg-amber-100',
+        iconColor: 'text-amber-600',
+    },
+    technical_review: {
+        icon: Settings02Icon,
+        bgColor: 'bg-blue-100',
+        iconColor: 'text-blue-600',
+    },
+    quality_approve: {
+        icon: CheckmarkCircle02Icon,
+        bgColor: 'bg-green-100',
+        iconColor: 'text-green-600',
+    },
+    return_to_draft: {
+        icon: RefreshIcon,
         bgColor: 'bg-gray-100',
         iconColor: 'text-gray-600',
     },
@@ -243,19 +279,33 @@ export function buildJobTimelineEvents(job: {
     performedAt?: string | null
     approvedAt?: string | null
     rejectedAt?: string | null
+    supersededAt?: string | null
     technicianName?: string | null
     approverName?: string | null
     rejectorName?: string | null
     rejectionReason?: string | null
+    amendmentReason?: string | null
+    supersedesId?: number | null
 }): TimelineEvent[] {
     const events: TimelineEvent[] = []
 
-    events.push({
-        id: 'created',
-        type: 'created',
-        label: 'Criado',
-        timestamp: job.createdAt,
-    })
+    // For amendments, show that this is a correction
+    if (job.supersedesId) {
+        events.push({
+            id: 'amendment_created',
+            type: 'amendment_created',
+            label: 'Retificação criada',
+            timestamp: job.createdAt,
+            details: job.amendmentReason,
+        })
+    } else {
+        events.push({
+            id: 'created',
+            type: 'created',
+            label: 'Criado',
+            timestamp: job.createdAt,
+        })
+    }
 
     if (job.performedAt) {
         events.push({
@@ -288,6 +338,15 @@ export function buildJobTimelineEvents(job: {
         })
     }
 
+    if (job.supersededAt) {
+        events.push({
+            id: 'superseded',
+            type: 'superseded',
+            label: 'Certificado retificado',
+            timestamp: job.supersededAt,
+        })
+    }
+
     return events
 }
 
@@ -301,6 +360,10 @@ const actionLabels: Record<string, string> = {
     status_change: 'Status alterado',
     renew: 'Certificado renovado',
     publish: 'Publicado',
+    request_approval: 'Solicitou aprovação',
+    technical_review: 'Revisão técnica',
+    quality_approve: 'Aprovado (Qualidade)',
+    return_to_draft: 'Retornou para rascunho',
     archive: 'Arquivado',
     new_version: 'Nova versão criada',
     deactivate: 'Desativado',
@@ -310,6 +373,8 @@ const actionLabels: Record<string, string> = {
     reject: 'Rejeitado',
     cancel: 'Cancelado',
     execute: 'Executado',
+    supersede: 'Certificado retificado',
+    create_amendment: 'Retificação criada',
 }
 
 /**
@@ -323,6 +388,10 @@ function mapActionToEventType(action: string): TimelineEvent['type'] {
         status_change: 'status_change',
         renew: 'renewed',
         publish: 'published',
+        request_approval: 'request_approval',
+        technical_review: 'technical_review',
+        quality_approve: 'quality_approve',
+        return_to_draft: 'return_to_draft',
         archive: 'archived',
         new_version: 'new_version',
         deactivate: 'deactivate',
@@ -332,6 +401,8 @@ function mapActionToEventType(action: string): TimelineEvent['type'] {
         reject: 'rejected',
         cancel: 'canceled',
         execute: 'executed',
+        supersede: 'superseded',
+        create_amendment: 'amendment_created',
     }
     return actionMap[action] || 'custom'
 }
@@ -346,6 +417,7 @@ export interface AuditLogRecord {
     performedAt: string
     performedBy?: string | null
     performerName?: string | null
+    performedByName?: string | null
     ipAddress?: string | null
     reason?: string | null
 }
@@ -362,7 +434,7 @@ export function buildAuditTimelineEvents(
         type: mapActionToEventType(log.action),
         label: actionLabels[log.action] || log.action,
         timestamp: log.performedAt,
-        actor: log.performerName,
+        actor: log.performerName ?? log.performedByName ?? log.performedBy,
         details: log.reason || undefined,
     }))
 }

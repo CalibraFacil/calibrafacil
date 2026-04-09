@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { timingSafeEqual } from "node:crypto";
 import { db } from "@calibra-facil/db";
 import {
   webhookEventLog,
@@ -13,25 +14,28 @@ import type {
   AsaasSubscription,
 } from "../services/asaas/types";
 import { calculatePeriodEnd } from "../services/asaas";
+import { invalidateOnMutation } from "../lib/cache";
 
 // =============================================================================
 // WEBHOOK ROUTES - Handle Asaas webhook events
 // =============================================================================
+
+const MAX_WEBHOOK_BODY_BYTES = 256 * 1024; // 256 KB
 
 /**
  * Verify the webhook request is from Asaas using the access token.
  * The token is configured in Asaas webhook settings and sent in the
  * `asaas-access-token` header.
  */
-function verifyWebhookToken(request: Request): boolean {
+export function verifyWebhookToken(request: Request): boolean {
   const webhookToken = process.env.ASAAS_WEBHOOK_TOKEN;
 
-  // If no token configured, skip verification (not recommended for production)
+  // Fail closed when token is not configured.
   if (!webhookToken) {
     console.warn(
-      "ASAAS_WEBHOOK_TOKEN not configured - webhook verification disabled",
+      "ASAAS_WEBHOOK_TOKEN not configured - rejecting webhook request",
     );
-    return true;
+    return false;
   }
 
   const receivedToken = request.headers.get("asaas-access-token");
@@ -40,17 +44,15 @@ function verifyWebhookToken(request: Request): boolean {
     return false;
   }
 
-  // Constant-time comparison to prevent timing attacks
-  if (webhookToken.length !== receivedToken.length) {
+  const expected = Buffer.from(webhookToken, "utf8");
+  const received = Buffer.from(receivedToken, "utf8");
+
+  // timingSafeEqual throws on unequal lengths
+  if (expected.length !== received.length) {
     return false;
   }
 
-  let result = 0;
-  for (let i = 0; i < webhookToken.length; i++) {
-    result |= webhookToken.charCodeAt(i) ^ receivedToken.charCodeAt(i);
-  }
-
-  return result === 0;
+  return timingSafeEqual(expected, received);
 }
 
 export const webhooksRouter = new Hono()
@@ -58,6 +60,14 @@ export const webhooksRouter = new Hono()
   // POST /asaas - Handle Asaas webhook events
   // =========================================================================
   .post("/asaas", async (c) => {
+    const contentLength = Number(c.req.header("content-length") ?? "0");
+    if (
+      Number.isFinite(contentLength) &&
+      contentLength > MAX_WEBHOOK_BODY_BYTES
+    ) {
+      return c.json({ error: "Payload too large" }, 413);
+    }
+
     // =======================================================================
     // STEP 0: Verify webhook authenticity
     // =======================================================================

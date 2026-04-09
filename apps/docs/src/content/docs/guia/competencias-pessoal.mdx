@@ -1,0 +1,102 @@
+---
+title: Competências do Pessoal
+description: Gestão de qualificações e competência técnica do pessoal conforme ISO/IEC 17025:2017 (Cláusula 6.2.3).
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## Visão Geral
+
+A seção **Competências do Pessoal** (`/dashboard/personnel`) permite registrar e acompanhar a qualificação técnica dos membros do laboratório por **tipo de instrumento** e **escopo**. Esse módulo atende à **ISO/IEC 17025:2017 — Cláusula 6.2.3**, mantendo evidências de treinamento, avaliação e validade das competências.
+
+## Pré-requisitos
+
+- **Membros com papel Técnico** cadastrados na organização.
+- **Tipos de instrumento** cadastrados para uso na matriz de competências.
+
+<Aside type="note">
+  Competências com **escopo geral** não aparecem na matriz (apenas na lista), pois a matriz cruza técnicos × tipos de instrumento.
+</Aside>
+
+## Modos de Visualização
+
+A tela oferece dois modos:
+
+- **Lista** — tabela com técnico, tipo de instrumento, escopo, datas e status, com filtros por status.
+- **Matriz** — visão por técnicos × tipos de instrumento com badges de status. Clique em um badge para abrir os detalhes.
+
+## Solicitar Nova Competência
+
+<Steps>
+
+1. **Abrir “Nova Solicitação”**
+
+   Clique em **Nova Solicitação** na página de competências.
+
+2. **Selecionar o técnico**
+
+   Escolha o membro que será qualificado.
+
+3. **Definir o tipo de instrumento (opcional)**
+
+   Selecione um tipo específico ou deixe **Escopo geral**.
+
+4. **Descrever o escopo**
+
+   Informe claramente a atividade, por exemplo: “Calibração de balanças analíticas até 220 g”.
+
+5. **Criar solicitação**
+
+   A competência é criada com status **Solicitada**.
+
+</Steps>
+
+## Fluxo de Qualificação
+
+| Status | Significado | Ações disponíveis |
+| :--- | :--- | :--- |
+| **Solicitada** | Pedido aberto para qualificação | Atribuir treinamento (vincular registros) |
+| **Treinamento Atribuído** | Treinamentos vinculados | **Iniciar Treinamento** |
+| **Em Treinamento** | Treinamento em execução | **Concluir Treinamento** |
+| **Aguardando Avaliação** | Pronto para avaliação | **Avaliar** (aprovar ou reprovar) |
+| **Ativa** | Competência válida | **Suspender** |
+| **Suspensa** | Competência temporariamente inválida | **Renovar** |
+| **Expirada** | Competência vencida | **Renovar** |
+
+**Reprovação na avaliação** retorna o status para **Treinamento Atribuído**.
+
+## Avaliação e Renovação
+
+Na avaliação, é possível:
+
+- **Aprovar** a competência (define **data de qualificação** automática e permite configurar **data de expiração** opcional).
+- **Reprovar** com observações (retorna ao treinamento).
+
+Na renovação, informe novas datas para reativar a competência. A data de expiração é opcional.
+
+## Aba “Treinamentos”
+
+A aba **Treinamentos** exibe os registros vinculados à competência, incluindo:
+
+- Tipo (interno, externo, em serviço, teste de proficiência)
+- Status (planejado, em andamento, concluído, reprovado)
+- Datas, horas, provedor e nota (quando aplicável)
+
+## Aba “Histórico”
+
+Todas as ações ficam registradas na trilha de auditoria, com **quem fez**, **quando** e **motivo**. Esse registro atende à **ISO/IEC 17025:2017 — Cláusula 8.4**.
+
+## Validação nas Ordens de Serviço
+
+Quando há competências registradas na organização, o sistema valida a competência **ativa** do técnico ao atribuí-lo a uma OS de um **tipo de instrumento específico**. Se não houver competência ativa para aquele tipo, a atribuição é bloqueada.
+
+## Notificações
+
+O módulo dispara notificações para eventos relevantes:
+
+- **Solicitação de competência criada**
+- **Competência aprovada**
+- **Competência expirando**
+- **Competência expirada**
+
+Essas preferências podem ser ajustadas em **Configurações → Notificações**.

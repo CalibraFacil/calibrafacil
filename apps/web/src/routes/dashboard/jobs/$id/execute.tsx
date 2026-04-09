@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -10,6 +10,9 @@ import {
     Alert02Icon,
     Download01Icon,
     SentIcon,
+    ThermometerIcon,
+    DropletIcon,
+    CompassIcon,
 } from '@hugeicons/core-free-icons'
 import { createEngine, flattenForExecution } from '@calibra-facil/math-engine'
 import type { FormulaContext } from '@calibra-facil/math-engine'
@@ -74,6 +77,48 @@ interface ReferenceStandard {
     daysUntilExpiry: number
 }
 
+interface StandardSnapshotItem {
+    id: number
+    name: string
+    certificateNumber: string
+    calibrationDate: string
+    uncertainty: number | null
+    uncertaintyUnit: string | null
+    coverageFactor: number
+    distribution: string
+    drift: number | null
+    certifiedValues: Array<{
+        nominal: string
+        value: number
+        uncertainty: number
+        unit: string
+    }> | null
+}
+
+interface EnvironmentalSnapshotData {
+    temperature: number | null
+    humidity: number | null
+    pressure: number | null
+    recordedAt: string
+    recordedBy: string
+    limits: {
+        temperature?: { min: number; max: number }
+        humidity?: { min: number; max: number }
+        pressure?: { min: number; max: number }
+    } | null
+    withinLimits: boolean
+    outOfLimitsJustification: string | null
+}
+
+interface EffectiveLimits {
+    temperatureMin: number | null
+    temperatureMax: number | null
+    humidityMin: number | null
+    humidityMax: number | null
+    pressureMin: number | null
+    pressureMax: number | null
+}
+
 interface JobData {
     id: number
     jobId: string
@@ -81,6 +126,8 @@ interface JobData {
     customerName: string
     assetName: string
     assetTag: string
+    unitId: number | null
+    assetTypeId: number
     serviceName: string
     methodSnapshot: {
         methodId: number
@@ -93,7 +140,8 @@ interface JobData {
     }
     data: Record<string, unknown> | null
     results: Record<string, unknown> | null
-    standardsSnapshot?: Array<unknown> | null
+    standardsSnapshot?: StandardSnapshotItem[] | null
+    environmentalSnapshot?: EnvironmentalSnapshotData | null
 }
 
 const statusLabels: Record<string, string> = {
@@ -107,20 +155,6 @@ const statusLabels: Record<string, string> = {
 
 function ExecuteJobPage() {
     const { id } = Route.useParams()
-    const navigate = useNavigate()
-    const queryClient = useQueryClient()
-
-    // Form state
-    const [formData, setFormData] = useState<Record<string, unknown>>({})
-    const [selectedStandardIds, setSelectedStandardIds] = useState<number[]>([])
-    const [sectionsOpen, setSectionsOpen] = useState({
-        standards: true,
-        data: true,
-        results: true,
-        validations: true,
-        debug: false,
-    })
-
     // Math engine
     const engine = useMemo(() => createEngine(), [])
 
@@ -146,12 +180,96 @@ function ExecuteJobPage() {
         },
     })
 
-    // Initialize form data from job
-    useEffect(() => {
-        if (job?.data) {
-            setFormData(job.data)
-        }
-    }, [job?.data])
+    // Fetch effective environmental limits for this job's asset type
+    const { data: envLimitsData } = useQuery({
+        queryKey: ['environmental-limits', 'effective', job?.assetTypeId, job?.unitId],
+        queryFn: async () => {
+            const res = await api.api['environmental-limits'].effective[':assetTypeId'].$get({
+                param: { assetTypeId: String(job!.assetTypeId) },
+                query: { unitId: String(job!.unitId) },
+            })
+            if (!res.ok) return { limits: null, source: null }
+            return res.json() as Promise<{ limits: EffectiveLimits | null; source: string | null }>
+        },
+        enabled: !!job?.assetTypeId && !!job?.unitId,
+        staleTime: 60000,
+    })
+
+    const envLimits = envLimitsData?.limits ?? null
+
+    if (jobError) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-background">
+                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-6">
+                    <p className="text-red-500">Erro ao carregar job: {jobError.message}</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (jobLoading || !job) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-background">
+                <Spinner className="size-8" />
+            </div>
+        )
+    }
+
+    return (
+        <ExecuteJobForm
+            key={job.id}
+            job={job}
+            standardsData={standardsData?.data ?? []}
+            envLimits={envLimits}
+            engine={engine}
+            jobId={id}
+        />
+    )
+}
+
+function ExecuteJobForm({
+    job,
+    standardsData,
+    envLimits,
+    engine,
+    jobId,
+}: {
+    job: JobData
+    standardsData: Array<ReferenceStandard>
+    envLimits: EffectiveLimits | null
+    engine: ReturnType<typeof createEngine>
+    jobId: string
+}) {
+    const navigate = useNavigate()
+    const queryClient = useQueryClient()
+
+    // Form state
+    const [formData, setFormData] = useState<Record<string, unknown>>(
+        () => job.data ?? {},
+    )
+    const [selectedStandardIds, setSelectedStandardIds] = useState<number[]>(
+        () =>
+            job.standardsSnapshot && job.standardsSnapshot.length > 0
+                ? job.standardsSnapshot.map((s) => s.id)
+                : [],
+    )
+    const [environment, setEnvironment] = useState<{
+        temperature: number | null
+        humidity: number | null
+        pressure: number | null
+    }>(() => ({
+        temperature: job.environmentalSnapshot?.temperature ?? null,
+        humidity: job.environmentalSnapshot?.humidity ?? null,
+        pressure: job.environmentalSnapshot?.pressure ?? null,
+    }))
+    const [sectionsOpen, setSectionsOpen] = useState({
+        standards: true,
+        environment: true,
+        data: true,
+        results: true,
+        validations: true,
+        debug: false,
+    })
 
     // Build context for math engine (including standard values)
     const context = useMemo(() => {
@@ -186,9 +304,9 @@ function ExecuteJobPage() {
         }
 
         // Inject selected standard values into context
-        const selectedStandards = standardsData?.data?.filter((s) =>
+        const selectedStandards = standardsData.filter((s) =>
             selectedStandardIds.includes(s.id),
-        ) || []
+        )
 
         for (const std of selectedStandards) {
             const prefix = `std_${std.id}`
@@ -207,8 +325,19 @@ function ExecuteJobPage() {
             }
         }
 
+        // Inject environment data for formula context
+        if (environment.temperature != null) {
+            processedData['env_temperature'] = environment.temperature
+        }
+        if (environment.humidity != null) {
+            processedData['env_humidity'] = environment.humidity
+        }
+        if (environment.pressure != null) {
+            processedData['env_pressure'] = environment.pressure
+        }
+
         return flattenForExecution(processedData, { preserveArrays: true })
-    }, [formData, job, standardsData?.data, selectedStandardIds])
+    }, [formData, job, standardsData, selectedStandardIds, environment])
 
     // Evaluate formulas
     const formulaResults = useMemo(() => {
@@ -280,9 +409,9 @@ function ExecuteJobPage() {
     // Compute certified value options from selected standards
     const certifiedValueOptions = useMemo((): CertifiedValueOption[] => {
         const options: CertifiedValueOption[] = []
-        const selectedStandards = standardsData?.data?.filter((s) =>
+        const selectedStandards = standardsData.filter((s) =>
             selectedStandardIds.includes(s.id)
-        ) || []
+        )
 
         for (const std of selectedStandards) {
             if (std.certifiedValues) {
@@ -298,26 +427,104 @@ function ExecuteJobPage() {
             }
         }
         return options
-    }, [standardsData?.data, selectedStandardIds])
+    }, [standardsData, selectedStandardIds])
 
     // Update field
     const updateField = useCallback((key: string, value: unknown) => {
         setFormData((prev) => ({ ...prev, [key]: value }))
     }, [])
 
+    // Normalize form data: convert string numbers to actual numbers before API calls
+    const normalizeFormData = useCallback((data: Record<string, unknown>): Record<string, unknown> => {
+        const normalized: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(data)) {
+            if (Array.isArray(value)) {
+                // Handle table data - normalize each row
+                normalized[key] = value.map((row) => {
+                    if (typeof row === 'object' && row !== null) {
+                        const normalizedRow: Record<string, unknown> = {}
+                        for (const [cellKey, cellValue] of Object.entries(row as Record<string, unknown>)) {
+                            normalizedRow[cellKey] = typeof cellValue === 'string' && /^-?\d*\.?\d+$/.test(cellValue)
+                                ? parseFloat(cellValue)
+                                : cellValue
+                        }
+                        return normalizedRow
+                    }
+                    return row
+                })
+            } else if (typeof value === 'string' && /^-?\d*\.?\d+$/.test(value)) {
+                normalized[key] = parseFloat(value)
+            } else {
+                normalized[key] = value
+            }
+        }
+        return normalized
+    }, [])
+
+    // Build environment payload (only send if any value is set)
+    const environmentPayload = useMemo(() => {
+        if (environment.temperature == null && environment.humidity == null && environment.pressure == null) {
+            return undefined
+        }
+        return environment
+    }, [environment])
+
+    // Compute environment warnings
+    const envWarnings = useMemo(() => {
+        const warnings: string[] = []
+        if (envLimits && environment.temperature != null) {
+            if (
+                envLimits.temperatureMin != null &&
+                envLimits.temperatureMax != null &&
+                (environment.temperature < envLimits.temperatureMin ||
+                    environment.temperature > envLimits.temperatureMax)
+            ) {
+                warnings.push(
+                    `Temperatura fora da faixa (${envLimits.temperatureMin} – ${envLimits.temperatureMax} °C)`,
+                )
+            }
+        }
+        if (envLimits && environment.humidity != null) {
+            if (
+                envLimits.humidityMin != null &&
+                envLimits.humidityMax != null &&
+                (environment.humidity < envLimits.humidityMin ||
+                    environment.humidity > envLimits.humidityMax)
+            ) {
+                warnings.push(
+                    `Umidade fora da faixa (${envLimits.humidityMin} – ${envLimits.humidityMax} %RH)`,
+                )
+            }
+        }
+        if (envLimits && environment.pressure != null) {
+            if (
+                envLimits.pressureMin != null &&
+                envLimits.pressureMax != null &&
+                (environment.pressure < envLimits.pressureMin ||
+                    environment.pressure > envLimits.pressureMax)
+            ) {
+                warnings.push(
+                    `Pressão fora da faixa (${envLimits.pressureMin} – ${envLimits.pressureMax} hPa)`,
+                )
+            }
+        }
+        return warnings
+    }, [environment, envLimits])
+
     // Save draft mutation
     const saveMutation = useMutation({
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].execute.$post({
-                param: { id },
+                param: { id: jobId },
                 json: {
                     selectedStandardIds,
-                    data: formData,
+                    data: normalizeFormData(formData),
                     results: Object.fromEntries(
                         Object.entries(formulaResults)
                             .filter(([, r]) => r.value !== undefined)
                             .map(([k, r]) => [k, r.value]),
                     ),
+                    environment: environmentPayload,
                 },
             })
             if (!res.ok) {
@@ -327,7 +534,7 @@ function ExecuteJobPage() {
             return res.json()
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['jobs', id] })
+            queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
             toast.success('Dados salvos com sucesso!')
         },
         onError: (error) => {
@@ -339,8 +546,8 @@ function ExecuteJobPage() {
     const submitMutation = useMutation({
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].submit.$post({
-                param: { id },
-                json: { data: formData },
+                param: { id: jobId },
+                json: { data: normalizeFormData(formData) },
             })
             if (!res.ok) {
                 const error = await res.json()
@@ -414,15 +621,27 @@ function ExecuteJobPage() {
                     </FieldLabel>
                     <div className="flex">
                         <Input
-                            type="number"
-                            step="any"
-                            value={(value as number) ?? ''}
+                            type="text"
+                            inputMode="decimal"
+                            value={value != null ? String(value) : ''}
                             onChange={(e) => {
                                 const val = e.target.value
-                                if (val === '') updateField(field.key, '')
-                                else {
+                                // Allow empty, numbers, decimal points, and negative sign
+                                // Keep as string to preserve trailing decimals during typing
+                                if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
+                                    // Normalize comma to period for consistency
+                                    const normalized = val.replace(',', '.')
+                                    updateField(field.key, normalized)
+                                }
+                            }}
+                            onBlur={(e) => {
+                                // Parse to number on blur if valid
+                                const val = e.target.value.replace(',', '.')
+                                if (val !== '' && val !== '-' && val !== '.') {
                                     const parsed = parseFloat(val)
-                                    updateField(field.key, isNaN(parsed) ? '' : parsed)
+                                    if (!isNaN(parsed)) {
+                                        updateField(field.key, parsed)
+                                    }
                                 }
                             }}
                             className={field.unit ? 'rounded-r-none' : ''}
@@ -471,35 +690,10 @@ function ExecuteJobPage() {
                 return val !== undefined && val !== ''
             })
         const hasNoErrors = validationResults.every(
-            (v) => v.passed || v.severity !== 'error' || v.error,
+            (v) => v.severity !== 'error' || v.passed === true,
         )
         return hasRequiredFields && hasNoErrors
     }, [job, formData, validationResults])
-
-    if (jobError) {
-        return (
-            <Card>
-                <CardContent className="pt-6">
-                    <p className="text-red-500">Erro ao carregar job: {jobError.message}</p>
-                </CardContent>
-            </Card>
-        )
-    }
-
-    if (jobLoading || !job) {
-        return (
-            <div className="space-y-4">
-                <Skeleton className="h-8 w-48" />
-                <Card>
-                    <CardContent className="pt-6 space-y-4">
-                        <Skeleton className="h-6 w-full" />
-                        <Skeleton className="h-6 w-3/4" />
-                        <Skeleton className="h-6 w-1/2" />
-                    </CardContent>
-                </Card>
-            </div>
-        )
-    }
 
     const isEditable = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
 
@@ -581,7 +775,7 @@ function ExecuteJobPage() {
                             <CollapsibleContent>
                                 <CardContent className="pt-0">
                                     <div className="grid gap-2">
-                                        {standardsData?.data?.map((std) => (
+                                        {standardsData.map((std) => (
                                             <div
                                                 key={std.id}
                                                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${selectedStandardIds.includes(std.id)
@@ -617,6 +811,177 @@ function ExecuteJobPage() {
                                                 </div>
                                             </div>
                                         ))}
+                                    </div>
+                                </CardContent>
+                            </CollapsibleContent>
+                        </Collapsible>
+                    </Card>
+
+                    {/* Environmental Conditions */}
+                    <Card>
+                        <Collapsible
+                            open={sectionsOpen.environment}
+                            onOpenChange={(open) =>
+                                setSectionsOpen((s) => ({ ...s, environment: open }))
+                            }
+                        >
+                            <CollapsibleTrigger className="w-full">
+                                <CardHeader className="cursor-pointer">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-base">
+                                            Condições Ambientais
+                                            {envWarnings.length > 0 && (
+                                                <Badge variant="destructive" className="ml-2">
+                                                    Fora dos limites
+                                                </Badge>
+                                            )}
+                                        </CardTitle>
+                                        <HugeiconsIcon
+                                            icon={ArrowDown01Icon}
+                                            className={`h-4 w-4 transition-transform ${sectionsOpen.environment ? 'rotate-180' : ''}`}
+                                        />
+                                    </div>
+                                    <CardDescription>
+                                        Registre temperatura, umidade e pressão do ambiente
+                                    </CardDescription>
+                                </CardHeader>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                                <CardContent className="pt-0 space-y-4">
+                                    {envWarnings.length > 0 && (
+                                        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
+                                            {envWarnings.map((w, i) => (
+                                                <div key={i} className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+                                                    <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4 shrink-0" />
+                                                    {w}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <Field>
+                                            <FieldLabel className="flex items-center gap-1.5">
+                                                <HugeiconsIcon icon={ThermometerIcon} className="h-3.5 w-3.5 text-orange-500" />
+                                                Temperatura
+                                            </FieldLabel>
+                                            <div className="flex">
+                                                <Input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder={
+                                                        envLimits?.temperatureMin != null
+                                                            ? `${envLimits.temperatureMin}–${envLimits.temperatureMax}`
+                                                            : 'Ex: 23.0'
+                                                    }
+                                                    value={environment.temperature != null ? String(environment.temperature) : ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value.replace(',', '.')
+                                                        if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
+                                                            setEnvironment((prev) => ({
+                                                                ...prev,
+                                                                temperature: val === '' ? null : Number(val) || null,
+                                                            }))
+                                                        }
+                                                    }}
+                                                    onBlur={(e) => {
+                                                        const val = e.target.value.replace(',', '.')
+                                                        if (val !== '' && val !== '-' && val !== '.') {
+                                                            const parsed = parseFloat(val)
+                                                            if (!isNaN(parsed)) {
+                                                                setEnvironment((prev) => ({ ...prev, temperature: parsed }))
+                                                            }
+                                                        }
+                                                    }}
+                                                    disabled={!isEditable}
+                                                    className="rounded-r-none"
+                                                />
+                                                <span className="inline-flex items-center px-3 text-sm text-muted-foreground bg-muted border border-l-0 border-input rounded-r-md">
+                                                    °C
+                                                </span>
+                                            </div>
+                                        </Field>
+                                        <Field>
+                                            <FieldLabel className="flex items-center gap-1.5">
+                                                <HugeiconsIcon icon={DropletIcon} className="h-3.5 w-3.5 text-blue-500" />
+                                                Umidade
+                                            </FieldLabel>
+                                            <div className="flex">
+                                                <Input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder={
+                                                        envLimits?.humidityMin != null
+                                                            ? `${envLimits.humidityMin}–${envLimits.humidityMax}`
+                                                            : 'Ex: 50.0'
+                                                    }
+                                                    value={environment.humidity != null ? String(environment.humidity) : ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value.replace(',', '.')
+                                                        if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
+                                                            setEnvironment((prev) => ({
+                                                                ...prev,
+                                                                humidity: val === '' ? null : Number(val) || null,
+                                                            }))
+                                                        }
+                                                    }}
+                                                    onBlur={(e) => {
+                                                        const val = e.target.value.replace(',', '.')
+                                                        if (val !== '' && val !== '-' && val !== '.') {
+                                                            const parsed = parseFloat(val)
+                                                            if (!isNaN(parsed)) {
+                                                                setEnvironment((prev) => ({ ...prev, humidity: parsed }))
+                                                            }
+                                                        }
+                                                    }}
+                                                    disabled={!isEditable}
+                                                    className="rounded-r-none"
+                                                />
+                                                <span className="inline-flex items-center px-3 text-sm text-muted-foreground bg-muted border border-l-0 border-input rounded-r-md">
+                                                    %RH
+                                                </span>
+                                            </div>
+                                        </Field>
+                                        <Field>
+                                            <FieldLabel className="flex items-center gap-1.5">
+                                                <HugeiconsIcon icon={CompassIcon} className="h-3.5 w-3.5 text-purple-500" />
+                                                Pressão
+                                            </FieldLabel>
+                                            <div className="flex">
+                                                <Input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder={
+                                                        envLimits?.pressureMin != null
+                                                            ? `${envLimits.pressureMin}–${envLimits.pressureMax}`
+                                                            : 'Ex: 1013.0'
+                                                    }
+                                                    value={environment.pressure != null ? String(environment.pressure) : ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value.replace(',', '.')
+                                                        if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
+                                                            setEnvironment((prev) => ({
+                                                                ...prev,
+                                                                pressure: val === '' ? null : Number(val) || null,
+                                                            }))
+                                                        }
+                                                    }}
+                                                    onBlur={(e) => {
+                                                        const val = e.target.value.replace(',', '.')
+                                                        if (val !== '' && val !== '-' && val !== '.') {
+                                                            const parsed = parseFloat(val)
+                                                            if (!isNaN(parsed)) {
+                                                                setEnvironment((prev) => ({ ...prev, pressure: parsed }))
+                                                            }
+                                                        }
+                                                    }}
+                                                    disabled={!isEditable}
+                                                    className="rounded-r-none"
+                                                />
+                                                <span className="inline-flex items-center px-3 text-sm text-muted-foreground bg-muted border border-l-0 border-input rounded-r-md">
+                                                    hPa
+                                                </span>
+                                            </div>
+                                        </Field>
                                     </div>
                                 </CardContent>
                             </CollapsibleContent>

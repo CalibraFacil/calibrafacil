@@ -88,18 +88,14 @@ export function PixPayment({
     },
   })
 
+  const isPaid = statusQuery.data?.isActive || statusQuery.data?.isPaid
+
   // Handle payment confirmation
   useEffect(() => {
-    const data = statusQuery.data
-    if ((data?.isActive || data?.isPaid) && subscriptionId) {
+    if (isPaid && subscriptionId) {
       onSuccess(subscriptionId)
     }
-  }, [
-    statusQuery.data?.isActive,
-    statusQuery.data?.isPaid,
-    subscriptionId,
-    onSuccess,
-  ])
+  }, [isPaid, subscriptionId, onSuccess])
 
   // Auto-initiate checkout
   useEffect(() => {

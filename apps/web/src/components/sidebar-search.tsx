@@ -14,11 +14,9 @@ import {
 export function SidebarSearch() {
   const { setOpen } = useCommandPalette()
   const { state } = useSidebar()
-  const [isMac, setIsMac] = React.useState(false)
-
-  React.useEffect(() => {
-    setIsMac(navigator.platform.toUpperCase().indexOf('MAC') >= 0)
-  }, [])
+  const [isMac] = React.useState(
+    () => navigator.platform.toUpperCase().indexOf('MAC') >= 0,
+  )
 
   const isCollapsed = state === 'collapsed'
 

@@ -144,26 +144,43 @@ export function TableInputRenderer({
                           <NumberCellWithPicker
                             value={row[col.key]}
                             onChange={(val) => updateCell(rowIndex, col.key, val)}
+                            onBlur={(val) => updateCell(rowIndex, col.key, val)}
                             disabled={disabled}
                             certifiedValueOptions={certifiedValueOptions}
+                          />
+                        ) : col.type === 'number' ? (
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            value={row[col.key] != null ? String(row[col.key]) : ''}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              // Allow empty, numbers, decimal points, and negative sign
+                              if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
+                                const normalized = val.replace(',', '.')
+                                updateCell(rowIndex, col.key, normalized === '' ? null : normalized)
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Parse to number on blur if valid
+                              const val = e.target.value.replace(',', '.')
+                              if (val !== '' && val !== '-' && val !== '.') {
+                                const parsed = parseFloat(val)
+                                if (!isNaN(parsed)) {
+                                  updateCell(rowIndex, col.key, parsed)
+                                }
+                              } else if (val === '' || val === '-' || val === '.') {
+                                updateCell(rowIndex, col.key, null)
+                              }
+                            }}
+                            disabled={disabled}
+                            className="h-8"
                           />
                         ) : (
                           <Input
                             type={col.type}
-                            step={col.type === 'number' ? 'any' : undefined}
                             value={row[col.key] != null ? String(row[col.key]) : ''}
-                            onChange={(e) => {
-                              const val = e.target.value
-                              updateCell(
-                                rowIndex,
-                                col.key,
-                                col.type === 'number'
-                                  ? val === ''
-                                    ? null
-                                    : parseFloat(val)
-                                  : val,
-                              )
-                            }}
+                            onChange={(e) => updateCell(rowIndex, col.key, e.target.value)}
                             disabled={disabled}
                             className="h-8"
                           />
@@ -202,11 +219,13 @@ export function TableInputRenderer({
 function NumberCellWithPicker({
   value,
   onChange,
+  onBlur,
   disabled,
   certifiedValueOptions,
 }: {
   value: unknown
-  onChange: (val: number | null) => void
+  onChange: (val: number | string | null) => void
+  onBlur?: (val: number | null) => void
   disabled: boolean
   certifiedValueOptions: CertifiedValueOption[]
 }) {
@@ -227,12 +246,28 @@ function NumberCellWithPicker({
   return (
     <div className="flex gap-1">
       <Input
-        type="number"
-        step="any"
+        type="text"
+        inputMode="decimal"
         value={value != null ? String(value) : ''}
         onChange={(e) => {
           const val = e.target.value
-          onChange(val === '' ? null : parseFloat(val))
+          // Allow empty, numbers, decimal points, and negative sign
+          if (val === '' || /^-?\d*[.,]?\d*$/.test(val)) {
+            const normalized = val.replace(',', '.')
+            onChange(normalized === '' ? null : normalized)
+          }
+        }}
+        onBlur={(e) => {
+          // Parse to number on blur if valid
+          const val = e.target.value.replace(',', '.')
+          if (val !== '' && val !== '-' && val !== '.') {
+            const parsed = parseFloat(val)
+            if (!isNaN(parsed)) {
+              onBlur?.(parsed)
+            }
+          } else {
+            onBlur?.(null)
+          }
         }}
         disabled={disabled}
         className="h-8 flex-1"

@@ -1,4 +1,5 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
+import { BrandLockup } from '@/components/brand'
 import { SignInForm } from '@/components/sign-in-form'
 
 type SignInSearch = {
@@ -28,14 +29,11 @@ function SignInPage() {
       <div className="flex flex-col gap-4 p-6 md:p-10">
         <div className="flex justify-center gap-2 md:justify-start">
           <Link to="/" className="flex items-center gap-2 font-medium">
-            <div className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md text-sm font-bold">
-              C
-            </div>
-            CalibraFácil
+            <BrandLockup markClassName="size-7" />
           </Link>
         </div>
         <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-xs">
+          <div className="w-full max-w-sm">
             <SignInForm redirect={redirect} />
           </div>
         </div>
@@ -50,7 +48,9 @@ function SignInPage() {
         <div className="relative z-10 mt-auto">
           <blockquote className="space-y-2">
             <p className="text-lg">
-              &ldquo;O CalibraFácil é a solução perfeita para a gestão metrológica de laboratórios. Simplifica nossos processos e nos ajuda a atender melhor nossos clientes.&rdquo;
+              &ldquo;O CalibraFácil é a solução perfeita para a gestão
+              metrológica de laboratórios. Simplifica nossos processos e nos
+              ajuda a atender melhor nossos clientes.&rdquo;
             </p>
             <footer className="text-sm">João Santos</footer>
           </blockquote>

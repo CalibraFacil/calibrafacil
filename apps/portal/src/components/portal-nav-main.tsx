@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   File01Icon,
   Home01Icon,
+  Notebook01Icon,
   Wrench01Icon,
 } from "@hugeicons/core-free-icons";
 
@@ -35,11 +36,14 @@ const navItems: Array<NavItem> = [
     icon: <HugeiconsIcon icon={Wrench01Icon} />,
   },
   {
+    title: "Solicitações",
+    url: "/requests",
+    icon: <HugeiconsIcon icon={Notebook01Icon} />,
+  },
+  {
     title: "Certificados",
     url: "/certificates",
     icon: <HugeiconsIcon icon={File01Icon} />,
-    badge: "em breve",
-    disabled: true,
   },
 ];
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { MethodFormula } from './types'
 
 import {
@@ -52,28 +52,41 @@ export function FormulaDialog({
   existingKeys,
   availableVariables,
 }: FormulaDialogProps) {
-  const [formula, setFormula] = useState<MethodFormula>({
-    outputKey: '',
-    expression: '',
-  })
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [autoKey, setAutoKey] = useState(true)
+  const dialogKey = `${open ? 'open' : 'closed'}-${initialData?.outputKey ?? 'new'}`
 
-  useEffect(() => {
-    if (open) {
-      if (initialData) {
-        setFormula(initialData)
-        setAutoKey(false)
-      } else {
-        setFormula({
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open && (
+        <FormulaDialogBody
+          key={dialogKey}
+          onOpenChange={onOpenChange}
+          onSave={onSave}
+          initialData={initialData}
+          existingKeys={existingKeys}
+          availableVariables={availableVariables}
+        />
+      )}
+    </Dialog>
+  )
+}
+
+function FormulaDialogBody({
+  onOpenChange,
+  onSave,
+  initialData,
+  existingKeys,
+  availableVariables,
+}: Omit<FormulaDialogProps, 'open'>) {
+  const [formula, setFormula] = useState<MethodFormula>(
+    initialData
+      ? { ...initialData }
+      : {
           outputKey: '',
           expression: '',
-        })
-        setAutoKey(true)
-      }
-      setErrors({})
-    }
-  }, [open, initialData])
+        },
+  )
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [autoKey, setAutoKey] = useState(!initialData)
 
   const handleLabelChange = (label: string) => {
     const updates: Partial<MethodFormula> = { label }
@@ -121,116 +134,114 @@ export function FormulaDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {initialData ? 'Editar Fórmula' : 'Adicionar Fórmula'}
-          </DialogTitle>
-          <DialogDescription>
-            Defina uma fórmula para calcular resultados a partir dos dados de
-            entrada.
-          </DialogDescription>
-        </DialogHeader>
+    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>
+          {initialData ? 'Editar Fórmula' : 'Adicionar Fórmula'}
+        </DialogTitle>
+        <DialogDescription>
+          Defina uma fórmula para calcular resultados a partir dos dados de
+          entrada.
+        </DialogDescription>
+      </DialogHeader>
 
-        <div className="space-y-4 py-4">
+      <div className="space-y-4 py-4">
+        <Field>
+          <FieldLabel htmlFor="label">Rótulo</FieldLabel>
+          <Input
+            id="label"
+            value={formula.label || ''}
+            onChange={(e) => handleLabelChange(e.target.value)}
+            placeholder="Ex: Erro de Medição"
+          />
+          <FieldDescription>
+            Nome descritivo para o resultado
+          </FieldDescription>
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="outputKey">Chave de Saída *</FieldLabel>
+          <Input
+            id="outputKey"
+            value={formula.outputKey}
+            onChange={(e) => {
+              setAutoKey(false)
+              setFormula((f) => ({ ...f, outputKey: e.target.value }))
+            }}
+            placeholder="Ex: erro"
+          />
+          <FieldDescription>
+            Nome da variável que armazenara o resultado
+          </FieldDescription>
+          {errors.outputKey && <FieldError>{errors.outputKey}</FieldError>}
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="expression">Expressão *</FieldLabel>
+          <Textarea
+            id="expression"
+            value={formula.expression}
+            onChange={(e) =>
+              setFormula((f) => ({ ...f, expression: e.target.value }))
+            }
+            placeholder="Ex: leitura_1 - padrao"
+            rows={3}
+            className="font-mono"
+          />
+          <FieldDescription>
+            Use variáveis definidas nos campos de entrada. Funções disponíveis:
+            abs(), sqrt(), mean(), std(), min(), max(), round()
+          </FieldDescription>
+          {errors.expression && <FieldError>{errors.expression}</FieldError>}
+        </Field>
+
+        {availableVariables.length > 0 && (
           <Field>
-            <FieldLabel htmlFor="label">Rótulo</FieldLabel>
-            <Input
-              id="label"
-              value={formula.label || ''}
-              onChange={(e) => handleLabelChange(e.target.value)}
-              placeholder="Ex: Erro de Medição"
-            />
-            <FieldDescription>
-              Nome descritivo para o resultado
-            </FieldDescription>
+            <FieldLabel>Variaveis Disponiveis</FieldLabel>
+            <div className="flex flex-wrap gap-1">
+              {availableVariables.map((v) => (
+                <Button
+                  key={v.key}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => insertVariable(v.key)}
+                  className="text-xs"
+                >
+                  {v.key}
+                  <span className="text-muted-foreground ml-1">
+                    ({v.type})
+                  </span>
+                </Button>
+              ))}
+            </div>
           </Field>
+        )}
 
-          <Field>
-            <FieldLabel htmlFor="outputKey">Chave de Saída *</FieldLabel>
-            <Input
-              id="outputKey"
-              value={formula.outputKey}
-              onChange={(e) => {
-                setAutoKey(false)
-                setFormula((f) => ({ ...f, outputKey: e.target.value }))
-              }}
-              placeholder="Ex: erro"
-            />
-            <FieldDescription>
-              Nome da variável que armazenara o resultado
-            </FieldDescription>
-            {errors.outputKey && <FieldError>{errors.outputKey}</FieldError>}
-          </Field>
+        <Field>
+          <FieldLabel htmlFor="unit">Unidade do Resultado</FieldLabel>
+          <Input
+            id="unit"
+            value={formula.unit || ''}
+            onChange={(e) =>
+              setFormula((f) => ({
+                ...f,
+                unit: e.target.value || undefined,
+              }))
+            }
+            placeholder="Ex: mm"
+          />
+        </Field>
+      </div>
 
-          <Field>
-            <FieldLabel htmlFor="expression">Expressão *</FieldLabel>
-            <Textarea
-              id="expression"
-              value={formula.expression}
-              onChange={(e) =>
-                setFormula((f) => ({ ...f, expression: e.target.value }))
-              }
-              placeholder="Ex: leitura_1 - padrao"
-              rows={3}
-              className="font-mono"
-            />
-            <FieldDescription>
-              Use variáveis definidas nos campos de entrada. Funções
-              disponíveis: abs(), sqrt(), mean(), std(), min(), max(), round()
-            </FieldDescription>
-            {errors.expression && <FieldError>{errors.expression}</FieldError>}
-          </Field>
-
-          {availableVariables.length > 0 && (
-            <Field>
-              <FieldLabel>Variaveis Disponiveis</FieldLabel>
-              <div className="flex flex-wrap gap-1">
-                {availableVariables.map((v) => (
-                  <Button
-                    key={v.key}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => insertVariable(v.key)}
-                    className="text-xs"
-                  >
-                    {v.key}
-                    <span className="text-muted-foreground ml-1">
-                      ({v.type})
-                    </span>
-                  </Button>
-                ))}
-              </div>
-            </Field>
-          )}
-
-          <Field>
-            <FieldLabel htmlFor="unit">Unidade do Resultado</FieldLabel>
-            <Input
-              id="unit"
-              value={formula.unit || ''}
-              onChange={(e) =>
-                setFormula((f) => ({
-                  ...f,
-                  unit: e.target.value || undefined,
-                }))
-              }
-              placeholder="Ex: mm"
-            />
-          </Field>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSave}>
-            {initialData ? 'Salvar' : 'Adicionar'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSave}>
+          {initialData ? 'Salvar' : 'Adicionar'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
   )
 }

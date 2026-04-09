@@ -1,3 +1,8 @@
+import {
+    type CertificateTemplateSnapshot,
+    normalizeCertificateTemplateConfig,
+} from "@calibra-facil/shared";
+
 // Types for certificate generation (standalone, does not depend on @calibra-facil/db)
 
 export type CustomerAddress = {
@@ -60,10 +65,28 @@ export type StandardSnapshot = {
     certifiedValues?: CertifiedValue[] | null;
 };
 
+export type EnvironmentalSnapshot = {
+    temperature: number | null;
+    humidity: number | null;
+    pressure: number | null;
+    recordedAt: string;
+    recordedBy: string;
+    limits: {
+        temperature?: { min: number; max: number };
+        humidity?: { min: number; max: number };
+        pressure?: { min: number; max: number };
+    } | null;
+    withinLimits: boolean;
+    outOfLimitsJustification: string | null;
+};
+
 export type JobData = {
     jobId: string;
+    organizationId?: string | null;
+    unitId?: number | null;
     performedAt: Date | null;
     approvedAt: Date | null;
+    environmentalSnapshot?: EnvironmentalSnapshot | null;
     lab: {
         name: string;
         cnpj?: string | null;
@@ -101,6 +124,16 @@ export type JobData = {
     data: Record<string, unknown> | null;
     results: Record<string, unknown> | null;
     approverName: string | null;
+    certificateTemplateSnapshot?: CertificateTemplateSnapshot | null;
+    // Visual signature image URL (presigned URL) - ISO 17025 Clause 7.8.2.1(q)
+    approverSignatureUrl?: string | null;
+    // Amendment fields - ISO 17025 Clause 7.8.4.1
+    supersedesId?: number | null;
+    supersededById?: number | null;
+    amendmentNumber?: number | null;
+    amendmentReason?: string | null;
+    originalJobId?: string | null; // Human-readable ID of the superseded job
+    originalApprovedAt?: Date | null;
 };
 
 const styles = `
@@ -119,15 +152,44 @@ const styles = `
     line-height: 1.4;
     color: #1a1a1a;
   }
+  @media screen {
+    body {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      padding: 15mm;
+      background: white;
+      box-shadow: 0 18px 48px rgba(15, 23, 42, 0.12);
+    }
+    .certificate {
+      max-width: none;
+      width: 100%;
+    }
+  }
   .certificate {
     max-width: 210mm;
     margin: 0 auto;
+  }
+  .certificate.density-compact {
+    font-size: 9pt;
+    line-height: 1.32;
+  }
+  .certificate.density-compact .section {
+    margin-bottom: 12px;
+  }
+  .certificate.density-compact .header {
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+  .certificate.density-compact th,
+  .certificate.density-compact td {
+    padding: 4px 6px;
   }
   .header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    border-bottom: 2px solid #0066cc;
+    border-bottom: 2px solid var(--template-primary);
     padding-bottom: 12px;
     margin-bottom: 16px;
   }
@@ -136,10 +198,30 @@ const styles = `
     align-items: center;
     gap: 12px;
   }
+  .header-style-minimal .header {
+    display: block;
+  }
+  .header-style-minimal .logo-section {
+    margin-bottom: 10px;
+  }
+  .header-style-minimal .cert-number {
+    text-align: left;
+  }
+  .header-style-split .header {
+    align-items: stretch;
+    gap: 18px;
+  }
+  .header-style-split .cert-number {
+    min-width: 220px;
+    padding: 12px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--template-accent) 65%, white);
+    border: 1px solid color-mix(in srgb, var(--template-primary) 20%, white);
+  }
   .logo-placeholder {
     width: 60px;
     height: 60px;
-    background: #0066cc;
+    background: var(--template-primary);
     border-radius: 8px;
     display: flex;
     align-items: center;
@@ -150,7 +232,7 @@ const styles = `
   }
   .lab-info h1 {
     font-size: 16pt;
-    color: #0066cc;
+    color: var(--template-primary);
     margin-bottom: 2px;
   }
   .lab-info p {
@@ -168,7 +250,23 @@ const styles = `
   .cert-number .number {
     font-size: 14pt;
     font-weight: bold;
-    color: #0066cc;
+    color: var(--template-primary);
+  }
+  .emphasis-formal .section-title,
+  .emphasis-formal .lab-info h1,
+  .emphasis-formal .cert-number .number {
+    color: #223047;
+  }
+  .emphasis-formal .header {
+    border-bottom-color: #223047;
+  }
+  .emphasis-neutral .section-title,
+  .emphasis-neutral .lab-info h1,
+  .emphasis-neutral .cert-number .number {
+    color: #374151;
+  }
+  .emphasis-neutral .header {
+    border-bottom-color: #d1d5db;
   }
   .section {
     margin-bottom: 16px;
@@ -176,7 +274,7 @@ const styles = `
   .section-title {
     font-size: 11pt;
     font-weight: 600;
-    color: #0066cc;
+    color: var(--template-primary);
     border-bottom: 1px solid #ccc;
     padding-bottom: 4px;
     margin-bottom: 8px;
@@ -210,7 +308,7 @@ const styles = `
     white-space: pre-line;
   }
   th {
-    background: #f5f5f5;
+    background: var(--template-accent);
     font-weight: 600;
     color: #333;
   }
@@ -255,6 +353,60 @@ const styles = `
     color: #333;
     margin-bottom: 4px;
     font-size: 10pt;
+  }
+  /* Amendment notice styles - ISO 17025 Clause 7.8.4.1 */
+  .amendment-notice {
+    border: 2px solid #f97316;
+    background: #fff7ed;
+    padding: 12px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+  }
+  .amendment-notice h3 {
+    color: #c2410c;
+    font-size: 11pt;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .amendment-notice p {
+    color: #9a3412;
+    font-size: 9pt;
+    margin-bottom: 4px;
+  }
+  .amendment-notice strong {
+    color: #7c2d12;
+  }
+  /* Watermark container - covers entire page on every page */
+  .superseded-watermark {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  .superseded-watermark-text {
+    font-size: 72pt;
+    font-weight: bold;
+    color: rgba(239, 68, 68, 0.18);
+    transform: rotate(-45deg);
+    white-space: nowrap;
+    letter-spacing: 8px;
+  }
+  @media print {
+    .superseded-watermark {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+    }
   }
 `;
 
@@ -373,6 +525,10 @@ function DataTable({
 }
 
 export function CertificateHtml({ job }: { job: JobData }) {
+    const templateSnapshot = job.certificateTemplateSnapshot ?? null;
+    const templateConfig = normalizeCertificateTemplateConfig(
+        templateSnapshot?.config
+    );
     const dataFields = job.methodSnapshot?.dataFields || [];
     const formulas = job.methodSnapshot?.formulas || [];
 
@@ -380,13 +536,10 @@ export function CertificateHtml({ job }: { job: JobData }) {
     const tableFields = dataFields.filter((f) => f.type === "table");
     const scalarFields = dataFields.filter((f) => f.type !== "table");
 
-    // Get environment data (look for common keys)
-    const envTemperature =
-        (job.data?.temp_start as number) ??
-        (job.data?.temperature as number) ??
-        (job.data?.temperatura as number);
-    const envHumidity =
-        (job.data?.humidity as number) ?? (job.data?.umidade as number);
+    // Get environment data from structured snapshot
+    const envTemperature = job.environmentalSnapshot?.temperature ?? null;
+    const envHumidity = job.environmentalSnapshot?.humidity ?? null;
+    const envPressure = job.environmentalSnapshot?.pressure ?? null;
 
     // Build results with labels from formulas
     const resultEntries: Array<{ key: string; label: string; value: unknown; unit?: string }> = [];
@@ -402,35 +555,71 @@ export function CertificateHtml({ job }: { job: JobData }) {
         }
     }
 
+    const dynamicStyles = `
+      :root {
+        --template-primary: ${templateConfig.theme.primaryColor};
+        --template-accent: ${templateConfig.theme.accentColor};
+      }
+      .logo-image {
+        max-width: 72px;
+        max-height: 72px;
+        object-fit: contain;
+      }
+      .intro {
+        margin-bottom: 16px;
+        padding: 12px;
+        background: color-mix(in srgb, var(--template-accent) 75%, white);
+        border-left: 4px solid var(--template-primary);
+        font-size: 9pt;
+      }
+    `;
+
     return (
         <html lang="pt-BR">
             <head>
                 <meta charSet="UTF-8" />
                 <title>Certificado de Calibração - {job.jobId}</title>
-                <style dangerouslySetInnerHTML={{ __html: styles }} />
+                <style
+                    dangerouslySetInnerHTML={{
+                        __html: `${dynamicStyles}\n${styles}`,
+                    }}
+                />
             </head>
             <body>
-                <div className="certificate">
+                <div
+                    className={`certificate density-${templateConfig.layout.density} header-style-${templateConfig.layout.headerStyle} emphasis-${templateConfig.layout.emphasis}`}
+                >
                     {/* Header */}
                     <div className="header">
                         <div className="logo-section">
-                            <div className="logo-placeholder">LAB</div>
+                            {templateConfig.theme.logoUrl ? (
+                                <img
+                                    src={templateConfig.theme.logoUrl}
+                                    alt={job.lab.name}
+                                    className="logo-image"
+                                />
+                            ) : (
+                                <div className="logo-placeholder">LAB</div>
+                            )}
                             <div className="lab-info">
                                 <h1>{job.lab.name}</h1>
-                                {job.lab.cnpj && (
+                                {job.lab.cnpj && templateConfig.sections.showAccreditation && (
                                     <p>CNPJ: {formatTaxId(job.lab.cnpj)}</p>
                                 )}
-                                {job.lab.accreditationNumber && (
+                                {job.lab.accreditationNumber &&
+                                    templateConfig.sections.showAccreditation && (
                                     <p>
                                         {job.lab.accreditationNumber}
                                         {job.lab.accreditationBody &&
                                             ` - ${job.lab.accreditationBody}`}
                                     </p>
                                 )}
-                                {formatLabAddress(job.lab) && (
+                                {formatLabAddress(job.lab) &&
+                                    templateConfig.sections.showLabAddress && (
                                     <p>{formatLabAddress(job.lab)}</p>
                                 )}
-                                {(job.lab.phone || job.lab.email) && (
+                                {(job.lab.phone || job.lab.email) &&
+                                    templateConfig.sections.showLabContact && (
                                     <p>
                                         {job.lab.phone}
                                         {job.lab.phone && job.lab.email && " | "}
@@ -440,10 +629,45 @@ export function CertificateHtml({ job }: { job: JobData }) {
                             </div>
                         </div>
                         <div className="cert-number">
-                            <h2>CERTIFICADO DE CALIBRAÇÃO</h2>
+                            <h2>{templateConfig.content.documentTitle}</h2>
                             <div className="number">{job.jobId}</div>
                         </div>
                     </div>
+
+                    {/* Amendment Notice - ISO 17025 Clause 7.8.4.1 */}
+                    {job.supersedesId && templateConfig.sections.showAmendmentNotice && (
+                        <div className="amendment-notice">
+                            <h3>CERTIFICADO RETIFICADO</h3>
+                            <p>
+                                Este certificado <strong>substitui e cancela</strong> o certificado nº{" "}
+                                <strong>{job.originalJobId || `#${job.supersedesId}`}</strong>
+                            </p>
+                            <p>
+                                <strong>Retificação nº {job.amendmentNumber || 1}</strong>
+                            </p>
+                            {job.amendmentReason && (
+                                <p>
+                                    <strong>Motivo da retificação:</strong> {job.amendmentReason}
+                                </p>
+                            )}
+                            {job.originalApprovedAt && (
+                                <p>
+                                    Certificado original emitido em: {formatDate(job.originalApprovedAt)}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {templateConfig.content.introText && (
+                        <div className="intro">{templateConfig.content.introText}</div>
+                    )}
+
+                    {/* Superseded Watermark - appears on all pages */}
+                    {job.supersededById && (
+                        <div className="superseded-watermark">
+                            <span className="superseded-watermark-text">CANCELADO</span>
+                        </div>
+                    )}
 
                     {/* Customer Section */}
                     <div className="section">
@@ -465,7 +689,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                     {formatAddress(job.customer.address)}
                                 </span>
                             </div>
-                            {job.customer.phone && (
+                            {job.customer.phone && templateConfig.sections.showCustomerContact && (
                                 <div className="info-row">
                                     <span className="info-label">Telefone:</span>
                                     <span className="info-value">{job.customer.phone}</span>
@@ -524,11 +748,12 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     </div>
 
                     {/* Environment */}
-                    {(envTemperature !== undefined || envHumidity !== undefined) && (
+                    {templateConfig.sections.showEnvironmental &&
+                        (envTemperature != null || envHumidity != null || envPressure != null) && (
                         <div className="section">
                             <div className="section-title">Condições Ambientais</div>
                             <div className="info-grid">
-                                {envTemperature !== undefined && (
+                                {envTemperature != null && (
                                     <div className="info-row">
                                         <span className="info-label">Temperatura:</span>
                                         <span className="info-value">
@@ -536,11 +761,19 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                         </span>
                                     </div>
                                 )}
-                                {envHumidity !== undefined && (
+                                {envHumidity != null && (
                                     <div className="info-row">
                                         <span className="info-label">Umidade:</span>
                                         <span className="info-value">
                                             {formatNumber(envHumidity, 1)} %
+                                        </span>
+                                    </div>
+                                )}
+                                {envPressure != null && (
+                                    <div className="info-row">
+                                        <span className="info-label">Pressão:</span>
+                                        <span className="info-value">
+                                            {formatNumber(envPressure, 1)} hPa
                                         </span>
                                     </div>
                                 )}
@@ -549,7 +782,9 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     )}
 
                     {/* Standards Used */}
-                    {job.standardsSnapshot && job.standardsSnapshot.length > 0 && (
+                    {templateConfig.sections.showStandards &&
+                        job.standardsSnapshot &&
+                        job.standardsSnapshot.length > 0 && (
                         <div className="section">
                             <div className="section-title">Padrões Utilizados</div>
                             <table>
@@ -658,7 +893,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     )}
 
                     {/* Results */}
-                    {resultEntries.length > 0 && (
+                    {templateConfig.sections.showResults && resultEntries.length > 0 && (
                         <div className="section">
                             <div className="section-title">Resultados</div>
                             <table>
@@ -683,9 +918,25 @@ export function CertificateHtml({ job }: { job: JobData }) {
                         </div>
                     )}
 
-                    {/* Signature */}
-                    <div className="signature-section">
-                        <div className="signature-box">
+                    {/* Signature - ISO 17025 Clause 7.8.2.1(q) */}
+                    {templateConfig.sections.showSignature && (
+                        <div className="signature-section">
+                            <div className="signature-box">
+                            {/* Visual signature image */}
+                            {job.approverSignatureUrl && (
+                                <img
+                                    src={job.approverSignatureUrl}
+                                    alt="Assinatura"
+                                    style={{
+                                        maxHeight: "60px",
+                                        maxWidth: "180px",
+                                        marginBottom: "4px",
+                                        display: "block",
+                                        marginLeft: "auto",
+                                        marginRight: "auto",
+                                    }}
+                                />
+                            )}
                             <div className="signature-line">
                                 {job.lab.technicalManagerName ||
                                     job.approverName ||
@@ -700,10 +951,14 @@ export function CertificateHtml({ job }: { job: JobData }) {
                             </div>
                         </div>
                     </div>
+                    )}
 
                     {/* Footer */}
                     <div className="footer">
                         <div>Emitido em: {formatDate(new Date())}</div>
+                        {templateConfig.content.footerNote && (
+                            <div>{templateConfig.content.footerNote}</div>
+                        )}
                     </div>
 
                     {/* End of Document Marker (ISO requirement) */}

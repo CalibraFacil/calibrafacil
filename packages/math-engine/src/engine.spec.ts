@@ -111,8 +111,8 @@ describe("CalibrationEngine", () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        // Result is now a number (not string) for scalar values
-        expect(result.data.result).toBeCloseTo(0.3, 15);
+        // result is stored as string for precision; use resultAsNumber for numeric checks
+        expect(result.data.result).toBe("0.3");
         expect(result.data.resultAsNumber).toBeCloseTo(0.3, 15);
       }
     });
@@ -454,6 +454,62 @@ describe("CalibrationEngine", () => {
   describe("Version", () => {
     it("should return engine version", () => {
       expect(engine.getVersion()).toBe(ENGINE_VERSION);
+    });
+  });
+
+  describe("Verbose Mode (Calculation Tracing)", () => {
+    it("should include trace when verbose mode is enabled", () => {
+      const verboseEngine = createEngine({ verbose: true });
+      const result = verboseEngine.performCalibration({
+        readings: [{ value: 10.1 }, { value: 10.2 }],
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.trace).toBeDefined();
+        expect(Array.isArray(result.data.trace)).toBe(true);
+        expect(result.data.trace!.length).toBeGreaterThan(0);
+
+        // Check trace structure
+        const firstTrace = result.data.trace![0];
+        expect(firstTrace).toHaveProperty("step");
+        expect(firstTrace).toHaveProperty("operation");
+        expect(firstTrace).toHaveProperty("inputs");
+        expect(firstTrace).toHaveProperty("output");
+        expect(firstTrace).toHaveProperty("timestamp");
+      }
+    });
+
+    it("should not include trace when verbose mode is disabled", () => {
+      const result = engine.performCalibration({
+        readings: [{ value: 10.1 }, { value: 10.2 }],
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.trace).toBeUndefined();
+      }
+    });
+
+    it("should trace all calculation steps", () => {
+      const verboseEngine = createEngine({ verbose: true });
+      const result = verboseEngine.performCalibration(
+        {
+          readings: [{ value: 10.1 }, { value: 10.2 }],
+        },
+        [{ name: "resolution", value: 0.01, distribution: "rectangular" }],
+        ["mean * 2"],
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        const steps = result.data.trace!.map((t) => t.step);
+        expect(steps).toContain("extractReadings");
+        expect(steps).toContain("TypeA");
+        expect(steps).toContain("TypeB");
+        expect(steps).toContain("Combined");
+        expect(steps.some((s) => s.startsWith("Formula:"))).toBe(true);
+      }
     });
   });
 });

@@ -5,8 +5,6 @@ import { ContextGroup } from './groups/context-group'
 import { QuickCreateGroup } from './groups/quick-create'
 import { GlobalSearchGroup } from './groups/global-search'
 import { NavigationGroup } from './groups/navigation-group'
-import { LogEnvironmentalDialog } from './dialogs/log-environmental'
-
 import {
   Command,
   CommandDialog,
@@ -17,15 +15,15 @@ import {
 } from '@/components/ui/command'
 
 export function CommandPalette() {
-  const { open, setOpen, activePage, setPages } = useCommandPalette()
-  const [searchValue, setSearchValue] = React.useState('')
+  const { open, setOpen, activePage, setPages, searchValue, setSearchValue } =
+    useCommandPalette()
 
-  // Reset search when closing
-  React.useEffect(() => {
-    if (!open) {
-      setSearchValue('')
-    }
-  }, [open])
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+    },
+    [setOpen],
+  )
 
   // Handle back navigation with Escape or Backspace on empty input
   const handleKeyDown = React.useCallback(
@@ -39,7 +37,7 @@ export function CommandPalette() {
         setSearchValue('')
       }
     },
-    [activePage, searchValue, setPages],
+    [activePage, searchValue, setPages, setSearchValue],
   )
 
   const getPlaceholder = () => {
@@ -63,7 +61,7 @@ export function CommandPalette() {
     <>
       <CommandDialog
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={handleOpenChange}
         title="Paleta de Comandos"
         description="Use atalhos de teclado para navegar rapidamente pelo sistema."
       >
@@ -74,14 +72,19 @@ export function CommandPalette() {
             onValueChange={setSearchValue}
           />
           <CommandList>
-            <CommandEmpty>Nenhum resultado encontrado.</CommandEmpty>
+            {activePage === 'root' && (
+              <CommandEmpty>Nenhum resultado encontrado.</CommandEmpty>
+            )}
 
             {activePage === 'root' && (
               <>
                 <ContextGroup />
                 <QuickCreateGroup />
                 <CommandSeparator />
-                <GlobalSearchGroup searchValue={searchValue} />
+                <GlobalSearchGroup
+                  searchValue={searchValue}
+                  onSearchModeSelect={() => setSearchValue('')}
+                />
                 <CommandSeparator />
                 <NavigationGroup />
               </>
@@ -93,9 +96,6 @@ export function CommandPalette() {
           </CommandList>
         </Command>
       </CommandDialog>
-
-      {/* Dialogs that can be opened from command palette */}
-      <LogEnvironmentalDialog />
     </>
   )
 }

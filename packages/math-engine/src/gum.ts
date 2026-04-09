@@ -1,4 +1,38 @@
-import { DISTRIBUTION_DIVISORS, T_TABLE, T_INFINITY } from "./constants";
+/**
+ * GUM Uncertainty Calculations
+ *
+ * This module implements uncertainty calculations following the Guide to the
+ * Expression of Uncertainty in Measurement (GUM, JCGM 100:2008).
+ *
+ * PRECISION ARCHITECTURE NOTE:
+ * This module uses native JavaScript Math.* functions (~15 significant digits)
+ * for uncertainty calculations. This is intentional and acceptable because:
+ *
+ * 1. Input measurement values rarely exceed 6-8 significant figures
+ * 2. GUM uncertainty calculations involve operations that don't compound errors
+ * 3. The coverage factor lookup (t-table) has only 2 decimal places
+ * 4. Final results are typically reported to 2-3 significant figures
+ *
+ * For user-defined formulas where arbitrary precision is required, the
+ * CalibrationEngine uses BigNumber (mathjs) with configurable precision.
+ *
+ * CORRELATION ASSUMPTION:
+ * This implementation uses the simplified GUM formula for combining uncertainties
+ * (GUM Equation 10), which assumes all input quantities are UNCORRELATED (r = 0).
+ * See calculateCombinedUncertainty() documentation for details.
+ *
+ * Reference: JCGM 100:2008 (GUM), ISO/IEC Guide 98-3:2008
+ *
+ * @module gum
+ */
+
+import {
+  DISTRIBUTION_DIVISORS,
+  T_TABLES,
+  T_TABLE,
+  T_INFINITY,
+  SUPPORTED_CONFIDENCE_LEVELS,
+} from "./constants";
 import type {
   TypeAInput,
   TypeAResult,
@@ -89,21 +123,52 @@ export function calculateTypeB(components: TypeBComponent[]): TypeBResult {
 // ============================================
 // Get coverage factor from t-table
 // ============================================
-function getCoverageFactor(dof: number): number {
-  if (dof >= 500) return T_INFINITY;
+/**
+ * Get coverage factor k from t-distribution table
+ *
+ * @param dof - Effective degrees of freedom
+ * @param confidenceLevel - Coverage probability (default: 0.9545)
+ * @returns Object with coverage factor and actual confidence level used
+ *
+ * Supported confidence levels: 0.95, 0.9545, 0.99
+ * For unsupported levels, uses the closest available table.
+ */
+function getCoverageFactor(
+  dof: number,
+  confidenceLevel: number = 0.9545
+): { factor: number; actualLevel: number } {
+  let actualLevel = confidenceLevel;
 
-  // Find the closest DOF in the table
-  const keys = Object.keys(T_TABLE)
+  if (dof >= 500) {
+    return { factor: T_INFINITY, actualLevel };
+  }
+
+  // Select the appropriate t-table for the confidence level
+  const levelKey = confidenceLevel.toFixed(4);
+  let table = T_TABLES[levelKey];
+
+  if (!table) {
+    // Find closest supported confidence level (silent fallback)
+    actualLevel = SUPPORTED_CONFIDENCE_LEVELS.reduce((prev, curr) =>
+      Math.abs(curr - confidenceLevel) < Math.abs(prev - confidenceLevel)
+        ? curr
+        : prev
+    );
+    table = T_TABLES[actualLevel.toFixed(4)]!;
+  }
+
+  // Find the closest DOF in the table (ceiling lookup)
+  const keys = Object.keys(table)
     .map(Number)
     .sort((a, b) => a - b);
 
   for (const key of keys) {
     if (dof <= key) {
-      return T_TABLE[key]!;
+      return { factor: table[key]!, actualLevel };
     }
   }
 
-  return T_INFINITY;
+  return { factor: T_INFINITY, actualLevel };
 }
 
 // ============================================
@@ -134,6 +199,33 @@ function calculateEffectiveDOF(
 // u_c = √(u_A² + u_B₁² + u_B₂² + ...)
 // U = k × u_c
 // ============================================
+/**
+ * Calculate combined standard uncertainty using RSS (root sum of squares)
+ *
+ * @param input - Type A and/or Type B uncertainty components
+ * @param confidenceLevel - Coverage probability (default: 0.9545 = 95.45%)
+ * @returns Combined uncertainty result with expanded uncertainty
+ *
+ * @warning ASSUMES UNCORRELATED INPUTS
+ *
+ * This function implements GUM Equation 10:
+ *   u_c = √(∑ cᵢ²uᵢ²)
+ *
+ * This formula ASSUMES all input quantities are UNCORRELATED (r = 0).
+ *
+ * For correlated inputs, the full formula (GUM Equation 13) requires:
+ *   u_c² = ∑∑ cᵢcⱼu(xᵢ)u(xⱼ)r(xᵢ,xⱼ)
+ *
+ * If your calibration involves correlated quantities (e.g., temperature
+ * affecting multiple components, or measurements from the same reference),
+ * this function may underestimate or overestimate the true combined uncertainty.
+ *
+ * For correlated inputs, you should:
+ * 1. Use a Monte Carlo method (GUM Supplement 1), OR
+ * 2. Document the correlation assumption in your uncertainty budget
+ *
+ * Reference: GUM Section 5.2, Equations 10-16
+ */
 export function calculateCombinedUncertainty(
   input: CombinedUncertaintyInput,
   confidenceLevel: number = 0.9545
@@ -172,8 +264,9 @@ export function calculateCombinedUncertainty(
   // Welch-Satterthwaite effective degrees of freedom
   const effectiveDegreesOfFreedom = calculateEffectiveDOF(uncertainties);
 
-  // Get coverage factor from t-table
-  const coverageFactor = getCoverageFactor(effectiveDegreesOfFreedom);
+  // Get coverage factor from t-table for the specified confidence level
+  const { factor: coverageFactor, actualLevel: actualConfidenceLevel } =
+    getCoverageFactor(effectiveDegreesOfFreedom, confidenceLevel);
 
   // Expanded uncertainty: U = k × u_c
   const expandedUncertainty = coverageFactor * combinedStandardUncertainty;
@@ -184,5 +277,6 @@ export function calculateCombinedUncertainty(
     coverageFactor,
     expandedUncertainty,
     confidenceLevel,
+    actualConfidenceLevel,
   };
 }

@@ -20,14 +20,13 @@ export type ContextActionsConfig = {
 type CommandPaletteContextType = {
   open: boolean
   setOpen: (open: boolean) => void
+  searchValue: string
+  setSearchValue: React.Dispatch<React.SetStateAction<string>>
   contextActions: Array<CommandAction>
   registerContextActions: (config: ContextActionsConfig) => () => void
   pages: Array<string>
   setPages: React.Dispatch<React.SetStateAction<Array<string>>>
   activePage: string
-  // Dialog states for nested dialogs
-  environmentalDialogOpen: boolean
-  setEnvironmentalDialogOpen: (open: boolean) => void
 }
 
 const CommandPaletteContext =
@@ -48,13 +47,12 @@ export function CommandPaletteProvider({
 }: {
   children: React.ReactNode
 }) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpenState] = React.useState(false)
+  const [searchValue, setSearchValue] = React.useState('')
   const [pages, setPages] = React.useState<Array<string>>(['root'])
   const [contextActionsRegistry, setContextActionsRegistry] = React.useState<
     Array<ContextActionsConfig>
   >([])
-  const [environmentalDialogOpen, setEnvironmentalDialogOpen] =
-    React.useState(false)
   const location = useLocation()
 
   const activePage = pages[pages.length - 1] ?? 'root'
@@ -80,6 +78,19 @@ export function CommandPaletteProvider({
     [],
   )
 
+  const setOpen = React.useCallback<
+    React.Dispatch<React.SetStateAction<boolean>>
+  >((value) => {
+    setOpenState((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value
+      if (!next) {
+        setPages(['root'])
+        setSearchValue('')
+      }
+      return next
+    })
+  }, [])
+
   // Keyboard shortcut: Cmd+K / Ctrl+K
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -93,25 +104,18 @@ export function CommandPaletteProvider({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Reset pages when closing
-  React.useEffect(() => {
-    if (!open) {
-      setPages(['root'])
-    }
-  }, [open])
-
   return (
     <CommandPaletteContext.Provider
       value={{
         open,
         setOpen,
+        searchValue,
+        setSearchValue,
         contextActions,
         registerContextActions,
         pages,
         setPages,
         activePage,
-        environmentalDialogOpen,
-        setEnvironmentalDialogOpen,
       }}
     >
       {children}

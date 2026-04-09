@@ -15,7 +15,7 @@ This package provides the core mathematical logic for the Calibra Fácil platfor
 
 1.  **Safety First:** No `eval()`, no `new Function()`, and no `isolated-vm`. Security is enforced via a strict `mathjs` allow-list and Regex pre-validation.
 2.  **Absolute Determinism:** Inputs produce the exact same output, bit-for-bit, every time.
-3.  **BigNumber Precision:** All internal calculations use 64-digit floating point precision (IEEE 754 bypass) to prevent rounding errors (e.g., `0.1 + 0.2 === 0.3`).
+3.  **BigNumber Precision:** Formula execution uses configurable BigNumber precision (default 32 digits) to prevent rounding errors (e.g., `0.1 + 0.2 === 0.3`). Note: GUM uncertainty calculations use native JavaScript math (~15 digits) - see [Known Limitations](#️-known-limitations).
 4.  **Traceability:** Every execution returns metadata regarding the engine version and exact inputs used, satisfying ISO 17025 Clause 7.11.
 
 ---
@@ -190,7 +190,7 @@ The main class.
 ### `flattenForExecution(data, options)`
 Utility to convert nested objects into flat math scopes.
 *   `options.normalizeUnits`: (default: `true`) Converts "10 mm" to `0.01`.
-*   `options.excludeKeys`: (default: `['nominal', 'reference', 'target']`) Prevents metadata from polluting math scope.
+*   `options.excludeKeys`: (default: `[]`) Keys to exclude from the math scope.
 
 ### `calculateCombinedUncertainty(input)`
 Performs RSS (Root Sum Squares) combination and Welch-Satterthwaite effective degrees of freedom calculation.
@@ -212,3 +212,60 @@ type EngineResult<T> =
 *   `FORMULA_ERROR`: Syntax error in the math expression.
 *   `INVALID_INPUT`: Zod validation failure.
 *   `PRECISION_ERROR`: BigNumber conversion failure.
+
+---
+
+## ⚠️ Known Limitations
+
+### Correlation Assumption
+
+The combined uncertainty calculation uses the simplified GUM formula (Equation 10):
+
+$$u_c = \sqrt{\sum c_i^2 u_i^2}$$
+
+This formula **assumes all input quantities are uncorrelated** ($r = 0$).
+
+For correlated inputs, the full formula (GUM Equation 13) should be used:
+
+$$u_c^2 = \sum\sum c_i c_j u(x_i) u(x_j) r(x_i, x_j)$$
+
+**Common sources of correlation in calibration:**
+- Multiple measurements using the same reference standard
+- Temperature affecting multiple components
+- Readings from instruments calibrated against the same reference
+
+If your calibration involves correlated quantities, you should:
+1. Use a Monte Carlo method (GUM Supplement 1), OR
+2. Document the correlation assumption in your uncertainty budget, OR
+3. Use a conservative estimate by assuming full correlation
+
+**Reference:** GUM Section 5.2, Equations 10-16
+
+### Precision Architecture
+
+- **GUM calculations** (Type A, Type B, Combined) use native JavaScript Math functions (~15 significant digits)
+- **Formula execution** uses mathjs BigNumber with configurable precision (default 32 digits)
+
+This is intentional because:
+1. Input measurement values rarely exceed 6-8 significant figures
+2. GUM uncertainty results are typically reported to 2-3 significant figures
+3. The coverage factor lookup has only 2 decimal places
+
+The BigNumber precision is preserved for user-defined formulas where arbitrary precision may be needed.
+
+### Supported Confidence Levels
+
+The t-distribution tables support the following confidence levels:
+- 0.95 (95%)
+- 0.9545 (95.45%, default)
+- 0.99 (99%)
+
+For other confidence levels, the closest supported level will be used with a console warning.
+
+---
+
+## 📄 References
+
+- **JCGM 100:2008** - Guide to the Expression of Uncertainty in Measurement (GUM)
+- **ISO/IEC Guide 98-3:2008** - Uncertainty of measurement
+- **NIST/SEMATECH e-Handbook** - t-distribution tables

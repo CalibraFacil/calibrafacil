@@ -1,215 +1,240 @@
-"use client";
+import { motion } from 'motion/react'
 
-import React from 'react';
-import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  AnalyticsUpIcon,
-  UserGroupIcon,
-  Settings01Icon,
-  FileValidationIcon,
-  Notification03Icon,
-  SearchIcon,
-  MoreHorizontalIcon,
-  CheckmarkCircle02Icon,
-} from '@hugeicons/core-free-icons';
-import { motion } from 'motion/react';
-import { BarChart as ReBarChart, Bar, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
-import { useTheme } from 'next-themes';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { BrandMark } from '@/components/brand'
 
-const data = [
-  { name: 'Seg', value: 12 },
-  { name: 'Ter', value: 19 },
-  { name: 'Qua', value: 15 },
-  { name: 'Qui', value: 24 },
-  { name: 'Sex', value: 32 },
-  { name: 'Sáb', value: 20 },
-];
-
-const sidebarItems = [
-  { icon: AnalyticsUpIcon, label: 'Visão Geral', active: true },
-  { icon: FileValidationIcon, label: 'Certificados', active: false },
-  { icon: UserGroupIcon, label: 'Clientes', active: false },
-  { icon: Settings01Icon, label: 'Configurações', active: false },
-];
-
-const DashboardPreview: React.FC = () => {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme ? resolvedTheme === 'dark' : true;
-
+export function DashboardPreview() {
   return (
-    <section className="relative pb-20 px-4 -mt-4">
-      <div className="max-w-6xl mx-auto relative">
+    <section id="plataforma" className="relative py-16 md:py-24">
+      {/* Subtle background */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-muted/30 to-transparent" />
+
+      <div className="relative mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-2xl text-center">
+          <motion.p
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.4 }}
+            className="text-sm font-medium tracking-wide text-primary uppercase"
+          >
+            Plataforma
+          </motion.p>
+          <motion.h2
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl"
+          >
+            Projetado para metrologia
+          </motion.h2>
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+            className="mt-4 text-base text-muted-foreground sm:text-lg"
+          >
+            Uma interface construída especificamente para o fluxo de trabalho de
+            laboratórios de calibração — intuitiva, rápida e completa.
+          </motion.p>
+        </div>
+
         <motion.div
-          initial={{ opacity: 0, y: 50, scale: 0.95 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.7 }}
-          className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl shadow-sky-900/20 overflow-hidden relative"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-100px' }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="mt-14"
         >
-          {/* Fake Browser Header */}
-          <div className="h-12 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center px-4 gap-2">
-            <div className="flex gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-              <div className="w-3 h-3 rounded-full bg-amber-500/80"></div>
-              <div className="w-3 h-3 rounded-full bg-emerald-500/80"></div>
-            </div>
-            <div className="ml-4 flex-1 max-w-xl bg-white dark:bg-slate-900 h-8 rounded-md border border-slate-200 dark:border-slate-800 flex items-center px-3 text-xs text-slate-400">
-              <HugeiconsIcon icon={SearchIcon} size={12} className="mr-2" />
-              app.calibrafacil.com/dashboard
-            </div>
-          </div>
-
-          {/* Dashboard Layout */}
-          <div className="flex h-[500px] md:h-[600px] overflow-hidden">
-            {/* Sidebar */}
-            <div className="w-16 md:w-64 border-r border-slate-200 dark:border-slate-800 p-4 flex-col gap-2 hidden sm:flex bg-slate-50/50 dark:bg-slate-950/50">
-              <div className="h-8 w-8 rounded-lg bg-sky-600 mb-6 flex items-center justify-center text-white font-bold">C</div>
-
-              {sidebarItems.map((item, idx) => (
-                <Button
-                  key={idx}
-                  variant="ghost"
-                  className={`w-full justify-start gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${item.active
-                    ? 'bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/40'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                >
-                  <HugeiconsIcon icon={item.icon} size={18} />
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{item.label}</span>
-                </Button>
-              ))}
-            </div>
-
-            {/* Main Content */}
-            <div className="flex-1 p-4 md:p-8 bg-slate-50/30 dark:bg-black/20 overflow-y-auto">
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900 dark:text-white">Bom dia, Laboratório X</h2>
-                  <p className="text-sm text-slate-500">Resumo das operações de hoje.</p>
+          {/* Browser mockup */}
+          <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xl shadow-black/5 dark:shadow-black/20">
+            {/* Title bar */}
+            <div className="flex items-center gap-2 border-b border-border/60 bg-muted/50 px-4 py-3">
+              <div className="flex gap-1.5">
+                <div className="size-3 rounded-full bg-border" />
+                <div className="size-3 rounded-full bg-border" />
+                <div className="size-3 rounded-full bg-border" />
+              </div>
+              <div className="ml-4 flex-1">
+                <div className="mx-auto max-w-xs rounded-md border border-border/60 bg-background px-3 py-1 text-center text-xs text-muted-foreground">
+                  calibrafacil.com/dashboard
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  aria-label="Notificações"
-                >
-                  <HugeiconsIcon icon={Notification03Icon} size={20} />
-                </Button>
               </div>
+            </div>
 
-              {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {[
-                  { label: 'Calibrações Hoje', value: '24', color: 'text-emerald-500', change: '+12%' },
-                  { label: 'Certificados Emitidos', value: '1,204', color: 'text-sky-500', change: '+5%' },
-                  { label: 'Aguardando Aprovação', value: '8', color: 'text-amber-500', change: '-2%' },
-                ].map((stat, idx) => (
-                  <Card
-                    key={idx}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl"
-                  >
-                    <CardContent className="p-6">
-                      <div className="text-sm text-slate-500 mb-1">{stat.label}</div>
-                      <div className="text-2xl font-bold text-slate-900 dark:text-white flex justify-between items-end">
-                        {stat.value}
-                        <Badge variant="secondary" className={`rounded-full ${stat.color} bg-slate-100 dark:bg-slate-800`}>
-                          {stat.change}
-                        </Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+            {/* Dashboard content */}
+            <div className="flex min-h-[400px] sm:min-h-[480px]">
+              {/* Sidebar */}
+              <div className="hidden w-52 shrink-0 border-r border-border/40 bg-muted/20 p-4 md:block">
+                <div className="mb-6 flex items-center gap-2">
+                  <BrandMark className="size-7" />
+                  <span className="text-xs font-semibold">MetroCal Lab</span>
+                </div>
 
-              {/* Content Area */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl h-80 flex flex-col">
-                  <CardHeader className="px-6 pt-6 pb-2">
-                    <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white">Volume de Calibrações (Semanal)</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex-1 w-full px-6 pb-6 pt-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ReBarChart data={data}>
-                        <XAxis
-                          dataKey="name"
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 12 }}
-                          dy={10}
-                        />
-                        <Tooltip
-                          cursor={{ fill: isDark ? '#1e293b' : '#f1f5f9' }}
-                          contentStyle={{
-                            backgroundColor: isDark ? '#0f172a' : '#fff',
-                            borderColor: isDark ? '#334155' : '#e2e8f0',
-                            borderRadius: '8px',
-                            color: isDark ? '#fff' : '#0f172a'
-                          }}
-                        />
-                        <Bar
-                          dataKey="value"
-                          fill="#0ea5e9"
-                          radius={[4, 4, 0, 0]}
-                          barSize={40}
-                        />
-                      </ReBarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-xl h-80 overflow-hidden">
-                  <CardHeader className="px-6 pt-6 pb-2">
-                    <CardTitle className="text-sm font-semibold text-slate-900 dark:text-white">Atividades Recentes</CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-6 pb-6 pt-2">
-                    <div className="space-y-4">
-                      {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0">
-                          <div className="w-8 h-8 rounded-full bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center text-sky-600 dark:text-sky-400 text-xs font-bold">
-                            OS
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-slate-900 dark:text-white truncate">Certificado #{2024000 + i}</div>
-                            <div className="text-xs text-slate-500">Micrômetro Externo - Cliente A</div>
-                          </div>
-                          <HugeiconsIcon icon={MoreHorizontalIcon} size={16} className="text-slate-400" />
-                        </div>
-                      ))}
+                <div className="space-y-1">
+                  {[
+                    { label: 'Dashboard', active: true },
+                    { label: 'Clientes', active: false },
+                    { label: 'Instrumentos', active: false },
+                    { label: 'Padrões', active: false },
+                    { label: 'Serviços', active: false },
+                    { label: 'Ordens de Serviço', active: false },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className={`rounded-md px-2.5 py-1.5 text-xs ${item.active ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground'}`}
+                    >
+                      {item.label}
                     </div>
-                  </CardContent>
-                </Card>
+                  ))}
+                </div>
+
+                <div className="mt-8 space-y-1">
+                  <p className="mb-2 px-2.5 text-[10px] font-medium tracking-wider text-muted-foreground/60 uppercase">
+                    Qualidade
+                  </p>
+                  {['Não Conformidades', 'Ações Corretivas'].map((item) => (
+                    <div
+                      key={item}
+                      className="rounded-md px-2.5 py-1.5 text-xs text-muted-foreground"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
               </div>
 
+              {/* Main content */}
+              <div className="flex-1 p-5 sm:p-6">
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">Dashboard</p>
+                    <p className="text-xs text-muted-foreground">
+                      Visão geral do laboratório
+                    </p>
+                  </div>
+                  <div className="h-7 rounded-md bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                    Este mês
+                  </div>
+                </div>
+
+                {/* Stats grid */}
+                <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {[
+                    { label: 'Calibrações', value: '147', change: '+12%' },
+                    { label: 'Em Andamento', value: '23', change: '' },
+                    { label: 'Certificados', value: '124', change: '+8%' },
+                    { label: 'Vencendo', value: '5', change: '', warn: true },
+                  ].map((stat) => (
+                    <div
+                      key={stat.label}
+                      className="rounded-lg border border-border/40 bg-background p-3"
+                    >
+                      <p className="text-[10px] text-muted-foreground">
+                        {stat.label}
+                      </p>
+                      <div className="mt-1 flex items-baseline gap-1.5">
+                        <span
+                          className={`text-lg font-bold ${stat.warn ? 'text-amber-500' : ''}`}
+                        >
+                          {stat.value}
+                        </span>
+                        {stat.change && (
+                          <span className="text-[10px] text-emerald-500">
+                            {stat.change}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Chart placeholder */}
+                <div className="mb-6 rounded-lg border border-border/40 bg-background p-4">
+                  <p className="mb-3 text-xs font-medium">
+                    Volume de Calibrações
+                  </p>
+                  <div className="flex h-28 items-end gap-1.5 sm:h-32">
+                    {[40, 55, 35, 70, 60, 85, 75, 90, 65, 80, 95, 88].map(
+                      (height, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 rounded-t-sm bg-primary/20 transition-colors hover:bg-primary/40"
+                          style={{ height: `${height}%` }}
+                        />
+                      ),
+                    )}
+                  </div>
+                  <div className="mt-2 flex justify-between text-[9px] text-muted-foreground">
+                    <span>Jan</span>
+                    <span>Fev</span>
+                    <span>Mar</span>
+                    <span>Abr</span>
+                    <span>Mai</span>
+                    <span>Jun</span>
+                    <span>Jul</span>
+                    <span>Ago</span>
+                    <span>Set</span>
+                    <span>Out</span>
+                    <span>Nov</span>
+                    <span>Dez</span>
+                  </div>
+                </div>
+
+                {/* Recent table */}
+                <div className="rounded-lg border border-border/40 bg-background p-4">
+                  <p className="mb-3 text-xs font-medium">
+                    Últimas Ordens de Serviço
+                  </p>
+                  <div className="space-y-2">
+                    {[
+                      {
+                        id: 'OS-2025-0147',
+                        client: 'Pharma Indústria',
+                        status: 'Concluída',
+                        statusColor: 'bg-emerald-500',
+                      },
+                      {
+                        id: 'OS-2025-0146',
+                        client: 'AutoPeças Brasil',
+                        status: 'Em Análise',
+                        statusColor: 'bg-amber-500',
+                      },
+                      {
+                        id: 'OS-2025-0145',
+                        client: 'Siderúrgica Vale',
+                        status: 'Em Execução',
+                        statusColor: 'bg-primary',
+                      },
+                    ].map((row) => (
+                      <div
+                        key={row.id}
+                        className="flex items-center justify-between rounded-md px-2 py-2 text-xs transition-colors hover:bg-muted/50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-muted-foreground">
+                            {row.id}
+                          </span>
+                          <span>{row.client}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div
+                            className={`size-1.5 rounded-full ${row.statusColor}`}
+                          />
+                          <span className="text-muted-foreground">
+                            {row.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>
-
-        {/* Floating Elements for 3D Effect */}
-        <motion.div
-          animate={{ y: [0, -10, 0] }}
-          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -right-4 top-20 md:right-10 md:top-40 z-20 hidden lg:block"
-          style={{ transform: 'translateX(50%)' }}
-        >
-          <Card className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 max-w-[200px]">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-md">
-                <HugeiconsIcon icon={CheckmarkCircle02Icon} size={20} />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">Aprovação Automática</p>
-                <p className="text-[10px] text-slate-500 mt-1">Certificado em conformidade com Inmetro.</p>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-
       </div>
     </section>
-  );
-};
-
-export default DashboardPreview;
+  )
+}

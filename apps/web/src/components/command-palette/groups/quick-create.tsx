@@ -17,7 +17,7 @@ import {
 
 export function QuickCreateGroup() {
   const navigate = useNavigate()
-  const { setOpen, setEnvironmentalDialogOpen } = useCommandPalette()
+  const { setOpen } = useCommandPalette()
 
   return (
     <CommandGroup heading="Criação Rápida">
@@ -35,13 +35,11 @@ export function QuickCreateGroup() {
       <CommandItem
         onSelect={() => {
           setOpen(false)
-          setTimeout(() => {
-            setEnvironmentalDialogOpen(true)
-          }, 100)
+          navigate({ to: '/dashboard/settings/environment' })
         }}
       >
         <HugeiconsIcon icon={ThermometerIcon} className="text-orange-500" />
-        <span>Registrar Condições Ambientais</span>
+        <span>Configurar Condições Ambientais</span>
         <CommandShortcut>⌘E</CommandShortcut>
       </CommandItem>
 

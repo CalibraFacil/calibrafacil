@@ -5,11 +5,14 @@
   "scripts": {
     "dev": "vite --port 5173 --host",
     "build": "vite build",
+    "build:ci": "vite build && node ./scripts/check-bundle-size.mjs",
+    "check:bundle": "node ./scripts/check-bundle-size.mjs",
+    "render:og": "node ./scripts/render-og.mjs",
     "preview": "vite preview",
-    "test": "vitest run",
-    "lint": "eslint",
+    "test": "vitest run --passWithNoTests",
+    "lint": "oxlint",
     "format": "prettier",
-    "check": "prettier --write . && eslint --fix"
+    "check": "prettier --write . && oxlint --fix"
   },
   "dependencies": {
     "@base-ui/react": "^1.0.0",
@@ -33,16 +36,17 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "color": "^5.0.3",
     "date-fns": "^4.1.0",
-    "hono": "^4.11.1",
+    "hono": "^4.12.4",
     "motion": "^12.23.26",
     "next-themes": "^0.4.6",
     "nuqs": "^2.8.5",
     "react": "^19.2.0",
     "react-day-picker": "^9.13.0",
     "react-dom": "^19.2.0",
+    "react-hook-form": "^7.71.1",
     "recharts": "2.15.4",
-    "shadcn": "^3.6.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.0.6",
@@ -52,10 +56,8 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "@tanstack/devtools-vite": "^0.3.11",
-    "@tanstack/eslint-config": "^0.3.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.2.0",
     "@types/node": "^22.10.2",
@@ -65,9 +67,11 @@
     "@vitejs/plugin-react": "^5.0.4",
     "jsdom": "^27.0.0",
     "prettier": "^3.5.3",
+    "shadcn": "^3.6.2",
     "typescript": "^5.7.2",
     "vite": "^7.1.7",
     "vitest": "^3.0.5",
-    "web-vitals": "^5.1.0"
+    "web-vitals": "^5.1.0",
+    "wrangler": "^4.54.0"
   }
 }

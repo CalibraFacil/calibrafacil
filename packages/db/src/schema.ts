@@ -4,13 +4,40 @@ import {
   text,
   timestamp,
   boolean,
+  foreignKey,
   index,
+  unique,
   uniqueIndex,
   serial,
   jsonb,
   integer,
   real,
 } from "drizzle-orm/pg-core";
+import type {
+  CustomerSuccessBlocker,
+  CustomerSuccessHealthStatus,
+  CustomerSuccessSlaTier,
+  GenericFinancialErpConnectionConfig,
+  GoLiveStatus,
+  IntegrationCredentialType,
+  IntegrationEventLevel,
+  IntegrationProvider,
+  IntegrationStatus,
+  IntegrationSyncStatus,
+  IntegrationSyncTarget,
+  IntegrationSyncTrigger,
+  IntegrationType,
+  MigrationStatus,
+  OnboardingStatus,
+  PublicApiResourceType,
+  PublicApiWebhookDeliveryStatus,
+  PublicApiWebhookEvent,
+  PublicApiWebhookSubscriptionStatus,
+  SupportEventKind,
+  SupportRequestCategory,
+  SupportRequestPriority,
+  SupportRequestStatus,
+} from "@calibra-facil/shared";
 
 // =============================================================================
 // ASSET TYPE - Dynamic Instrument Classification (ISO 17025)
@@ -35,6 +62,10 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  role: text("role").default("user").notNull(),
+  banned: boolean("banned").default(false).notNull(),
+  banReason: text("ban_reason"),
+  banExpires: timestamp("ban_expires"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -58,6 +89,9 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    impersonatedBy: text("impersonated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => [index("session_userId_idx").on(table.userId)],
 );
@@ -153,6 +187,293 @@ export const member = pgTable(
   ],
 );
 
+export type OrganizationUnitStatus = "ACTIVE" | "ARCHIVED";
+export type MemberUnitRole = "member" | "technician" | "unit_admin";
+
+export const organizationUnit = pgTable(
+  "organization_unit",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    status: text("status")
+      .$type<OrganizationUnitStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("organization_unit_org_id_idx").on(table.organizationId),
+    index("organization_unit_status_idx").on(table.status),
+    uniqueIndex("organization_unit_org_slug_uidx").on(
+      table.organizationId,
+      table.slug,
+    ),
+  ],
+);
+
+export const memberUnitAssignment = pgTable(
+  "member_unit_assignment",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "cascade" }),
+    role: text("role").$type<MemberUnitRole>().default("member").notNull(),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("member_unit_assignment_org_id_idx").on(table.organizationId),
+    index("member_unit_assignment_member_id_idx").on(table.memberId),
+    index("member_unit_assignment_unit_id_idx").on(table.unitId),
+    unique("member_unit_assignment_member_unit_unique").on(
+      table.memberId,
+      table.unitId,
+    ),
+  ],
+);
+
+export const organizationEventLog = pgTable(
+  "organization_event_log",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "set null",
+    }),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    actorMemberId: text("actor_member_id").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("organization_event_log_org_id_idx").on(table.organizationId),
+    index("organization_event_log_unit_id_idx").on(table.unitId),
+    index("organization_event_log_action_idx").on(table.action),
+    index("organization_event_log_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const platformEventLog = pgTable(
+  "platform_event_log",
+  {
+    id: serial("id").primaryKey(),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    targetUserId: text("target_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("platform_event_log_action_idx").on(table.action),
+    index("platform_event_log_actor_user_idx").on(table.actorUserId),
+    index("platform_event_log_target_user_idx").on(table.targetUserId),
+    index("platform_event_log_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const organizationSuccessProfile = pgTable(
+  "organization_success_profile",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    accountOwnerUserId: text("account_owner_user_id").references(
+      () => user.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    accountOwnerName: text("account_owner_name"),
+    accountOwnerEmail: text("account_owner_email"),
+    supportContactEmail: text("support_contact_email"),
+    internalOwnerUserId: text("internal_owner_user_id").references(
+      () => user.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    prioritySupport: boolean("priority_support").default(false).notNull(),
+    slaTier: text("sla_tier")
+      .$type<CustomerSuccessSlaTier>()
+      .default("PLAN_DEFAULT")
+      .notNull(),
+    onboardingStatus: text("onboarding_status")
+      .$type<OnboardingStatus>()
+      .default("NOT_STARTED")
+      .notNull(),
+    migrationStatus: text("migration_status")
+      .$type<MigrationStatus>()
+      .default("NOT_REQUIRED")
+      .notNull(),
+    goLiveStatus: text("go_live_status")
+      .$type<GoLiveStatus>()
+      .default("NOT_SCHEDULED")
+      .notNull(),
+    healthStatus: text("health_status")
+      .$type<CustomerSuccessHealthStatus>()
+      .default("HEALTHY")
+      .notNull(),
+    blockers: jsonb("blockers").$type<CustomerSuccessBlocker[]>(),
+    nextAction: text("next_action"),
+    nextActionDueAt: timestamp("next_action_due_at"),
+    nextActionCompletedAt: timestamp("next_action_completed_at"),
+    goLiveTargetDate: timestamp("go_live_target_date"),
+    goLiveActualDate: timestamp("go_live_actual_date"),
+    publicStatusNote: text("public_status_note"),
+    internalNotes: text("internal_notes"),
+    lastTouchedAt: timestamp("last_touched_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_success_profile_org_uidx").on(
+      table.organizationId,
+    ),
+    index("organization_success_profile_onboarding_idx").on(
+      table.onboardingStatus,
+    ),
+    index("organization_success_profile_migration_idx").on(
+      table.migrationStatus,
+    ),
+    index("organization_success_profile_go_live_idx").on(table.goLiveStatus),
+    index("organization_success_profile_health_idx").on(table.healthStatus),
+    index("organization_success_profile_priority_support_idx").on(
+      table.prioritySupport,
+    ),
+    index("organization_success_profile_next_action_due_idx").on(
+      table.nextActionDueAt,
+    ),
+  ],
+);
+
+export const organizationSupportRequest = pgTable(
+  "organization_support_request",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    requestedByUserId: text("requested_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    assignedToUserId: text("assigned_to_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    category: text("category").$type<SupportRequestCategory>().notNull(),
+    priority: text("priority")
+      .$type<SupportRequestPriority>()
+      .default("NORMAL")
+      .notNull(),
+    status: text("status")
+      .$type<SupportRequestStatus>()
+      .default("OPEN")
+      .notNull(),
+    subject: text("subject").notNull(),
+    description: text("description").notNull(),
+    publicResponse: text("public_response"),
+    slaTargetAt: timestamp("sla_target_at"),
+    firstResponseAt: timestamp("first_response_at"),
+    escalatedAt: timestamp("escalated_at"),
+    escalatedByUserId: text("escalated_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    escalationReason: text("escalation_reason"),
+    resolvedAt: timestamp("resolved_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("organization_support_request_org_idx").on(table.organizationId),
+    index("organization_support_request_status_idx").on(table.status),
+    index("organization_support_request_priority_idx").on(table.priority),
+    index("organization_support_request_escalated_at_idx").on(
+      table.escalatedAt,
+    ),
+    index("organization_support_request_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const organizationSupportRequestEvent = pgTable(
+  "organization_support_request_event",
+  {
+    id: serial("id").primaryKey(),
+    supportRequestId: integer("support_request_id")
+      .notNull()
+      .references(() => organizationSupportRequest.id, {
+        onDelete: "cascade",
+      }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    kind: text("kind").$type<SupportEventKind>().notNull(),
+    message: text("message").notNull(),
+    publicVisible: boolean("public_visible").default(false).notNull(),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("organization_support_request_event_request_idx").on(
+      table.supportRequestId,
+    ),
+    index("organization_support_request_event_org_idx").on(table.organizationId),
+    index("organization_support_request_event_kind_idx").on(table.kind),
+    index("organization_support_request_event_created_at_idx").on(
+      table.createdAt,
+    ),
+  ],
+);
+
 export const invitation = pgTable(
   "invitation",
   {
@@ -172,6 +493,508 @@ export const invitation = pgTable(
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
+  ],
+);
+
+export const ssoProvider = pgTable(
+  "sso_provider",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    oidcConfig: text("oidc_config"),
+    samlConfig: text("saml_config"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull().unique(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, {
+        onDelete: "cascade",
+      }),
+    domain: text("domain").notNull(),
+    domainVerified: boolean("domain_verified").default(false),
+  },
+  (table) => [
+    index("sso_provider_user_id_idx").on(table.userId),
+    index("sso_provider_org_id_idx").on(table.organizationId),
+    uniqueIndex("sso_provider_org_id_uidx").on(table.organizationId),
+  ],
+);
+
+export const organizationCustomDomain = pgTable(
+  "organization_custom_domain",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    hostname: text("hostname").notNull().unique(),
+    verificationToken: text("verification_token").notNull(),
+    verifiedAt: timestamp("verified_at"),
+    activatedAt: timestamp("activated_at"),
+    lastVerifiedAt: timestamp("last_verified_at"),
+    isActive: boolean("is_active").default(false).notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("org_custom_domain_org_uidx").on(table.organizationId),
+    uniqueIndex("org_custom_domain_hostname_uidx").on(table.hostname),
+    index("org_custom_domain_active_idx").on(table.isActive),
+  ],
+);
+
+export const certificateTemplate = pgTable(
+  "certificate_template",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    version: integer("version").default(1).notNull(),
+    status: text("status").default("ACTIVE").notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    config: jsonb("config").$type<Record<string, unknown>>().notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("certificate_template_org_id_idx").on(table.organizationId),
+    index("certificate_template_status_idx").on(table.status),
+    uniqueIndex("certificate_template_org_slug_uidx").on(
+      table.organizationId,
+      table.slug,
+    ),
+  ],
+);
+
+export const organizationApiKey = pgTable(
+  "organization_api_key",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull().unique(),
+    scopes: jsonb("scopes").$type<string[]>().default([]).notNull(),
+    lastUsedAt: timestamp("last_used_at"),
+    lastUsedIp: text("last_used_ip"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    revokedAt: timestamp("revoked_at"),
+    revokedBy: text("revoked_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("organization_api_key_org_id_idx").on(table.organizationId),
+    uniqueIndex("organization_api_key_hash_uidx").on(table.keyHash),
+  ],
+);
+
+export const organizationApiKeyAuditLog = pgTable(
+  "organization_api_key_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    apiKeyId: text("api_key_id")
+      .notNull()
+      .references(() => organizationApiKey.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    performedBy: text("performed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ipAddress: text("ip_address"),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("organization_api_key_audit_log_key_idx").on(table.apiKeyId),
+    index("organization_api_key_audit_log_org_idx").on(table.organizationId),
+  ],
+);
+
+export const publicApiResourceRef = pgTable(
+  "public_api_resource_ref",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    resourceType: text("resource_type").$type<PublicApiResourceType>().notNull(),
+    resourceId: text("resource_id").notNull(),
+    externalId: text("external_id").notNull(),
+    createdByApiKeyId: text("created_by_api_key_id").references(
+      () => organizationApiKey.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("public_api_resource_ref_org_idx").on(table.organizationId),
+    index("public_api_resource_ref_type_idx").on(table.resourceType),
+    uniqueIndex("public_api_resource_ref_external_uidx").on(
+      table.organizationId,
+      table.resourceType,
+      table.externalId,
+    ),
+    uniqueIndex("public_api_resource_ref_resource_uidx").on(
+      table.organizationId,
+      table.resourceType,
+      table.resourceId,
+    ),
+  ],
+);
+
+export const publicApiIdempotencyKey = pgTable(
+  "public_api_idempotency_key",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    apiKeyId: text("api_key_id")
+      .notNull()
+      .references(() => organizationApiKey.id, { onDelete: "cascade" }),
+    requestMethod: text("request_method").notNull(),
+    requestPath: text("request_path").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    responseStatus: integer("response_status").notNull(),
+    responseBody: jsonb("response_body").$type<Record<string, unknown>>().notNull(),
+    resourceType: text("resource_type").$type<PublicApiResourceType>(),
+    resourceId: text("resource_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at"),
+  },
+  (table) => [
+    index("public_api_idempotency_org_idx").on(table.organizationId),
+    index("public_api_idempotency_api_key_idx").on(table.apiKeyId),
+    uniqueIndex("public_api_idempotency_request_uidx").on(
+      table.organizationId,
+      table.apiKeyId,
+      table.requestMethod,
+      table.requestPath,
+      table.idempotencyKey,
+    ),
+  ],
+);
+
+export const publicApiWebhookSubscription = pgTable(
+  "public_api_webhook_subscription",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    targetUrl: text("target_url").notNull(),
+    events: jsonb("events").$type<PublicApiWebhookEvent[]>().default([]).notNull(),
+    status: text("status")
+      .$type<PublicApiWebhookSubscriptionStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    secretPrefix: text("secret_prefix").notNull(),
+    encryptedSecret: text("encrypted_secret").notNull(),
+    secretIv: text("secret_iv").notNull(),
+    lastSuccessAt: timestamp("last_success_at"),
+    lastFailureAt: timestamp("last_failure_at"),
+    consecutiveFailures: integer("consecutive_failures").default(0).notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedBy: text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("public_api_webhook_subscription_org_idx").on(table.organizationId),
+    index("public_api_webhook_subscription_status_idx").on(table.status),
+  ],
+);
+
+export const publicApiWebhookDelivery = pgTable(
+  "public_api_webhook_delivery",
+  {
+    id: text("id").primaryKey(),
+    subscriptionId: text("subscription_id")
+      .notNull()
+      .references(() => publicApiWebhookSubscription.id, {
+        onDelete: "cascade",
+      }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    eventId: text("event_id").notNull(),
+    eventType: text("event_type").$type<PublicApiWebhookEvent>().notNull(),
+    requestUrl: text("request_url").notNull(),
+    requestBody: jsonb("request_body").$type<Record<string, unknown>>().notNull(),
+    responseStatus: integer("response_status"),
+    responseBody: text("response_body"),
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    status: text("status")
+      .$type<PublicApiWebhookDeliveryStatus>()
+      .default("PENDING")
+      .notNull(),
+    deliveredAt: timestamp("delivered_at"),
+    failedAt: timestamp("failed_at"),
+    lastError: text("last_error"),
+    replayOfDeliveryId: text("replay_of_delivery_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("public_api_webhook_delivery_subscription_idx").on(
+      table.subscriptionId,
+    ),
+    index("public_api_webhook_delivery_org_idx").on(table.organizationId),
+    index("public_api_webhook_delivery_event_idx").on(table.eventId),
+    index("public_api_webhook_delivery_status_idx").on(table.status),
+  ],
+);
+
+export const organizationIntegration = pgTable(
+  "organization_integration",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    type: text("type").$type<IntegrationType>().notNull(),
+    provider: text("provider").$type<IntegrationProvider>().notNull(),
+    name: text("name").notNull(),
+    status: text("status").$type<IntegrationStatus>().default("ACTIVE").notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedBy: text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    lastValidatedAt: timestamp("last_validated_at"),
+    lastValidationError: text("last_validation_error"),
+    disabledAt: timestamp("disabled_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("organization_integration_org_id_idx").on(table.organizationId),
+    index("organization_integration_status_idx").on(table.status),
+    uniqueIndex("organization_integration_id_org_uidx").on(
+      table.id,
+      table.organizationId,
+    ),
+  ],
+);
+
+export const integrationConnection = pgTable(
+  "integration_connection",
+  {
+    id: text("id").primaryKey(),
+    integrationId: text("integration_id")
+      .notNull()
+      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    credentialType: text("credential_type")
+      .$type<IntegrationCredentialType>()
+      .default("bearer")
+      .notNull(),
+    config: jsonb("config")
+      .$type<GenericFinancialErpConnectionConfig>()
+      .notNull(),
+    encryptedSecret: text("encrypted_secret").notNull(),
+    secretIv: text("secret_iv").notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedBy: text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("integration_connection_integration_uidx").on(table.integrationId),
+    index("integration_connection_org_id_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [
+        organizationIntegration.id,
+        organizationIntegration.organizationId,
+      ],
+      name: "integration_connection_integration_org_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const integrationObjectLink = pgTable(
+  "integration_object_link",
+  {
+    id: text("id").primaryKey(),
+    integrationId: text("integration_id")
+      .notNull()
+      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    target: text("target").$type<IntegrationSyncTarget>().notNull(),
+    localEntityId: text("local_entity_id").notNull(),
+    remoteEntityId: text("remote_entity_id"),
+    remoteDisplayId: text("remote_display_id"),
+    lastSyncedAt: timestamp("last_synced_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("integration_object_link_local_uidx").on(
+      table.integrationId,
+      table.target,
+      table.localEntityId,
+    ),
+    index("integration_object_link_remote_idx").on(
+      table.integrationId,
+      table.target,
+      table.remoteEntityId,
+    ),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [
+        organizationIntegration.id,
+        organizationIntegration.organizationId,
+      ],
+      name: "integration_object_link_integration_org_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const integrationSyncRun = pgTable(
+  "integration_sync_run",
+  {
+    id: text("id").primaryKey(),
+    integrationId: text("integration_id")
+      .notNull()
+      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    trigger: text("trigger").$type<IntegrationSyncTrigger>().notNull(),
+    target: text("target").$type<IntegrationSyncTarget>().notNull(),
+    status: text("status")
+      .$type<IntegrationSyncStatus>()
+      .default("PENDING")
+      .notNull(),
+    initiatedBy: text("initiated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    processedCount: integer("processed_count").default(0).notNull(),
+    successCount: integer("success_count").default(0).notNull(),
+    errorCount: integer("error_count").default(0).notNull(),
+    summary: jsonb("summary").$type<Record<string, unknown>>(),
+    errorSummary: text("error_summary"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("integration_sync_run_integration_idx").on(table.integrationId),
+    index("integration_sync_run_org_idx").on(table.organizationId),
+    index("integration_sync_run_status_idx").on(table.status),
+    index("integration_sync_run_created_at_idx").on(table.createdAt),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [
+        organizationIntegration.id,
+        organizationIntegration.organizationId,
+      ],
+      name: "integration_sync_run_integration_org_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const integrationEventLog = pgTable(
+  "integration_event_log",
+  {
+    id: serial("id").primaryKey(),
+    integrationId: text("integration_id")
+      .notNull()
+      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    runId: text("run_id").references(() => integrationSyncRun.id, {
+      onDelete: "cascade",
+    }),
+    level: text("level").$type<IntegrationEventLevel>().default("info").notNull(),
+    event: text("event").notNull(),
+    message: text("message").notNull(),
+    details: jsonb("details").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("integration_event_log_integration_idx").on(table.integrationId),
+    index("integration_event_log_org_idx").on(table.organizationId),
+    index("integration_event_log_run_idx").on(table.runId),
+    index("integration_event_log_created_at_idx").on(table.createdAt),
+    foreignKey({
+      columns: [table.integrationId, table.organizationId],
+      foreignColumns: [
+        organizationIntegration.id,
+        organizationIntegration.organizationId,
+      ],
+      name: "integration_event_log_integration_org_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -309,6 +1132,18 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   members: many(member),
   invitations: many(invitation),
+  ssoProviders: many(ssoProvider),
+  customDomains: many(organizationCustomDomain),
+  certificateTemplates: many(certificateTemplate),
+  apiKeyAuditLogs: many(organizationApiKeyAuditLog),
+  successProfiles: many(organizationSuccessProfile),
+  supportRequestsCreated: many(organizationSupportRequest, {
+    relationName: "supportRequestRequestedBy",
+  }),
+  supportRequestsAssigned: many(organizationSupportRequest, {
+    relationName: "supportRequestAssignedTo",
+  }),
+  supportRequestEvents: many(organizationSupportRequestEvent),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -329,12 +1164,27 @@ export const organizationRelations = relations(
   organization,
   ({ one, many }) => ({
     members: many(member),
+    units: many(organizationUnit),
+    unitAssignments: many(memberUnitAssignment),
     invitations: many(invitation),
+    eventLogs: many(organizationEventLog),
     subscription: one(subscription),
+    ssoProviders: many(ssoProvider),
+    customDomain: one(organizationCustomDomain),
+    certificateTemplates: many(certificateTemplate),
+    apiKeys: many(organizationApiKey),
+    integrations: many(organizationIntegration),
+    integrationConnections: many(integrationConnection),
+    integrationSyncRuns: many(integrationSyncRun),
+    integrationEventLogs: many(integrationEventLog),
+    integrationObjectLinks: many(integrationObjectLink),
+    successProfile: one(organizationSuccessProfile),
+    supportRequests: many(organizationSupportRequest),
+    supportRequestEvents: many(organizationSupportRequestEvent),
   }),
 );
 
-export const memberRelations = relations(member, ({ one }) => ({
+export const memberRelations = relations(member, ({ one, many }) => ({
   organization: one(organization, {
     fields: [member.organizationId],
     references: [organization.id],
@@ -343,7 +1193,109 @@ export const memberRelations = relations(member, ({ one }) => ({
     fields: [member.userId],
     references: [user.id],
   }),
+  unitAssignments: many(memberUnitAssignment),
 }));
+
+export const memberUnitAssignmentRelations = relations(
+  memberUnitAssignment,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [memberUnitAssignment.organizationId],
+      references: [organization.id],
+    }),
+    member: one(member, {
+      fields: [memberUnitAssignment.memberId],
+      references: [member.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [memberUnitAssignment.unitId],
+      references: [organizationUnit.id],
+    }),
+    createdByUser: one(user, {
+      fields: [memberUnitAssignment.createdBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const organizationEventLogRelations = relations(
+  organizationEventLog,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [organizationEventLog.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [organizationEventLog.unitId],
+      references: [organizationUnit.id],
+    }),
+    actorUser: one(user, {
+      fields: [organizationEventLog.actorUserId],
+      references: [user.id],
+    }),
+    actorMember: one(member, {
+      fields: [organizationEventLog.actorMemberId],
+      references: [member.id],
+    }),
+  }),
+);
+
+export const organizationSuccessProfileRelations = relations(
+  organizationSuccessProfile,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [organizationSuccessProfile.organizationId],
+      references: [organization.id],
+    }),
+    accountOwnerUser: one(user, {
+      fields: [organizationSuccessProfile.accountOwnerUserId],
+      references: [user.id],
+    }),
+    internalOwnerUser: one(user, {
+      fields: [organizationSuccessProfile.internalOwnerUserId],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const organizationSupportRequestRelations = relations(
+  organizationSupportRequest,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [organizationSupportRequest.organizationId],
+      references: [organization.id],
+    }),
+    requestedByUser: one(user, {
+      fields: [organizationSupportRequest.requestedByUserId],
+      references: [user.id],
+      relationName: "supportRequestRequestedBy",
+    }),
+    assignedToUser: one(user, {
+      fields: [organizationSupportRequest.assignedToUserId],
+      references: [user.id],
+      relationName: "supportRequestAssignedTo",
+    }),
+    events: many(organizationSupportRequestEvent),
+  }),
+);
+
+export const organizationSupportRequestEventRelations = relations(
+  organizationSupportRequestEvent,
+  ({ one }) => ({
+    supportRequest: one(organizationSupportRequest, {
+      fields: [organizationSupportRequestEvent.supportRequestId],
+      references: [organizationSupportRequest.id],
+    }),
+    organization: one(organization, {
+      fields: [organizationSupportRequestEvent.organizationId],
+      references: [organization.id],
+    }),
+    actorUser: one(user, {
+      fields: [organizationSupportRequestEvent.actorUserId],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const invitationRelations = relations(invitation, ({ one }) => ({
   organization: one(organization, {
@@ -355,6 +1307,186 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const ssoProviderRelations = relations(ssoProvider, ({ one }) => ({
+  organization: one(organization, {
+    fields: [ssoProvider.organizationId],
+    references: [organization.id],
+  }),
+  user: one(user, {
+    fields: [ssoProvider.userId],
+    references: [user.id],
+  }),
+}));
+
+export const organizationCustomDomainRelations = relations(
+  organizationCustomDomain,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [organizationCustomDomain.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationCustomDomain.createdBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const certificateTemplateRelations = relations(
+  certificateTemplate,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [certificateTemplate.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [certificateTemplate.createdBy],
+      references: [user.id],
+    }),
+    jobs: many(calibrationJob),
+  }),
+);
+
+export const organizationApiKeyRelations = relations(
+  organizationApiKey,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [organizationApiKey.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationApiKey.createdBy],
+      references: [user.id],
+    }),
+    revokedByUser: one(user, {
+      fields: [organizationApiKey.revokedBy],
+      references: [user.id],
+    }),
+    auditLogs: many(organizationApiKeyAuditLog),
+  }),
+);
+
+export const organizationApiKeyAuditLogRelations = relations(
+  organizationApiKeyAuditLog,
+  ({ one }) => ({
+    apiKey: one(organizationApiKey, {
+      fields: [organizationApiKeyAuditLog.apiKeyId],
+      references: [organizationApiKey.id],
+    }),
+    organization: one(organization, {
+      fields: [organizationApiKeyAuditLog.organizationId],
+      references: [organization.id],
+    }),
+    performedByUser: one(user, {
+      fields: [organizationApiKeyAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const organizationIntegrationRelations = relations(
+  organizationIntegration,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [organizationIntegration.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationIntegration.createdBy],
+      references: [user.id],
+      relationName: "organizationIntegrationCreator",
+    }),
+    updatedByUser: one(user, {
+      fields: [organizationIntegration.updatedBy],
+      references: [user.id],
+      relationName: "organizationIntegrationUpdater",
+    }),
+    connection: one(integrationConnection, {
+      fields: [organizationIntegration.id],
+      references: [integrationConnection.integrationId],
+    }),
+    runs: many(integrationSyncRun),
+    events: many(integrationEventLog),
+    objectLinks: many(integrationObjectLink),
+  }),
+);
+
+export const integrationConnectionRelations = relations(
+  integrationConnection,
+  ({ one }) => ({
+    integration: one(organizationIntegration, {
+      fields: [integrationConnection.integrationId],
+      references: [organizationIntegration.id],
+    }),
+    organization: one(organization, {
+      fields: [integrationConnection.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [integrationConnection.createdBy],
+      references: [user.id],
+      relationName: "integrationConnectionCreator",
+    }),
+    updatedByUser: one(user, {
+      fields: [integrationConnection.updatedBy],
+      references: [user.id],
+      relationName: "integrationConnectionUpdater",
+    }),
+  }),
+);
+
+export const integrationObjectLinkRelations = relations(
+  integrationObjectLink,
+  ({ one }) => ({
+    integration: one(organizationIntegration, {
+      fields: [integrationObjectLink.integrationId],
+      references: [organizationIntegration.id],
+    }),
+    organization: one(organization, {
+      fields: [integrationObjectLink.organizationId],
+      references: [organization.id],
+    }),
+  }),
+);
+
+export const integrationSyncRunRelations = relations(
+  integrationSyncRun,
+  ({ one, many }) => ({
+    integration: one(organizationIntegration, {
+      fields: [integrationSyncRun.integrationId],
+      references: [organizationIntegration.id],
+    }),
+    organization: one(organization, {
+      fields: [integrationSyncRun.organizationId],
+      references: [organization.id],
+    }),
+    initiatedByUser: one(user, {
+      fields: [integrationSyncRun.initiatedBy],
+      references: [user.id],
+      relationName: "integrationRunInitiator",
+    }),
+    events: many(integrationEventLog),
+  }),
+);
+
+export const integrationEventLogRelations = relations(
+  integrationEventLog,
+  ({ one }) => ({
+    integration: one(organizationIntegration, {
+      fields: [integrationEventLog.integrationId],
+      references: [organizationIntegration.id],
+    }),
+    organization: one(organization, {
+      fields: [integrationEventLog.organizationId],
+      references: [organization.id],
+    }),
+    run: one(integrationSyncRun, {
+      fields: [integrationEventLog.runId],
+      references: [integrationSyncRun.id],
+    }),
+  }),
+);
 
 export const customerRelations = relations(customer, ({ one, many }) => ({
   organization: one(organization, {
@@ -396,6 +1528,9 @@ export const asset = pgTable(
   "asset",
   {
     id: serial("id").primaryKey(),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "cascade" }),
@@ -422,6 +1557,7 @@ export const asset = pgTable(
       .notNull(),
   },
   (table) => [
+    index("asset_unit_id_idx").on(table.unitId),
     index("asset_customer_id_idx").on(table.customerId),
     index("asset_type_id_idx").on(table.assetTypeId),
     index("asset_status_idx").on(table.status),
@@ -468,6 +1604,10 @@ export const assetTypeRelations = relations(assetType, ({ many }) => ({
 }));
 
 export const assetRelations = relations(asset, ({ one, many }) => ({
+  unit: one(organizationUnit, {
+    fields: [asset.unitId],
+    references: [organizationUnit.id],
+  }),
   customer: one(customer, {
     fields: [asset.customerId],
     references: [customer.id],
@@ -497,10 +1637,17 @@ export const assetAuditLogRelations = relations(assetAuditLog, ({ one }) => ({
 /**
  * Method status values for versioning workflow
  * - DRAFT: Work in progress, can be edited
+ * - PENDING_APPROVAL: Submitted for review, locked for edits
+ * - TECHNICAL_REVIEWED: Approved by technical reviewer, pending quality approval
  * - PUBLISHED: Active and immutable, used for calibrations
  * - ARCHIVED: No longer active, kept for historical reference
  */
-export type MethodStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+export type MethodStatus =
+  | "DRAFT"
+  | "PENDING_APPROVAL"
+  | "TECHNICAL_REVIEWED"
+  | "PUBLISHED"
+  | "ARCHIVED";
 
 /**
  * Input field definition for method data collection.
@@ -597,8 +1744,17 @@ export const calibrationMethod = pgTable(
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
+    technicalReviewedBy: text("technical_reviewed_by").references(
+      () => user.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     publishedAt: timestamp("published_at"),
     publishedBy: text("published_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    approvedBy: text("approved_by").references(() => user.id, {
       onDelete: "set null",
     }),
     archivedAt: timestamp("archived_at"),
@@ -632,7 +1788,7 @@ export const methodAuditLog = pgTable(
     methodId: integer("method_id")
       .notNull()
       .references(() => calibrationMethod.id, { onDelete: "cascade" }),
-    action: text("action").notNull(), // 'create', 'update', 'publish', 'archive', 'new_version'
+    action: text("action").notNull(), // 'create', 'update', 'request_approval', 'technical_review', 'quality_approve', 'return_to_draft', 'publish', 'archive', 'new_version'
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")
       .notNull()
@@ -673,10 +1829,20 @@ export const calibrationMethodRelations = relations(
       references: [user.id],
       relationName: "methodCreator",
     }),
+    technicalReviewedByUser: one(user, {
+      fields: [calibrationMethod.technicalReviewedBy],
+      references: [user.id],
+      relationName: "methodTechnicalReviewer",
+    }),
     publishedByUser: one(user, {
       fields: [calibrationMethod.publishedBy],
       references: [user.id],
       relationName: "methodPublisher",
+    }),
+    approvedByUser: one(user, {
+      fields: [calibrationMethod.approvedBy],
+      references: [user.id],
+      relationName: "methodQualityApprover",
     }),
     auditLogs: many(methodAuditLog),
   }),
@@ -713,6 +1879,9 @@ export const service = pgTable(
   "service",
   {
     id: serial("id").primaryKey(),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -742,6 +1911,7 @@ export const service = pgTable(
       .notNull(),
   },
   (table) => [
+    index("service_unit_id_idx").on(table.unitId),
     index("service_organization_id_idx").on(table.organizationId),
     index("service_method_id_idx").on(table.methodId),
     index("service_asset_type_id_idx").on(table.assetTypeId),
@@ -787,6 +1957,10 @@ export const serviceRelations = relations(service, ({ one, many }) => ({
   organization: one(organization, {
     fields: [service.organizationId],
     references: [organization.id],
+  }),
+  unit: one(organizationUnit, {
+    fields: [service.unitId],
+    references: [organizationUnit.id],
   }),
   method: one(calibrationMethod, {
     fields: [service.methodId],
@@ -856,6 +2030,9 @@ export const referenceStandard = pgTable(
   "reference_standard",
   {
     id: serial("id").primaryKey(),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -898,6 +2075,7 @@ export const referenceStandard = pgTable(
     deletedAt: timestamp("deleted_at"), // Soft delete
   },
   (table) => [
+    index("standard_unit_id_idx").on(table.unitId),
     index("standard_organization_id_idx").on(table.organizationId),
     index("standard_status_idx").on(table.status),
     index("standard_next_cal_date_idx").on(table.nextCalibrationDate),
@@ -946,6 +2124,10 @@ export const referenceStandardRelations = relations(
       fields: [referenceStandard.organizationId],
       references: [organization.id],
     }),
+    unit: one(organizationUnit, {
+      fields: [referenceStandard.unitId],
+      references: [organizationUnit.id],
+    }),
     createdByUser: one(user, {
       fields: [referenceStandard.createdBy],
       references: [user.id],
@@ -981,6 +2163,7 @@ export const referenceStandardAuditLogRelations = relations(
  * - APPROVED: Certificate generated and ready
  * - REJECTED: Manager rejected, needs rework
  * - CANCELED: Job was canceled (soft delete equivalent)
+ * - SUPERSEDED: Certificate was amended and replaced by a new version (ISO 17025 Clause 7.8.4.1)
  */
 export type JobStatus =
   | "DRAFT"
@@ -989,7 +2172,8 @@ export type JobStatus =
   | "GENERATING_PDF"
   | "APPROVED"
   | "REJECTED"
-  | "CANCELED";
+  | "CANCELED"
+  | "SUPERSEDED";
 
 /**
  * Method Snapshot - Frozen copy of method at job creation time.
@@ -1026,6 +2210,30 @@ export type StandardSnapshot = {
   certifiedValues: CertifiedValue[] | null;
 };
 
+export type EnvironmentalLimitsSnapshot = {
+  temperature?: { min: number; max: number };
+  humidity?: { min: number; max: number };
+  pressure?: { min: number; max: number };
+};
+
+export type EnvironmentalSnapshot = {
+  temperature: number | null;
+  humidity: number | null;
+  pressure: number | null;
+  recordedAt: string;
+  recordedBy: string;
+  limits: EnvironmentalLimitsSnapshot | null;
+  withinLimits: boolean;
+  outOfLimitsJustification: string | null;
+};
+
+export type CalibrationRequestStatus =
+  | "PENDING"
+  | "UNDER_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "CONVERTED";
+
 /**
  * Calibration Job table - The Work Order / Operational Record
  * ISO 17025:2017 Clause 7.7 - Ensuring Validity of Results
@@ -1046,6 +2254,9 @@ export const calibrationJob = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
     // Customer who owns the asset
     customerId: integer("customer_id")
       .notNull()
@@ -1077,6 +2288,18 @@ export const calibrationJob = pgTable(
     // Frozen copy of reference standards used during execution
     // This ensures traceability per ISO 17025 requirements
     standardsSnapshot: jsonb("standards_snapshot").$type<StandardSnapshot[]>(),
+    // Frozen copy of environmental conditions at execution time
+    // ISO 17025:2017 Clause 7.1.2 - Environmental conditions monitoring
+    environmentalSnapshot: jsonb(
+      "environmental_snapshot",
+    ).$type<EnvironmentalSnapshot>(),
+    certificateTemplateId: integer("certificate_template_id").references(
+      () => certificateTemplate.id,
+      { onDelete: "set null" },
+    ),
+    certificateTemplateSnapshot: jsonb("certificate_template_snapshot").$type<
+      Record<string, unknown>
+    >(),
     // Certificate URL (populated after approval and PDF generation)
     certificateUrl: text("certificate_url"),
     // Label URL for thermal printer sticker (populated after label generation)
@@ -1107,8 +2330,58 @@ export const calibrationJob = pgTable(
     }),
     rejectedAt: timestamp("rejected_at"),
     rejectionReason: text("rejection_reason"),
+    // ==========================================================================
+    // AMENDMENT TRACKING - ISO 17025:2017 Clause 7.8.4.1
+    // "When a report or certificate needs to be revised after issue, each
+    // revision shall be uniquely identified and shall contain a reference
+    // to the original."
+    // ==========================================================================
+    /**
+     * References the job that this job supersedes (if this is a correction).
+     * NULL for original certificates.
+     * Example: Job #123 has error. Create Job #456 with supersedesId=123.
+     */
+    supersedesId: integer("supersedes_id"),
+    /**
+     * References the job that superseded this job (if this has been corrected).
+     * NULL for current valid certificates.
+     * Automatically set when another job is created to supersede this one.
+     */
+    supersededById: integer("superseded_by_id"),
+    /**
+     * Amendment number (1, 2, 3...) if this is a correction.
+     * NULL for original certificates.
+     * Used for display: "Retificação nº 2"
+     */
+    amendmentNumber: integer("amendment_number"),
+    /**
+     * Mandatory reason for amendment (ISO 17025 requirement).
+     * Example: "Erro de digitação no valor de incerteza"
+     */
+    amendmentReason: text("amendment_reason"),
+    /**
+     * Timestamp when this job was superseded by another.
+     */
+    supersededAt: timestamp("superseded_at"),
+    // ==========================================================================
+    // DIGITAL SIGNATURE - ISO 17025:2017 Clause 7.8.2.1(q)
+    // "Reports and certificates shall include... the signature..."
+    // ==========================================================================
+    /**
+     * Digital signature metadata from ICP-Brasil certificate.
+     * Populated after PDF signing. NULL if not signed.
+     */
+    signatureMetadata: jsonb("signature_metadata").$type<{
+      signedAt: string; // ISO timestamp
+      signerCertificateSerial: string;
+      signerName: string;
+      signerCpfCnpj: string | null;
+      pdfHash: string; // SHA-256 hash of signed PDF
+      ltvEnabled: boolean;
+    }>(),
   },
   (table) => [
+    index("job_unit_id_idx").on(table.unitId),
     index("job_organization_id_idx").on(table.organizationId),
     index("job_customer_id_idx").on(table.customerId),
     index("job_asset_id_idx").on(table.assetId),
@@ -1116,7 +2389,27 @@ export const calibrationJob = pgTable(
     index("job_technician_id_idx").on(table.technicianId),
     index("job_status_idx").on(table.status),
     index("job_due_date_idx").on(table.dueDate),
+    index("job_org_status_due_idx").on(
+      table.organizationId,
+      table.status,
+      table.dueDate,
+    ),
+    index("job_org_status_approved_at_idx").on(
+      table.organizationId,
+      table.status,
+      table.approvedAt,
+    ),
+    index("job_org_status_rejected_at_idx").on(
+      table.organizationId,
+      table.status,
+      table.rejectedAt,
+    ),
+    index("job_org_created_at_idx").on(table.organizationId, table.createdAt),
     uniqueIndex("job_org_job_id_uidx").on(table.organizationId, table.jobId),
+    // Amendment tracking indexes for efficient chain lookups
+    index("job_supersedes_id_idx").on(table.supersedesId),
+    index("job_superseded_by_id_idx").on(table.supersededById),
+    index("job_certificate_template_id_idx").on(table.certificateTemplateId),
   ],
 );
 
@@ -1153,6 +2446,129 @@ export const jobAuditLog = pgTable(
 );
 
 // =============================================================================
+// CALIBRATION REQUEST - Client Portal Intake Queue
+// =============================================================================
+
+export const calibrationRequest = pgTable(
+  "calibration_request",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "restrict" }),
+    authOrganizationId: text("auth_organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    status: text("status")
+      .$type<CalibrationRequestStatus>()
+      .default("PENDING")
+      .notNull(),
+    observations: text("observations"),
+    internalNotes: text("internal_notes"),
+    requestedDueDate: timestamp("requested_due_date", {
+      withTimezone: true,
+    }),
+    submittedBy: text("submitted_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    reviewedBy: text("reviewed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    approvedBy: text("approved_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    rejectedBy: text("rejected_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    rejectionReason: text("rejection_reason"),
+    convertedBy: text("converted_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    convertedAt: timestamp("converted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("calibration_request_unit_id_idx").on(table.unitId),
+    index("calibration_request_org_id_idx").on(table.organizationId),
+    index("calibration_request_customer_id_idx").on(table.customerId),
+    index("calibration_request_auth_org_id_idx").on(table.authOrganizationId),
+    index("calibration_request_status_idx").on(table.status),
+    index("calibration_request_submitted_at_idx").on(table.submittedAt),
+  ],
+);
+
+export const calibrationRequestItem = pgTable(
+  "calibration_request_item",
+  {
+    id: serial("id").primaryKey(),
+    requestId: integer("request_id")
+      .notNull()
+      .references(() => calibrationRequest.id, { onDelete: "cascade" }),
+    assetId: integer("asset_id")
+      .notNull()
+      .references(() => asset.id, { onDelete: "restrict" }),
+    convertedJobId: integer("converted_job_id").references(
+      () => calibrationJob.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("calibration_request_item_request_id_idx").on(table.requestId),
+    index("calibration_request_item_asset_id_idx").on(table.assetId),
+    index("calibration_request_item_job_id_idx").on(table.convertedJobId),
+    uniqueIndex("calibration_request_item_request_asset_uidx").on(
+      table.requestId,
+      table.assetId,
+    ),
+  ],
+);
+
+export const calibrationRequestAuditLog = pgTable(
+  "calibration_request_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    requestId: integer("request_id")
+      .notNull()
+      .references(() => calibrationRequest.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("cal_request_audit_log_request_id_idx").on(table.requestId),
+    index("cal_request_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
 // CALIBRATION JOB RELATIONS
 // =============================================================================
 
@@ -1162,6 +2578,10 @@ export const calibrationJobRelations = relations(
     organization: one(organization, {
       fields: [calibrationJob.organizationId],
       references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [calibrationJob.unitId],
+      references: [organizationUnit.id],
     }),
     customer: one(customer, {
       fields: [calibrationJob.customerId],
@@ -1196,6 +2616,23 @@ export const calibrationJobRelations = relations(
       relationName: "jobRejecter",
     }),
     auditLogs: many(jobAuditLog),
+    certificateTemplate: one(certificateTemplate, {
+      fields: [calibrationJob.certificateTemplateId],
+      references: [certificateTemplate.id],
+    }),
+    // Amendment tracking - ISO 17025:2017 Clause 7.8.4.1
+    // The job that this one supersedes (original certificate being corrected)
+    supersedes: one(calibrationJob, {
+      fields: [calibrationJob.supersedesId],
+      references: [calibrationJob.id],
+      relationName: "amendmentChain",
+    }),
+    // The job that superseded this one (the corrected certificate)
+    supersededBy: one(calibrationJob, {
+      fields: [calibrationJob.supersededById],
+      references: [calibrationJob.id],
+      relationName: "amendmentChainReverse",
+    }),
   }),
 );
 
@@ -1209,6 +2646,173 @@ export const jobAuditLogRelations = relations(jobAuditLog, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const calibrationRequestRelations = relations(
+  calibrationRequest,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [calibrationRequest.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [calibrationRequest.unitId],
+      references: [organizationUnit.id],
+    }),
+    customer: one(customer, {
+      fields: [calibrationRequest.customerId],
+      references: [customer.id],
+    }),
+    authOrganization: one(organization, {
+      fields: [calibrationRequest.authOrganizationId],
+      references: [organization.id],
+      relationName: "calibrationRequestAuthOrganization",
+    }),
+    submittedByUser: one(user, {
+      fields: [calibrationRequest.submittedBy],
+      references: [user.id],
+      relationName: "calibrationRequestSubmitter",
+    }),
+    reviewedByUser: one(user, {
+      fields: [calibrationRequest.reviewedBy],
+      references: [user.id],
+      relationName: "calibrationRequestReviewer",
+    }),
+    approvedByUser: one(user, {
+      fields: [calibrationRequest.approvedBy],
+      references: [user.id],
+      relationName: "calibrationRequestApprover",
+    }),
+    rejectedByUser: one(user, {
+      fields: [calibrationRequest.rejectedBy],
+      references: [user.id],
+      relationName: "calibrationRequestRejecter",
+    }),
+    convertedByUser: one(user, {
+      fields: [calibrationRequest.convertedBy],
+      references: [user.id],
+      relationName: "calibrationRequestConverter",
+    }),
+    items: many(calibrationRequestItem),
+    auditLogs: many(calibrationRequestAuditLog),
+  }),
+);
+
+export const organizationUnitRelations = relations(
+  organizationUnit,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [organizationUnit.organizationId],
+      references: [organization.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationUnit.createdBy],
+      references: [user.id],
+    }),
+    memberAssignments: many(memberUnitAssignment),
+    services: many(service),
+    standards: many(referenceStandard),
+    jobs: many(calibrationJob),
+    calibrationRequests: many(calibrationRequest),
+    assets: many(asset),
+    eventLogs: many(organizationEventLog),
+  }),
+);
+
+export const calibrationRequestItemRelations = relations(
+  calibrationRequestItem,
+  ({ one }) => ({
+    request: one(calibrationRequest, {
+      fields: [calibrationRequestItem.requestId],
+      references: [calibrationRequest.id],
+    }),
+    assetRecord: one(asset, {
+      fields: [calibrationRequestItem.assetId],
+      references: [asset.id],
+    }),
+    convertedJob: one(calibrationJob, {
+      fields: [calibrationRequestItem.convertedJobId],
+      references: [calibrationJob.id],
+      relationName: "requestItemConvertedJob",
+    }),
+  }),
+);
+
+export const calibrationRequestAuditLogRelations = relations(
+  calibrationRequestAuditLog,
+  ({ one }) => ({
+    request: one(calibrationRequest, {
+      fields: [calibrationRequestAuditLog.requestId],
+      references: [calibrationRequest.id],
+    }),
+    performedByUser: one(user, {
+      fields: [calibrationRequestAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+// =============================================================================
+// ENVIRONMENTAL LIMITS - ISO 17025:2017 Clause 7.1.2
+// Configurable environmental condition limits per organization/asset type
+// =============================================================================
+
+export const environmentalLimits = pgTable(
+  "environmental_limits",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "cascade" }),
+    // NULL = unit default; specific assetTypeId = override for that instrument type
+    assetTypeId: integer("asset_type_id").references(() => assetType.id, {
+      onDelete: "cascade",
+    }),
+    // Temperature limits (°C)
+    temperatureMin: real("temperature_min"),
+    temperatureMax: real("temperature_max"),
+    // Humidity limits (%RH)
+    humidityMin: real("humidity_min"),
+    humidityMax: real("humidity_max"),
+    // Pressure limits (hPa)
+    pressureMin: real("pressure_min"),
+    pressureMax: real("pressure_max"),
+    // Audit
+    updatedBy: text("updated_by").references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("env_limits_organization_id_idx").on(table.organizationId),
+    index("env_limits_unit_id_idx").on(table.unitId),
+    unique("env_limits_org_unit_asset_type_uidx")
+      .on(table.organizationId, table.unitId, table.assetTypeId)
+      .nullsNotDistinct(),
+  ],
+);
+
+export const environmentalLimitsRelations = relations(
+  environmentalLimits,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [environmentalLimits.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [environmentalLimits.unitId],
+      references: [organizationUnit.id],
+    }),
+    assetType: one(assetType, {
+      fields: [environmentalLimits.assetTypeId],
+      references: [assetType.id],
+    }),
+  }),
+);
 
 // =============================================================================
 // SUBSCRIPTION - Organization Billing (SaaS Tiering)
@@ -1409,3 +3013,1078 @@ export const paymentHistoryRelations = relations(paymentHistory, ({ one }) => ({
     references: [organization.id],
   }),
 }));
+
+// =============================================================================
+// NOTIFICATION SYSTEM - ISO 17025 Compliance Alerts & Operational Notifications
+// =============================================================================
+
+/**
+ * Notification type enum - categorizes notification events
+ */
+export type NotificationType =
+  | "JOB_SUBMITTED_FOR_REVIEW"
+  | "JOB_APPROVED"
+  | "JOB_REJECTED"
+  | "JOB_ASSIGNED"
+  | "CERTIFICATE_READY"
+  | "CERTIFICATE_AMENDED" // ISO 17025 Clause 7.8.4.1 - Certificate amendment notification
+  | "ASSET_DUE_FOR_RECALIBRATION"
+  | "STANDARD_EXPIRING"
+  | "STANDARD_EXPIRED" // ISO 17025 Clause 6.4.6 - Standard expired, jobs blocked
+  | "JOB_OVERDUE"
+  | "PAYMENT_RECEIVED"
+  | "PAYMENT_FAILED"
+  | "NC_CREATED" // ISO 17025 Clause 8.7 - New non-conformance registered
+  | "NC_ESCALATED_TO_CAPA" // ISO 17025 Clause 8.7 - NC escalated to CAPA
+  | "COMPETENCE_EXPIRING" // ISO 17025 Clause 6.2.3 - Competence expiring soon
+  | "COMPETENCE_EXPIRED" // ISO 17025 Clause 6.2.3 - Competence expired, blocks assignment
+  | "COMPETENCE_REQUESTED" // ISO 17025 Clause 6.2.3 - New qualification request
+  | "COMPETENCE_APPROVED" // ISO 17025 Clause 6.2.3 - Qualification approved
+  | "CUSTOMER_SUCCESS_WORKFLOW_BLOCKED"
+  | "CUSTOMER_SUCCESS_GO_LIVE_AT_RISK"
+  | "CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE"
+  | "CUSTOMER_SUCCESS_SLA_DUE_SOON"
+  | "CUSTOMER_SUCCESS_SLA_BREACHED"
+  | "CUSTOMER_SUCCESS_ESCALATION_REQUIRED";
+
+/**
+ * Notification priority levels
+ */
+export type NotificationPriority = "HIGH" | "MEDIUM" | "LOW";
+
+/**
+ * Notification status values
+ */
+export type NotificationStatus = "UNREAD" | "READ" | "ARCHIVED";
+
+/**
+ * Notification delivery channel
+ */
+export type NotificationChannel = "IN_APP" | "EMAIL";
+
+/**
+ * Related entity reference for deep linking
+ */
+export type NotificationRelatedEntity = {
+  entityType:
+    | "job"
+    | "asset"
+    | "standard"
+    | "payment"
+    | "customer"
+    | "nc"
+    | "capa"
+    | "competence";
+  entityId: number | string;
+  jobId?: string; // Human-readable job ID for display
+};
+
+/**
+ * Notification table - Stores all notifications for users.
+ * Never hard-delete for ISO 17025 audit compliance - use ARCHIVED status.
+ */
+export const notification = pgTable(
+  "notification",
+  {
+    id: serial("id").primaryKey(),
+    recipientUserId: text("recipient_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    type: text("type").$type<NotificationType>().notNull(),
+    priority: text("priority")
+      .$type<NotificationPriority>()
+      .default("MEDIUM")
+      .notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    relatedEntity: jsonb("related_entity").$type<NotificationRelatedEntity>(),
+    actionUrl: text("action_url"),
+    channelsSent: jsonb("channels_sent")
+      .$type<NotificationChannel[]>()
+      .default([])
+      .notNull(),
+    status: text("status")
+      .$type<NotificationStatus>()
+      .default("UNREAD")
+      .notNull(),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at"),
+  },
+  (table) => [
+    index("notification_recipient_user_id_idx").on(table.recipientUserId),
+    index("notification_organization_id_idx").on(table.organizationId),
+    index("notification_status_idx").on(table.status),
+    index("notification_type_idx").on(table.type),
+    index("notification_created_at_idx").on(table.createdAt),
+  ],
+);
+
+/**
+ * Notification preference per notification type
+ */
+export type NotificationPreferenceMap = {
+  [K in NotificationType]?: {
+    inApp: boolean;
+    email: boolean;
+  };
+};
+
+/**
+ * Digest frequency for email notifications
+ */
+export type DigestFrequency = "NONE" | "DAILY" | "WEEKLY";
+
+/**
+ * Notification Preference table - User preferences for notification delivery.
+ * One record per user with JSONB preferences map.
+ */
+export const notificationPreference = pgTable(
+  "notification_preference",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .unique()
+      .references(() => user.id, { onDelete: "cascade" }),
+    preferences: jsonb("preferences")
+      .$type<NotificationPreferenceMap>()
+      .notNull(),
+    emailEnabled: boolean("email_enabled").default(true).notNull(),
+    notifySelfActions: boolean("notify_self_actions").default(false).notNull(),
+    digestFrequency: text("digest_frequency")
+      .$type<DigestFrequency>()
+      .default("NONE")
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("notification_preference_user_id_uidx").on(table.userId),
+  ],
+);
+
+/**
+ * Scheduled notification entity type
+ */
+export type ScheduledNotificationEntityType =
+  | "asset"
+  | "standard"
+  | "job"
+  | "competence";
+
+/**
+ * Scheduled Notification table - Tracks scheduled compliance alerts.
+ * Prevents duplicate alerts by using unique constraint on entity + type + lead time.
+ */
+export const scheduledNotification = pgTable(
+  "scheduled_notification",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    type: text("type").$type<NotificationType>().notNull(),
+    entityType: text("entity_type")
+      .$type<ScheduledNotificationEntityType>()
+      .notNull(),
+    entityId: integer("entity_id").notNull(),
+    scheduledFor: timestamp("scheduled_for").notNull(),
+    leadTimeDays: integer("lead_time_days").default(7).notNull(),
+    sentAt: timestamp("sent_at"),
+    canceled: boolean("canceled").default(false).notNull(),
+    canceledReason: text("canceled_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("scheduled_notification_organization_id_idx").on(
+      table.organizationId,
+    ),
+    index("scheduled_notification_scheduled_for_idx").on(table.scheduledFor),
+    index("scheduled_notification_entity_idx").on(
+      table.entityType,
+      table.entityId,
+    ),
+    uniqueIndex("scheduled_notification_unique_idx").on(
+      table.organizationId,
+      table.type,
+      table.entityType,
+      table.entityId,
+      table.leadTimeDays,
+    ),
+  ],
+);
+
+// =============================================================================
+// NOTIFICATION RELATIONS
+// =============================================================================
+
+export const notificationRelations = relations(notification, ({ one }) => ({
+  recipient: one(user, {
+    fields: [notification.recipientUserId],
+    references: [user.id],
+  }),
+  organization: one(organization, {
+    fields: [notification.organizationId],
+    references: [organization.id],
+  }),
+}));
+
+export const notificationPreferenceRelations = relations(
+  notificationPreference,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [notificationPreference.userId],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const scheduledNotificationRelations = relations(
+  scheduledNotification,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [scheduledNotification.organizationId],
+      references: [organization.id],
+    }),
+  }),
+);
+
+// =============================================================================
+// ORGANIZATION SIGNING CERTIFICATE - ICP-Brasil Digital Signature (ISO 7.8.2.1)
+// =============================================================================
+
+/**
+ * Stores ICP-Brasil A1 certificates (PKCS#12) per organization.
+ * Password is encrypted with AES-256-GCM using a master key from Cloudflare secrets.
+ * Enables PDF signing for calibration certificates per NIT-DICLA-083 requirements.
+ */
+export const organizationSigningCertificate = pgTable(
+  "organization_signing_certificate",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "cascade" }),
+    // Certificate identification
+    name: text("name").notNull(), // Display name, e.g., "Certificado Principal"
+    serialNumber: text("serial_number").notNull(), // Certificate serial from ICP-Brasil
+    issuerCn: text("issuer_cn").notNull(), // e.g., "AC SOLUTI Multipla v5"
+    subjectCn: text("subject_cn").notNull(), // Company name from certificate
+    subjectCpfCnpj: text("subject_cpf_cnpj"), // CPF/CNPJ extracted from certificate
+    // Validity period
+    validFrom: timestamp("valid_from").notNull(),
+    validUntil: timestamp("valid_until").notNull(),
+    // Encrypted storage
+    encryptedP12: text("encrypted_p12").notNull(), // AES-256-GCM encrypted PKCS#12 blob (enc:v1)
+    encryptedPassword: text("encrypted_password").notNull(), // AES-256-GCM encrypted
+    passwordIv: text("password_iv").notNull(), // IV for AES decryption
+    // Status
+    isActive: boolean("is_active").default(true).notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
+    // Audit trail
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at"),
+    revokedBy: text("revoked_by").references(() => user.id),
+    revokedReason: text("revoked_reason"),
+  },
+  (table) => [
+    index("org_signing_cert_org_id_idx").on(table.organizationId),
+    index("org_signing_cert_unit_id_idx").on(table.unitId),
+    index("org_signing_cert_valid_until_idx").on(table.validUntil),
+    index("org_signing_cert_is_default_idx").on(
+      table.organizationId,
+      table.unitId,
+      table.isDefault,
+    ),
+  ],
+);
+
+export const organizationSigningCertificateRelations = relations(
+  organizationSigningCertificate,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [organizationSigningCertificate.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [organizationSigningCertificate.unitId],
+      references: [organizationUnit.id],
+    }),
+    createdByUser: one(user, {
+      fields: [organizationSigningCertificate.createdBy],
+      references: [user.id],
+      relationName: "signingCertCreator",
+    }),
+    revokedByUser: one(user, {
+      fields: [organizationSigningCertificate.revokedBy],
+      references: [user.id],
+      relationName: "signingCertRevoker",
+    }),
+  }),
+);
+
+// =============================================================================
+// MEMBER VISUAL SIGNATURE - Handwritten signature images
+// =============================================================================
+
+/**
+ * Stores handwritten signature images for organization members.
+ * Images are stored in a private R2 bucket and accessed via presigned URLs.
+ * Used to display visual signatures on calibration certificates.
+ */
+export const memberVisualSignature = pgTable(
+  "member_visual_signature",
+  {
+    id: serial("id").primaryKey(),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // Storage location
+    r2Key: text("r2_key").notNull(), // "signatures/{org_id}/{member_id}.png"
+    contentType: text("content_type").notNull(), // "image/png"
+    // Image dimensions
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    fileSize: integer("file_size").notNull(), // In bytes
+    // Timestamps
+    uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("member_visual_sig_org_id_idx").on(table.organizationId),
+    uniqueIndex("member_visual_sig_unique_idx").on(
+      table.memberId,
+      table.organizationId,
+    ),
+  ],
+);
+
+export const memberVisualSignatureRelations = relations(
+  memberVisualSignature,
+  ({ one }) => ({
+    member: one(member, {
+      fields: [memberVisualSignature.memberId],
+      references: [member.id],
+    }),
+    organization: one(organization, {
+      fields: [memberVisualSignature.organizationId],
+      references: [organization.id],
+    }),
+  }),
+);
+
+// =============================================================================
+// CORRECTIVE ACTION (CAPA) - ISO 17025:2017 Clause 8.2 / 8.7 / 8.9
+// =============================================================================
+
+/**
+ * CAPA status values for lifecycle tracking
+ */
+export type CorrectiveActionStatus =
+  | "OPEN"
+  | "INVESTIGATION"
+  | "IMPLEMENTATION"
+  | "VERIFICATION"
+  | "CLOSED";
+
+/**
+ * CAPA source - where the CAPA originated from
+ */
+export type CorrectiveActionSource =
+  | "internal_audit"
+  | "customer_complaint"
+  | "nc_detection"
+  | "external_audit"
+  | "management_review";
+
+/**
+ * CAPA type - corrective vs preventive
+ */
+export type CorrectiveActionType = "corrective" | "preventive";
+
+/**
+ * CAPA severity classification
+ */
+export type CorrectiveActionSeverity = "minor" | "major" | "critical";
+
+/**
+ * CAPA category - affected area
+ */
+export type CorrectiveActionCategory =
+  | "method"
+  | "equipment"
+  | "personnel"
+  | "procedure"
+  | "environment"
+  | "other";
+
+/**
+ * Root cause analysis method used
+ */
+export type RootCauseAnalysisMethod =
+  | "5_whys"
+  | "fishbone"
+  | "pareto"
+  | "other";
+
+/**
+ * Corrective Action table - Root Cause Analysis & Corrective/Preventive Actions
+ * ISO 17025:2017 Clause 8.2 (Corrective Actions) / Clause 8.7 / Clause 8.9 (Improvement)
+ *
+ * Key concepts:
+ * - Can be linked to one or more Non-Conformances (nc_detection source)
+ * - Can also originate from audits, complaints, or management reviews
+ * - Tracks root cause analysis, corrective action plan, and effectiveness verification
+ * - Requires approval from technical manager for closure
+ */
+export const correctiveAction = pgTable(
+  "corrective_action",
+  {
+    id: serial("id").primaryKey(),
+    capaNumber: text("capa_number").notNull().unique(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+
+    // Source
+    source: text("source")
+      .$type<CorrectiveActionSource>()
+      .default("nc_detection")
+      .notNull(),
+    sourceReference: text("source_reference"), // Job ID, complaint ID, NC number, etc.
+
+    // Description
+    title: text("title").notNull().default(""),
+    description: text("description").notNull().default(""),
+    detectionDate: timestamp("detection_date"),
+
+    // Classification
+    type: text("type")
+      .$type<CorrectiveActionType>()
+      .default("corrective")
+      .notNull(),
+    severity: text("severity")
+      .$type<CorrectiveActionSeverity>()
+      .default("minor")
+      .notNull(),
+    category: text("category")
+      .$type<CorrectiveActionCategory>()
+      .default("procedure")
+      .notNull(),
+
+    // Root cause analysis
+    rootCauseAnalysis: text("root_cause_analysis"),
+    rootCauseAnalysisMethod:
+      text("rca_method").$type<RootCauseAnalysisMethod>(),
+
+    // Corrective action plan
+    actionPlan: text("action_plan"),
+    // Preventive measures
+    preventiveMeasures: text("preventive_measures"),
+
+    // Responsible person
+    responsibleId: text("responsible_id").references(() => user.id),
+    // Target date for completion
+    dueDate: timestamp("due_date"),
+
+    // Implementation tracking
+    implementationEvidence: text("implementation_evidence"),
+    implementedAt: timestamp("implemented_at"),
+
+    // Investigation
+    investigationCompletedAt: timestamp("investigation_completed_at"),
+
+    // Effectiveness verification
+    verifiedAt: timestamp("verified_at"),
+    verifiedBy: text("verified_by").references(() => user.id),
+    verificationNotes: text("verification_notes"),
+    effectivenessConfirmed: boolean("effectiveness_confirmed"),
+
+    // Status tracking
+    status: text("status")
+      .$type<CorrectiveActionStatus>()
+      .default("OPEN")
+      .notNull(),
+
+    // Closure
+    closedAt: timestamp("closed_at"),
+    closedBy: text("closed_by").references(() => user.id),
+
+    // Audit
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("capa_organization_id_idx").on(table.organizationId),
+    index("capa_status_idx").on(table.status),
+    index("capa_responsible_id_idx").on(table.responsibleId),
+    index("capa_severity_idx").on(table.severity),
+    index("capa_category_idx").on(table.category),
+    index("capa_source_idx").on(table.source),
+    uniqueIndex("capa_number_uidx").on(table.capaNumber),
+  ],
+);
+
+// =============================================================================
+// CORRECTIVE ACTION AUDIT LOG - ISO 17025:2017 Clause 8.4 (Control of records)
+// =============================================================================
+
+/**
+ * Audit log for CAPA changes.
+ * Tracks all modifications for compliance and traceability.
+ */
+export const correctiveActionAuditLog = pgTable(
+  "corrective_action_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    capaId: integer("capa_id")
+      .notNull()
+      .references(() => correctiveAction.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // 'create', 'update', 'investigate', 'implement', 'verify', 'close'
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("capa_audit_log_capa_id_idx").on(table.capaId),
+    index("capa_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// NON-CONFORMANCE - ISO 17025:2017 Clause 8.7 (Control of Nonconforming Work)
+// =============================================================================
+
+/**
+ * NC type values
+ */
+export type NonConformanceType = "work" | "equipment" | "documentation";
+
+/**
+ * NC disposition values
+ */
+export type NonConformanceDisposition =
+  | "rework"
+  | "scrap"
+  | "use_as_is"
+  | "concession";
+
+/**
+ * NC status values
+ */
+export type NonConformanceStatus = "open" | "under_review" | "resolved";
+
+/**
+ * Non-Conformance table - ISO 17025:2017 Clause 8.7
+ * Tracks nonconforming work, equipment issues, and documentation errors.
+ *
+ * Key concepts:
+ * - Linked optionally to a calibration job
+ * - Requires disposition decision (rework, scrap, use as is, concession)
+ * - "use_as_is" and "concession" require technical manager approval
+ * - Can be escalated to CAPA for root cause analysis
+ */
+export const nonConformance = pgTable(
+  "non_conformance",
+  {
+    id: serial("id").primaryKey(),
+    ncNumber: text("nc_number").notNull().unique(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // Optional link to calibration job
+    jobId: integer("job_id").references(() => calibrationJob.id),
+    // NC classification
+    type: text("type").$type<NonConformanceType>().notNull(),
+    description: text("description").notNull(),
+    // Detection
+    detectedBy: text("detected_by")
+      .notNull()
+      .references(() => user.id),
+    detectedAt: timestamp("detected_at").notNull(),
+    // Disposition
+    disposition: text("disposition").$type<NonConformanceDisposition>(),
+    dispositionJustification: text("disposition_justification"),
+    dispositionApprovedBy: text("disposition_approved_by").references(
+      () => user.id,
+    ),
+    dispositionApprovedAt: timestamp("disposition_approved_at"),
+    // Resolution
+    correctionTaken: text("correction_taken"),
+    resolvedAt: timestamp("resolved_at"),
+    resolvedBy: text("resolved_by").references(() => user.id),
+    // Status
+    status: text("status")
+      .$type<NonConformanceStatus>()
+      .default("open")
+      .notNull(),
+    // Link to CAPA (if escalated)
+    capaId: integer("capa_id").references(() => correctiveAction.id),
+    // Audit
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("nc_organization_id_idx").on(table.organizationId),
+    index("nc_job_id_idx").on(table.jobId),
+    index("nc_status_idx").on(table.status),
+    index("nc_type_idx").on(table.type),
+    index("nc_detected_at_idx").on(table.detectedAt),
+    index("nc_capa_id_idx").on(table.capaId),
+    uniqueIndex("nc_number_uidx").on(table.ncNumber),
+  ],
+);
+
+// =============================================================================
+// NON-CONFORMANCE AUDIT LOG - ISO 17025:2017 Clause 8.4 (Control of records)
+// =============================================================================
+
+/**
+ * Audit log for non-conformance changes.
+ * Tracks all modifications for compliance and traceability.
+ */
+export const nonConformanceAuditLog = pgTable(
+  "non_conformance_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    ncId: integer("nc_id")
+      .notNull()
+      .references(() => nonConformance.id, { onDelete: "cascade" }),
+    action: text("action").notNull(), // 'create', 'update', 'disposition', 'resolve', 'escalate_to_capa'
+    changes: jsonb("changes"),
+    performedBy: text("performed_by")
+      .notNull()
+      .references(() => user.id),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("nc_audit_log_nc_id_idx").on(table.ncId),
+    index("nc_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// NON-CONFORMANCE & CAPA RELATIONS
+// =============================================================================
+
+export const correctiveActionRelations = relations(
+  correctiveAction,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [correctiveAction.organizationId],
+      references: [organization.id],
+    }),
+    responsible: one(user, {
+      fields: [correctiveAction.responsibleId],
+      references: [user.id],
+      relationName: "capaResponsible",
+    }),
+    verifiedByUser: one(user, {
+      fields: [correctiveAction.verifiedBy],
+      references: [user.id],
+      relationName: "capaVerifier",
+    }),
+    closedByUser: one(user, {
+      fields: [correctiveAction.closedBy],
+      references: [user.id],
+      relationName: "capaCloser",
+    }),
+    createdByUser: one(user, {
+      fields: [correctiveAction.createdBy],
+      references: [user.id],
+      relationName: "capaCreator",
+    }),
+    nonConformances: many(nonConformance),
+    auditLogs: many(correctiveActionAuditLog),
+  }),
+);
+
+export const correctiveActionAuditLogRelations = relations(
+  correctiveActionAuditLog,
+  ({ one }) => ({
+    correctiveAction: one(correctiveAction, {
+      fields: [correctiveActionAuditLog.capaId],
+      references: [correctiveAction.id],
+    }),
+    performedByUser: one(user, {
+      fields: [correctiveActionAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const nonConformanceRelations = relations(
+  nonConformance,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [nonConformance.organizationId],
+      references: [organization.id],
+    }),
+    job: one(calibrationJob, {
+      fields: [nonConformance.jobId],
+      references: [calibrationJob.id],
+    }),
+    detectedByUser: one(user, {
+      fields: [nonConformance.detectedBy],
+      references: [user.id],
+      relationName: "ncDetector",
+    }),
+    dispositionApprovedByUser: one(user, {
+      fields: [nonConformance.dispositionApprovedBy],
+      references: [user.id],
+      relationName: "ncDispositionApprover",
+    }),
+    resolvedByUser: one(user, {
+      fields: [nonConformance.resolvedBy],
+      references: [user.id],
+      relationName: "ncResolver",
+    }),
+    capa: one(correctiveAction, {
+      fields: [nonConformance.capaId],
+      references: [correctiveAction.id],
+    }),
+    createdByUser: one(user, {
+      fields: [nonConformance.createdBy],
+      references: [user.id],
+      relationName: "ncCreator",
+    }),
+    auditLogs: many(nonConformanceAuditLog),
+  }),
+);
+
+export const nonConformanceAuditLogRelations = relations(
+  nonConformanceAuditLog,
+  ({ one }) => ({
+    nonConformance: one(nonConformance, {
+      fields: [nonConformanceAuditLog.ncId],
+      references: [nonConformance.id],
+    }),
+    performedByUser: one(user, {
+      fields: [nonConformanceAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+// =============================================================================
+// PERSONNEL COMPETENCE - ISO 17025:2017 Clause 6.2.3 (Personnel Competence)
+// =============================================================================
+
+/**
+ * Competence workflow status values
+ */
+export type CompetenceStatus =
+  | "REQUESTED"
+  | "TRAINING_ASSIGNED"
+  | "IN_TRAINING"
+  | "PENDING_EVALUATION"
+  | "ACTIVE"
+  | "SUSPENDED"
+  | "EXPIRED";
+
+/**
+ * Training type values
+ */
+export type TrainingType = "internal" | "external" | "ojt" | "proficiency_test";
+
+/**
+ * Training status values
+ */
+export type TrainingStatus = "planned" | "in_progress" | "completed" | "failed";
+
+/**
+ * Personnel Competence table - Tracks technician qualifications per asset type
+ * ISO 17025:2017 Clause 6.2.3 - Personnel competence requirements
+ *
+ * Key concepts:
+ * - Tracks qualifications per user per asset type
+ * - Full workflow: REQUESTED → TRAINING_ASSIGNED → IN_TRAINING → PENDING_EVALUATION → ACTIVE
+ * - Auto-detect enforcement: skip if org has zero records, enforce once populated
+ * - Supports expiration and renewal
+ */
+export const personnelCompetence = pgTable(
+  "personnel_competence",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    assetTypeId: integer("asset_type_id").references(() => assetType.id, {
+      onDelete: "set null",
+    }),
+    scopeDescription: text("scope_description").notNull(),
+    status: text("status")
+      .$type<CompetenceStatus>()
+      .default("REQUESTED")
+      .notNull(),
+    qualifiedAt: timestamp("qualified_at"),
+    expiresAt: timestamp("expires_at"),
+    certificateR2Key: text("certificate_r2_key"),
+    certificateFileName: text("certificate_file_name"),
+    notes: text("notes"),
+    requestedBy: text("requested_by")
+      .notNull()
+      .references(() => user.id),
+    evaluatedBy: text("evaluated_by").references(() => user.id),
+    approvedBy: text("approved_by").references(() => user.id),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [
+    index("competence_organization_id_idx").on(table.organizationId),
+    index("competence_user_id_idx").on(table.userId),
+    index("competence_asset_type_id_idx").on(table.assetTypeId),
+    index("competence_status_idx").on(table.status),
+    index("competence_expires_at_idx").on(table.expiresAt),
+    unique("competence_org_user_asset_type_uidx")
+      .on(table.organizationId, table.userId, table.assetTypeId)
+      .nullsNotDistinct(),
+  ],
+);
+
+// =============================================================================
+// TRAINING RECORD - ISO 17025:2017 Clause 6.2.3 (Training Evidence)
+// =============================================================================
+
+/**
+ * Training Record table - Stores training history for personnel
+ * Links to personnel competence for qualification tracking
+ */
+export const trainingRecord = pgTable(
+  "training_record",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    competenceId: integer("competence_id").references(
+      () => personnelCompetence.id,
+      { onDelete: "set null" },
+    ),
+    title: text("title").notNull(),
+    type: text("type").$type<TrainingType>().notNull(),
+    status: text("status").$type<TrainingStatus>().default("planned").notNull(),
+    provider: text("provider"),
+    description: text("description"),
+    startDate: timestamp("start_date").notNull(),
+    endDate: timestamp("end_date"),
+    hoursCompleted: integer("hours_completed"),
+    certificateR2Key: text("certificate_r2_key"),
+    certificateFileName: text("certificate_file_name"),
+    score: real("score"),
+    passingScore: real("passing_score"),
+    passed: boolean("passed"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [
+    index("training_organization_id_idx").on(table.organizationId),
+    index("training_user_id_idx").on(table.userId),
+    index("training_competence_id_idx").on(table.competenceId),
+    index("training_status_idx").on(table.status),
+    index("training_start_date_idx").on(table.startDate),
+  ],
+);
+
+// =============================================================================
+// PERSONNEL COMPETENCE AUDIT LOG - ISO 17025:2017 Clause 8.4
+// =============================================================================
+
+export const personnelCompetenceAuditLog = pgTable(
+  "personnel_competence_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    competenceId: integer("competence_id")
+      .notNull()
+      .references(() => personnelCompetence.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    changes: jsonb("changes"),
+    performedBy: text("performed_by").notNull(),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("competence_audit_log_competence_id_idx").on(table.competenceId),
+    index("competence_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// TRAINING RECORD AUDIT LOG - ISO 17025:2017 Clause 8.4
+// =============================================================================
+
+export const trainingRecordAuditLog = pgTable(
+  "training_record_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    trainingRecordId: integer("training_record_id")
+      .notNull()
+      .references(() => trainingRecord.id, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    changes: jsonb("changes"),
+    performedBy: text("performed_by").notNull(),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    reason: text("reason"),
+  },
+  (table) => [
+    index("training_audit_log_training_id_idx").on(table.trainingRecordId),
+    index("training_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// PERSONNEL COMPETENCE & TRAINING RELATIONS
+// =============================================================================
+
+export const personnelCompetenceRelations = relations(
+  personnelCompetence,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [personnelCompetence.organizationId],
+      references: [organization.id],
+    }),
+    user: one(user, {
+      fields: [personnelCompetence.userId],
+      references: [user.id],
+      relationName: "competenceUser",
+    }),
+    assetType: one(assetType, {
+      fields: [personnelCompetence.assetTypeId],
+      references: [assetType.id],
+    }),
+    requestedByUser: one(user, {
+      fields: [personnelCompetence.requestedBy],
+      references: [user.id],
+      relationName: "competenceRequester",
+    }),
+    evaluatedByUser: one(user, {
+      fields: [personnelCompetence.evaluatedBy],
+      references: [user.id],
+      relationName: "competenceEvaluator",
+    }),
+    approvedByUser: one(user, {
+      fields: [personnelCompetence.approvedBy],
+      references: [user.id],
+      relationName: "competenceApprover",
+    }),
+    createdByUser: one(user, {
+      fields: [personnelCompetence.createdBy],
+      references: [user.id],
+      relationName: "competenceCreator",
+    }),
+    trainingRecords: many(trainingRecord),
+    auditLogs: many(personnelCompetenceAuditLog),
+  }),
+);
+
+export const trainingRecordRelations = relations(
+  trainingRecord,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [trainingRecord.organizationId],
+      references: [organization.id],
+    }),
+    user: one(user, {
+      fields: [trainingRecord.userId],
+      references: [user.id],
+      relationName: "trainingUser",
+    }),
+    competence: one(personnelCompetence, {
+      fields: [trainingRecord.competenceId],
+      references: [personnelCompetence.id],
+    }),
+    createdByUser: one(user, {
+      fields: [trainingRecord.createdBy],
+      references: [user.id],
+      relationName: "trainingCreator",
+    }),
+    auditLogs: many(trainingRecordAuditLog),
+  }),
+);
+
+export const personnelCompetenceAuditLogRelations = relations(
+  personnelCompetenceAuditLog,
+  ({ one }) => ({
+    competence: one(personnelCompetence, {
+      fields: [personnelCompetenceAuditLog.competenceId],
+      references: [personnelCompetence.id],
+    }),
+    performedByUser: one(user, {
+      fields: [personnelCompetenceAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const trainingRecordAuditLogRelations = relations(
+  trainingRecordAuditLog,
+  ({ one }) => ({
+    trainingRecord: one(trainingRecord, {
+      fields: [trainingRecordAuditLog.trainingRecordId],
+      references: [trainingRecord.id],
+    }),
+    performedByUser: one(user, {
+      fields: [trainingRecordAuditLog.performedBy],
+      references: [user.id],
+    }),
+  }),
+);

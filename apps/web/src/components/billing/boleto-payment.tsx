@@ -106,12 +106,14 @@ export function BoletoPayment({
     },
   })
 
+  const isActive = statusQuery.data?.status === 'ACTIVE'
+
   // Handle payment confirmation
   useEffect(() => {
-    if (statusQuery.data?.status === 'ACTIVE' && subscriptionId) {
+    if (isActive && subscriptionId) {
       onSuccess(subscriptionId)
     }
-  }, [statusQuery.data?.status, subscriptionId, onSuccess])
+  }, [isActive, subscriptionId, onSuccess])
 
   // Auto-initiate checkout
   useEffect(() => {

@@ -1,8 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { useMutation } from '@tanstack/react-query'
+import {
+  CloudUploadIcon,
+  Delete02Icon,
+  Tick02Icon,
+} from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useSettings } from '@/contexts/settings-context'
+import { resolveApiURL } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -21,7 +29,6 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Label } from '@/components/ui/label'
 
 export const Route = createFileRoute('/dashboard/settings/profile')({
   head: () => ({
@@ -34,17 +41,124 @@ function ProfileSettingsPage() {
   const { user, isLoading, isUpdating, updateProfile, clearError } =
     useSettings()
 
-  const [name, setName] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (user?.name) {
-      setName(user.name)
-    }
-  }, [user?.name])
-
   if (isLoading) {
     return <ProfileSkeleton />
+  }
+
+  if (!user) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          Usuário não encontrado
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <ProfileSettingsForm
+      key={user.id}
+      user={user}
+      isUpdating={isUpdating}
+      updateProfile={updateProfile}
+      clearError={clearError}
+    />
+  )
+}
+
+function ProfileSettingsForm({
+  user,
+  isUpdating,
+  updateProfile,
+  clearError,
+}: {
+  user: NonNullable<ReturnType<typeof useSettings>['user']>
+  isUpdating: boolean
+  updateProfile: ReturnType<typeof useSettings>['updateProfile']
+  clearError: ReturnType<typeof useSettings>['clearError']
+}) {
+  const [name, setName] = useState(user.name ?? '')
+  const [formError, setFormError] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData()
+      formData.append('avatar', file)
+
+      const res = await fetch(`${resolveApiURL()}/api/profile-media/avatar`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(
+          data && typeof data === 'object' && 'error' in data
+            ? String(data.error)
+            : 'Falha ao enviar avatar',
+        )
+      }
+
+      return res.json() as Promise<{ imageUrl: string }>
+    },
+    onSuccess: async (data) => {
+      await updateProfile({ image: data.imageUrl })
+      setPreviewUrl(null)
+      toast.success('Avatar atualizado')
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Falha ao enviar avatar')
+    },
+  })
+
+  const deleteAvatarMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`${resolveApiURL()}/api/profile-media/avatar`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(
+          data && typeof data === 'object' && 'error' in data
+            ? String(data.error)
+            : 'Falha ao remover avatar',
+        )
+      }
+    },
+    onSuccess: async () => {
+      await updateProfile({ image: '' })
+      setPreviewUrl(null)
+      toast.success('Avatar removido')
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao remover avatar',
+      )
+    },
+  })
+
+  const handleAvatarSelect = (file: File) => {
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      toast.error('Use PNG, JPG ou WebP')
+      return
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 2MB.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setPreviewUrl((event.target?.result as string) ?? null)
+    }
+    reader.readAsDataURL(file)
+    uploadMutation.mutate(file)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,31 +201,73 @@ function ProfileSettingsPage() {
           <form onSubmit={handleSubmit}>
             <FieldGroup>
               <Field>
-                <div className="flex flex-row items-center gap-6">
-                  {/* Left Column: Avatar */}
-                  <Avatar className="size-20 sm:size-24">
-                    <AvatarImage
-                      src={user?.image ?? ''}
-                      alt={user?.name ?? ''}
-                    />
-                    <AvatarFallback className="text-xl sm:text-2xl">
-                      {getInitials(user?.name ?? 'U')}
-                    </AvatarFallback>
-                  </Avatar>
+                <div className="flex flex-col gap-4 rounded-xl border p-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-center gap-5">
+                    <Avatar className="size-20 sm:size-24">
+                      <AvatarImage
+                        src={previewUrl || user.image || ''}
+                        alt={user.name ?? ''}
+                      />
+                      <AvatarFallback className="text-xl sm:text-2xl">
+                        {getInitials(user.name ?? 'U')}
+                      </AvatarFallback>
+                    </Avatar>
 
-                  {/* Right Column: Label, Input, and Description */}
-                  <div className="flex flex-col gap-2 w-full max-w-sm">
-                    <Label htmlFor="avatar-upload">Alterar foto</Label>
-                    <Input
-                      id="avatar-upload"
+                    <div className="space-y-2">
+                      <p className="font-medium">Avatar do perfil</p>
+                      <p className="max-w-md text-sm text-muted-foreground">
+                        Sua foto aparece na navegação do dashboard e do portal.
+                        O asset fica em storage privado e é servido pela API.
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {user.image ? (
+                          <>
+                            <HugeiconsIcon icon={Tick02Icon} className="size-4" />
+                            Avatar configurado
+                          </>
+                        ) : (
+                          'Nenhum avatar configurado'
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      ref={fileInputRef}
                       type="file"
-                      accept="image/*"
-                      disabled={isUpdating}
-                      className="cursor-pointer"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0]
+                        if (file) {
+                          handleAvatarSelect(file)
+                        }
+                        event.currentTarget.value = ''
+                      }}
                     />
-                    <span className="text-sm text-muted-foreground">
-                      Sua foto de perfil será exibida em toda a plataforma.
-                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isUpdating || uploadMutation.isPending}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <HugeiconsIcon icon={CloudUploadIcon} className="size-4" />
+                      {user.image ? 'Trocar avatar' : 'Enviar avatar'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={
+                        isUpdating ||
+                        deleteAvatarMutation.isPending ||
+                        (!user.image && !previewUrl)
+                      }
+                      onClick={() => deleteAvatarMutation.mutate()}
+                    >
+                      <HugeiconsIcon icon={Delete02Icon} className="size-4" />
+                      Remover
+                    </Button>
                   </div>
                 </div>
               </Field>
@@ -126,7 +282,11 @@ function ProfileSettingsPage() {
                     setName(e.target.value)
                     setFormError(null)
                   }}
-                  disabled={isUpdating}
+                  disabled={
+                    isUpdating ||
+                    uploadMutation.isPending ||
+                    deleteAvatarMutation.isPending
+                  }
                   placeholder="Seu nome completo"
                 />
                 {formError && <FieldError>{formError}</FieldError>}
@@ -148,7 +308,14 @@ function ProfileSettingsPage() {
               </Field>
 
               <div className="flex justify-end pt-4">
-                <Button type="submit" disabled={isUpdating}>
+                <Button
+                  type="submit"
+                  disabled={
+                    isUpdating ||
+                    uploadMutation.isPending ||
+                    deleteAvatarMutation.isPending
+                  }
+                >
                   {isUpdating ? 'Salvando...' : 'Salvar alterações'}
                 </Button>
               </div>

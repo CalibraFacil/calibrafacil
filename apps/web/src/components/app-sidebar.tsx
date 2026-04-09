@@ -1,11 +1,10 @@
 import {
+  AlertCircleIcon,
   Book02Icon,
   Building02Icon,
   ClipboardIcon,
-  CropIcon,
   CustomerSupportIcon,
   Home01Icon,
-  MapsIcon,
   PieChartIcon,
   Settings05Icon,
   TaskAdd01Icon,
@@ -14,10 +13,10 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
+import { useActiveOrganization } from '@calibra-facil/auth/client'
 
 import { OrganizationSwitcher } from './organization-switcher'
 import { NavMain } from './nav-main'
-import { NavProjects } from './nav-projects'
 import { NavUser } from './nav-user'
 import { SidebarSearch } from './sidebar-search'
 
@@ -59,6 +58,7 @@ const data = {
       items: [
         { title: 'Métodos de Calibração', url: '/dashboard/methods' },
         { title: 'Padrões de Referência', url: '/dashboard/standards' },
+        { title: 'Competências do Pessoal', url: '/dashboard/personnel' },
       ],
     },
     {
@@ -71,44 +71,70 @@ const data = {
       url: '/dashboard/jobs',
       icon: <HugeiconsIcon icon={ClipboardIcon} />,
     },
+    {
+      title: 'Solicitações',
+      url: '/dashboard/requests',
+      icon: <HugeiconsIcon icon={TaskAdd01Icon} />,
+    },
+    {
+      title: 'Qualidade',
+      url: '#',
+      icon: <HugeiconsIcon icon={AlertCircleIcon} />,
+      items: [
+        { title: 'Não Conformidades', url: '/dashboard/nc' },
+        { title: 'Ações Corretivas (CAPA)', url: '/dashboard/capa' },
+      ],
+    },
   ],
   navSecondary: [
     {
-      title: 'Configurações',
-      url: '/dashboard/settings',
-      icon: <HugeiconsIcon icon={Settings05Icon} />,
-    },
-    {
-      title: 'Suporte',
-      url: '/support',
-      icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
-    },
-    {
       title: 'Documentação',
-      url: '/documentation',
+      url: 'https://docs.calibrafacil.com',
       icon: <HugeiconsIcon icon={Book02Icon} />,
-    },
-  ],
-  projects: [
-    {
-      name: 'Engenharia de Métodos',
-      url: '#',
-      icon: CropIcon,
-    },
-    {
-      name: 'Relatórios',
-      url: '#',
-      icon: PieChartIcon,
-    },
-    {
-      name: 'Compliance',
-      url: '#',
-      icon: MapsIcon,
     },
   ],
 }
 
 export function AppSidebar() {
+  const { data: activeOrg } = useActiveOrganization()
+  const currentRole =
+    typeof activeOrg?.members?.[0]?.role === 'string'
+      ? activeOrg.members[0].role
+      : 'member'
+  const canAccessConsolidatedReports =
+    currentRole === 'owner' || currentRole === 'admin'
+
+  const navMain = [...data.navMain]
+
+  const navSecondary = [...data.navSecondary]
+  const managementItems = [
+    ...(canAccessConsolidatedReports
+      ? [
+          {
+            title: 'Relatórios',
+            url: '/dashboard/reports',
+            icon: <HugeiconsIcon icon={PieChartIcon} />,
+          },
+        ]
+      : []),
+    {
+      title: 'Customer Success',
+      url: '/dashboard/customer-success',
+      icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
+      items: [
+        {
+          title: 'Área do laboratório',
+          url: '/dashboard/customer-success',
+        },
+      ],
+    },
+    {
+      title: 'Configurações',
+      url: '/dashboard/settings',
+      icon: <HugeiconsIcon icon={Settings05Icon} />,
+    },
+  ]
+
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
@@ -116,16 +142,22 @@ export function AppSidebar() {
         <SidebarSearch />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        <NavMain items={navMain} />
+        <NavMain items={managementItems} label="Gestão" />
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>
-              {data.navSecondary.map((item) => (
+              {navSecondary.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     render={
-                      item.url.startsWith('#') ? (
+                      item.url.startsWith('http') ? (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        />
+                      ) : item.url.startsWith('#') ? (
                         <a href={item.url} />
                       ) : (
                         <Link to={item.url} />

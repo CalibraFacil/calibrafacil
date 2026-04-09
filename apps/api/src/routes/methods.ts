@@ -11,12 +11,21 @@ import {
   CreateMethodSchema,
   UpdateMethodSchema,
   ListMethodsQuerySchema,
+  ReturnMethodToDraftSchema,
 } from "@calibra-facil/schemas";
 import { eq, and, ilike, or, count, desc, ne } from "drizzle-orm";
 import {
   withLabPermission,
   type AuthVariables,
+  requireRole,
 } from "../middleware/permission";
+import { requireFeature } from "../middleware/tier-guard";
+import { withCache, withInvalidation } from "../middleware/cache";
+import { CACHE_TTL } from "../lib/cache";
+import { alias } from "drizzle-orm/pg-core";
+
+const technicalReviewerUser = alias(user, "technicalReviewerUser");
+const approverUser = alias(user, "approverUser");
 
 export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -25,6 +34,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...withLabPermission({ template: ["read"] }),
+    withCache("methods", CACHE_TTL.referenceData),
     zValidator("query", ListMethodsQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -108,6 +118,42 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /:id/label - Get method label by ID
+  // =========================================================================
+  .get(
+    "/:id/label",
+    ...withLabPermission({ template: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      const [method] = await db
+        .select({
+          id: calibrationMethod.id,
+          label: calibrationMethod.name,
+        })
+        .from(calibrationMethod)
+        .where(
+          and(
+            eq(calibrationMethod.id, id),
+            eq(calibrationMethod.organizationId, member.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!method) {
+        return c.json({ error: "Método nao encontrado" }, 404);
+      }
+
+      return c.json(method);
+    },
+  )
+
+  // =========================================================================
   // GET /:id - Get a single method by ID
   // =========================================================================
   .get("/:id", ...withLabPermission({ template: ["read"] }), async (c) => {
@@ -136,12 +182,24 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           parentId: calibrationMethod.parentId,
           createdAt: calibrationMethod.createdAt,
           createdByName: user.name,
+          technicalReviewedBy: calibrationMethod.technicalReviewedBy,
+          technicalReviewedByName: technicalReviewerUser.name,
           publishedAt: calibrationMethod.publishedAt,
+          approvedBy: calibrationMethod.approvedBy,
+          approvedByName: approverUser.name,
           archivedAt: calibrationMethod.archivedAt,
         })
         .from(calibrationMethod)
         .leftJoin(assetType, eq(calibrationMethod.assetTypeId, assetType.id))
         .leftJoin(user, eq(calibrationMethod.createdBy, user.id))
+        .leftJoin(
+          technicalReviewerUser,
+          eq(calibrationMethod.technicalReviewedBy, technicalReviewerUser.id),
+        )
+        .leftJoin(
+          approverUser,
+          eq(calibrationMethod.approvedBy, approverUser.id),
+        )
         .where(
           and(
             eq(calibrationMethod.id, id),
@@ -167,6 +225,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ template: ["create"] }),
+    withInvalidation("methods"),
     zValidator("json", CreateMethodSchema),
     async (c) => {
       const member = c.get("member");
@@ -236,6 +295,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .put(
     "/:id",
     ...withLabPermission({ template: ["update"] }),
+    withInvalidation("methods"),
     zValidator("json", UpdateMethodSchema),
     async (c) => {
       const member = c.get("member");
@@ -369,11 +429,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
-  // POST /:id/publish - Publish a DRAFT method
+  // POST /:id/request-approval - Submit method for approval
   // =========================================================================
   .post(
-    "/:id/publish",
-    ...withLabPermission({ template: ["publish"] }),
+    "/:id/request-approval",
+    ...withLabPermission({ template: ["update"] }),
+    requireFeature("approval_workflow"),
+    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -401,7 +463,354 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
 
         if (existing.status !== "DRAFT") {
           return c.json(
-            { error: "Apenas rascunhos podem ser publicados" },
+            { error: "Apenas rascunhos podem ser enviados para aprovacao" },
+            400,
+          );
+        }
+
+        // Validate method has required fields
+        if (!existing.dataFields || existing.dataFields.length === 0) {
+          return c.json(
+            { error: "Método deve ter pelo menos um campo de entrada" },
+            400,
+          );
+        }
+
+        const [updated] = await db
+          .update(calibrationMethod)
+          .set({
+            status: "PENDING_APPROVAL",
+            technicalReviewedBy: null,
+            approvedBy: null,
+            publishedAt: null,
+            publishedBy: null,
+          })
+          .where(eq(calibrationMethod.id, id))
+          .returning();
+
+        await db.insert(methodAuditLog).values({
+          methodId: id,
+          action: "request_approval",
+          changes: { status: { old: "DRAFT", new: "PENDING_APPROVAL" } },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        return c.json(updated);
+      } catch (error) {
+        console.error("Error requesting method approval:", error);
+        return c.json({ error: "Erro ao solicitar aprovacao" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/technical-review - Technical review (admin only)
+  // =========================================================================
+  .post(
+    "/:id/technical-review",
+    ...withLabPermission({ template: ["publish"] }),
+    requireFeature("approval_workflow"),
+    requireRole(["admin"]),
+    withInvalidation("methods"),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const [existing] = await db
+          .select()
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
+
+        if (existing.status !== "PENDING_APPROVAL") {
+          return c.json(
+            { error: "Apenas métodos pendentes podem ser revisados" },
+            400,
+          );
+        }
+
+        const [updated] = await db
+          .update(calibrationMethod)
+          .set({
+            status: "TECHNICAL_REVIEWED",
+            technicalReviewedBy: session.user.id,
+          })
+          .where(eq(calibrationMethod.id, id))
+          .returning();
+
+        await db.insert(methodAuditLog).values({
+          methodId: id,
+          action: "technical_review",
+          changes: {
+            status: { old: "PENDING_APPROVAL", new: "TECHNICAL_REVIEWED" },
+            technicalReviewedBy: { old: null, new: session.user.id },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        return c.json(updated);
+      } catch (error) {
+        console.error("Error technical reviewing method:", error);
+        return c.json({ error: "Erro ao revisar tecnicamente" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/quality-approve - Quality approval (owner only)
+  // =========================================================================
+  .post(
+    "/:id/quality-approve",
+    ...withLabPermission({ template: ["publish"] }),
+    requireFeature("approval_workflow"),
+    requireRole(["owner"]),
+    withInvalidation("methods"),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const [existing] = await db
+          .select()
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
+
+        if (existing.status !== "TECHNICAL_REVIEWED") {
+          return c.json(
+            { error: "Apenas métodos revisados podem ser aprovados" },
+            400,
+          );
+        }
+
+        if (!existing.technicalReviewedBy) {
+          return c.json(
+            { error: "Revisao tecnica obrigatoria antes da aprovacao" },
+            400,
+          );
+        }
+
+        if (existing.technicalReviewedBy === session.user.id) {
+          return c.json(
+            {
+              error:
+                "Revisao tecnica e aprovacao de qualidade devem ser feitas por usuarios diferentes",
+            },
+            400,
+          );
+        }
+
+        // Validate method has required fields
+        if (!existing.dataFields || existing.dataFields.length === 0) {
+          return c.json(
+            { error: "Método deve ter pelo menos um campo de entrada" },
+            400,
+          );
+        }
+
+        // Archive any previously published version with same name
+        await db
+          .update(calibrationMethod)
+          .set({
+            status: "ARCHIVED",
+            archivedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(calibrationMethod.organizationId, member.organizationId),
+              eq(calibrationMethod.name, existing.name),
+              eq(calibrationMethod.status, "PUBLISHED"),
+              ne(calibrationMethod.id, id),
+            ),
+          );
+
+        const [published] = await db
+          .update(calibrationMethod)
+          .set({
+            status: "PUBLISHED",
+            publishedAt: new Date(),
+            publishedBy: session.user.id,
+            approvedBy: session.user.id,
+          })
+          .where(eq(calibrationMethod.id, id))
+          .returning();
+
+        await db.insert(methodAuditLog).values({
+          methodId: id,
+          action: "quality_approve",
+          changes: { status: { old: "TECHNICAL_REVIEWED", new: "PUBLISHED" } },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        return c.json(published);
+      } catch (error) {
+        console.error("Error quality approving method:", error);
+        return c.json({ error: "Erro ao aprovar qualidade" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/return-to-draft - Return method to draft (admin/owner)
+  // =========================================================================
+  .post(
+    "/:id/return-to-draft",
+    ...withLabPermission({ template: ["update"] }),
+    requireFeature("approval_workflow"),
+    requireRole(["admin", "owner"]),
+    withInvalidation("methods"),
+    zValidator("json", ReturnMethodToDraftSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      const { reason } = c.req.valid("json");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const [existing] = await db
+          .select()
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
+
+        if (
+          existing.status !== "PENDING_APPROVAL" &&
+          existing.status !== "TECHNICAL_REVIEWED"
+        ) {
+          return c.json(
+            { error: "Apenas métodos em aprovacao podem retornar ao rascunho" },
+            400,
+          );
+        }
+
+        const [updated] = await db
+          .update(calibrationMethod)
+          .set({
+            status: "DRAFT",
+            technicalReviewedBy: null,
+            approvedBy: null,
+            publishedAt: null,
+            publishedBy: null,
+          })
+          .where(eq(calibrationMethod.id, id))
+          .returning();
+
+        await db.insert(methodAuditLog).values({
+          methodId: id,
+          action: "return_to_draft",
+          changes: { status: { old: existing.status, new: "DRAFT" } },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason,
+        });
+
+        return c.json(updated);
+      } catch (error) {
+        console.error("Error returning method to draft:", error);
+        return c.json({ error: "Erro ao retornar para rascunho" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/publish - Publish a TECHNICAL_REVIEWED method (compat)
+  // =========================================================================
+  .post(
+    "/:id/publish",
+    ...withLabPermission({ template: ["publish"] }),
+    requireFeature("approval_workflow"),
+    requireRole(["owner"]),
+    withInvalidation("methods"),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const [existing] = await db
+          .select()
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
+
+        if (existing.status !== "TECHNICAL_REVIEWED") {
+          return c.json(
+            { error: "Apenas métodos revisados podem ser publicados" },
+            400,
+          );
+        }
+
+        if (!existing.technicalReviewedBy) {
+          return c.json(
+            { error: "Revisao tecnica obrigatoria antes da publicacao" },
+            400,
+          );
+        }
+
+        if (existing.technicalReviewedBy === session.user.id) {
+          return c.json(
+            {
+              error:
+                "Revisao tecnica e publicacao devem ser feitas por usuarios diferentes",
+            },
             400,
           );
         }
@@ -437,6 +846,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             status: "PUBLISHED",
             publishedAt: new Date(),
             publishedBy: session.user.id,
+            approvedBy: session.user.id,
           })
           .where(eq(calibrationMethod.id, id))
           .returning();
@@ -445,7 +855,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         await db.insert(methodAuditLog).values({
           methodId: id,
           action: "publish",
-          changes: { status: { old: "DRAFT", new: "PUBLISHED" } },
+          changes: { status: { old: "TECHNICAL_REVIEWED", new: "PUBLISHED" } },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
@@ -464,6 +874,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/archive",
     ...withLabPermission({ template: ["update"] }),
+    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -528,6 +939,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/new-version",
     ...withLabPermission({ template: ["create"] }),
+    withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -649,49 +1061,54 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // DELETE /:id - Delete a DRAFT method only
   // =========================================================================
-  .delete("/:id", ...withLabPermission({ template: ["delete"] }), async (c) => {
-    const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+  .delete(
+    "/:id",
+    ...withLabPermission({ template: ["delete"] }),
+    withInvalidation("methods"),
+    async (c) => {
+      const member = c.get("member");
+      const id = parseInt(c.req.param("id"), 10);
 
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
-    }
-
-    try {
-      const [existing] = await db
-        .select()
-        .from(calibrationMethod)
-        .where(
-          and(
-            eq(calibrationMethod.id, id),
-            eq(calibrationMethod.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json({ error: "Método nao encontrado" }, 404);
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
       }
 
-      if (existing.status !== "DRAFT") {
-        return c.json(
-          {
-            error:
-              "Apenas rascunhos podem ser excluidos. métodos publicados devem ser arquivados.",
-          },
-          400,
-        );
+      try {
+        const [existing] = await db
+          .select()
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
+
+        if (existing.status !== "DRAFT") {
+          return c.json(
+            {
+              error:
+                "Apenas rascunhos podem ser excluidos. métodos publicados devem ser arquivados.",
+            },
+            400,
+          );
+        }
+
+        // Delete (audit logs will cascade)
+        await db.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
+
+        return c.json({ success: true });
+      } catch (error) {
+        console.error("Error deleting method:", error);
+        return c.json({ error: "Erro ao excluir método" }, 500);
       }
-
-      // Delete (audit logs will cascade)
-      await db.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
-
-      return c.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting method:", error);
-      return c.json({ error: "Erro ao excluir método" }, 500);
-    }
-  })
+    },
+  )
 
   // =========================================================================
   // GET /:id/versions - Get version history for a method
@@ -757,6 +1174,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/:id/audit",
     ...withLabPermission({ template: ["read"] }),
+    requireFeature("advanced_audit_trail"),
     async (c) => {
       const member = c.get("member");
       const id = parseInt(c.req.param("id"), 10);

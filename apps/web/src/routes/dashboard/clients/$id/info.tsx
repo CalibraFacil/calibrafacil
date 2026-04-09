@@ -1,5 +1,5 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -44,15 +44,6 @@ type CustomerAddress = {
 
 function ClientInfoTab() {
   const { id } = useParams({ from: '/dashboard/clients/$id/info' })
-  const queryClient = useQueryClient()
-  const [addressOpen, setAddressOpen] = useState(false)
-
-  const [name, setName] = useState('')
-  const [taxId, setTaxId] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [address, setAddress] = useState<CustomerAddress>({})
-  const [formError, setFormError] = useState<string | null>(null)
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ['customer', id],
@@ -63,45 +54,14 @@ function ClientInfoTab() {
       if (!res.ok) {
         throw new Error('Falha ao carregar cliente')
       }
-      return res.json()
-    },
-  })
-
-  // Populate form when customer data loads
-  useEffect(() => {
-    if (customer) {
-      setName(customer.name || '')
-      setTaxId(customer.taxId || '')
-      setEmail(customer.email || '')
-      setPhone(customer.phone || '')
-      setAddress(customer.address || {})
-    }
-  }, [customer])
-
-  const updateMutation = useMutation({
-    mutationFn: async (data: {
-      name?: string
-      taxId?: string
-      email?: string
-      phone?: string
-      address?: CustomerAddress
-    }) => {
-      const res = await api.api.customers[':id'].$put({
-        param: { id },
-        json: data,
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao atualizar cliente')
-      }
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer', id] })
-      queryClient.invalidateQueries({ queryKey: ['customers'] })
-      toast.success('Cliente atualizado com sucesso!')
-    },
-    onError: (error) => {
-      toast.error(error.message || 'Erro ao atualizar cliente')
+      return res.json() as Promise<{
+        id: number
+        name?: string
+        taxId?: string
+        email?: string
+        phone?: string
+        address?: CustomerAddress
+      }>
     },
   })
 
@@ -118,6 +78,64 @@ function ClientInfoTab() {
       </Card>
     )
   }
+
+  return (
+    <ClientInfoForm key={customer.id} customer={customer} customerId={id} />
+  )
+}
+
+function ClientInfoForm({
+  customer,
+  customerId,
+}: {
+  customer: {
+    id: number
+    name?: string
+    taxId?: string
+    email?: string
+    phone?: string
+    address?: CustomerAddress
+  }
+  customerId: string
+}) {
+  const queryClient = useQueryClient()
+  const [addressOpen, setAddressOpen] = useState(false)
+
+  const [name, setName] = useState(customer.name || '')
+  const [taxId, setTaxId] = useState(customer.taxId || '')
+  const [email, setEmail] = useState(customer.email || '')
+  const [phone, setPhone] = useState(customer.phone || '')
+  const [address, setAddress] = useState<CustomerAddress>(
+    customer.address || {},
+  )
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: {
+      name?: string
+      taxId?: string
+      email?: string
+      phone?: string
+      address?: CustomerAddress
+    }) => {
+      const res = await api.api.customers[':id'].$put({
+        param: { id: customerId },
+        json: data,
+      })
+      if (!res.ok) {
+        throw new Error('Falha ao atualizar cliente')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer', customerId] })
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      toast.success('Cliente atualizado com sucesso!')
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Erro ao atualizar cliente')
+    },
+  })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

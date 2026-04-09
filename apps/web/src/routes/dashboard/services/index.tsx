@@ -30,6 +30,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
+import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { DataTable } from '@/components/ui/data-table'
 import {
   type Service,
@@ -46,6 +47,9 @@ export const Route = createFileRoute('/dashboard/services/')({
 
 function ServicesListPage() {
   const queryClient = useQueryClient()
+  const { activeOrganizationId, isContextSwitching } =
+    useDashboardContextState()
+  const organizationQueryKey = activeOrganizationId ?? 'no-org'
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | ''>(
@@ -55,7 +59,8 @@ function ServicesListPage() {
   const limit = 20
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['services', page, search, statusFilter],
+    queryKey: ['services', organizationQueryKey, page, search, statusFilter],
+    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
       const res = await api.api.services.$get({
         query: {

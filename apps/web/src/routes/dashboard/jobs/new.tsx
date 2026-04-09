@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -114,13 +114,6 @@ function NewJobPage() {
     {},
   )
 
-  // Selected entities for display
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null,
-  )
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
-  const [selectedService, setSelectedService] = useState<Service | null>(null)
-
   // Fetch customers
   const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ['customers', 'list'],
@@ -163,6 +156,11 @@ function NewJobPage() {
     enabled: !!formData.customerId,
   })
 
+  const selectedAsset = useMemo(() => {
+    if (!formData.assetId || !assetsData?.data) return null
+    return assetsData.data.find((a) => a.id === formData.assetId) || null
+  }, [formData.assetId, assetsData?.data])
+
   // Fetch services (filtered by asset type when asset is selected)
   const { data: servicesData, isLoading: servicesLoading } = useQuery({
     queryKey: ['services', 'for-job', selectedAsset?.assetTypeId],
@@ -187,7 +185,7 @@ function NewJobPage() {
         data: Array<Service>
       }>
     },
-    enabled: !!formData.assetId,
+    enabled: !!selectedAsset,
   })
 
   // Fetch technicians
@@ -206,44 +204,14 @@ function NewJobPage() {
     },
   })
 
-  // Reset dependent fields when parent changes
-  useEffect(() => {
-    if (formData.customerId) {
-      // Reset asset and service when customer changes
-      const customer = customersData?.data?.find(
-        (c) => c.id === formData.customerId,
-      )
-      setSelectedCustomer(customer || null)
-    } else {
-      setSelectedCustomer(null)
-    }
+  const selectedCustomer = useMemo(() => {
+    if (!formData.customerId || !customersData?.data) return null
+    return customersData.data.find((c) => c.id === formData.customerId) || null
   }, [formData.customerId, customersData?.data])
 
-  useEffect(() => {
-    if (formData.assetId) {
-      const asset = assetsData?.data?.find((a) => a.id === formData.assetId)
-      setSelectedAsset(asset || null)
-    } else {
-      setSelectedAsset(null)
-    }
-  }, [formData.assetId, assetsData?.data])
-
-  useEffect(() => {
-    if (formData.serviceId) {
-      const service = servicesData?.data?.find(
-        (s) => s.id === formData.serviceId,
-      )
-      setSelectedService(service || null)
-
-      // Auto-suggest due date based on TAT
-      if (service?.tat && !formData.dueDate) {
-        const suggestedDueDate = new Date()
-        suggestedDueDate.setDate(suggestedDueDate.getDate() + service.tat)
-        setFormData((prev) => ({ ...prev, dueDate: suggestedDueDate }))
-      }
-    } else {
-      setSelectedService(null)
-    }
+  const selectedService = useMemo(() => {
+    if (!formData.serviceId || !servicesData?.data) return null
+    return servicesData.data.find((s) => s.id === formData.serviceId) || null
   }, [formData.serviceId, servicesData?.data])
 
   // Computed display values for combobox inputs
@@ -262,7 +230,9 @@ function NewJobPage() {
 
   const selectedTechnicianName = useMemo(() => {
     if (!formData.technicianId || !techniciansData?.data) return ''
-    const tech = techniciansData.data.find((t) => t.id === formData.technicianId)
+    const tech = techniciansData.data.find(
+      (t) => t.id === formData.technicianId,
+    )
     return tech?.name || ''
   }, [formData.technicianId, techniciansData?.data])
 
@@ -337,6 +307,14 @@ function NewJobPage() {
       }
       if (field === 'assetId') {
         newData.serviceId = null
+      }
+      if (field === 'serviceId' && value) {
+        const service = servicesData?.data?.find((s) => s.id === Number(value))
+        if (service?.tat && !newData.dueDate) {
+          const suggestedDueDate = new Date()
+          suggestedDueDate.setDate(suggestedDueDate.getDate() + service.tat)
+          newData.dueDate = suggestedDueDate
+        }
       }
 
       return newData

@@ -44,6 +44,8 @@ const DANGEROUS_PATTERNS = [
 export interface MathEngineConfig {
   precision: number;
   predictable: boolean;
+  /** Enable verbose mode to log calculation traces for audit trails */
+  verbose?: boolean;
 }
 
 const DEFAULT_CONFIG: MathEngineConfig = {

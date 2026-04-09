@@ -28,9 +28,15 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 function getWebAppUrl(): string {
+  if (import.meta.env.VITE_WEB_URL) {
+    return import.meta.env.VITE_WEB_URL;
+  }
   const host =
     typeof window !== "undefined" ? window.location.hostname : "localhost";
-  return `https://${host}:5173`;
+  if (host === "localhost" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+    return `https://${host}:5173`;
+  }
+  return "https://calibrafacil.com";
 }
 
 export function PortalOrgSwitcher() {

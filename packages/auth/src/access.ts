@@ -5,6 +5,11 @@ import {
   memberAc,
   ownerAc,
 } from "better-auth/plugins/organization/access";
+import {
+  adminAc as platformAdminAc,
+  defaultStatements as platformDefaultStatements,
+  userAc as platformUserAc,
+} from "better-auth/plugins/admin/access";
 
 /**
  * =============================================================================
@@ -70,6 +75,18 @@ export const statements = {
     "approve",
     "reject",
   ],
+
+  // ---------------------------------------------------------------------------
+  // REQUEST - Client portal calibration intake queue
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Submit a new client calibration request
+   * - read: View request details and queue state
+   * - update: Review, approve, reject, and annotate requests
+   * - convert: Convert approved requests into internal calibration jobs
+   */
+  request: ["create", "read", "update", "convert"],
 
   // ---------------------------------------------------------------------------
   // TEMPLATE - Calculation templates that define math models and form schemas
@@ -184,6 +201,53 @@ export const statements = {
    * - delete: Deactivate a service (soft delete)
    */
   service: ["create", "read", "update", "delete"],
+
+  // ---------------------------------------------------------------------------
+  // NON-CONFORMANCE - ISO 17025:2017 Clause 8.7 (Control of nonconforming work)
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Register a new non-conformance
+   * - read: View NC details and history
+   * - update: Update NC information (disposition, resolution)
+   * - approve_disposition: Approve "use as is" / "concession" dispositions
+   * - escalate: Escalate NC to CAPA
+   */
+  non_conformance: [
+    "create",
+    "read",
+    "update",
+    "approve_disposition",
+    "escalate",
+  ],
+
+  // ---------------------------------------------------------------------------
+  // CAPA - ISO 17025:2017 Clause 8.2 (Corrective Actions)
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Create a new CAPA
+   * - read: View CAPA details and history
+   * - update: Update CAPA information
+   * - implement: Mark a CAPA as implemented
+   * - verify: Verify CAPA effectiveness
+   * - close: Close a verified CAPA
+   */
+  capa: ["create", "read", "update", "implement", "verify", "close"],
+
+  // ---------------------------------------------------------------------------
+  // COMPETENCE - ISO 17025:2017 Clause 6.2.3 (Personnel competence tracking)
+  // ---------------------------------------------------------------------------
+  /**
+   * Actions:
+   * - create: Request a new qualification
+   * - read: View competence records and training history
+   * - update: Update competence details, assign training, manage workflow
+   * - delete: Soft delete a competence record
+   * - evaluate: Evaluate a technician's competence after training
+   * - approve: Approve a qualification (final step)
+   */
+  competence: ["create", "read", "update", "delete", "evaluate", "approve"],
 } as const;
 
 // =============================================================================
@@ -213,6 +277,7 @@ export const member = ac.newRole({
 
   // Read-only access to operational data
   calibration: ["read"],
+  request: ["read"],
   template: ["read"],
   standard: ["read"],
   equipment: ["read"],
@@ -222,6 +287,12 @@ export const member = ac.newRole({
   settings: ["read"],
   // Read-only access to service catalog
   service: ["read"],
+  // Read-only access to non-conformances
+  non_conformance: ["read"],
+  // Read-only access to CAPAs
+  capa: ["read"],
+  // Read-only access to competence records
+  competence: ["read"],
 });
 
 /**
@@ -243,6 +314,7 @@ export const technician = ac.newRole({
   // - Can submit for review (Draft -> Review)
   // - CANNOT approve or reject (manager only - ISO 17025 clause 6.2.4)
   calibration: ["create", "read", "update", "delete", "submit"],
+  request: ["read", "update", "convert"],
 
   // Read-only access to templates (cannot modify calculation logic)
   template: ["read"],
@@ -270,6 +342,14 @@ export const technician = ac.newRole({
 
   // Read-only access to service catalog (needs to see services to create jobs)
   service: ["read"],
+
+  // NC: can create and update (set disposition for rework/scrap), cannot approve use_as_is/concession
+  non_conformance: ["create", "read", "update"],
+
+  // CAPA: can create, update, and implement (cannot verify/close - requires admin/owner)
+  capa: ["create", "read", "update", "implement"],
+  // Competence: can request qualifications and view
+  competence: ["create", "read"],
 });
 
 /**
@@ -295,6 +375,7 @@ export const admin = ac.newRole({
     "approve",
     "reject",
   ],
+  request: ["create", "read", "update", "convert"],
 
   // Full template management
   template: ["create", "read", "update", "delete", "publish"],
@@ -325,6 +406,20 @@ export const admin = ac.newRole({
 
   // Full service catalog management
   service: ["create", "read", "update", "delete"],
+
+  // Full NC management including disposition approval and CAPA escalation
+  non_conformance: [
+    "create",
+    "read",
+    "update",
+    "approve_disposition",
+    "escalate",
+  ],
+
+  // Full CAPA management
+  capa: ["create", "read", "update", "implement", "verify", "close"],
+  // Full competence management
+  competence: ["create", "read", "update", "delete", "evaluate", "approve"],
 });
 
 /**
@@ -349,6 +444,7 @@ export const owner = ac.newRole({
     "approve",
     "reject",
   ],
+  request: ["create", "read", "update", "convert"],
 
   // Full template management
   template: ["create", "read", "update", "delete", "publish"],
@@ -379,6 +475,20 @@ export const owner = ac.newRole({
 
   // Full service catalog management
   service: ["create", "read", "update", "delete"],
+
+  // Full NC management
+  non_conformance: [
+    "create",
+    "read",
+    "update",
+    "approve_disposition",
+    "escalate",
+  ],
+
+  // Full CAPA management
+  capa: ["create", "read", "update", "implement", "verify", "close"],
+  // Full competence management
+  competence: ["create", "read", "update", "delete", "evaluate", "approve"],
 });
 
 /**
@@ -398,6 +508,9 @@ export const client_user = ac.newRole({
 
   // Calibration: read-only access to see status
   calibration: ["read"],
+
+  // Requests: create and track portal intake
+  request: ["create", "read"],
 
   // Certificates: full access to their certificates
   certificate: ["read", "download", "verify"],
@@ -460,6 +573,51 @@ export const INTERNAL_ROLES: RoleName[] = [
 ];
 
 /**
+ * External roles that are allowed to access the client portal.
+ *
+ * Note: Keeping this list explicit prevents leaking internal lab members
+ * (owner/admin/technician/member) into portal user management screens.
+ */
+export const PORTAL_ACCESS_ROLES = ["client_user"] as const;
+
+/**
+ * Roles that should be visible in customer portal member lists.
+ *
+ * Currently this matches portal access roles, but is separate so we can evolve
+ * visibility rules independently (e.g. future hidden service roles).
+ */
+export const PORTAL_VISIBLE_MEMBER_ROLES = [...PORTAL_ACCESS_ROLES] as const;
+
+/**
+ * Roles that can be managed (removed) from customer portal user management.
+ */
+export const PORTAL_MANAGEABLE_MEMBER_ROLES = ["client_user"] as const;
+
+export type PortalAccessRole = (typeof PORTAL_ACCESS_ROLES)[number];
+export type PortalVisibleMemberRole =
+  (typeof PORTAL_VISIBLE_MEMBER_ROLES)[number];
+export type PortalManageableMemberRole =
+  (typeof PORTAL_MANAGEABLE_MEMBER_ROLES)[number];
+
+export function isPortalAccessRole(role: string): role is PortalAccessRole {
+  return PORTAL_ACCESS_ROLES.includes(role as PortalAccessRole);
+}
+
+export function isPortalVisibleMemberRole(
+  role: string,
+): role is PortalVisibleMemberRole {
+  return PORTAL_VISIBLE_MEMBER_ROLES.includes(role as PortalVisibleMemberRole);
+}
+
+export function isPortalManageableMemberRole(
+  role: string,
+): role is PortalManageableMemberRole {
+  return PORTAL_MANAGEABLE_MEMBER_ROLES.includes(
+    role as PortalManageableMemberRole,
+  );
+}
+
+/**
  * Role labels for UI display (Portuguese)
  */
 export const roleLabels: Record<RoleName, string> = {
@@ -479,7 +637,7 @@ export const roleDescriptions: Record<RoleName, string> = {
   admin: "Controle operacional completo, aprova e rejeita calibrações",
   owner: "Controle total incluindo faturamento e exclusão da organização",
   client_user:
-    "Acesso ao portal do cliente para visualizar ativos e certificados",
+    "Acesso ao portal do cliente para visualizar ativos, certificados e solicitações",
 };
 
 /**
@@ -632,5 +790,69 @@ export function getAllowedCalibrationActions(
   ];
   return actions.filter((action) =>
     canPerformCalibrationAction(role, state, action),
+  );
+}
+
+// =============================================================================
+// PLATFORM / BACKOFFICE ACCESS CONTROL
+// =============================================================================
+
+export const platformStatements = {
+  ...platformDefaultStatements,
+} as const;
+
+export const platformAc = createAccessControl(platformStatements);
+
+export const platformUser = platformAc.newRole({
+  ...platformUserAc.statements,
+});
+
+export const platformOperator = platformAc.newRole({
+  ...platformUserAc.statements,
+  user: ["list", "impersonate"],
+  session: ["list", "revoke"],
+});
+
+export const platformAdmin = platformAc.newRole({
+  ...platformAdminAc.statements,
+});
+
+export const platformRoles = {
+  user: platformUser,
+  platform_operator: platformOperator,
+  platform_admin: platformAdmin,
+} as const;
+
+export type PlatformRole = keyof typeof platformRoles;
+
+export const DEFAULT_PLATFORM_ROLE: PlatformRole = "user";
+
+export function parsePlatformRoles(
+  rawRole: string | null | undefined,
+): PlatformRole[] {
+  if (!rawRole) {
+    return [DEFAULT_PLATFORM_ROLE];
+  }
+
+  const roles = rawRole
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value): value is PlatformRole => value in platformRoles);
+
+  return roles.length > 0 ? roles : [DEFAULT_PLATFORM_ROLE];
+}
+
+export function hasPlatformRole(
+  rawRole: string | null | undefined,
+  role: PlatformRole,
+): boolean {
+  return parsePlatformRoles(rawRole).includes(role);
+}
+
+export function canAccessBackoffice(rawRole: string | null | undefined) {
+  const roles = parsePlatformRoles(rawRole);
+  return (
+    roles.includes("platform_admin") || roles.includes("platform_operator")
   );
 }

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -104,18 +104,14 @@ function NewAssetPage() {
   // Read customerId from query params (e.g., /dashboard/assets/new?customerId=123)
   const [customerIdParam] = useQueryState('customerId', parseAsInteger)
 
-  const [formData, setFormData] = useState<FormData>(initialFormData)
+  const [formData, setFormData] = useState<FormData>(() => ({
+    ...initialFormData,
+    customerId: customerIdParam ?? null,
+  }))
   const [errors, setErrors] = useState<
     Partial<Record<keyof FormData | string, string>>
   >({})
   const [customerSearch, setCustomerSearch] = useState('')
-
-  // Pre-fill customerId from query param on mount
-  useEffect(() => {
-    if (customerIdParam && !formData.customerId) {
-      setFormData((prev) => ({ ...prev, customerId: customerIdParam }))
-    }
-  }, [customerIdParam, formData.customerId])
 
   // Fetch customers for the combobox
   const { data: customersData, isLoading: customersLoading } = useQuery({

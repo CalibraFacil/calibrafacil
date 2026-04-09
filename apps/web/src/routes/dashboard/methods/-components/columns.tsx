@@ -18,7 +18,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-type MethodStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED"
+type MethodStatus =
+    | "DRAFT"
+    | "PENDING_APPROVAL"
+    | "TECHNICAL_REVIEWED"
+    | "PUBLISHED"
+    | "ARCHIVED"
 
 export interface Method {
     id: number
@@ -43,12 +48,16 @@ export interface MethodsTableMeta {
 
 const statusLabels: Record<MethodStatus, string> = {
     DRAFT: "Rascunho",
+    PENDING_APPROVAL: "Em aprovação",
+    TECHNICAL_REVIEWED: "Revisão técnica",
     PUBLISHED: "Publicado",
     ARCHIVED: "Arquivado",
 }
 
 const statusVariants: Record<MethodStatus, "default" | "secondary" | "outline"> = {
     DRAFT: "secondary",
+    PENDING_APPROVAL: "outline",
+    TECHNICAL_REVIEWED: "outline",
     PUBLISHED: "default",
     ARCHIVED: "outline",
 }

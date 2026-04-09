@@ -1,0 +1,1 @@
+ALTER TABLE "notification_preference" ADD COLUMN "notify_self_actions" boolean DEFAULT false NOT NULL;

@@ -1,123 +1,186 @@
-import React from 'react';
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Tick02Icon } from '@hugeicons/core-free-icons';
+import React from 'react'
+import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+  ArrowRight01Icon,
+  Cancel01Icon,
+  SparklesIcon,
+  Tick02Icon,
+} from '@hugeicons/core-free-icons'
 
-const plans = [
-  {
-    name: 'Iniciante',
-    price: 'R$ 299',
-    description: 'Ideal para laboratórios pequenos iniciando a acreditação.',
-    features: [
-      'Até 500 certificados/mês',
-      '2 Usuários técnicos',
-      'Portal do cliente básico',
-      'Suporte por e-mail',
-    ],
-    popular: false,
-  },
-  {
-    name: 'Profissional',
-    price: 'R$ 599',
-    description: 'Para laboratórios RBC em crescimento constante.',
-    features: [
-      'Certificados ilimitados',
-      '5 Usuários técnicos',
-      'Portal do cliente White-label',
-      'Cálculo de Incerteza Avançado',
-      'Suporte Prioritário',
-    ],
-    popular: true,
-  },
-  {
-    name: 'Enterprise',
-    price: 'Sob Consulta',
-    description: 'Para grandes redes de laboratórios e metrologia industrial.',
-    features: [
-      'Múltiplas Unidades',
-      'API de Integração',
-      'SSO (Single Sign-On)',
-      'Gerente de Conta Dedicado',
-      'SLA Garantido',
-    ],
-    popular: false,
-  },
-];
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import {
+  ENTITLEMENT_METADATA,
+  PLANS,
+  hasFeature,
+  type FeatureFlag,
+  type PlanId,
+} from '@calibra-facil/shared'
+
+type LandingPlanId = Exclude<PlanId, 'FREE'>
+
+const LANDING_PLANS: Array<LandingPlanId> = [
+  'STANDARD',
+  'PROFESSIONAL',
+  'ENTERPRISE',
+]
+
+const ALL_FEATURES: FeatureFlag[] = [
+  'math_engine',
+  'portal',
+  'financial',
+  'api',
+  'custom_domain',
+  'sso',
+  'approval_workflow',
+  'advanced_audit_trail',
+  'custom_templates',
+  'priority_support',
+  'multi_unit',
+  'custom_integrations',
+]
+
+const PLAN_HIGHLIGHTS: Record<LandingPlanId, string[]> = {
+  STANDARD: [
+    'Portal do cliente incluído',
+    'Templates padrão de certificado',
+    'Suporte padrão',
+  ],
+  PROFESSIONAL: [
+    'Fluxo de revisão e aprovação',
+    'Templates personalizados',
+    'Suporte prioritário',
+  ],
+  ENTERPRISE: [
+    'SSO corporativo via OIDC',
+    'Suporte dedicado sob consulta',
+    'Onboarding assistido',
+    'Soluções customizadas para operação complexa',
+  ],
+}
+
+const CONTACT_URL = 'https://cal.com/calibrafacil/30min?user=calibrafacil'
 
 const Pricing: React.FC = () => {
   return (
-    <section id="pricing" className="py-24 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4">
-            Preços transparentes
+    <section id="pricing" className="border-t bg-background py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto mb-12 max-w-3xl text-center">
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            Planos para diferentes estágios da operação
           </h2>
-          <p className="text-lg text-slate-600 dark:text-slate-400">
-            Escolha o plano que melhor se adapta ao volume de calibrações do seu laboratório.
+          <p className="mt-4 text-lg text-muted-foreground">
+            A base técnica permanece consistente. O que evolui é a governança,
+            a extensibilidade e o nível de suporte para o laboratório.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {plans.map((plan) => (
-            <Card
-              key={plan.name}
-              className={`relative flex flex-col ${plan.popular
-                  ? 'border-sky-500 shadow-xl shadow-sky-900/10 dark:shadow-sky-900/20 scale-105 z-10 bg-white dark:bg-slate-900'
-                  : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50'
-                }`}
-            >
-              {plan.popular && (
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <Badge className="bg-sky-500 hover:bg-sky-500 text-white font-bold uppercase tracking-wide rounded-full">
-                    Mais Popular
-                  </Badge>
-                </div>
-              )}
-              <CardHeader>
-                <CardTitle className="text-xl font-bold text-slate-900 dark:text-white mb-2">{plan.name}</CardTitle>
-                <div className="flex items-baseline gap-1 mb-4">
-                  <span className="text-4xl font-bold text-slate-900 dark:text-white">{plan.price}</span>
-                  <span className="text-slate-500 dark:text-slate-400">/mês</span>
-                </div>
-                <CardDescription className="text-sm text-slate-600 dark:text-slate-400">{plan.description}</CardDescription>
-              </CardHeader>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {LANDING_PLANS.map((planId) => {
+            const plan = PLANS[planId]
+            const isPopular = Boolean(plan.isPopular)
 
-              <CardContent className="flex-1">
-                <ul className="space-y-4">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300">
-                      <HugeiconsIcon icon={Tick02Icon} className="text-sky-500 shrink-0" size={18} />
-                      <span>{feature}</span>
-                    </li>
+            return (
+              <div
+                key={planId}
+                className={cn(
+                  'relative flex flex-col rounded-xl border p-4 transition-all',
+                  'border-border bg-background',
+                  isPopular && 'border-primary/30',
+                )}
+              >
+                {isPopular && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
+                      <HugeiconsIcon icon={SparklesIcon} className="size-3" />
+                      Mais Popular
+                    </span>
+                  </div>
+                )}
+
+                <div className={cn('text-center', isPopular && 'mt-2')}>
+                  <h3 className="text-lg font-semibold">{plan.name}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {plan.description}
+                  </p>
+                  {plan.recommendedFor && (
+                    <p className="mt-2 text-xs font-medium text-primary">
+                      {plan.recommendedFor}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-4 space-y-2 border-t pt-4">
+                  {PLAN_HIGHLIGHTS[planId].map((highlight) => (
+                    <div
+                      key={highlight}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <HugeiconsIcon
+                        icon={Tick02Icon}
+                        className="size-4 shrink-0 text-primary"
+                      />
+                      <span>{highlight}</span>
+                    </div>
                   ))}
-                </ul>
-              </CardContent>
+                </div>
 
-              <CardFooter>
-                <Button
-                  className={`w-full font-semibold ${plan.popular
-                      ? 'bg-sky-600 hover:bg-sky-500 text-white'
-                      : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200'
-                    }`}
-                >
-                  Escolher {plan.name}
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+                <div className="mt-4 flex-1 space-y-2 border-t pt-4">
+                  {ALL_FEATURES.map((feature) => {
+                    const has = hasFeature(planId, feature)
+                    const label = ENTITLEMENT_METADATA[feature]
+
+                    return (
+                      <div
+                        key={feature}
+                        className={cn(
+                          'flex items-center gap-2 text-sm',
+                          !has && 'text-muted-foreground/50',
+                        )}
+                      >
+                        <HugeiconsIcon
+                          icon={has ? Tick02Icon : Cancel01Icon}
+                          className={cn(
+                            'size-4 shrink-0',
+                            has ? 'text-green-600' : 'text-muted-foreground/30',
+                          )}
+                        />
+                        <span className={cn(!has && 'line-through')}>
+                          {label.name}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="mt-4 border-t pt-4">
+                  <Button
+                    asChild
+                    variant={isPopular ? 'default' : 'outline'}
+                    className="w-full"
+                  >
+                    <a
+                      href={CONTACT_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        <span>Falar com Especialista</span>
+                        <HugeiconsIcon
+                          icon={ArrowRight01Icon}
+                          className="size-4 shrink-0"
+                        />
+                      </span>
+                    </a>
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </section>
-  );
-};
+  )
+}
 
-export default Pricing;
+export default Pricing

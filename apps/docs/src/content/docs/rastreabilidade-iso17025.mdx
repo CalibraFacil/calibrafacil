@@ -1,0 +1,113 @@
+---
+title: Conformidade ISO/IEC 17025
+description: Como o CalibraFácil apoia laboratórios de calibração na conformidade com a ISO/IEC 17025:2017.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+O CalibraFácil foi projetado para apoiar laboratórios de calibração no atendimento aos requisitos da **ISO/IEC 17025:2017**. Esta página apresenta como as funcionalidades da plataforma se relacionam com as principais cláusulas da norma.
+
+<Aside type="note">
+  A plataforma é uma **ferramenta de apoio** à conformidade. A acreditação depende do sistema de gestão completo do laboratório, incluindo procedimentos, competência técnica e infraestrutura adequada.
+</Aside>
+
+## Mapeamento de Cláusulas
+
+### 6.2.3 — Competência do Pessoal
+
+> O laboratório deve assegurar a competência do pessoal que executa atividades laboratoriais.
+
+**Como o CalibraFácil apoia:**
+
+- Módulo de [Competências do Pessoal](/guia/competencias-pessoal) com workflow completo de qualificação.
+- Registro de **treinamentos vinculados** e avaliação técnica com evidências.
+- Controle de **validade**, expiração automática e renovação de competências.
+- **Trilha de auditoria** de todas as alterações (quem, quando e por quê).
+- Validação de competência ativa ao atribuir técnico a ordens de serviço por tipo de instrumento.
+
+### 7.2.1.3 — Validação de Métodos
+
+> O laboratório deve validar métodos não normalizados, métodos desenvolvidos pelo laboratório e métodos normalizados utilizados fora do escopo pretendido ou de outra forma modificados.
+
+**Como o CalibraFácil apoia:**
+
+- Os cálculos de incerteza são validados contra referências internacionais reconhecidas, incluindo exemplos do **GUM Anexo H** e tabelas **NIST/SEMATECH**.
+- A validação formal do motor matemático está documentada em [Validação do Motor Matemático](/validacao-motor-matematico), com protocolo, relatório e evidências.
+- Os métodos de calibração possuem [ciclo de vida controlado](/metodos/ciclo-de-vida) (Rascunho → Em aprovação → Revisão técnica → Publicado → Arquivado), com aprovação em dois níveis para garantir que apenas métodos validados sejam utilizados em calibrações.
+- Toda alteração em um método publicado gera uma nova versão, preservando o histórico.
+
+### 7.1.2 — Condições Ambientais
+
+> O laboratório deve monitorar, controlar e registrar as condições ambientais [...] quando estas influenciam a validade dos resultados.
+
+**Como o CalibraFácil apoia:**
+
+- Configuração de **limites aceitáveis** de temperatura (°C), umidade relativa (%RH) e pressão atmosférica (hPa) por organização ou por tipo de equipamento.
+- Registro obrigatório das condições ambientais durante a [execução da calibração](/guia/ordens/execucao), com validação em tempo real contra os limites configurados.
+- **Snapshot imutável** das condições e limites efetivos no momento da medição, vinculado à ordem de serviço.
+- Fluxo de aprovação com **justificativa obrigatória** quando as condições estiverem fora dos limites, garantindo análise técnica documentada.
+- Variáveis ambientais disponíveis nas fórmulas dos métodos, permitindo que cálculos de incerteza considerem as condições reais.
+
+Para mais detalhes, consulte [Monitoramento Ambiental](/guia/monitoramento-ambiental).
+
+### 7.6 — Avaliação da Incerteza de Medição
+
+> O laboratório deve identificar as contribuições para a incerteza de medição. [...] O laboratório deve levar em conta todas as contribuições significativas.
+
+**Como o CalibraFácil apoia:**
+
+- Cálculos de incerteza conforme o **GUM (JCGM 100:2008)**, com avaliações Tipo A e Tipo B.
+- Suporte a 4 distribuições de probabilidade (Normal, Retangular, Triangular, U-shaped).
+- Incerteza combinada via soma em quadratura (RSS) com coeficientes de sensibilidade configuráveis.
+- Graus de liberdade efetivos via Welch-Satterthwaite e fator $k$ dinâmico pela tabela t-Student.
+- Limitações documentadas (como a assunção de correlação zero) para transparência.
+
+Para mais detalhes, consulte [Cálculos de Incerteza](/motor-matematico).
+
+### 7.7 — Garantia da Validade dos Resultados
+
+> O laboratório deve ter um procedimento para monitorar a validade dos resultados.
+
+**Como o CalibraFácil apoia:**
+
+- Os [padrões de referência](/guia/padroes) possuem controle de validade com alertas automáticos de vencimento (7 dias de antecedência).
+- Padrões vencidos são sinalizados automaticamente, impedindo uso inadvertido em novas calibrações.
+- Os [critérios de aceitação](/metodos/criterios-de-aceitacao) dos métodos verificam automaticamente se os resultados estão dentro dos limites definidos.
+- O [monitoramento ambiental](/guia/monitoramento-ambiental) registra e valida as condições de temperatura, umidade e pressão, com snapshot imutável vinculado a cada calibração.
+
+### 7.8 — Relato de Resultados
+
+> O laboratório deve relatar os resultados de cada atividade laboratorial de forma precisa, clara, inequívoca e objetiva.
+
+**Como o CalibraFácil apoia:**
+
+- Certificados de calibração gerados automaticamente em PDF com todos os dados da calibração.
+- Incerteza expandida reportada com fator $k$ e nível de confiança.
+- Rastreabilidade dos padrões utilizados (snapshot no momento da calibração).
+- Assinatura digital ICP-Brasil com verificação pública via QR code.
+
+### 7.11 — Controle de Dados e Gestão da Informação
+
+> O laboratório deve ter acesso a dados e informações necessários para realizar atividades laboratoriais. [...] O sistema de gestão da informação laboratorial deve ser protegido contra acesso ou alteração não autorizados.
+
+**Como o CalibraFácil apoia:**
+
+- Cada cálculo registra metadados de rastreabilidade: versão do sistema, data/hora e variáveis utilizadas.
+- Trilha de auditoria completa em operações críticas (cadastros, aprovações, alterações).
+- Controle de acesso baseado em papéis (Owner, Admin, Técnico, Membro) com [permissões granulares](/guia/configuracoes).
+- Separação de responsabilidades: o técnico executor não pode aprovar a própria calibração.
+
+### 8.4 — Trabalho Não Conforme
+
+> O laboratório deve ter um procedimento a ser implementado quando qualquer aspecto de suas atividades laboratoriais [...] não estiver em conformidade.
+
+**Como o CalibraFácil apoia:**
+
+- Sistema de [Não Conformidades (NC)](/guia/qualidade/nc) com fluxo completo de registro, investigação e resolução.
+- Escalonamento para [Ações Corretivas (CAPA)](/guia/qualidade/capa) quando aplicável.
+- Notificações automáticas para responsáveis em eventos de NC e CAPA.
+- Histórico completo de ações e resoluções com rastreabilidade.
+
+<Aside type="tip" title="Dica para Auditorias">
+  Durante auditorias, utilize os relatórios e trilhas de auditoria da plataforma como evidência de conformidade. Consulte seu gerente da qualidade para definir quais registros apresentar em cada cláusula.
+</Aside>

@@ -37,6 +37,7 @@ type JobStatus =
     | "APPROVED"
     | "REJECTED"
     | "CANCELED"
+    | "SUPERSEDED"
 
 export interface Job {
     id: number
@@ -70,6 +71,7 @@ const statusLabels: Record<JobStatus, string> = {
     APPROVED: "Aprovado",
     REJECTED: "Rejeitado",
     CANCELED: "Cancelado",
+    SUPERSEDED: "Retificado",
 }
 
 const statusVariants: Record<
@@ -83,6 +85,7 @@ const statusVariants: Record<
     APPROVED: "default",
     REJECTED: "destructive",
     CANCELED: "secondary",
+    SUPERSEDED: "outline",
 }
 
 function formatDate(dateString: string | null): string {

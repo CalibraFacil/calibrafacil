@@ -3,10 +3,15 @@ import {
   Building06Icon,
   CreditCardIcon,
   Key01Icon,
+  LinkSquare02Icon,
   Notification01Icon,
   PaintBoardIcon,
+  Settings02Icon,
   ShieldKeyIcon,
   UserIcon,
+  PenTool01Icon,
+  Certificate01Icon,
+  ThermometerIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
@@ -36,6 +41,36 @@ const settingsNavItems: Array<SettingsNavItem> = [
     icon: <HugeiconsIcon icon={Building06Icon} className="size-4" />,
   },
   {
+    value: 'portal-domain',
+    label: 'Portal Domain',
+    href: '/dashboard/settings/portal-domain',
+    icon: <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" />,
+  },
+  {
+    value: 'branding',
+    label: 'Branding',
+    href: '/dashboard/settings/branding',
+    icon: <HugeiconsIcon icon={PaintBoardIcon} className="size-4" />,
+  },
+  {
+    value: 'signature',
+    label: 'Assinatura',
+    href: '/dashboard/settings/signature',
+    icon: <HugeiconsIcon icon={PenTool01Icon} className="size-4" />,
+  },
+  {
+    value: 'certificates',
+    label: 'Certificados ICP',
+    href: '/dashboard/settings/certificates',
+    icon: <HugeiconsIcon icon={Certificate01Icon} className="size-4" />,
+  },
+  {
+    value: 'environment',
+    label: 'Ambiente',
+    href: '/dashboard/settings/environment',
+    icon: <HugeiconsIcon icon={ThermometerIcon} className="size-4" />,
+  },
+  {
     value: 'security',
     label: 'Segurança',
     href: '/dashboard/settings/security',
@@ -48,10 +83,16 @@ const settingsNavItems: Array<SettingsNavItem> = [
     icon: <HugeiconsIcon icon={Key01Icon} className="size-4" />,
   },
   {
+    value: 'integrations',
+    label: 'Integrações',
+    href: '/dashboard/settings/integrations',
+    icon: <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" />,
+  },
+  {
     value: 'appearance',
     label: 'Aparência',
     href: '/dashboard/settings/appearance',
-    icon: <HugeiconsIcon icon={PaintBoardIcon} className="size-4" />,
+    icon: <HugeiconsIcon icon={Settings02Icon} className="size-4" />,
   },
   {
     value: 'billing',
