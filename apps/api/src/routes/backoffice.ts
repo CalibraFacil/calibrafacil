@@ -26,6 +26,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { internalCustomerSuccessRouter } from "./internal-customer-success";
+import { backofficeCommercialRouter } from "./backoffice-commercial";
 import { getOrganizationPlanAccess } from "../lib/organization-plan";
 import {
   buildWorkflowDelays,
@@ -531,6 +532,7 @@ export const backofficeRouter = new Hono<{
     },
   )
   .route("/customer-success", internalCustomerSuccessRouter)
+  .route("/commercial", backofficeCommercialRouter)
   .get("/organizations", async (c) => {
     const rows = await db
       .select({

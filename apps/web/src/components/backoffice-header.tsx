@@ -17,6 +17,7 @@ const routeLabels: Record<string, string> = {
   '/backoffice/': 'Visão Geral',
   '/backoffice/organizations': 'Organizações',
   '/backoffice/organizations/$id': 'Organização',
+  '/backoffice/commercial-checkouts': 'Comercial',
   '/backoffice/customer-success': 'Customer Success',
   '/backoffice/support': 'Suporte',
   '/backoffice/users': 'Usuários',

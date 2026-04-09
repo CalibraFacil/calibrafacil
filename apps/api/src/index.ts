@@ -51,6 +51,7 @@ import { customerSuccessRouter } from "./routes/customer-success";
 import { internalCustomerSuccessRouter } from "./routes/internal-customer-success";
 import { backofficeRouter } from "./routes/backoffice";
 import { profileMediaRouter } from "./routes/profile-media";
+import { publicCommercialCheckoutRouter } from "./routes/public-commercial-checkout";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -287,6 +288,7 @@ const routes = app
   .route("/api/backoffice", backofficeRouter)
   .route("/api/internal/customer-success", internalCustomerSuccessRouter)
   .route("/api/profile-media", profileMediaRouter)
+  .route("/api/public/commercial-checkout", publicCommercialCheckoutRouter)
   .route("/api/public/v1", publicApiRouter)
   .route("/api/public/v2", publicApiV2DocsRouter)
   .route("/api/public/v2", publicApiV2Router);

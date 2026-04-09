@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./commercial";
 
 export const TaskSchema = z.object({
   id: z.string().optional(),

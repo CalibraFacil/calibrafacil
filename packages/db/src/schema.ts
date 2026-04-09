@@ -14,6 +14,19 @@ import {
   real,
 } from "drizzle-orm/pg-core";
 import type {
+  BillingCustomerStatus,
+  CommercialActivationBehavior,
+  CommercialDealStatus,
+  CommercialHistorySource,
+  CommercialOfferItemType,
+  CommercialOfferKind,
+  CommercialOfferStatus,
+  CommercialOfferAccessEventType,
+  CommercialPaymentMethod,
+  CommercialPublicCheckoutState,
+  CommercialProvider,
+  CommercialProviderMode,
+  CommercialRenewalMode,
   CustomerSuccessBlocker,
   CustomerSuccessHealthStatus,
   CustomerSuccessSlaTier,
@@ -2834,57 +2847,7 @@ export type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "CANCELED" | "TRIAL";
 export type BillingCycle = "MONTHLY" | "YEARLY";
 
 /**
- * Subscription table - Links organizations to their billing plan.
- * Each organization can have at most one active subscription.
- */
-export const subscription = pgTable(
-  "subscription",
-  {
-    id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .unique()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    // Plan from shared config (FREE, STANDARD, PROFESSIONAL, ENTERPRISE)
-    planId: text("plan_id").$type<PlanId>().notNull(),
-    // Asaas integration (nullable for FREE plan)
-    asaasSubscriptionId: text("asaas_subscription_id").unique(),
-    asaasCustomerId: text("asaas_customer_id"),
-    // Billing details
-    billingCycle: text("billing_cycle").$type<BillingCycle>(),
-    status: text("status")
-      .$type<SubscriptionStatus>()
-      .default("TRIAL")
-      .notNull(),
-    // Trial period
-    trialEndsAt: timestamp("trial_ends_at"),
-    // Current billing period
-    currentPeriodStart: timestamp("current_period_start"),
-    currentPeriodEnd: timestamp("current_period_end"),
-    nextBillingDate: timestamp("next_billing_date"),
-    // Cancellation tracking
-    canceledAt: timestamp("canceled_at"),
-    cancelReason: text("cancel_reason"),
-    // Timestamps
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => /* @__PURE__ */ new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("subscription_org_id_idx").on(table.organizationId),
-    index("subscription_status_idx").on(table.status),
-    index("subscription_asaas_sub_id_idx").on(table.asaasSubscriptionId),
-  ],
-);
-
-// =============================================================================
-// PAYMENT HISTORY - Payment Records from Asaas
-// =============================================================================
-
-/**
- * Payment status matching Asaas webhook events
+ * Billing/payment status matching Asaas webhook events
  */
 export type PaymentStatus =
   | "PENDING"
@@ -2902,51 +2865,30 @@ export type PaymentStatus =
   | "DELETED";
 
 /**
- * Payment method types
+ * Commercial billing customer mapped to provider
  */
-export type PaymentMethod = "CREDIT_CARD" | "PIX" | "BOLETO";
-
-/**
- * Payment source - where the payment record originated from.
- * CHECKOUT: Created during checkout flow (provisional, for UX)
- * WEBHOOK: Created/confirmed by Asaas webhook (canonical source)
- */
-export type PaymentSource = "CHECKOUT" | "WEBHOOK";
-
-/**
- * Payment History table - Records all payments for subscriptions.
- * Populated via Asaas webhooks for accurate tracking.
- */
-export const paymentHistory = pgTable(
-  "payment_history",
+export const billingCustomer = pgTable(
+  "billing_customer",
   {
     id: serial("id").primaryKey(),
-    subscriptionId: integer("subscription_id")
-      .notNull()
-      .references(() => subscription.id, { onDelete: "cascade" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    // Asaas references
-    asaasPaymentId: text("asaas_payment_id").unique(),
-    asaasInvoiceUrl: text("asaas_invoice_url"),
-    asaasBankSlipUrl: text("asaas_bank_slip_url"), // Boleto PDF
-    asaasPixQrCodeUrl: text("asaas_pix_qr_code_url"),
-    asaasPixPayload: text("asaas_pix_payload"), // Copia e Cola
-    // Payment details
-    amount: integer("amount").notNull(), // In centavos
-    netAmount: integer("net_amount"), // After fees
-    currency: text("currency").default("BRL").notNull(),
-    paymentMethod: text("payment_method").$type<PaymentMethod>().notNull(),
-    status: text("status").$type<PaymentStatus>().notNull(),
-    source: text("source").$type<PaymentSource>().default("WEBHOOK").notNull(),
-    // Dates
-    dueDate: timestamp("due_date"),
-    paidAt: timestamp("paid_at"),
-    // Card info (last 4 digits only for display)
-    cardLast4: text("card_last4"),
-    cardBrand: text("card_brand"),
-    // Timestamps
+    provider: text("provider").$type<CommercialProvider>().default("ASAAS").notNull(),
+    providerCustomerId: text("provider_customer_id").notNull().unique(),
+    status: text("status")
+      .$type<BillingCustomerStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    name: text("name").notNull(),
+    email: text("email"),
+    phone: text("phone"),
+    taxId: text("tax_id"),
+    addressSnapshot: jsonb("address_snapshot").$type<Record<string, unknown>>(),
+    providerSnapshot: jsonb("provider_snapshot").$type<Record<string, unknown>>(),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -2954,37 +2896,405 @@ export const paymentHistory = pgTable(
       .notNull(),
   },
   (table) => [
-    index("payment_subscription_id_idx").on(table.subscriptionId),
-    index("payment_org_id_idx").on(table.organizationId),
-    index("payment_status_idx").on(table.status),
-    uniqueIndex("payment_asaas_id_idx").on(table.asaasPaymentId),
+    index("billing_customer_org_idx").on(table.organizationId),
+    index("billing_customer_status_idx").on(table.status),
+    uniqueIndex("billing_customer_org_provider_uidx").on(
+      table.organizationId,
+      table.provider,
+    ),
   ],
 );
 
-// =============================================================================
-// WEBHOOK EVENT LOG - Idempotency for Asaas Webhooks
-// =============================================================================
-
 /**
- * Webhook Event Log table - Ensures idempotent webhook processing.
- * Stores all received webhook events with their processing status.
- * Uses UNIQUE constraint on eventId for "at least once" delivery handling.
+ * Optional billing contacts for sales-issued offers
  */
-export const webhookEventLog = pgTable(
-  "webhook_event_log",
+export const billingContact = pgTable(
+  "billing_contact",
   {
     id: serial("id").primaryKey(),
-    eventId: text("event_id").notNull().unique(), // Asaas event ID
-    eventType: text("event_type").notNull(), // PAYMENT_RECEIVED, etc.
-    payload: jsonb("payload").notNull(), // Full webhook payload
-    processedAt: timestamp("processed_at"), // When processing completed
-    processingError: text("processing_error"), // Error message if failed
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    phone: text("phone"),
+    role: text("role"),
+    isPrimary: boolean("is_primary").default(false).notNull(),
+    notes: text("notes"),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("billing_contact_org_idx").on(table.organizationId),
+    index("billing_contact_primary_idx").on(table.organizationId, table.isPrimary),
+  ],
+);
+
+/**
+ * Closed-won deal envelope for issued offers
+ */
+export const commercialDeal = pgTable(
+  "commercial_deal",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    status: text("status")
+      .$type<CommercialDealStatus>()
+      .default("OPEN")
+      .notNull(),
+    primaryBillingContactId: integer("primary_billing_contact_id").references(
+      () => billingContact.id,
+      { onDelete: "set null" },
+    ),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    closedBy: text("closed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("commercial_deal_org_idx").on(table.organizationId),
+    index("commercial_deal_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * Immutable issued commercial offer snapshot
+ */
+export const commercialOffer = pgTable(
+  "commercial_offer",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    dealId: text("deal_id")
+      .notNull()
+      .references(() => commercialDeal.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<CommercialOfferKind>().notNull(),
+    status: text("status")
+      .$type<CommercialOfferStatus>()
+      .default("DRAFT")
+      .notNull(),
+    provider: text("provider").$type<CommercialProvider>().default("ASAAS").notNull(),
+    providerMode: text("provider_mode")
+      .$type<CommercialProviderMode>()
+      .notNull(),
+    activationBehavior: text("activation_behavior")
+      .$type<CommercialActivationBehavior>()
+      .default("NONE")
+      .notNull(),
+    basePlanId: text("base_plan_id").$type<PlanId>(),
+    billingCycle: text("billing_cycle").$type<BillingCycle>(),
+    contractTermMonths: integer("contract_term_months"),
+    renewalMode: text("renewal_mode")
+      .$type<CommercialRenewalMode>()
+      .default("NONE")
+      .notNull(),
+    currency: text("currency").default("BRL").notNull(),
+    subtotalAmount: integer("subtotal_amount").notNull(),
+    discountAmount: integer("discount_amount").default(0).notNull(),
+    totalAmount: integer("total_amount").notNull(),
+    dueDate: timestamp("due_date"),
+    offerExpiresAt: timestamp("offer_expires_at"),
+    paymentMethods: jsonb("payment_methods")
+      .$type<CommercialPaymentMethod[]>()
+      .default([])
+      .notNull(),
+    customerVisibleDescription: text("customer_visible_description"),
+    internalNotes: text("internal_notes"),
+    termsSnapshot: jsonb("terms_snapshot")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    customerSnapshot: jsonb("customer_snapshot")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    providerRequestSnapshot: jsonb("provider_request_snapshot").$type<
+      Record<string, unknown>
+    >(),
+    providerResponseSnapshot: jsonb("provider_response_snapshot").$type<
+      Record<string, unknown>
+    >(),
+    checkoutUrl: text("checkout_url"),
+    providerCheckoutId: text("provider_checkout_id"),
+    providerPaymentId: text("provider_payment_id"),
+    providerSubscriptionId: text("provider_subscription_id"),
+    publicTokenHash: text("public_token_hash"),
+    publicTokenIssuedAt: timestamp("public_token_issued_at"),
+    publicTokenRevokedAt: timestamp("public_token_revoked_at"),
+    publicViewedAt: timestamp("public_viewed_at"),
+    publicLastAccessAt: timestamp("public_last_access_at"),
+    customerCheckoutUrlPath: text("customer_checkout_url_path"),
+    billingCustomerId: integer("billing_customer_id")
+      .notNull()
+      .references(() => billingCustomer.id, { onDelete: "restrict" }),
+    issuedAt: timestamp("issued_at"),
+    paidAt: timestamp("paid_at"),
+    activatedAt: timestamp("activated_at"),
+    canceledAt: timestamp("canceled_at"),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    canceledBy: text("canceled_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    reissuedFromOfferId: text("reissued_from_offer_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("commercial_offer_org_idx").on(table.organizationId),
+    index("commercial_offer_deal_idx").on(table.dealId),
+    index("commercial_offer_status_idx").on(table.status),
+    index("commercial_offer_kind_idx").on(table.kind),
+    uniqueIndex("commercial_offer_provider_checkout_uidx").on(
+      table.providerCheckoutId,
+    ),
+    uniqueIndex("commercial_offer_provider_payment_uidx").on(
+      table.providerPaymentId,
+    ),
+    uniqueIndex("commercial_offer_provider_subscription_uidx").on(
+      table.providerSubscriptionId,
+    ),
+    uniqueIndex("commercial_offer_public_token_hash_uidx").on(
+      table.publicTokenHash,
+    ),
+  ],
+);
+
+/**
+ * Immutable itemized snapshot inside a commercial offer
+ */
+export const commercialOfferItem = pgTable(
+  "commercial_offer_item",
+  {
+    id: serial("id").primaryKey(),
+    offerId: text("offer_id")
+      .notNull()
+      .references(() => commercialOffer.id, { onDelete: "cascade" }),
+    type: text("type").$type<CommercialOfferItemType>().notNull(),
+    label: text("label").notNull(),
+    description: text("description"),
+    quantity: integer("quantity").default(1).notNull(),
+    unitAmount: integer("unit_amount").notNull(),
+    totalAmount: integer("total_amount").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("commercial_offer_item_offer_idx").on(table.offerId)],
+);
+
+/**
+ * Status transition log for commercial offers
+ */
+export const commercialOfferStatusHistory = pgTable(
+  "commercial_offer_status_history",
+  {
+    id: serial("id").primaryKey(),
+    offerId: text("offer_id")
+      .notNull()
+      .references(() => commercialOffer.id, { onDelete: "cascade" }),
+    fromStatus: text("from_status").$type<CommercialOfferStatus>(),
+    toStatus: text("to_status").$type<CommercialOfferStatus>().notNull(),
+    reason: text("reason"),
+    source: text("source").$type<CommercialHistorySource>().notNull(),
+    sourceEventId: text("source_event_id"),
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
+    changedBy: text("changed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("webhook_event_id_uidx").on(table.eventId),
-    index("webhook_event_type_idx").on(table.eventType),
-    index("webhook_created_at_idx").on(table.createdAt),
+    index("commercial_offer_history_offer_idx").on(table.offerId),
+    index("commercial_offer_history_source_event_idx").on(table.sourceEventId),
+  ],
+);
+
+export const commercialOfferAccessLog = pgTable(
+  "commercial_offer_access_log",
+  {
+    id: serial("id").primaryKey(),
+    offerId: text("offer_id")
+      .notNull()
+      .references(() => commercialOffer.id, { onDelete: "cascade" }),
+    eventType: text("event_type")
+      .$type<CommercialOfferAccessEventType>()
+      .notNull(),
+    publicState: text("public_state").$type<CommercialPublicCheckoutState>(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("commercial_offer_access_log_offer_idx").on(table.offerId),
+    index("commercial_offer_access_log_event_type_idx").on(table.eventType),
+    index("commercial_offer_access_log_created_at_idx").on(table.createdAt),
+  ],
+);
+
+/**
+ * Runtime entitlements for an organization
+ */
+export const subscription = pgTable(
+  "subscription",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    planId: text("plan_id").$type<PlanId>().notNull(),
+    status: text("status")
+      .$type<SubscriptionStatus>()
+      .default("TRIAL")
+      .notNull(),
+    billingCycle: text("billing_cycle").$type<BillingCycle>(),
+    renewalMode: text("renewal_mode")
+      .$type<CommercialRenewalMode>()
+      .default("NONE")
+      .notNull(),
+    contractTermMonths: integer("contract_term_months"),
+    sourceCommercialOfferId: text("source_commercial_offer_id").references(
+      () => commercialOffer.id,
+      { onDelete: "set null" },
+    ),
+    providerSubscriptionId: text("provider_subscription_id").unique(),
+    currentPeriodStart: timestamp("current_period_start"),
+    currentPeriodEnd: timestamp("current_period_end"),
+    nextBillingDate: timestamp("next_billing_date"),
+    canceledAt: timestamp("canceled_at"),
+    cancelReason: text("cancel_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("subscription_org_id_idx").on(table.organizationId),
+    index("subscription_status_idx").on(table.status),
+    index("subscription_provider_sub_id_idx").on(table.providerSubscriptionId),
+  ],
+);
+
+/**
+ * Provider payment record stored from Asaas lifecycle
+ */
+export const paymentRecord = pgTable(
+  "payment_record",
+  {
+    id: serial("id").primaryKey(),
+    commercialOfferId: text("commercial_offer_id")
+      .notNull()
+      .references(() => commercialOffer.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    provider: text("provider").$type<CommercialProvider>().default("ASAAS").notNull(),
+    providerCheckoutId: text("provider_checkout_id"),
+    providerPaymentId: text("provider_payment_id"),
+    providerSubscriptionId: text("provider_subscription_id"),
+    externalReference: text("external_reference"),
+    amount: integer("amount").notNull(),
+    netAmount: integer("net_amount"),
+    currency: text("currency").default("BRL").notNull(),
+    paymentMethod: text("payment_method")
+      .$type<CommercialPaymentMethod>()
+      .notNull(),
+    status: text("status").$type<PaymentStatus>().notNull(),
+    cardLast4: text("card_last4"),
+    cardBrand: text("card_brand"),
+    dueDate: timestamp("due_date"),
+    paidAt: timestamp("paid_at"),
+    invoiceUrl: text("invoice_url"),
+    bankSlipUrl: text("bank_slip_url"),
+    pixQrCodeUrl: text("pix_qr_code_url"),
+    pixPayload: text("pix_payload"),
+    providerSnapshot: jsonb("provider_snapshot").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("payment_record_offer_idx").on(table.commercialOfferId),
+    index("payment_record_org_idx").on(table.organizationId),
+    index("payment_record_status_idx").on(table.status),
+    uniqueIndex("payment_record_provider_payment_uidx").on(
+      table.providerPaymentId,
+    ),
+  ],
+);
+
+/**
+ * Payment status transition history
+ */
+export const paymentStatusHistory = pgTable(
+  "payment_status_history",
+  {
+    id: serial("id").primaryKey(),
+    paymentRecordId: integer("payment_record_id")
+      .notNull()
+      .references(() => paymentRecord.id, { onDelete: "cascade" }),
+    commercialOfferId: text("commercial_offer_id")
+      .notNull()
+      .references(() => commercialOffer.id, { onDelete: "cascade" }),
+    fromStatus: text("from_status").$type<PaymentStatus>(),
+    toStatus: text("to_status").$type<PaymentStatus>().notNull(),
+    sourceEventId: text("source_event_id"),
+    payload: jsonb("payload").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("payment_status_history_payment_idx").on(table.paymentRecordId),
+    index("payment_status_history_offer_idx").on(table.commercialOfferId),
+  ],
+);
+
+/**
+ * Provider webhook event log with idempotency
+ */
+export const providerWebhookEvent = pgTable(
+  "provider_webhook_event",
+  {
+    id: serial("id").primaryKey(),
+    provider: text("provider").$type<CommercialProvider>().default("ASAAS").notNull(),
+    eventId: text("event_id").notNull().unique(),
+    eventType: text("event_type").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    processedAt: timestamp("processed_at"),
+    processingError: text("processing_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("provider_webhook_event_uidx").on(table.provider, table.eventId),
+    index("provider_webhook_event_type_idx").on(table.eventType),
+    index("provider_webhook_event_created_idx").on(table.createdAt),
   ],
 );
 
@@ -2999,20 +3309,137 @@ export const subscriptionRelations = relations(
       fields: [subscription.organizationId],
       references: [organization.id],
     }),
-    payments: many(paymentHistory),
+    sourceOffer: one(commercialOffer, {
+      fields: [subscription.sourceCommercialOfferId],
+      references: [commercialOffer.id],
+    }),
   }),
 );
 
-export const paymentHistoryRelations = relations(paymentHistory, ({ one }) => ({
-  subscription: one(subscription, {
-    fields: [paymentHistory.subscriptionId],
-    references: [subscription.id],
+export const billingCustomerRelations = relations(billingCustomer, ({ one, many }) => ({
+  organization: one(organization, {
+    fields: [billingCustomer.organizationId],
+    references: [organization.id],
+  }),
+  offers: many(commercialOffer),
+}));
+
+export const commercialDealRelations = relations(commercialDeal, ({ one, many }) => ({
+  organization: one(organization, {
+    fields: [commercialDeal.organizationId],
+    references: [organization.id],
+  }),
+  primaryBillingContact: one(billingContact, {
+    fields: [commercialDeal.primaryBillingContactId],
+    references: [billingContact.id],
+  }),
+  offers: many(commercialOffer),
+}));
+
+export const commercialOfferRelations = relations(
+  commercialOffer,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [commercialOffer.organizationId],
+      references: [organization.id],
+    }),
+    deal: one(commercialDeal, {
+      fields: [commercialOffer.dealId],
+      references: [commercialDeal.id],
+    }),
+    billingCustomer: one(billingCustomer, {
+      fields: [commercialOffer.billingCustomerId],
+      references: [billingCustomer.id],
+    }),
+    items: many(commercialOfferItem),
+    statusHistory: many(commercialOfferStatusHistory),
+    accessLogs: many(commercialOfferAccessLog),
+    paymentRecords: many(paymentRecord),
+  }),
+);
+
+export const paymentRecordRelations = relations(paymentRecord, ({ one, many }) => ({
+  offer: one(commercialOffer, {
+    fields: [paymentRecord.commercialOfferId],
+    references: [commercialOffer.id],
   }),
   organization: one(organization, {
-    fields: [paymentHistory.organizationId],
+    fields: [paymentRecord.organizationId],
+    references: [organization.id],
+  }),
+  statusHistory: many(paymentStatusHistory),
+}));
+
+export const paymentStatusHistoryRelations = relations(
+  paymentStatusHistory,
+  ({ one }) => ({
+    paymentRecord: one(paymentRecord, {
+      fields: [paymentStatusHistory.paymentRecordId],
+      references: [paymentRecord.id],
+    }),
+    offer: one(commercialOffer, {
+      fields: [paymentStatusHistory.commercialOfferId],
+      references: [commercialOffer.id],
+    }),
+  }),
+);
+
+export const commercialOfferItemRelations = relations(
+  commercialOfferItem,
+  ({ one }) => ({
+    offer: one(commercialOffer, {
+      fields: [commercialOfferItem.offerId],
+      references: [commercialOffer.id],
+    }),
+  }),
+);
+
+export const commercialOfferStatusHistoryRelations = relations(
+  commercialOfferStatusHistory,
+  ({ one }) => ({
+    offer: one(commercialOffer, {
+      fields: [commercialOfferStatusHistory.offerId],
+      references: [commercialOffer.id],
+    }),
+  }),
+);
+
+export const commercialOfferAccessLogRelations = relations(
+  commercialOfferAccessLog,
+  ({ one }) => ({
+    offer: one(commercialOffer, {
+      fields: [commercialOfferAccessLog.offerId],
+      references: [commercialOffer.id],
+    }),
+  }),
+);
+
+export const billingContactRelations = relations(billingContact, ({ one }) => ({
+  organization: one(organization, {
+    fields: [billingContact.organizationId],
     references: [organization.id],
   }),
 }));
+
+export const paymentHistory = paymentRecord;
+export const webhookEventLog = providerWebhookEvent;
+
+export const paymentHistoryRelations = relations(paymentRecord, ({ one }) => ({
+  subscription: one(subscription, {
+    fields: [paymentRecord.organizationId],
+    references: [subscription.organizationId],
+  }),
+  offer: one(commercialOffer, {
+    fields: [paymentRecord.commercialOfferId],
+    references: [commercialOffer.id],
+  }),
+  organization: one(organization, {
+    fields: [paymentRecord.organizationId],
+    references: [organization.id],
+  }),
+}));
+
+export const webhookEventLogRelations = relations(providerWebhookEvent, ({}) => ({}));
 
 // =============================================================================
 // NOTIFICATION SYSTEM - ISO 17025 Compliance Alerts & Operational Notifications

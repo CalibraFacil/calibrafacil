@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
 import {
@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/utils/api'
 
@@ -83,6 +84,18 @@ function BackofficeOrganizationDetailPage() {
               <Badge variant="outline">
                 {isMultiUnit ? 'Conta multiunidade' : 'Conta mono-unidade'}
               </Badge>
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+              >
+                <Link
+                  to="/backoffice/commercial-checkouts"
+                  search={{ organizationId: data.organization.id }}
+                >
+                  Abrir comercial
+                </Link>
+              </Button>
             </div>
           </div>
 

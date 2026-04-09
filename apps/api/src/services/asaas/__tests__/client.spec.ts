@@ -250,7 +250,7 @@ describe("AsaasClient", () => {
         status: 500,
         statusText: "Internal Server Error",
         json: () => Promise.reject(new Error("Invalid JSON")),
-      } as Response;
+      } as unknown as Response;
 
       // Mock to always return this error (simulates exhausted retries)
       global.fetch = vi.fn().mockResolvedValue(response);

@@ -1,2 +1,0 @@
-ALTER TABLE "calibration_job" ADD COLUMN "verification_token" text DEFAULT gen_random_uuid() NOT NULL;--> statement-breakpoint
-ALTER TABLE "calibration_job" ADD CONSTRAINT "calibration_job_verification_token_unique" UNIQUE("verification_token");

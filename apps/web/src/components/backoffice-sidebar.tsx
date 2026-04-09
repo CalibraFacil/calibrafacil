@@ -2,6 +2,7 @@ import {
   BriefcaseIcon,
   CustomerSupportIcon,
   Home01Icon,
+  Invoice02Icon,
   LeftToRightListDashIcon,
   UserGroupIcon,
   UserIcon,
@@ -44,6 +45,11 @@ const platformItems = [
 ]
 
 const operationsItems = [
+  {
+    title: 'Comercial',
+    url: '/backoffice/commercial-checkouts',
+    icon: <HugeiconsIcon icon={Invoice02Icon} />,
+  },
   {
     title: 'Customer Success',
     url: '/backoffice/customer-success',

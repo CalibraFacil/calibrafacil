@@ -1,1 +1,0 @@
-ALTER TABLE "calibration_job" ADD COLUMN "standards_snapshot" jsonb;

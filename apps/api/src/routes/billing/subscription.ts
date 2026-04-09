@@ -37,7 +37,6 @@ function serializePublicSubscription(
     currentPeriodStart: sub.currentPeriodStart,
     currentPeriodEnd: sub.currentPeriodEnd,
     nextBillingDate: sub.nextBillingDate,
-    trialEndsAt: sub.trialEndsAt,
     canceledAt: sub.canceledAt,
     createdAt: sub.createdAt,
   };
@@ -111,10 +110,10 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       // Cancel in Asaas if exists
-      if (sub.asaasSubscriptionId) {
+      if (sub.providerSubscriptionId) {
         try {
           const { cancelSubscription } = await import("../../services/asaas");
-          await cancelSubscription(sub.asaasSubscriptionId);
+          await cancelSubscription(sub.providerSubscriptionId);
         } catch (error) {
           console.error("Error canceling Asaas subscription:", error);
           return c.json(
@@ -143,7 +142,7 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
           console.error("Error updating canceled subscription locally:", {
             error,
             subscriptionId: sub.id,
-            asaasSubscriptionId: sub.asaasSubscriptionId,
+            providerSubscriptionId: sub.providerSubscriptionId,
           });
           return c.json(
             {

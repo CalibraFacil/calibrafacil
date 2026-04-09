@@ -1,8 +1,6 @@
-import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
-  Rocket01Icon,
   Invoice02Icon,
   Calendar03Icon,
   AlertCircleIcon,
@@ -36,8 +34,6 @@ import {
 } from '@/components/ui/table'
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -45,7 +41,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { CheckoutDialog } from '@/components/billing'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { api } from '@/utils/api'
 import {
@@ -94,8 +89,6 @@ const PAYMENT_STATUS: Record<
 }
 
 function BillingSettingsPage() {
-  const [checkoutOpen, setCheckoutOpen] = useState(false)
-  const queryClient = useQueryClient()
   const accessQuery = usePlanAccess()
   const accessReady = accessQuery.isSuccess && !!accessQuery.data
   const accessPlanId =
@@ -135,23 +128,6 @@ function BillingSettingsPage() {
       return response.json()
     },
     enabled: accessReady && canManageBilling,
-  })
-
-  // Cancel subscription mutation
-  const cancelMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.api.billing.subscription.$delete()
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao cancelar',
-        )
-      }
-      return response.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['billing'] })
-    },
   })
 
   const { subscription, plan, usage, limits } = subscriptionQuery.data || {
@@ -200,21 +176,16 @@ function BillingSettingsPage() {
               fica disponível a partir do plano Professional.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex items-center justify-between gap-4 rounded-lg border p-4">
+          <CardContent className="rounded-lg border p-4">
             <div className="space-y-1">
               <p className="font-medium">
-                Faça upgrade para liberar o módulo financeiro avançado
+                A contratação é conduzida pelo time comercial da CalibraFácil
               </p>
               <p className="text-sm text-muted-foreground">
-                Você ainda pode gerenciar sua assinatura e acompanhar cobranças
-                neste painel. O upgrade libera os recursos operacionais do
-                módulo financeiro.
+                Durante a beta, mudanças de plano, condições negociadas e novas
+                cobranças são emitidas exclusivamente pelo backoffice interno.
               </p>
             </div>
-            <Button onClick={() => setCheckoutOpen(true)}>
-              <HugeiconsIcon icon={Rocket01Icon} size={16} />
-              Fazer upgrade
-            </Button>
           </CardContent>
         </Card>
       )}
@@ -267,46 +238,24 @@ function BillingSettingsPage() {
                 </p>
               )}
             </div>
-            <div className="flex gap-2">
-              {subscription?.status !== 'CANCELED' &&
-                subscription?.planId !== 'FREE' && (
-                  <AlertDialog>
-                    <AlertDialogTrigger
-                      render={<Button variant="outline" size="sm" />}
-                    >
-                      Cancelar
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          Cancelar assinatura?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Você perderá acesso aos recursos premium ao final do
-                          período atual. Essa acão não pode ser desfeita.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Manter assinatura</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => cancelMutation.mutate()}
-                          disabled={cancelMutation.isPending}
-                        >
-                          {cancelMutation.isPending
-                            ? 'Cancelando...'
-                            : 'Confirmar cancelamento'}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-              <Button onClick={() => setCheckoutOpen(true)}>
-                <HugeiconsIcon icon={Rocket01Icon} size={16} />
-                {subscription?.planId === 'FREE' || !subscription
-                  ? 'Fazer upgrade'
-                  : 'Mudar plano'}
-              </Button>
-            </div>
+            <AlertDialog>
+              <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
+                Como alterar o plano?
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Alterações comerciais são internas</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    O ambiente beta usa emissão comercial interna. Solicite a
+                    mudança de plano, renovação ou nova cobrança ao time da
+                    CalibraFácil.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <Button variant="outline">Entendi</Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
 
           {/* Usage Meters */}
@@ -424,13 +373,13 @@ function BillingSettingsPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          {payment.asaasInvoiceUrl && (
+                          {payment.invoiceUrl && (
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() =>
                                 window.open(
-                                  payment.asaasInvoiceUrl!,
+                                  payment.invoiceUrl!,
                                   '_blank',
                                   'noopener,noreferrer',
                                 )
@@ -451,19 +400,6 @@ function BillingSettingsPage() {
         </Card>
       )}
 
-      {/* Checkout Dialog */}
-      <CheckoutDialog
-        open={checkoutOpen}
-        onOpenChange={setCheckoutOpen}
-        currentPlanId={
-          (subscription?.planId &&
-          isValidPlanId(subscription.planId)
-            ? subscription.planId
-            : undefined) ??
-          accessPlanId ??
-          'FREE'
-        }
-      />
     </div>
   )
 }
@@ -490,6 +426,6 @@ interface PaymentRecord {
   status: string
   paymentMethod: string
   createdAt: string
-  asaasInvoiceUrl?: string | null
-  asaasBankSlipUrl?: string | null
+  invoiceUrl?: string | null
+  bankSlipUrl?: string | null
 }

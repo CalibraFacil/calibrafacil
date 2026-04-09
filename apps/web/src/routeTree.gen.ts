@@ -22,10 +22,12 @@ import { Route as BackofficeIndexRouteImport } from './routes/backoffice/index'
 import { Route as OnboardingOrganizationRouteImport } from './routes/onboarding/organization'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard/reports'
 import { Route as DashboardCustomerSuccessRouteImport } from './routes/dashboard/customer-success'
+import { Route as CheckoutTokenRouteImport } from './routes/checkout/$token'
 import { Route as BackofficeUsersRouteImport } from './routes/backoffice/users'
 import { Route as BackofficeSupportRouteImport } from './routes/backoffice/support'
 import { Route as BackofficeSignInRouteImport } from './routes/backoffice/sign-in'
 import { Route as BackofficeCustomerSuccessRouteImport } from './routes/backoffice/customer-success'
+import { Route as BackofficeCommercialCheckoutsRouteImport } from './routes/backoffice/commercial-checkouts'
 import { Route as BackofficeBootstrapRouteImport } from './routes/backoffice/bootstrap'
 import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitation/$id'
 import { Route as DashboardStandardsRouteRouteImport } from './routes/dashboard/standards/route'
@@ -169,6 +171,11 @@ const DashboardCustomerSuccessRoute =
     path: '/customer-success',
     getParentRoute: () => DashboardRouteRoute,
   } as any)
+const CheckoutTokenRoute = CheckoutTokenRouteImport.update({
+  id: '/checkout/$token',
+  path: '/checkout/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BackofficeUsersRoute = BackofficeUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -188,6 +195,12 @@ const BackofficeCustomerSuccessRoute =
   BackofficeCustomerSuccessRouteImport.update({
     id: '/customer-success',
     path: '/customer-success',
+    getParentRoute: () => BackofficeRouteRoute,
+  } as any)
+const BackofficeCommercialCheckoutsRoute =
+  BackofficeCommercialCheckoutsRouteImport.update({
+    id: '/commercial-checkouts',
+    path: '/commercial-checkouts',
     getParentRoute: () => BackofficeRouteRoute,
   } as any)
 const BackofficeBootstrapRoute = BackofficeBootstrapRouteImport.update({
@@ -620,10 +633,12 @@ export interface FileRoutesByFullPath {
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/backoffice/bootstrap': typeof BackofficeBootstrapRoute
+  '/backoffice/commercial-checkouts': typeof BackofficeCommercialCheckoutsRoute
   '/backoffice/customer-success': typeof BackofficeCustomerSuccessRoute
   '/backoffice/sign-in': typeof BackofficeSignInRoute
   '/backoffice/support': typeof BackofficeSupportRoute
   '/backoffice/users': typeof BackofficeUsersRoute
+  '/checkout/$token': typeof CheckoutTokenRoute
   '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
@@ -702,10 +717,12 @@ export interface FileRoutesByTo {
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/backoffice/bootstrap': typeof BackofficeBootstrapRoute
+  '/backoffice/commercial-checkouts': typeof BackofficeCommercialCheckoutsRoute
   '/backoffice/customer-success': typeof BackofficeCustomerSuccessRoute
   '/backoffice/sign-in': typeof BackofficeSignInRoute
   '/backoffice/support': typeof BackofficeSupportRoute
   '/backoffice/users': typeof BackofficeUsersRoute
+  '/checkout/$token': typeof CheckoutTokenRoute
   '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
@@ -795,10 +812,12 @@ export interface FileRoutesById {
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/backoffice/bootstrap': typeof BackofficeBootstrapRoute
+  '/backoffice/commercial-checkouts': typeof BackofficeCommercialCheckoutsRoute
   '/backoffice/customer-success': typeof BackofficeCustomerSuccessRoute
   '/backoffice/sign-in': typeof BackofficeSignInRoute
   '/backoffice/support': typeof BackofficeSupportRoute
   '/backoffice/users': typeof BackofficeUsersRoute
+  '/checkout/$token': typeof CheckoutTokenRoute
   '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
@@ -892,10 +911,12 @@ export interface FileRouteTypes {
     | '/dashboard/standards'
     | '/accept-invitation/$id'
     | '/backoffice/bootstrap'
+    | '/backoffice/commercial-checkouts'
     | '/backoffice/customer-success'
     | '/backoffice/sign-in'
     | '/backoffice/support'
     | '/backoffice/users'
+    | '/checkout/$token'
     | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
@@ -974,10 +995,12 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/accept-invitation/$id'
     | '/backoffice/bootstrap'
+    | '/backoffice/commercial-checkouts'
     | '/backoffice/customer-success'
     | '/backoffice/sign-in'
     | '/backoffice/support'
     | '/backoffice/users'
+    | '/checkout/$token'
     | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
@@ -1066,10 +1089,12 @@ export interface FileRouteTypes {
     | '/dashboard/standards'
     | '/accept-invitation/$id'
     | '/backoffice/bootstrap'
+    | '/backoffice/commercial-checkouts'
     | '/backoffice/customer-success'
     | '/backoffice/sign-in'
     | '/backoffice/support'
     | '/backoffice/users'
+    | '/checkout/$token'
     | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
@@ -1148,6 +1173,7 @@ export interface RootRouteChildren {
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosDeUsoRoute: typeof TermosDeUsoRoute
   AcceptInvitationIdRoute: typeof AcceptInvitationIdRoute
+  CheckoutTokenRoute: typeof CheckoutTokenRoute
   OnboardingOrganizationRoute: typeof OnboardingOrganizationRoute
   ResetPasswordIndexRoute: typeof ResetPasswordIndexRoute
   SignInIndexRoute: typeof SignInIndexRoute
@@ -1247,6 +1273,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardCustomerSuccessRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/checkout/$token': {
+      id: '/checkout/$token'
+      path: '/checkout/$token'
+      fullPath: '/checkout/$token'
+      preLoaderRoute: typeof CheckoutTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/backoffice/users': {
       id: '/backoffice/users'
       path: '/users'
@@ -1273,6 +1306,13 @@ declare module '@tanstack/react-router' {
       path: '/customer-success'
       fullPath: '/backoffice/customer-success'
       preLoaderRoute: typeof BackofficeCustomerSuccessRouteImport
+      parentRoute: typeof BackofficeRouteRoute
+    }
+    '/backoffice/commercial-checkouts': {
+      id: '/backoffice/commercial-checkouts'
+      path: '/commercial-checkouts'
+      fullPath: '/backoffice/commercial-checkouts'
+      preLoaderRoute: typeof BackofficeCommercialCheckoutsRouteImport
       parentRoute: typeof BackofficeRouteRoute
     }
     '/backoffice/bootstrap': {
@@ -1829,6 +1869,7 @@ const BackofficeOrganizationsRouteRouteWithChildren =
 interface BackofficeRouteRouteChildren {
   BackofficeOrganizationsRouteRoute: typeof BackofficeOrganizationsRouteRouteWithChildren
   BackofficeBootstrapRoute: typeof BackofficeBootstrapRoute
+  BackofficeCommercialCheckoutsRoute: typeof BackofficeCommercialCheckoutsRoute
   BackofficeCustomerSuccessRoute: typeof BackofficeCustomerSuccessRoute
   BackofficeSignInRoute: typeof BackofficeSignInRoute
   BackofficeSupportRoute: typeof BackofficeSupportRoute
@@ -1840,6 +1881,7 @@ const BackofficeRouteRouteChildren: BackofficeRouteRouteChildren = {
   BackofficeOrganizationsRouteRoute:
     BackofficeOrganizationsRouteRouteWithChildren,
   BackofficeBootstrapRoute: BackofficeBootstrapRoute,
+  BackofficeCommercialCheckoutsRoute: BackofficeCommercialCheckoutsRoute,
   BackofficeCustomerSuccessRoute: BackofficeCustomerSuccessRoute,
   BackofficeSignInRoute: BackofficeSignInRoute,
   BackofficeSupportRoute: BackofficeSupportRoute,
@@ -2183,6 +2225,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacidadeRoute: PrivacidadeRoute,
   TermosDeUsoRoute: TermosDeUsoRoute,
   AcceptInvitationIdRoute: AcceptInvitationIdRoute,
+  CheckoutTokenRoute: CheckoutTokenRoute,
   OnboardingOrganizationRoute: OnboardingOrganizationRoute,
   ResetPasswordIndexRoute: ResetPasswordIndexRoute,
   SignInIndexRoute: SignInIndexRoute,

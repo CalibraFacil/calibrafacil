@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db } from "@calibra-facil/db";
-import { paymentHistory } from "@calibra-facil/db/schema";
+import { paymentRecord } from "@calibra-facil/db/schema";
 import { eq, desc } from "drizzle-orm";
 import {
   withLabPermission,
@@ -32,9 +32,9 @@ export const paymentsRouter = new Hono<{ Variables: AuthVariables }>()
 
     const payments = await db
       .select()
-      .from(paymentHistory)
-      .where(eq(paymentHistory.organizationId, memberData.organizationId))
-      .orderBy(desc(paymentHistory.createdAt))
+      .from(paymentRecord)
+      .where(eq(paymentRecord.organizationId, memberData.organizationId))
+      .orderBy(desc(paymentRecord.createdAt))
       .limit(limit)
       .offset(offset);
 
@@ -52,8 +52,8 @@ export const paymentsRouter = new Hono<{ Variables: AuthVariables }>()
       const paymentId = parseInt(c.req.param("paymentId"));
       const memberData = c.get("member");
 
-      const payment = await db.query.paymentHistory.findFirst({
-        where: eq(paymentHistory.id, paymentId),
+      const payment = await db.query.paymentRecord.findFirst({
+        where: eq(paymentRecord.id, paymentId),
       });
 
       if (!payment || payment.organizationId !== memberData.organizationId) {

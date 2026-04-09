@@ -16,6 +16,8 @@ export type AsaasBillingType =
   | "PIX"
   | "UNDEFINED";
 
+export type AsaasCheckoutChargeType = "DETACHED" | "RECURRENT";
+
 /**
  * Asaas billing cycles
  */
@@ -205,6 +207,16 @@ export interface AsaasPayment {
   };
 }
 
+export interface CreatePaymentInput {
+  customer: string;
+  billingType: AsaasBillingType;
+  value: number;
+  dueDate: string;
+  description?: string;
+  externalReference?: string;
+  callback?: AsaasCheckoutCallback;
+}
+
 export interface AsaasPaymentList {
   object: "list";
   hasMore: boolean;
@@ -212,6 +224,66 @@ export interface AsaasPaymentList {
   limit: number;
   offset: number;
   data: AsaasPayment[];
+}
+
+// =============================================================================
+// CHECKOUT TYPES
+// =============================================================================
+
+export interface AsaasCheckoutItem {
+  name: string;
+  description?: string;
+  quantity: number;
+  value: number;
+}
+
+export interface AsaasCheckoutCustomerData {
+  name: string;
+  cpfCnpj: string;
+  email?: string;
+  phone?: string;
+  postalCode?: string;
+  address?: string;
+  addressNumber?: string;
+  complement?: string;
+  province?: string;
+  city?: string | number;
+  state?: string;
+}
+
+export interface AsaasCheckoutCallback {
+  successUrl?: string;
+  cancelUrl?: string;
+  expiredUrl?: string;
+  autoRedirect?: boolean;
+}
+
+export interface CreateCheckoutInput {
+  billingTypes: AsaasBillingType[];
+  chargeTypes: AsaasCheckoutChargeType[];
+  customer?: string;
+  customerData?: AsaasCheckoutCustomerData;
+  items: AsaasCheckoutItem[];
+  minutesToExpire?: number;
+  dueDateLimitDays?: number;
+  callback?: AsaasCheckoutCallback;
+  externalReference?: string;
+  subscription?: {
+    cycle: AsaasCycle;
+    nextDueDate: string;
+    endDate?: string;
+  };
+}
+
+export interface AsaasCheckout {
+  id: string;
+  url: string;
+  billingTypes: AsaasBillingType[];
+  chargeTypes: AsaasCheckoutChargeType[];
+  externalReference?: string;
+  status?: string;
+  customer?: string;
+  createdDate?: string;
 }
 
 // =============================================================================
@@ -244,6 +316,11 @@ export type AsaasWebhookEventType =
   | "PAYMENT_DUNNING_REQUESTED"
   | "PAYMENT_BANK_SLIP_VIEWED"
   | "PAYMENT_CHECKOUT_VIEWED"
+  // Checkout events
+  | "CHECKOUT_CREATED"
+  | "CHECKOUT_EXPIRED"
+  | "CHECKOUT_CANCELED"
+  | "CHECKOUT_PAID"
   // Subscription events
   | "SUBSCRIPTION_CREATED"
   | "SUBSCRIPTION_UPDATED"
@@ -258,6 +335,7 @@ export interface AsaasWebhookPayload {
   dateCreated?: string;
   payment?: AsaasPayment;
   subscription?: AsaasSubscription;
+  checkout?: AsaasCheckout;
 }
 
 // =============================================================================
