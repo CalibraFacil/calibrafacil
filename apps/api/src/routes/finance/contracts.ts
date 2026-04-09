@@ -10,6 +10,10 @@ import {
   customer,
 } from "@calibra-facil/db/schema";
 import { type CommercialAgreementStatus } from "@calibra-facil/shared";
+import {
+  loadCustomerActiveCommercialAgreement,
+  syncComplianceWithActiveAgreement,
+} from "../../lib/finance";
 import { withInvalidation } from "../../middleware/cache";
 import { withLabPermission, type AuthVariables } from "../../middleware/permission";
 import { requireFeature } from "../../middleware/tier-guard";
@@ -62,6 +66,7 @@ async function getAgreementById(organizationId: string, agreementId: number) {
       organizationId: commercialAgreement.organizationId,
       customerId: commercialAgreement.customerId,
       customerName: customer.name,
+      customerCompliance: customer.compliance,
       status: commercialAgreement.status,
       agreementCode: commercialAgreement.agreementCode,
       title: commercialAgreement.title,
@@ -110,6 +115,53 @@ async function getAgreementById(organizationId: string, agreementId: number) {
     unitIds: unitScopes.map((unit) => unit.unitId),
     serviceTerms,
   };
+}
+
+async function syncCustomerComplianceContract(
+  organizationId: string,
+  customerId: number,
+) {
+  const [currentCustomer] = await db
+    .select({
+      compliance: customer.compliance,
+    })
+    .from(customer)
+    .where(
+      and(
+        eq(customer.id, customerId),
+        eq(customer.labOrganizationId, organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!currentCustomer) {
+    return null;
+  }
+
+  const activeCommercialAgreement = await loadCustomerActiveCommercialAgreement(
+    organizationId,
+    customerId,
+  );
+  const nextCompliance = syncComplianceWithActiveAgreement(
+    currentCustomer.compliance,
+    activeCommercialAgreement,
+  );
+
+  const [updatedCustomer] = await db
+    .update(customer)
+    .set({
+      compliance: nextCompliance,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(customer.id, customerId),
+        eq(customer.labOrganizationId, organizationId),
+      ),
+    )
+    .returning();
+
+  return updatedCustomer ?? null;
 }
 
 export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
@@ -321,6 +373,13 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
         return [agreement];
       });
 
+      if ((input.status ?? existing.status) === "ACTIVE") {
+        const customerIdsToSync = new Set([existing.customerId, input.customerId]);
+        for (const customerId of customerIdsToSync) {
+          await syncCustomerComplianceContract(member.organizationId, customerId);
+        }
+      }
+
       return c.json({ data: updated });
     },
   )
@@ -365,6 +424,11 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
         )
         .returning();
 
+      await syncCustomerComplianceContract(
+        member.organizationId,
+        existing.customerId,
+      );
+
       return c.json({ data: updated });
     },
   )
@@ -400,6 +464,11 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
       if (!updated) {
         return c.json({ error: "Contrato nao encontrado" }, 404);
       }
+
+      await syncCustomerComplianceContract(
+        member.organizationId,
+        updated.customerId,
+      );
 
       return c.json({ data: updated });
     },

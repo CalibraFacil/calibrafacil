@@ -37,7 +37,6 @@ import {
 } from '@/components/ui/empty'
 import {
   Field,
-  FieldDescription,
   FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
@@ -382,13 +381,8 @@ function FinanceDocumentsPage() {
                         inputMode="decimal"
                         value={discountAmount}
                         onChange={(event) => setDiscountAmount(event.target.value)}
-                        placeholder="0,00"
+                        placeholder="R$ 150,00"
                       />
-                      <FieldDescription>
-                        Informe o valor do desconto em {FINANCE_CURRENCY_LABEL},
-                        por
-                        exemplo 150,00.
-                      </FieldDescription>
                     </Field>
                   </FieldGroup>
 

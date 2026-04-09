@@ -38,12 +38,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -84,20 +79,28 @@ type SelectOption = {
 
 type ServiceTermDraft = {
   serviceId: string
-  priceCents: string
-  currency: string
+  priceAmount: string
 }
 
 function createEmptyServiceTerm(): ServiceTermDraft {
   return {
     serviceId: '',
-    priceCents: '',
-    currency: 'BRL',
+    priceAmount: '',
   }
 }
 
 const FINANCE_CURRENCY = 'BRL'
-const FINANCE_CURRENCY_LABEL = 'R$'
+
+function parseCurrencyInputToCents(value: string) {
+  const normalized = value.replace(/\s/g, '').replace(',', '.')
+  const parsed = Number.parseFloat(normalized)
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0
+  }
+
+  return Math.round(parsed * 100)
+}
 
 export const Route = createFileRoute('/dashboard/finance/contracts')({
   head: () => ({
@@ -194,8 +197,8 @@ function FinanceContractsPage() {
         unitIds: [],
         serviceTerms: serviceTerms.map((term) => ({
           serviceId: Number(term.serviceId),
-          priceCents: Number(term.priceCents),
-          currency: term.currency,
+          priceCents: parseCurrencyInputToCents(term.priceAmount),
+          currency: FINANCE_CURRENCY,
           isActive: true,
         })),
       }
@@ -393,20 +396,11 @@ function FinanceContractsPage() {
                   <div className="space-y-1">
                     <h3 className="font-medium">Condições comerciais</h3>
                     <p className="text-muted-foreground text-sm">
-                      Vigência, operação em Real brasileiro e prazo padrão
-                      usados na emissão.
+                      Vigência e prazo padrão usados na emissão.
                     </p>
                   </div>
 
                   <FieldGroup className="grid gap-4 md:grid-cols-2">
-                    <Field>
-                      <FieldLabel>Moeda base</FieldLabel>
-                      <Input value={FINANCE_CURRENCY_LABEL} disabled />
-                      <FieldDescription>
-                        O módulo financeiro opera somente em Real brasileiro.
-                      </FieldDescription>
-                    </Field>
-
                     <Field>
                       <FieldLabel>Prazo padrão de pagamento</FieldLabel>
                       <Input
@@ -491,14 +485,13 @@ function FinanceContractsPage() {
                       key={`${index}-${term.serviceId}`}
                       className="rounded-2xl border bg-background p-4 shadow-sm"
                     >
-                      <div className="hidden grid-cols-[minmax(0,2fr)_180px_140px_48px] gap-4 border-b px-1 pb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase md:grid">
+                      <div className="hidden grid-cols-[minmax(0,2fr)_220px_48px] gap-4 border-b px-1 pb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase md:grid">
                         <span>Serviço</span>
-                        <span>Preço (centavos)</span>
-                        <span>Moeda</span>
+                        <span>Preço negociado</span>
                         <span className="sr-only">Ações</span>
                       </div>
 
-                      <div className="mt-0 grid gap-4 md:mt-4 md:grid-cols-[minmax(0,2fr)_180px_140px_48px]">
+                      <div className="mt-0 grid gap-4 md:mt-4 md:grid-cols-[minmax(0,2fr)_220px_48px]">
                         <Field>
                           <FieldLabel className="md:sr-only">Serviço</FieldLabel>
                           <Select
@@ -514,11 +507,12 @@ function FinanceContractsPage() {
                                     ? {
                                         ...entry,
                                         serviceId: value,
-                                        priceCents:
+                                        priceAmount:
                                           selectedService?.price != null
-                                            ? String(selectedService.price)
-                                            : entry.priceCents,
-                                        currency: FINANCE_CURRENCY,
+                                            ? (selectedService.price / 100)
+                                                .toFixed(2)
+                                                .replace('.', ',')
+                                            : entry.priceAmount,
                                       }
                                     : entry,
                                 ),
@@ -542,35 +536,22 @@ function FinanceContractsPage() {
                         </Field>
 
                         <Field>
-                          <FieldLabel className="md:sr-only">
-                            Preço (centavos)
-                          </FieldLabel>
+                          <FieldLabel className="md:sr-only">Preço negociado</FieldLabel>
                           <Input
-                            type="number"
-                            min={0}
-                            value={term.priceCents}
+                            type="text"
+                            inputMode="decimal"
+                            value={term.priceAmount}
                             onChange={(event) =>
                               setServiceTerms((current) =>
                                 current.map((entry, entryIndex) =>
                                   entryIndex === index
-                                    ? { ...entry, priceCents: event.target.value }
+                                    ? { ...entry, priceAmount: event.target.value }
                                     : entry,
                                 ),
                               )
                             }
+                            placeholder="R$ 150,00"
                           />
-                        </Field>
-
-                        <Field>
-                          <FieldLabel className="md:sr-only">Moeda</FieldLabel>
-                          <Select
-                            value={FINANCE_CURRENCY}
-                            disabled
-                          >
-                            <SelectTrigger className="w-full">
-                              <span>{FINANCE_CURRENCY_LABEL}</span>
-                            </SelectTrigger>
-                          </Select>
                         </Field>
 
                         <div className="flex items-end md:justify-end">
@@ -597,13 +578,13 @@ function FinanceContractsPage() {
                         </div>
                       </div>
 
-                      {term.serviceId && term.priceCents && (
+                      {term.serviceId && term.priceAmount && (
                         <label className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
                           <Checkbox checked={true} disabled />
                           Snapshot inicial estimado:{' '}
                           {formatFinanceMoney(
-                            Number(term.priceCents || 0),
-                            term.currency,
+                            parseCurrencyInputToCents(term.priceAmount),
+                            FINANCE_CURRENCY,
                           )}
                         </label>
                       )}

@@ -1,5 +1,6 @@
 import { db } from "@calibra-facil/db";
 import {
+  type CustomerCompliance,
   billingDocument,
   billingDocumentItem,
   commercialAgreement,
@@ -63,12 +64,29 @@ export type CustomerFinancialSummary = {
   overdueBalanceFlag: boolean;
 };
 
+export type ActiveCommercialAgreementSummary = {
+  id: number;
+  agreementCode: string | null;
+  title: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  currency: string;
+  defaultPaymentTermDays: number;
+};
+
 type AgreementResolution = {
   agreement: typeof commercialAgreement.$inferSelect;
   term: typeof commercialAgreementServiceTerm.$inferSelect | null;
 } | null;
 
 const OPERATIONAL_FINANCE_SYSTEM_VERSION = "finance-v1";
+
+function getAgreementDisplayCode(agreement: {
+  agreementCode: string | null;
+  id: number;
+}) {
+  return agreement.agreementCode?.trim() || `Contrato #${agreement.id}`;
+}
 
 function getIntegrationsMasterKey(env: IntegrationsEnv) {
   if (!env.INTEGRATIONS_MASTER_KEY) {
@@ -241,6 +259,99 @@ async function resolveApplicableAgreement(
   }
 
   return null;
+}
+
+export async function loadCustomerActiveCommercialAgreement(
+  organizationId: string,
+  customerId: number,
+  executor?: FinanceDbExecutor,
+): Promise<ActiveCommercialAgreementSummary | null> {
+  const runner = executor ?? db;
+  const now = new Date();
+
+  const [agreement] = await runner
+    .select({
+      id: commercialAgreement.id,
+      agreementCode: commercialAgreement.agreementCode,
+      title: commercialAgreement.title,
+      effectiveFrom: commercialAgreement.effectiveFrom,
+      effectiveTo: commercialAgreement.effectiveTo,
+      currency: commercialAgreement.currency,
+      defaultPaymentTermDays: commercialAgreement.defaultPaymentTermDays,
+    })
+    .from(commercialAgreement)
+    .where(
+      and(
+        eq(commercialAgreement.organizationId, organizationId),
+        eq(commercialAgreement.customerId, customerId),
+        eq(commercialAgreement.status, "ACTIVE" satisfies CommercialAgreementStatus),
+        lte(commercialAgreement.effectiveFrom, now),
+        or(
+          isNull(commercialAgreement.effectiveTo),
+          gte(commercialAgreement.effectiveTo, now),
+        ),
+      ),
+    )
+    .orderBy(desc(commercialAgreement.effectiveFrom), desc(commercialAgreement.id))
+    .limit(1);
+
+  if (!agreement) {
+    return null;
+  }
+
+  return {
+    ...agreement,
+    effectiveFrom: agreement.effectiveFrom.toISOString(),
+    effectiveTo: agreement.effectiveTo?.toISOString() ?? null,
+  };
+}
+
+export function syncComplianceWithActiveAgreement(
+  currentCompliance: CustomerCompliance | null | undefined,
+  activeAgreement: ActiveCommercialAgreementSummary | null,
+): CustomerCompliance {
+  const baseCompliance: CustomerCompliance = {
+    qualificationStatus: currentCompliance?.qualificationStatus ?? "pending",
+    qualityRequirementsAcknowledged:
+      currentCompliance?.qualityRequirementsAcknowledged ?? false,
+    qualificationDate: currentCompliance?.qualificationDate,
+    qualificationExpiresAt: currentCompliance?.qualificationExpiresAt,
+    contractAgreementId: currentCompliance?.contractAgreementId,
+    contractNumber: currentCompliance?.contractNumber,
+    contractSignedAt: currentCompliance?.contractSignedAt,
+    contractExpiresAt: currentCompliance?.contractExpiresAt,
+    qualityRequirementsAcknowledgedAt:
+      currentCompliance?.qualityRequirementsAcknowledgedAt,
+    notes: currentCompliance?.notes,
+  };
+
+  if (!activeAgreement) {
+    return {
+      ...baseCompliance,
+      contractAgreementId: undefined,
+      contractNumber: undefined,
+      contractSignedAt: undefined,
+      contractExpiresAt: undefined,
+      qualityRequirementsAcknowledged: false,
+      qualityRequirementsAcknowledgedAt: undefined,
+    };
+  }
+
+  const agreementChanged = baseCompliance.contractAgreementId !== activeAgreement.id;
+
+  return {
+    ...baseCompliance,
+    contractAgreementId: activeAgreement.id,
+    contractNumber: getAgreementDisplayCode(activeAgreement),
+    contractExpiresAt: activeAgreement.effectiveTo ?? undefined,
+    ...(agreementChanged
+      ? {
+          contractSignedAt: undefined,
+          qualityRequirementsAcknowledged: false,
+          qualityRequirementsAcknowledgedAt: undefined,
+        }
+      : {}),
+  };
 }
 
 export async function ensureJobCommercialSnapshot(

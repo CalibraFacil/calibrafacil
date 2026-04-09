@@ -55,6 +55,9 @@ interface Customer {
   id: number
   name: string
   taxId: string | null
+  compliance?: {
+    qualificationStatus?: 'pending' | 'qualified' | 'suspended' | 'expired'
+  } | null
 }
 
 interface Asset {
@@ -218,6 +221,9 @@ function NewJobPage() {
   const selectedCustomerName = useMemo(() => {
     return selectedCustomer?.name || ''
   }, [selectedCustomer])
+
+  const selectedCustomerIsSuspended =
+    selectedCustomer?.compliance?.qualificationStatus === 'suspended'
 
   const selectedAssetDisplayName = useMemo(() => {
     if (!selectedAsset) return ''
@@ -395,6 +401,12 @@ function NewJobPage() {
                     </Combobox>
                     {errors.customerId && (
                       <FieldError>{errors.customerId}</FieldError>
+                    )}
+                    {selectedCustomerIsSuspended && (
+                      <FieldError>
+                        Cliente suspenso. Reative a qualificação em
+                        Conformidade antes de criar novas ordens de serviço.
+                      </FieldError>
                     )}
                   </Field>
 
@@ -598,6 +610,7 @@ function NewJobPage() {
                       type="submit"
                       disabled={
                         createMutation.isPending ||
+                        selectedCustomerIsSuspended ||
                         !formData.customerId ||
                         !formData.assetId ||
                         !formData.serviceId

@@ -139,7 +139,7 @@ function FinanceContractDetailsPage() {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <InfoItem label="Moeda" value={contract.currency} />
+          <InfoItem label="Moeda" value={contract.currency === 'BRL' ? 'R$' : contract.currency} />
           <InfoItem
             label="Vigência inicial"
             value={formatFinanceDate(contract.effectiveFrom)}
@@ -155,6 +155,52 @@ function FinanceContractDetailsPage() {
           <InfoItem
             label="Prazo padrão"
             value={`${contract.defaultPaymentTermDays} dias`}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Compatibilidade com Compliance</CardTitle>
+          <CardDescription>
+            O contrato ativo alimenta o cadastro de conformidade do cliente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <InfoItem
+            label="Status de qualificação"
+            value={
+              contract.customerCompliance?.qualificationStatus === 'qualified'
+                ? 'Qualificado'
+                : contract.customerCompliance?.qualificationStatus === 'suspended'
+                  ? 'Suspenso'
+                  : contract.customerCompliance?.qualificationStatus === 'expired'
+                    ? 'Expirado'
+                    : 'Pendente'
+            }
+          />
+          <InfoItem
+            label="Requisitos reconhecidos"
+            value={
+              contract.customerCompliance?.qualityRequirementsAcknowledged
+                ? 'Sim'
+                : 'Não'
+            }
+          />
+          <InfoItem
+            label="Reconhecimento do cliente"
+            value={
+              contract.customerCompliance?.contractSignedAt
+                ? formatFinanceDate(contract.customerCompliance.contractSignedAt)
+                : 'Não registrado'
+            }
+          />
+          <InfoItem
+            label="Contrato sincronizado"
+            value={
+              contract.customerCompliance?.contractNumber ||
+              `Contrato #${contract.id}`
+            }
           />
         </CardContent>
       </Card>

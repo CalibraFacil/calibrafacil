@@ -1071,6 +1071,7 @@ export type CustomerCompliance = {
   qualificationStatus: "pending" | "qualified" | "suspended" | "expired";
   qualificationDate?: string;
   qualificationExpiresAt?: string;
+  contractAgreementId?: number;
   contractNumber?: string;
   contractSignedAt?: string;
   contractExpiresAt?: string;
