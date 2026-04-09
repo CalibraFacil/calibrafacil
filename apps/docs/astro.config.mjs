@@ -45,10 +45,6 @@ export default defineConfig({
           items: [
             { label: "Painel e Dashboard", slug: "guia/painel" },
             {
-              label: "Planos, Cobrança e Entitlements",
-              slug: "guia/planos-e-entitlements",
-            },
-            {
               label: "Autenticação, SSO e API Keys",
               slug: "guia/autenticacao-sso-api",
             },
