@@ -92,8 +92,9 @@ async function getInvitationUrl(
   invitationId: string,
 ): Promise<string> {
   const baseUrl =
-    (await getPortalBaseUrlForClientOrganization(organizationId).catch(() => null)) ??
-    getPortalAppUrlFallback();
+    (await getPortalBaseUrlForClientOrganization(organizationId).catch(
+      () => null,
+    )) ?? getPortalAppUrlFallback();
 
   return `${baseUrl}/accept-invite?token=${invitationId}`;
 }
@@ -185,6 +186,21 @@ export async function createClientOrganizationAsServiceOwner(params: {
       name: params.name,
       slug: params.slug,
       type: "CLIENT",
+      cnpj: "",
+      accreditationNumber: "",
+      accreditationBody: "",
+      street: "",
+      number: "",
+      complement: "",
+      neighbourhood: "",
+      city: "",
+      state: "",
+      cep: "",
+      phone: "",
+      email: "",
+      website: "",
+      technicalManagerName: "",
+      technicalManagerTitle: "",
       userId: serviceUser.id,
       keepCurrentActiveOrganization: true,
     },

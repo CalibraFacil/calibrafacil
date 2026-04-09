@@ -15,7 +15,7 @@ export function getApiBaseUrl(): string {
     typeof window !== "undefined" ? window.location.hostname : "localhost";
 
   if (host === "localhost" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
-    return `https://${host}:3000`;
+    return `http://${host}:3000`;
   }
 
   return "https://api.calibrafacil.com";

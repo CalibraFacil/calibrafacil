@@ -236,7 +236,7 @@ function AcceptInvitePage() {
     }
   };
 
-  if (loading || sessionLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Spinner className="size-8" />
