@@ -16,7 +16,8 @@ pnpm turbo dev --filter=@calibra-facil/portal
 pnpm dev
 ```
 
-The app runs at `https://localhost:5174`.
+The app runs at `http://localhost:5174` by default.
+Set `VITE_DEV_HTTPS=true` if you explicitly need local HTTPS.
 
 ## Routes
 
