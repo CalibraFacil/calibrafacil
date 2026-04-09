@@ -222,6 +222,33 @@ function TermsOfUsePage() {
               de acreditação aplicáveis.
             </li>
           </ol>
+          <p>
+            <strong>5.2.</strong> Também constitui uso indevido da PLATAFORMA,
+            vedado ao LICENCIADO e a seus usuários:
+          </p>
+          <ol>
+            <li>
+              praticar engenharia reversa, desmontagem, descompilação ou
+              tentativa de obtenção indevida de código-fonte, modelos, regras de
+              cálculo ou estruturas internas da PLATAFORMA;
+            </li>
+            <li>
+              executar scraping, varredura automatizada, uso abusivo de API,
+              automações não autorizadas ou qualquer rotina que comprometa a
+              disponibilidade, segurança ou previsibilidade operacional do
+              serviço;
+            </li>
+            <li>
+              tentar contornar controles de autenticação, segregação de tenants,
+              permissões, trilhas de auditoria ou demais mecanismos de
+              segurança;
+            </li>
+            <li>
+              utilizar a PLATAFORMA para inserção de conteúdo ilícito, malware,
+              cargas maliciosas, fraudes ou qualquer operação incompatível com a
+              finalidade contratada.
+            </li>
+          </ol>
         </section>
 
         <section className="rounded-3xl border border-amber-500/30 bg-amber-500/8 px-6 py-5">
@@ -290,6 +317,19 @@ function TermsOfUsePage() {
             equivalente aos últimos 3 meses de assinatura efetivamente pagos
             pelo LICENCIADO.
           </p>
+          <p>
+            <strong>6.3.3.</strong> A limitação acima aplica-se apenas a danos
+            diretos comprovados e não abrange lucros cessantes, danos indiretos,
+            consequenciais, emergentes ampliados, perda de chance, perda
+            reputacional ou interrupções decorrentes de fatores externos ao
+            controle da LICENCIANTE.
+          </p>
+          <p>
+            <strong>6.3.4.</strong> Nada nesta cláusula exclui ou limita
+            responsabilidade por dolo, fraude, violação deliberada de dever de
+            confidencialidade ou hipóteses cuja limitação seja vedada pela
+            legislação aplicável.
+          </p>
         </section>
 
         <section>
@@ -337,6 +377,33 @@ function TermsOfUsePage() {
               </li>
             ))}
           </ul>
+          <h3>8.4. Do Tratamento por Conta do Controlador</h3>
+          <p>
+            <strong>8.4.1.</strong> Quando atuar como operadora, a LICENCIANTE
+            tratará dados pessoais exclusivamente conforme instruções lícitas,
+            documentadas e compatíveis com a finalidade contratada, emitidas
+            pelo LICENCIADO na condição de controlador.
+          </p>
+          <p>
+            <strong>8.4.2.</strong> A LICENCIANTE manterá obrigação de
+            confidencialidade aplicável a empregados, sócios, prepostos e
+            terceiros autorizados a acessar dados pessoais, em extensão
+            compatível com a natureza dos dados tratados.
+          </p>
+          <p>
+            <strong>8.4.3.</strong> A LICENCIANTE adotará medidas técnicas e
+            organizacionais compatíveis com o risco do tratamento, incluindo
+            controles de acesso, trilhas de auditoria, segregação lógica entre
+            organizações, gestão de credenciais e mecanismos razoáveis de
+            detecção e resposta a incidentes.
+          </p>
+          <p>
+            <strong>8.4.4.</strong> Mediante solicitação razoável e dentro dos
+            limites operacionais e legais aplicáveis, a LICENCIANTE auxiliará o
+            LICENCIADO em demandas relacionadas a direitos de titulares,
+            incidentes de segurança, avaliações de impacto e comprovação de
+            medidas de proteção adotadas no contexto do serviço.
+          </p>
         </section>
 
         <section>
@@ -373,6 +440,21 @@ function TermsOfUsePage() {
             maior e falhas de infraestrutura de terceiros fora de seu controle.
           </p>
           <p>
+            <strong>10.1.1.</strong> Para fins destes Termos, indisponibilidade
+            corresponde à impossibilidade generalizada de acesso às funções
+            essenciais da PLATAFORMA por falha atribuível diretamente à
+            infraestrutura ou ao software operado pela LICENCIANTE, aferida em
+            janelas mensais.
+          </p>
+          <p>
+            <strong>10.1.2.</strong> Não serão considerados como
+            indisponibilidade, para fins do cálculo acima, períodos de
+            manutenção programada previamente comunicados, eventos de segurança
+            que demandem contenção emergencial, falhas de conectividade do
+            LICENCIADO, indisponibilidade de provedores de terceiros, atos de
+            autoridade pública, caso fortuito ou força maior.
+          </p>
+          <p>
             <strong>10.2.</strong> O suporte técnico será prestado por canal
             eletrônico e pelo e-mail {LEGAL_ENTITY.email}, em dias úteis, das 9h
             às 18h, horário de Brasília, com atendimento inicial priorizado
@@ -382,6 +464,19 @@ function TermsOfUsePage() {
             <strong>10.3.</strong> Os prazos de atendimento referem-se à
             primeira resposta e não constituem compromisso de resolução
             definitiva dentro do mesmo período.
+          </p>
+          <p>
+            <strong>10.4.</strong> Salvo contratação específica em sentido
+            diverso, os níveis de serviço aqui descritos não geram créditos
+            automáticos, multas contratuais ou penalidades financeiras, servindo
+            como referência operacional padrão para a prestação do serviço.
+          </p>
+          <p>
+            <strong>10.5.</strong> A LICENCIANTE manterá rotinas razoáveis de
+            backup, redundância e recuperação operacional compatíveis com a
+            arquitetura da PLATAFORMA, sem prejuízo da recomendação de que o
+            LICENCIADO também realize exportações e salvaguardas próprias dos
+            dados críticos ao seu negócio.
           </p>
         </section>
 

@@ -1,5 +1,5 @@
 export const LEGAL_LAST_UPDATED = '09/04/2026'
-export const LEGAL_VERSION = '1.0'
+export const LEGAL_VERSION = '1.1'
 export const LEGAL_TECHNICAL_RETENTION_YEARS = 5
 
 export const LEGAL_ENTITY = {
@@ -14,7 +14,7 @@ export const LEGAL_ENTITY = {
   email: 'contato@calibrafacil.com',
   forum: 'Porto Alegre/RS',
   dpoName: 'Operador Exemplo',
-  dpoEmail: 'contato@calibrafacil.com',
+  dpoEmail: 'privacidade@calibrafacil.com',
   get cityState() {
     return `${this.city}/${this.state}`
   },

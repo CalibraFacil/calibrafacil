@@ -242,16 +242,37 @@ function PrivacyPolicyPage() {
           </p>
           <ul>
             <li>uso de HTTPS/TLS nas comunicações;</li>
-            <li>controles de autenticação e acesso;</li>
-            <li>isolamento lógico entre organizações;</li>
-            <li>rotinas de backup e monitoramento operacional;</li>
-            <li>logs de auditoria para rastreabilidade técnica.</li>
+            <li>
+              controles de autenticação, credenciais e permissões compatíveis
+              com o perfil de acesso e o contexto organizacional;
+            </li>
+            <li>
+              isolamento lógico entre organizações em arquitetura multi-tenant;
+            </li>
+            <li>
+              registros de auditoria imutáveis para rastreabilidade de eventos
+              técnicos e operacionais relevantes;
+            </li>
+            <li>
+              rotinas de backup, monitoramento operacional e procedimentos de
+              resposta a incidentes;
+            </li>
+            <li>
+              uso de provedores de infraestrutura que oferecem salvaguardas de
+              segurança compatíveis com serviços em nuvem de uso corporativo.
+            </li>
           </ul>
           <p>
             Em conformidade com os requisitos de integridade e rastreabilidade
             exigidos pela ABNT NBR ISO/IEC 17025:2017, a plataforma mantém logs
             de auditoria imutáveis sobre alterações relevantes em registros
             técnicos e operacionais.
+          </p>
+          <p>
+            Sempre que suportado pela arquitetura e pelos provedores
+            contratados, as salvaguardas incluem proteção de dados em repouso,
+            segregação de ambiente e controles de acesso administrativos
+            proporcionais ao risco do tratamento.
           </p>
         </section>
 
@@ -330,6 +351,54 @@ function PrivacyPolicyPage() {
             essenciais de navegação.
           </p>
           <p>
+            A base legal aplicável a esses cookies é a execução do contrato e,
+            quando cabível, o legítimo interesse relacionado à segurança,
+            estabilidade e continuidade do serviço.
+          </p>
+          <div className="not-prose overflow-x-auto">
+            <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-2xl border border-border/70 text-sm">
+              <thead className="bg-muted/40">
+                <tr>
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                    Tipo
+                  </th>
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                    Finalidade
+                  </th>
+                  <th className="border-b border-border/70 px-4 py-3 text-left font-medium">
+                    Duração
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  [
+                    'Cookies de sessão',
+                    'Autenticação e navegação segura durante a sessão ativa',
+                    'Expiram ao encerrar a sessão do navegador',
+                  ],
+                  [
+                    'Cookies persistentes de preferência',
+                    'Manutenção de preferências essenciais, como tema e contexto de navegação',
+                    'Até 12 meses, conforme a funcionalidade utilizada',
+                  ],
+                ].map(([kind, purpose, duration]) => (
+                  <tr key={kind}>
+                    <td className="border-b border-border/50 px-4 py-3 align-top font-medium">
+                      {kind}
+                    </td>
+                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                      {purpose}
+                    </td>
+                    <td className="border-b border-border/50 px-4 py-3 align-top">
+                      {duration}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p>
             O CalibraFácil não utiliza, nesta política, cookies de rastreamento
             publicitário de terceiros nem comercializa dados de navegação.
           </p>
@@ -373,6 +442,19 @@ function PrivacyPolicyPage() {
             ocorrerá conforme os mecanismos previstos no art. 33 da LGPD,
             incluindo cláusulas contratuais e garantias adequadas.
           </p>
+          <p>
+            Quando aplicável, a CalibraFácil utiliza instrumentos contratuais
+            com operadores e suboperadores contendo cláusulas padrão de proteção
+            de dados, obrigações equivalentes de confidencialidade, segurança e
+            tratamento limitado à finalidade contratada, além de medidas
+            suplementares compatíveis com o risco envolvido.
+          </p>
+          <p>
+            Entre as medidas suplementares que podem ser empregadas conforme o
+            caso estão controles de acesso, segregação lógica, minimização de
+            dados, trilhas de auditoria e revisão periódica da necessidade de
+            manutenção do fornecedor internacional no fluxo operacional.
+          </p>
         </section>
 
         <section>
@@ -385,8 +467,10 @@ function PrivacyPolicyPage() {
           </p>
           <p>
             Quando atuando como operadora, o CalibraFácil comunicará o
-            laboratório cliente controlador em prazo razoável e compatível com a
-            gravidade do evento.
+            laboratório cliente controlador sem atraso injustificado e em prazo
+            compatível com a gravidade do evento, fornecendo as informações
+            disponíveis para avaliação, contenção e eventual comunicação aos
+            titulares e autoridades competentes.
           </p>
         </section>
 
