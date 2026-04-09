@@ -16,6 +16,7 @@ import {
 import { eq, and, count, sql, gte, lte, inArray, desc } from "drizzle-orm";
 import { withCache } from "../middleware/cache";
 import { CACHE_TTL } from "../lib/cache";
+import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
 
 /**
@@ -215,11 +216,11 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Format trend data
         // db.execute returns array directly for postgres driver
-        const trendRows = trendResult as unknown as Array<{
+        const trendRows = getExecuteRows<{
           date: string;
           approved: string;
           rejected: string;
-        }>;
+        }>(trendResult);
         const calibrationTrend = trendRows.map((row) => ({
           date: row.date,
           approved: parseInt(row.approved, 10) || 0,
