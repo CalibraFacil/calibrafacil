@@ -103,7 +103,8 @@ export function NavUser() {
   const impersonatedBy =
     typeof (session.session as { impersonatedBy?: unknown }).impersonatedBy ===
     'string'
-      ? ((session.session as { impersonatedBy?: string }).impersonatedBy ?? null)
+      ? ((session.session as { impersonatedBy?: string }).impersonatedBy ??
+        null)
       : null
   const showBackoffice = !impersonatedBy && canAccessBackoffice(userRole)
 
@@ -147,13 +148,6 @@ export function NavUser() {
                   </div>
                 </div>
               </DropdownMenuLabel>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <HugeiconsIcon icon={SparklesIcon} />
-                Atualizar para Pro
-              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
