@@ -12,34 +12,13 @@ import {
   UserAdd02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import type {
+  NotificationPriority,
+  NotificationStatus,
+  NotificationType,
+} from '@calibra-facil/db/schema'
 
 import { cn } from '@/lib/utils'
-
-type NotificationType =
-  | 'JOB_SUBMITTED_FOR_REVIEW'
-  | 'JOB_APPROVED'
-  | 'JOB_REJECTED'
-  | 'JOB_ASSIGNED'
-  | 'CERTIFICATE_READY'
-  | 'CERTIFICATE_AMENDED'
-  | 'ASSET_DUE_FOR_RECALIBRATION'
-  | 'STANDARD_EXPIRING'
-  | 'STANDARD_EXPIRED'
-  | 'JOB_OVERDUE'
-  | 'PAYMENT_RECEIVED'
-  | 'PAYMENT_FAILED'
-  | 'NC_CREATED'
-  | 'NC_ESCALATED_TO_CAPA'
-  | 'CUSTOMER_SUCCESS_WORKFLOW_BLOCKED'
-  | 'CUSTOMER_SUCCESS_GO_LIVE_AT_RISK'
-  | 'CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE'
-  | 'CUSTOMER_SUCCESS_SLA_DUE_SOON'
-  | 'CUSTOMER_SUCCESS_SLA_BREACHED'
-  | 'CUSTOMER_SUCCESS_ESCALATION_REQUIRED'
-
-type NotificationPriority = 'HIGH' | 'MEDIUM' | 'LOW'
-
-type NotificationStatus = 'UNREAD' | 'READ' | 'ARCHIVED'
 
 interface Notification {
   id: number
@@ -72,6 +51,10 @@ const notificationIcons = {
   PAYMENT_FAILED: CancelCircleIcon,
   NC_CREATED: Alert02Icon,
   NC_ESCALATED_TO_CAPA: Alert02Icon,
+  COMPETENCE_EXPIRING: Calendar03Icon,
+  COMPETENCE_EXPIRED: Alert02Icon,
+  COMPETENCE_REQUESTED: UserAdd02Icon,
+  COMPETENCE_APPROVED: CheckmarkCircle02Icon,
   CUSTOMER_SUCCESS_WORKFLOW_BLOCKED: Alert02Icon,
   CUSTOMER_SUCCESS_GO_LIVE_AT_RISK: Alert02Icon,
   CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE: Calendar03Icon,
@@ -95,6 +78,10 @@ const notificationColors: Record<NotificationType, string> = {
   PAYMENT_FAILED: 'text-red-500',
   NC_CREATED: 'text-amber-500',
   NC_ESCALATED_TO_CAPA: 'text-red-500',
+  COMPETENCE_EXPIRING: 'text-amber-500',
+  COMPETENCE_EXPIRED: 'text-red-500',
+  COMPETENCE_REQUESTED: 'text-blue-500',
+  COMPETENCE_APPROVED: 'text-green-500',
   CUSTOMER_SUCCESS_WORKFLOW_BLOCKED: 'text-red-500',
   CUSTOMER_SUCCESS_GO_LIVE_AT_RISK: 'text-red-500',
   CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE: 'text-amber-500',

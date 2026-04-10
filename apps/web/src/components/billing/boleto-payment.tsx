@@ -51,6 +51,8 @@ export function BoletoPayment({
   onSuccess,
   onBack,
 }: BoletoPaymentProps) {
+  const billingCheckoutApi = (api.api.billing as unknown as { checkout: any })
+    .checkout
   const [subscriptionId, setSubscriptionId] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -60,7 +62,7 @@ export function BoletoPayment({
   // Create subscription with Boleto
   const checkoutMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.api.billing.checkout.boleto.$post({
+      const response = await billingCheckoutApi.boleto.$post({
         json: {
           planId: planId as Exclude<PlanId, 'FREE'>,
           cycle,
@@ -87,9 +89,7 @@ export function BoletoPayment({
     queryFn: async () => {
       if (!subscriptionId) return null
 
-      const response = await api.api.billing.checkout.status[
-        ':subscriptionId'
-      ].$get({
+      const response = await billingCheckoutApi.status[':subscriptionId'].$get({
         param: { subscriptionId: String(subscriptionId) },
       })
 

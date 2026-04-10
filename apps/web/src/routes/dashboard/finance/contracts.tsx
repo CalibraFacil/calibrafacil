@@ -355,7 +355,10 @@ function FinanceContractsPage() {
                   <FieldGroup className="grid gap-4 md:grid-cols-2">
                     <Field className="md:col-span-2">
                       <FieldLabel>Cliente</FieldLabel>
-                      <Select value={customerId || undefined} onValueChange={setCustomerId}>
+                      <Select
+                        value={customerId || undefined}
+                        onValueChange={(value) => setCustomerId(value ?? '')}
+                      >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Selecione um cliente" />
                         </SelectTrigger>
@@ -497,7 +500,8 @@ function FinanceContractsPage() {
                           <Select
                             value={term.serviceId || undefined}
                             onValueChange={(value) => {
-                              const selectedServiceId = Number(value)
+                              const nextServiceId = value ?? ''
+                              const selectedServiceId = Number(nextServiceId)
                               const selectedService =
                                 servicePriceLookup.get(selectedServiceId)
 
@@ -506,7 +510,7 @@ function FinanceContractsPage() {
                                   entryIndex === index
                                     ? {
                                         ...entry,
-                                        serviceId: value,
+                                        serviceId: nextServiceId,
                                         priceAmount:
                                           selectedService?.price != null
                                             ? (selectedService.price / 100)

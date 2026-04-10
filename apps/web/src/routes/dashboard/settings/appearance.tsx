@@ -134,8 +134,13 @@ function AppearanceSettingsPage() {
                 </p>
               </div>
             </div>
-            <Button asChild className="mt-4" variant="outline">
-              <Link to="/dashboard/settings/branding">Abrir branding</Link>
+            <Button
+              className="mt-4"
+              variant="outline"
+              nativeButton={false}
+              render={<Link to="/dashboard/settings/branding" />}
+            >
+              Abrir branding
             </Button>
           </div>
 
@@ -152,10 +157,13 @@ function AppearanceSettingsPage() {
                 </p>
               </div>
             </div>
-            <Button asChild className="mt-4" variant="outline">
-              <Link to="/dashboard/settings/portal-domain">
-                Abrir domínio do portal
-              </Link>
+            <Button
+              className="mt-4"
+              variant="outline"
+              nativeButton={false}
+              render={<Link to="/dashboard/settings/portal-domain" />}
+            >
+              Abrir domínio do portal
             </Button>
           </div>
         </CardContent>

@@ -130,7 +130,7 @@ async function fetchSsoSettings(): Promise<SsoSettingsResponse> {
     )
   }
 
-  return res.json()
+  return (await res.json()) as SsoSettingsResponse
 }
 
 function AuthenticationSettingsPage() {
@@ -323,14 +323,18 @@ function ApiKeysCard() {
                 para organizações com entitlement ativo e sessão válida.
               </p>
             </div>
-            <Button asChild type="button" variant="outline">
-              <a
-                href={apiReferenceUrl}
-                target="_blank"
-                rel="noreferrer nofollow"
-              >
-                Abrir referência
-              </a>
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={
+                <a
+                  href={apiReferenceUrl}
+                  target="_blank"
+                  rel="noreferrer nofollow"
+                />
+              }
+            >
+              Abrir referência
             </Button>
           </div>
         )}
@@ -651,6 +655,10 @@ function SsoSettingsCard({
   }
 
   const data = ssoQuery.data
+  if (!data) {
+    return <SsoSkeleton />
+  }
+
   const provider = data.provider
   const canManage = data.access.canManage
   const hasSso = data.billing.hasSso

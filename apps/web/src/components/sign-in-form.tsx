@@ -19,6 +19,10 @@ interface SignInFormProps extends React.ComponentProps<'form'> {
   mode?: 'lab' | 'backoffice'
 }
 
+interface SsoStartResponse {
+  url: string
+}
+
 export function SignInForm({
   className,
   redirect,
@@ -114,7 +118,7 @@ export function SignInForm({
         return
       }
 
-      const data = await res.json()
+      const data = (await res.json()) as SsoStartResponse
       if (!data.url) {
         setError('Falha ao iniciar login via SSO')
         return

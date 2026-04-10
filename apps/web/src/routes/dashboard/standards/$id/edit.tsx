@@ -427,7 +427,7 @@ function EditStandardForm({
     value: FormData[TKey],
   ) => {
     if (!formData) return
-    setFormData((prev) => (prev ? { ...prev, [field]: value } : null))
+    setFormData((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
@@ -435,29 +435,21 @@ function EditStandardForm({
 
   const addCertifiedValue = () => {
     if (!formData) return
-    setFormData((prev) =>
-      prev
-        ? {
-            ...prev,
-            certifiedValues: [
-              ...prev.certifiedValues,
-              { nominal: '', value: '', uncertainty: '', unit: '' },
-            ],
-          }
-        : null,
-    )
+    setFormData((prev) => ({
+      ...prev,
+      certifiedValues: [
+        ...prev.certifiedValues,
+        { nominal: '', value: '', uncertainty: '', unit: '' },
+      ],
+    }))
   }
 
   const removeCertifiedValue = (index: number) => {
     if (!formData) return
-    setFormData((prev) =>
-      prev
-        ? {
-            ...prev,
-            certifiedValues: prev.certifiedValues.filter((_, i) => i !== index),
-          }
-        : null,
-    )
+    setFormData((prev) => ({
+      ...prev,
+      certifiedValues: prev.certifiedValues.filter((_, i) => i !== index),
+    }))
   }
 
   const updateCertifiedValue = (
@@ -466,16 +458,12 @@ function EditStandardForm({
     value: string,
   ) => {
     if (!formData) return
-    setFormData((prev) =>
-      prev
-        ? {
-            ...prev,
-            certifiedValues: prev.certifiedValues.map((cv, i) =>
-              i === index ? { ...cv, [field]: value } : cv,
-            ),
-          }
-        : null,
-    )
+    setFormData((prev) => ({
+      ...prev,
+      certifiedValues: prev.certifiedValues.map((cv, i) =>
+        i === index ? { ...cv, [field]: value } : cv,
+      ),
+    }))
   }
 
   const openRenewDialog = () => {

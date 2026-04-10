@@ -29,7 +29,7 @@ function BackofficeOrganizationDetailPage() {
         throw new Error('Falha ao carregar organização')
       }
 
-      return res.json() as Promise<{
+      return res.json() as unknown as Promise<{
         organization: {
           id: string
           name: string
@@ -85,16 +85,17 @@ function BackofficeOrganizationDetailPage() {
                 {isMultiUnit ? 'Conta multiunidade' : 'Conta mono-unidade'}
               </Badge>
               <Button
-                asChild
                 variant="outline"
                 size="sm"
+                nativeButton={false}
+                render={
+                  <Link
+                    to="/backoffice/commercial-checkouts"
+                    search={{ organizationId: data.organization.id }}
+                  />
+                }
               >
-                <Link
-                  to="/backoffice/commercial-checkouts"
-                  search={{ organizationId: data.organization.id }}
-                >
-                  Abrir comercial
-                </Link>
+                Abrir comercial
               </Button>
             </div>
           </div>

@@ -115,6 +115,8 @@ export function CreditCardForm({
   cycle,
   onSuccess,
 }: CreditCardFormProps) {
+  const billingCheckoutApi = (api.api.billing as unknown as { checkout: any })
+    .checkout
   const [formData, setFormData] = useState<CardFormData>({
     holderName: '',
     number: '',
@@ -148,7 +150,7 @@ export function CreditCardForm({
       }
 
       // Step 1: Tokenize card data (PCI-DSS compliant)
-      const tokenizeResponse = await api.api.billing.checkout.tokenize.$post({
+      const tokenizeResponse = await billingCheckoutApi.tokenize.$post({
         json: {
           creditCard: {
             holderName: data.holderName,
@@ -171,7 +173,7 @@ export function CreditCardForm({
       const tokenData = await tokenizeResponse.json()
 
       // Step 2: Create subscription using token (no raw card data)
-      const response = await api.api.billing.checkout['credit-card'].$post({
+      const response = await billingCheckoutApi['credit-card'].$post({
         json: {
           planId: planId as Exclude<PlanId, 'FREE'>,
           cycle,

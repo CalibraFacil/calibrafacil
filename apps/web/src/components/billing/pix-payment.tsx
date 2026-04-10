@@ -31,6 +31,8 @@ export function PixPayment({
   onSuccess,
   onBack,
 }: PixPaymentProps) {
+  const billingCheckoutApi = (api.api.billing as unknown as { checkout: any })
+    .checkout
   const [subscriptionId, setSubscriptionId] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
   const [timeRemaining, setTimeRemaining] = useState<string>('')
@@ -41,7 +43,7 @@ export function PixPayment({
   // Create subscription with PIX
   const checkoutMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.api.billing.checkout.pix.$post({
+      const response = await billingCheckoutApi.pix.$post({
         json: {
           planId: planId as Exclude<PlanId, 'FREE'>,
           cycle,
@@ -68,9 +70,7 @@ export function PixPayment({
     queryFn: async () => {
       if (!subscriptionId) return null
 
-      const response = await api.api.billing.checkout.status[
-        ':subscriptionId'
-      ].$get({
+      const response = await billingCheckoutApi.status[':subscriptionId'].$get({
         param: { subscriptionId: String(subscriptionId) },
       })
 

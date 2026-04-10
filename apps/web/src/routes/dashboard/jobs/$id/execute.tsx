@@ -20,7 +20,6 @@ import type { FormulaContext } from '@calibra-facil/math-engine'
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import {
     Card,
@@ -41,6 +40,7 @@ import {
     SelectItem,
     SelectTrigger,
 } from '@/components/ui/select'
+import { Spinner } from '@/components/ui/spinner'
 import { TableInputRenderer, type CertifiedValueOption } from '@/components/method-builder/table-input-renderer'
 import type {
     MethodInputField,
@@ -164,7 +164,7 @@ function ExecuteJobPage() {
         queryFn: async () => {
             const res = await api.api.jobs[':id'].$get({ param: { id } })
             if (!res.ok) throw new Error('Falha ao carregar job')
-            return res.json() as Promise<JobData>
+            return res.json() as unknown as Promise<JobData>
         },
     })
 
@@ -184,10 +184,10 @@ function ExecuteJobPage() {
     const { data: envLimitsData } = useQuery({
         queryKey: ['environmental-limits', 'effective', job?.assetTypeId, job?.unitId],
         queryFn: async () => {
-            const res = await api.api['environmental-limits'].effective[':assetTypeId'].$get({
+            const res = await api.api['environmental-limits'].effective[':assetTypeId'].$get(({
                 param: { assetTypeId: String(job!.assetTypeId) },
                 query: { unitId: String(job!.unitId) },
-            })
+            } as unknown) as { param: { assetTypeId: string } })
             if (!res.ok) return { limits: null, source: null }
             return res.json() as Promise<{ limits: EffectiveLimits | null; source: string | null }>
         },
