@@ -30,7 +30,7 @@ overrides:
   vite@>=6.0.0 <=6.4.1: ^6.4.2
   vite@>=7.0.0 <=7.3.1: ^7.3.2
   diff: ^8.0.3
-  basic-ftp: ^5.2.1
+  basic-ftp: ^5.2.2
   rollup: ^4.59.0
   svgo: ^4.0.1
   '@xmldom/xmldom': ^0.8.12
@@ -3841,8 +3841,8 @@ packages:
     resolution: {integrity: sha512-2VIKvDx8Z1a9rTB2eCkdPE5nSe28XnA+qivGnWHoB40hMMt/h1hSz0960Zqsn6ZyxWXUie0EBdElKv8may20AA==}
     hasBin: true
 
-  basic-ftp@5.2.1:
-    resolution: {integrity: sha512-0yaL8JdxTknKDILitVpfYfV2Ob6yb3udX/hK97M7I3jOeznBNxQPtVvTUtnhUkyHlxFWyr5Lvknmgzoc7jf+1Q==}
+  basic-ftp@5.2.2:
+    resolution: {integrity: sha512-1tDrzKsdCg70WGvbFss/ulVAxupNauGnOlgpyjKzeQxzyllBLS0CGLV7tjIXTK3ZQA9/FBEm9qyFFN1bciA6pw==}
     engines: {node: '>=10.0.0'}
 
   bcp-47-match@2.0.3:
@@ -11691,7 +11691,7 @@ snapshots:
 
   baseline-browser-mapping@2.9.10: {}
 
-  basic-ftp@5.2.1: {}
+  basic-ftp@5.2.2: {}
 
   bcp-47-match@2.0.3: {}
 
@@ -12743,7 +12743,7 @@ snapshots:
 
   get-uri@6.0.5:
     dependencies:
-      basic-ftp: 5.2.1
+      basic-ftp: 5.2.2
       data-uri-to-buffer: 6.0.2
       debug: 4.4.3
     transitivePeerDependencies:
