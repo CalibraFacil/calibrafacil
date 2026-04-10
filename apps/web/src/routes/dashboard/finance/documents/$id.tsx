@@ -7,9 +7,8 @@ import { useFinanceAccess } from '@/hooks/use-finance-access'
 import {
   BillingDocumentStatusBadge,
   ExportStatusBadge,
-  formatFinanceDate,
-  formatFinanceMoney,
-} from '@/components/finance/finance-ui'
+} from '@/components/finance-status-badges'
+import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -129,7 +128,9 @@ function FinanceDocumentDetailsPage() {
       const response = await api.api.finance.documents[':id'].$put({
         param: { id },
         json: {
-          dueDate: draft.dueDate ? new Date(draft.dueDate).toISOString() : undefined,
+          dueDate: draft.dueDate
+            ? new Date(draft.dueDate).toISOString()
+            : undefined,
           notes: draft.notes,
           discountCents: Number(draft.discountCents) || 0,
         },
@@ -282,11 +283,20 @@ function FinanceDocumentDetailsPage() {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <InfoItem label="Emissão" value={formatFinanceDate(document.issueDate)} />
-          <InfoItem label="Vencimento" value={formatFinanceDate(document.dueDate)} />
+          <InfoItem
+            label="Emissão"
+            value={formatFinanceDate(document.issueDate)}
+          />
+          <InfoItem
+            label="Vencimento"
+            value={formatFinanceDate(document.dueDate)}
+          />
           <InfoItem
             label="Subtotal"
-            value={formatFinanceMoney(document.subtotalCents, document.currency)}
+            value={formatFinanceMoney(
+              document.subtotalCents,
+              document.currency,
+            )}
           />
           <InfoItem
             label="Total"
@@ -321,7 +331,10 @@ function FinanceDocumentDetailsPage() {
                     <TableCell>{item.jobDisplayId ?? 'Manual'}</TableCell>
                     <TableCell>{item.quantity}</TableCell>
                     <TableCell className="text-right">
-                      {formatFinanceMoney(item.unitPriceCents, document.currency)}
+                      {formatFinanceMoney(
+                        item.unitPriceCents,
+                        document.currency,
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       {formatFinanceMoney(item.totalCents, document.currency)}
@@ -372,7 +385,9 @@ function FinanceDocumentDetailsPage() {
                   <TableRow key={installment.id}>
                     <TableCell>{installment.installmentNumber}</TableCell>
                     <TableCell>{installment.status}</TableCell>
-                    <TableCell>{formatFinanceDate(installment.dueDate)}</TableCell>
+                    <TableCell>
+                      {formatFinanceDate(installment.dueDate)}
+                    </TableCell>
                     <TableCell className="text-right">
                       {formatFinanceMoney(
                         installment.amountCents,
@@ -397,11 +412,18 @@ function FinanceDocumentDetailsPage() {
                 {document.receipts.length > 0 ? (
                   document.receipts.map((receipt) => (
                     <TableRow key={receipt.id}>
-                      <TableCell>{formatFinanceDate(receipt.receivedAt)}</TableCell>
+                      <TableCell>
+                        {formatFinanceDate(receipt.receivedAt)}
+                      </TableCell>
                       <TableCell>{receipt.paymentMethod}</TableCell>
-                      <TableCell>{receipt.reference || 'Sem referência'}</TableCell>
+                      <TableCell>
+                        {receipt.reference || 'Sem referência'}
+                      </TableCell>
                       <TableCell className="text-right">
-                        {formatFinanceMoney(receipt.amountCents, document.currency)}
+                        {formatFinanceMoney(
+                          receipt.amountCents,
+                          document.currency,
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -440,7 +462,9 @@ function FinanceDocumentDetailsPage() {
                 {document.audit.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell>{entry.action}</TableCell>
-                    <TableCell>{formatFinanceDate(entry.performedAt)}</TableCell>
+                    <TableCell>
+                      {formatFinanceDate(entry.performedAt)}
+                    </TableCell>
                     <TableCell>{entry.reason || 'Sem motivo'}</TableCell>
                   </TableRow>
                 ))}
@@ -503,7 +527,9 @@ function DocumentParametersCard({
   }) => void
 }) {
   const [dueDate, setDueDate] = useState(document.dueDate.slice(0, 10))
-  const [discountCents, setDiscountCents] = useState(String(document.discountCents))
+  const [discountCents, setDiscountCents] = useState(
+    String(document.discountCents),
+  )
   const [notes, setNotes] = useState(document.notes ?? '')
 
   return (
@@ -538,7 +564,10 @@ function DocumentParametersCard({
         </Field>
       </FieldGroup>
       {document.status === 'DRAFT' ? (
-        <Button onClick={() => onSave({ dueDate, discountCents, notes })} disabled={isSaving}>
+        <Button
+          onClick={() => onSave({ dueDate, discountCents, notes })}
+          disabled={isSaving}
+        >
           {isSaving ? 'Salvando...' : 'Salvar rascunho'}
         </Button>
       ) : null}

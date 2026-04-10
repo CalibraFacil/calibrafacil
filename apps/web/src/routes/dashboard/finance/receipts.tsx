@@ -3,11 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
 
-import {
-  BillingDocumentStatusBadge,
-  formatFinanceDate,
-  formatFinanceMoney,
-} from '@/components/finance/finance-ui'
+import { BillingDocumentStatusBadge } from '@/components/finance-status-badges'
+import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -72,7 +69,8 @@ function FinanceReceiptsPage() {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedRow, setSelectedRow] = useState<ReceiptRow | null>(null)
-  const [paymentMethod, setPaymentMethod] = useState<(typeof PAYMENT_METHODS)[number]>('BANK_TRANSFER')
+  const [paymentMethod, setPaymentMethod] =
+    useState<(typeof PAYMENT_METHODS)[number]>('BANK_TRANSFER')
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
   const [receivedAt, setReceivedAt] = useState(

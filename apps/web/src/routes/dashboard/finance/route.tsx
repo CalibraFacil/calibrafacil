@@ -2,7 +2,6 @@ import { Link, Outlet, createFileRoute } from '@tanstack/react-router'
 import { CreditCardIcon, ShieldKeyIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { FinanceNav } from '@/components/finance/finance-nav'
 import { useFinanceAccess } from '@/hooks/use-finance-access'
 import { Button } from '@/components/ui/button'
 import {
@@ -99,11 +98,10 @@ function FinanceLayout() {
         <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
         <p className="text-muted-foreground">
           Contratos comerciais, documentos de cobrança, recebimentos e
-          exportação ERP em uma trilha operacional separada da assinatura SaaS.
+          exportação ERP.
         </p>
       </div>
 
-      <FinanceNav />
       <Outlet />
     </div>
   )

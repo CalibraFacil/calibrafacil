@@ -5,9 +5,8 @@ import { toast } from 'sonner'
 import {
   BillingDocumentStatusBadge,
   ExportStatusBadge,
-  formatFinanceDate,
-  formatFinanceMoney,
-} from '@/components/finance/finance-ui'
+} from '@/components/finance-status-badges'
+import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
 import { Button } from '@/components/ui/button'
 import {
   Card,

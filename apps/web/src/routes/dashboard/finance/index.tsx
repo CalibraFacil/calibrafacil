@@ -11,9 +11,8 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   BillingDocumentStatusBadge,
   ExportStatusBadge,
-  formatFinanceDate,
-  formatFinanceMoney,
-} from '@/components/finance/finance-ui'
+} from '@/components/finance-status-badges'
+import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -173,7 +172,8 @@ function FinanceOverviewPage() {
                           params={{ id: String(document.id) }}
                           className="font-medium hover:underline"
                         >
-                          {document.documentNumber ?? `Rascunho #${document.id}`}
+                          {document.documentNumber ??
+                            `Rascunho #${document.id}`}
                         </Link>
                         <div className="text-muted-foreground text-xs">
                           {document.unitName}
@@ -186,7 +186,9 @@ function FinanceOverviewPage() {
                       <TableCell>
                         <ExportStatusBadge status={document.exportStatus} />
                       </TableCell>
-                      <TableCell>{formatFinanceDate(document.dueDate)}</TableCell>
+                      <TableCell>
+                        {formatFinanceDate(document.dueDate)}
+                      </TableCell>
                       <TableCell className="text-right">
                         {formatFinanceMoney(document.totalCents)}
                       </TableCell>
@@ -221,8 +223,14 @@ function FinanceOverviewPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <AgingRow label="0 a 30 dias" value={data?.aging['0_30'] ?? 0} />
-              <AgingRow label="31 a 60 dias" value={data?.aging['31_60'] ?? 0} />
-              <AgingRow label="61 a 90 dias" value={data?.aging['61_90'] ?? 0} />
+              <AgingRow
+                label="31 a 60 dias"
+                value={data?.aging['31_60'] ?? 0}
+              />
+              <AgingRow
+                label="61 a 90 dias"
+                value={data?.aging['61_90'] ?? 0}
+              />
               <AgingRow
                 label="Acima de 90 dias"
                 value={data?.aging['90_plus'] ?? 0}
