@@ -60,9 +60,10 @@ import {
 } from '@/components/audit-timeline'
 import { api } from '@/utils/api'
 import { toast } from 'sonner'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Spinner } from '@/components/ui/spinner'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 interface MethodSnapshot {
   methodId: number
@@ -180,32 +181,6 @@ export function ApprovedJobRecord({
   const [isAmendDialogOpen, setIsAmendDialogOpen] = useState(false)
   const [amendmentReason, setAmendmentReason] = useState('')
   const [isAmending, setIsAmending] = useState(false)
-
-  // Poll for label completion when generation was triggered
-  // labelUrl is the single source of truth - polling continues until it appears
-  useEffect(() => {
-    if (!labelPending) return
-
-    // If label is now available, stop polling
-    if (job.labelUrl) {
-      setLabelPending(false)
-      toast.success('Etiqueta gerada com sucesso!')
-      return
-    }
-
-    // Poll every 2 seconds
-    const interval = setInterval(onRefresh, 2000)
-
-    // Warn user if taking too long (but don't stop polling)
-    const warningTimeout = setTimeout(() => {
-      toast.warning('A geração está demorando mais que o esperado...')
-    }, 30000)
-
-    return () => {
-      clearInterval(interval)
-      clearTimeout(warningTimeout)
-    }
-  }, [labelPending, job.labelUrl, onRefresh])
 
   const handleDownloadCertificate = async () => {
     setIsDownloading(true)
@@ -393,6 +368,17 @@ export function ApprovedJobRecord({
 
   return (
     <div className="space-y-6">
+      {labelPending && job.labelUrl ? (
+        <LabelReadyNotifier
+          onReady={() => {
+            setLabelPending(false)
+            toast.success('Etiqueta gerada com sucesso!')
+          }}
+        />
+      ) : null}
+      {labelPending && !job.labelUrl ? (
+        <PendingLabelPoller onRefresh={onRefresh} />
+      ) : null}
       {/* Header - Status & Actions */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
@@ -885,4 +871,28 @@ export function ApprovedJobRecord({
       </div>
     </div>
   )
+}
+
+function LabelReadyNotifier({ onReady }: { onReady: () => void }) {
+  useMountEffect(() => {
+    onReady()
+  })
+
+  return null
+}
+
+function PendingLabelPoller({ onRefresh }: { onRefresh: () => void }) {
+  useMountEffect(() => {
+    const interval = window.setInterval(onRefresh, 2000)
+    const warningTimeout = window.setTimeout(() => {
+      toast.warning('A geração está demorando mais que o esperado...')
+    }, 30000)
+
+    return () => {
+      window.clearInterval(interval)
+      window.clearTimeout(warningTimeout)
+    }
+  })
+
+  return null
 }

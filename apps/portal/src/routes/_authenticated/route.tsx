@@ -4,7 +4,6 @@ import {
   createFileRoute,
   useNavigate,
 } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import {
@@ -25,6 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useMountEffect } from "@/hooks/use-mount-effect";
 import { getApiBaseUrl } from "@/lib/utils";
 
 const PORTAL_ORG_KEY = "portal-active-org";
@@ -61,10 +61,6 @@ function PortalLayout() {
   const { data: activeOrg, isPending: activeOrgLoading } =
     usePortalActiveOrganization();
 
-  // Track if we've already done initial context setup
-  const hasSetupContext = useRef(false);
-  const [isSettingUp, setIsSettingUp] = useState(true);
-
   // Fetch CLIENT organizations where user has an external portal role
   const { data: clientOrganizations = [], isPending: orgsLoading } = useQuery({
     queryKey: ["portal-organizations"],
@@ -84,63 +80,22 @@ function PortalLayout() {
   });
 
   const hasClientAccess = clientOrganizations.length > 0;
-
-  // Context Setup: Only runs once on initial load
-  // Uses localStorage to remember preferred org, avoiding conflicts with dashboard
-  useEffect(() => {
-    async function setupPortalContext() {
-      if (
-        orgsLoading ||
-        activeOrgLoading ||
-        !session ||
-        hasSetupContext.current
-      )
-        return;
-      if (!hasClientAccess) {
-        setIsSettingUp(false);
-        return;
-      }
-
-      hasSetupContext.current = true;
-
-      // Get stored preference for portal
-      const storedOrgId = localStorage.getItem(PORTAL_ORG_KEY);
-
-      // Check if stored org is a valid CLIENT org
-      const storedOrg = storedOrgId
-        ? clientOrganizations.find((org) => org.id === storedOrgId)
-        : null;
-
-      // Determine target org: stored preference > current if CLIENT > first CLIENT
-      let targetOrg = storedOrg;
-      if (!targetOrg) {
-        targetOrg = clientOrganizations.find((org) => org.id === activeOrg?.id);
-      }
-      if (!targetOrg) {
-        targetOrg = clientOrganizations[0];
-      }
-
-      // Only switch if needed
-      if (targetOrg && activeOrg?.id !== targetOrg.id) {
-        await portalOrganization.setActive({ organizationId: targetOrg.id });
-        localStorage.setItem(PORTAL_ORG_KEY, targetOrg.id);
-      } else if (targetOrg) {
-        // Store current selection
-        localStorage.setItem(PORTAL_ORG_KEY, targetOrg.id);
-      }
-
-      setIsSettingUp(false);
-    }
-
-    setupPortalContext();
-  }, [
-    session,
-    orgsLoading,
-    activeOrgLoading,
-    hasClientAccess,
-    activeOrg,
-    clientOrganizations,
-  ]);
+  const storedOrgId =
+    typeof window !== "undefined" ? localStorage.getItem(PORTAL_ORG_KEY) : null;
+  const storedOrg = storedOrgId
+    ? clientOrganizations.find((org) => org.id === storedOrgId) ?? null
+    : null;
+  const activeClientOrg =
+    activeOrg?.type === "CLIENT"
+      ? clientOrganizations.find((org) => org.id === activeOrg.id) ?? null
+      : null;
+  const targetOrg = storedOrg ?? activeClientOrg ?? clientOrganizations[0] ?? null;
+  const needsPortalOrgSwitch = Boolean(
+    session &&
+      hasClientAccess &&
+      targetOrg &&
+      activeOrg?.id !== targetOrg.id,
+  );
 
   // Show loading state
   if (sessionPending) {
@@ -155,9 +110,12 @@ function PortalLayout() {
     return <Navigate to="/sign-in" />;
   }
 
-  if (orgsLoading || activeOrgLoading || isSettingUp) {
+  if (orgsLoading || activeOrgLoading || needsPortalOrgSwitch) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
+        {needsPortalOrgSwitch && targetOrg ? (
+          <PortalOrgSwitcher key={targetOrg.id} organizationId={targetOrg.id} />
+        ) : null}
         <Spinner className="size-8" />
       </div>
     );
@@ -200,6 +158,9 @@ function PortalLayout() {
 
   return (
     <SidebarProvider>
+      {targetOrg ? (
+        <PersistPortalOrgSelection key={targetOrg.id} organizationId={targetOrg.id} />
+      ) : null}
       <PortalSidebar />
       <SidebarInset>
         <PortalHeader />
@@ -209,4 +170,24 @@ function PortalLayout() {
       </SidebarInset>
     </SidebarProvider>
   );
+}
+
+function PortalOrgSwitcher({ organizationId }: { organizationId: string }) {
+  useMountEffect(() => {
+    void portalOrganization
+      .setActive({ organizationId })
+      .then(() => {
+        localStorage.setItem(PORTAL_ORG_KEY, organizationId);
+      });
+  });
+
+  return null;
+}
+
+function PersistPortalOrgSelection({ organizationId }: { organizationId: string }) {
+  useMountEffect(() => {
+    localStorage.setItem(PORTAL_ORG_KEY, organizationId);
+  });
+
+  return null;
 }

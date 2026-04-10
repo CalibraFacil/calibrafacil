@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { api } from '@/utils/api'
@@ -124,196 +124,72 @@ function formatDate(date: string | null | undefined) {
   return new Date(date).toLocaleDateString('pt-BR')
 }
 
-function CalibrationRequestDetailPage() {
-  const { id } = Route.useParams()
-  const queryClient = useQueryClient()
-  const { activeOrganizationId, isContextSwitching } =
-    useDashboardContextState()
-  const organizationQueryKey = activeOrganizationId ?? 'no-org'
-  const [internalNotes, setInternalNotes] = useState('')
-  const [rejectionReason, setRejectionReason] = useState('')
+function getCompatibleServices(services: Array<Service>, item: RequestItem) {
+  return services.filter(
+    (service) =>
+      service.methodId !== null &&
+      service.methodStatus === 'PUBLISHED' &&
+      (!service.assetTypeId || service.assetTypeId === item.assetTypeId),
+  )
+}
+
+function buildInitialConversionDrafts(
+  request: CalibrationRequestDetail,
+  services: Array<Service>,
+) {
+  return Object.fromEntries(
+    request.items.map((item) => {
+      const compatibleServices = getCompatibleServices(services, item)
+
+      return [
+        item.id,
+        {
+          serviceId:
+            !item.convertedJobId && compatibleServices.length === 1
+              ? String(compatibleServices[0].id)
+              : '',
+          technicianId: '',
+          dueDate: request.requestedDueDate
+            ? new Date(request.requestedDueDate).toISOString().slice(0, 10)
+            : '',
+        },
+      ]
+    }),
+  ) as Record<number, ConversionDraft>
+}
+
+function CalibrationRequestTriagePanel({
+  request,
+  requestId,
+  services,
+  technicians,
+  servicesLoading,
+  onInvalidate,
+}: {
+  request: CalibrationRequestDetail
+  requestId: string
+  services: Array<Service>
+  technicians: Array<Technician>
+  servicesLoading: boolean
+  onInvalidate: () => Promise<void>
+}) {
+  const [internalNotes, setInternalNotes] = useState(request.internalNotes || '')
+  const [rejectionReason, setRejectionReason] = useState(
+    request.rejectionReason || '',
+  )
   const [conversionDrafts, setConversionDrafts] = useState<
     Record<number, ConversionDraft>
-  >({})
+  >(() => buildInitialConversionDrafts(request, services))
 
-  const detailQuery = useQuery({
-    queryKey: ['calibration-request', organizationQueryKey, id],
-    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
-    queryFn: async () => {
-      const res = await api.api['calibration-requests'][':id'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar solicitação')
-      }
-
-      return res.json() as Promise<CalibrationRequestDetail>
-    },
-  })
-
-  const servicesQuery = useQuery({
-    queryKey: ['services', organizationQueryKey, 'request-conversion'],
-    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
-    queryFn: async () => {
-      const firstPageResponse = await api.api.services.$get({
-        query: {
-          page: '1',
-          limit: '100',
-          isActive: 'true',
-        },
-      })
-
-      if (!firstPageResponse.ok) {
-        throw new Error('Falha ao carregar serviços')
-      }
-
-      const firstPage = (await firstPageResponse.json()) as {
-        data: Array<Service>
-        pagination: {
-          totalPages: number
-        }
-      }
-
-      if (firstPage.pagination.totalPages <= 1) {
-        return { data: firstPage.data }
-      }
-
-      const remainingPages = await Promise.all(
-        Array.from(
-          { length: firstPage.pagination.totalPages - 1 },
-          (_, index) =>
-            api.api.services.$get({
-              query: {
-                page: String(index + 2),
-                limit: '100',
-                isActive: 'true',
-              },
-            }),
-        ),
-      )
-
-      const failedPage = remainingPages.find((response) => !response.ok)
-      if (failedPage) {
-        throw new Error('Falha ao carregar serviços')
-      }
-
-      const remainingData = await Promise.all(
-        remainingPages.map(
-          async (response) =>
-            (await response.json()) as {
-              data: Array<Service>
-            },
-        ),
-      )
-
-      return {
-        data: [
-          ...firstPage.data,
-          ...remainingData.flatMap((page) => page.data),
-        ],
-      }
-    },
-  })
-
-  const techniciansQuery = useQuery({
-    queryKey: ['jobs', organizationQueryKey, 'technicians'],
-    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
-    queryFn: async () => {
-      const res = await api.api.jobs.technicians.list.$get()
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar técnicos')
-      }
-
-      return res.json() as Promise<{ data: Array<Technician> }>
-    },
-  })
-
-  const request = detailQuery.data
-
-  useEffect(() => {
-    setConversionDrafts({})
-    setInternalNotes('')
-    setRejectionReason('')
-  }, [activeOrganizationId, id])
-
-  useEffect(() => {
-    if (!detailQuery.data) return
-
-    setInternalNotes(detailQuery.data.internalNotes || '')
-    setRejectionReason(detailQuery.data.rejectionReason || '')
-    setConversionDrafts((current) => {
-      if (Object.keys(current).length > 0) {
-        return current
-      }
-
-      return Object.fromEntries(
-        detailQuery.data.items.map((item) => [
-          item.id,
-          {
-            serviceId: '',
-            technicianId: '',
-            dueDate: detailQuery.data?.requestedDueDate
-              ? new Date(detailQuery.data.requestedDueDate)
-                  .toISOString()
-                  .slice(0, 10)
-              : '',
-          },
-        ]),
-      )
-    })
-  }, [detailQuery.data])
-
-  useEffect(() => {
-    if (!request || !servicesQuery.data?.data) return
-
-    setConversionDrafts((current) => {
-      let changed = false
-      const next = { ...current }
-
-      for (const item of request.items) {
-        if (item.convertedJobId) continue
-
-        const compatibleServices = servicesQuery.data.data.filter(
-          (service) =>
-            service.methodId !== null &&
-            service.methodStatus === 'PUBLISHED' &&
-            (!service.assetTypeId || service.assetTypeId === item.assetTypeId),
-        )
-
-        if (compatibleServices.length === 1 && !next[item.id]?.serviceId) {
-          next[item.id] = {
-            serviceId: String(compatibleServices[0].id),
-            technicianId: next[item.id]?.technicianId || '',
-            dueDate: next[item.id]?.dueDate || '',
-          }
-          changed = true
-        }
-      }
-
-      return changed ? next : current
-    })
-  }, [request, servicesQuery.data])
-
-  const invalidate = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: ['calibration-request', organizationQueryKey, id],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ['calibration-requests', organizationQueryKey],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ['jobs', organizationQueryKey],
-      }),
-    ])
-  }
+  const pendingConversionItems = useMemo(
+    () => request.items.filter((item) => item.convertedJobId === null),
+    [request.items],
+  )
 
   const reviewMutation = useMutation({
     mutationFn: async () => {
       const res = await api.api['calibration-requests'][':id'].review.$post({
-        param: { id },
+        param: { id: requestId },
         json: { internalNotes: internalNotes || undefined },
       })
 
@@ -325,7 +201,7 @@ function CalibrationRequestDetailPage() {
       }
     },
     onSuccess: async () => {
-      await invalidate()
+      await onInvalidate()
       toast.success('Solicitação movida para análise')
     },
     onError: (error) => toast.error(error.message),
@@ -334,7 +210,7 @@ function CalibrationRequestDetailPage() {
   const approveMutation = useMutation({
     mutationFn: async () => {
       const res = await api.api['calibration-requests'][':id'].approve.$post({
-        param: { id },
+        param: { id: requestId },
         json: { internalNotes: internalNotes || undefined },
       })
 
@@ -346,7 +222,7 @@ function CalibrationRequestDetailPage() {
       }
     },
     onSuccess: async () => {
-      await invalidate()
+      await onInvalidate()
       toast.success('Solicitação aprovada')
     },
     onError: (error) => toast.error(error.message),
@@ -355,7 +231,7 @@ function CalibrationRequestDetailPage() {
   const rejectMutation = useMutation({
     mutationFn: async () => {
       const res = await api.api['calibration-requests'][':id'].reject.$post({
-        param: { id },
+        param: { id: requestId },
         json: {
           reason: rejectionReason,
           internalNotes: internalNotes || undefined,
@@ -370,7 +246,7 @@ function CalibrationRequestDetailPage() {
       }
     },
     onSuccess: async () => {
-      await invalidate()
+      await onInvalidate()
       toast.success('Solicitação rejeitada')
     },
     onError: (error) => toast.error(error.message),
@@ -378,11 +254,7 @@ function CalibrationRequestDetailPage() {
 
   const convertMutation = useMutation({
     mutationFn: async () => {
-      const items =
-        detailQuery.data?.items.filter(
-          (item) => item.convertedJobId === null,
-        ) ?? []
-      const payload = items.map((item) => {
+      const payload = pendingConversionItems.map((item) => {
         const draft = conversionDrafts[item.id]
 
         return {
@@ -396,7 +268,7 @@ function CalibrationRequestDetailPage() {
       })
 
       const res = await api.api['calibration-requests'][':id'].convert.$post({
-        param: { id },
+        param: { id: requestId },
         json: { items: payload },
       })
 
@@ -408,21 +280,19 @@ function CalibrationRequestDetailPage() {
       }
     },
     onSuccess: async () => {
-      await invalidate()
+      await onInvalidate()
       toast.success('Solicitação convertida em ordens de serviço')
     },
     onError: (error) => toast.error(error.message),
   })
 
-  const pendingConversionItems = useMemo(
-    () => request?.items.filter((item) => item.convertedJobId === null) ?? [],
-    [request],
-  )
-
   const conversionBlockedReason = useMemo(() => {
-    if (!request || request.status !== 'APPROVED') return null
+    if (request.status !== 'APPROVED') return null
     if (pendingConversionItems.length === 0) {
       return 'Todos os itens desta solicitação já foram convertidos.'
+    }
+    if (servicesLoading) {
+      return 'Carregando serviços compatíveis para conversão.'
     }
 
     const itemsWithoutService = pendingConversionItems.filter((item) => {
@@ -433,14 +303,7 @@ function CalibrationRequestDetailPage() {
     if (itemsWithoutService.length === 0) return null
 
     const itemsWithoutCompatibleService = itemsWithoutService.filter((item) => {
-      const compatibleServices =
-        servicesQuery.data?.data.filter(
-          (service) =>
-            service.methodId !== null &&
-            service.methodStatus === 'PUBLISHED' &&
-            (!service.assetTypeId || service.assetTypeId === item.assetTypeId),
-        ) ?? []
-
+      const compatibleServices = getCompatibleServices(services, item)
       return compatibleServices.length === 0
     })
 
@@ -449,30 +312,18 @@ function CalibrationRequestDetailPage() {
     }
 
     return 'Selecione um serviço para cada ativo acima para habilitar a conversão.'
-  }, [conversionDrafts, pendingConversionItems, request, servicesQuery.data])
+  }, [
+    conversionDrafts,
+    pendingConversionItems,
+    request.status,
+    services,
+    servicesLoading,
+  ])
 
   const canConvert = useMemo(() => {
-    if (!request || request.status !== 'APPROVED') return false
+    if (request.status !== 'APPROVED') return false
     return pendingConversionItems.length > 0 && !conversionBlockedReason
-  }, [conversionBlockedReason, pendingConversionItems.length, request])
-
-  if (detailQuery.isLoading) {
-    return (
-      <div className="flex items-center justify-center py-10">
-        <Spinner className="size-8" />
-      </div>
-    )
-  }
-
-  if (detailQuery.error || !request) {
-    return (
-      <Card>
-        <CardContent className="pt-6 text-destructive">
-          Erro ao carregar solicitação.
-        </CardContent>
-      </Card>
-    )
-  }
+  }, [conversionBlockedReason, pendingConversionItems.length, request.status])
 
   const isSubmitting =
     reviewMutation.isPending ||
@@ -481,61 +332,7 @@ function CalibrationRequestDetailPage() {
     convertMutation.isPending
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Solicitação #{request.id}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Cliente {request.customerName} · enviada em{' '}
-            {formatDate(request.submittedAt)}
-          </p>
-        </div>
-        <Badge variant={statusVariants[request.status]}>
-          {statusLabels[request.status]}
-        </Badge>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Resumo</CardTitle>
-          <CardDescription>
-            Contexto enviado pelo cliente e histórico da triagem.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <div className="text-sm text-muted-foreground">
-              Prazo solicitado
-            </div>
-            <div className="font-medium">
-              {formatDate(request.requestedDueDate)}
-            </div>
-          </div>
-          <div>
-            <div className="text-sm text-muted-foreground">Solicitado por</div>
-            <div className="font-medium">{request.submittedByName || '-'}</div>
-          </div>
-          <div className="sm:col-span-2">
-            <div className="text-sm text-muted-foreground">
-              Observações do cliente
-            </div>
-            <div className="font-medium">
-              {request.observations?.trim() || 'Sem observações informadas.'}
-            </div>
-          </div>
-          {request.rejectionReason && (
-            <div className="sm:col-span-2">
-              <div className="text-sm text-muted-foreground">
-                Motivo da rejeição
-              </div>
-              <div className="font-medium">{request.rejectionReason}</div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
+    <>
       <Card>
         <CardHeader>
           <CardTitle>Ativos solicitados</CardTitle>
@@ -547,14 +344,7 @@ function CalibrationRequestDetailPage() {
               technicianId: '',
               dueDate: '',
             }
-            const compatibleServices =
-              servicesQuery.data?.data.filter(
-                (service) =>
-                  service.methodId !== null &&
-                  service.methodStatus === 'PUBLISHED' &&
-                  (!service.assetTypeId ||
-                    service.assetTypeId === item.assetTypeId),
-              ) ?? []
+            const compatibleServices = getCompatibleServices(services, item)
 
             return (
               <div key={item.id} className="rounded-lg border p-4">
@@ -590,7 +380,8 @@ function CalibrationRequestDetailPage() {
                             ...current,
                             [item.id]: {
                               ...draft,
-                              serviceId: value === 'placeholder' ? '' : value,
+                              serviceId:
+                                !value || value === 'placeholder' ? '' : value,
                             },
                           }))
                         }
@@ -602,7 +393,9 @@ function CalibrationRequestDetailPage() {
                                   (service) =>
                                     String(service.id) === draft.serviceId,
                                 )?.name || 'Selecione'
-                              : 'Selecione'}
+                              : servicesLoading
+                                ? 'Carregando...'
+                                : 'Selecione'}
                           </span>
                         </SelectTrigger>
                         <SelectContent>
@@ -628,7 +421,8 @@ function CalibrationRequestDetailPage() {
                             ...current,
                             [item.id]: {
                               ...draft,
-                              technicianId: value === 'unassigned' ? '' : value,
+                              technicianId:
+                                !value || value === 'unassigned' ? '' : value,
                             },
                           }))
                         }
@@ -636,7 +430,7 @@ function CalibrationRequestDetailPage() {
                         <SelectTrigger>
                           <span>
                             {draft.technicianId
-                              ? techniciansQuery.data?.data.find(
+                              ? technicians.find(
                                   (technician) =>
                                     technician.id === draft.technicianId,
                                 )?.name || 'Selecione'
@@ -647,7 +441,7 @@ function CalibrationRequestDetailPage() {
                           <SelectItem value="unassigned">
                             Não atribuído
                           </SelectItem>
-                          {techniciansQuery.data?.data.map((technician) => (
+                          {technicians.map((technician) => (
                             <SelectItem
                               key={technician.id}
                               value={technician.id}
@@ -762,6 +556,217 @@ function CalibrationRequestDetailPage() {
           )}
         </CardContent>
       </Card>
+    </>
+  )
+}
+
+function CalibrationRequestDetailPage() {
+  const { id } = Route.useParams()
+  const queryClient = useQueryClient()
+  const { activeOrganizationId, isContextSwitching } =
+    useDashboardContextState()
+  const organizationQueryKey = activeOrganizationId ?? 'no-org'
+
+  const detailQuery = useQuery({
+    queryKey: ['calibration-request', organizationQueryKey, id],
+    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
+    queryFn: async () => {
+      const res = await api.api['calibration-requests'][':id'].$get({
+        param: { id },
+      })
+
+      if (!res.ok) {
+        throw new Error('Falha ao carregar solicitação')
+      }
+
+      return res.json() as Promise<CalibrationRequestDetail>
+    },
+  })
+
+  const servicesQuery = useQuery({
+    queryKey: ['services', organizationQueryKey, 'request-conversion'],
+    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
+    queryFn: async () => {
+      const firstPageResponse = await api.api.services.$get({
+        query: {
+          page: '1',
+          limit: '100',
+          isActive: 'true',
+        },
+      })
+
+      if (!firstPageResponse.ok) {
+        throw new Error('Falha ao carregar serviços')
+      }
+
+      const firstPage = (await firstPageResponse.json()) as {
+        data: Array<Service>
+        pagination: {
+          totalPages: number
+        }
+      }
+
+      if (firstPage.pagination.totalPages <= 1) {
+        return { data: firstPage.data }
+      }
+
+      const remainingPages = await Promise.all(
+        Array.from(
+          { length: firstPage.pagination.totalPages - 1 },
+          (_, index) =>
+            api.api.services.$get({
+              query: {
+                page: String(index + 2),
+                limit: '100',
+                isActive: 'true',
+              },
+            }),
+        ),
+      )
+
+      const failedPage = remainingPages.find((response) => !response.ok)
+      if (failedPage) {
+        throw new Error('Falha ao carregar serviços')
+      }
+
+      const remainingData = await Promise.all(
+        remainingPages.map(
+          async (response) =>
+            (await response.json()) as {
+              data: Array<Service>
+            },
+        ),
+      )
+
+      return {
+        data: [
+          ...firstPage.data,
+          ...remainingData.flatMap((page) => page.data),
+        ],
+      }
+    },
+  })
+
+  const techniciansQuery = useQuery({
+    queryKey: ['jobs', organizationQueryKey, 'technicians'],
+    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
+    queryFn: async () => {
+      const res = await api.api.jobs.technicians.list.$get()
+
+      if (!res.ok) {
+        throw new Error('Falha ao carregar técnicos')
+      }
+
+      return res.json() as Promise<{ data: Array<Technician> }>
+    },
+  })
+
+  const request = detailQuery.data
+
+  const invalidate = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ['calibration-request', organizationQueryKey, id],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['calibration-requests', organizationQueryKey],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['jobs', organizationQueryKey],
+      }),
+    ])
+  }
+
+  if (detailQuery.isLoading) {
+    return (
+      <div className="flex items-center justify-center py-10">
+        <Spinner className="size-8" />
+      </div>
+    )
+  }
+
+  if (detailQuery.error || !request) {
+    return (
+      <Card>
+        <CardContent className="pt-6 text-destructive">
+          Erro ao carregar solicitação.
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const triagePanelKey = [
+    organizationQueryKey,
+    id,
+    detailQuery.dataUpdatedAt,
+    servicesQuery.dataUpdatedAt,
+  ].join(':')
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Solicitação #{request.id}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Cliente {request.customerName} · enviada em{' '}
+            {formatDate(request.submittedAt)}
+          </p>
+        </div>
+        <Badge variant={statusVariants[request.status]}>
+          {statusLabels[request.status]}
+        </Badge>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Resumo</CardTitle>
+          <CardDescription>
+            Contexto enviado pelo cliente e histórico da triagem.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <div className="text-sm text-muted-foreground">
+              Prazo solicitado
+            </div>
+            <div className="font-medium">
+              {formatDate(request.requestedDueDate)}
+            </div>
+          </div>
+          <div>
+            <div className="text-sm text-muted-foreground">Solicitado por</div>
+            <div className="font-medium">{request.submittedByName || '-'}</div>
+          </div>
+          <div className="sm:col-span-2">
+            <div className="text-sm text-muted-foreground">
+              Observações do cliente
+            </div>
+            <div className="font-medium">
+              {request.observations?.trim() || 'Sem observações informadas.'}
+            </div>
+          </div>
+          {request.rejectionReason && (
+            <div className="sm:col-span-2">
+              <div className="text-sm text-muted-foreground">
+                Motivo da rejeição
+              </div>
+              <div className="font-medium">{request.rejectionReason}</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <CalibrationRequestTriagePanel
+        key={triagePanelKey}
+        request={request}
+        requestId={id}
+        services={servicesQuery.data?.data ?? []}
+        technicians={techniciansQuery.data?.data ?? []}
+        servicesLoading={servicesQuery.isLoading}
+        onInvalidate={invalidate}
+      />
     </div>
   )
 }

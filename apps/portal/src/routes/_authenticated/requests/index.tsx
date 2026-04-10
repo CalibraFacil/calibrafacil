@@ -7,7 +7,7 @@ import {
   Notebook01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -82,10 +82,6 @@ function RequestsPage() {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim());
   const limit = 20;
-
-  useEffect(() => {
-    setPage(1);
-  }, [deferredSearch]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["portal-requests", page, limit, deferredSearch],
@@ -245,7 +241,10 @@ function RequestsPage() {
               placeholder="Buscar por número ou observações..."
               aria-label="Buscar por número ou observações"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               className="pl-9"
             />
           </div>

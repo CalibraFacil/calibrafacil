@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Copy01Icon, Tick02Icon, Loading03Icon } from '@hugeicons/core-free-icons'
@@ -13,6 +13,7 @@ import {
   type BillingCycle,
 } from '@calibra-facil/shared'
 import type { CheckoutState } from './checkout-dialog'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 interface PixPaymentProps {
   planId: PlanId
@@ -90,53 +91,7 @@ export function PixPayment({
 
   const isPaid = statusQuery.data?.isActive || statusQuery.data?.isPaid
 
-  // Handle payment confirmation
-  useEffect(() => {
-    if (isPaid && subscriptionId) {
-      onSuccess(subscriptionId)
-    }
-  }, [isPaid, subscriptionId, onSuccess])
-
-  // Auto-initiate checkout
-  useEffect(() => {
-    if (!subscriptionId && !checkoutMutation.isPending) {
-      checkoutMutation.mutate()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Countdown timer
-  useEffect(() => {
-    const expirationDate = checkoutMutation.data?.pix?.expirationDate
-    if (!expirationDate) return
-
-    const updateTimer = () => {
-      const expiration = new Date(expirationDate)
-      const now = new Date()
-      const diff = expiration.getTime() - now.getTime()
-
-      if (diff <= 0) {
-        setTimeRemaining('Expirado')
-        return
-      }
-
-      const hours = Math.floor(diff / (1000 * 60 * 60))
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-
-      if (hours > 0) {
-        setTimeRemaining(`${hours}h ${minutes}m ${seconds}s`)
-      } else if (minutes > 0) {
-        setTimeRemaining(`${minutes}m ${seconds}s`)
-      } else {
-        setTimeRemaining(`${seconds}s`)
-      }
-    }
-
-    updateTimer()
-    const interval = setInterval(updateTimer, 1000)
-    return () => clearInterval(interval)
-  }, [checkoutMutation.data?.pix?.expirationDate])
+  const expirationDate = checkoutMutation.data?.pix?.expirationDate
 
   const handleCopy = async () => {
     if (checkoutMutation.data?.pix?.payload) {
@@ -191,6 +146,19 @@ export function PixPayment({
 
   return (
     <div className="flex flex-col items-center gap-6">
+      {!subscriptionId && !checkoutMutation.isPending && !checkoutMutation.data ? (
+        <PixCheckoutStarter onStart={() => checkoutMutation.mutate()} />
+      ) : null}
+      {isPaid && subscriptionId ? (
+        <PixSuccessNotifier subscriptionId={subscriptionId} onSuccess={onSuccess} />
+      ) : null}
+      {expirationDate ? (
+        <PixCountdown
+          key={expirationDate}
+          expirationDate={expirationDate}
+          onTick={setTimeRemaining}
+        />
+      ) : null}
       {/* QR Code */}
       <div className="flex flex-col items-center gap-3">
         <p className="text-sm text-muted-foreground">Escaneie o QR Code</p>
@@ -254,4 +222,68 @@ export function PixPayment({
       </div>
     </div>
   )
+}
+
+function PixCheckoutStarter({ onStart }: { onStart: () => void }) {
+  useMountEffect(() => {
+    onStart()
+  })
+
+  return null
+}
+
+function PixSuccessNotifier({
+  subscriptionId,
+  onSuccess,
+}: {
+  subscriptionId: number
+  onSuccess: (
+    subscriptionId: number,
+    paymentData?: CheckoutState['paymentData'],
+  ) => void
+}) {
+  useMountEffect(() => {
+    onSuccess(subscriptionId)
+  })
+
+  return null
+}
+
+function PixCountdown({
+  expirationDate,
+  onTick,
+}: {
+  expirationDate: string
+  onTick: (value: string) => void
+}) {
+  useMountEffect(() => {
+    const updateTimer = () => {
+      const expiration = new Date(expirationDate)
+      const now = new Date()
+      const diff = expiration.getTime() - now.getTime()
+
+      if (diff <= 0) {
+        onTick('Expirado')
+        return
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60))
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+
+      if (hours > 0) {
+        onTick(`${hours}h ${minutes}m ${seconds}s`)
+      } else if (minutes > 0) {
+        onTick(`${minutes}m ${seconds}s`)
+      } else {
+        onTick(`${seconds}s`)
+      }
+    }
+
+    updateTimer()
+    const interval = window.setInterval(updateTimer, 1000)
+    return () => window.clearInterval(interval)
+  })
+
+  return null
 }

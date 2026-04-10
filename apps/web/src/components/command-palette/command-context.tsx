@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useLocation } from '@tanstack/react-router'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 export type CommandAction = {
   id: string
@@ -91,8 +92,7 @@ export function CommandPaletteProvider({
     })
   }, [])
 
-  // Keyboard shortcut: Cmd+K / Ctrl+K
-  React.useEffect(() => {
+  useMountEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
@@ -102,7 +102,7 @@ export function CommandPaletteProvider({
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  })
 
   return (
     <CommandPaletteContext.Provider

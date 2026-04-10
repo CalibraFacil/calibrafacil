@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { HelpCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { createFileRoute, Link } from '@tanstack/react-router'
@@ -144,33 +144,10 @@ function BackofficeCommercialCheckoutsPage() {
     },
     enabled: !!selectedOrganizationId,
   })
-
-  useEffect(() => {
-    const primaryContact = contextQuery.data?.billingContacts.find((contact) => contact.isPrimary)
-    if (primaryContact && !billingContactId) {
-      setBillingContactId(primaryContact.id)
-    }
-  }, [contextQuery.data?.billingContacts, billingContactId])
-
-  useEffect(() => {
-    setForm((current) => {
-      if (current.kind === 'SETUP_FEE') {
-        return {
-          ...current,
-          billingCycle: 'YEARLY',
-        }
-      }
-
-      if (current.kind === 'PLAN_UPFRONT' && current.billingCycle !== 'YEARLY') {
-        return {
-          ...current,
-          billingCycle: 'YEARLY',
-        }
-      }
-
-      return current
-    })
-  }, [form.kind])
+  const primaryBillingContact = contextQuery.data?.billingContacts.find((contact) =>
+    contact.isPrimary,
+  )
+  const resolvedBillingContactId = billingContactId ?? primaryBillingContact?.id
 
   const syncBillingCustomerMutation = useMutation({
     mutationFn: async () => {
@@ -239,7 +216,7 @@ function BackofficeCommercialCheckoutsPage() {
     mutationFn: async () => {
       if (!selectedOrganizationId) throw new Error('Selecione uma organização')
       const res = await api.api.backoffice.commercial.offers.preview.$post({
-        json: buildOfferPayload(selectedOrganizationId, billingContactId, form),
+        json: buildOfferPayload(selectedOrganizationId, resolvedBillingContactId, form),
       })
       if (!res.ok) throw new Error('Falha ao gerar prévia')
       return res.json()
@@ -256,7 +233,7 @@ function BackofficeCommercialCheckoutsPage() {
 
       const res = await api.api.backoffice.commercial.offers.$post({
         json: {
-          ...buildOfferPayload(selectedOrganizationId, billingContactId, form),
+          ...buildOfferPayload(selectedOrganizationId, resolvedBillingContactId, form),
           idempotencyKey: crypto.randomUUID(),
         },
       })
@@ -304,7 +281,7 @@ function BackofficeCommercialCheckoutsPage() {
         param: { offerId },
         json: {
           idempotencyKey: crypto.randomUUID(),
-          overrides: buildOfferPayload(selectedOrganizationId!, billingContactId, form),
+          overrides: buildOfferPayload(selectedOrganizationId!, resolvedBillingContactId, form),
         },
       })
       if (!res.ok) throw new Error('Falha ao reemitir oferta')
@@ -452,7 +429,7 @@ function BackofficeCommercialCheckoutsPage() {
                     <p className="text-sm font-medium">Contato de cobrança</p>
                     <NativeSelect
                       className="w-full"
-                      value={billingContactId ? String(billingContactId) : ''}
+                      value={resolvedBillingContactId ? String(resolvedBillingContactId) : ''}
                       onChange={(event) =>
                         setBillingContactId(
                           event.target.value ? Number(event.target.value) : undefined,
@@ -542,7 +519,14 @@ function BackofficeCommercialCheckoutsPage() {
                   className="w-full"
                   value={form.kind}
                   onChange={(event) =>
-                    setForm((current) => ({ ...current, kind: event.target.value as OfferKind }))
+                    setForm((current) => ({
+                      ...current,
+                      kind: event.target.value as OfferKind,
+                      billingCycle:
+                        event.target.value === 'PLAN_RECURRING'
+                          ? current.billingCycle
+                          : 'YEARLY',
+                    }))
                   }
                 >
                   <NativeSelectOption value="PLAN_RECURRING">Plano recorrente</NativeSelectOption>

@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -82,15 +82,6 @@ interface Member {
     email: string
     image?: string
   }
-}
-
-interface Invitation {
-  id: string
-  email: string
-  role: string
-  status: 'pending' | 'accepted' | 'rejected' | 'canceled'
-  expiresAt: Date
-  inviterId: string
 }
 
 interface OrganizationUnit {
@@ -254,11 +245,6 @@ function OrganizationSettingsPage({
   )
   const [isUpdatingIso, setIsUpdatingIso] = useState(false)
 
-  const [members, setMembers] = useState<Array<Member>>([])
-  const [membersLoading, setMembersLoading] = useState(false)
-
-  const [invitations, setInvitations] = useState<Array<Invitation>>([])
-  const [invitationsLoading, setInvitationsLoading] = useState(false)
   const [cancellingInvitation, setCancellingInvitation] = useState<
     string | null
   >(null)
@@ -275,11 +261,13 @@ function OrganizationSettingsPage({
   const [savingAssignmentsFor, setSavingAssignmentsFor] = useState<string | null>(
     null,
   )
-  const [assignmentDrafts, setAssignmentDrafts] = useState<
+  const [assignmentDraftOverrides, setAssignmentDraftOverrides] = useState<
     Record<string, Record<number, EditableUnitAssignmentRole>>
   >({})
   const [editingUnitId, setEditingUnitId] = useState<number | null>(null)
-  const [unitNameDrafts, setUnitNameDrafts] = useState<Record<number, string>>({})
+  const [unitNameDraftOverrides, setUnitNameDraftOverrides] = useState<
+    Record<number, string>
+  >({})
   const [updatingUnitId, setUpdatingUnitId] = useState<number | null>(null)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -412,6 +400,65 @@ function OrganizationSettingsPage({
   const canManageGlobalRoles =
     governanceViewer?.canManageGlobalRoles ?? canManageOrganizationSettings
   const canViewGovernance = governanceViewer?.canViewGovernance ?? false
+  const membersQuery = useQuery({
+    queryKey: ['organization-members', activeOrg.id],
+    enabled: canManageOrganizationSettings,
+    queryFn: async () => {
+      const result = await authClient.organization.listMembers({
+        query: { organizationId: activeOrg.id },
+      })
+
+      return (result.data?.members ?? []).map((member) => ({
+        ...member,
+        createdAt: new Date(member.createdAt),
+      }))
+    },
+  })
+  const invitationsQuery = useQuery({
+    queryKey: ['organization-invitations', activeOrg.id],
+    enabled: canManageOrganizationSettings,
+    queryFn: async () => {
+      const result = await authClient.organization.listInvitations({
+        query: { organizationId: activeOrg.id },
+      })
+
+      return (result.data ?? []).map((invitation) => ({
+        ...invitation,
+        expiresAt: new Date(invitation.expiresAt),
+      }))
+    },
+  })
+  const members = membersQuery.data ?? []
+  const membersLoading = membersQuery.isPending
+  const invitations = invitationsQuery.data ?? []
+  const invitationsLoading = invitationsQuery.isPending
+  const baseUnitNameDrafts = useMemo<Record<number, string>>(
+    () =>
+      Object.fromEntries(
+        (unitsQuery.data?.data ?? []).map((unit) => [unit.id, unit.name]),
+      ),
+    [unitsQuery.data],
+  )
+  const unitNameDrafts = useMemo<Record<number, string>>(
+    () => ({ ...baseUnitNameDrafts, ...unitNameDraftOverrides }),
+    [baseUnitNameDrafts, unitNameDraftOverrides],
+  )
+  const baseAssignmentDrafts = useMemo(
+    () =>
+      Object.fromEntries(
+        (governanceMembersQuery.data?.data ?? []).map((member) => [
+          member.id,
+          Object.fromEntries(
+            (unitsQuery.data?.data ?? []).map((unit) => [
+              unit.id,
+              member.assignments.find((assignment) => assignment.unitId === unit.id)
+                ?.role ?? 'none',
+            ]),
+          ),
+        ]),
+      ) as Record<string, Record<number, EditableUnitAssignmentRole>>,
+    [governanceMembersQuery.data, unitsQuery.data],
+  )
 
   const createUnitMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -563,7 +610,9 @@ function OrganizationSettingsPage({
     },
     onSuccess: async () => {
       await Promise.all([
-        loadMembers(),
+        queryClient.invalidateQueries({
+          queryKey: ['organization-members', activeOrg.id],
+        }),
         queryClient.invalidateQueries({
           queryKey: ['organization-governance-members', activeOrg.id],
         }),
@@ -579,152 +628,6 @@ function OrganizationSettingsPage({
       )
     },
   })
-
-  useEffect(() => {
-    if (!activeOrg?.id) return
-
-    let cancelled = false
-    const fetchMembers = async () => {
-      if (!canManageOrganizationSettings) {
-        setMembers([])
-        setMembersLoading(false)
-        return
-      }
-      setMembersLoading(true)
-      try {
-        const result = await authClient.organization.listMembers({
-          query: { organizationId: activeOrg.id },
-        })
-        if (!cancelled && result.data) {
-          setMembers(
-            result.data.members.map((m) => ({
-              ...m,
-              createdAt: new Date(m.createdAt),
-            })),
-          )
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Failed to load members:', err)
-        }
-      } finally {
-        if (!cancelled) {
-          setMembersLoading(false)
-        }
-      }
-    }
-
-    const fetchInvitations = async () => {
-      if (!canManageOrganizationSettings) {
-        setInvitations([])
-        setInvitationsLoading(false)
-        return
-      }
-      setInvitationsLoading(true)
-      try {
-        const result = await authClient.organization.listInvitations({
-          query: { organizationId: activeOrg.id },
-        })
-        if (!cancelled && result.data) {
-          setInvitations(
-            result.data.map((inv) => ({
-              ...inv,
-              expiresAt: new Date(inv.expiresAt),
-            })),
-          )
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Failed to load invitations:', err)
-        }
-      } finally {
-        if (!cancelled) {
-          setInvitationsLoading(false)
-        }
-      }
-    }
-
-    fetchMembers()
-    fetchInvitations()
-    return () => {
-      cancelled = true
-    }
-  }, [activeOrg?.id, canManageOrganizationSettings])
-
-  useEffect(() => {
-    const units = unitsQuery.data?.data ?? []
-    const governanceMembers = governanceMembersQuery.data?.data ?? []
-
-    if (units.length === 0 || governanceMembers.length === 0) {
-      setAssignmentDrafts({})
-      setUnitNameDrafts(
-        Object.fromEntries(units.map((unit) => [unit.id, unit.name])),
-      )
-      return
-    }
-
-    setUnitNameDrafts(
-      Object.fromEntries(units.map((unit) => [unit.id, unit.name])),
-    )
-    setAssignmentDrafts(
-      Object.fromEntries(
-        governanceMembers.map((member) => [
-          member.id,
-          Object.fromEntries(
-            units.map((unit) => [
-              unit.id,
-              member.assignments.find((assignment) => assignment.unitId === unit.id)
-                ?.role ?? 'none',
-            ]),
-          ),
-        ]),
-      ),
-    )
-  }, [governanceMembersQuery.data, unitsQuery.data])
-
-  const loadMembers = async () => {
-    if (!activeOrg || !canManageOrganizationSettings) return
-    setMembersLoading(true)
-    try {
-      const result = await authClient.organization.listMembers({
-        query: { organizationId: activeOrg.id },
-      })
-      if (result.data) {
-        setMembers(
-          result.data.members.map((m) => ({
-            ...m,
-            createdAt: new Date(m.createdAt),
-          })),
-        )
-      }
-    } catch (err) {
-      console.error('Failed to load members:', err)
-    } finally {
-      setMembersLoading(false)
-    }
-  }
-
-  const loadInvitations = async () => {
-    if (!activeOrg || !canManageOrganizationSettings) return
-    setInvitationsLoading(true)
-    try {
-      const result = await authClient.organization.listInvitations({
-        query: { organizationId: activeOrg.id },
-      })
-      if (result.data) {
-        setInvitations(
-          result.data.map((inv) => ({
-            ...inv,
-            expiresAt: new Date(inv.expiresAt),
-          })),
-        )
-      }
-    } catch (err) {
-      console.error('Failed to load invitations:', err)
-    } finally {
-      setInvitationsLoading(false)
-    }
-  }
 
   const handleUpdateOrganization = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -816,7 +719,9 @@ function OrganizationSettingsPage({
       }
       toast.success(`Convite enviado para ${inviteEmail}`)
       setInviteEmail('')
-      await loadInvitations()
+      await queryClient.invalidateQueries({
+        queryKey: ['organization-invitations', activeOrg.id],
+      })
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Falha ao enviar convite'
@@ -841,7 +746,9 @@ function OrganizationSettingsPage({
       }
       toast.success('Membro removido com sucesso')
       setMemberToRemove(null)
-      await loadMembers()
+      await queryClient.invalidateQueries({
+        queryKey: ['organization-members', activeOrg.id],
+      })
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Falha ao remover membro'
@@ -881,7 +788,9 @@ function OrganizationSettingsPage({
         throw new Error(result.error.message ?? 'Falha ao cancelar convite')
       }
       toast.success('Convite cancelado com sucesso')
-      await loadInvitations()
+      await queryClient.invalidateQueries({
+        queryKey: ['organization-invitations', activeOrg.id],
+      })
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Falha ao cancelar convite'
@@ -1001,7 +910,7 @@ function OrganizationSettingsPage({
     unitId: number,
     role: EditableUnitAssignmentRole,
   ) => {
-    setAssignmentDrafts((current) => ({
+    setAssignmentDraftOverrides((current) => ({
       ...current,
       [memberId]: {
         ...current[memberId],
@@ -1011,8 +920,15 @@ function OrganizationSettingsPage({
   }
 
   const getDraftAssignmentsForMember = (memberId: string) => {
-    const draft = assignmentDrafts[memberId] ?? {}
+    const draft = {
+      ...baseAssignmentDrafts[memberId],
+      ...assignmentDraftOverrides[memberId],
+    }
+
     return Object.entries(draft)
+      .filter(([unitId]) =>
+        (unitsQuery.data?.data ?? []).some((unit) => unit.id === Number(unitId)),
+      )
       .filter(([, role]) => role && role !== 'none')
       .map(([unitId, role]) => ({
         unitId: Number(unitId),
@@ -1494,11 +1410,14 @@ function OrganizationSettingsPage({
                   Portal Domain.
                 </p>
               </div>
-              <Button asChild variant="outline">
-                <Link to="/dashboard/settings/portal-domain">
-                  Abrir Portal Domain
-                </Link>
-              </Button>
+              <Button
+                variant="outline"
+                render={
+                  <Link to="/dashboard/settings/portal-domain">
+                    Abrir Portal Domain
+                  </Link>
+                }
+              />
             </CardContent>
           </Card>
         </>
@@ -1540,10 +1459,10 @@ function OrganizationSettingsPage({
                     <div className="space-y-2">
                       {editingUnitId === unit.id ? (
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                          <Input
-                            value={unitNameDrafts[unit.id] ?? unit.name}
-                            onChange={(event) =>
-                              setUnitNameDrafts((current) => ({
+                            <Input
+                              value={unitNameDrafts[unit.id] ?? unit.name}
+                              onChange={(event) =>
+                              setUnitNameDraftOverrides((current) => ({
                                 ...current,
                                 [unit.id]: event.target.value,
                               }))
@@ -1567,7 +1486,7 @@ function OrganizationSettingsPage({
                               disabled={updatingUnitId === unit.id}
                               onClick={() => {
                                 setEditingUnitId(null)
-                                setUnitNameDrafts((current) => ({
+                                setUnitNameDraftOverrides((current) => ({
                                   ...current,
                                   [unit.id]: unit.name,
                                 }))
@@ -1609,7 +1528,7 @@ function OrganizationSettingsPage({
                             }
                             onClick={() => {
                               setEditingUnitId(unit.id)
-                              setUnitNameDrafts((current) => ({
+                              setUnitNameDraftOverrides((current) => ({
                                 ...current,
                                 [unit.id]: current[unit.id] ?? unit.name,
                               }))
@@ -1729,7 +1648,9 @@ function OrganizationSettingsPage({
                                 </div>
                                 <Select
                                   value={
-                                    assignmentDrafts[member.id]?.[unit.id] ?? 'none'
+                                    assignmentDraftOverrides[member.id]?.[unit.id] ??
+                                    baseAssignmentDrafts[member.id]?.[unit.id] ??
+                                    'none'
                                   }
                                   onValueChange={(value) =>
                                     updateAssignmentDraft(
@@ -1746,7 +1667,9 @@ function OrganizationSettingsPage({
                                   <SelectTrigger className="w-full md:w-52">
                                     <SelectValue>
                                       {getUnitRoleLabel(
-                                        assignmentDrafts[member.id]?.[unit.id] ?? 'none',
+                                        assignmentDraftOverrides[member.id]?.[unit.id] ??
+                                          baseAssignmentDrafts[member.id]?.[unit.id] ??
+                                          'none',
                                       )}
                                     </SelectValue>
                                   </SelectTrigger>

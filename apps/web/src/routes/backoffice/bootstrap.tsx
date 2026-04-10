@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
+import { Navigate, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -47,11 +47,9 @@ function BackofficeBootstrapPage() {
     retry: false,
   })
 
-  useEffect(() => {
-    if (accessQuery.data?.allowed) {
-      navigate({ to: '/backoffice' })
-    }
-  }, [accessQuery.data?.allowed, navigate])
+  if (accessQuery.data?.allowed) {
+    return <Navigate to="/backoffice" />
+  }
 
   const bootstrapMutation = useMutation({
     mutationFn: async () => {

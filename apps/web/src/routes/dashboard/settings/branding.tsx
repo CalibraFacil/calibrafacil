@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useMemo, useRef, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { toast } from 'sonner'
 
@@ -75,6 +75,11 @@ interface TemplateListResponse {
   items: TemplateItem[]
 }
 
+type TemplateDraft = {
+  name: string
+  config: CertificateTemplateConfig
+}
+
 const layoutOptions = {
   headerStyle: [
     { value: 'classic', label: 'Clássico' },
@@ -117,6 +122,13 @@ function templateKey(template: TemplateItem) {
   return template.id ? String(template.id) : `system:${template.slug}`
 }
 
+function createTemplateDraft(template: TemplateItem): TemplateDraft {
+  return {
+    name: template.name,
+    config: normalizeCertificateTemplateConfig(template.config),
+  }
+}
+
 function BrandingSettingsPage() {
   const queryClient = useQueryClient()
   const accessQuery = usePlanAccess()
@@ -127,14 +139,9 @@ function BrandingSettingsPage() {
   )
   const [newTemplateName, setNewTemplateName] = useState('')
   const logoInputRef = useRef<HTMLInputElement>(null)
-  const [draft, setDraft] = useState<{
-    name: string
-    config: CertificateTemplateConfig
-  }>({
-    name: '',
-    config: DEFAULT_CERTIFICATE_TEMPLATE_CONFIG,
-  })
-  const deferredConfig = useDeferredValue(draft.config)
+  const [draftsByTemplateKey, setDraftsByTemplateKey] = useState<
+    Record<string, TemplateDraft>
+  >({})
 
   const templatesQuery = useQuery({
     queryKey: ['certificate-templates'],
@@ -148,32 +155,47 @@ function BrandingSettingsPage() {
   })
 
   const templates = templatesQuery.data?.items ?? []
+  const defaultTemplateKey = useMemo(() => {
+    const fallbackTemplate =
+      templates.find((template) => template.isDefault) ?? templates[0] ?? null
+    return fallbackTemplate ? templateKey(fallbackTemplate) : null
+  }, [templates])
+  const effectiveSelectedTemplateKey = selectedTemplateKey ?? defaultTemplateKey
   const selectedTemplate = useMemo(
     () =>
       templates.find(
-        (template) => templateKey(template) === selectedTemplateKey,
+        (template) => templateKey(template) === effectiveSelectedTemplateKey,
       ) ??
       templates[0] ??
       null,
-    [selectedTemplateKey, templates],
+    [effectiveSelectedTemplateKey, templates],
   )
+  const draft =
+    selectedTemplate && effectiveSelectedTemplateKey
+      ? draftsByTemplateKey[effectiveSelectedTemplateKey] ??
+        createTemplateDraft(selectedTemplate)
+      : {
+          name: '',
+          config: DEFAULT_CERTIFICATE_TEMPLATE_CONFIG,
+        }
+  const deferredConfig = useDeferredValue(draft.config)
+  const setDraft = (
+    updater: TemplateDraft | ((current: TemplateDraft) => TemplateDraft),
+  ) => {
+    if (!selectedTemplate || !effectiveSelectedTemplateKey) return
 
-  useEffect(() => {
-    if (!selectedTemplateKey && templates.length > 0) {
-      const nextSelection =
-        templates.find((template) => template.isDefault) ?? templates[0]
-      setSelectedTemplateKey(templateKey(nextSelection))
-    }
-  }, [selectedTemplateKey, templates])
+    setDraftsByTemplateKey((current) => {
+      const base =
+        current[effectiveSelectedTemplateKey] ?? createTemplateDraft(selectedTemplate)
+      const nextDraft =
+        typeof updater === 'function' ? updater(base) : updater
 
-  useEffect(() => {
-    if (!selectedTemplate) return
-
-    setDraft({
-      name: selectedTemplate.name,
-      config: normalizeCertificateTemplateConfig(selectedTemplate.config),
+      return {
+        ...current,
+        [effectiveSelectedTemplateKey]: nextDraft,
+      }
     })
-  }, [selectedTemplate])
+  }
 
   const refreshTemplates = async () => {
     await queryClient.invalidateQueries({ queryKey: ['certificate-templates'] })

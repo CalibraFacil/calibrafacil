@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -261,6 +261,25 @@ type ProfilePayload = {
   }>
 }
 
+type ProfileDraft = {
+  accountOwnerName: string
+  accountOwnerEmail: string
+  supportContactEmail: string
+  internalOwnerUserId: string
+  prioritySupport: boolean
+  slaTier: SlaTier
+  onboardingStatus: OnboardingStatus
+  migrationStatus: MigrationStatus
+  goLiveStatus: GoLiveStatus
+  healthStatus: HealthStatus
+  nextAction: string
+  nextActionDueAt: string
+  goLiveTargetDate: string
+  goLiveActualDate: string
+  publicStatusNote: string
+  internalNotes: string
+}
+
 type SupportRequest = {
   id: number
   category: string
@@ -328,6 +347,25 @@ const onboardingLabels: Record<OnboardingStatus, string> = {
   TRAINING: 'Treinamento',
   LIVE: 'Em produção',
   BLOCKED: 'Bloqueado',
+}
+
+const DEFAULT_PROFILE_DRAFT: ProfileDraft = {
+  accountOwnerName: '',
+  accountOwnerEmail: '',
+  supportContactEmail: '',
+  internalOwnerUserId: '',
+  prioritySupport: false,
+  slaTier: 'PLAN_DEFAULT',
+  onboardingStatus: 'NOT_STARTED',
+  migrationStatus: 'NOT_REQUIRED',
+  goLiveStatus: 'NOT_SCHEDULED',
+  healthStatus: 'HEALTHY',
+  nextAction: '',
+  nextActionDueAt: '',
+  goLiveTargetDate: '',
+  goLiveActualDate: '',
+  publicStatusNote: '',
+  internalNotes: '',
 }
 
 const migrationLabels: Record<MigrationStatus, string> = {
@@ -438,6 +476,27 @@ function formatDateTime(value: string | null) {
 function formatDateOnly(value: string | null) {
   if (!value) return ''
   return new Date(value).toISOString().slice(0, 10)
+}
+
+function createProfileDraft(payload: ProfilePayload): ProfileDraft {
+  return {
+    accountOwnerName: payload.profile.accountOwnerName ?? '',
+    accountOwnerEmail: payload.profile.accountOwnerEmail ?? '',
+    supportContactEmail: payload.profile.supportContactEmail ?? '',
+    internalOwnerUserId: payload.profile.internalOwnerUserId ?? '',
+    prioritySupport: payload.profile.prioritySupport,
+    slaTier: payload.profile.slaTier,
+    onboardingStatus: payload.profile.onboardingStatus,
+    migrationStatus: payload.profile.migrationStatus,
+    goLiveStatus: payload.profile.goLiveStatus,
+    healthStatus: payload.profile.healthStatus,
+    nextAction: payload.profile.nextAction ?? '',
+    nextActionDueAt: formatDateOnly(payload.profile.nextActionDueAt),
+    goLiveTargetDate: formatDateOnly(payload.profile.goLiveTargetDate),
+    goLiveActualDate: formatDateOnly(payload.profile.goLiveActualDate),
+    publicStatusNote: payload.profile.publicStatusNote ?? '',
+    internalNotes: payload.profile.internalNotes ?? '',
+  }
 }
 
 function formatRelativeSla(value: number | null) {
@@ -553,24 +612,8 @@ function InternalCustomerSuccessPage() {
     | 'escalation'
   >('all')
   const [search, setSearch] = useState('')
-  const [profileDraft, setProfileDraft] = useState({
-    accountOwnerName: '',
-    accountOwnerEmail: '',
-    supportContactEmail: '',
-    internalOwnerUserId: '',
-    prioritySupport: false,
-    slaTier: 'PLAN_DEFAULT' as SlaTier,
-    onboardingStatus: 'NOT_STARTED' as OnboardingStatus,
-    migrationStatus: 'NOT_REQUIRED' as MigrationStatus,
-    goLiveStatus: 'NOT_SCHEDULED' as GoLiveStatus,
-    healthStatus: 'HEALTHY' as HealthStatus,
-    nextAction: '',
-    nextActionDueAt: '',
-    goLiveTargetDate: '',
-    goLiveActualDate: '',
-    publicStatusNote: '',
-    internalNotes: '',
-  })
+  const [profileDraftsByOrganizationId, setProfileDraftsByOrganizationId] =
+    useState<Record<string, ProfileDraft>>({})
   const [responseDrafts, setResponseDrafts] = useState<Record<number, string>>({})
   const [blockerScopeDraft, setBlockerScopeDraft] =
     useState<BlockerScope>('ONBOARDING')
@@ -610,7 +653,7 @@ function InternalCustomerSuccessPage() {
         throw new Error(await parseApiError(res, 'Falha ao carregar fila de tickets'))
       }
 
-      return res.json() as Promise<{ data: SupportQueueItem[] }>
+      return res.json() as unknown as Promise<{ data: SupportQueueItem[] }>
     },
     enabled: accessQuery.isSuccess,
   })
@@ -661,24 +704,23 @@ function InternalCustomerSuccessPage() {
     })
   }, [organizationFilter, organizationsQuery.data, search])
 
-  useEffect(() => {
-    if (!filteredOrganizations.length) return
-
-    const hasSelected = filteredOrganizations.some(
-      (organization) => organization.id === selectedOrganizationId,
-    )
-
-    if (!selectedOrganizationId || !hasSelected) {
-      setSelectedOrganizationId(filteredOrganizations[0].id)
-    }
-  }, [filteredOrganizations, selectedOrganizationId])
+  const effectiveSelectedOrganizationId = filteredOrganizations.some(
+    (organization) => organization.id === selectedOrganizationId,
+  )
+    ? selectedOrganizationId
+    : filteredOrganizations[0]?.id ?? ''
 
   const profileQuery = useQuery({
-    queryKey: ['backoffice', 'customer-success', 'profile', selectedOrganizationId],
+    queryKey: [
+      'backoffice',
+      'customer-success',
+      'profile',
+      effectiveSelectedOrganizationId,
+    ],
     queryFn: async () => {
       const res =
         await api.api.backoffice['customer-success'].organizations[':id'].profile.$get({
-          param: { id: selectedOrganizationId },
+          param: { id: effectiveSelectedOrganizationId },
         })
 
       if (!res.ok) {
@@ -687,15 +729,20 @@ function InternalCustomerSuccessPage() {
 
       return res.json() as Promise<ProfilePayload>
     },
-    enabled: Boolean(selectedOrganizationId) && accessQuery.isSuccess,
+    enabled: Boolean(effectiveSelectedOrganizationId) && accessQuery.isSuccess,
   })
 
   const requestsQuery = useQuery({
-    queryKey: ['backoffice', 'customer-success', 'requests', selectedOrganizationId],
+    queryKey: [
+      'backoffice',
+      'customer-success',
+      'requests',
+      effectiveSelectedOrganizationId,
+    ],
     queryFn: async () => {
       const res =
         await api.api.backoffice['customer-success'].organizations[':id'].requests.$get({
-          param: { id: selectedOrganizationId },
+          param: { id: effectiveSelectedOrganizationId },
         })
 
       if (!res.ok) {
@@ -704,31 +751,31 @@ function InternalCustomerSuccessPage() {
 
       return res.json() as Promise<RequestsPayload>
     },
-    enabled: Boolean(selectedOrganizationId) && accessQuery.isSuccess,
+    enabled: Boolean(effectiveSelectedOrganizationId) && accessQuery.isSuccess,
   })
+  const profileDraft =
+    effectiveSelectedOrganizationId && profileQuery.data
+      ? profileDraftsByOrganizationId[effectiveSelectedOrganizationId] ??
+        createProfileDraft(profileQuery.data)
+      : DEFAULT_PROFILE_DRAFT
+  const setProfileDraft = (
+    updater: ProfileDraft | ((current: ProfileDraft) => ProfileDraft),
+  ) => {
+    if (!effectiveSelectedOrganizationId || !profileQuery.data) return
 
-  useEffect(() => {
-    if (!profileQuery.data) return
+    setProfileDraftsByOrganizationId((current) => {
+      const base =
+        current[effectiveSelectedOrganizationId] ??
+        createProfileDraft(profileQuery.data)
+      const nextDraft =
+        typeof updater === 'function' ? updater(base) : updater
 
-    setProfileDraft({
-      accountOwnerName: profileQuery.data.profile.accountOwnerName ?? '',
-      accountOwnerEmail: profileQuery.data.profile.accountOwnerEmail ?? '',
-      supportContactEmail: profileQuery.data.profile.supportContactEmail ?? '',
-      internalOwnerUserId: profileQuery.data.profile.internalOwnerUserId ?? '',
-      prioritySupport: profileQuery.data.profile.prioritySupport,
-      slaTier: profileQuery.data.profile.slaTier,
-      onboardingStatus: profileQuery.data.profile.onboardingStatus,
-      migrationStatus: profileQuery.data.profile.migrationStatus,
-      goLiveStatus: profileQuery.data.profile.goLiveStatus,
-      healthStatus: profileQuery.data.profile.healthStatus,
-      nextAction: profileQuery.data.profile.nextAction ?? '',
-      nextActionDueAt: formatDateOnly(profileQuery.data.profile.nextActionDueAt),
-      goLiveTargetDate: formatDateOnly(profileQuery.data.profile.goLiveTargetDate),
-      goLiveActualDate: formatDateOnly(profileQuery.data.profile.goLiveActualDate),
-      publicStatusNote: profileQuery.data.profile.publicStatusNote ?? '',
-      internalNotes: profileQuery.data.profile.internalNotes ?? '',
+      return {
+        ...current,
+        [effectiveSelectedOrganizationId]: nextDraft,
+      }
     })
-  }, [profileQuery.data])
+  }
 
   const refreshCurrentOrganization = async () => {
     await Promise.all([
@@ -736,10 +783,20 @@ function InternalCustomerSuccessPage() {
         queryKey: ['backoffice', 'customer-success', 'organizations'],
       }),
       queryClient.invalidateQueries({
-        queryKey: ['backoffice', 'customer-success', 'profile', selectedOrganizationId],
+        queryKey: [
+          'backoffice',
+          'customer-success',
+          'profile',
+          effectiveSelectedOrganizationId,
+        ],
       }),
       queryClient.invalidateQueries({
-        queryKey: ['backoffice', 'customer-success', 'requests', selectedOrganizationId],
+        queryKey: [
+          'backoffice',
+          'customer-success',
+          'requests',
+          effectiveSelectedOrganizationId,
+        ],
       }),
       queryClient.invalidateQueries({
         queryKey: ['backoffice', 'support', 'queue', 'customer-success'],
@@ -760,7 +817,7 @@ function InternalCustomerSuccessPage() {
     mutationFn: async () => {
       const res =
         await api.api.backoffice['customer-success'].organizations[':id'].profile.$put({
-          param: { id: selectedOrganizationId },
+          param: { id: effectiveSelectedOrganizationId },
           json: {
             accountOwnerName: profileDraft.accountOwnerName,
             accountOwnerEmail: profileDraft.accountOwnerEmail || null,
@@ -813,7 +870,7 @@ function InternalCustomerSuccessPage() {
       const res =
         await api.api.backoffice['customer-success'].organizations[':id']['next-action'].$post(
           {
-            param: { id: selectedOrganizationId },
+            param: { id: effectiveSelectedOrganizationId },
             json: {
               nextAction: markCompleted ? null : profileDraft.nextAction || null,
               nextActionDueAt:
@@ -868,7 +925,7 @@ function InternalCustomerSuccessPage() {
       const res =
         await api.api.backoffice['customer-success'].organizations[':id'].block.$post(
           {
-            param: { id: selectedOrganizationId },
+            param: { id: effectiveSelectedOrganizationId },
             json: {
               scope,
               mode,
@@ -1034,7 +1091,7 @@ function InternalCustomerSuccessPage() {
 
       const res =
         await api.api.backoffice['customer-success'].organizations[':id'].profile.$put({
-          param: { id: selectedOrganizationId },
+          param: { id: effectiveSelectedOrganizationId },
           json: {
             internalOwnerUserId: userId,
           },
@@ -1065,7 +1122,8 @@ function InternalCustomerSuccessPage() {
         ),
         cell: ({ row }) => {
           const organization = row.original
-          const isSelected = organization.id === selectedOrganizationId
+          const isSelected =
+            organization.id === effectiveSelectedOrganizationId
 
           return (
             <div className="flex min-w-60 flex-col gap-1">
@@ -1149,7 +1207,7 @@ function InternalCustomerSuccessPage() {
         },
       },
     ],
-    [selectedOrganizationId],
+    [effectiveSelectedOrganizationId],
   )
 
   const supportQueueData = supportQueueQuery.data?.data ?? []
@@ -1262,10 +1320,13 @@ function InternalCustomerSuccessPage() {
 
   const selectedOrganization =
     organizationsQuery.data?.data.find(
-      (organization) => organization.id === selectedOrganizationId,
+      (organization) => organization.id === effectiveSelectedOrganizationId,
     ) ?? null
-  const hasSelection = Boolean(selectedOrganizationId && selectedOrganization)
+  const hasSelection = Boolean(
+    effectiveSelectedOrganizationId && selectedOrganization,
+  )
   const organizationRequests = requestsQuery.data?.data ?? []
+  const profileData = profileQuery.data ?? null
 
   if (accessQuery.isLoading || organizationsQuery.isLoading) {
     return <InternalCustomerSuccessSkeleton />
@@ -1688,14 +1749,17 @@ function InternalCustomerSuccessPage() {
                     <div className="grid gap-4 md:grid-cols-2">
                       <Field>
                         <FieldLabel>Plano</FieldLabel>
-                        <Input value={profileQuery.data.plan.name} disabled />
+                        <Input value={profileData?.plan.name ?? ''} disabled />
                       </Field>
                       <Field>
                         <FieldLabel>Modo de suporte</FieldLabel>
-                        <Input value={profileQuery.data.supportPolicy.supportMode} disabled />
+                        <Input
+                          value={profileData?.supportPolicy.supportMode ?? ''}
+                          disabled
+                        />
                         <FieldDescription>
                           Meta de primeira resposta: {' '}
-                          {profileQuery.data.supportPolicy.targetFirstResponseBusinessHours}h
+                          {profileData?.supportPolicy.targetFirstResponseBusinessHours ?? 0}h
                         </FieldDescription>
                       </Field>
                     </div>
@@ -1704,29 +1768,31 @@ function InternalCustomerSuccessPage() {
                       <p>
                         SLA efetivo:{' '}
                         <strong>
-                          {slaTierLabels[profileQuery.data.policy.effectiveSlaTier]}
+                          {profileData
+                            ? slaTierLabels[profileData.policy.effectiveSlaTier]
+                            : '-'}
                         </strong>
                         {' · '}
                         Resposta alvo:{' '}
                         <strong>
-                          {profileQuery.data.policy.targetFirstResponseBusinessHours}h úteis
+                          {profileData?.policy.targetFirstResponseBusinessHours ?? 0}h úteis
                         </strong>
                         {' · '}
                         Alerta SLA:{' '}
                         <strong>
-                          {profileQuery.data.policy.dueSoonThresholdBusinessHours}h úteis
+                          {profileData?.policy.dueSoonThresholdBusinessHours ?? 0}h úteis
                         </strong>
                         {' · '}
                         Owner interno obrigatório:{' '}
                         <strong>
-                          {profileQuery.data.policy.requiresInternalOwnerForActiveWorkflows
+                          {profileData?.policy.requiresInternalOwnerForActiveWorkflows
                             ? 'Sim'
                             : 'Não'}
                         </strong>
                         {' · '}
                         Próxima ação obrigatória:{' '}
                         <strong>
-                          {profileQuery.data.policy.requiresNextActionForActiveWorkflows
+                          {profileData?.policy.requiresNextActionForActiveWorkflows
                             ? 'Sim'
                             : 'Não'}
                         </strong>
@@ -1787,7 +1853,7 @@ function InternalCustomerSuccessPage() {
                           }
                         >
                           <NativeSelectOption value="">Sem owner</NativeSelectOption>
-                          {profileQuery.data.operators.map((operator) => (
+                          {(profileData?.operators ?? []).map((operator) => (
                             <NativeSelectOption key={operator.id} value={operator.id}>
                               {operator.name}
                             </NativeSelectOption>

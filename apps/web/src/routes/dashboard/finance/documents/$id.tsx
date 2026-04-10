@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
@@ -101,9 +101,6 @@ function FinanceDocumentDetailsPage() {
   const { id } = Route.useParams()
   const queryClient = useQueryClient()
   const financeAccess = useFinanceAccess()
-  const [dueDate, setDueDate] = useState('')
-  const [discountCents, setDiscountCents] = useState('0')
-  const [notes, setNotes] = useState('')
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
   const [voidReason, setVoidReason] = useState('')
 
@@ -123,21 +120,18 @@ function FinanceDocumentDetailsPage() {
 
   const document = documentQuery.data?.data
 
-  useEffect(() => {
-    if (!document) return
-    setDueDate(document.dueDate.slice(0, 10))
-    setDiscountCents(String(document.discountCents))
-    setNotes(document.notes ?? '')
-  }, [document])
-
   const updateMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (draft: {
+      dueDate: string
+      discountCents: string
+      notes: string
+    }) => {
       const response = await api.api.finance.documents[':id'].$put({
         param: { id },
         json: {
-          dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
-          notes,
-          discountCents: Number(discountCents) || 0,
+          dueDate: draft.dueDate ? new Date(draft.dueDate).toISOString() : undefined,
+          notes: draft.notes,
+          discountCents: Number(draft.discountCents) || 0,
         },
       })
 
@@ -264,13 +258,6 @@ function FinanceDocumentDetailsPage() {
             {document.status === 'DRAFT' && (
               <>
                 <Button
-                  variant="outline"
-                  onClick={() => updateMutation.mutate()}
-                  disabled={updateMutation.isPending}
-                >
-                  {updateMutation.isPending ? 'Salvando...' : 'Salvar rascunho'}
-                </Button>
-                <Button
                   onClick={() => issueMutation.mutate()}
                   disabled={issueMutation.isPending}
                 >
@@ -353,37 +340,12 @@ function FinanceDocumentDetailsPage() {
               Rascunhos permitem ajustar vencimento, desconto e observações.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <FieldGroup>
-              <Field>
-                <FieldLabel>Vencimento</FieldLabel>
-                <Input
-                  type="date"
-                  value={dueDate}
-                  onChange={(event) => setDueDate(event.target.value)}
-                  disabled={document.status !== 'DRAFT'}
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Desconto (centavos)</FieldLabel>
-                <Input
-                  type="number"
-                  min={0}
-                  value={discountCents}
-                  onChange={(event) => setDiscountCents(event.target.value)}
-                  disabled={document.status !== 'DRAFT'}
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Observações</FieldLabel>
-                <Textarea
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  disabled={document.status !== 'DRAFT'}
-                />
-              </Field>
-            </FieldGroup>
-          </CardContent>
+          <DocumentParametersCard
+            key={`${document.id}:${document.dueDate}:${document.discountCents}:${document.notes ?? ''}`}
+            document={document}
+            isSaving={updateMutation.isPending}
+            onSave={(draft) => updateMutation.mutate(draft)}
+          />
         </Card>
       </div>
 
@@ -524,6 +486,63 @@ function FinanceDocumentDetailsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+function DocumentParametersCard({
+  document,
+  isSaving,
+  onSave,
+}: {
+  document: BillingDocumentDetails
+  isSaving: boolean
+  onSave: (draft: {
+    dueDate: string
+    discountCents: string
+    notes: string
+  }) => void
+}) {
+  const [dueDate, setDueDate] = useState(document.dueDate.slice(0, 10))
+  const [discountCents, setDiscountCents] = useState(String(document.discountCents))
+  const [notes, setNotes] = useState(document.notes ?? '')
+
+  return (
+    <CardContent className="space-y-4">
+      <FieldGroup>
+        <Field>
+          <FieldLabel>Vencimento</FieldLabel>
+          <Input
+            type="date"
+            value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
+            disabled={document.status !== 'DRAFT'}
+          />
+        </Field>
+        <Field>
+          <FieldLabel>Desconto (centavos)</FieldLabel>
+          <Input
+            type="number"
+            min={0}
+            value={discountCents}
+            onChange={(event) => setDiscountCents(event.target.value)}
+            disabled={document.status !== 'DRAFT'}
+          />
+        </Field>
+        <Field>
+          <FieldLabel>Observações</FieldLabel>
+          <Textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            disabled={document.status !== 'DRAFT'}
+          />
+        </Field>
+      </FieldGroup>
+      {document.status === 'DRAFT' ? (
+        <Button onClick={() => onSave({ dueDate, discountCents, notes })} disabled={isSaving}>
+          {isSaving ? 'Salvando...' : 'Salvar rascunho'}
+        </Button>
+      ) : null}
+    </CardContent>
   )
 }
 

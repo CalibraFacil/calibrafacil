@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from 'sonner'
 import { api } from '@/utils/api'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 interface BoletoPaymentProps {
   planId: PlanId
@@ -108,21 +109,6 @@ export function BoletoPayment({
 
   const isActive = statusQuery.data?.status === 'ACTIVE'
 
-  // Handle payment confirmation
-  useEffect(() => {
-    if (isActive && subscriptionId) {
-      onSuccess(subscriptionId)
-    }
-  }, [isActive, subscriptionId, onSuccess])
-
-  // Auto-initiate checkout
-  useEffect(() => {
-    if (!subscriptionId && !checkoutMutation.isPending) {
-      checkoutMutation.mutate()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   // Get boleto data with proper typing
   const boletoData = checkoutMutation.data?.boleto as
     | BoletoData
@@ -195,6 +181,15 @@ export function BoletoPayment({
 
   return (
     <div className="flex flex-col items-center gap-6">
+      {!subscriptionId && !checkoutMutation.isPending && !checkoutMutation.data ? (
+        <BoletoCheckoutStarter onStart={() => checkoutMutation.mutate()} />
+      ) : null}
+      {isActive && subscriptionId ? (
+        <BoletoSuccessNotifier
+          subscriptionId={subscriptionId}
+          onSuccess={onSuccess}
+        />
+      ) : null}
       {/* Header */}
       <div className="text-center">
         <h3 className="text-lg font-semibold">Boleto Gerado</h3>
@@ -268,4 +263,29 @@ export function BoletoPayment({
       </div>
     </div>
   )
+}
+
+function BoletoCheckoutStarter({ onStart }: { onStart: () => void }) {
+  useMountEffect(() => {
+    onStart()
+  })
+
+  return null
+}
+
+function BoletoSuccessNotifier({
+  subscriptionId,
+  onSuccess,
+}: {
+  subscriptionId: number
+  onSuccess: (
+    subscriptionId: number,
+    paymentData?: CheckoutState['paymentData'],
+  ) => void
+}) {
+  useMountEffect(() => {
+    onSuccess(subscriptionId)
+  })
+
+  return null
 }

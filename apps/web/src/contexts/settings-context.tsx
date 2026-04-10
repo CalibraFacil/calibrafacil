@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authClient, useSession } from '@calibra-facil/auth/client'
 
 import { api } from '@/utils/api'
@@ -81,45 +82,38 @@ export function useSettings() {
 // =============================================================================
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient()
   const { data: sessionData, isPending } = useSession()
 
   const [isUpdating, setIsUpdating] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
-  const [sessions, setSessions] = React.useState<Array<SessionInfo>>([])
-  const [sessionsLoading, setSessionsLoading] = React.useState(false)
-
-  // Fetch sessions on mount
-  React.useEffect(() => {
-    refreshSessions()
-  }, [])
 
   const clearError = React.useCallback(() => {
     setError(null)
   }, [])
 
-  const refreshSessions = React.useCallback(async () => {
-    setSessionsLoading(true)
-    try {
+  const sessionsQuery = useQuery({
+    queryKey: ['settings', 'sessions'],
+    queryFn: async (): Promise<Array<SessionInfo>> => {
       const result = await authClient.listSessions()
-      if (result.data) {
-        setSessions(
-          result.data.map((s) => ({
-            id: s.id,
-            token: s.token,
-            expiresAt: new Date(s.expiresAt),
-            createdAt: new Date(s.createdAt),
-            updatedAt: new Date(s.updatedAt),
-            userAgent: s.userAgent ?? null,
-            ipAddress: s.ipAddress ?? null,
-          })),
-        )
-      }
-    } catch (err) {
-      console.error('Failed to fetch sessions:', err)
-    } finally {
-      setSessionsLoading(false)
-    }
-  }, [])
+      return (result.data ?? []).map((s) => ({
+        id: s.id,
+        token: s.token,
+        expiresAt: new Date(s.expiresAt),
+        createdAt: new Date(s.createdAt),
+        updatedAt: new Date(s.updatedAt),
+        userAgent: s.userAgent ?? null,
+        ipAddress: s.ipAddress ?? null,
+      }))
+    },
+  })
+
+  const refreshSessions = React.useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['settings', 'sessions'] })
+    await queryClient.refetchQueries({ queryKey: ['settings', 'sessions'] })
+  }, [queryClient])
+  const sessions = sessionsQuery.data ?? []
+  const sessionsLoading = sessionsQuery.isPending || sessionsQuery.isFetching
 
   const updateProfile = React.useCallback(
     async (data: { name?: string; image?: string }) => {
@@ -181,7 +175,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setIsUpdating(true)
       setError(null)
       // Remove from local state immediately (optimistic update)
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+      queryClient.setQueryData<Array<SessionInfo>>(
+        ['settings', 'sessions'],
+        (prev) => (prev ?? []).filter((s) => s.id !== sessionId),
+      )
       try {
         const res = await api.api.sessions.revoke.$post({
           json: { sessionId },
@@ -209,7 +206,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         setIsUpdating(false)
       }
     },
-    [refreshSessions],
+    [queryClient, refreshSessions],
   )
 
   const revokeOtherSessions = React.useCallback(async () => {

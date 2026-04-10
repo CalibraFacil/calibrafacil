@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -50,10 +50,6 @@ function NewRequestPage() {
   const [observations, setObservations] = useState("");
   const [requestedDueDate, setRequestedDueDate] = useState("");
   const limit = 20;
-
-  useEffect(() => {
-    setPage(1);
-  }, [deferredSearch]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["portal-request-assets", page, limit, deferredSearch],
@@ -149,7 +145,10 @@ function NewRequestPage() {
           <Input
             placeholder="Buscar ativos por nome, tag ou série..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
           />
           <p className="text-xs text-muted-foreground">
             Pesquise ou navegue pelas páginas. Os ativos selecionados continuam
