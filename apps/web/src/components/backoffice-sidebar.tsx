@@ -54,6 +54,10 @@ const operationsItems = [
     title: 'Customer Success',
     url: '/backoffice/customer-success',
     icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
+    items: [
+      { title: 'Contas', url: '/backoffice/customer-success' },
+      { title: 'Tickets', url: '/backoffice/customer-success/tickets' },
+    ],
   },
   {
     title: 'Suporte',
