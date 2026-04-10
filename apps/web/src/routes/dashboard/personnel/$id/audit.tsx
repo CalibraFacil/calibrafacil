@@ -3,18 +3,16 @@ import { useQuery } from '@tanstack/react-query'
 
 import { api } from '@/utils/api'
 import {
+  AuditTimeline,
+  buildAuditTimelineEvents,
+} from '@/components/audit-timeline'
+import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from '@/components/ui/empty'
 
 export const Route = createFileRoute('/dashboard/personnel/$id/audit')({
   head: () => ({
@@ -22,31 +20,6 @@ export const Route = createFileRoute('/dashboard/personnel/$id/audit')({
   }),
   component: AuditTab,
 })
-
-function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-const actionLabels: Record<string, string> = {
-  create: 'Competência criada',
-  update: 'Dados atualizados',
-  assign_training: 'Treinamento atribuído',
-  start_training: 'Treinamento iniciado',
-  complete_training: 'Treinamento concluído',
-  approve: 'Competência aprovada',
-  reject: 'Competência reprovada',
-  suspend: 'Competência suspensa',
-  renew: 'Competência renovada',
-  expire: 'Competência expirada',
-  delete: 'Competência removida',
-}
 
 function AuditTab() {
   const { id } = Route.useParams()
@@ -83,53 +56,16 @@ function AuditTab() {
   }
 
   const entries = logs ?? []
+  const timelineEvents = buildAuditTimelineEvents(entries)
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Histórico de Alterações</CardTitle>
-        <CardDescription>
-          Registro de auditoria - ISO 17025 Cláusula 8.4
-        </CardDescription>
+        <CardDescription>Registro de auditoria</CardDescription>
       </CardHeader>
       <CardContent>
-        {entries.length === 0 ? (
-          <Empty className="border">
-            <EmptyHeader>
-              <EmptyTitle>Nenhum registro</EmptyTitle>
-              <EmptyDescription>
-                O histórico de auditoria aparecerá aqui conforme ações forem
-                realizadas.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div className="space-y-3">
-            {entries.map((log) => (
-              <div
-                key={log.id}
-                className="flex items-start justify-between border-b pb-3 last:border-b-0"
-              >
-                <div>
-                  <p className="font-medium text-sm">
-                    {actionLabels[log.action] ?? log.action}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    por {log.performedByName}
-                  </p>
-                  {log.reason && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {log.reason}
-                    </p>
-                  )}
-                </div>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {formatDate(log.performedAt)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        <AuditTimeline events={timelineEvents} showCard={false} />
       </CardContent>
     </Card>
   )

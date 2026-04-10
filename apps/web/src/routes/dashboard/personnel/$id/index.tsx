@@ -1,4 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { useActiveOrganization } from '@calibra-facil/auth/client'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -13,17 +14,26 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
 import { type CompetenceStatus, getStatusBadge } from '../-components/columns'
 
 export const Route = createFileRoute('/dashboard/personnel/$id/')({
@@ -42,6 +52,18 @@ function formatDate(dateString: string | null | undefined): string {
   })
 }
 
+function getTodayDateInputValue(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function toISOStringFromDateInput(value: string): string {
+  return new Date(`${value}T00:00:00`).toISOString()
+}
+
 const WORKFLOW_STEPS: CompetenceStatus[] = [
   'REQUESTED',
   'TRAINING_ASSIGNED',
@@ -50,11 +72,45 @@ const WORKFLOW_STEPS: CompetenceStatus[] = [
   'ACTIVE',
 ]
 
+type TrainingType = 'internal' | 'external' | 'ojt' | 'proficiency_test'
+
+type TrainingRecordOption = {
+  id: number
+  userId: string
+  competenceId: number | null
+  title: string
+  type: TrainingType
+  status: string
+  provider: string | null
+  startDate: string
+  endDate: string | null
+  hoursCompleted: number | null
+}
+
+const TRAINING_TYPE_LABELS: Record<TrainingType, string> = {
+  internal: 'Interno',
+  external: 'Externo',
+  ojt: 'Em Serviço',
+  proficiency_test: 'Teste de Proficiência',
+}
+
+const TRAINING_STATUS_LABELS: Record<string, string> = {
+  planned: 'Planejado',
+  in_progress: 'Em Andamento',
+  completed: 'Concluído',
+  failed: 'Reprovado',
+}
+
 function CompetenceDetailPage() {
   const { id } = Route.useParams()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { data: activeOrg } = useActiveOrganization()
   const [evaluateDialogOpen, setEvaluateDialogOpen] = useState(false)
   const [renewDialogOpen, setRenewDialogOpen] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [cancelNotes, setCancelNotes] = useState('')
 
   const {
     data: comp,
@@ -181,6 +237,51 @@ function CompetenceDetailPage() {
     onError: (error) => toast.error(error.message),
   })
 
+  const cancelMutation = useMutation({
+    mutationFn: async (notes?: string) => {
+      const res = await api.api.competences[':id'].cancel.$post({
+        param: { id },
+        json: { notes },
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(
+          (err as { error?: string }).error || 'Erro ao cancelar competência',
+        )
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      invalidateAll()
+      toast.success('Competência cancelada')
+      setCancelDialogOpen(false)
+      setCancelNotes('')
+    },
+    onError: (error) => toast.error(error.message),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.api.competences[':id'].$delete({
+        param: { id },
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(
+          (err as { error?: string }).error || 'Erro ao excluir competência',
+        )
+      }
+      return res.json()
+    },
+    onSuccess: async () => {
+      invalidateAll()
+      toast.success('Competência excluída')
+      setDeleteDialogOpen(false)
+      await navigate({ to: '/dashboard/personnel' })
+    },
+    onError: (error) => toast.error(error.message),
+  })
+
   if (isLoading) {
     return (
       <Card>
@@ -205,6 +306,20 @@ function CompetenceDetailPage() {
 
   const statusBadge = getStatusBadge(comp.status)
   const currentStepIndex = WORKFLOW_STEPS.indexOf(comp.status)
+  const userRole =
+    typeof activeOrg?.members?.[0]?.role === 'string'
+      ? activeOrg.members[0].role
+      : null
+  const canDelete = userRole === 'owner' || userRole === 'admin'
+  const isTerminalInactive =
+    comp.status === 'SUSPENDED' ||
+    comp.status === 'EXPIRED' ||
+    comp.status === 'CANCELLED'
+  const canCancel =
+    comp.status === 'REQUESTED' ||
+    comp.status === 'TRAINING_ASSIGNED' ||
+    comp.status === 'IN_TRAINING' ||
+    comp.status === 'PENDING_EVALUATION'
 
   return (
     <div className="space-y-6">
@@ -218,15 +333,13 @@ function CompetenceDetailPage() {
             {WORKFLOW_STEPS.map((step, i) => {
               const isCompleted = currentStepIndex > i
               const isCurrent = comp.status === step
-              const isInactive =
-                comp.status === 'SUSPENDED' || comp.status === 'EXPIRED'
               return (
                 <div key={step} className="flex items-center flex-1">
                   <div
                     className={`flex-1 h-2 rounded-full ${
                       isCompleted
                         ? 'bg-primary'
-                        : isCurrent && !isInactive
+                        : isCurrent && !isTerminalInactive
                           ? 'bg-primary/50'
                           : 'bg-muted'
                     }`}
@@ -241,10 +354,13 @@ function CompetenceDetailPage() {
             <span>Avaliação</span>
             <span>Ativa</span>
           </div>
-          {(comp.status === 'SUSPENDED' || comp.status === 'EXPIRED') && (
+          {isTerminalInactive && (
             <div className="mt-3">
-              <Badge variant="destructive">
-                {comp.status === 'SUSPENDED' ? 'Suspensa' : 'Expirada'}
+              <Badge
+                variant={statusBadge.variant}
+                className={statusBadge.className}
+              >
+                {statusBadge.label}
               </Badge>
             </div>
           )}
@@ -339,6 +455,75 @@ function CompetenceDetailPage() {
 
             {/* Workflow Actions */}
             <div className="flex flex-wrap gap-2 pt-4 border-t">
+              {canCancel && (
+                <Dialog
+                  open={cancelDialogOpen}
+                  onOpenChange={(open) => {
+                    setCancelDialogOpen(open)
+                    if (!open) setCancelNotes('')
+                  }}
+                >
+                  <DialogTrigger
+                    render={<Button variant="outline">Cancelar</Button>}
+                  />
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Cancelar Competência</DialogTitle>
+                      <DialogDescription>
+                        Cancele este fluxo quando a qualificação não deve mais
+                        prosseguir. A competência permanecerá no histórico com
+                        status &quot;Cancelada&quot;.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="cancel-notes">Motivo (opcional)</Label>
+                      <Textarea
+                        id="cancel-notes"
+                        value={cancelNotes}
+                        onChange={(e) => setCancelNotes(e.target.value)}
+                        placeholder="Explique por que esta competência foi cancelada..."
+                        rows={3}
+                        disabled={cancelMutation.isPending}
+                      />
+                    </div>
+
+                    <DialogFooter>
+                      <DialogClose
+                        render={
+                          <Button
+                            variant="outline"
+                            disabled={cancelMutation.isPending}
+                          />
+                        }
+                      >
+                        Voltar
+                      </DialogClose>
+                      <Button
+                        variant="destructive"
+                        onClick={() =>
+                          cancelMutation.mutate(cancelNotes || undefined)
+                        }
+                        disabled={cancelMutation.isPending}
+                      >
+                        {cancelMutation.isPending
+                          ? 'Processando...'
+                          : 'Confirmar Cancelamento'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+
+              {comp.status === 'REQUESTED' && (
+                <AssignTrainingDialog
+                  competenceId={id}
+                  userId={comp.userId}
+                  userName={comp.userName ?? 'Técnico'}
+                  onAssigned={invalidateAll}
+                />
+              )}
+
               {comp.status === 'TRAINING_ASSIGNED' && (
                 <Button
                   onClick={() =>
@@ -419,11 +604,431 @@ function CompetenceDetailPage() {
                   </DialogContent>
                 </Dialog>
               )}
+
+              {canDelete && (
+                <Dialog
+                  open={deleteDialogOpen}
+                  onOpenChange={setDeleteDialogOpen}
+                >
+                  <DialogTrigger
+                    render={<Button variant="destructive">Excluir</Button>}
+                  />
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Excluir Competência</DialogTitle>
+                      <DialogDescription>
+                        Esta ação remove a competência da visualização principal.
+                        O registro será mantido como exclusão lógica para fins
+                        internos.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <p className="text-sm text-muted-foreground">
+                      Exclua apenas cadastros criados por engano ou que não
+                      devam permanecer no histórico operacional.
+                    </p>
+
+                    <DialogFooter>
+                      <DialogClose
+                        render={
+                          <Button
+                            variant="outline"
+                            disabled={deleteMutation.isPending}
+                          />
+                        }
+                      >
+                        Voltar
+                      </DialogClose>
+                      <Button
+                        variant="destructive"
+                        onClick={() => deleteMutation.mutate()}
+                        disabled={deleteMutation.isPending}
+                      >
+                        {deleteMutation.isPending
+                          ? 'Excluindo...'
+                          : 'Confirmar Exclusão'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
     </div>
+  )
+}
+
+function AssignTrainingDialog({
+  competenceId,
+  userId,
+  userName,
+  onAssigned,
+}: {
+  competenceId: string
+  userId: string
+  userName: string
+  onAssigned: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [createMode, setCreateMode] = useState(false)
+  const [selectedTrainingIds, setSelectedTrainingIds] = useState<number[]>([])
+  const [title, setTitle] = useState('')
+  const [type, setType] = useState<TrainingType>('internal')
+  const [provider, setProvider] = useState('')
+  const [description, setDescription] = useState('')
+  const [startDate, setStartDate] = useState(getTodayDateInputValue())
+  const [endDate, setEndDate] = useState('')
+  const queryClient = useQueryClient()
+
+  const resetForm = () => {
+    setCreateMode(false)
+    setSelectedTrainingIds([])
+    setTitle('')
+    setType('internal')
+    setProvider('')
+    setDescription('')
+    setStartDate(getTodayDateInputValue())
+    setEndDate('')
+  }
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['training-records', 'assignable', userId],
+    queryFn: async () => {
+      const res = await api.api['training-records'].$get({
+        query: {
+          page: '1',
+          limit: '100',
+          userId,
+        },
+      })
+      if (!res.ok) throw new Error('Falha ao carregar treinamentos')
+      return res.json() as Promise<{ data: Array<TrainingRecordOption> }>
+    },
+    enabled: open,
+  })
+
+  const availableTrainingRecords =
+    data?.data.filter(
+      (record) =>
+        record.competenceId === null ||
+        record.competenceId === Number(competenceId),
+    ) ?? []
+
+  const assignTrainingMutation = useMutation({
+    mutationFn: async (trainingRecordIds: number[]) => {
+      const res = await api.api.competences[':id']['assign-training'].$post({
+        param: { id: competenceId },
+        json: { trainingRecordIds },
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(
+          (err as { error?: string }).error || 'Erro ao atribuir treinamento',
+        )
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['training-records'] })
+      onAssigned()
+      toast.success('Treinamento atribuído')
+      setOpen(false)
+      resetForm()
+    },
+    onError: (error) => toast.error(error.message),
+  })
+
+  const createTrainingMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.api['training-records'].$post({
+        json: {
+          userId,
+          title: title.trim(),
+          type,
+          provider: provider.trim() || undefined,
+          description: description.trim() || undefined,
+          startDate: toISOStringFromDateInput(startDate),
+          endDate: endDate ? toISOStringFromDateInput(endDate) : undefined,
+        },
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(
+          (err as { error?: string }).error ||
+            'Erro ao criar registro de treinamento',
+        )
+      }
+
+      const created = (await res.json()) as { id: number }
+
+      const assignRes = await api.api.competences[':id']['assign-training'].$post(
+        {
+          param: { id: competenceId },
+          json: { trainingRecordIds: [created.id] },
+        },
+      )
+
+      if (!assignRes.ok) {
+        const err = await assignRes.json()
+        throw new Error(
+          (err as { error?: string }).error || 'Erro ao atribuir treinamento',
+        )
+      }
+
+      return assignRes.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['training-records'] })
+      onAssigned()
+      toast.success('Treinamento atribuído')
+      setOpen(false)
+      resetForm()
+    },
+    onError: (error) => toast.error(error.message),
+  })
+
+  const isSubmitting =
+    assignTrainingMutation.isPending || createTrainingMutation.isPending
+  const showCreateForm =
+    createMode || (!isLoading && !error && availableTrainingRecords.length === 0)
+
+  const toggleTraining = (trainingId: number, checked: boolean) => {
+    setSelectedTrainingIds((current) => {
+      if (checked) {
+        return current.includes(trainingId) ? current : [...current, trainingId]
+      }
+      return current.filter((id) => id !== trainingId)
+    })
+  }
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (!nextOpen) resetForm()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger render={<Button>Atribuir Treinamento</Button>} />
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Atribuir Treinamento</DialogTitle>
+          <DialogDescription>
+            Vincule um treinamento existente ou crie um novo registro para
+            avançar a competência de {userName} para o status &quot;Treinamento
+            Atribuído&quot;.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!createMode && isLoading ? (
+          <p className="text-sm text-muted-foreground">
+            Carregando treinamentos...
+          </p>
+        ) : !createMode && error ? (
+          <div className="space-y-4">
+            <p className="text-sm text-red-500">{error.message}</p>
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateMode(true)}
+              >
+                Criar novo treinamento
+              </Button>
+            </div>
+          </div>
+        ) : showCreateForm ? (
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              createTrainingMutation.mutate()
+            }}
+          >
+            {availableTrainingRecords.length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="px-0"
+                onClick={() => setCreateMode(false)}
+                disabled={isSubmitting}
+              >
+                Selecionar treinamento existente
+              </Button>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="training-title">Título do treinamento</Label>
+              <Input
+                id="training-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Ex.: Treinamento interno de calibração"
+                disabled={isSubmitting}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Select
+                value={type}
+                onValueChange={(value) => setType(value as TrainingType)}
+              >
+                <SelectTrigger>
+                  <span>{TRAINING_TYPE_LABELS[type]}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  {(
+                    Object.entries(TRAINING_TYPE_LABELS) as Array<
+                      [TrainingType, string]
+                    >
+                  ).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="training-start-date">Data de início</Label>
+                <Input
+                  id="training-start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  disabled={isSubmitting}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="training-end-date">Data de término</Label>
+                <Input
+                  id="training-end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="training-provider">Provedor (opcional)</Label>
+              <Input
+                id="training-provider"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value)}
+                placeholder="Ex.: SENAI, fabricante, treinamento interno"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="training-description">Descrição (opcional)</Label>
+              <Textarea
+                id="training-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Descreva o conteúdo ou evidência do treinamento..."
+                rows={3}
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <DialogFooter>
+              <DialogClose
+                render={<Button variant="outline" disabled={isSubmitting} />}
+              >
+                Cancelar
+              </DialogClose>
+              <Button
+                type="submit"
+                disabled={!title.trim() || !startDate || isSubmitting}
+              >
+                {isSubmitting ? 'Processando...' : 'Criar e Atribuir'}
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : (
+          <div className="space-y-4">
+            <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+              {availableTrainingRecords.map((record) => {
+                const checked = selectedTrainingIds.includes(record.id)
+                return (
+                  <label
+                    key={record.id}
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border p-3"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(nextChecked) =>
+                        toggleTraining(record.id, nextChecked === true)
+                      }
+                      disabled={isSubmitting}
+                    />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-medium">{record.title}</p>
+                        <Badge variant="outline">
+                          {TRAINING_STATUS_LABELS[record.status] ??
+                            record.status}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {TRAINING_TYPE_LABELS[record.type]} • início{' '}
+                        {formatDate(record.startDate)}
+                        {record.endDate
+                          ? ` • término ${formatDate(record.endDate)}`
+                          : ''}
+                      </p>
+                      {record.provider && (
+                        <p className="text-sm text-muted-foreground">
+                          {record.provider}
+                        </p>
+                      )}
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex gap-2">
+                <DialogClose
+                  render={<Button variant="outline" disabled={isSubmitting} />}
+                >
+                  Cancelar
+                </DialogClose>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCreateMode(true)}
+                  disabled={isSubmitting}
+                >
+                  Novo treinamento
+                </Button>
+              </div>
+
+              <Button
+                type="button"
+                disabled={selectedTrainingIds.length === 0 || isSubmitting}
+                onClick={() =>
+                  assignTrainingMutation.mutate(selectedTrainingIds)
+                }
+              >
+                {isSubmitting ? 'Processando...' : 'Atribuir Selecionados'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 

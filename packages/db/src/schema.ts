@@ -4587,7 +4587,8 @@ export type CompetenceStatus =
   | "PENDING_EVALUATION"
   | "ACTIVE"
   | "SUSPENDED"
-  | "EXPIRED";
+  | "EXPIRED"
+  | "CANCELLED";
 
 /**
  * Training type values
@@ -4608,6 +4609,7 @@ export type TrainingStatus = "planned" | "in_progress" | "completed" | "failed";
  * - Full workflow: REQUESTED → TRAINING_ASSIGNED → IN_TRAINING → PENDING_EVALUATION → ACTIVE
  * - Auto-detect enforcement: skip if org has zero records, enforce once populated
  * - Supports expiration and renewal
+ * - Supports cancellation before activation when qualification should not proceed
  */
 export const personnelCompetence = pgTable(
   "personnel_competence",

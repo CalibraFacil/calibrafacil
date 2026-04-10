@@ -56,6 +56,7 @@ const STATUS_LABELS: Record<CompetenceStatus, string> = {
   ACTIVE: 'Ativa',
   SUSPENDED: 'Suspensa',
   EXPIRED: 'Expirada',
+  CANCELLED: 'Cancelada',
 }
 
 function PersonnelPage() {
@@ -79,7 +80,12 @@ function PersonnelPage() {
       if (!res.ok) throw new Error('Falha ao carregar competências')
       return res.json() as Promise<{
         data: Array<CompetenceRow>
-        pagination: { page: number; limit: number; total: number; totalPages: number }
+        pagination: {
+          page: number
+          limit: number
+          total: number
+          totalPages: number
+        }
       }>
     },
     enabled: viewMode === 'list',
@@ -124,9 +130,7 @@ function PersonnelPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Competências do Pessoal</CardTitle>
-            <CardDescription>
-              Gestão de qualificações - ISO 17025 Cláusula 6.2.3
-            </CardDescription>
+            <CardDescription>Gestão de qualificações</CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex rounded-md border">
@@ -155,7 +159,7 @@ function PersonnelPage() {
             />
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           {viewMode === 'list' ? (
             <>
               {/* Filters */}
@@ -216,7 +220,10 @@ function PersonnelPage() {
                   <EmptyContent>
                     {!statusFilter && (
                       <Button render={<Link to="/dashboard/personnel/new" />}>
-                        <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+                        <HugeiconsIcon
+                          icon={PlusSignIcon}
+                          className="mr-2 size-4"
+                        />
                         Nova Solicitação
                       </Button>
                     )}
@@ -273,7 +280,11 @@ function MatrixView({
   isLoading: boolean
 }) {
   if (isLoading) {
-    return <p className="text-muted-foreground py-8 text-center">Carregando matriz...</p>
+    return (
+      <p className="text-muted-foreground py-8 text-center">
+        Carregando matriz...
+      </p>
+    )
   }
 
   if (!data || data.technicians.length === 0) {
@@ -285,7 +296,8 @@ function MatrixView({
           </EmptyMedia>
           <EmptyTitle>Nenhum técnico encontrado</EmptyTitle>
           <EmptyDescription>
-            Adicione membros com papel de técnico para visualizar a matriz de competências.
+            Adicione membros com papel de técnico para visualizar a matriz de
+            competências.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -301,7 +313,8 @@ function MatrixView({
           </EmptyMedia>
           <EmptyTitle>Nenhum tipo de instrumento cadastrado</EmptyTitle>
           <EmptyDescription>
-            Cadastre tipos de instrumentos para visualizar a matriz de competências.
+            Cadastre tipos de instrumentos para visualizar a matriz de
+            competências.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -315,15 +328,18 @@ function MatrixView({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="w-full min-w-0 max-w-full overflow-x-auto">
+      <table className="min-w-max text-sm">
         <thead>
           <tr className="border-b">
             <th className="text-left py-3 px-2 font-medium sticky left-0 bg-background">
               Técnico
             </th>
             {data.assetTypes.map((at) => (
-              <th key={at.id} className="text-center py-3 px-2 font-medium min-w-[120px]">
+              <th
+                key={at.id}
+                className="text-center py-3 px-2 font-medium min-w-[120px]"
+              >
                 {at.name}
               </th>
             ))}

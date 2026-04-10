@@ -17,6 +17,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from '@/components/ui/empty'
+import { getStatusBadge, type CompetenceStatus } from '../-components/columns'
 
 export const Route = createFileRoute('/dashboard/personnel/$id/training')({
   head: () => ({
@@ -59,7 +60,23 @@ function TrainingTab() {
     queryFn: async () => {
       const res = await api.api.competences[':id'].$get({ param: { id } })
       if (!res.ok) throw new Error('Falha ao carregar')
-      return res.json()
+      return res.json() as Promise<{
+        status: CompetenceStatus
+        trainingRecords: Array<{
+          id: number
+          title: string
+          type: string
+          status: string
+          provider: string | null
+          description: string | null
+          startDate: string
+          endDate: string | null
+          hoursCompleted: number | null
+          score: number | null
+          passingScore: number | null
+          passed: boolean | null
+        }>
+      }>
     },
   })
 
@@ -74,6 +91,7 @@ function TrainingTab() {
   }
 
   const trainings = comp?.trainingRecords ?? []
+  const competenceBadge = comp ? getStatusBadge(comp.status) : null
 
   if (trainings.length === 0) {
     return (
@@ -81,7 +99,8 @@ function TrainingTab() {
         <CardHeader>
           <CardTitle>Registros de Treinamento</CardTitle>
           <CardDescription>
-            Treinamentos vinculados a esta competência
+            Treinamentos vinculados a esta competência.
+            {competenceBadge ? ` Competência atual: ${competenceBadge.label}.` : ''}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -105,8 +124,13 @@ function TrainingTab() {
         <CardTitle>Registros de Treinamento</CardTitle>
         <CardDescription>
           {trainings.length} treinamento{trainings.length !== 1 ? 's' : ''}{' '}
-          vinculado{trainings.length !== 1 ? 's' : ''}
+          vinculado{trainings.length !== 1 ? 's' : ''}.
+          {competenceBadge ? ` Competência atual: ${competenceBadge.label}.` : ''}
         </CardDescription>
+        <p className="text-sm text-muted-foreground">
+          O status da competência é independente do status dos treinamentos
+          vinculados.
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {trainings.map((tr) => (
@@ -116,9 +140,11 @@ function TrainingTab() {
           >
             <div className="flex items-center justify-between">
               <h4 className="font-medium">{tr.title}</h4>
-              <Badge variant={statusVariants[tr.status] ?? 'secondary'}>
-                {statusLabels[tr.status] ?? tr.status}
-              </Badge>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Badge variant={statusVariants[tr.status] ?? 'secondary'}>
+                  Status do treinamento: {statusLabels[tr.status] ?? tr.status}
+                </Badge>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div>

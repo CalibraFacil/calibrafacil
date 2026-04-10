@@ -1431,6 +1431,7 @@ export const CompetenceStatusSchema = z.enum([
   "ACTIVE",
   "SUSPENDED",
   "EXPIRED",
+  "CANCELLED",
 ]);
 
 export type CompetenceStatus = z.infer<typeof CompetenceStatusSchema>;
@@ -1509,6 +1510,15 @@ export const EvaluateCompetenceSchema = z.object({
 });
 
 export type EvaluateCompetenceInput = z.infer<typeof EvaluateCompetenceSchema>;
+
+/**
+ * Schema for cancelling a competence workflow
+ */
+export const CancelCompetenceSchema = z.object({
+  notes: z.string().optional().nullable(),
+});
+
+export type CancelCompetenceInput = z.infer<typeof CancelCompetenceSchema>;
 
 /**
  * Schema for listing personnel competences with filters

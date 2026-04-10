@@ -21,6 +21,7 @@ export type CompetenceStatus =
   | 'ACTIVE'
   | 'SUSPENDED'
   | 'EXPIRED'
+  | 'CANCELLED'
 
 export interface CompetenceRow {
   id: number
@@ -47,6 +48,7 @@ const statusConfig: Record<
   ACTIVE: { label: 'Ativa', variant: 'default' },
   SUSPENDED: { label: 'Suspensa', variant: 'destructive' },
   EXPIRED: { label: 'Expirada', variant: 'destructive' },
+  CANCELLED: { label: 'Cancelada', variant: 'secondary' },
 }
 
 function formatDate(dateString: string | null): string {
