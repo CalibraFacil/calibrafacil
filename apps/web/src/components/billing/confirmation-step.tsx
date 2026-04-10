@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { CheckoutState, PaymentMethodType } from './checkout-dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 interface ConfirmationStepProps {
   subscriptionId: number
@@ -21,7 +22,7 @@ export function ConfirmationStep({
   const isPending = paymentMethod === 'BOLETO' && !!paymentData?.boleto
 
   // Stagger animations
-  useEffect(() => {
+  useMountEffect(() => {
     const checkmarkTimer = setTimeout(() => setShowCheckmark(true), 100)
     const contentTimer = setTimeout(() => setShowContent(true), 600)
 
@@ -29,7 +30,7 @@ export function ConfirmationStep({
       clearTimeout(checkmarkTimer)
       clearTimeout(contentTimer)
     }
-  }, [])
+  })
 
   return (
     <div className="flex flex-col items-center gap-6 py-4">

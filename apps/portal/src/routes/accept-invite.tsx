@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 import { portalAuthClient, usePortalSession } from "@calibra-facil/auth/client";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { useMountEffect } from "@/hooks/use-mount-effect";
 import { getApiBaseUrl } from "@/lib/utils";
 
 const searchSchema = z.object({
@@ -41,10 +43,7 @@ function AcceptInvitePage() {
   const navigate = useNavigate();
   const { data: session, isPending: sessionLoading } = usePortalSession();
 
-  const [invitation, setInvitation] = useState<InvitationData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Track if invitation was already accepted to prevent duplicate calls
   const invitationAcceptedRef = useRef(false);
@@ -53,130 +52,41 @@ function AcceptInvitePage() {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  // Fetch invitation details using our public API endpoint
-  useEffect(() => {
-    async function fetchInvitation() {
+  const invitationQuery = useQuery({
+    queryKey: ["portal-invitation", token],
+    queryFn: async (): Promise<InvitationData> => {
       if (!token) {
-        setError("Token de convite não fornecido.");
-        setLoading(false);
-        return;
+        throw new Error("Token de convite não fornecido.");
       }
 
-      try {
-        // Use our public API endpoint that doesn't require authentication
-        const response = await fetch(
-          `${getApiBaseUrl()}/api/invitations/${token}`,
-          {
-            credentials: "include",
-          },
-        );
+      const response = await fetch(`${getApiBaseUrl()}/api/invitations/${token}`, {
+        credentials: "include",
+      });
 
-        if (!response.ok) {
-          if (response.status === 404) {
-            setError("Convite não encontrado.");
-          } else {
-            setError("Convite inválido ou expirado.");
-          }
-          setLoading(false);
-          return;
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("Convite não encontrado.");
         }
-
-        const data = await response.json();
-        setInvitation({
-          id: data.id,
-          email: data.email,
-          organizationName: data.organizationName,
-          organizationSlug: data.organizationSlug,
-          inviterEmail: data.inviterEmail || "",
-          status: data.status,
-          expiresAt: new Date(data.expiresAt),
-        });
-      } catch {
-        setError("Erro ao buscar informações do convite.");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchInvitation();
-  }, [token]);
-
-  // If user is already logged in, check if they're already a member or accept the invitation
-  useEffect(() => {
-    async function handleLoggedInUser() {
-      if (!session || !invitation) return;
-
-      // Skip if invitation was already accepted by handleSubmit
-      if (invitationAcceptedRef.current) return;
-
-      // User is already logged in - check if email matches
-      if (session.user.email !== invitation.email) {
-        setError(
-          `Este convite foi enviado para ${invitation.email}. Você está logado como ${session.user.email}.`,
-        );
-        return;
+        throw new Error("Convite inválido ou expirado.");
       }
 
-      // Check if user is already a member of this organization
-      try {
-        const orgsResult = await portalAuthClient.organization.list();
-        if (orgsResult.data) {
-          const isMember = orgsResult.data.some(
-            (org) => org.slug === invitation.organizationSlug,
-          );
-
-          if (isMember) {
-            // User is already a member - redirect to home
-            toast.success("Você já é membro desta organização!");
-            navigate({ to: "/" });
-            return;
-          }
-        }
-      } catch {
-        // Ignore - proceed with acceptance attempt
-      }
-
-      // Try to accept the invitation if it's still pending
-      if (invitation.status === "pending") {
-        setSubmitting(true);
-        invitationAcceptedRef.current = true;
-        try {
-          const result = await portalAuthClient.organization.acceptInvitation({
-            invitationId: invitation.id,
-          });
-
-          if (result.error) {
-            // Check if error is because already accepted/member
-            if (
-              result.error.message?.includes("already") ||
-              result.error.code === "ALREADY_MEMBER" ||
-              result.error.code === "INVITATION_NOT_FOUND"
-            ) {
-              toast.success("Você já é membro desta organização!");
-              navigate({ to: "/" });
-              return;
-            }
-            invitationAcceptedRef.current = false;
-            toast.error("Erro ao aceitar convite");
-            setSubmitting(false);
-            return;
-          }
-
-          toast.success("Convite aceito com sucesso!");
-          navigate({ to: "/" });
-        } catch {
-          invitationAcceptedRef.current = false;
-          toast.error("Erro ao aceitar convite");
-          setSubmitting(false);
-        }
-      }
-    }
-
-    if (!sessionLoading && session && invitation) {
-      handleLoggedInUser();
-    }
-  }, [session, sessionLoading, invitation, navigate]);
+      const data = await response.json();
+      return {
+        id: data.id,
+        email: data.email,
+        organizationName: data.organizationName,
+        organizationSlug: data.organizationSlug,
+        inviterEmail: data.inviterEmail || "",
+        status: data.status,
+        expiresAt: new Date(data.expiresAt),
+      };
+    },
+  });
+  const invitation = invitationQuery.data;
+  const error =
+    invitationQuery.error instanceof Error
+      ? invitationQuery.error.message
+      : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,7 +146,7 @@ function AcceptInvitePage() {
     }
   };
 
-  if (loading) {
+  if (invitationQuery.isPending || sessionLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Spinner className="size-8" />
@@ -303,22 +213,23 @@ function AcceptInvitePage() {
   }
 
   // If user is logged in with matching email, show accepting state
-  if (session && session.user.email === invitation.email) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Aceitando convite...</CardTitle>
-            <CardDescription>
-              Por favor, aguarde enquanto processamos seu convite.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <Spinner className="size-8" />
-          </CardContent>
-        </Card>
-      </div>
-    );
+  if (session) {
+    if (session.user.email !== invitation.email) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl text-destructive">Erro</CardTitle>
+              <CardDescription>
+                {`Este convite foi enviado para ${invitation.email}. Você está logado como ${session.user.email}.`}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
+      );
+    }
+
+    return <LoggedInInviteAcceptance invitation={invitation} />;
   }
 
   // New user signup form
@@ -396,6 +307,134 @@ function AcceptInvitePage() {
             </Button>
           </form>
         </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function LoggedInInviteAcceptance({
+  invitation,
+}: {
+  invitation: InvitationData;
+}) {
+  const organizationsQuery = useQuery({
+    queryKey: ["portal-organizations", "accept-invite", invitation.organizationSlug],
+    queryFn: async () => {
+      const orgsResult = await portalAuthClient.organization.list();
+      return orgsResult.data ?? [];
+    },
+  });
+
+  if (organizationsQuery.isPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Verificando convite...</CardTitle>
+            <CardDescription>
+              Aguarde enquanto validamos seu acesso.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <Spinner className="size-8" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const isMember = (organizationsQuery.data ?? []).some(
+    (org) => org.slug === invitation.organizationSlug,
+  );
+
+  if (isMember) {
+    return <InviteMemberRedirectOnMount />;
+  }
+
+  return <InviteAutoAcceptOnMount invitation={invitation} />;
+}
+
+function InviteMemberRedirectOnMount() {
+  const navigate = useNavigate();
+
+  useMountEffect(() => {
+    toast.success("Você já é membro desta organização!");
+    navigate({ to: "/" });
+  });
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">Redirecionando...</CardTitle>
+          <CardDescription>
+            Você já faz parte desta organização.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    </div>
+  );
+}
+
+function InviteAutoAcceptOnMount({
+  invitation,
+}: {
+  invitation: InvitationData;
+}) {
+  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+
+  useMountEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const result = await portalAuthClient.organization.acceptInvitation({
+        invitationId: invitation.id,
+      });
+
+      if (cancelled) return;
+
+      if (result.error) {
+        if (
+          result.error.message?.includes("already") ||
+          result.error.code === "ALREADY_MEMBER" ||
+          result.error.code === "INVITATION_NOT_FOUND"
+        ) {
+          toast.success("Você já é membro desta organização!");
+          navigate({ to: "/" });
+          return;
+        }
+
+        setError("Erro ao aceitar convite");
+        toast.error("Erro ao aceitar convite");
+        return;
+      }
+
+      toast.success("Convite aceito com sucesso!");
+      navigate({ to: "/" });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">
+            {error ? "Erro" : "Aceitando convite..."}
+          </CardTitle>
+          <CardDescription>
+            {error ?? "Por favor, aguarde enquanto processamos seu convite."}
+          </CardDescription>
+        </CardHeader>
+        {!error ? (
+          <CardContent className="flex justify-center">
+            <Spinner className="size-8" />
+          </CardContent>
+        ) : null}
       </Card>
     </div>
   );

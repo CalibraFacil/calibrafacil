@@ -5,7 +5,6 @@ import {
   useMatches,
   useNavigate,
 } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
 
 import {
   organization,
@@ -32,6 +31,7 @@ import {
   DashboardContextStateContext,
   useDashboardContextState,
 } from '@/contexts/dashboard-context'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 export { useDashboardContextState }
 
@@ -85,16 +85,6 @@ function DashboardLayout() {
   const { data: activeOrg, isPending: activeOrgLoading } =
     useActiveOrganization()
 
-  const hasMarkedReady = useRef(false)
-  const [isSettingUp, setIsSettingUp] = useState(false)
-  const [resolvedDashboardOrgId, setResolvedDashboardOrgId] = useState<
-    string | null
-  >(null)
-
-  useEffect(() => {
-    mark(DASHBOARD_LAYOUT_MOUNT_MARK)
-  }, [])
-
   // Check if user has any LAB organizations
   // The 'type' field is a direct column on organization table (not in metadata)
   const labOrganizations =
@@ -119,91 +109,17 @@ function DashboardLayout() {
   const hasLoadedOrganizations = !organizationsLoading
   const preferredDashboardOrg =
     storedLabOrg ?? activeLabOrg ?? labOrganizations[0] ?? null
-  const needsInitialDashboardOrg =
+  const needsDashboardOrgSwitch =
     hasLoadedOrganizations &&
+    !activeOrgLoading &&
     hasLabAccess &&
-    !resolvedDashboardOrgId &&
-    (activeOrgLoading || Boolean(preferredDashboardOrg))
+    Boolean(preferredDashboardOrg) &&
+    activeOrg?.id !== preferredDashboardOrg?.id
   const isBootstrappingContext =
-    !hasLoadedOrganizations || needsInitialDashboardOrg
-  const isContextSwitching = isBootstrappingContext || isSettingUp
+    !hasLoadedOrganizations || activeOrgLoading || needsDashboardOrgSwitch
+  const isContextSwitching = isBootstrappingContext
   const shouldBlockChildRoutes = !isDashboardHome && isContextSwitching
-  const effectiveActiveOrganizationId = hasLabAccess
-    ? resolvedDashboardOrgId
-    : null
-
-  useEffect(() => {
-    async function setupDashboardContext() {
-      if (!hasLoadedOrganizations || activeOrgLoading || isSettingUp) return
-
-      if (!hasLabAccess) {
-        setResolvedDashboardOrgId(null)
-        setIsSettingUp(false)
-        return
-      }
-
-      const targetOrg = preferredDashboardOrg
-
-      if (!targetOrg) {
-        setResolvedDashboardOrgId(null)
-        return
-      }
-
-      if (activeOrg?.id !== targetOrg.id) {
-        setIsSettingUp(true)
-        mark(DASHBOARD_CONTEXT_START_MARK)
-        try {
-          await organization.setActive({ organizationId: targetOrg.id })
-          localStorage.setItem(DASHBOARD_ORG_KEY, targetOrg.id)
-          setResolvedDashboardOrgId(targetOrg.id)
-        } finally {
-          mark(DASHBOARD_CONTEXT_END_MARK)
-          measure(
-            'dashboard:context:init',
-            DASHBOARD_CONTEXT_START_MARK,
-            DASHBOARD_CONTEXT_END_MARK,
-          )
-          setIsSettingUp(false)
-        }
-      } else {
-        // Store current selection
-        localStorage.setItem(DASHBOARD_ORG_KEY, targetOrg.id)
-        setResolvedDashboardOrgId(targetOrg.id)
-      }
-    }
-
-    setupDashboardContext()
-  }, [
-    activeOrgLoading,
-    hasLoadedOrganizations,
-    hasLabAccess,
-    isSettingUp,
-    preferredDashboardOrg,
-    activeOrg?.id,
-  ])
-
-  useEffect(() => {
-    if (!hasLabAccess) {
-      setResolvedDashboardOrgId(null)
-      return
-    }
-
-    if (activeLabOrg?.id) {
-      setResolvedDashboardOrgId(activeLabOrg.id)
-    }
-  }, [activeLabOrg?.id, hasLabAccess])
-
-  useEffect(() => {
-    if (!isContextSwitching && !hasMarkedReady.current) {
-      hasMarkedReady.current = true
-      mark(DASHBOARD_LAYOUT_READY_MARK)
-      measure(
-        'dashboard:layout:ready',
-        DASHBOARD_LAYOUT_MOUNT_MARK,
-        DASHBOARD_LAYOUT_READY_MARK,
-      )
-    }
-  }, [isContextSwitching])
+  const effectiveActiveOrganizationId = activeLabOrg?.id ?? null
 
   // No LAB access but no organizations yet - send to onboarding
   if (!isBootstrappingContext && !hasLabAccess && !hasAnyOrganizations) {
@@ -268,6 +184,20 @@ function DashboardLayout() {
         activeOrganizationId: effectiveActiveOrganizationId,
       }}
     >
+      <DashboardLayoutMountMarker />
+      {preferredDashboardOrg ? (
+        <PersistDashboardOrgSelection
+          key={preferredDashboardOrg.id}
+          organizationId={preferredDashboardOrg.id}
+        />
+      ) : null}
+      {needsDashboardOrgSwitch && preferredDashboardOrg ? (
+        <DashboardOrgSwitcher
+          key={preferredDashboardOrg.id}
+          organizationId={preferredDashboardOrg.id}
+        />
+      ) : null}
+      {!isContextSwitching ? <DashboardReadyMarker /> : null}
       <CommandPaletteProvider>
         <SidebarProvider>
           <AppSidebar />
@@ -290,4 +220,54 @@ function DashboardLayout() {
       </CommandPaletteProvider>
     </DashboardContextStateContext.Provider>
   )
+}
+
+function DashboardLayoutMountMarker() {
+  useMountEffect(() => {
+    mark(DASHBOARD_LAYOUT_MOUNT_MARK)
+  })
+
+  return null
+}
+
+function DashboardOrgSwitcher({ organizationId }: { organizationId: string }) {
+  useMountEffect(() => {
+    mark(DASHBOARD_CONTEXT_START_MARK)
+    void organization.setActive({ organizationId }).finally(() => {
+      localStorage.setItem(DASHBOARD_ORG_KEY, organizationId)
+      mark(DASHBOARD_CONTEXT_END_MARK)
+      measure(
+        'dashboard:context:init',
+        DASHBOARD_CONTEXT_START_MARK,
+        DASHBOARD_CONTEXT_END_MARK,
+      )
+    })
+  })
+
+  return null
+}
+
+function PersistDashboardOrgSelection({
+  organizationId,
+}: {
+  organizationId: string
+}) {
+  useMountEffect(() => {
+    localStorage.setItem(DASHBOARD_ORG_KEY, organizationId)
+  })
+
+  return null
+}
+
+function DashboardReadyMarker() {
+  useMountEffect(() => {
+    mark(DASHBOARD_LAYOUT_READY_MARK)
+    measure(
+      'dashboard:layout:ready',
+      DASHBOARD_LAYOUT_MOUNT_MARK,
+      DASHBOARD_LAYOUT_READY_MARK,
+    )
+  })
+
+  return null
 }

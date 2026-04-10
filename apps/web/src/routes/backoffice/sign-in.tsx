@@ -1,5 +1,4 @@
-import { useEffect } from 'react'
-import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Link, Navigate, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
 import { BrandLockup } from '@/components/brand'
@@ -18,6 +17,7 @@ import {
   useBackofficeSession,
 } from '@calibra-facil/auth/client'
 import { api } from '@/utils/api'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 type BackofficeSignInSearch = {
   redirect?: string
@@ -61,28 +61,17 @@ function BackofficeSignInPage() {
     retry: false,
   })
 
-  useEffect(() => {
-    if (session?.user && accessQuery.data?.allowed) {
-      navigate({ to: redirectTo || '/backoffice' })
-      return
-    }
+  if (session?.user && accessQuery.data?.allowed) {
+    return <Navigate to={redirectTo || '/backoffice'} />
+  }
 
-    if (session?.user && accessQuery.data?.bootstrapAvailable) {
-      navigate({ to: '/backoffice/bootstrap' })
-      return
-    }
+  if (session?.user && accessQuery.data?.bootstrapAvailable) {
+    return <Navigate to="/backoffice/bootstrap" />
+  }
 
-    if (session?.user && accessQuery.isSuccess) {
-      void backofficeSignOut()
-    }
-  }, [
-    accessQuery.data?.allowed,
-    accessQuery.data?.bootstrapAvailable,
-    accessQuery.isSuccess,
-    navigate,
-    redirectTo,
-    session?.user,
-  ])
+  if (session?.user && accessQuery.isSuccess) {
+    return <BackofficeSignOutOnMount />
+  }
 
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
@@ -135,6 +124,25 @@ function BackofficeSignInPage() {
           </p>
         </div>
       </div>
+    </div>
+  )
+}
+
+function BackofficeSignOutOnMount() {
+  useMountEffect(() => {
+    void backofficeSignOut()
+  })
+
+  return (
+    <div className="grid min-h-svh place-items-center p-6">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle>Saindo...</CardTitle>
+          <CardDescription>
+            Esta conta não possui acesso ao backoffice.
+          </CardDescription>
+        </CardHeader>
+      </Card>
     </div>
   )
 }

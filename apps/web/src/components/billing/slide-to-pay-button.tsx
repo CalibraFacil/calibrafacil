@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { cn } from '@/lib/utils'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 interface SlideToPayButtonProps {
   /** Called when slide completes. Return true if action succeeded, false to reset button. */
@@ -72,33 +73,6 @@ export function SlideToPayButton({
     }
   }, [isDragging, position, getMaxPosition, onComplete])
 
-  // Global mouse events
-  useEffect(() => {
-    if (!isDragging) return
-
-    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX)
-    const onMouseUp = () => handleEnd()
-
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-  }, [isDragging, handleMove, handleEnd])
-
-  // Reset when loading completes or on error
-  useEffect(() => {
-    if (!isLoading && isCompleted) {
-      const timer = setTimeout(() => {
-        setIsCompleted(false)
-        setPosition(0)
-      }, 1000)
-      return () => clearTimeout(timer)
-    }
-  }, [isLoading, isCompleted])
-
   const maxPos = getMaxPosition()
   const progress = maxPos > 0 ? position / maxPos : 0
 
@@ -112,6 +86,17 @@ export function SlideToPayButton({
         isCompleted && 'bg-green-600',
       )}
     >
+      {isDragging ? (
+        <SlideDragListeners onMove={handleMove} onEnd={handleEnd} />
+      ) : null}
+      {!isLoading && isCompleted ? (
+        <SlideCompletionResetter
+          onReset={() => {
+            setIsCompleted(false)
+            setPosition(0)
+          }}
+        />
+      ) : null}
       {/* Label */}
       <div
         className={cn(
@@ -163,6 +148,43 @@ export function SlideToPayButton({
       </div>
     </div>
   )
+}
+
+function SlideDragListeners({
+  onMove,
+  onEnd,
+}: {
+  onMove: (clientX: number) => void
+  onEnd: () => void
+}) {
+  const onMoveRef = useRef(onMove)
+  const onEndRef = useRef(onEnd)
+  onMoveRef.current = onMove
+  onEndRef.current = onEnd
+
+  useMountEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => onMoveRef.current(event.clientX)
+    const handleMouseUp = () => onEndRef.current()
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  })
+
+  return null
+}
+
+function SlideCompletionResetter({ onReset }: { onReset: () => void }) {
+  useMountEffect(() => {
+    const timer = window.setTimeout(onReset, 1000)
+    return () => window.clearTimeout(timer)
+  })
+
+  return null
 }
 
 function LockIcon({ className }: { className?: string }) {

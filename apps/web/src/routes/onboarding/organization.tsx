@@ -1,5 +1,5 @@
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect, useMemo, useState } from 'react'
+import { Navigate, createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
 import {
   authClient,
   organization,
@@ -75,14 +75,8 @@ function OrganizationOnboardingPage() {
     [organizations],
   )
 
-  useEffect(() => {
-    if (!isPending && hasLabOrganization) {
-      navigate({ to: redirectTo || '/dashboard' })
-    }
-  }, [hasLabOrganization, isPending, navigate, redirectTo])
-
   if (!isPending && hasLabOrganization) {
-    return null
+    return <Navigate to={redirectTo || '/dashboard'} />
   }
 
   async function handleSubmit(event: React.FormEvent) {

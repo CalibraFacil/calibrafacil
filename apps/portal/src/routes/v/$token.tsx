@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -41,47 +42,35 @@ type VerificationData = {
 
 function VerifyPage() {
   const { token } = Route.useParams();
-
-  const [data, setData] = useState<VerificationData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const verificationQuery = useQuery({
+    queryKey: ["verification", token],
+    queryFn: async (): Promise<VerificationData> => {
+      const response = await fetch(`${getApiBaseUrl()}/api/verify/${token}`, {
+        credentials: "include",
+      });
 
-  useEffect(() => {
-    async function fetchVerification() {
-      try {
-        const response = await fetch(`${getApiBaseUrl()}/api/verify/${token}`, {
-          credentials: "include",
-        });
-
-        if (!response.ok) {
-          if (response.status === 404 || response.status === 400) {
-            setError("Certificado não encontrado ou inválido.");
-          } else {
-            setError("Erro ao verificar certificado.");
-          }
-          setLoading(false);
-          return;
+      if (!response.ok) {
+        if (response.status === 404 || response.status === 400) {
+          throw new Error("Certificado não encontrado ou inválido.");
         }
-
-        const result = await response.json();
-
-        if (!result.valid) {
-          setError("Certificado não encontrado ou inválido.");
-          setLoading(false);
-          return;
-        }
-
-        setData(result);
-      } catch {
-        setError("Erro ao verificar certificado.");
-      } finally {
-        setLoading(false);
+        throw new Error("Erro ao verificar certificado.");
       }
-    }
 
-    fetchVerification();
-  }, [token]);
+      const result = (await response.json()) as VerificationData;
+
+      if (!result.valid) {
+        throw new Error("Certificado não encontrado ou inválido.");
+      }
+
+      return result;
+    },
+  });
+  const data = verificationQuery.data;
+  const error =
+    verificationQuery.error instanceof Error
+      ? verificationQuery.error.message
+      : null;
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -116,7 +105,7 @@ function VerifyPage() {
   };
 
   // Loading state
-  if (loading) {
+  if (verificationQuery.isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Spinner className="size-8" />

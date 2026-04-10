@@ -1,6 +1,6 @@
 import Color from 'color'
 import { Slider } from '@base-ui/react/slider'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 type ColorInputProps = {
   value: string
@@ -55,44 +56,16 @@ export function ColorInput({
   presets = DEFAULT_PRESETS,
 }: ColorInputProps) {
   const currentColor = useMemo(() => safeColor(value), [value])
-  const [hue, setHue] = useState(currentColor.hsv().color[0] ?? 0)
-  const [saturation, setSaturation] = useState(currentColor.hsv().color[1] ?? 100)
-  const [brightness, setBrightness] = useState(currentColor.hsv().color[2] ?? 100)
-  const [hexInput, setHexInput] = useState(normalizeHex(value))
-
-  useEffect(() => {
-    const color = safeColor(value)
-    const [nextHue, nextSaturation, nextBrightness] = color.hsv().array()
-
-    setHue(nextHue ?? 0)
-    setSaturation(nextSaturation ?? 100)
-    setBrightness(nextBrightness ?? 100)
-    setHexInput(color.hex().toUpperCase())
-  }, [value])
+  const [hue, saturation, brightness] = currentColor.hsv().array()
 
   const selectionBackground = useMemo(
     () =>
-      `linear-gradient(0deg, rgba(0,0,0,1), rgba(0,0,0,0)), linear-gradient(90deg, rgba(255,255,255,1), rgba(255,255,255,0)), hsl(${Math.round(hue)} 100% 50%)`,
+      `linear-gradient(0deg, rgba(0,0,0,1), rgba(0,0,0,0)), linear-gradient(90deg, rgba(255,255,255,1), rgba(255,255,255,0)), hsl(${Math.round(hue ?? 0)} 100% 50%)`,
     [hue],
   )
 
-  const positionX = saturation / 100
-  const positionY = 1 - brightness / 100
-
-  function commitHex(nextValue: string) {
-    const trimmed = nextValue.trim()
-    if (!trimmed) {
-      setHexInput(normalizeHex(value))
-      return
-    }
-
-    try {
-      const nextHex = normalizeHex(trimmed)
-      onChange(nextHex)
-    } catch {
-      setHexInput(normalizeHex(value))
-    }
-  }
+  const positionX = (saturation ?? 100) / 100
+  const positionY = 1 - (brightness ?? 100) / 100
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
@@ -128,10 +101,8 @@ export function ColorInput({
             positionX={positionX}
             positionY={positionY}
             onChange={(nextSaturation, nextBrightness) => {
-              setSaturation(nextSaturation)
-              setBrightness(nextBrightness)
               onChange(
-                Color.hsv(hue, nextSaturation, nextBrightness).hex().toUpperCase(),
+                Color.hsv(hue ?? 0, nextSaturation, nextBrightness).hex().toUpperCase(),
               )
             }}
           />
@@ -145,11 +116,14 @@ export function ColorInput({
               min={0}
               max={360}
               step={1}
-              value={hue}
+              value={hue ?? 0}
               onValueChange={(nextValue) => {
-                setHue(nextValue as number)
                 onChange(
-                  Color.hsv(nextValue as number, saturation, brightness)
+                  Color.hsv(
+                    nextValue as number,
+                    saturation ?? 100,
+                    brightness ?? 100,
+                  )
                     .hex()
                     .toUpperCase(),
                 )
@@ -194,22 +168,7 @@ export function ColorInput({
         </PopoverContent>
       </Popover>
 
-      <Input
-        value={hexInput}
-        disabled={disabled}
-        onChange={(event) => setHexInput(event.target.value.toUpperCase())}
-        onBlur={(event) => commitHex(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            commitHex(hexInput)
-          }
-          if (event.key === 'Escape') {
-            setHexInput(normalizeHex(value))
-          }
-        }}
-        className="font-mono uppercase"
-      />
+      <ColorHexInput key={value} value={value} onChange={onChange} disabled={disabled} />
     </div>
   )
 }
@@ -240,24 +199,6 @@ function ColorSelection({
     onChange(Math.round(nextX * 100), Math.round((1 - nextY) * 100))
   }
 
-  useEffect(() => {
-    if (!dragging) return
-
-    const handlePointerMove = (event: PointerEvent) => {
-      updateFromPointer(event.clientX, event.clientY)
-    }
-
-    const handlePointerUp = () => setDragging(false)
-
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
-
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-    }
-  }, [dragging, disabled])
-
   return (
     <div
       ref={containerRef}
@@ -273,6 +214,12 @@ function ColorSelection({
         updateFromPointer(event.clientX, event.clientY)
       }}
     >
+      {dragging ? (
+        <ColorSelectionDragLayer
+          onPointerMove={updateFromPointer}
+          onPointerUp={() => setDragging(false)}
+        />
+      ) : null}
       <div
         className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
         style={{
@@ -282,4 +229,79 @@ function ColorSelection({
       />
     </div>
   )
+}
+
+function ColorHexInput({
+  value,
+  onChange,
+  disabled,
+}: Pick<ColorInputProps, 'value' | 'onChange' | 'disabled'>) {
+  const [hexInput, setHexInput] = useState(normalizeHex(value))
+
+  function commitHex(nextValue: string) {
+    const trimmed = nextValue.trim()
+    if (!trimmed) {
+      setHexInput(normalizeHex(value))
+      return
+    }
+
+    try {
+      const nextHex = normalizeHex(trimmed)
+      onChange(nextHex)
+    } catch {
+      setHexInput(normalizeHex(value))
+    }
+  }
+
+  return (
+    <Input
+      value={hexInput}
+      disabled={disabled}
+      onChange={(event) => setHexInput(event.target.value.toUpperCase())}
+      onBlur={(event) => commitHex(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          commitHex(hexInput)
+        }
+        if (event.key === 'Escape') {
+          setHexInput(normalizeHex(value))
+        }
+      }}
+      className="font-mono uppercase"
+    />
+  )
+}
+
+function ColorSelectionDragLayer({
+  onPointerMove,
+  onPointerUp,
+}: {
+  onPointerMove: (clientX: number, clientY: number) => void
+  onPointerUp: () => void
+}) {
+  const moveRef = useRef(onPointerMove)
+  const upRef = useRef(onPointerUp)
+  moveRef.current = onPointerMove
+  upRef.current = onPointerUp
+
+  useMountEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      moveRef.current(event.clientX, event.clientY)
+    }
+
+    const handlePointerUp = () => {
+      upRef.current()
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  })
+
+  return null
 }

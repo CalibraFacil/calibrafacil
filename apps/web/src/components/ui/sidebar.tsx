@@ -24,6 +24,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state'
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
@@ -94,22 +95,23 @@ function SidebarProvider({
       ? setOpenMobile((state) => !state)
       : setOpen((state) => !state)
   }, [isMobile, setOpen, setOpenMobile])
+  const toggleSidebarRef = React.useRef(toggleSidebar)
+  toggleSidebarRef.current = toggleSidebar
 
-  // Adds a keyboard shortcut to toggle the sidebar.
-  React.useEffect(() => {
+  useMountEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
         event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
         (event.metaKey || event.ctrlKey)
       ) {
         event.preventDefault()
-        toggleSidebar()
+        toggleSidebarRef.current()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [toggleSidebar])
+  })
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.

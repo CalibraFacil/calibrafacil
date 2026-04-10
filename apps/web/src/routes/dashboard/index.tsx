@@ -6,12 +6,12 @@ import {
   RefreshIcon,
   PlusSignIcon,
 } from '@hugeicons/core-free-icons'
-import { useEffect, useRef } from 'react'
 
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 import { SectionCards } from './-components/section-cards'
 import { ChartCalibrations } from './-components/chart-calibrations'
 import { RecentJobsTable } from './-components/recent-jobs-table'
@@ -51,14 +51,8 @@ export const Route = createFileRoute('/dashboard/')({
 })
 
 function DashboardIndex() {
-  const hasMarkedDataReady = useRef(false)
-  const hasMarkedFirstContent = useRef(false)
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
-
-  useEffect(() => {
-    mark(DASHBOARD_INDEX_MOUNT_MARK)
-  }, [])
 
   const { data, isPending, isFetching, refetch, isRefetching } = useQuery({
     queryKey: ['dashboard', 'stats', activeOrganizationId ?? 'no-org'],
@@ -84,38 +78,15 @@ function DashboardIndex() {
 
   const isLoading = !data && (isPending || isFetching)
 
-  useEffect(() => {
-    if (!isLoading && !hasMarkedDataReady.current) {
-      hasMarkedDataReady.current = true
-      mark(DASHBOARD_INDEX_DATA_READY_MARK)
-      measure(
-        'dashboard:index:data-ready',
-        DASHBOARD_INDEX_MOUNT_MARK,
-        DASHBOARD_INDEX_DATA_READY_MARK,
-      )
-    }
-  }, [isLoading])
-
-  useEffect(() => {
-    if (isLoading || hasMarkedFirstContent.current) return
-
-    hasMarkedFirstContent.current = true
-    const rafId = window.requestAnimationFrame(() => {
-      mark(DASHBOARD_INDEX_FIRST_CONTENT_MARK)
-      measure(
-        'dashboard:index:first-content',
-        DASHBOARD_INDEX_MOUNT_MARK,
-        DASHBOARD_INDEX_FIRST_CONTENT_MARK,
-      )
-    })
-
-    return () => {
-      window.cancelAnimationFrame(rafId)
-    }
-  }, [isLoading])
-
   return (
     <div className="space-y-6 @container">
+      <DashboardIndexMountMarker />
+      {!isLoading ? (
+        <>
+          <DashboardIndexDataReadyMarker />
+          <DashboardIndexFirstContentMarker />
+        </>
+      ) : null}
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -179,4 +150,44 @@ function DashboardIndex() {
       </div>
     </div>
   )
+}
+
+function DashboardIndexMountMarker() {
+  useMountEffect(() => {
+    mark(DASHBOARD_INDEX_MOUNT_MARK)
+  })
+
+  return null
+}
+
+function DashboardIndexDataReadyMarker() {
+  useMountEffect(() => {
+    mark(DASHBOARD_INDEX_DATA_READY_MARK)
+    measure(
+      'dashboard:index:data-ready',
+      DASHBOARD_INDEX_MOUNT_MARK,
+      DASHBOARD_INDEX_DATA_READY_MARK,
+    )
+  })
+
+  return null
+}
+
+function DashboardIndexFirstContentMarker() {
+  useMountEffect(() => {
+    const rafId = window.requestAnimationFrame(() => {
+      mark(DASHBOARD_INDEX_FIRST_CONTENT_MARK)
+      measure(
+        'dashboard:index:first-content',
+        DASHBOARD_INDEX_MOUNT_MARK,
+        DASHBOARD_INDEX_FIRST_CONTENT_MARK,
+      )
+    })
+
+    return () => {
+      window.cancelAnimationFrame(rafId)
+    }
+  })
+
+  return null
 }

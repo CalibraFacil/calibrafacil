@@ -182,10 +182,14 @@ function CalendarDayButton({
 }: React.ComponentProps<typeof DayButton>) {
   const defaultClassNames = getDefaultClassNames()
 
-  const ref = React.useRef<HTMLButtonElement>(null)
-  React.useEffect(() => {
-    if (modifiers.focused) ref.current?.focus()
-  }, [modifiers.focused])
+  const ref = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (node && modifiers.focused) {
+        node.focus()
+      }
+    },
+    [modifiers.focused],
+  )
 
   return (
     <Button
@@ -198,6 +202,7 @@ function CalendarDayButton({
         !modifiers.range_end &&
         !modifiers.range_middle
       }
+      ref={ref}
       data-range-start={modifiers.range_start}
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}

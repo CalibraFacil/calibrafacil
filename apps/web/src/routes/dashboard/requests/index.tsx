@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ClipboardIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
@@ -89,10 +89,6 @@ function RequestsPage() {
   const [statusFilter, setStatusFilter] = useState<RequestStatus | ''>('')
   const deferredSearch = useDeferredValue(search.trim())
   const limit = 20
-
-  useEffect(() => {
-    setPage(1)
-  }, [deferredSearch])
 
   const { data, isLoading, error } = useQuery({
     queryKey: [
@@ -217,7 +213,10 @@ function RequestsPage() {
             <Input
               placeholder="Buscar por observações..."
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value)
+                setPage(1)
+              }}
               className="sm:max-w-sm"
             />
             <div className="flex flex-wrap gap-2">

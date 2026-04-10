@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -180,7 +180,10 @@ function AuthenticationSettingsPage() {
 
       {organizationType === 'LAB' ? (
         <>
-          <SsoSettingsCard activeOrganizationSlug={activeOrg?.slug ?? null} />
+          <SsoSettingsCard
+            key={activeOrg?.slug ?? 'no-org'}
+            activeOrganizationSlug={activeOrg?.slug ?? null}
+          />
           <ApiKeysCard />
         </>
       ) : (
@@ -483,10 +486,6 @@ function SsoSettingsCard({
     queryFn: fetchSsoSettings,
     enabled: Boolean(activeOrganizationSlug),
   })
-
-  useEffect(() => {
-    setProviderId(activeOrganizationSlug ? `${activeOrganizationSlug}-oidc` : '')
-  }, [activeOrganizationSlug])
 
   const createProviderMutation = useMutation({
     mutationFn: async () => {

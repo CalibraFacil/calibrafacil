@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { ArrowDown01Icon, ArrowUp01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { createFileRoute } from '@tanstack/react-router'
@@ -41,6 +41,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { api, resolveApiURL } from '@/utils/api'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 export const Route = createFileRoute('/backoffice/users')({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -195,12 +196,6 @@ function BackofficeUsersPage() {
     [sessionRole],
   )
   const canManageRoles = currentPlatformRoles.includes('platform_admin')
-
-  useEffect(() => {
-    if (impersonationError) {
-      toast.error(impersonationError)
-    }
-  }, [impersonationError])
 
   const organizationsQuery = useQuery({
     queryKey: ['backoffice', 'organizations', 'options'],
@@ -574,6 +569,9 @@ function BackofficeUsersPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {impersonationError ? (
+        <ToastOnMount key={impersonationError} message={impersonationError} />
+      ) : null}
       <div>
         <h1 className="text-2xl font-semibold">Usuários</h1>
         <p className="text-sm text-muted-foreground">
@@ -899,6 +897,14 @@ function BackofficeUsersPage() {
       </Card>
     </div>
   )
+}
+
+function ToastOnMount({ message }: { message: string }) {
+  useMountEffect(() => {
+    toast.error(message)
+  })
+
+  return null
 }
 
 function UserTableRow({

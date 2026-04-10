@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { authClient, useSession } from "@calibra-facil/auth/client";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -42,31 +43,27 @@ function AcceptInvitationPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const { data: session, isPending: isSessionLoading } = useSession();
-
-  const [invitation, setInvitation] = useState<InvitationData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
-
-  useEffect(() => {
-    async function fetchInvitation() {
+  const invitationQuery = useQuery({
+    queryKey: ["accept-invitation", id],
+    queryFn: async (): Promise<InvitationData> => {
       const { data, error } = await authClient.organization.getInvitation({
         query: { id },
       });
 
       if (error) {
-        setError(error.message || "Não foi possível carregar o convite.");
-        setIsLoading(false);
-        return;
+        throw new Error(error.message || "Não foi possível carregar o convite.");
       }
 
-      setInvitation(data as InvitationData);
-      setIsLoading(false);
-    }
-
-    fetchInvitation();
-  }, [id]);
+      return data as InvitationData;
+    },
+  });
+  const invitation = invitationQuery.data;
+  const error =
+    invitationQuery.error instanceof Error
+      ? invitationQuery.error.message
+      : null;
 
   async function handleAccept() {
     setIsAccepting(true);
@@ -107,7 +104,7 @@ function AcceptInvitationPage() {
     member: "Membro",
   };
 
-  if (isSessionLoading || isLoading) {
+  if (isSessionLoading || invitationQuery.isPending) {
     return (
       <div className="flex min-h-svh items-center justify-center p-4">
         <Card className="w-full max-w-md">
