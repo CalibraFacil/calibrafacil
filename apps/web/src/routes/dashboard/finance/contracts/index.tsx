@@ -1,0 +1,174 @@
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link, createFileRoute } from '@tanstack/react-router'
+import { Building02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+
+import { CommercialAgreementStatusBadge } from '@/components/finance-status-badges'
+import { formatFinanceDate } from '@/lib/finance-formatters'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { api } from '@/utils/api'
+
+type ContractListItem = {
+  id: number
+  customerId: number
+  customerName: string
+  status: string
+  agreementCode: string | null
+  title: string
+  currency: string
+  effectiveFrom: string
+  effectiveTo: string | null
+  defaultPaymentTermDays: number
+  updatedAt: string
+}
+
+export const Route = createFileRoute('/dashboard/finance/contracts/')({
+  head: () => ({
+    meta: [{ title: 'Contratos comerciais | CalibraFácil' }],
+  }),
+  component: FinanceContractsPage,
+})
+
+function FinanceContractsPage() {
+  const [query, setQuery] = useState('')
+
+  const contractsQuery = useQuery({
+    queryKey: ['finance', 'contracts', query],
+    queryFn: async () => {
+      const response = await api.api.finance.contracts.$get({
+        query: { query: query || undefined },
+      })
+      if (!response.ok) {
+        throw new Error('Erro ao carregar contratos')
+      }
+
+      return response.json() as Promise<{ data: ContractListItem[] }>
+    },
+  })
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>Contratos comerciais</CardTitle>
+            <CardDescription>
+              Defina preços negociados, vigência e condições comerciais por
+              cliente.
+            </CardDescription>
+          </div>
+          <Button
+            render={<Link to="/dashboard/finance/contracts/new" />}
+            type="button"
+          >
+            <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+            Novo contrato
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="max-w-sm">
+            <Input
+              placeholder="Buscar por cliente, título ou código"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </div>
+
+          {contractsQuery.isError ? (
+            <div className="text-destructive text-sm">
+              Não foi possível carregar os contratos.
+            </div>
+          ) : contractsQuery.data?.data.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Contrato</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Vigência</TableHead>
+                  <TableHead>Prazo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {contractsQuery.data.data.map((contract) => (
+                  <TableRow key={contract.id}>
+                    <TableCell>
+                      <Link
+                        to="/dashboard/finance/contracts/$id"
+                        params={{ id: String(contract.id) }}
+                        className="font-medium hover:underline"
+                      >
+                        {contract.title}
+                      </Link>
+                      <div className="text-muted-foreground text-xs">
+                        {contract.agreementCode || `Contrato #${contract.id}`}
+                      </div>
+                    </TableCell>
+                    <TableCell>{contract.customerName}</TableCell>
+                    <TableCell>
+                      <CommercialAgreementStatusBadge
+                        status={contract.status}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {formatFinanceDate(contract.effectiveFrom)}
+                      {contract.effectiveTo ? (
+                        <div className="text-muted-foreground text-xs">
+                          até {formatFinanceDate(contract.effectiveTo)}
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground text-xs">
+                          sem término
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {contract.defaultPaymentTermDays} dias
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={Building02Icon} />
+                </EmptyMedia>
+                <EmptyTitle>Nenhum contrato cadastrado</EmptyTitle>
+                <EmptyDescription>
+                  Cadastre o primeiro contrato para congelar a base comercial
+                  antes da emissão dos documentos.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

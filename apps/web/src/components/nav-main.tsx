@@ -23,7 +23,6 @@ export type NavMainItem = {
   title: string
   url: string
   icon?: React.ReactNode
-  isActive?: boolean
   items?: Array<{
     title: string
     url: string
@@ -35,8 +34,31 @@ type NavMainProps = {
   label?: string
 }
 
+function renderNavLink(url: string) {
+  if (url.startsWith('#')) {
+    return <a href={url} />
+  }
+
+  return <Link to={url} />
+}
+
 export function NavMain({ items, label = 'Dashboard' }: NavMainProps) {
   const location = useLocation()
+
+  const matchesPath = (targetUrl: string) => {
+    if (targetUrl.startsWith('#')) {
+      return false
+    }
+
+    if (targetUrl === '/dashboard') {
+      return location.pathname === targetUrl
+    }
+
+    return (
+      location.pathname === targetUrl ||
+      location.pathname.startsWith(`${targetUrl}/`)
+    )
+  }
 
   return (
     <SidebarGroup>
@@ -45,8 +67,8 @@ export function NavMain({ items, label = 'Dashboard' }: NavMainProps) {
       <SidebarMenu>
         {items.map((item) => {
           const isActive =
-            location.pathname === item.url ||
-            item.items?.some((sub) => location.pathname === sub.url)
+            matchesPath(item.url) ||
+            item.items?.some((sub) => matchesPath(sub.url))
 
           return (
             <Collapsible
@@ -79,14 +101,8 @@ export function NavMain({ items, label = 'Dashboard' }: NavMainProps) {
                       {item.items.map((subItem) => (
                         <SidebarMenuSubItem key={subItem.title}>
                           <SidebarMenuSubButton
-                            render={
-                              subItem.url.startsWith('#') ? (
-                                <a href={subItem.url} />
-                              ) : (
-                                <Link to={subItem.url} />
-                              )
-                            }
-                            isActive={location.pathname === subItem.url}
+                            render={renderNavLink(subItem.url)}
+                            isActive={matchesPath(subItem.url)}
                           >
                             <span>{subItem.title}</span>
                           </SidebarMenuSubButton>
@@ -97,14 +113,8 @@ export function NavMain({ items, label = 'Dashboard' }: NavMainProps) {
                 </>
               ) : (
                 <SidebarMenuButton
-                  render={
-                    item.url.startsWith('#') ? (
-                      <a href={item.url} />
-                    ) : (
-                      <Link to={item.url} />
-                    )
-                  }
-                  isActive={location.pathname === item.url}
+                  render={renderNavLink(item.url)}
+                  isActive={matchesPath(item.url)}
                 >
                   {item.icon}
                   <span>{item.title}</span>

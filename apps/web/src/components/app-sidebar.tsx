@@ -41,7 +41,6 @@ const data = {
       title: 'Painel',
       url: '/dashboard',
       icon: <HugeiconsIcon icon={Home01Icon} />,
-      isActive: true,
     },
     {
       title: 'Clientes',
@@ -110,17 +109,24 @@ export function AppSidebar() {
     (currentRole === 'owner' || currentRole === 'admin') &&
     Boolean(accessQuery.data?.hasFinancialModule)
 
-  const navMain = [...data.navMain]
+  const navMain = canAccessFinance
+    ? [
+        ...data.navMain,
+        {
+          title: 'Financeiro',
+          url: '#',
+          icon: <HugeiconsIcon icon={CreditCardIcon} />,
+          items: [
+            { title: 'Visão geral', url: '/dashboard/finance' },
+            { title: 'Documentos', url: '/dashboard/finance/documents' },
+            { title: 'Recebimentos', url: '/dashboard/finance/receipts' },
+            { title: 'Contratos', url: '/dashboard/finance/contracts' },
+            { title: 'ERP', url: '/dashboard/finance/erp' },
+          ],
+        },
+      ]
+    : data.navMain
 
-  if (canAccessFinance) {
-    navMain.push({
-      title: 'Financeiro',
-      url: '/dashboard/finance',
-      icon: <HugeiconsIcon icon={CreditCardIcon} />,
-    })
-  }
-
-  const navSecondary = [...data.navSecondary]
   const managementItems = [
     ...(canAccessConsolidatedReports
       ? [
@@ -161,7 +167,7 @@ export function AppSidebar() {
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>
-              {navSecondary.map((item) => (
+              {data.navSecondary.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     render={

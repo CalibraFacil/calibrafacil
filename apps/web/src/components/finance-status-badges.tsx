@@ -1,6 +1,5 @@
 import { Badge } from '@/components/ui/badge'
 import {
-  formatMoney,
   getBillingDocumentStatusLabel,
   getCommercialAgreementStatusLabel,
   type BillingDocumentStatus,
@@ -35,19 +34,6 @@ const exportStatusMeta: Record<
   PENDING: { label: 'Pendente', variant: 'default' },
   EXPORTED: { label: 'Exportado', variant: 'outline' },
   FAILED: { label: 'Falhou', variant: 'destructive' },
-}
-
-export function formatFinanceMoney(value: number, currency = 'BRL') {
-  return formatMoney(value ?? 0, currency)
-}
-
-export function formatFinanceDate(value: string | Date | null | undefined) {
-  if (!value) return 'Sem data'
-
-  const date = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Sem data'
-
-  return date.toLocaleDateString('pt-BR')
 }
 
 export function BillingDocumentStatusBadge({

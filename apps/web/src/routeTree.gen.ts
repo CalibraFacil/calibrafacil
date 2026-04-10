@@ -80,13 +80,13 @@ import { Route as DashboardJobsNewRouteImport } from './routes/dashboard/jobs/ne
 import { Route as DashboardInternalCustomerSuccessRouteImport } from './routes/dashboard/internal/customer-success'
 import { Route as DashboardFinanceReceiptsRouteImport } from './routes/dashboard/finance/receipts'
 import { Route as DashboardFinanceErpRouteImport } from './routes/dashboard/finance/erp'
-import { Route as DashboardFinanceDocumentsRouteImport } from './routes/dashboard/finance/documents'
-import { Route as DashboardFinanceContractsRouteImport } from './routes/dashboard/finance/contracts'
 import { Route as DashboardClientsNewRouteImport } from './routes/dashboard/clients/new'
 import { Route as DashboardCapaNewRouteImport } from './routes/dashboard/capa/new'
 import { Route as DashboardAssetsNewRouteImport } from './routes/dashboard/assets/new'
 import { Route as BackofficeOrganizationsIdRouteImport } from './routes/backoffice/organizations/$id'
 import { Route as DashboardPersonnelIdRouteRouteImport } from './routes/dashboard/personnel/$id/route'
+import { Route as DashboardFinanceDocumentsRouteRouteImport } from './routes/dashboard/finance/documents/route'
+import { Route as DashboardFinanceContractsRouteRouteImport } from './routes/dashboard/finance/contracts/route'
 import { Route as DashboardClientsIdRouteRouteImport } from './routes/dashboard/clients/$id/route'
 import { Route as DashboardAssetsIdRouteRouteImport } from './routes/dashboard/assets/$id/route'
 import { Route as DashboardStandardsIdIndexRouteImport } from './routes/dashboard/standards/$id/index'
@@ -96,6 +96,8 @@ import { Route as DashboardPersonnelIdIndexRouteImport } from './routes/dashboar
 import { Route as DashboardNcIdIndexRouteImport } from './routes/dashboard/nc/$id/index'
 import { Route as DashboardMethodsIdIndexRouteImport } from './routes/dashboard/methods/$id/index'
 import { Route as DashboardJobsIdIndexRouteImport } from './routes/dashboard/jobs/$id/index'
+import { Route as DashboardFinanceDocumentsIndexRouteImport } from './routes/dashboard/finance/documents/index'
+import { Route as DashboardFinanceContractsIndexRouteImport } from './routes/dashboard/finance/contracts/index'
 import { Route as DashboardClientsIdIndexRouteImport } from './routes/dashboard/clients/$id/index'
 import { Route as DashboardCapaIdIndexRouteImport } from './routes/dashboard/capa/$id/index'
 import { Route as DashboardAssetsIdIndexRouteImport } from './routes/dashboard/assets/$id/index'
@@ -105,7 +107,9 @@ import { Route as DashboardPersonnelIdTrainingRouteImport } from './routes/dashb
 import { Route as DashboardPersonnelIdAuditRouteImport } from './routes/dashboard/personnel/$id/audit'
 import { Route as DashboardMethodsIdEditRouteImport } from './routes/dashboard/methods/$id/edit'
 import { Route as DashboardJobsIdExecuteRouteImport } from './routes/dashboard/jobs/$id/execute'
+import { Route as DashboardFinanceDocumentsNewRouteImport } from './routes/dashboard/finance/documents/new'
 import { Route as DashboardFinanceDocumentsIdRouteImport } from './routes/dashboard/finance/documents/$id'
+import { Route as DashboardFinanceContractsNewRouteImport } from './routes/dashboard/finance/contracts/new'
 import { Route as DashboardFinanceContractsIdRouteImport } from './routes/dashboard/finance/contracts/$id'
 import { Route as DashboardClientsIdUsersRouteImport } from './routes/dashboard/clients/$id/users'
 import { Route as DashboardClientsIdInfoRouteImport } from './routes/dashboard/clients/$id/info'
@@ -490,18 +494,6 @@ const DashboardFinanceErpRoute = DashboardFinanceErpRouteImport.update({
   path: '/erp',
   getParentRoute: () => DashboardFinanceRouteRoute,
 } as any)
-const DashboardFinanceDocumentsRoute =
-  DashboardFinanceDocumentsRouteImport.update({
-    id: '/documents',
-    path: '/documents',
-    getParentRoute: () => DashboardFinanceRouteRoute,
-  } as any)
-const DashboardFinanceContractsRoute =
-  DashboardFinanceContractsRouteImport.update({
-    id: '/contracts',
-    path: '/contracts',
-    getParentRoute: () => DashboardFinanceRouteRoute,
-  } as any)
 const DashboardClientsNewRoute = DashboardClientsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -528,6 +520,18 @@ const DashboardPersonnelIdRouteRoute =
     id: '/$id',
     path: '/$id',
     getParentRoute: () => DashboardPersonnelRouteRoute,
+  } as any)
+const DashboardFinanceDocumentsRouteRoute =
+  DashboardFinanceDocumentsRouteRouteImport.update({
+    id: '/documents',
+    path: '/documents',
+    getParentRoute: () => DashboardFinanceRouteRoute,
+  } as any)
+const DashboardFinanceContractsRouteRoute =
+  DashboardFinanceContractsRouteRouteImport.update({
+    id: '/contracts',
+    path: '/contracts',
+    getParentRoute: () => DashboardFinanceRouteRoute,
   } as any)
 const DashboardClientsIdRouteRoute = DashboardClientsIdRouteRouteImport.update({
   id: '/$id',
@@ -578,6 +582,18 @@ const DashboardJobsIdIndexRoute = DashboardJobsIdIndexRouteImport.update({
   path: '/$id/',
   getParentRoute: () => DashboardJobsRouteRoute,
 } as any)
+const DashboardFinanceDocumentsIndexRoute =
+  DashboardFinanceDocumentsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => DashboardFinanceDocumentsRouteRoute,
+  } as any)
+const DashboardFinanceContractsIndexRoute =
+  DashboardFinanceContractsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => DashboardFinanceContractsRouteRoute,
+  } as any)
 const DashboardClientsIdIndexRoute = DashboardClientsIdIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -626,17 +642,29 @@ const DashboardJobsIdExecuteRoute = DashboardJobsIdExecuteRouteImport.update({
   path: '/$id/execute',
   getParentRoute: () => DashboardJobsRouteRoute,
 } as any)
+const DashboardFinanceDocumentsNewRoute =
+  DashboardFinanceDocumentsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => DashboardFinanceDocumentsRouteRoute,
+  } as any)
 const DashboardFinanceDocumentsIdRoute =
   DashboardFinanceDocumentsIdRouteImport.update({
     id: '/$id',
     path: '/$id',
-    getParentRoute: () => DashboardFinanceDocumentsRoute,
+    getParentRoute: () => DashboardFinanceDocumentsRouteRoute,
+  } as any)
+const DashboardFinanceContractsNewRoute =
+  DashboardFinanceContractsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => DashboardFinanceContractsRouteRoute,
   } as any)
 const DashboardFinanceContractsIdRoute =
   DashboardFinanceContractsIdRouteImport.update({
     id: '/$id',
     path: '/$id',
-    getParentRoute: () => DashboardFinanceContractsRoute,
+    getParentRoute: () => DashboardFinanceContractsRouteRoute,
   } as any)
 const DashboardClientsIdUsersRoute = DashboardClientsIdUsersRouteImport.update({
   id: '/users',
@@ -710,13 +738,13 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof SignUpIndexRoute
   '/dashboard/assets/$id': typeof DashboardAssetsIdRouteRouteWithChildren
   '/dashboard/clients/$id': typeof DashboardClientsIdRouteRouteWithChildren
+  '/dashboard/finance/contracts': typeof DashboardFinanceContractsRouteRouteWithChildren
+  '/dashboard/finance/documents': typeof DashboardFinanceDocumentsRouteRouteWithChildren
   '/dashboard/personnel/$id': typeof DashboardPersonnelIdRouteRouteWithChildren
   '/backoffice/organizations/$id': typeof BackofficeOrganizationsIdRoute
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
-  '/dashboard/finance/contracts': typeof DashboardFinanceContractsRouteWithChildren
-  '/dashboard/finance/documents': typeof DashboardFinanceDocumentsRouteWithChildren
   '/dashboard/finance/erp': typeof DashboardFinanceErpRoute
   '/dashboard/finance/receipts': typeof DashboardFinanceReceiptsRoute
   '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
@@ -760,7 +788,9 @@ export interface FileRoutesByFullPath {
   '/dashboard/clients/$id/info': typeof DashboardClientsIdInfoRoute
   '/dashboard/clients/$id/users': typeof DashboardClientsIdUsersRoute
   '/dashboard/finance/contracts/$id': typeof DashboardFinanceContractsIdRoute
+  '/dashboard/finance/contracts/new': typeof DashboardFinanceContractsNewRoute
   '/dashboard/finance/documents/$id': typeof DashboardFinanceDocumentsIdRoute
+  '/dashboard/finance/documents/new': typeof DashboardFinanceDocumentsNewRoute
   '/dashboard/jobs/$id/execute': typeof DashboardJobsIdExecuteRoute
   '/dashboard/methods/$id/edit': typeof DashboardMethodsIdEditRoute
   '/dashboard/personnel/$id/audit': typeof DashboardPersonnelIdAuditRoute
@@ -770,6 +800,8 @@ export interface FileRoutesByFullPath {
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
   '/dashboard/capa/$id': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
+  '/dashboard/finance/contracts/': typeof DashboardFinanceContractsIndexRoute
+  '/dashboard/finance/documents/': typeof DashboardFinanceDocumentsIndexRoute
   '/dashboard/jobs/$id': typeof DashboardJobsIdIndexRoute
   '/dashboard/methods/$id': typeof DashboardMethodsIdIndexRoute
   '/dashboard/nc/$id': typeof DashboardNcIdIndexRoute
@@ -804,8 +836,6 @@ export interface FileRoutesByTo {
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
-  '/dashboard/finance/contracts': typeof DashboardFinanceContractsRouteWithChildren
-  '/dashboard/finance/documents': typeof DashboardFinanceDocumentsRouteWithChildren
   '/dashboard/finance/erp': typeof DashboardFinanceErpRoute
   '/dashboard/finance/receipts': typeof DashboardFinanceReceiptsRoute
   '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
@@ -849,7 +879,9 @@ export interface FileRoutesByTo {
   '/dashboard/clients/$id/info': typeof DashboardClientsIdInfoRoute
   '/dashboard/clients/$id/users': typeof DashboardClientsIdUsersRoute
   '/dashboard/finance/contracts/$id': typeof DashboardFinanceContractsIdRoute
+  '/dashboard/finance/contracts/new': typeof DashboardFinanceContractsNewRoute
   '/dashboard/finance/documents/$id': typeof DashboardFinanceDocumentsIdRoute
+  '/dashboard/finance/documents/new': typeof DashboardFinanceDocumentsNewRoute
   '/dashboard/jobs/$id/execute': typeof DashboardJobsIdExecuteRoute
   '/dashboard/methods/$id/edit': typeof DashboardMethodsIdEditRoute
   '/dashboard/personnel/$id/audit': typeof DashboardPersonnelIdAuditRoute
@@ -859,6 +891,8 @@ export interface FileRoutesByTo {
   '/dashboard/assets/$id': typeof DashboardAssetsIdIndexRoute
   '/dashboard/capa/$id': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id': typeof DashboardClientsIdIndexRoute
+  '/dashboard/finance/contracts': typeof DashboardFinanceContractsIndexRoute
+  '/dashboard/finance/documents': typeof DashboardFinanceDocumentsIndexRoute
   '/dashboard/jobs/$id': typeof DashboardJobsIdIndexRoute
   '/dashboard/methods/$id': typeof DashboardMethodsIdIndexRoute
   '/dashboard/nc/$id': typeof DashboardNcIdIndexRoute
@@ -906,13 +940,13 @@ export interface FileRoutesById {
   '/sign-up/': typeof SignUpIndexRoute
   '/dashboard/assets/$id': typeof DashboardAssetsIdRouteRouteWithChildren
   '/dashboard/clients/$id': typeof DashboardClientsIdRouteRouteWithChildren
+  '/dashboard/finance/contracts': typeof DashboardFinanceContractsRouteRouteWithChildren
+  '/dashboard/finance/documents': typeof DashboardFinanceDocumentsRouteRouteWithChildren
   '/dashboard/personnel/$id': typeof DashboardPersonnelIdRouteRouteWithChildren
   '/backoffice/organizations/$id': typeof BackofficeOrganizationsIdRoute
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
   '/dashboard/capa/new': typeof DashboardCapaNewRoute
   '/dashboard/clients/new': typeof DashboardClientsNewRoute
-  '/dashboard/finance/contracts': typeof DashboardFinanceContractsRouteWithChildren
-  '/dashboard/finance/documents': typeof DashboardFinanceDocumentsRouteWithChildren
   '/dashboard/finance/erp': typeof DashboardFinanceErpRoute
   '/dashboard/finance/receipts': typeof DashboardFinanceReceiptsRoute
   '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
@@ -956,7 +990,9 @@ export interface FileRoutesById {
   '/dashboard/clients/$id/info': typeof DashboardClientsIdInfoRoute
   '/dashboard/clients/$id/users': typeof DashboardClientsIdUsersRoute
   '/dashboard/finance/contracts/$id': typeof DashboardFinanceContractsIdRoute
+  '/dashboard/finance/contracts/new': typeof DashboardFinanceContractsNewRoute
   '/dashboard/finance/documents/$id': typeof DashboardFinanceDocumentsIdRoute
+  '/dashboard/finance/documents/new': typeof DashboardFinanceDocumentsNewRoute
   '/dashboard/jobs/$id/execute': typeof DashboardJobsIdExecuteRoute
   '/dashboard/methods/$id/edit': typeof DashboardMethodsIdEditRoute
   '/dashboard/personnel/$id/audit': typeof DashboardPersonnelIdAuditRoute
@@ -966,6 +1002,8 @@ export interface FileRoutesById {
   '/dashboard/assets/$id/': typeof DashboardAssetsIdIndexRoute
   '/dashboard/capa/$id/': typeof DashboardCapaIdIndexRoute
   '/dashboard/clients/$id/': typeof DashboardClientsIdIndexRoute
+  '/dashboard/finance/contracts/': typeof DashboardFinanceContractsIndexRoute
+  '/dashboard/finance/documents/': typeof DashboardFinanceDocumentsIndexRoute
   '/dashboard/jobs/$id/': typeof DashboardJobsIdIndexRoute
   '/dashboard/methods/$id/': typeof DashboardMethodsIdIndexRoute
   '/dashboard/nc/$id/': typeof DashboardNcIdIndexRoute
@@ -1014,13 +1052,13 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/dashboard/assets/$id'
     | '/dashboard/clients/$id'
+    | '/dashboard/finance/contracts'
+    | '/dashboard/finance/documents'
     | '/dashboard/personnel/$id'
     | '/backoffice/organizations/$id'
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
     | '/dashboard/clients/new'
-    | '/dashboard/finance/contracts'
-    | '/dashboard/finance/documents'
     | '/dashboard/finance/erp'
     | '/dashboard/finance/receipts'
     | '/dashboard/internal/customer-success'
@@ -1064,7 +1102,9 @@ export interface FileRouteTypes {
     | '/dashboard/clients/$id/info'
     | '/dashboard/clients/$id/users'
     | '/dashboard/finance/contracts/$id'
+    | '/dashboard/finance/contracts/new'
     | '/dashboard/finance/documents/$id'
+    | '/dashboard/finance/documents/new'
     | '/dashboard/jobs/$id/execute'
     | '/dashboard/methods/$id/edit'
     | '/dashboard/personnel/$id/audit'
@@ -1074,6 +1114,8 @@ export interface FileRouteTypes {
     | '/dashboard/assets/$id/'
     | '/dashboard/capa/$id'
     | '/dashboard/clients/$id/'
+    | '/dashboard/finance/contracts/'
+    | '/dashboard/finance/documents/'
     | '/dashboard/jobs/$id'
     | '/dashboard/methods/$id'
     | '/dashboard/nc/$id'
@@ -1108,8 +1150,6 @@ export interface FileRouteTypes {
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
     | '/dashboard/clients/new'
-    | '/dashboard/finance/contracts'
-    | '/dashboard/finance/documents'
     | '/dashboard/finance/erp'
     | '/dashboard/finance/receipts'
     | '/dashboard/internal/customer-success'
@@ -1153,7 +1193,9 @@ export interface FileRouteTypes {
     | '/dashboard/clients/$id/info'
     | '/dashboard/clients/$id/users'
     | '/dashboard/finance/contracts/$id'
+    | '/dashboard/finance/contracts/new'
     | '/dashboard/finance/documents/$id'
+    | '/dashboard/finance/documents/new'
     | '/dashboard/jobs/$id/execute'
     | '/dashboard/methods/$id/edit'
     | '/dashboard/personnel/$id/audit'
@@ -1163,6 +1205,8 @@ export interface FileRouteTypes {
     | '/dashboard/assets/$id'
     | '/dashboard/capa/$id'
     | '/dashboard/clients/$id'
+    | '/dashboard/finance/contracts'
+    | '/dashboard/finance/documents'
     | '/dashboard/jobs/$id'
     | '/dashboard/methods/$id'
     | '/dashboard/nc/$id'
@@ -1209,13 +1253,13 @@ export interface FileRouteTypes {
     | '/sign-up/'
     | '/dashboard/assets/$id'
     | '/dashboard/clients/$id'
+    | '/dashboard/finance/contracts'
+    | '/dashboard/finance/documents'
     | '/dashboard/personnel/$id'
     | '/backoffice/organizations/$id'
     | '/dashboard/assets/new'
     | '/dashboard/capa/new'
     | '/dashboard/clients/new'
-    | '/dashboard/finance/contracts'
-    | '/dashboard/finance/documents'
     | '/dashboard/finance/erp'
     | '/dashboard/finance/receipts'
     | '/dashboard/internal/customer-success'
@@ -1259,7 +1303,9 @@ export interface FileRouteTypes {
     | '/dashboard/clients/$id/info'
     | '/dashboard/clients/$id/users'
     | '/dashboard/finance/contracts/$id'
+    | '/dashboard/finance/contracts/new'
     | '/dashboard/finance/documents/$id'
+    | '/dashboard/finance/documents/new'
     | '/dashboard/jobs/$id/execute'
     | '/dashboard/methods/$id/edit'
     | '/dashboard/personnel/$id/audit'
@@ -1269,6 +1315,8 @@ export interface FileRouteTypes {
     | '/dashboard/assets/$id/'
     | '/dashboard/capa/$id/'
     | '/dashboard/clients/$id/'
+    | '/dashboard/finance/contracts/'
+    | '/dashboard/finance/documents/'
     | '/dashboard/jobs/$id/'
     | '/dashboard/methods/$id/'
     | '/dashboard/nc/$id/'
@@ -1791,20 +1839,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardFinanceErpRouteImport
       parentRoute: typeof DashboardFinanceRouteRoute
     }
-    '/dashboard/finance/documents': {
-      id: '/dashboard/finance/documents'
-      path: '/documents'
-      fullPath: '/dashboard/finance/documents'
-      preLoaderRoute: typeof DashboardFinanceDocumentsRouteImport
-      parentRoute: typeof DashboardFinanceRouteRoute
-    }
-    '/dashboard/finance/contracts': {
-      id: '/dashboard/finance/contracts'
-      path: '/contracts'
-      fullPath: '/dashboard/finance/contracts'
-      preLoaderRoute: typeof DashboardFinanceContractsRouteImport
-      parentRoute: typeof DashboardFinanceRouteRoute
-    }
     '/dashboard/clients/new': {
       id: '/dashboard/clients/new'
       path: '/new'
@@ -1839,6 +1873,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/personnel/$id'
       preLoaderRoute: typeof DashboardPersonnelIdRouteRouteImport
       parentRoute: typeof DashboardPersonnelRouteRoute
+    }
+    '/dashboard/finance/documents': {
+      id: '/dashboard/finance/documents'
+      path: '/documents'
+      fullPath: '/dashboard/finance/documents'
+      preLoaderRoute: typeof DashboardFinanceDocumentsRouteRouteImport
+      parentRoute: typeof DashboardFinanceRouteRoute
+    }
+    '/dashboard/finance/contracts': {
+      id: '/dashboard/finance/contracts'
+      path: '/contracts'
+      fullPath: '/dashboard/finance/contracts'
+      preLoaderRoute: typeof DashboardFinanceContractsRouteRouteImport
+      parentRoute: typeof DashboardFinanceRouteRoute
     }
     '/dashboard/clients/$id': {
       id: '/dashboard/clients/$id'
@@ -1903,6 +1951,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardJobsIdIndexRouteImport
       parentRoute: typeof DashboardJobsRouteRoute
     }
+    '/dashboard/finance/documents/': {
+      id: '/dashboard/finance/documents/'
+      path: '/'
+      fullPath: '/dashboard/finance/documents/'
+      preLoaderRoute: typeof DashboardFinanceDocumentsIndexRouteImport
+      parentRoute: typeof DashboardFinanceDocumentsRouteRoute
+    }
+    '/dashboard/finance/contracts/': {
+      id: '/dashboard/finance/contracts/'
+      path: '/'
+      fullPath: '/dashboard/finance/contracts/'
+      preLoaderRoute: typeof DashboardFinanceContractsIndexRouteImport
+      parentRoute: typeof DashboardFinanceContractsRouteRoute
+    }
     '/dashboard/clients/$id/': {
       id: '/dashboard/clients/$id/'
       path: '/'
@@ -1966,19 +2028,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardJobsIdExecuteRouteImport
       parentRoute: typeof DashboardJobsRouteRoute
     }
+    '/dashboard/finance/documents/new': {
+      id: '/dashboard/finance/documents/new'
+      path: '/new'
+      fullPath: '/dashboard/finance/documents/new'
+      preLoaderRoute: typeof DashboardFinanceDocumentsNewRouteImport
+      parentRoute: typeof DashboardFinanceDocumentsRouteRoute
+    }
     '/dashboard/finance/documents/$id': {
       id: '/dashboard/finance/documents/$id'
       path: '/$id'
       fullPath: '/dashboard/finance/documents/$id'
       preLoaderRoute: typeof DashboardFinanceDocumentsIdRouteImport
-      parentRoute: typeof DashboardFinanceDocumentsRoute
+      parentRoute: typeof DashboardFinanceDocumentsRouteRoute
+    }
+    '/dashboard/finance/contracts/new': {
+      id: '/dashboard/finance/contracts/new'
+      path: '/new'
+      fullPath: '/dashboard/finance/contracts/new'
+      preLoaderRoute: typeof DashboardFinanceContractsNewRouteImport
+      parentRoute: typeof DashboardFinanceContractsRouteRoute
     }
     '/dashboard/finance/contracts/$id': {
       id: '/dashboard/finance/contracts/$id'
       path: '/$id'
       fullPath: '/dashboard/finance/contracts/$id'
       preLoaderRoute: typeof DashboardFinanceContractsIdRouteImport
-      parentRoute: typeof DashboardFinanceContractsRoute
+      parentRoute: typeof DashboardFinanceContractsRouteRoute
     }
     '/dashboard/clients/$id/users': {
       id: '/dashboard/clients/$id/users'
@@ -2155,45 +2231,55 @@ const DashboardClientsRouteRouteWithChildren =
     DashboardClientsRouteRouteChildren,
   )
 
-interface DashboardFinanceContractsRouteChildren {
+interface DashboardFinanceContractsRouteRouteChildren {
   DashboardFinanceContractsIdRoute: typeof DashboardFinanceContractsIdRoute
+  DashboardFinanceContractsNewRoute: typeof DashboardFinanceContractsNewRoute
+  DashboardFinanceContractsIndexRoute: typeof DashboardFinanceContractsIndexRoute
 }
 
-const DashboardFinanceContractsRouteChildren: DashboardFinanceContractsRouteChildren =
+const DashboardFinanceContractsRouteRouteChildren: DashboardFinanceContractsRouteRouteChildren =
   {
     DashboardFinanceContractsIdRoute: DashboardFinanceContractsIdRoute,
+    DashboardFinanceContractsNewRoute: DashboardFinanceContractsNewRoute,
+    DashboardFinanceContractsIndexRoute: DashboardFinanceContractsIndexRoute,
   }
 
-const DashboardFinanceContractsRouteWithChildren =
-  DashboardFinanceContractsRoute._addFileChildren(
-    DashboardFinanceContractsRouteChildren,
+const DashboardFinanceContractsRouteRouteWithChildren =
+  DashboardFinanceContractsRouteRoute._addFileChildren(
+    DashboardFinanceContractsRouteRouteChildren,
   )
 
-interface DashboardFinanceDocumentsRouteChildren {
+interface DashboardFinanceDocumentsRouteRouteChildren {
   DashboardFinanceDocumentsIdRoute: typeof DashboardFinanceDocumentsIdRoute
+  DashboardFinanceDocumentsNewRoute: typeof DashboardFinanceDocumentsNewRoute
+  DashboardFinanceDocumentsIndexRoute: typeof DashboardFinanceDocumentsIndexRoute
 }
 
-const DashboardFinanceDocumentsRouteChildren: DashboardFinanceDocumentsRouteChildren =
+const DashboardFinanceDocumentsRouteRouteChildren: DashboardFinanceDocumentsRouteRouteChildren =
   {
     DashboardFinanceDocumentsIdRoute: DashboardFinanceDocumentsIdRoute,
+    DashboardFinanceDocumentsNewRoute: DashboardFinanceDocumentsNewRoute,
+    DashboardFinanceDocumentsIndexRoute: DashboardFinanceDocumentsIndexRoute,
   }
 
-const DashboardFinanceDocumentsRouteWithChildren =
-  DashboardFinanceDocumentsRoute._addFileChildren(
-    DashboardFinanceDocumentsRouteChildren,
+const DashboardFinanceDocumentsRouteRouteWithChildren =
+  DashboardFinanceDocumentsRouteRoute._addFileChildren(
+    DashboardFinanceDocumentsRouteRouteChildren,
   )
 
 interface DashboardFinanceRouteRouteChildren {
-  DashboardFinanceContractsRoute: typeof DashboardFinanceContractsRouteWithChildren
-  DashboardFinanceDocumentsRoute: typeof DashboardFinanceDocumentsRouteWithChildren
+  DashboardFinanceContractsRouteRoute: typeof DashboardFinanceContractsRouteRouteWithChildren
+  DashboardFinanceDocumentsRouteRoute: typeof DashboardFinanceDocumentsRouteRouteWithChildren
   DashboardFinanceErpRoute: typeof DashboardFinanceErpRoute
   DashboardFinanceReceiptsRoute: typeof DashboardFinanceReceiptsRoute
   DashboardFinanceIndexRoute: typeof DashboardFinanceIndexRoute
 }
 
 const DashboardFinanceRouteRouteChildren: DashboardFinanceRouteRouteChildren = {
-  DashboardFinanceContractsRoute: DashboardFinanceContractsRouteWithChildren,
-  DashboardFinanceDocumentsRoute: DashboardFinanceDocumentsRouteWithChildren,
+  DashboardFinanceContractsRouteRoute:
+    DashboardFinanceContractsRouteRouteWithChildren,
+  DashboardFinanceDocumentsRouteRoute:
+    DashboardFinanceDocumentsRouteRouteWithChildren,
   DashboardFinanceErpRoute: DashboardFinanceErpRoute,
   DashboardFinanceReceiptsRoute: DashboardFinanceReceiptsRoute,
   DashboardFinanceIndexRoute: DashboardFinanceIndexRoute,

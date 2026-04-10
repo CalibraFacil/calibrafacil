@@ -2,11 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
 
-import {
-  CommercialAgreementStatusBadge,
-  formatFinanceDate,
-  formatFinanceMoney,
-} from '@/components/finance/finance-ui'
+import { CommercialAgreementStatusBadge } from '@/components/finance-status-badges'
+import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -115,7 +112,8 @@ function FinanceContractDetailsPage() {
               <CommercialAgreementStatusBadge status={contract.status} />
             </div>
             <CardDescription>
-              {contract.customerName} · {contract.agreementCode || `#${contract.id}`}
+              {contract.customerName} ·{' '}
+              {contract.agreementCode || `#${contract.id}`}
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -133,13 +131,18 @@ function FinanceContractDetailsPage() {
                 onClick={() => cancelMutation.mutate()}
                 disabled={cancelMutation.isPending}
               >
-                {cancelMutation.isPending ? 'Cancelando...' : 'Cancelar contrato'}
+                {cancelMutation.isPending
+                  ? 'Cancelando...'
+                  : 'Cancelar contrato'}
               </Button>
             )}
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <InfoItem label="Moeda" value={contract.currency === 'BRL' ? 'R$' : contract.currency} />
+          <InfoItem
+            label="Moeda"
+            value={contract.currency === 'BRL' ? 'R$' : contract.currency}
+          />
           <InfoItem
             label="Vigência inicial"
             value={formatFinanceDate(contract.effectiveFrom)}
@@ -172,9 +175,11 @@ function FinanceContractDetailsPage() {
             value={
               contract.customerCompliance?.qualificationStatus === 'qualified'
                 ? 'Qualificado'
-                : contract.customerCompliance?.qualificationStatus === 'suspended'
+                : contract.customerCompliance?.qualificationStatus ===
+                    'suspended'
                   ? 'Suspenso'
-                  : contract.customerCompliance?.qualificationStatus === 'expired'
+                  : contract.customerCompliance?.qualificationStatus ===
+                      'expired'
                     ? 'Expirado'
                     : 'Pendente'
             }
@@ -191,7 +196,9 @@ function FinanceContractDetailsPage() {
             label="Reconhecimento do cliente"
             value={
               contract.customerCompliance?.contractSignedAt
-                ? formatFinanceDate(contract.customerCompliance.contractSignedAt)
+                ? formatFinanceDate(
+                    contract.customerCompliance.contractSignedAt,
+                  )
                 : 'Não registrado'
             }
           />
@@ -233,7 +240,9 @@ function FinanceContractDetailsPage() {
                 }) => (
                   <TableRow key={term.id}>
                     <TableCell>Serviço #{term.serviceId}</TableCell>
-                    <TableCell>{term.unitId ? `Unidade #${term.unitId}` : 'Geral'}</TableCell>
+                    <TableCell>
+                      {term.unitId ? `Unidade #${term.unitId}` : 'Geral'}
+                    </TableCell>
                     <TableCell>{term.currency}</TableCell>
                     <TableCell className="text-right">
                       {formatFinanceMoney(term.priceCents, term.currency)}

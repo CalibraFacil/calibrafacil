@@ -40,9 +40,11 @@ const routeLabels: Record<string, string> = {
   '/dashboard/internal/customer-success': 'Customer Success',
   '/dashboard/finance': 'Financeiro',
   '/dashboard/finance/documents': 'Documentos financeiros',
+  '/dashboard/finance/documents/new': 'Nova cobrança',
   '/dashboard/finance/documents/$id': 'Documento financeiro',
   '/dashboard/finance/receipts': 'Recebimentos',
   '/dashboard/finance/contracts': 'Contratos comerciais',
+  '/dashboard/finance/contracts/new': 'Novo contrato comercial',
   '/dashboard/finance/contracts/$id': 'Contrato comercial',
   '/dashboard/finance/erp': 'ERP financeiro',
 
