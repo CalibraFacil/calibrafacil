@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import type { InferResponseType } from 'hono/client'
 
 import {
   Card,
@@ -17,6 +18,13 @@ export const Route = createFileRoute('/backoffice/organizations/$id')({
   component: BackofficeOrganizationDetailPage,
 })
 
+type OrganizationDetailRequest =
+  (typeof api.api.backoffice.organizations)[':id']['$get']
+type OrganizationDetailResponse = InferResponseType<
+  OrganizationDetailRequest,
+  200
+>
+
 function BackofficeOrganizationDetailPage() {
   const { id } = Route.useParams()
   const organizationQuery = useQuery({
@@ -29,32 +37,7 @@ function BackofficeOrganizationDetailPage() {
         throw new Error('Falha ao carregar organização')
       }
 
-      return res.json() as Promise<{
-        organization: {
-          id: string
-          name: string
-          slug: string
-          type: string | null
-          cnpj: string | null
-        }
-        units: Array<{ id: number; name: string; status: string; cnpj: string | null }>
-        integrations: Array<{ id: number; name: string; provider: string; status: string }>
-        successProfile: {
-          onboardingStatus: string
-          migrationStatus: string
-          accountOwnerName: string | null
-          supportContactEmail: string | null
-        } | null
-        support: {
-          total: number
-          open: number
-        }
-        plan: {
-          planId: string
-          planName: string
-          status: string
-        }
-      }>
+      return res.json() as Promise<OrganizationDetailResponse>
     },
   })
 
@@ -85,16 +68,17 @@ function BackofficeOrganizationDetailPage() {
                 {isMultiUnit ? 'Conta multiunidade' : 'Conta mono-unidade'}
               </Badge>
               <Button
-                asChild
                 variant="outline"
                 size="sm"
+                nativeButton={false}
+                render={
+                  <Link
+                    to="/backoffice/commercial-checkouts"
+                    search={{ organizationId: data.organization.id }}
+                  />
+                }
               >
-                <Link
-                  to="/backoffice/commercial-checkouts"
-                  search={{ organizationId: data.organization.id }}
-                >
-                  Abrir comercial
-                </Link>
+                Abrir comercial
               </Button>
             </div>
           </div>
@@ -196,7 +180,7 @@ function BackofficeOrganizationDetailPage() {
                     <div>
                       <p className="font-medium">{unit.name}</p>
                       <p className="text-muted-foreground">
-                        CNPJ {unit.cnpj || 'Não definido'}
+                        Slug {unit.slug}
                       </p>
                     </div>
                     <Badge variant={unit.status === 'ACTIVE' ? 'default' : 'secondary'}>

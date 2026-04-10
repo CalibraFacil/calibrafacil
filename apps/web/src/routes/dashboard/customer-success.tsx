@@ -437,6 +437,10 @@ function CustomerSuccessPage() {
   }
 
   const payload = profileQuery.data
+  if (!payload) {
+    return <CustomerSuccessSkeleton />
+  }
+
   const supportRequests = requestsQuery.data?.data ?? []
 
   return (

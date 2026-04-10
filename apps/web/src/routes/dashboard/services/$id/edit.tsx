@@ -89,6 +89,7 @@ interface Service {
 
 function EditServicePage() {
   const { id } = Route.useParams()
+  const navigate = useNavigate()
 
   // Fetch service data
   const {

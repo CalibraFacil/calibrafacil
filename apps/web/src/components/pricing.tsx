@@ -155,23 +155,24 @@ const Pricing: React.FC = () => {
 
                 <div className="mt-4 border-t pt-4">
                   <Button
-                    asChild
+                    nativeButton={false}
+                    render={
+                      <a
+                        href={CONTACT_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      />
+                    }
                     variant={isPopular ? 'default' : 'outline'}
                     className="w-full"
                   >
-                    <a
-                      href={CONTACT_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <span className="flex items-center justify-center gap-2">
-                        <span>Falar com Especialista</span>
-                        <HugeiconsIcon
-                          icon={ArrowRight01Icon}
-                          className="size-4 shrink-0"
-                        />
-                      </span>
-                    </a>
+                    <span className="flex items-center justify-center gap-2">
+                      <span>Falar com Especialista</span>
+                      <HugeiconsIcon
+                        icon={ArrowRight01Icon}
+                        className="size-4 shrink-0"
+                      />
+                    </span>
                   </Button>
                 </div>
               </div>

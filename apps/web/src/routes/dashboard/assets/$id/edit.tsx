@@ -331,7 +331,7 @@ function EditAssetForm({
               {/* Customer - Read only */}
               <Field>
                 <FieldLabel>Cliente</FieldLabel>
-                <Input value={asset.customerName} disabled />
+                <Input value={asset.customerName ?? ''} disabled />
                 <FieldDescription>
                   O cliente não pode ser alterado após o cadastro.
                 </FieldDescription>
@@ -340,7 +340,7 @@ function EditAssetForm({
               {/* Asset Type - Read only */}
               <Field>
                 <FieldLabel>Tipo de Instrumento</FieldLabel>
-                <Input value={asset.assetTypeName} disabled />
+                <Input value={asset.assetTypeName ?? ''} disabled />
                 <FieldDescription>
                   O tipo de instrumento não pode ser alterado após o cadastro.
                 </FieldDescription>

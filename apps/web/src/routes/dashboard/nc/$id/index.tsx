@@ -2,7 +2,6 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { useForm } from 'react-hook-form'
 
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
@@ -554,7 +553,10 @@ function DispositionForm({
     <div className="space-y-4">
       <div className="space-y-2">
         <Label>Disposicao</Label>
-        <Select value={disposition} onValueChange={setDisposition}>
+        <Select
+          value={disposition}
+          onValueChange={(value) => setDisposition(value ?? '')}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Selecione a disposicao" />
           </SelectTrigger>

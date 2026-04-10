@@ -63,6 +63,13 @@ export const Route = createFileRoute('/backoffice/commercial-checkouts')({
   component: BackofficeCommercialCheckoutsPage,
 })
 
+type CommercialOfferPreview = NonNullable<
+  React.ComponentProps<typeof CommercialOfferSummaryCard>['preview']
+>
+type IssuedOffer = NonNullable<
+  React.ComponentProps<typeof CommercialOfferSummaryCard>['issuedOffer']
+>
+
 function BackofficeCommercialCheckoutsPage() {
   const queryClient = useQueryClient()
   const search = Route.useSearch() as { organizationId?: string } | undefined
@@ -72,8 +79,8 @@ function BackofficeCommercialCheckoutsPage() {
   )
   const [billingContactId, setBillingContactId] = useState<number | undefined>(undefined)
   const [form, setForm] = useState(DEFAULT_FORM)
-  const [preview, setPreview] = useState<any | null>(null)
-  const [issuedOffer, setIssuedOffer] = useState<any | null>(null)
+  const [preview, setPreview] = useState<CommercialOfferPreview | null>(null)
+  const [issuedOffer, setIssuedOffer] = useState<IssuedOffer | null>(null)
   const [newContact, setNewContact] = useState({
     name: '',
     email: '',
@@ -241,7 +248,7 @@ function BackofficeCommercialCheckoutsPage() {
       if (!res.ok) {
         throw new Error((payload as { error?: string } | null)?.error || 'Falha ao emitir oferta')
       }
-      return payload as { offer: any }
+      return payload as { offer: IssuedOffer }
     },
     onSuccess: (data) => {
       setIssuedOffer(data.offer)
@@ -288,7 +295,7 @@ function BackofficeCommercialCheckoutsPage() {
       return res.json()
     },
     onSuccess: (data) => {
-      setIssuedOffer((data as { offer: any }).offer)
+      setIssuedOffer(data.offer)
       toast.success('Oferta reemitida')
       void queryClient.invalidateQueries({
         queryKey: ['backoffice', 'commercial', 'context', selectedOrganizationId],

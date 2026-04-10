@@ -230,6 +230,10 @@ function PortalDomainSettingsPage() {
 
   const hasCustomDomain = accessQuery.data?.hasCustomDomain ?? false
   const payload = domainQuery.data
+  if (!payload) {
+    return <PortalDomainSkeleton />
+  }
+
   const domain = payload.domain
 
   return (

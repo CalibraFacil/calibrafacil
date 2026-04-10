@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import type { InferResponseType } from 'hono/client'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -12,6 +13,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { api } from '@/utils/api'
+import type { RenewCertificateInput } from '@calibra-facil/schemas'
 import {
   AuditTimeline,
   buildAuditTimelineEvents,
@@ -57,6 +59,9 @@ export const Route = createFileRoute('/dashboard/standards/$id/edit')({
   }),
   component: EditStandardPage,
 })
+
+type StandardDetailRequest = (typeof api.api.standards)[':id']['$get']
+type StandardDetail = InferResponseType<StandardDetailRequest, 200>
 
 interface CertifiedValue {
   nominal: string
@@ -174,7 +179,7 @@ function EditStandardForm({
   standardId,
   auditLogData,
 }: {
-  standard: any
+  standard: StandardDetail
   standardId: number
   auditLogData: Array<AuditLogRecord>
 }) {
@@ -205,7 +210,7 @@ function EditStandardForm({
     coverageFactor: standard.coverageFactor?.toString() || '2.0',
     distribution: standard.distribution || 'normal',
     drift: standard.drift?.toString() || '',
-    certifiedValues: hasCertifiedValues
+    certifiedValues: standard.certifiedValues?.length
       ? standard.certifiedValues.map(
           (cv: {
             nominal: string
@@ -301,7 +306,7 @@ function EditStandardForm({
   // Renew mutation
   const renewMutation = useMutation({
     mutationFn: async (data: RenewFormData) => {
-      const payload: Record<string, unknown> = {
+      const payload: RenewCertificateInput = {
         certificateNumber: data.certificateNumber,
         calibratedBy: data.calibratedBy || undefined,
         calibrationDate: data.calibrationDate,
@@ -334,8 +339,7 @@ function EditStandardForm({
 
       const res = await api.api.standards[':id'].renew.$post({
         param: { id: String(standardId) },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        json: payload as any,
+        json: payload,
       })
 
       if (!res.ok) {
@@ -427,7 +431,7 @@ function EditStandardForm({
     value: FormData[TKey],
   ) => {
     if (!formData) return
-    setFormData((prev) => (prev ? { ...prev, [field]: value } : null))
+    setFormData((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
@@ -435,29 +439,21 @@ function EditStandardForm({
 
   const addCertifiedValue = () => {
     if (!formData) return
-    setFormData((prev) =>
-      prev
-        ? {
-            ...prev,
-            certifiedValues: [
-              ...prev.certifiedValues,
-              { nominal: '', value: '', uncertainty: '', unit: '' },
-            ],
-          }
-        : null,
-    )
+    setFormData((prev) => ({
+      ...prev,
+      certifiedValues: [
+        ...prev.certifiedValues,
+        { nominal: '', value: '', uncertainty: '', unit: '' },
+      ],
+    }))
   }
 
   const removeCertifiedValue = (index: number) => {
     if (!formData) return
-    setFormData((prev) =>
-      prev
-        ? {
-            ...prev,
-            certifiedValues: prev.certifiedValues.filter((_, i) => i !== index),
-          }
-        : null,
-    )
+    setFormData((prev) => ({
+      ...prev,
+      certifiedValues: prev.certifiedValues.filter((_, i) => i !== index),
+    }))
   }
 
   const updateCertifiedValue = (
@@ -466,16 +462,12 @@ function EditStandardForm({
     value: string,
   ) => {
     if (!formData) return
-    setFormData((prev) =>
-      prev
-        ? {
-            ...prev,
-            certifiedValues: prev.certifiedValues.map((cv, i) =>
-              i === index ? { ...cv, [field]: value } : cv,
-            ),
-          }
-        : null,
-    )
+    setFormData((prev) => ({
+      ...prev,
+      certifiedValues: prev.certifiedValues.map((cv, i) =>
+        i === index ? { ...cv, [field]: value } : cv,
+      ),
+    }))
   }
 
   const openRenewDialog = () => {

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
+import type { InferResponseType } from 'hono/client'
 import { toast } from 'sonner'
 
 import { useBackofficeSession } from '@calibra-facil/auth/client'
@@ -322,7 +323,7 @@ type RequestsPayload = {
   data: SupportRequest[]
 }
 
-type SupportQueueItem = SupportRequest & {
+type SupportQueueItem = Omit<SupportRequest, 'events'> & {
   organization: { id: string; name: string; slug: string } | null
   organizationHealth: HealthStatus
   effectiveSlaTier: SlaTier
@@ -332,6 +333,7 @@ type SupportQueueItem = SupportRequest & {
   escalationReason: string | null
   nextActionStatus: NextActionStatus
   organizationBlockers: Blocker[]
+  events?: SupportRequest['events']
   workflowDelays: {
     hasBlockedWorkflow: boolean
     goLiveAtRisk: boolean
@@ -339,6 +341,12 @@ type SupportQueueItem = SupportRequest & {
     nextActionDueSoon: boolean
   }
 }
+
+type SupportQueueResponse = InferResponseType<
+  typeof api.api.backoffice.support.queue.$get,
+  200
+>
+type SupportQueueApiItem = SupportQueueResponse['data'][number]
 
 const onboardingLabels: Record<OnboardingStatus, string> = {
   NOT_STARTED: 'Não iniciado',
@@ -653,7 +661,7 @@ function InternalCustomerSuccessPage() {
         throw new Error(await parseApiError(res, 'Falha ao carregar fila de tickets'))
       }
 
-      return res.json() as unknown as Promise<{ data: SupportQueueItem[] }>
+      return res.json() as Promise<SupportQueueResponse>
     },
     enabled: accessQuery.isSuccess,
   })
@@ -1210,7 +1218,7 @@ function InternalCustomerSuccessPage() {
     [effectiveSelectedOrganizationId],
   )
 
-  const supportQueueData = supportQueueQuery.data?.data ?? []
+  const supportQueueData: SupportQueueApiItem[] = supportQueueQuery.data?.data ?? []
   const filteredSupportQueue = useMemo(() => {
     return supportQueueData.filter((request) => {
       const isMine = request.assignedToUser?.id === session?.user?.id

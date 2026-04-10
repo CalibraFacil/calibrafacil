@@ -69,7 +69,23 @@ export const Route = createFileRoute('/dashboard/settings/organization')({
 
 type ActiveOrganization = NonNullable<
   ReturnType<typeof useActiveOrganization>['data']
->
+> & {
+  cnpj?: string | null
+  accreditationNumber?: string | null
+  accreditationBody?: string | null
+  street?: string | null
+  number?: string | null
+  complement?: string | null
+  neighbourhood?: string | null
+  city?: string | null
+  state?: string | null
+  cep?: string | null
+  phone?: string | null
+  email?: string | null
+  website?: string | null
+  technicalManagerName?: string | null
+  technicalManagerTitle?: string | null
+}
 
 interface Member {
   id: string
@@ -216,32 +232,32 @@ function OrganizationSettingsPage({
   const [formError, setFormError] = useState<string | null>(null)
 
   // ISO 17025 / RBC compliance fields
-  const [cnpj, setCnpj] = useState((activeOrg as any).cnpj || '')
+  const [cnpj, setCnpj] = useState(activeOrg.cnpj ?? '')
   const [accreditationNumber, setAccreditationNumber] = useState(
-    (activeOrg as any).accreditationNumber || '',
+    activeOrg.accreditationNumber ?? '',
   )
   const [accreditationBody, setAccreditationBody] = useState(
-    (activeOrg as any).accreditationBody || '',
+    activeOrg.accreditationBody ?? '',
   )
-  const [street, setStreet] = useState((activeOrg as any).street || '')
-  const [number, setNumber] = useState((activeOrg as any).number || '')
+  const [street, setStreet] = useState(activeOrg.street ?? '')
+  const [number, setNumber] = useState(activeOrg.number ?? '')
   const [complement, setComplement] = useState(
-    (activeOrg as any).complement || '',
+    activeOrg.complement ?? '',
   )
   const [neighbourhood, setNeighbourhood] = useState(
-    (activeOrg as any).neighbourhood || '',
+    activeOrg.neighbourhood ?? '',
   )
-  const [city, setCity] = useState((activeOrg as any).city || '')
-  const [state, setState] = useState((activeOrg as any).state || '')
-  const [cep, setCep] = useState((activeOrg as any).cep || '')
-  const [phone, setPhone] = useState((activeOrg as any).phone || '')
-  const [email, setEmail] = useState((activeOrg as any).email || '')
-  const [website, setWebsite] = useState((activeOrg as any).website || '')
+  const [city, setCity] = useState(activeOrg.city ?? '')
+  const [state, setState] = useState(activeOrg.state ?? '')
+  const [cep, setCep] = useState(activeOrg.cep ?? '')
+  const [phone, setPhone] = useState(activeOrg.phone ?? '')
+  const [email, setEmail] = useState(activeOrg.email ?? '')
+  const [website, setWebsite] = useState(activeOrg.website ?? '')
   const [technicalManagerName, setTechnicalManagerName] = useState(
-    (activeOrg as any).technicalManagerName || '',
+    activeOrg.technicalManagerName ?? '',
   )
   const [technicalManagerTitle, setTechnicalManagerTitle] = useState(
-    (activeOrg as any).technicalManagerTitle || '',
+    activeOrg.technicalManagerTitle ?? '',
   )
   const [isUpdatingIso, setIsUpdatingIso] = useState(false)
 

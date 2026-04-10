@@ -817,7 +817,7 @@ function StatusBadge({ state }: { state: CheckoutState }) {
 }
 
 function InfoPill(props: {
-  icon: React.ComponentType<any>
+  icon: typeof CreditCardIcon
   label: string
   value: string
 }) {

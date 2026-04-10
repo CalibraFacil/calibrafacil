@@ -73,7 +73,9 @@ export function UnitSwitcher() {
     return null
   }
 
-  const handleChange = async (value: string) => {
+  const handleChange = async (value: string | null) => {
+    if (!value) return
+
     window.localStorage.setItem(
       `${DASHBOARD_UNIT_KEY_PREFIX}${activeOrg.id}`,
       value,
