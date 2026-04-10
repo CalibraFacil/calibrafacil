@@ -287,72 +287,15 @@ type ProfileDraft = {
   internalNotes: string
 }
 
-type SupportRequest = {
-  id: number
-  category: string
-  priority: SupportPriority
-  status: SupportRequestStatus
-  subject: string
-  description: string
-  publicResponse: string | null
-  createdAt: string
-  slaTargetAt: string | null
-  slaStatus: SupportSlaStatus
-  timeToSlaMs: number | null
-  prioritySupport: boolean
-  requestedByUser: { id?: string; name: string; email: string } | null
-  assignedToUser: { id: string; name: string; email: string } | null
-  escalatedAt?: string | null
-  escalationReason?: string | null
-  needsEscalation?: boolean
-  attentionScore?: number
-  events: Array<{
-    kind: string
-    message: string
-    publicVisible: boolean
-    createdAt: string
-    actorUser: { name: string; email: string } | null
-  }>
-}
-
-type RequestsPayload = {
-  organization: {
-    id: string
-    name: string
-    slug: string
-  }
-  operationalSummary: OrganizationQueueItem['operationalSummary']
-  workflow: WorkflowSummary
-  workflowWarnings: WorkflowIssue<WorkflowWarningCode>[]
-  workflowViolations: WorkflowIssue<WorkflowViolationCode>[]
-  policy: WorkflowPolicy
-  data: SupportRequest[]
-}
-
-type SupportQueueItem = Omit<SupportRequest, 'events'> & {
-  organization: { id: string; name: string; slug: string } | null
-  organizationHealth: HealthStatus
-  effectiveSlaTier: SlaTier
-  prioritySupport: boolean
-  needsEscalation: boolean
-  attentionScore: number
-  escalationReason: string | null
-  nextActionStatus: NextActionStatus
-  organizationBlockers: Blocker[]
-  events?: SupportRequest['events']
-  workflowDelays: {
-    hasBlockedWorkflow: boolean
-    goLiveAtRisk: boolean
-    nextActionOverdue: boolean
-    nextActionDueSoon: boolean
-  }
-}
-
+type RequestsPayload = InferResponseType<
+  (typeof api.api.backoffice)['customer-success']['organizations'][':id']['requests']['$get'],
+  200
+>
 type SupportQueueResponse = InferResponseType<
   typeof api.api.backoffice.support.queue.$get,
   200
 >
-type SupportQueueApiItem = SupportQueueResponse['data'][number]
+type SupportQueueItem = SupportQueueResponse['data'][number]
 
 const onboardingLabels: Record<OnboardingStatus, string> = {
   NOT_STARTED: 'Não iniciado',
@@ -1265,7 +1208,7 @@ function InternalCustomerSuccessPage() {
     [effectiveSelectedOrganizationId],
   )
 
-  const supportQueueData: SupportQueueApiItem[] =
+  const supportQueueData: SupportQueueItem[] =
     supportQueueQuery.data?.data ?? []
   const filteredSupportQueue = useMemo(() => {
     return supportQueueData.filter((request) => {
