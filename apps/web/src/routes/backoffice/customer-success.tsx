@@ -29,6 +29,7 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { CustomerSuccessAccountTimeline } from '@/components/customer-success-account-timeline'
 
 export const Route = createFileRoute('/backoffice/customer-success')({
   head: () => ({
@@ -54,7 +55,12 @@ type MigrationStatus =
   | 'COMPLETED'
   | 'BLOCKED'
 type SlaTier = 'PLAN_DEFAULT' | 'PRIORITY' | 'DEDICATED'
-type NextActionStatus = 'NONE' | 'PENDING' | 'DUE_SOON' | 'OVERDUE' | 'COMPLETED'
+type NextActionStatus =
+  | 'NONE'
+  | 'PENDING'
+  | 'DUE_SOON'
+  | 'OVERDUE'
+  | 'COMPLETED'
 type BlockerScope = 'ONBOARDING' | 'MIGRATION' | 'GO_LIVE' | 'SUPPORT'
 type SupportRequestStatus =
   | 'OPEN'
@@ -467,7 +473,8 @@ async function parseApiError(res: Response, fallback: string) {
 
   if (data && typeof data === 'object') {
     if ('error' in data && typeof data.error === 'string') return data.error
-    if ('message' in data && typeof data.message === 'string') return data.message
+    if ('message' in data && typeof data.message === 'string')
+      return data.message
   }
 
   return fallback
@@ -522,7 +529,9 @@ function formatRelativeSla(value: number | null) {
   return `${Math.round(absoluteHours / 24)}d restantes`
 }
 
-function getHealthBadgeVariant(status: HealthStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getHealthBadgeVariant(
+  status: HealthStatus,
+): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
     case 'CRITICAL':
       return 'destructive'
@@ -533,7 +542,9 @@ function getHealthBadgeVariant(status: HealthStatus): 'default' | 'secondary' | 
   }
 }
 
-function getSlaBadgeVariant(status: SupportSlaStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getSlaBadgeVariant(
+  status: SupportSlaStatus,
+): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
     case 'BREACHED':
       return 'destructive'
@@ -546,7 +557,9 @@ function getSlaBadgeVariant(status: SupportSlaStatus): 'default' | 'secondary' |
   }
 }
 
-function getPriorityBadgeVariant(priority: SupportPriority): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getPriorityBadgeVariant(
+  priority: SupportPriority,
+): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (priority) {
     case 'URGENT':
       return 'destructive'
@@ -622,7 +635,9 @@ function InternalCustomerSuccessPage() {
   const [search, setSearch] = useState('')
   const [profileDraftsByOrganizationId, setProfileDraftsByOrganizationId] =
     useState<Record<string, ProfileDraft>>({})
-  const [responseDrafts, setResponseDrafts] = useState<Record<number, string>>({})
+  const [responseDrafts, setResponseDrafts] = useState<Record<number, string>>(
+    {},
+  )
   const [blockerScopeDraft, setBlockerScopeDraft] =
     useState<BlockerScope>('ONBOARDING')
   const [blockerReasonDraft, setBlockerReasonDraft] = useState('')
@@ -643,7 +658,8 @@ function InternalCustomerSuccessPage() {
   const organizationsQuery = useQuery({
     queryKey: ['backoffice', 'customer-success', 'organizations'],
     queryFn: async () => {
-      const res = await api.api.backoffice['customer-success'].organizations.$get()
+      const res =
+        await api.api.backoffice['customer-success'].organizations.$get()
       if (!res.ok) {
         throw new Error(await parseApiError(res, 'Falha ao carregar contas'))
       }
@@ -658,7 +674,9 @@ function InternalCustomerSuccessPage() {
     queryFn: async () => {
       const res = await api.api.backoffice.support.queue.$get()
       if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao carregar fila de tickets'))
+        throw new Error(
+          await parseApiError(res, 'Falha ao carregar fila de tickets'),
+        )
       }
 
       return res.json() as Promise<SupportQueueResponse>
@@ -675,8 +693,12 @@ function InternalCustomerSuccessPage() {
         normalizedSearch.length === 0 ||
         organization.name.toLowerCase().includes(normalizedSearch) ||
         organization.slug.toLowerCase().includes(normalizedSearch) ||
-        (organization.accountOwnerName ?? '').toLowerCase().includes(normalizedSearch) ||
-        (organization.internalOwnerUser?.name ?? '').toLowerCase().includes(normalizedSearch)
+        (organization.accountOwnerName ?? '')
+          .toLowerCase()
+          .includes(normalizedSearch) ||
+        (organization.internalOwnerUser?.name ?? '')
+          .toLowerCase()
+          .includes(normalizedSearch)
 
       if (!matchesSearch) return false
 
@@ -716,7 +738,7 @@ function InternalCustomerSuccessPage() {
     (organization) => organization.id === selectedOrganizationId,
   )
     ? selectedOrganizationId
-    : filteredOrganizations[0]?.id ?? ''
+    : (filteredOrganizations[0]?.id ?? '')
 
   const profileQuery = useQuery({
     queryKey: [
@@ -726,13 +748,16 @@ function InternalCustomerSuccessPage() {
       effectiveSelectedOrganizationId,
     ],
     queryFn: async () => {
-      const res =
-        await api.api.backoffice['customer-success'].organizations[':id'].profile.$get({
-          param: { id: effectiveSelectedOrganizationId },
-        })
+      const res = await api.api.backoffice['customer-success'].organizations[
+        ':id'
+      ].profile.$get({
+        param: { id: effectiveSelectedOrganizationId },
+      })
 
       if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao carregar detalhe da conta'))
+        throw new Error(
+          await parseApiError(res, 'Falha ao carregar detalhe da conta'),
+        )
       }
 
       return res.json() as Promise<ProfilePayload>
@@ -748,13 +773,16 @@ function InternalCustomerSuccessPage() {
       effectiveSelectedOrganizationId,
     ],
     queryFn: async () => {
-      const res =
-        await api.api.backoffice['customer-success'].organizations[':id'].requests.$get({
-          param: { id: effectiveSelectedOrganizationId },
-        })
+      const res = await api.api.backoffice['customer-success'].organizations[
+        ':id'
+      ].requests.$get({
+        param: { id: effectiveSelectedOrganizationId },
+      })
 
       if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao carregar tickets da conta'))
+        throw new Error(
+          await parseApiError(res, 'Falha ao carregar tickets da conta'),
+        )
       }
 
       return res.json() as Promise<RequestsPayload>
@@ -763,8 +791,8 @@ function InternalCustomerSuccessPage() {
   })
   const profileDraft =
     effectiveSelectedOrganizationId && profileQuery.data
-      ? profileDraftsByOrganizationId[effectiveSelectedOrganizationId] ??
-        createProfileDraft(profileQuery.data)
+      ? (profileDraftsByOrganizationId[effectiveSelectedOrganizationId] ??
+        createProfileDraft(profileQuery.data))
       : DEFAULT_PROFILE_DRAFT
   const setProfileDraft = (
     updater: ProfileDraft | ((current: ProfileDraft) => ProfileDraft),
@@ -775,8 +803,7 @@ function InternalCustomerSuccessPage() {
       const base =
         current[effectiveSelectedOrganizationId] ??
         createProfileDraft(profileQuery.data)
-      const nextDraft =
-        typeof updater === 'function' ? updater(base) : updater
+      const nextDraft = typeof updater === 'function' ? updater(base) : updater
 
       return {
         ...current,
@@ -823,30 +850,31 @@ function InternalCustomerSuccessPage() {
 
   const updateProfileMutation = useMutation({
     mutationFn: async () => {
-      const res =
-        await api.api.backoffice['customer-success'].organizations[':id'].profile.$put({
-          param: { id: effectiveSelectedOrganizationId },
-          json: {
-            accountOwnerName: profileDraft.accountOwnerName,
-            accountOwnerEmail: profileDraft.accountOwnerEmail || null,
-            supportContactEmail: profileDraft.supportContactEmail || null,
-            internalOwnerUserId: profileDraft.internalOwnerUserId || null,
-            prioritySupport: profileDraft.prioritySupport,
-            slaTier: profileDraft.slaTier,
-            onboardingStatus: profileDraft.onboardingStatus,
-            migrationStatus: profileDraft.migrationStatus,
-            goLiveStatus: profileDraft.goLiveStatus,
-            healthStatus: profileDraft.healthStatus,
-            goLiveTargetDate: profileDraft.goLiveTargetDate
-              ? new Date(profileDraft.goLiveTargetDate).toISOString()
-              : null,
-            goLiveActualDate: profileDraft.goLiveActualDate
-              ? new Date(profileDraft.goLiveActualDate).toISOString()
-              : null,
-            publicStatusNote: profileDraft.publicStatusNote || null,
-            internalNotes: profileDraft.internalNotes || null,
-          },
-        })
+      const res = await api.api.backoffice['customer-success'].organizations[
+        ':id'
+      ].profile.$put({
+        param: { id: effectiveSelectedOrganizationId },
+        json: {
+          accountOwnerName: profileDraft.accountOwnerName,
+          accountOwnerEmail: profileDraft.accountOwnerEmail || null,
+          supportContactEmail: profileDraft.supportContactEmail || null,
+          internalOwnerUserId: profileDraft.internalOwnerUserId || null,
+          prioritySupport: profileDraft.prioritySupport,
+          slaTier: profileDraft.slaTier,
+          onboardingStatus: profileDraft.onboardingStatus,
+          migrationStatus: profileDraft.migrationStatus,
+          goLiveStatus: profileDraft.goLiveStatus,
+          healthStatus: profileDraft.healthStatus,
+          goLiveTargetDate: profileDraft.goLiveTargetDate
+            ? new Date(profileDraft.goLiveTargetDate).toISOString()
+            : null,
+          goLiveActualDate: profileDraft.goLiveActualDate
+            ? new Date(profileDraft.goLiveActualDate).toISOString()
+            : null,
+          publicStatusNote: profileDraft.publicStatusNote || null,
+          internalNotes: profileDraft.internalNotes || null,
+        },
+      })
 
       if (!res.ok) {
         throw new Error(
@@ -875,20 +903,19 @@ function InternalCustomerSuccessPage() {
     }: {
       markCompleted?: boolean
     }) => {
-      const res =
-        await api.api.backoffice['customer-success'].organizations[':id']['next-action'].$post(
-          {
-            param: { id: effectiveSelectedOrganizationId },
-            json: {
-              nextAction: markCompleted ? null : profileDraft.nextAction || null,
-              nextActionDueAt:
-                markCompleted || !profileDraft.nextActionDueAt
-                  ? null
-                  : new Date(profileDraft.nextActionDueAt).toISOString(),
-              markCompleted,
-            },
-          },
-        )
+      const res = await api.api.backoffice['customer-success'].organizations[
+        ':id'
+      ]['next-action'].$post({
+        param: { id: effectiveSelectedOrganizationId },
+        json: {
+          nextAction: markCompleted ? null : profileDraft.nextAction || null,
+          nextActionDueAt:
+            markCompleted || !profileDraft.nextActionDueAt
+              ? null
+              : new Date(profileDraft.nextActionDueAt).toISOString(),
+          markCompleted,
+        },
+      })
 
       if (!res.ok) {
         throw new Error(
@@ -930,17 +957,16 @@ function InternalCustomerSuccessPage() {
       scope: BlockerScope
       mode: 'ADD' | 'RESOLVE'
     }) => {
-      const res =
-        await api.api.backoffice['customer-success'].organizations[':id'].block.$post(
-          {
-            param: { id: effectiveSelectedOrganizationId },
-            json: {
-              scope,
-              mode,
-              reason: mode === 'ADD' ? blockerReasonDraft : undefined,
-            },
-          },
-        )
+      const res = await api.api.backoffice['customer-success'].organizations[
+        ':id'
+      ].block.$post({
+        param: { id: effectiveSelectedOrganizationId },
+        json: {
+          scope,
+          mode,
+          reason: mode === 'ADD' ? blockerReasonDraft : undefined,
+        },
+      })
 
       if (!res.ok) {
         throw new Error(await parseApiError(res, 'Falha ao atualizar bloqueio'))
@@ -971,15 +997,15 @@ function InternalCustomerSuccessPage() {
         throw new Error('Informe uma resposta antes de enviar')
       }
 
-      const res = await api.api.backoffice['customer-success'].requests[':id'].respond.$post(
-        {
-          param: { id: String(requestId) },
-          json: {
-            message,
-            publicVisible: true,
-          },
+      const res = await api.api.backoffice['customer-success'].requests[
+        ':id'
+      ].respond.$post({
+        param: { id: String(requestId) },
+        json: {
+          message,
+          publicVisible: true,
         },
-      )
+      })
 
       if (!res.ok) {
         throw new Error(await parseApiError(res, 'Falha ao responder'))
@@ -993,7 +1019,9 @@ function InternalCustomerSuccessPage() {
       await refreshCurrentOrganization()
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao responder ticket')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao responder ticket',
+      )
     },
   })
 
@@ -1005,12 +1033,12 @@ function InternalCustomerSuccessPage() {
       requestId: number
       assignedToUserId: string | null
     }) => {
-      const res = await api.api.backoffice['customer-success'].requests[':id'].assign.$post(
-        {
-          param: { id: String(requestId) },
-          json: { assignedToUserId },
-        },
-      )
+      const res = await api.api.backoffice['customer-success'].requests[
+        ':id'
+      ].assign.$post({
+        param: { id: String(requestId) },
+        json: { assignedToUserId },
+      })
 
       if (!res.ok) {
         throw new Error(await parseApiError(res, 'Falha ao atribuir ticket'))
@@ -1024,7 +1052,9 @@ function InternalCustomerSuccessPage() {
     },
     onError: (error) => {
       toast.error(
-        error instanceof Error ? error.message : 'Falha ao atualizar atribuição',
+        error instanceof Error
+          ? error.message
+          : 'Falha ao atualizar atribuição',
       )
     },
   })
@@ -1037,12 +1067,12 @@ function InternalCustomerSuccessPage() {
       requestId: number
       status: SupportRequestStatus
     }) => {
-      const res = await api.api.backoffice['customer-success'].requests[':id'].status.$post(
-        {
-          param: { id: String(requestId) },
-          json: { status },
-        },
-      )
+      const res = await api.api.backoffice['customer-success'].requests[
+        ':id'
+      ].status.$post({
+        param: { id: String(requestId) },
+        json: { status },
+      })
 
       if (!res.ok) {
         throw new Error(await parseApiError(res, 'Falha ao atualizar status'))
@@ -1055,7 +1085,9 @@ function InternalCustomerSuccessPage() {
       await refreshCurrentOrganization()
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao atualizar status')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao atualizar status',
+      )
     },
   })
 
@@ -1067,13 +1099,12 @@ function InternalCustomerSuccessPage() {
       requestId: number
       reason: string
     }) => {
-      const res =
-        await api.api.backoffice['customer-success'].requests[':id'].escalate.$post(
-          {
-            param: { id: String(requestId) },
-            json: { reason },
-          },
-        )
+      const res = await api.api.backoffice['customer-success'].requests[
+        ':id'
+      ].escalate.$post({
+        param: { id: String(requestId) },
+        json: { reason },
+      })
 
       if (!res.ok) {
         throw new Error(await parseApiError(res, 'Falha ao escalar ticket'))
@@ -1086,7 +1117,9 @@ function InternalCustomerSuccessPage() {
       await refreshCurrentOrganization()
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao escalar ticket')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao escalar ticket',
+      )
     },
   })
 
@@ -1097,13 +1130,14 @@ function InternalCustomerSuccessPage() {
         throw new Error('Sessão inválida para assumir a conta')
       }
 
-      const res =
-        await api.api.backoffice['customer-success'].organizations[':id'].profile.$put({
-          param: { id: effectiveSelectedOrganizationId },
-          json: {
-            internalOwnerUserId: userId,
-          },
-        })
+      const res = await api.api.backoffice['customer-success'].organizations[
+        ':id'
+      ].profile.$put({
+        param: { id: effectiveSelectedOrganizationId },
+        json: {
+          internalOwnerUserId: userId,
+        },
+      })
 
       if (!res.ok) {
         throw new Error(await parseApiError(res, 'Falha ao assumir a conta'))
@@ -1116,7 +1150,9 @@ function InternalCustomerSuccessPage() {
       await refreshCurrentOrganization()
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao assumir a conta')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao assumir a conta',
+      )
     },
   })
 
@@ -1130,8 +1166,7 @@ function InternalCustomerSuccessPage() {
         ),
         cell: ({ row }) => {
           const organization = row.original
-          const isSelected =
-            organization.id === effectiveSelectedOrganizationId
+          const isSelected = organization.id === effectiveSelectedOrganizationId
 
           return (
             <div className="flex min-w-60 flex-col gap-1">
@@ -1139,7 +1174,9 @@ function InternalCustomerSuccessPage() {
                 <span className="font-medium">{organization.name}</span>
                 {isSelected ? <Badge>Selecionada</Badge> : null}
               </div>
-              <span className="text-sm text-muted-foreground">{organization.slug}</span>
+              <span className="text-sm text-muted-foreground">
+                {organization.slug}
+              </span>
             </div>
           )
         },
@@ -1155,7 +1192,11 @@ function InternalCustomerSuccessPage() {
           return (
             <div className="flex min-w-56 flex-col gap-2">
               <div className="flex flex-wrap gap-2">
-                <Badge variant={getHealthBadgeVariant(organization.operationalSummary.healthStatus)}>
+                <Badge
+                  variant={getHealthBadgeVariant(
+                    organization.operationalSummary.healthStatus,
+                  )}
+                >
                   {healthLabels[organization.operationalSummary.healthStatus]}
                 </Badge>
                 <Badge variant="outline">
@@ -1196,8 +1237,7 @@ function InternalCustomerSuccessPage() {
       },
       {
         id: 'risk',
-        accessorFn: (row) =>
-          row.operationalSummary.attentionScore,
+        accessorFn: (row) => row.operationalSummary.attentionScore,
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title="Pressão" />
         ),
@@ -1205,10 +1245,17 @@ function InternalCustomerSuccessPage() {
           const organization = row.original
           return (
             <div className="flex min-w-48 flex-col gap-1 text-sm">
-              <span>Score {organization.operationalSummary.attentionScore}</span>
+              <span>
+                Score {organization.operationalSummary.attentionScore}
+              </span>
               <span className="text-muted-foreground">
-                {nextActionStatusLabels[organization.operationalSummary.nextActionStatus]} ·{' '}
-                {organization.operationalSummary.activeBlockersCount} bloqueios
+                {
+                  nextActionStatusLabels[
+                    organization.operationalSummary.nextActionStatus
+                  ]
+                }{' '}
+                · {organization.operationalSummary.activeBlockersCount}{' '}
+                bloqueios
               </span>
             </div>
           )
@@ -1218,7 +1265,8 @@ function InternalCustomerSuccessPage() {
     [effectiveSelectedOrganizationId],
   )
 
-  const supportQueueData: SupportQueueApiItem[] = supportQueueQuery.data?.data ?? []
+  const supportQueueData: SupportQueueApiItem[] =
+    supportQueueQuery.data?.data ?? []
   const filteredSupportQueue = useMemo(() => {
     return supportQueueData.filter((request) => {
       const isMine = request.assignedToUser?.id === session?.user?.id
@@ -1298,8 +1346,12 @@ function InternalCustomerSuccessPage() {
           const request = row.original
           return (
             <div className="flex min-w-44 flex-col gap-2">
-              <Badge variant="outline">{requestStatusLabels[request.status]}</Badge>
-              <Badge variant={getHealthBadgeVariant(request.organizationHealth)}>
+              <Badge variant="outline">
+                {requestStatusLabels[request.status]}
+              </Badge>
+              <Badge
+                variant={getHealthBadgeVariant(request.organizationHealth)}
+              >
                 {healthLabels[request.organizationHealth]}
               </Badge>
               {request.prioritySupport ? <Badge>Priority</Badge> : null}
@@ -1372,13 +1424,16 @@ function InternalCustomerSuccessPage() {
 
   const totalOrganizations = organizationsQuery.data?.data.length ?? 0
   const attentionCount =
-    organizationsQuery.data?.data.filter((item) => item.operationalSummary.needsAttention)
-      .length ?? 0
+    organizationsQuery.data?.data.filter(
+      (item) => item.operationalSummary.needsAttention,
+    ).length ?? 0
   const priorityCount =
-    organizationsQuery.data?.data.filter((item) => item.operationalSummary.prioritySupport)
-      .length ?? 0
+    organizationsQuery.data?.data.filter(
+      (item) => item.operationalSummary.prioritySupport,
+    ).length ?? 0
   const breachedCount =
-    supportQueueData.filter((request) => request.slaStatus === 'BREACHED').length ?? 0
+    supportQueueData.filter((request) => request.slaStatus === 'BREACHED')
+      .length ?? 0
   const escalationCount =
     supportQueueData.filter((request) => request.needsEscalation).length ?? 0
 
@@ -1389,7 +1444,8 @@ function InternalCustomerSuccessPage() {
           Customer Success Operacional
         </h1>
         <p className="text-muted-foreground">
-          Workspace interno para onboarding, migração, suporte prioritário e SLA.
+          Workspace interno para onboarding, migração, suporte prioritário e
+          SLA.
         </p>
       </div>
 
@@ -1503,10 +1559,20 @@ function InternalCustomerSuccessPage() {
                       }
                     </Badge>
                     <Badge variant="outline">
-                      {goLiveLabels[selectedOrganization.operationalSummary.goLiveStatus]}
+                      {
+                        goLiveLabels[
+                          selectedOrganization.operationalSummary.goLiveStatus
+                        ]
+                      }
                     </Badge>
                     <Badge variant="outline">
-                      SLA {slaTierLabels[selectedOrganization.operationalSummary.effectiveSlaTier]}
+                      SLA{' '}
+                      {
+                        slaTierLabels[
+                          selectedOrganization.operationalSummary
+                            .effectiveSlaTier
+                        ]
+                      }
                     </Badge>
                     <Badge
                       variant={getWorkflowBadgeVariant(
@@ -1555,7 +1621,11 @@ function InternalCustomerSuccessPage() {
                       )}
                     >
                       Go-live{' '}
-                      {workflowStateLabels[selectedOrganization.workflow.goLiveState]}
+                      {
+                        workflowStateLabels[
+                          selectedOrganization.workflow.goLiveState
+                        ]
+                      }
                     </Badge>
                     <Badge
                       variant={getWorkflowBadgeVariant(
@@ -1575,32 +1645,42 @@ function InternalCustomerSuccessPage() {
                     <div className="rounded-lg border p-4">
                       <p className="text-sm font-medium">Próxima ação</p>
                       <p className="mt-2 text-sm text-muted-foreground">
-                        {selectedOrganization.profile.nextAction ?? 'Nenhuma ação definida'}
+                        {selectedOrganization.profile.nextAction ??
+                          'Nenhuma ação definida'}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Badge
                           variant={getNextActionBadgeVariant(
-                            selectedOrganization.operationalSummary.nextActionStatus,
+                            selectedOrganization.operationalSummary
+                              .nextActionStatus,
                           )}
                         >
                           {
                             nextActionStatusLabels[
-                              selectedOrganization.operationalSummary.nextActionStatus
+                              selectedOrganization.operationalSummary
+                                .nextActionStatus
                             ]
                           }
                         </Badge>
                       </div>
                       <p className="mt-2 text-xs text-muted-foreground">
-                        Prazo: {formatDateTime(selectedOrganization.profile.nextActionDueAt)}
+                        Prazo:{' '}
+                        {formatDateTime(
+                          selectedOrganization.profile.nextActionDueAt,
+                        )}
                       </p>
                     </div>
                     <div className="rounded-lg border p-4">
                       <p className="text-sm font-medium">Responsável interno</p>
                       <p className="mt-2 text-sm text-muted-foreground">
-                        {selectedOrganization.internalOwnerUser?.name ?? 'Não definido'}
+                        {selectedOrganization.internalOwnerUser?.name ??
+                          'Não definido'}
                       </p>
                       <p className="mt-2 text-xs text-muted-foreground">
-                        Último toque: {formatDateTime(selectedOrganization.profile.lastTouchedAt)}
+                        Último toque:{' '}
+                        {formatDateTime(
+                          selectedOrganization.profile.lastTouchedAt,
+                        )}
                       </p>
                     </div>
                   </div>
@@ -1611,9 +1691,11 @@ function InternalCustomerSuccessPage() {
                         Ações requeridas
                       </p>
                       <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                        {selectedOrganization.workflowViolations.map((issue) => (
-                          <p key={issue.code}>{issue.message}</p>
-                        ))}
+                        {selectedOrganization.workflowViolations.map(
+                          (issue) => (
+                            <p key={issue.code}>{issue.message}</p>
+                          ),
+                        )}
                       </div>
                     </div>
                   ) : null}
@@ -1632,28 +1714,42 @@ function InternalCustomerSuccessPage() {
                   <div className="grid gap-4 md:grid-cols-4">
                     <MiniMetric
                       label="Tickets abertos"
-                      value={selectedOrganization.operationalSummary.openRequestsCount}
+                      value={
+                        selectedOrganization.operationalSummary
+                          .openRequestsCount
+                      }
                     />
                     <MiniMetric
                       label="SLA vencendo"
-                      value={selectedOrganization.operationalSummary.dueSoonRequestsCount}
+                      value={
+                        selectedOrganization.operationalSummary
+                          .dueSoonRequestsCount
+                      }
                     />
                     <MiniMetric
                       label="SLA violado"
-                      value={selectedOrganization.operationalSummary.breachedRequestsCount}
+                      value={
+                        selectedOrganization.operationalSummary
+                          .breachedRequestsCount
+                      }
                     />
                     <MiniMetric
                       label="Escalados"
-                      value={selectedOrganization.operationalSummary.escalatedRequestsCount}
+                      value={
+                        selectedOrganization.operationalSummary
+                          .escalatedRequestsCount
+                      }
                     />
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {selectedOrganization.operationalSummary.workstreams.map((item) => (
-                      <Badge key={item} variant="outline">
-                        {item}
-                      </Badge>
-                    ))}
+                    {selectedOrganization.operationalSummary.workstreams.map(
+                      (item) => (
+                        <Badge key={item} variant="outline">
+                          {item}
+                        </Badge>
+                      ),
+                    )}
                     <Button
                       type="button"
                       size="sm"
@@ -1680,39 +1776,42 @@ function InternalCustomerSuccessPage() {
                     ) : null}
                   </div>
 
-                  {selectedOrganization.operationalSummary.blockers.length > 0 ? (
+                  {selectedOrganization.operationalSummary.blockers.length >
+                  0 ? (
                     <div className="rounded-lg border border-dashed p-4">
                       <p className="text-sm font-medium">Bloqueios ativos</p>
                       <div className="mt-3 space-y-2">
-                        {selectedOrganization.operationalSummary.blockers.map((blocker) => (
-                          <div
-                            key={blocker.id}
-                            className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-                          >
-                            <div>
-                              <p className="font-medium">
-                                {blockerScopeLabels[blocker.scope]}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {blocker.reason}
-                              </p>
-                            </div>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                blockerMutation.mutate({
-                                  scope: blocker.scope,
-                                  mode: 'RESOLVE',
-                                })
-                              }
-                              disabled={blockerMutation.isPending}
+                        {selectedOrganization.operationalSummary.blockers.map(
+                          (blocker) => (
+                            <div
+                              key={blocker.id}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
                             >
-                              Resolver bloqueio
-                            </Button>
-                          </div>
-                        ))}
+                              <div>
+                                <p className="font-medium">
+                                  {blockerScopeLabels[blocker.scope]}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {blocker.reason}
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  blockerMutation.mutate({
+                                    scope: blocker.scope,
+                                    mode: 'RESOLVE',
+                                  })
+                                }
+                                disabled={blockerMutation.isPending}
+                              >
+                                Resolver bloqueio
+                              </Button>
+                            </div>
+                          ),
+                        )}
                       </div>
                     </div>
                   ) : null}
@@ -1729,7 +1828,8 @@ function InternalCustomerSuccessPage() {
             <CardHeader>
               <CardTitle>Postura Operacional</CardTitle>
               <CardDescription>
-                Atualize owner interno, saúde da conta, próximo passo e comunicação.
+                Atualize owner interno, saúde da conta, próximo passo e
+                comunicação.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1766,8 +1866,10 @@ function InternalCustomerSuccessPage() {
                           disabled
                         />
                         <FieldDescription>
-                          Meta de primeira resposta: {' '}
-                          {profileData?.supportPolicy.targetFirstResponseBusinessHours ?? 0}h
+                          Meta de primeira resposta:{' '}
+                          {profileData?.supportPolicy
+                            .targetFirstResponseBusinessHours ?? 0}
+                          h
                         </FieldDescription>
                       </Field>
                     </div>
@@ -1783,24 +1885,30 @@ function InternalCustomerSuccessPage() {
                         {' · '}
                         Resposta alvo:{' '}
                         <strong>
-                          {profileData?.policy.targetFirstResponseBusinessHours ?? 0}h úteis
+                          {profileData?.policy
+                            .targetFirstResponseBusinessHours ?? 0}
+                          h úteis
                         </strong>
                         {' · '}
                         Alerta SLA:{' '}
                         <strong>
-                          {profileData?.policy.dueSoonThresholdBusinessHours ?? 0}h úteis
+                          {profileData?.policy.dueSoonThresholdBusinessHours ??
+                            0}
+                          h úteis
                         </strong>
                         {' · '}
                         Owner interno obrigatório:{' '}
                         <strong>
-                          {profileData?.policy.requiresInternalOwnerForActiveWorkflows
+                          {profileData?.policy
+                            .requiresInternalOwnerForActiveWorkflows
                             ? 'Sim'
                             : 'Não'}
                         </strong>
                         {' · '}
                         Próxima ação obrigatória:{' '}
                         <strong>
-                          {profileData?.policy.requiresNextActionForActiveWorkflows
+                          {profileData?.policy
+                            .requiresNextActionForActiveWorkflows
                             ? 'Sim'
                             : 'Não'}
                         </strong>
@@ -1860,9 +1968,14 @@ function InternalCustomerSuccessPage() {
                             }))
                           }
                         >
-                          <NativeSelectOption value="">Sem owner</NativeSelectOption>
+                          <NativeSelectOption value="">
+                            Sem owner
+                          </NativeSelectOption>
                           {(profileData?.operators ?? []).map((operator) => (
-                            <NativeSelectOption key={operator.id} value={operator.id}>
+                            <NativeSelectOption
+                              key={operator.id}
+                              value={operator.id}
+                            >
                               {operator.name}
                             </NativeSelectOption>
                           ))}
@@ -1878,15 +1991,18 @@ function InternalCustomerSuccessPage() {
                           onChange={(event) =>
                             setProfileDraft((current) => ({
                               ...current,
-                              onboardingStatus: event.target.value as OnboardingStatus,
+                              onboardingStatus: event.target
+                                .value as OnboardingStatus,
                             }))
                           }
                         >
-                          {Object.entries(onboardingLabels).map(([value, label]) => (
-                            <NativeSelectOption key={value} value={value}>
-                              {label}
-                            </NativeSelectOption>
-                          ))}
+                          {Object.entries(onboardingLabels).map(
+                            ([value, label]) => (
+                              <NativeSelectOption key={value} value={value}>
+                                {label}
+                              </NativeSelectOption>
+                            ),
+                          )}
                         </NativeSelect>
                       </Field>
                       <Field>
@@ -1896,15 +2012,18 @@ function InternalCustomerSuccessPage() {
                           onChange={(event) =>
                             setProfileDraft((current) => ({
                               ...current,
-                              migrationStatus: event.target.value as MigrationStatus,
+                              migrationStatus: event.target
+                                .value as MigrationStatus,
                             }))
                           }
                         >
-                          {Object.entries(migrationLabels).map(([value, label]) => (
-                            <NativeSelectOption key={value} value={value}>
-                              {label}
-                            </NativeSelectOption>
-                          ))}
+                          {Object.entries(migrationLabels).map(
+                            ([value, label]) => (
+                              <NativeSelectOption key={value} value={value}>
+                                {label}
+                              </NativeSelectOption>
+                            ),
+                          )}
                         </NativeSelect>
                       </Field>
                     </div>
@@ -1921,11 +2040,13 @@ function InternalCustomerSuccessPage() {
                             }))
                           }
                         >
-                          {Object.entries(goLiveLabels).map(([value, label]) => (
-                            <NativeSelectOption key={value} value={value}>
-                              {label}
-                            </NativeSelectOption>
-                          ))}
+                          {Object.entries(goLiveLabels).map(
+                            ([value, label]) => (
+                              <NativeSelectOption key={value} value={value}>
+                                {label}
+                              </NativeSelectOption>
+                            ),
+                          )}
                         </NativeSelect>
                       </Field>
                       <Field>
@@ -1939,11 +2060,13 @@ function InternalCustomerSuccessPage() {
                             }))
                           }
                         >
-                          {Object.entries(healthLabels).map(([value, label]) => (
-                            <NativeSelectOption key={value} value={value}>
-                              {label}
-                            </NativeSelectOption>
-                          ))}
+                          {Object.entries(healthLabels).map(
+                            ([value, label]) => (
+                              <NativeSelectOption key={value} value={value}>
+                                {label}
+                              </NativeSelectOption>
+                            ),
+                          )}
                         </NativeSelect>
                       </Field>
                       <Field>
@@ -1957,11 +2080,13 @@ function InternalCustomerSuccessPage() {
                             }))
                           }
                         >
-                          {Object.entries(slaTierLabels).map(([value, label]) => (
-                            <NativeSelectOption key={value} value={value}>
-                              {label}
-                            </NativeSelectOption>
-                          ))}
+                          {Object.entries(slaTierLabels).map(
+                            ([value, label]) => (
+                              <NativeSelectOption key={value} value={value}>
+                                {label}
+                              </NativeSelectOption>
+                            ),
+                          )}
                         </NativeSelect>
                       </Field>
                     </div>
@@ -2044,7 +2169,8 @@ function InternalCustomerSuccessPage() {
                           })
                         }
                         disabled={
-                          nextActionMutation.isPending || !profileDraft.nextAction
+                          nextActionMutation.isPending ||
+                          !profileDraft.nextAction
                         }
                       >
                         Concluir ação atual
@@ -2057,21 +2183,27 @@ function InternalCustomerSuccessPage() {
                         <NativeSelect
                           value={blockerScopeDraft}
                           onChange={(event) =>
-                            setBlockerScopeDraft(event.target.value as BlockerScope)
+                            setBlockerScopeDraft(
+                              event.target.value as BlockerScope,
+                            )
                           }
                         >
-                          {Object.entries(blockerScopeLabels).map(([value, label]) => (
-                            <NativeSelectOption key={value} value={value}>
-                              {label}
-                            </NativeSelectOption>
-                          ))}
+                          {Object.entries(blockerScopeLabels).map(
+                            ([value, label]) => (
+                              <NativeSelectOption key={value} value={value}>
+                                {label}
+                              </NativeSelectOption>
+                            ),
+                          )}
                         </NativeSelect>
                       </Field>
                       <Field>
                         <FieldLabel>Motivo do bloqueio</FieldLabel>
                         <Input
                           value={blockerReasonDraft}
-                          onChange={(event) => setBlockerReasonDraft(event.target.value)}
+                          onChange={(event) =>
+                            setBlockerReasonDraft(event.target.value)
+                          }
                           placeholder="Ex.: aguardando base de migração validada"
                         />
                       </Field>
@@ -2084,7 +2216,10 @@ function InternalCustomerSuccessPage() {
                             mode: 'ADD',
                           })
                         }
-                        disabled={blockerMutation.isPending || !blockerReasonDraft.trim()}
+                        disabled={
+                          blockerMutation.isPending ||
+                          !blockerReasonDraft.trim()
+                        }
                       >
                         Registrar bloqueio
                       </Button>
@@ -2103,7 +2238,8 @@ function InternalCustomerSuccessPage() {
                           }
                         />
                         <FieldDescription>
-                          Destaca a conta na fila e antecipa o tratamento operacional.
+                          Destaca a conta na fila e antecipa o tratamento
+                          operacional.
                         </FieldDescription>
                       </div>
                     </Field>
@@ -2137,7 +2273,10 @@ function InternalCustomerSuccessPage() {
                     </Field>
                   </FieldGroup>
 
-                  <Button type="submit" disabled={updateProfileMutation.isPending}>
+                  <Button
+                    type="submit"
+                    disabled={updateProfileMutation.isPending}
+                  >
                     {updateProfileMutation.isPending
                       ? 'Salvando...'
                       : 'Salvar postura operacional'}
@@ -2166,24 +2305,9 @@ function InternalCustomerSuccessPage() {
                   Selecione uma conta para ver a timeline operacional.
                 </p>
               ) : profileQuery.data?.timeline.length ? (
-                profileQuery.data.timeline.map((event) => (
-                  <div key={event.id} className="rounded-lg border p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">{event.action}</Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDateTime(event.createdAt)}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {event.actorUser?.name ?? 'Sistema'}
-                    </p>
-                    {event.details ? (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {JSON.stringify(event.details)}
-                      </p>
-                    ) : null}
-                  </div>
-                ))
+                <CustomerSuccessAccountTimeline
+                  events={profileQuery.data.timeline}
+                />
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Nenhuma atividade operacional registrada para esta conta.
@@ -2196,7 +2320,8 @@ function InternalCustomerSuccessPage() {
             <CardHeader>
               <CardTitle>Tickets da Conta</CardTitle>
               <CardDescription>
-                Responda, atribua ou mova o status sem sair do contexto da conta.
+                Responda, atribua ou mova o status sem sair do contexto da
+                conta.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -2220,7 +2345,10 @@ function InternalCustomerSuccessPage() {
                 </p>
               ) : (
                 organizationRequests.map((request) => (
-                  <div key={request.id} className="space-y-4 rounded-lg border p-4">
+                  <div
+                    key={request.id}
+                    className="space-y-4 rounded-lg border p-4"
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="space-y-1">
                         <p className="font-medium">{request.subject}</p>
@@ -2230,7 +2358,9 @@ function InternalCustomerSuccessPage() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Badge variant={getPriorityBadgeVariant(request.priority)}>
+                        <Badge
+                          variant={getPriorityBadgeVariant(request.priority)}
+                        >
                           {requestPriorityLabels[request.priority]}
                         </Badge>
                         <Badge variant={getSlaBadgeVariant(request.slaStatus)}>
@@ -2247,7 +2377,8 @@ function InternalCustomerSuccessPage() {
                     </p>
 
                     <div className="text-xs text-muted-foreground">
-                      SLA: {formatRelativeSla(request.timeToSlaMs)} · Responsável:{' '}
+                      SLA: {formatRelativeSla(request.timeToSlaMs)} ·
+                      Responsável:{' '}
                       {request.assignedToUser?.name ?? 'Não atribuído'}
                     </div>
 
@@ -2333,9 +2464,10 @@ function InternalCustomerSuccessPage() {
                         onClick={() =>
                           escalateMutation.mutate({
                             requestId: request.id,
-                            reason: request.slaStatus === 'BREACHED'
-                              ? 'Escalação automática do operador: ticket fora do SLA.'
-                              : 'Escalação manual do operador para tratamento prioritário.',
+                            reason:
+                              request.slaStatus === 'BREACHED'
+                                ? 'Escalação automática do operador: ticket fora do SLA.'
+                                : 'Escalação manual do operador para tratamento prioritário.',
                           })
                         }
                         disabled={
@@ -2358,7 +2490,9 @@ function InternalCustomerSuccessPage() {
                             <p className="text-xs text-muted-foreground">
                               {event.actorUser?.name ?? 'Sistema'} ·{' '}
                               {formatDateTime(event.createdAt)}
-                              {event.publicVisible ? ' · Público' : ' · Interno'}
+                              {event.publicVisible
+                                ? ' · Público'
+                                : ' · Interno'}
                             </p>
                           </div>
                         ))}
