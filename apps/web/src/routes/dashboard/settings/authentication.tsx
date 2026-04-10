@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { InferResponseType } from 'hono/client'
 import { toast } from 'sonner'
 import {
   Cancel01Icon,
@@ -68,7 +69,7 @@ interface SsoProviderSummary {
   domainHost: string
   domainVerified: boolean
   organizationId: string | null
-  type: 'oidc' | 'unknown'
+  type: string
   redirectURI: string
   oidcConfig: {
     discoveryEndpoint: string | null
@@ -98,6 +99,8 @@ interface SsoSettingsResponse {
     hasSso: boolean
   }
 }
+
+type SsoSettingsApiResponse = InferResponseType<typeof api.api.sso.providers.$get, 200>
 
 interface ApiKeySummary {
   id: string
@@ -130,7 +133,7 @@ async function fetchSsoSettings(): Promise<SsoSettingsResponse> {
     )
   }
 
-  return (await res.json()) as SsoSettingsResponse
+  return (await res.json()) as SsoSettingsApiResponse
 }
 
 function AuthenticationSettingsPage() {
