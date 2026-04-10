@@ -14,6 +14,7 @@ import {
   UpdatePersonnelCompetenceSchema,
   AssignTrainingSchema,
   EvaluateCompetenceSchema,
+  CancelCompetenceSchema,
   ListPersonnelCompetenceQuerySchema,
 } from "@calibra-facil/schemas";
 import {
@@ -40,6 +41,7 @@ import {
  * Competences Router - ISO 17025:2017 Clause 6.2.3 (Personnel Competence)
  *
  * Full workflow: REQUESTED → TRAINING_ASSIGNED → IN_TRAINING → PENDING_EVALUATION → ACTIVE
+ * REQUESTED/TRAINING_ASSIGNED/IN_TRAINING/PENDING_EVALUATION → CANCELLED
  * ACTIVE → SUSPENDED (manual) / EXPIRED (auto) → ACTIVE (renew)
  */
 export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
@@ -791,6 +793,78 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
 
         return c.json(updated);
       }
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/cancel - pre-active states → CANCELLED
+  // =========================================================================
+  .post(
+    "/:id/cancel",
+    ...withLabPermission({ competence: ["update"] }),
+    zValidator("json", CancelCompetenceSchema),
+    async (c) => {
+      const memberData = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      const input = c.req.valid("json");
+
+      if (isNaN(id)) {
+        return c.json({ error: "ID inválido" }, 400);
+      }
+
+      const [existing] = await db
+        .select()
+        .from(personnelCompetence)
+        .where(
+          and(
+            eq(personnelCompetence.id, id),
+            eq(personnelCompetence.organizationId, memberData.organizationId),
+            isNull(personnelCompetence.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json({ error: "Competência não encontrada" }, 404);
+      }
+
+      if (
+        existing.status !== "REQUESTED" &&
+        existing.status !== "TRAINING_ASSIGNED" &&
+        existing.status !== "IN_TRAINING" &&
+        existing.status !== "PENDING_EVALUATION"
+      ) {
+        return c.json(
+          {
+            error:
+              "Só é possível cancelar competências em andamento antes da ativação",
+          },
+          400,
+        );
+      }
+
+      const [updated] = await db
+        .update(personnelCompetence)
+        .set({
+          status: "CANCELLED",
+          notes: input.notes ?? existing.notes,
+        })
+        .where(eq(personnelCompetence.id, id))
+        .returning();
+
+      await db.insert(personnelCompetenceAuditLog).values({
+        competenceId: id,
+        action: "cancel",
+        changes: {
+          status: { old: existing.status, new: "CANCELLED" },
+        },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+        reason: input.notes ?? null,
+      });
+
+      return c.json(updated);
     },
   )
 
