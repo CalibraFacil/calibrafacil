@@ -122,6 +122,160 @@ function checkEnvironmentWithinLimits(
   return true;
 }
 
+async function buildStandardsSnapshot(
+  selectedStandardIds: number[] | undefined,
+  organizationId: string,
+  unitId: number,
+): Promise<
+  | { ok: true; snapshot: StandardSnapshot[] | null | undefined }
+  | { ok: false; error: string }
+> {
+  if (selectedStandardIds === undefined) {
+    return { ok: true, snapshot: undefined };
+  }
+
+  if (selectedStandardIds.length === 0) {
+    return { ok: true, snapshot: null };
+  }
+
+  const standards = await db
+    .select()
+    .from(referenceStandard)
+    .where(
+      and(
+        inArray(referenceStandard.id, selectedStandardIds),
+        eq(referenceStandard.organizationId, organizationId),
+        eq(referenceStandard.unitId, unitId),
+      ),
+    );
+
+  if (standards.length !== selectedStandardIds.length) {
+    const foundIds = new Set(standards.map((s) => s.id));
+    const missingIds = selectedStandardIds.filter((id) => !foundIds.has(id));
+    return {
+      ok: false,
+      error: `Padroes nao encontrados ou nao pertencem a organizacao: ${missingIds.join(", ")}`,
+    };
+  }
+
+  const inactiveStandards = standards.filter((s) => s.status !== "ACTIVE");
+  if (inactiveStandards.length > 0) {
+    return {
+      ok: false,
+      error: `Os seguintes padroes nao estao ativos: ${inactiveStandards.map((s) => s.name).join(", ")}`,
+    };
+  }
+
+  const now = new Date();
+  const expiredStandards = standards.filter((s) => s.nextCalibrationDate < now);
+  if (expiredStandards.length > 0) {
+    return {
+      ok: false,
+      error: `Os seguintes padroes estao com certificado vencido: ${expiredStandards.map((s) => s.name).join(", ")}`,
+    };
+  }
+
+  return {
+    ok: true,
+    snapshot: standards.map((s) => ({
+      id: s.id,
+      name: s.name,
+      certificateNumber: s.certificateNumber,
+      calibrationDate: s.calibrationDate,
+      uncertainty: s.uncertainty,
+      uncertaintyUnit: s.uncertaintyUnit,
+      coverageFactor: s.coverageFactor,
+      distribution: s.distribution,
+      drift: s.drift,
+      certifiedValues: s.certifiedValues,
+    })),
+  };
+}
+
+async function buildEnvironmentalSnapshot(
+  environment:
+    | {
+        temperature: number | null;
+        humidity: number | null;
+        pressure: number | null;
+      }
+    | undefined,
+  existing: { assetId: number; unitId: number },
+  organizationId: string,
+  userId: string,
+): Promise<EnvironmentalSnapshot | undefined> {
+  if (!environment) return undefined;
+
+  const [jobAsset] = await db
+    .select({ assetTypeId: asset.assetTypeId })
+    .from(asset)
+    .where(eq(asset.id, existing.assetId))
+    .limit(1);
+
+  let frozenLimits: EnvironmentalLimitsSnapshot | null = null;
+  if (jobAsset && existing.unitId) {
+    const limits = await db
+      .select()
+      .from(environmentalLimits)
+      .where(
+        and(
+          eq(environmentalLimits.organizationId, organizationId),
+          eq(environmentalLimits.unitId, existing.unitId),
+          or(
+            eq(environmentalLimits.assetTypeId, jobAsset.assetTypeId),
+            isNull(environmentalLimits.assetTypeId),
+          ),
+        ),
+      )
+      .orderBy(desc(environmentalLimits.assetTypeId));
+
+    const { limits: effectiveLimits } =
+      selectEffectiveEnvironmentalLimits(limits);
+    if (effectiveLimits) {
+      frozenLimits = {
+        ...(effectiveLimits.temperatureMin != null &&
+        effectiveLimits.temperatureMax != null
+          ? {
+              temperature: {
+                min: effectiveLimits.temperatureMin,
+                max: effectiveLimits.temperatureMax,
+              },
+            }
+          : {}),
+        ...(effectiveLimits.humidityMin != null &&
+        effectiveLimits.humidityMax != null
+          ? {
+              humidity: {
+                min: effectiveLimits.humidityMin,
+                max: effectiveLimits.humidityMax,
+              },
+            }
+          : {}),
+        ...(effectiveLimits.pressureMin != null &&
+        effectiveLimits.pressureMax != null
+          ? {
+              pressure: {
+                min: effectiveLimits.pressureMin,
+                max: effectiveLimits.pressureMax,
+              },
+            }
+          : {}),
+      };
+    }
+  }
+
+  return {
+    temperature: environment.temperature,
+    humidity: environment.humidity,
+    pressure: environment.pressure,
+    recordedAt: new Date().toISOString(),
+    recordedBy: userId,
+    limits: frozenLimits,
+    withinLimits: checkEnvironmentWithinLimits(environment, frozenLimits),
+    outOfLimitsJustification: null,
+  };
+}
+
 /**
  * Calibration Jobs Router - Work Orders (ISO 17025 Operational Layer)
  *
@@ -932,11 +1086,37 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      // Update job with data and set status to REVIEW
+      const standardsResult = await buildStandardsSnapshot(
+        input.selectedStandardIds,
+        memberData.organizationId,
+        existing.unitId,
+      );
+      if (!standardsResult.ok) {
+        return c.json({ error: standardsResult.error }, 400);
+      }
+
+      const environmentalSnapshot = await buildEnvironmentalSnapshot(
+        input.environment,
+        existing,
+        memberData.organizationId,
+        session.user.id,
+      );
+
+      const nextStandardsSnapshot =
+        standardsResult.snapshot === undefined
+          ? existing.standardsSnapshot
+          : standardsResult.snapshot;
+      const nextEnvironmentalSnapshot =
+        environmentalSnapshot ?? existing.environmentalSnapshot;
+
+      // Update job with execution data and set status to REVIEW
       const [updated] = await db
         .update(calibrationJob)
         .set({
           data: input.data,
+          results: input.results ?? existing.results,
+          standardsSnapshot: nextStandardsSnapshot,
+          environmentalSnapshot: nextEnvironmentalSnapshot,
           status: "REVIEW",
           performedAt: new Date(),
         })
@@ -950,12 +1130,28 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         changes: {
           status: { old: existing.status, new: "REVIEW" },
           data: { old: existing.data, new: input.data },
+          results:
+            input.results !== undefined
+              ? { old: existing.results, new: input.results }
+              : undefined,
+          standardsSnapshot:
+            standardsResult.snapshot !== undefined
+              ? {
+                  old: existing.standardsSnapshot,
+                  new: standardsResult.snapshot,
+                }
+              : undefined,
+          environmentalSnapshot: environmentalSnapshot
+            ? {
+                old: existing.environmentalSnapshot,
+                new: environmentalSnapshot,
+              }
+            : undefined,
         },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
         reason:
-          existing.environmentalSnapshot &&
-          !existing.environmentalSnapshot.withinLimits
+          nextEnvironmentalSnapshot && !nextEnvironmentalSnapshot.withinLimits
             ? "Submetido com condições ambientais fora dos limites"
             : undefined,
       });
@@ -1017,157 +1213,28 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      // Build standards snapshot if standards were selected
-      let standardsSnapshot: StandardSnapshot[] | null = null;
-      if (input.selectedStandardIds && input.selectedStandardIds.length > 0) {
-        const standards = await db
-          .select()
-          .from(referenceStandard)
-          .where(
-            and(
-              inArray(referenceStandard.id, input.selectedStandardIds),
-              eq(referenceStandard.organizationId, memberData.organizationId),
-              eq(referenceStandard.unitId, existing.unitId),
-            ),
-          );
-
-        // Validate all requested standards were found
-        if (standards.length !== input.selectedStandardIds.length) {
-          const foundIds = new Set(standards.map((s) => s.id));
-          const missingIds = input.selectedStandardIds.filter(
-            (id) => !foundIds.has(id),
-          );
-          return c.json(
-            {
-              error: `Padroes nao encontrados ou nao pertencem a organizacao: ${missingIds.join(", ")}`,
-            },
-            400,
-          );
-        }
-
-        // Validate all standards are ACTIVE
-        const inactiveStandards = standards.filter(
-          (s) => s.status !== "ACTIVE",
-        );
-        if (inactiveStandards.length > 0) {
-          return c.json(
-            {
-              error: `Os seguintes padroes nao estao ativos: ${inactiveStandards.map((s) => s.name).join(", ")}`,
-            },
-            400,
-          );
-        }
-
-        // Validate all standards have valid certificates (not expired)
-        const now = new Date();
-        const expiredStandards = standards.filter(
-          (s) => s.nextCalibrationDate < now,
-        );
-        if (expiredStandards.length > 0) {
-          return c.json(
-            {
-              error: `Os seguintes padroes estao com certificado vencido: ${expiredStandards.map((s) => s.name).join(", ")}`,
-            },
-            400,
-          );
-        }
-
-        // Create snapshot of standards - freeze values at execution time
-        standardsSnapshot = standards.map((s) => ({
-          id: s.id,
-          name: s.name,
-          certificateNumber: s.certificateNumber,
-          calibrationDate: s.calibrationDate,
-          uncertainty: s.uncertainty,
-          uncertaintyUnit: s.uncertaintyUnit,
-          coverageFactor: s.coverageFactor,
-          distribution: s.distribution,
-          drift: s.drift,
-          certifiedValues: s.certifiedValues,
-        }));
+      const standardsResult = await buildStandardsSnapshot(
+        input.selectedStandardIds,
+        memberData.organizationId,
+        existing.unitId,
+      );
+      if (!standardsResult.ok) {
+        return c.json({ error: standardsResult.error }, 400);
       }
 
-      // Build environmental snapshot if environment data was provided
-      let environmentalSnapshot: EnvironmentalSnapshot | null =
-        existing.environmentalSnapshot;
-      if (input.environment) {
-        // Look up the asset's assetTypeId
-        const [jobAsset] = await db
-          .select({ assetTypeId: asset.assetTypeId })
-          .from(asset)
-          .where(eq(asset.id, existing.assetId))
-          .limit(1);
+      const environmentalSnapshot = await buildEnvironmentalSnapshot(
+        input.environment,
+        existing,
+        memberData.organizationId,
+        session.user.id,
+      );
 
-        // Fetch limits: unit asset-type-specific first, then unit default
-        let frozenLimits: EnvironmentalLimitsSnapshot | null = null;
-        if (jobAsset && existing.unitId) {
-          const limits = await db
-            .select()
-            .from(environmentalLimits)
-            .where(
-              and(
-                eq(environmentalLimits.organizationId, memberData.organizationId),
-                eq(environmentalLimits.unitId, existing.unitId),
-                or(
-                  eq(environmentalLimits.assetTypeId, jobAsset.assetTypeId),
-                  isNull(environmentalLimits.assetTypeId),
-                ),
-              ),
-            )
-            .orderBy(desc(environmentalLimits.assetTypeId)); // non-null first
-
-          const { limits: effectiveLimits } =
-            selectEffectiveEnvironmentalLimits(limits);
-          if (effectiveLimits) {
-            frozenLimits = {
-              ...(effectiveLimits.temperatureMin != null &&
-              effectiveLimits.temperatureMax != null
-                ? {
-                    temperature: {
-                      min: effectiveLimits.temperatureMin,
-                      max: effectiveLimits.temperatureMax,
-                    },
-                  }
-                : {}),
-              ...(effectiveLimits.humidityMin != null &&
-              effectiveLimits.humidityMax != null
-                ? {
-                    humidity: {
-                      min: effectiveLimits.humidityMin,
-                      max: effectiveLimits.humidityMax,
-                    },
-                  }
-                : {}),
-              ...(effectiveLimits.pressureMin != null &&
-              effectiveLimits.pressureMax != null
-                ? {
-                    pressure: {
-                      min: effectiveLimits.pressureMin,
-                      max: effectiveLimits.pressureMax,
-                    },
-                  }
-                : {}),
-            };
-          }
-        }
-
-        // Check if within limits
-        const withinLimits = checkEnvironmentWithinLimits(
-          input.environment,
-          frozenLimits,
-        );
-
-        environmentalSnapshot = {
-          temperature: input.environment.temperature,
-          humidity: input.environment.humidity,
-          pressure: input.environment.pressure,
-          recordedAt: new Date().toISOString(),
-          recordedBy: session.user.id,
-          limits: frozenLimits,
-          withinLimits,
-          outOfLimitsJustification: null,
-        };
-      }
+      const nextStandardsSnapshot =
+        standardsResult.snapshot === undefined
+          ? existing.standardsSnapshot
+          : standardsResult.snapshot;
+      const nextEnvironmentalSnapshot =
+        environmentalSnapshot ?? existing.environmentalSnapshot;
 
       // Determine new status
       const newStatus =
@@ -1178,10 +1245,9 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         .update(calibrationJob)
         .set({
           data: input.data,
-          results: input.results || null,
-          standardsSnapshot: standardsSnapshot || existing.standardsSnapshot,
-          environmentalSnapshot:
-            environmentalSnapshot || existing.environmentalSnapshot,
+          results: input.results ?? null,
+          standardsSnapshot: nextStandardsSnapshot,
+          environmentalSnapshot: nextEnvironmentalSnapshot,
           status: newStatus,
         })
         .where(eq(calibrationJob.id, id))
@@ -1197,9 +1263,13 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
               ? { old: existing.status, new: newStatus }
               : undefined,
           data: { old: existing.data, new: input.data },
-          standardsSnapshot: standardsSnapshot
-            ? { old: existing.standardsSnapshot, new: standardsSnapshot }
-            : undefined,
+          standardsSnapshot:
+            standardsResult.snapshot !== undefined
+              ? {
+                  old: existing.standardsSnapshot,
+                  new: standardsResult.snapshot,
+                }
+              : undefined,
           environmentalSnapshot: environmentalSnapshot
             ? {
                 old: existing.environmentalSnapshot,
