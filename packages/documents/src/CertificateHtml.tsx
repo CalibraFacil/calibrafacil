@@ -311,6 +311,8 @@ const styles = `
     border-bottom: 1px solid #ccc;
     padding-bottom: 4px;
     margin-bottom: 8px;
+    break-after: avoid;
+    page-break-after: avoid;
   }
   .info-grid {
     display: grid;
@@ -384,12 +386,20 @@ const styles = `
   }
   .data-table {
     margin-top: 8px;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .data-table-title {
     font-weight: 600;
     color: #333;
     margin-bottom: 4px;
     font-size: 10pt;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .calibration-data-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   /* Amendment notice styles - ISO 17025 Clause 7.8.4.1 */
   .amendment-notice {
@@ -1154,7 +1164,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
 
                     {/* Calibration Data Tables */}
                     {tableFields.length > 0 && job.data && (
-                        <div className="section">
+                        <div className="section calibration-data-section">
                             <div className="section-title">
                                 Dados de Calibração
                             </div>
