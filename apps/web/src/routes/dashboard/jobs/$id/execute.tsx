@@ -256,7 +256,9 @@ function ExecuteJobForm({
     const [selectedStandardIds, setSelectedStandardIds] = useState<number[]>(
         () =>
             job.standardsSnapshot && job.standardsSnapshot.length > 0
-                ? job.standardsSnapshot.map((s) => s.id)
+                ? job.standardsSnapshot
+                    .map((s) => Number(s.id))
+                    .filter((standardId) => Number.isFinite(standardId))
                 : [],
     )
     const [environment, setEnvironment] = useState<{
@@ -550,7 +552,16 @@ function ExecuteJobForm({
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].submit.$post({
                 param: { id: jobId },
-                json: { data: normalizeFormData(formData) },
+                json: {
+                    selectedStandardIds,
+                    data: normalizeFormData(formData),
+                    results: Object.fromEntries(
+                        Object.entries(formulaResults)
+                            .filter(([, r]) => r.value !== undefined)
+                            .map(([k, r]) => [k, r.value]),
+                    ),
+                    environment: environmentPayload,
+                },
             })
             if (!res.ok) {
                 const error = await res.json()
