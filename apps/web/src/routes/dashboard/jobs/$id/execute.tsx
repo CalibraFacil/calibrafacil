@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { TableInputRenderer, type CertifiedValueOption } from '@/components/method-builder/table-input-renderer'
+import { formatCalibrationValue } from '@calibra-facil/shared'
 import type {
     MethodInputField,
     FormulaResult,
@@ -359,12 +360,9 @@ function ExecuteJobForm({
 
             if (result.success) {
                 const rawValue = result.data.result
-                let displayValue: string
-                if (Array.isArray(rawValue)) {
-                    displayValue = `[${rawValue.map((v) => String(v)).join(', ')}]`
-                } else {
-                    displayValue = String(rawValue)
-                }
+                const displayValue = formatCalibrationValue(rawValue, {
+                    wrapArrays: true,
+                })
 
                 results[formula.outputKey] = { value: rawValue, displayValue }
                 runningContext[formula.outputKey] = rawValue

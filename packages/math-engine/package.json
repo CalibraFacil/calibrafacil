@@ -19,7 +19,7 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "mathjs": "^13.2.0",
+    "mathjs": "^15.2.0",
     "zod": "^4.2.1"
   },
   "devDependencies": {

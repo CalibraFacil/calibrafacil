@@ -1,5 +1,6 @@
 import {
     type CertificateTemplateSnapshot,
+    formatCalibrationValue,
     normalizeCertificateTemplateConfig,
 } from "@calibra-facil/shared";
 
@@ -435,10 +436,7 @@ function formatNumber(value: number, minDecimals = 4): string {
 
 function formatValue(value: unknown): string {
     if (value === null || value === undefined) return "-";
-    if (Array.isArray(value))
-        return value.map((v) => formatValue(v)).join(", ");
-    if (typeof value === "number") return formatNumber(value);
-    return String(value);
+    return formatCalibrationValue(value, { decimalSeparator: "," });
 }
 
 function formatAddress(address: CustomerAddress | null): string {

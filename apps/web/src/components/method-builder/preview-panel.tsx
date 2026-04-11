@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { createEngine, flattenForExecution } from '@calibra-facil/math-engine'
+import { formatCalibrationValue } from '@calibra-facil/shared'
 
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -109,13 +110,9 @@ export function PreviewPanel({
         const rawValue = result.data.result
 
         // Format for display
-        let displayValue: string
-        if (Array.isArray(rawValue)) {
-          // Pretty print array: [0.0001, -0.0001]
-          displayValue = `[${rawValue.map((v) => String(v)).join(', ')}]`
-        } else {
-          displayValue = String(rawValue)
-        }
+        const displayValue = formatCalibrationValue(rawValue, {
+          wrapArrays: true,
+        })
 
         results[formula.outputKey] = {
           value: rawValue, // Store raw value (fixes arrays showing "-")
