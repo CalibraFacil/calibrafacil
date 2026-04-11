@@ -146,10 +146,7 @@ function findMissingRequiredAssetSpecs(
     (field) =>
       field.source === "asset_spec" &&
       field.required &&
-      !hasSpecificationValue(
-        assetSnapshot?.specifications,
-        field.assetSpecKey,
-      ),
+      !hasSpecificationValue(assetSnapshot?.specifications, field.assetSpecKey),
   );
 }
 
@@ -329,6 +326,7 @@ async function buildStandardsSnapshot(
       name: s.name,
       certificateNumber: s.certificateNumber,
       calibrationDate: s.calibrationDate,
+      nextCalibrationDate: s.nextCalibrationDate,
       uncertainty: s.uncertainty,
       uncertaintyUnit: s.uncertaintyUnit,
       coverageFactor: s.coverageFactor,
