@@ -1,15 +1,5 @@
 # Repository Guidelines
 
-## MANDATORY: Use td for Task Management
-
-Run td usage --new-session at conversation start (or after /clear). This tells you what to work on next.
-
-Sessions are automatic (based on terminal/agent context). Optional:
-- td session "name" to label the current session
-- td session --new to force a new session in the same context
-
-Use td usage -q after first read.
-
 ## Project Structure & Module Organization
 - `apps/`: deployable services. Key apps: `apps/api` (Hono REST API), `apps/web` (lab dashboard), `apps/portal` (client portal), `apps/worker` (background jobs), `apps/docs` (docs site).
 - `packages/`: shared libraries such as `db` (Drizzle schema), `schemas` (Zod), `auth`, `math-engine`, `documents`, `shared`.
