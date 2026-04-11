@@ -85,6 +85,7 @@ const allowedOrigins = new Set([
   "https://192.168.0.10:5174",
   "https://calibrafacil.com",
   "https://portal.calibrafacil.com",
+  "https://verify.calibrafacil.com",
   "https://api.calibrafacil.com",
 ]);
 
