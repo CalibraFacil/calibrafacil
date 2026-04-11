@@ -1,6 +1,7 @@
 import { db } from "@calibra-facil/db";
 import {
   asset,
+  assetType,
   calibrationJob,
   calibrationMethod,
   customer,
@@ -10,6 +11,8 @@ import {
   personnelCompetence,
   service,
   type CustomerCompliance,
+  type AssetSnapshot,
+  type MethodInputField,
   type MethodSnapshot,
 } from "@calibra-facil/db/schema";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
@@ -51,7 +54,38 @@ export const jobCreationClientErrors = new Set([
   "Tecnico nao encontrado ou sem permissao",
   "Técnico não possui competência ativa para este tipo de instrumento",
   "Cliente suspenso. Reative a qualificação antes de criar novas ordens de serviço.",
+  "Ativo nao possui especificacao obrigatoria para este metodo",
 ]);
+
+function hasSpecificationValue(
+  specifications: Record<string, unknown> | null | undefined,
+  key: string | undefined,
+) {
+  if (!specifications || !key) {
+    return false;
+  }
+
+  const value = specifications[key];
+  return value !== null && value !== undefined && value !== "";
+}
+
+function validateRequiredAssetSpecs(
+  dataFields: MethodInputField[] | null | undefined,
+  specifications: Record<string, unknown> | null | undefined,
+) {
+  const missing = (dataFields ?? []).filter(
+    (field) =>
+      field.source === "asset_spec" &&
+      field.required &&
+      !hasSpecificationValue(specifications, field.assetSpecKey),
+  );
+
+  if (missing.length > 0) {
+    throw new Error(
+      "Ativo nao possui especificacao obrigatoria para este metodo",
+    );
+  }
+}
 
 function addBusinessDays(startDate: Date, businessDays: number) {
   const dueDate = new Date(startDate);
@@ -79,12 +113,21 @@ async function persistCalibrationJob(
       unitId: asset.unitId,
       customerId: asset.customerId,
       assetTypeId: asset.assetTypeId,
+      name: asset.name,
+      tag: asset.tag,
+      serialNumber: asset.serialNumber,
+      manufacturer: asset.manufacturer,
+      model: asset.model,
+      specifications: asset.specifications,
+      assetTypeName: assetType.name,
+      assetTypeSlug: assetType.slug,
       deletedAt: asset.deletedAt,
       labOrganizationId: customer.labOrganizationId,
       customerCompliance: customer.compliance,
     })
     .from(asset)
     .innerJoin(customer, eq(asset.customerId, customer.id))
+    .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
     .where(eq(asset.id, params.assetId))
     .limit(1);
 
@@ -263,6 +306,25 @@ async function persistCalibrationJob(
     uncertaintyParams: methodData.uncertaintyParams,
   };
 
+  validateRequiredAssetSpecs(
+    methodSnapshot.dataFields,
+    assetData.specifications,
+  );
+
+  const assetSnapshot: AssetSnapshot = {
+    assetId: assetData.id,
+    assetTypeId: assetData.assetTypeId,
+    assetTypeName: assetData.assetTypeName,
+    assetTypeSlug: assetData.assetTypeSlug,
+    name: assetData.name,
+    tag: assetData.tag,
+    serialNumber: assetData.serialNumber,
+    manufacturer: assetData.manufacturer,
+    model: assetData.model,
+    specifications: assetData.specifications,
+    capturedAt: new Date().toISOString(),
+  };
+
   let dueDate: Date | null = null;
   if (params.dueDate) {
     dueDate =
@@ -284,6 +346,7 @@ async function persistCalibrationJob(
       serviceId: params.serviceId,
       technicianId: params.technicianId || null,
       methodSnapshot,
+      assetSnapshot,
       status: "DRAFT",
       dueDate,
       createdBy: params.createdBy,

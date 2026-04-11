@@ -45,6 +45,7 @@ import { TableInputRenderer, type CertifiedValueOption } from '@/components/meth
 import { formatCalibrationValue } from '@calibra-facil/shared'
 import type {
     MethodInputField,
+    MethodFormula,
     FormulaResult,
     ValidationResult,
 } from '@/components/method-builder/types'
@@ -111,6 +112,20 @@ interface EnvironmentalSnapshotData {
     outOfLimitsJustification: string | null
 }
 
+interface AssetSnapshot {
+    assetId: number
+    assetTypeId: number
+    assetTypeName: string
+    assetTypeSlug: string
+    name: string
+    tag: string
+    serialNumber: string
+    manufacturer: string | null
+    model: string | null
+    specifications: Record<string, unknown> | null
+    capturedAt: string
+}
+
 interface EffectiveLimits {
     temperatureMin: number | null
     temperatureMax: number | null
@@ -135,12 +150,13 @@ interface JobData {
         methodName: string
         methodVersion: number
         dataFields: MethodInputField[]
-        formulas: Array<{ outputKey: string; expression: string; label?: string; unit?: string }>
+        formulas: MethodFormula[]
         validations: Array<{ expression: string; message: string; severity: 'error' | 'warning' }>
         uncertaintyParams: Array<unknown>
     }
     data: Record<string, unknown> | null
     results: Record<string, unknown> | null
+    assetSnapshot?: AssetSnapshot | null
     standardsSnapshot?: StandardSnapshotItem[] | null
     environmentalSnapshot?: EnvironmentalSnapshotData | null
 }
@@ -273,11 +289,34 @@ function ExecuteJobForm({
     const [sectionsOpen, setSectionsOpen] = useState({
         standards: true,
         environment: true,
+        assetSpecs: true,
         data: true,
         results: true,
         validations: true,
         debug: false,
     })
+
+    const assetSpecFields = useMemo(
+        () => job.methodSnapshot.dataFields.filter((field) => field.source === 'asset_spec'),
+        [job.methodSnapshot.dataFields],
+    )
+
+    const manualFields = useMemo(
+        () => job.methodSnapshot.dataFields.filter((field) => field.source !== 'asset_spec'),
+        [job.methodSnapshot.dataFields],
+    )
+
+    const missingAssetSpecFields = useMemo(
+        () =>
+            assetSpecFields.filter((field) => {
+                if (!field.required) return false
+                const key = field.assetSpecKey
+                if (!key) return true
+                const value = job.assetSnapshot?.specifications?.[key]
+                return value === null || value === undefined || value === ''
+            }),
+        [assetSpecFields, job.assetSnapshot],
+    )
 
     // Build context for math engine (including standard values)
     const context = useMemo(() => {
@@ -287,6 +326,15 @@ function ExecuteJobForm({
 
         // Process form data fields
         for (const field of job.methodSnapshot.dataFields) {
+            if (field.source === 'asset_spec') {
+                const key = field.assetSpecKey
+                const value = key ? job.assetSnapshot?.specifications?.[key] : undefined
+                if (value !== undefined && value !== null && value !== '') {
+                    processedData[field.key] = value
+                }
+                continue
+            }
+
             const value = formData[field.key]
 
             if (field.type === 'table' && field.columns) {
@@ -442,7 +490,11 @@ function ExecuteJobForm({
     // Normalize form data: convert string numbers to actual numbers before API calls
     const normalizeFormData = useCallback((data: Record<string, unknown>): Record<string, unknown> => {
         const normalized: Record<string, unknown> = {}
+        const manualKeys = new Set(manualFields.map((field) => field.key))
         for (const [key, value] of Object.entries(data)) {
+            if (!manualKeys.has(key)) {
+                continue
+            }
             if (Array.isArray(value)) {
                 // Handle table data - normalize each row
                 normalized[key] = value.map((row) => {
@@ -464,7 +516,7 @@ function ExecuteJobForm({
             }
         }
         return normalized
-    }, [])
+    }, [manualFields])
 
     // Build environment payload (only send if any value is set)
     const environmentPayload = useMemo(() => {
@@ -581,6 +633,10 @@ function ExecuteJobForm({
 
     // Render field
     const renderField = (field: MethodInputField) => {
+        if (field.source === 'asset_spec') {
+            return null
+        }
+
         const value = formData[field.key]
 
         if (field.type === 'table') {
@@ -697,17 +753,18 @@ function ExecuteJobForm({
     // Check if can submit
     const canSubmit = useMemo(() => {
         if (!job) return false
-        const hasRequiredFields = job.methodSnapshot.dataFields
+        const hasRequiredFields = manualFields
             .filter((f) => f.required)
             .every((f) => {
                 const val = formData[f.key]
                 return val !== undefined && val !== ''
             })
+        const hasRequiredAssetSpecs = missingAssetSpecFields.length === 0
         const hasNoErrors = validationResults.every(
             (v) => v.severity !== 'error' || v.passed === true,
         )
-        return hasRequiredFields && hasNoErrors
-    }, [job, formData, validationResults])
+        return hasRequiredFields && hasRequiredAssetSpecs && hasNoErrors
+    }, [job, manualFields, formData, missingAssetSpecFields, validationResults])
 
     const isEditable = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
 
@@ -738,7 +795,7 @@ function ExecuteJobForm({
                         <Button
                             variant="outline"
                             onClick={() => saveMutation.mutate()}
-                            disabled={saveMutation.isPending}
+                            disabled={saveMutation.isPending || missingAssetSpecFields.length > 0}
                         >
                             <HugeiconsIcon icon={Download01Icon} className="mr-2 h-4 w-4" />
                             {saveMutation.isPending ? 'Salvando...' : 'Salvar Rascunho'}
@@ -1002,6 +1059,75 @@ function ExecuteJobForm({
                         </Collapsible>
                     </Card>
 
+                    {assetSpecFields.length > 0 && (
+                        <Card>
+                            <Collapsible
+                                open={sectionsOpen.assetSpecs}
+                                onOpenChange={(open) =>
+                                    setSectionsOpen((s) => ({ ...s, assetSpecs: open }))
+                                }
+                            >
+                                <CollapsibleTrigger className="w-full">
+                                    <CardHeader className="cursor-pointer">
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="text-base">
+                                                Características do instrumento usadas no cálculo
+                                                {missingAssetSpecFields.length > 0 && (
+                                                    <Badge variant="destructive" className="ml-2">
+                                                        Incompleto
+                                                    </Badge>
+                                                )}
+                                            </CardTitle>
+                                            <HugeiconsIcon
+                                                icon={ArrowDown01Icon}
+                                                className={`h-4 w-4 transition-transform ${sectionsOpen.assetSpecs ? 'rotate-180' : ''}`}
+                                            />
+                                        </div>
+                                        <CardDescription>
+                                            Dados carregados do cadastro do ativo e congelados no job.
+                                        </CardDescription>
+                                    </CardHeader>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                    <CardContent className="pt-0 space-y-3">
+                                        {missingAssetSpecFields.map((field) => (
+                                            <div
+                                                key={field.key}
+                                                className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+                                            >
+                                                O ativo não possui a especificação obrigatória "{field.label}". Atualize o cadastro do ativo antes de executar a calibração.
+                                            </div>
+                                        ))}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            {assetSpecFields.map((field) => {
+                                                const value = field.assetSpecKey
+                                                    ? job.assetSnapshot?.specifications?.[field.assetSpecKey]
+                                                    : undefined
+                                                return (
+                                                    <div key={field.key} className="rounded-md border p-3">
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {field.label}
+                                                        </p>
+                                                        <p className="font-mono text-sm">
+                                                            {value !== null && value !== undefined && value !== ''
+                                                                ? formatCalibrationValue(value)
+                                                                : '-'}
+                                                            {field.unit && (
+                                                                <span className="text-xs text-muted-foreground ml-1">
+                                                                    {field.unit}
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </CardContent>
+                                </CollapsibleContent>
+                            </Collapsible>
+                        </Card>
+                    )}
+
                     {/* Data Entry Form */}
                     <Card>
                         <Collapsible
@@ -1014,7 +1140,7 @@ function ExecuteJobForm({
                                 <CardHeader className="cursor-pointer">
                                     <div className="flex items-center justify-between">
                                         <CardTitle className="text-base">
-                                            Dados de Medição ({job.methodSnapshot.dataFields.length})
+                                            Dados de Medição ({manualFields.length})
                                         </CardTitle>
                                         <HugeiconsIcon
                                             icon={ArrowDown01Icon}
@@ -1028,7 +1154,7 @@ function ExecuteJobForm({
                             </CollapsibleTrigger>
                             <CollapsibleContent>
                                 <CardContent className="pt-0 space-y-4">
-                                    {job.methodSnapshot.dataFields.map(renderField)}
+                                    {manualFields.map(renderField)}
                                 </CardContent>
                             </CollapsibleContent>
                         </Collapsible>

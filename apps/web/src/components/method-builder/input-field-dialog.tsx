@@ -4,6 +4,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 
 import type { MethodInputField, MethodTableColumn } from './types'
+import type { SpecFieldDefinition } from '@/components/dynamic-specs-form'
 
 import {
   Dialog,
@@ -35,6 +36,7 @@ interface InputFieldDialogProps {
   onSave: (field: MethodInputField) => void
   initialData?: MethodInputField
   existingKeys: Array<string>
+  assetTypeDefinition?: Array<SpecFieldDefinition>
 }
 
 function slugify(text: string): string {
@@ -134,6 +136,7 @@ export function InputFieldDialog({
   onSave,
   initialData,
   existingKeys,
+  assetTypeDefinition = [],
 }: InputFieldDialogProps) {
   const dialogKey = `${open ? 'open' : 'closed'}-${initialData?.key ?? 'new'}`
 
@@ -146,6 +149,7 @@ export function InputFieldDialog({
           onSave={onSave}
           initialData={initialData}
           existingKeys={existingKeys}
+          assetTypeDefinition={assetTypeDefinition}
         />
       )}
     </Dialog>
@@ -157,6 +161,7 @@ function InputFieldDialogBody({
   onSave,
   initialData,
   existingKeys,
+  assetTypeDefinition = [],
 }: Omit<InputFieldDialogProps, 'open'>) {
   const [field, setField] = useState<MethodInputField>(
     initialData
@@ -166,6 +171,7 @@ function InputFieldDialogBody({
           label: '',
           type: 'number',
           required: false,
+          source: 'manual',
         },
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -197,6 +203,39 @@ function InputFieldDialogBody({
       updates.options = undefined
     }
     setField((f) => ({ ...f, ...updates }))
+  }
+
+  const handleSourceChange = (source: MethodInputField['source']) => {
+    setField((f) => {
+      if (source === 'asset_spec') {
+        return {
+          ...f,
+          source,
+          allowOverride: false,
+          type: f.type === 'table' ? 'number' : f.type,
+          columns: undefined,
+        }
+      }
+
+      return {
+        ...f,
+        source: 'manual',
+        assetSpecKey: undefined,
+        allowOverride: undefined,
+      }
+    })
+  }
+
+  const handleAssetSpecChange = (assetSpecKey: string) => {
+    const spec = assetTypeDefinition.find((item) => item.key === assetSpecKey)
+    setField((f) => ({
+      ...f,
+      assetSpecKey,
+      type: spec?.type ?? f.type,
+      unit: spec?.unit ?? f.unit,
+      options: spec?.type === 'select' ? spec.options : undefined,
+      columns: undefined,
+    }))
   }
 
   const addColumn = () => {
@@ -292,6 +331,15 @@ function InputFieldDialogBody({
       }
     }
 
+    if (field.source === 'asset_spec') {
+      if (field.type === 'table') {
+        newErrors.type = 'Campos do ativo não podem ser tabela'
+      }
+      if (!field.assetSpecKey) {
+        newErrors.assetSpecKey = 'Selecione a especificação do ativo'
+      }
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -301,6 +349,14 @@ function InputFieldDialogBody({
 
     // Clean up options for select type
     const cleanedField = { ...field }
+    if (!cleanedField.source || cleanedField.source === 'manual') {
+      cleanedField.source = undefined
+      cleanedField.assetSpecKey = undefined
+      cleanedField.allowOverride = undefined
+    } else {
+      cleanedField.allowOverride = false
+      cleanedField.columns = undefined
+    }
     if (cleanedField.type === 'select') {
       cleanedField.options = (cleanedField.options || []).filter((o) =>
         o.trim(),
@@ -351,12 +407,82 @@ function InputFieldDialogBody({
           </Field>
 
           <Field>
+            <FieldLabel htmlFor="source">Origem do valor</FieldLabel>
+            <Select
+              value={field.source ?? 'manual'}
+              onValueChange={(v) =>
+                handleSourceChange(v as MethodInputField['source'])
+              }
+            >
+              <SelectTrigger>
+                <span>
+                  {(field.source ?? 'manual') === 'asset_spec'
+                    ? 'Especificação do ativo'
+                    : 'Digitado na execução'}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manual">Digitado na execução</SelectItem>
+                <SelectItem value="asset_spec">
+                  Especificação do ativo
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {(field.source ?? 'manual') === 'asset_spec' && (
+              <FieldDescription>
+                Este valor será carregado automaticamente do ativo calibrado e
+                congelado no job.
+              </FieldDescription>
+            )}
+          </Field>
+
+          {(field.source ?? 'manual') === 'asset_spec' && (
+            <Field>
+              <FieldLabel htmlFor="assetSpecKey">
+                Especificação do ativo *
+              </FieldLabel>
+              <Select
+                value={field.assetSpecKey ?? ''}
+                onValueChange={handleAssetSpecChange}
+              >
+                <SelectTrigger>
+                  <span>
+                    {field.assetSpecKey
+                      ? assetTypeDefinition.find(
+                          (item) => item.key === field.assetSpecKey,
+                        )?.label || field.assetSpecKey
+                      : 'Selecione...'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {assetTypeDefinition.length === 0 ? (
+                    <SelectItem value="__empty" disabled>
+                      Selecione um tipo de instrumento no método
+                    </SelectItem>
+                  ) : (
+                    assetTypeDefinition.map((spec) => (
+                      <SelectItem key={spec.key} value={spec.key}>
+                        {spec.label} ({spec.key}
+                        {spec.unit ? ` [${spec.unit}]` : ''})
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {errors.assetSpecKey && (
+                <FieldError>{errors.assetSpecKey}</FieldError>
+              )}
+            </Field>
+          )}
+
+          <Field>
             <FieldLabel htmlFor="type">Tipo</FieldLabel>
             <Select
               value={field.type}
               onValueChange={(v) =>
                 handleTypeChange(v as MethodInputField['type'])
               }
+              disabled={(field.source ?? 'manual') === 'asset_spec'}
             >
               <SelectTrigger>
                 <span>
@@ -373,9 +499,12 @@ function InputFieldDialogBody({
                 <SelectItem value="number">Número</SelectItem>
                 <SelectItem value="text">Texto</SelectItem>
                 <SelectItem value="select">Seleção</SelectItem>
-                <SelectItem value="table">Tabela</SelectItem>
+                {(field.source ?? 'manual') !== 'asset_spec' && (
+                  <SelectItem value="table">Tabela</SelectItem>
+                )}
               </SelectContent>
             </Select>
+            {errors.type && <FieldError>{errors.type}</FieldError>}
           </Field>
 
           {(field.type === 'number' || field.type === 'text') && (

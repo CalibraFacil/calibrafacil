@@ -410,6 +410,9 @@ export const MethodTableColumnSchema = z.object({
 
 export type MethodTableColumn = z.infer<typeof MethodTableColumnSchema>;
 
+export const MethodInputSourceSchema = z.enum(["manual", "asset_spec"]);
+export type MethodInputSource = z.infer<typeof MethodInputSourceSchema>;
+
 /**
  * Input field definition for method data collection
  */
@@ -429,6 +432,9 @@ export const MethodInputFieldSchema = z
     options: z.array(z.string()).optional(),
     defaultValue: z.union([z.string(), z.number()]).optional(),
     columns: z.array(MethodTableColumnSchema).optional(),
+    source: MethodInputSourceSchema.optional().default("manual"),
+    assetSpecKey: z.string().optional(),
+    allowOverride: z.boolean().optional().default(false),
   })
   .refine(
     (data) => {
@@ -455,6 +461,33 @@ export const MethodInputFieldSchema = z
       return true;
     },
     { message: "Colunas são obrigatórias para campos do tipo 'table'" },
+  )
+  .refine(
+    (data) => {
+      if (data.source !== "asset_spec") {
+        return true;
+      }
+      return Boolean(data.assetSpecKey?.trim());
+    },
+    {
+      message:
+        "Chave da especificação do ativo é obrigatória para campos do ativo",
+      path: ["assetSpecKey"],
+    },
+  )
+  .refine(
+    (data) => data.source !== "asset_spec" || data.type !== "table",
+    {
+      message: "Campos de especificação do ativo não podem ser tabela",
+      path: ["type"],
+    },
+  )
+  .refine(
+    (data) => data.source !== "asset_spec" || !data.columns,
+    {
+      message: "Campos de especificação do ativo não aceitam colunas",
+      path: ["columns"],
+    },
   );
 
 export type MethodInputField = z.infer<typeof MethodInputFieldSchema>;
@@ -462,6 +495,27 @@ export type MethodInputField = z.infer<typeof MethodInputFieldSchema>;
 /**
  * Formula definition for computed values
  */
+export const MethodFormulaReportingSchema = z.object({
+  includeInCertificate: z.boolean().optional(),
+  role: z
+    .enum([
+      "primary_result",
+      "expanded_uncertainty",
+      "coverage_factor",
+      "conformity_margin",
+      "uncertainty_component",
+      "auxiliary",
+    ])
+    .optional(),
+  group: z
+    .enum(["calibration_result", "uncertainty_budget", "raw_calculation"])
+    .optional(),
+});
+
+export type MethodFormulaReporting = z.infer<
+  typeof MethodFormulaReportingSchema
+>;
+
 export const MethodFormulaSchema = z.object({
   outputKey: z
     .string()
@@ -473,6 +527,7 @@ export const MethodFormulaSchema = z.object({
   expression: z.string().min(1, "Expressão é obrigatória"),
   label: z.string().optional(),
   unit: z.string().optional(),
+  reporting: MethodFormulaReportingSchema.optional(),
 });
 
 export type MethodFormula = z.infer<typeof MethodFormulaSchema>;

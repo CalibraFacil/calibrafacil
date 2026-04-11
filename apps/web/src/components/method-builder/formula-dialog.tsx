@@ -13,6 +13,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
+import {
   Field,
   FieldDescription,
   FieldError,
@@ -118,7 +124,16 @@ function FormulaDialogBody({
 
   const handleSave = () => {
     if (!validate()) return
-    onSave(formula)
+    const cleanedFormula = { ...formula }
+    if (!cleanedFormula.reporting?.group) {
+      cleanedFormula.reporting = undefined
+    } else {
+      cleanedFormula.reporting = {
+        includeInCertificate: true,
+        ...cleanedFormula.reporting,
+      }
+    }
+    onSave(cleanedFormula)
   }
 
   const insertVariable = (varKey: string) => {
@@ -232,6 +247,107 @@ function FormulaDialogBody({
             placeholder="Ex: mm"
           />
         </Field>
+
+        <Field>
+          <FieldLabel htmlFor="reportingGroup">Grupo no certificado</FieldLabel>
+          <Select
+            value={formula.reporting?.group ?? 'none'}
+            onValueChange={(value) =>
+              setFormula((f) => ({
+                ...f,
+                reporting:
+                  value === 'none'
+                    ? undefined
+                    : {
+                        ...f.reporting,
+                        group: value as NonNullable<
+                          MethodFormula['reporting']
+                        >['group'],
+                        includeInCertificate: true,
+                      },
+              }))
+            }
+          >
+            <SelectTrigger>
+              <span>
+                {formula.reporting?.group === 'calibration_result'
+                  ? 'Resultado da calibração'
+                  : formula.reporting?.group === 'uncertainty_budget'
+                    ? 'Orçamento de incerteza'
+                    : formula.reporting?.group === 'raw_calculation'
+                      ? 'Cálculo auxiliar'
+                      : 'Tabela genérica'}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Tabela genérica</SelectItem>
+              <SelectItem value="calibration_result">
+                Resultado da calibração
+              </SelectItem>
+              <SelectItem value="uncertainty_budget">
+                Orçamento de incerteza
+              </SelectItem>
+              <SelectItem value="raw_calculation">Cálculo auxiliar</SelectItem>
+            </SelectContent>
+          </Select>
+          <FieldDescription>
+            Use estes metadados para montar o certificado RBC-like sem amarrar o
+            layout a um tipo de instrumento.
+          </FieldDescription>
+        </Field>
+
+        {formula.reporting?.group && (
+          <Field>
+            <FieldLabel htmlFor="reportingRole">Papel no relatório</FieldLabel>
+            <Select
+              value={formula.reporting?.role ?? 'auxiliary'}
+              onValueChange={(value) =>
+                setFormula((f) => ({
+                  ...f,
+                  reporting: {
+                    ...f.reporting,
+                    role: value as NonNullable<
+                      MethodFormula['reporting']
+                    >['role'],
+                  },
+                }))
+              }
+            >
+              <SelectTrigger>
+                <span>
+                  {formula.reporting?.role === 'primary_result'
+                    ? 'Resultado principal'
+                    : formula.reporting?.role === 'expanded_uncertainty'
+                      ? 'Incerteza expandida'
+                      : formula.reporting?.role === 'coverage_factor'
+                        ? 'Fator k'
+                        : formula.reporting?.role === 'conformity_margin'
+                          ? 'Margem de conformidade'
+                          : formula.reporting?.role ===
+                              'uncertainty_component'
+                            ? 'Componente de incerteza'
+                            : 'Auxiliar'}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="primary_result">
+                  Resultado principal
+                </SelectItem>
+                <SelectItem value="expanded_uncertainty">
+                  Incerteza expandida
+                </SelectItem>
+                <SelectItem value="coverage_factor">Fator k</SelectItem>
+                <SelectItem value="conformity_margin">
+                  Margem de conformidade
+                </SelectItem>
+                <SelectItem value="uncertainty_component">
+                  Componente de incerteza
+                </SelectItem>
+                <SelectItem value="auxiliary">Auxiliar</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
       </div>
 
       <DialogFooter>

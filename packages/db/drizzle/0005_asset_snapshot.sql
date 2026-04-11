@@ -1,0 +1,1 @@
+ALTER TABLE "calibration_job" ADD COLUMN "asset_snapshot" jsonb;
