@@ -36,6 +36,13 @@
       "when": 1775770648853,
       "tag": "0004_operational_finance",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775910045030,
+      "tag": "0005_asset_snapshot",
+      "breakpoints": true
     }
   ]
 }

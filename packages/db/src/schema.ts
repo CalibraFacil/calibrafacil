@@ -1669,6 +1669,8 @@ export type MethodStatus =
   | "PUBLISHED"
   | "ARCHIVED";
 
+export type MethodInputSource = "manual" | "asset_spec";
+
 /**
  * Input field definition for method data collection.
  * Defines what the technician types during calibration.
@@ -1681,6 +1683,9 @@ export type MethodInputField = {
   required?: boolean;
   options?: string[]; // For select type
   defaultValue?: string | number;
+  source?: MethodInputSource;
+  assetSpecKey?: string;
+  allowOverride?: boolean;
   // For table type only:
   columns?: Array<{
     key: string;
@@ -1688,6 +1693,18 @@ export type MethodInputField = {
     type: "text" | "number";
     unit?: string;
   }>;
+};
+
+export type MethodFormulaReporting = {
+  includeInCertificate?: boolean;
+  role?:
+    | "primary_result"
+    | "expanded_uncertainty"
+    | "coverage_factor"
+    | "conformity_margin"
+    | "uncertainty_component"
+    | "auxiliary";
+  group?: "calibration_result" | "uncertainty_budget" | "raw_calculation";
 };
 
 /**
@@ -1699,6 +1716,7 @@ export type MethodFormula = {
   expression: string; // Math expression, e.g., "reading_1 - nominal"
   label?: string; // Display label, e.g., "Measurement Error"
   unit?: string;
+  reporting?: MethodFormulaReporting;
 };
 
 /**
@@ -2211,6 +2229,20 @@ export type MethodSnapshot = {
   uncertaintyParams: MethodTypeBComponent[];
 };
 
+export type AssetSnapshot = {
+  assetId: number;
+  assetTypeId: number;
+  assetTypeName: string;
+  assetTypeSlug: string;
+  name: string;
+  tag: string;
+  serialNumber: string;
+  manufacturer: string | null;
+  model: string | null;
+  specifications: Record<string, unknown> | null;
+  capturedAt: string;
+};
+
 /**
  * Standard Snapshot - Frozen copy of reference standards at execution time.
  * This ensures the standard values used are recorded exactly as they were
@@ -2296,6 +2328,8 @@ export const calibrationJob = pgTable(
     // CRITICAL: Frozen copy of method configuration at job creation
     // This ensures reproducibility per ISO 17025 requirements
     methodSnapshot: jsonb("method_snapshot").$type<MethodSnapshot>().notNull(),
+    // Frozen copy of asset identity and specifications used by calculations
+    assetSnapshot: jsonb("asset_snapshot").$type<AssetSnapshot>(),
     // Workflow status
     status: text("status").$type<JobStatus>().default("DRAFT").notNull(),
     // Dates

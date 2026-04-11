@@ -43,11 +43,18 @@ export function PreviewPanel({
   onPreviewDataChange,
 }: PreviewPanelProps) {
   const [sectionsOpen, setSectionsOpen] = useState({
+    assetValues: true,
     form: true,
     results: true,
     validations: true,
     context: false,
   })
+  const assetSpecFields = method.dataFields.filter(
+    (field) => field.source === 'asset_spec',
+  )
+  const manualFields = method.dataFields.filter(
+    (field) => field.source !== 'asset_spec',
+  )
 
   // Create engine instance
   const engine = useMemo(() => createEngine(), [])
@@ -285,13 +292,37 @@ export function PreviewPanel({
       </p>
 
       {/* Form Preview */}
+      {assetSpecFields.length > 0 && (
+        <Collapsible
+          open={sectionsOpen.assetValues}
+          onOpenChange={(open) =>
+            setSectionsOpen((s) => ({ ...s, assetValues: open }))
+          }
+        >
+          <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
+            <span className="font-medium">
+              Valores simulados do ativo ({assetSpecFields.length})
+            </span>
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              className={`h-4 w-4 transition-transform ${sectionsOpen.assetValues ? 'rotate-180' : ''}`}
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2">
+            <div className="space-y-4">
+              {assetSpecFields.map(renderField)}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
       <Collapsible
         open={sectionsOpen.form}
         onOpenChange={(open) => setSectionsOpen((s) => ({ ...s, form: open }))}
       >
         <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
           <span className="font-medium">
-            Formulário ({method.dataFields.length} campos)
+            Formulário ({manualFields.length} campos)
           </span>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
@@ -299,13 +330,13 @@ export function PreviewPanel({
           />
         </CollapsibleTrigger>
         <CollapsibleContent className="pt-2">
-          {method.dataFields.length === 0 ? (
+          {manualFields.length === 0 ? (
             <p className="text-sm text-muted-foreground p-2">
               Adicione campos de entrada para visualizar o formulário.
             </p>
           ) : (
             <div className="space-y-4">
-              {method.dataFields.map(renderField)}
+              {manualFields.map(renderField)}
             </div>
           )}
         </CollapsibleContent>

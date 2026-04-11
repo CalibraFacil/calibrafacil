@@ -6,6 +6,7 @@ import {
   calibrationJob,
   jobAuditLog,
   asset,
+  assetType,
   customer,
   service,
   calibrationMethod,
@@ -16,6 +17,8 @@ import {
   environmentalLimits,
   personnelCompetence,
   type MethodSnapshot,
+  type MethodInputField,
+  type AssetSnapshot,
   type StandardSnapshot,
   type EnvironmentalSnapshot,
   type EnvironmentalLimitsSnapshot,
@@ -120,6 +123,150 @@ function checkEnvironmentWithinLimits(
     return false;
   }
   return true;
+}
+
+function hasSpecificationValue(
+  specifications: Record<string, unknown> | null | undefined,
+  key: string | undefined,
+) {
+  if (!specifications || !key) {
+    return false;
+  }
+
+  const value = specifications[key];
+  return value !== null && value !== undefined && value !== "";
+}
+
+function findMissingRequiredAssetSpecs(
+  methodSnapshot: MethodSnapshot | null | undefined,
+  assetSnapshot: AssetSnapshot | null | undefined,
+) {
+  const fields = (methodSnapshot?.dataFields ?? []) as MethodInputField[];
+  return fields.filter(
+    (field) =>
+      field.source === "asset_spec" &&
+      field.required &&
+      !hasSpecificationValue(
+        assetSnapshot?.specifications,
+        field.assetSpecKey,
+      ),
+  );
+}
+
+function stripAssetSpecData(
+  data: Record<string, unknown> | null | undefined,
+  methodSnapshot: MethodSnapshot | null | undefined,
+) {
+  if (!data) {
+    return data;
+  }
+
+  const assetSpecKeys = new Set(
+    ((methodSnapshot?.dataFields ?? []) as MethodInputField[])
+      .filter((field) => field.source === "asset_spec")
+      .map((field) => field.key),
+  );
+
+  if (assetSpecKeys.size === 0) {
+    return data;
+  }
+
+  return Object.fromEntries(
+    Object.entries(data).filter(([key]) => !assetSpecKeys.has(key)),
+  );
+}
+
+async function buildAssetSnapshot(
+  assetId: number,
+): Promise<
+  | { ok: true; snapshot: AssetSnapshot; assetTypeDefinition: unknown }
+  | { ok: false; error: string }
+> {
+  const [row] = await db
+    .select({
+      id: asset.id,
+      assetTypeId: asset.assetTypeId,
+      name: asset.name,
+      tag: asset.tag,
+      serialNumber: asset.serialNumber,
+      manufacturer: asset.manufacturer,
+      model: asset.model,
+      specifications: asset.specifications,
+      assetTypeName: assetType.name,
+      assetTypeSlug: assetType.slug,
+      assetTypeDefinition: assetType.definition,
+    })
+    .from(asset)
+    .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
+    .where(eq(asset.id, assetId))
+    .limit(1);
+
+  if (!row) {
+    return { ok: false, error: "Ativo nao encontrado" };
+  }
+
+  return {
+    ok: true,
+    assetTypeDefinition: row.assetTypeDefinition,
+    snapshot: {
+      assetId: row.id,
+      assetTypeId: row.assetTypeId,
+      assetTypeName: row.assetTypeName,
+      assetTypeSlug: row.assetTypeSlug,
+      name: row.name,
+      tag: row.tag,
+      serialNumber: row.serialNumber,
+      manufacturer: row.manufacturer,
+      model: row.model,
+      specifications: row.specifications,
+      capturedAt: new Date().toISOString(),
+    },
+  };
+}
+
+async function ensureEditableJobAssetSnapshot(existing: {
+  id: number;
+  assetId: number;
+  assetSnapshot: AssetSnapshot | null;
+  methodSnapshot: MethodSnapshot;
+}) {
+  if (existing.assetSnapshot) {
+    const missing = findMissingRequiredAssetSpecs(
+      existing.methodSnapshot,
+      existing.assetSnapshot,
+    );
+    if (missing.length > 0) {
+      return {
+        ok: false as const,
+        error: `O ativo não possui a especificação obrigatória "${missing[0]?.label}". Atualize o cadastro do ativo antes de executar a calibração.`,
+      };
+    }
+
+    return { ok: true as const, snapshot: existing.assetSnapshot };
+  }
+
+  const result = await buildAssetSnapshot(existing.assetId);
+  if (!result.ok) {
+    return result;
+  }
+
+  const missing = findMissingRequiredAssetSpecs(
+    existing.methodSnapshot,
+    result.snapshot,
+  );
+  if (missing.length > 0) {
+    return {
+      ok: false as const,
+      error: `O ativo não possui a especificação obrigatória "${missing[0]?.label}". Atualize o cadastro do ativo antes de executar a calibração.`,
+    };
+  }
+
+  await db
+    .update(calibrationJob)
+    .set({ assetSnapshot: result.snapshot })
+    .where(eq(calibrationJob.id, existing.id));
+
+  return { ok: true as const, snapshot: result.snapshot };
 }
 
 async function buildStandardsSnapshot(
@@ -563,6 +710,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         results: calibrationJob.results,
         standardsSnapshot: calibrationJob.standardsSnapshot,
         environmentalSnapshot: calibrationJob.environmentalSnapshot,
+        assetSnapshot: calibrationJob.assetSnapshot,
         certificateUrl: calibrationJob.certificateUrl,
         labelUrl: calibrationJob.labelUrl,
         methodSnapshot: calibrationJob.methodSnapshot,
@@ -591,6 +739,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         assetSerialNumber: asset.serialNumber,
         assetManufacturer: asset.manufacturer,
         assetModel: asset.model,
+        assetSpecifications: asset.specifications,
+        assetTypeName: assetType.name,
+        assetTypeSlug: assetType.slug,
+        assetTypeDefinition: assetType.definition,
         serviceId: calibrationJob.serviceId,
         serviceName: service.name,
         servicePrice: service.price,
@@ -603,6 +755,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       .from(calibrationJob)
       .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
       .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+      .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
       .leftJoin(service, eq(calibrationJob.serviceId, service.id))
       .leftJoin(user, eq(calibrationJob.technicianId, user.id))
       .leftJoin(approverUser, eq(calibrationJob.approvedBy, approverUser.id))
@@ -624,11 +777,29 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       memberData.organizationId,
       [job.id],
     );
+    const derivedAssetSnapshot =
+      job.assetSnapshot ??
+      (["DRAFT", "IN_PROGRESS", "REVIEW", "REJECTED"].includes(job.status)
+        ? ({
+            assetId: job.assetId,
+            assetTypeId: job.assetTypeId ?? 0,
+            assetTypeName: job.assetTypeName ?? "",
+            assetTypeSlug: job.assetTypeSlug ?? "",
+            name: job.assetName ?? "",
+            tag: job.assetTag ?? "",
+            serialNumber: job.assetSerialNumber ?? "",
+            manufacturer: job.assetManufacturer,
+            model: job.assetModel,
+            specifications: job.assetSpecifications,
+            capturedAt: new Date().toISOString(),
+          } satisfies AssetSnapshot)
+        : null);
 
     // Add computed fields
     const now = new Date();
     const result = {
       ...job,
+      assetSnapshot: derivedAssetSnapshot,
       isOverdue:
         job.dueDate &&
         job.dueDate < now &&
@@ -1086,6 +1257,16 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
+      const assetSnapshotResult = await ensureEditableJobAssetSnapshot({
+        id: existing.id,
+        assetId: existing.assetId,
+        assetSnapshot: existing.assetSnapshot,
+        methodSnapshot: existing.methodSnapshot,
+      });
+      if (!assetSnapshotResult.ok) {
+        return c.json({ error: assetSnapshotResult.error }, 400);
+      }
+
       const standardsResult = await buildStandardsSnapshot(
         input.selectedStandardIds,
         memberData.organizationId,
@@ -1108,13 +1289,16 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           : standardsResult.snapshot;
       const nextEnvironmentalSnapshot =
         environmentalSnapshot ?? existing.environmentalSnapshot;
+      const nextAssetSnapshot = assetSnapshotResult.snapshot;
+      const nextData = stripAssetSpecData(input.data, existing.methodSnapshot);
 
       // Update job with execution data and set status to REVIEW
       const [updated] = await db
         .update(calibrationJob)
         .set({
-          data: input.data,
+          data: nextData,
           results: input.results ?? existing.results,
+          assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
           status: "REVIEW",
@@ -1129,7 +1313,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         action: "submit",
         changes: {
           status: { old: existing.status, new: "REVIEW" },
-          data: { old: existing.data, new: input.data },
+          data: { old: existing.data, new: nextData },
           results:
             input.results !== undefined
               ? { old: existing.results, new: input.results }
@@ -1147,6 +1331,9 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
                 new: environmentalSnapshot,
               }
             : undefined,
+          assetSnapshot: existing.assetSnapshot
+            ? undefined
+            : { old: null, new: nextAssetSnapshot },
         },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
@@ -1213,6 +1400,16 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
+      const assetSnapshotResult = await ensureEditableJobAssetSnapshot({
+        id: existing.id,
+        assetId: existing.assetId,
+        assetSnapshot: existing.assetSnapshot,
+        methodSnapshot: existing.methodSnapshot,
+      });
+      if (!assetSnapshotResult.ok) {
+        return c.json({ error: assetSnapshotResult.error }, 400);
+      }
+
       const standardsResult = await buildStandardsSnapshot(
         input.selectedStandardIds,
         memberData.organizationId,
@@ -1235,6 +1432,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           : standardsResult.snapshot;
       const nextEnvironmentalSnapshot =
         environmentalSnapshot ?? existing.environmentalSnapshot;
+      const nextAssetSnapshot = assetSnapshotResult.snapshot;
+      const nextData = stripAssetSpecData(input.data, existing.methodSnapshot);
 
       // Determine new status
       const newStatus =
@@ -1244,8 +1443,9 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       const [updated] = await db
         .update(calibrationJob)
         .set({
-          data: input.data,
+          data: nextData,
           results: input.results ?? null,
+          assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
           status: newStatus,
@@ -1262,7 +1462,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             existing.status !== newStatus
               ? { old: existing.status, new: newStatus }
               : undefined,
-          data: { old: existing.data, new: input.data },
+          data: { old: existing.data, new: nextData },
           standardsSnapshot:
             standardsResult.snapshot !== undefined
               ? {
@@ -1276,6 +1476,9 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
                 new: environmentalSnapshot,
               }
             : undefined,
+          assetSnapshot: existing.assetSnapshot
+            ? undefined
+            : { old: null, new: nextAssetSnapshot },
         },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,

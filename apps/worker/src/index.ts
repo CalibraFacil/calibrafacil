@@ -93,9 +93,11 @@ async function fetchJobData(
         `
     SELECT
       cj.job_id,
+      cj.unit_id,
       cj.performed_at,
       cj.approved_at,
       cj.method_snapshot,
+      cj.asset_snapshot,
       cj.standards_snapshot,
       cj.environmental_snapshot,
       cj.certificate_template_id,
@@ -272,6 +274,7 @@ async function fetchJobData(
             manufacturer: row.manufacturer,
         },
         methodSnapshot: row.method_snapshot,
+        assetSnapshot: row.asset_snapshot,
         standardsSnapshot: row.standards_snapshot,
         environmentalSnapshot: row.environmental_snapshot,
         certificateTemplateSnapshot,

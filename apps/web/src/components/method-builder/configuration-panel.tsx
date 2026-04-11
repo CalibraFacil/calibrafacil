@@ -19,6 +19,7 @@ import type {
   MethodInputField,
   MethodValidation,
 } from './types'
+import type { SpecFieldDefinition } from '@/components/dynamic-specs-form'
 
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -51,6 +52,8 @@ interface ConfigurationPanelProps {
 type AssetType = {
   id: number
   name: string
+  slug: string
+  definition: Array<SpecFieldDefinition>
 }
 
 export function ConfigurationPanel({
@@ -168,6 +171,9 @@ export function ConfigurationPanel({
   }))
 
   const allVariables = [...availableVariables, ...formulaVariables]
+  const selectedAssetType = assetTypesData?.data?.find(
+    (type) => type.id === method.assetTypeId,
+  )
 
   return (
     <div className="p-4 space-y-4">
@@ -283,6 +289,11 @@ export function ConfigurationPanel({
                     {field.required && (
                       <span className="text-xs text-red-500 ml-1">*</span>
                     )}
+                    {field.source === 'asset_spec' && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        · Ativo: {field.assetSpecKey}
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-1">
                     <Button
@@ -360,6 +371,11 @@ export function ConfigurationPanel({
                     <code className="text-xs text-muted-foreground ml-2 bg-muted px-1 rounded">
                       {formula.expression}
                     </code>
+                    {formula.reporting?.group && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        · Certificado: {formula.reporting.group}
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-1">
                     <Button
@@ -496,6 +512,7 @@ export function ConfigurationPanel({
         existingKeys={method.dataFields
           .filter((_, i) => i !== editingInputIndex)
           .map((f) => f.key)}
+        assetTypeDefinition={selectedAssetType?.definition ?? []}
       />
 
       <FormulaDialog

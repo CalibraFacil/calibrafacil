@@ -24,6 +24,9 @@ export type MethodInputField = {
     required?: boolean;
     options?: string[];
     defaultValue?: string | number;
+    source?: "manual" | "asset_spec";
+    assetSpecKey?: string;
+    allowOverride?: boolean;
     columns?: Array<{
         key: string;
         label: string;
@@ -32,12 +35,25 @@ export type MethodInputField = {
     }>;
 };
 
+export type MethodFormulaReporting = {
+    includeInCertificate?: boolean;
+    role?:
+        | "primary_result"
+        | "expanded_uncertainty"
+        | "coverage_factor"
+        | "conformity_margin"
+        | "uncertainty_component"
+        | "auxiliary";
+    group?: "calibration_result" | "uncertainty_budget" | "raw_calculation";
+};
+
 // Method formula definition (for labeling results)
 export type MethodFormula = {
     outputKey: string;
     expression: string;
     label?: string;
     unit?: string;
+    reporting?: MethodFormulaReporting;
 };
 
 export type MethodSnapshot = {
@@ -81,6 +97,20 @@ export type EnvironmentalSnapshot = {
     outOfLimitsJustification: string | null;
 };
 
+export type AssetSnapshot = {
+    assetId: number;
+    assetTypeId: number;
+    assetTypeName: string;
+    assetTypeSlug: string;
+    name: string;
+    tag: string;
+    serialNumber: string;
+    manufacturer: string | null;
+    model: string | null;
+    specifications: Record<string, unknown> | null;
+    capturedAt: string;
+};
+
 export type JobData = {
     jobId: string;
     organizationId?: string | null;
@@ -121,6 +151,7 @@ export type JobData = {
         manufacturer: string | null;
     };
     methodSnapshot: MethodSnapshot;
+    assetSnapshot?: AssetSnapshot | null;
     standardsSnapshot: StandardSnapshot[] | null;
     data: Record<string, unknown> | null;
     results: Record<string, unknown> | null;
@@ -478,6 +509,57 @@ function formatTaxId(taxId: string | null | undefined): string {
     return taxId;
 }
 
+function getArrayLength(value: unknown): number {
+    return Array.isArray(value) ? value.length : 0;
+}
+
+function getIndexedValue(value: unknown, index: number): unknown {
+    return Array.isArray(value) ? value[index] : value;
+}
+
+function formatValueWithUnit(value: unknown, unit?: string): string {
+    const formatted = formatValue(value);
+    return unit ? `${formatted} ${unit}` : formatted;
+}
+
+function formatReportedValue(
+    entry: { formula?: MethodFormula },
+    value: unknown
+): string {
+    const formatted = formatValue(value);
+    const role = entry.formula?.reporting?.role;
+    const numeric =
+        typeof value === "number"
+            ? value
+            : typeof value === "string"
+              ? Number(value)
+              : NaN;
+
+    if (role === "expanded_uncertainty" && formatted !== "-") {
+        return `±${formatted.replace(/^[+-]/, "")}`;
+    }
+
+    if (role === "primary_result" && Number.isFinite(numeric) && numeric > 0) {
+        return `+${formatted}`;
+    }
+
+    return formatted;
+}
+
+function getPointLabels(dataFields: MethodInputField[], data: Record<string, unknown> | null) {
+    const tableField = dataFields.find((field) => field.type === "table");
+    const rows = tableField && data ? data[tableField.key] : null;
+    if (!Array.isArray(rows)) {
+        return [] as string[];
+    }
+
+    return rows.map((row, index) => {
+        const record = row as Record<string, unknown>;
+        const point = record.ponto ?? record.point ?? record.nominal ?? record.valor_nominal;
+        return point != null && point !== "" ? String(point) : String(index + 1);
+    });
+}
+
 // Render a data table based on method dataField definition
 function DataTable({
     field,
@@ -530,9 +612,10 @@ export function CertificateHtml({ job }: { job: JobData }) {
     const dataFields = job.methodSnapshot?.dataFields || [];
     const formulas = job.methodSnapshot?.formulas || [];
 
-    // Separate table fields from scalar fields
-    const tableFields = dataFields.filter((f) => f.type === "table");
-    const scalarFields = dataFields.filter((f) => f.type !== "table");
+    const assetSpecFields = dataFields.filter((f) => f.source === "asset_spec");
+    const tableFields = dataFields.filter(
+        (f) => f.type === "table" && f.source !== "asset_spec"
+    );
 
     // Get environment data from structured snapshot
     const envTemperature = job.environmentalSnapshot?.temperature ?? null;
@@ -540,7 +623,13 @@ export function CertificateHtml({ job }: { job: JobData }) {
     const envPressure = job.environmentalSnapshot?.pressure ?? null;
 
     // Build results with labels from formulas
-    const resultEntries: Array<{ key: string; label: string; value: unknown; unit?: string }> = [];
+    const resultEntries: Array<{
+        key: string;
+        label: string;
+        value: unknown;
+        unit?: string;
+        formula?: MethodFormula;
+    }> = [];
     if (job.results) {
         for (const [key, value] of Object.entries(job.results)) {
             const formula = formulas.find((f) => f.outputKey === key);
@@ -549,9 +638,38 @@ export function CertificateHtml({ job }: { job: JobData }) {
                 label: formula?.label || key,
                 value,
                 unit: formula?.unit,
+                formula,
             });
         }
     }
+    const calibrationResultEntries = resultEntries.filter(
+        (entry) =>
+            entry.formula?.reporting?.group === "calibration_result" &&
+            entry.formula.reporting.includeInCertificate !== false
+    );
+    const uncertaintyBudgetEntries = resultEntries.filter(
+        (entry) =>
+            entry.formula?.reporting?.group === "uncertainty_budget" &&
+            entry.formula.reporting.includeInCertificate !== false
+    );
+    const genericResultEntries = resultEntries.filter(
+        (entry) =>
+            !entry.formula?.reporting?.group ||
+            entry.formula.reporting.group === "raw_calculation"
+    );
+    const pointLabels = getPointLabels(dataFields, job.data);
+    const calibrationResultRowCount = Math.max(
+        pointLabels.length,
+        ...calibrationResultEntries.map((entry) => getArrayLength(entry.value)),
+    );
+    const assetSpecEntries = assetSpecFields
+        .map((field) => ({
+            field,
+            value: field.assetSpecKey
+                ? job.assetSnapshot?.specifications?.[field.assetSpecKey]
+                : undefined,
+        }))
+        .filter(({ value }) => value !== null && value !== undefined && value !== "");
 
     const dynamicStyles = `
       :root {
@@ -725,6 +843,24 @@ export function CertificateHtml({ job }: { job: JobData }) {
                         </div>
                     </div>
 
+                    {assetSpecEntries.length > 0 && (
+                        <div className="section">
+                            <div className="section-title">
+                                Características do Instrumento Consideradas
+                            </div>
+                            <div className="info-grid">
+                                {assetSpecEntries.map(({ field, value }) => (
+                                    <div className="info-row" key={field.key}>
+                                        <span className="info-label">{field.label}:</span>
+                                        <span className="info-value">
+                                            {formatValueWithUnit(value, field.unit)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Method */}
                     <div className="section">
                         <div className="section-title">Método de Calibração</div>
@@ -890,8 +1026,122 @@ export function CertificateHtml({ job }: { job: JobData }) {
                         </div>
                     )}
 
+                    {/* RBC-like Calibration Result */}
+                    {templateConfig.sections.showResults &&
+                        calibrationResultEntries.length > 0 &&
+                        calibrationResultRowCount > 0 && (
+                        <div className="section">
+                            <div className="section-title">Resultado da Calibração</div>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Ponto</th>
+                                        {calibrationResultEntries.map(({ key, label, unit }) => (
+                                            <th key={key}>
+                                                {label}
+                                                {unit ? ` (${unit})` : ""}
+                                            </th>
+                                        ))}
+                                        {calibrationResultEntries.some(
+                                            (entry) =>
+                                                entry.formula?.reporting?.role ===
+                                                "conformity_margin"
+                                        ) && <th>Critério</th>}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {Array.from({
+                                        length: calibrationResultRowCount,
+                                    }).map((_, index) => {
+                                        const conformityEntry =
+                                            calibrationResultEntries.find(
+                                                (entry) =>
+                                                    entry.formula?.reporting?.role ===
+                                                    "conformity_margin"
+                                            );
+                                        const conformityValue = conformityEntry
+                                            ? getIndexedValue(
+                                                  conformityEntry.value,
+                                                  index
+                                              )
+                                            : undefined;
+                                        const conformityNumber =
+                                            typeof conformityValue === "number"
+                                                ? conformityValue
+                                                : typeof conformityValue === "string"
+                                                  ? Number(conformityValue)
+                                                  : NaN;
+
+                                        return (
+                                            <tr key={index}>
+                                                <td>
+                                                    {pointLabels[index] ??
+                                                        String(index + 1)}
+                                                </td>
+                                                {calibrationResultEntries.map(
+                                                    (entry) => (
+                                                        <td key={entry.key}>
+                                                            {formatReportedValue(
+                                                                entry,
+                                                                getIndexedValue(
+                                                                    entry.value,
+                                                                    index
+                                                                )
+                                                            )}
+                                                        </td>
+                                                    )
+                                                )}
+                                                {conformityEntry && (
+                                                    <td>
+                                                        {Number.isFinite(
+                                                            conformityNumber
+                                                        )
+                                                            ? conformityNumber >= 0
+                                                                ? "Conforme"
+                                                                : "Não conforme"
+                                                            : "-"}
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {templateConfig.sections.showResults &&
+                        uncertaintyBudgetEntries.length > 0 && (
+                        <div className="section">
+                            <div className="section-title">
+                                Orçamento de Incerteza
+                            </div>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Componente</th>
+                                        <th>Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {uncertaintyBudgetEntries.map(
+                                        ({ key, label, value, unit }) => (
+                                            <tr key={key}>
+                                                <td>{label}</td>
+                                                <td>
+                                                    {formatValue(value)}
+                                                    {unit ? ` ${unit}` : ""}
+                                                </td>
+                                            </tr>
+                                        )
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
                     {/* Results */}
-                    {templateConfig.sections.showResults && resultEntries.length > 0 && (
+                    {templateConfig.sections.showResults && genericResultEntries.length > 0 && (
                         <div className="section">
                             <div className="section-title">Resultados</div>
                             <table>
@@ -902,7 +1152,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {resultEntries.map(({ key, label, value, unit }) => (
+                                    {genericResultEntries.map(({ key, label, value, unit }) => (
                                         <tr key={key}>
                                             <td>{label}</td>
                                             <td>

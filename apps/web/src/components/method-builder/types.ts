@@ -3,6 +3,7 @@
  */
 
 export type MethodInputType = 'text' | 'number' | 'select' | 'table'
+export type MethodInputSource = 'manual' | 'asset_spec'
 
 export interface MethodTableColumn {
   key: string
@@ -20,6 +21,21 @@ export interface MethodInputField {
   options?: Array<string>
   defaultValue?: string | number
   columns?: Array<MethodTableColumn>
+  source?: MethodInputSource
+  assetSpecKey?: string
+  allowOverride?: boolean
+}
+
+export interface MethodFormulaReporting {
+  includeInCertificate?: boolean
+  role?:
+    | 'primary_result'
+    | 'expanded_uncertainty'
+    | 'coverage_factor'
+    | 'conformity_margin'
+    | 'uncertainty_component'
+    | 'auxiliary'
+  group?: 'calibration_result' | 'uncertainty_budget' | 'raw_calculation'
 }
 
 export interface MethodFormula {
@@ -27,6 +43,7 @@ export interface MethodFormula {
   expression: string
   label?: string
   unit?: string
+  reporting?: MethodFormulaReporting
 }
 
 export interface MethodValidation {
