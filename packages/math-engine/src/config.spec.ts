@@ -35,7 +35,7 @@ describe("Secure Math Configuration", () => {
     it("should block derivative function", () => {
       const { evaluate } = getSecureMath();
       expect(() => evaluate("derivative('x^2', 'x')")).toThrow(
-        "Security violation"
+        "Security violation",
       );
     });
   });
@@ -44,35 +44,35 @@ describe("Secure Math Configuration", () => {
     it("should block __proto__ access", () => {
       const { evaluate } = getSecureMath();
       expect(() => evaluate("x.__proto__", { x: {} })).toThrow(
-        "Security violation"
+        "Security violation",
       );
     });
 
     it("should block constructor access", () => {
       const { evaluate } = getSecureMath();
       expect(() => evaluate("x.constructor", { x: {} })).toThrow(
-        "Security violation"
+        "Security violation",
       );
     });
 
     it("should block bracket notation prototype access", () => {
       const { evaluate } = getSecureMath();
       expect(() => evaluate('x["__proto__"]', { x: {} })).toThrow(
-        "Security violation"
+        "Security violation",
       );
     });
 
     it("should block single quote bracket notation prototype access", () => {
       const { evaluate } = getSecureMath();
       expect(() => evaluate("x['__proto__']", { x: {} })).toThrow(
-        "Security violation"
+        "Security violation",
       );
     });
 
     it("should block Function constructor", () => {
       const { evaluate } = getSecureMath();
       expect(() => evaluate('Function("return 1")')).toThrow(
-        "Security violation"
+        "Security violation",
       );
     });
 
@@ -149,10 +149,34 @@ describe("Secure Math Configuration", () => {
       expect(evaluate("5 == 5")).toBe(true);
     });
 
+    it("should allow common JavaScript boolean operators", () => {
+      const { evaluate } = getSecureMath();
+      expect(evaluate("x >= 18 && x <= 23", { x: 20.3 })).toBe(true);
+      expect(evaluate("x < 18 || x > 23", { x: 20.3 })).toBe(false);
+    });
+
     it("should allow variable access from scope", () => {
       const { evaluate } = getSecureMath();
       const result = evaluate("x + y", { x: 10, y: 20 });
       expect(Number(result)).toBe(30);
+    });
+
+    it("should normalize decimal arrays from scope before vector arithmetic", () => {
+      const { evaluate } = getSecureMath();
+      const result = evaluate("(a + b + c) / 3", {
+        a: [10.0001, 50.0002, 100.0003, 200.0004],
+        b: [10.0001, 50.0001, 100.0002, 200.0003],
+        c: [10.0001, 50.0002, 100.0002, 200.0004],
+      });
+
+      expect(Array.isArray(result)).toBe(true);
+      const values = result as Array<{ toString: () => string }>;
+      expect(values.map((value) => value.toString())).toEqual([
+        "10.0001",
+        "50.000166666666666666666666666667",
+        "100.00023333333333333333333333333",
+        "200.00036666666666666666666666667",
+      ]);
     });
   });
 

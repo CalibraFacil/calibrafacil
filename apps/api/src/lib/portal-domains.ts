@@ -15,6 +15,25 @@ import { organizationHasEntitlement } from "./organization-plan";
 const DEFAULT_PORTAL_URL_PRODUCTION = "https://portal.calibrafacil.com";
 const DEFAULT_PORTAL_URL_DEVELOPMENT = "http://localhost:5174";
 
+function derivePortalBaseUrlFromAppUrl(appUrl: string): string | null {
+  try {
+    const url = new URL(appUrl);
+    const isLocalHost =
+      url.hostname === "localhost" ||
+      url.hostname === "127.0.0.1" ||
+      /^\d{1,3}(?:\.\d{1,3}){3}$/.test(url.hostname);
+
+    if (!isLocalHost) {
+      return DEFAULT_PORTAL_URL_PRODUCTION;
+    }
+
+    url.port = "5174";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
 export function buildPortalDomainVerificationHost(hostname: string): string {
   return `_calibrafacil-domain.${hostname}`;
 }
@@ -71,10 +90,8 @@ export async function getPortalBaseUrlForLabOrganization(
 
   const appUrl = process.env.APP_URL?.trim();
   if (appUrl) {
-    return appUrl
-      .replace(":5173", ":5174")
-      .replace("https://calibrafacil.com", DEFAULT_PORTAL_URL_PRODUCTION)
-      .replace(/\/+$/, "");
+    const portalUrl = derivePortalBaseUrlFromAppUrl(appUrl);
+    if (portalUrl) return portalUrl;
   }
 
   return process.env.NODE_ENV === "production"

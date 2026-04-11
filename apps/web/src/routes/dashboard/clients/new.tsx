@@ -78,6 +78,28 @@ const initialFormData: FormData = {
   },
 }
 
+const DEFAULT_PRODUCTION_PORTAL_URL = 'https://portal.calibrafacil.com'
+const DEFAULT_DEVELOPMENT_PORTAL_PORT = '5174'
+
+function getPortalBaseUrl() {
+  const configuredPortalUrl = import.meta.env.VITE_PORTAL_APP_URL?.trim()
+  if (configuredPortalUrl) {
+    return configuredPortalUrl.replace(/\/+$/, '')
+  }
+
+  const { hostname, protocol } = window.location
+  const isLocalHost =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname)
+
+  if (isLocalHost) {
+    return `${protocol}//${hostname}:${DEFAULT_DEVELOPMENT_PORTAL_PORT}`
+  }
+
+  return DEFAULT_PRODUCTION_PORTAL_URL
+}
+
 function NewClientPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -96,9 +118,7 @@ function NewClientPage() {
   // Generate the invitation URL for the portal
   const getInviteUrl = () => {
     if (!invitationId) return ''
-    // Use the portal URL (port 5174)
-    const host = window.location.hostname
-    return `${window.location.protocol}//${host}:5174/accept-invite?token=${invitationId}`
+    return `${getPortalBaseUrl()}/accept-invite?token=${invitationId}`
   }
 
   const handleCopyLink = async () => {

@@ -61,11 +61,74 @@ export interface SecureMath {
   evaluate: (expr: string, scope?: Record<string, unknown>) => unknown;
 }
 
+const NUMERIC_STRING_PATTERN =
+  /^[+-]?(?:(?:\d+\.?\d*)|(?:\.\d+))(?:e[+-]?\d+)?$/i;
+
+function isBigNumberLike(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "toNumber" in value &&
+    "toString" in value
+  );
+}
+
+function normalizeScopeValue(value: unknown, math: MathJsInstance): unknown {
+  if (typeof value === "number") {
+    return math.bignumber(value.toString());
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (NUMERIC_STRING_PATTERN.test(trimmed)) {
+      return math.bignumber(trimmed);
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeScopeValue(item, math));
+  }
+
+  if (isBigNumberLike(value)) {
+    return value;
+  }
+
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        normalizeScopeValue(item, math),
+      ]),
+    );
+  }
+
+  return value;
+}
+
+function normalizeScope(
+  scope: Record<string, unknown> | undefined,
+  math: MathJsInstance,
+): Record<string, unknown> {
+  if (!scope) return {};
+
+  return Object.fromEntries(
+    Object.entries(scope).map(([key, value]) => [
+      key,
+      normalizeScopeValue(value, math),
+    ]),
+  );
+}
+
+function normalizeExpression(expr: string): string {
+  return expr.replace(/\s*&&\s*/g, " and ").replace(/\s*\|\|\s*/g, " or ");
+}
+
 // ============================================
 // Create secure math instance
 // ============================================
 export function createSecureMath(
-  config: Partial<MathEngineConfig> = {}
+  config: Partial<MathEngineConfig> = {},
 ): SecureMath {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
 
@@ -93,19 +156,24 @@ export function createSecureMath(
   // Return secure evaluate function with pre-validation
   const secureEvaluate = (
     expr: string,
-    scope?: Record<string, unknown>
+    scope?: Record<string, unknown>,
   ): unknown => {
     // Check for dangerous patterns before evaluation
     for (const pattern of DANGEROUS_PATTERNS) {
       if (pattern.test(expr)) {
         throw new Error(
-          "Security violation: Dangerous pattern detected in expression"
+          "Security violation: Dangerous pattern detected in expression",
         );
       }
     }
 
-    // Ensure scope is always an object (mathjs requires it)
-    return originalEvaluate(expr, scope ?? {});
+    // Normalize user scope to BigNumber values before mathjs evaluates it.
+    // This keeps formulas readable and avoids leaking bignumber(...) calls into
+    // calibration methods just to work around JavaScript floating point noise.
+    return originalEvaluate(
+      normalizeExpression(expr),
+      normalizeScope(scope, math),
+    );
   };
 
   return {
@@ -119,9 +187,7 @@ export function createSecureMath(
 // ============================================
 let defaultInstance: SecureMath | null = null;
 
-export function getSecureMath(
-  config?: Partial<MathEngineConfig>
-): SecureMath {
+export function getSecureMath(config?: Partial<MathEngineConfig>): SecureMath {
   if (!defaultInstance || config) {
     defaultInstance = createSecureMath(config);
   }

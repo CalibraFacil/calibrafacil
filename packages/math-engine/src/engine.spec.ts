@@ -169,6 +169,45 @@ describe("CalibrationEngine", () => {
       }
     });
 
+    it("should evaluate decimal vector formulas without explicit bignumber calls", () => {
+      const meanResult = engine.evaluateFormula({
+        formula: "(pontos_leitura_1 + pontos_leitura_2 + pontos_leitura_3) / 3",
+        context: {
+          pontos_leitura_1: [10.0001, 50.0002, 100.0003, 200.0004],
+          pontos_leitura_2: [10.0001, 50.0001, 100.0002, 200.0003],
+          pontos_leitura_3: [10.0001, 50.0002, 100.0002, 200.0004],
+        },
+      });
+
+      expect(meanResult.success).toBe(true);
+      if (!meanResult.success) return;
+
+      expect(meanResult.data.result).toEqual([
+        "10.0001",
+        "50.000166666666666666666666666667",
+        "100.00023333333333333333333333333",
+        "200.00036666666666666666666666667",
+      ]);
+
+      const errorResult = engine.evaluateFormula({
+        formula: "leitura_media - pontos_valor_padrao",
+        context: {
+          leitura_media: meanResult.data.result,
+          pontos_valor_padrao: [10.00002, 50.00004, 100.00008, 200.00011],
+        },
+      });
+
+      expect(errorResult.success).toBe(true);
+      if (errorResult.success) {
+        expect(errorResult.data.result).toEqual([
+          "0.00008",
+          "0.000126666666666666666666666667",
+          "0.00015333333333333333333333333",
+          "0.00025666666666666666666666667",
+        ]);
+      }
+    });
+
     it("should allow chaining vector results with aggregate functions", () => {
       const engine = createEngine();
 

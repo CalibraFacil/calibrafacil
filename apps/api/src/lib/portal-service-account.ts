@@ -74,10 +74,22 @@ function getPortalAppUrlFallback(): string {
 
   const appUrl = process.env.APP_URL?.trim();
   if (appUrl) {
-    return appUrl
-      .replace(":5173", ":5174")
-      .replace("https://calibrafacil.com", "https://portal.calibrafacil.com")
-      .replace(/\/+$/, "");
+    try {
+      const url = new URL(appUrl);
+      const isLocalHost =
+        url.hostname === "localhost" ||
+        url.hostname === "127.0.0.1" ||
+        /^\d{1,3}(?:\.\d{1,3}){3}$/.test(url.hostname);
+
+      if (!isLocalHost) {
+        return "https://portal.calibrafacil.com";
+      }
+
+      url.port = "5174";
+      return url.toString().replace(/\/+$/, "");
+    } catch {
+      // Fall through to the environment default below.
+    }
   }
 
   if (process.env.NODE_ENV === "production") {

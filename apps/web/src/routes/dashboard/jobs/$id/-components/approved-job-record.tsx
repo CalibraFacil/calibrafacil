@@ -62,6 +62,7 @@ import { api } from '@/utils/api'
 import { toast } from 'sonner'
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { formatCalibrationValue } from '@calibra-facil/shared'
 import { Spinner } from '@/components/ui/spinner'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
@@ -156,14 +157,8 @@ function formatDateTime(dateString: string | null | undefined): string {
 
 function formatValue(value: unknown, unit?: string): string {
   if (value === null || value === undefined || value === '') return '-'
-  if (typeof value === 'number') {
-    const formatted = Number.isInteger(value) ? String(value) : value.toFixed(4)
-    return unit ? `${formatted} ${unit}` : formatted
-  }
-  if (Array.isArray(value)) {
-    return value.map((v) => formatValue(v)).join(', ')
-  }
-  return String(value)
+  const formatted = formatCalibrationValue(value)
+  return unit ? `${formatted} ${unit}` : formatted
 }
 
 export function ApprovedJobRecord({
