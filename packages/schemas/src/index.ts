@@ -475,20 +475,14 @@ export const MethodInputFieldSchema = z
       path: ["assetSpecKey"],
     },
   )
-  .refine(
-    (data) => data.source !== "asset_spec" || data.type !== "table",
-    {
-      message: "Campos de especificação do ativo não podem ser tabela",
-      path: ["type"],
-    },
-  )
-  .refine(
-    (data) => data.source !== "asset_spec" || !data.columns,
-    {
-      message: "Campos de especificação do ativo não aceitam colunas",
-      path: ["columns"],
-    },
-  );
+  .refine((data) => data.source !== "asset_spec" || data.type !== "table", {
+    message: "Campos de especificação do ativo não podem ser tabela",
+    path: ["type"],
+  })
+  .refine((data) => data.source !== "asset_spec" || !data.columns, {
+    message: "Campos de especificação do ativo não aceitam colunas",
+    path: ["columns"],
+  });
 
 export type MethodInputField = z.infer<typeof MethodInputFieldSchema>;
 
@@ -970,6 +964,7 @@ export const StandardSnapshotSchema = z.object({
   name: z.string(),
   certificateNumber: z.string(),
   calibrationDate: z.string(),
+  nextCalibrationDate: z.string().nullable().optional(),
   uncertainty: z.number().nullable(),
   uncertaintyUnit: z.string().nullable(),
   coverageFactor: z.number(),

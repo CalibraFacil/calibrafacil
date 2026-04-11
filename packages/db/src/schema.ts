@@ -485,7 +485,9 @@ export const organizationSupportRequestEvent = pgTable(
     index("organization_support_request_event_request_idx").on(
       table.supportRequestId,
     ),
-    index("organization_support_request_event_org_idx").on(table.organizationId),
+    index("organization_support_request_event_org_idx").on(
+      table.organizationId,
+    ),
     index("organization_support_request_event_kind_idx").on(table.kind),
     index("organization_support_request_event_created_at_idx").on(
       table.createdAt,
@@ -666,7 +668,9 @@ export const publicApiResourceRef = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    resourceType: text("resource_type").$type<PublicApiResourceType>().notNull(),
+    resourceType: text("resource_type")
+      .$type<PublicApiResourceType>()
+      .notNull(),
     resourceId: text("resource_id").notNull(),
     externalId: text("external_id").notNull(),
     createdByApiKeyId: text("created_by_api_key_id").references(
@@ -710,7 +714,9 @@ export const publicApiIdempotencyKey = pgTable(
     idempotencyKey: text("idempotency_key").notNull(),
     requestHash: text("request_hash").notNull(),
     responseStatus: integer("response_status").notNull(),
-    responseBody: jsonb("response_body").$type<Record<string, unknown>>().notNull(),
+    responseBody: jsonb("response_body")
+      .$type<Record<string, unknown>>()
+      .notNull(),
     resourceType: text("resource_type").$type<PublicApiResourceType>(),
     resourceId: text("resource_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -738,7 +744,10 @@ export const publicApiWebhookSubscription = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     targetUrl: text("target_url").notNull(),
-    events: jsonb("events").$type<PublicApiWebhookEvent[]>().default([]).notNull(),
+    events: jsonb("events")
+      .$type<PublicApiWebhookEvent[]>()
+      .default([])
+      .notNull(),
     status: text("status")
       .$type<PublicApiWebhookSubscriptionStatus>()
       .default("ACTIVE")
@@ -782,7 +791,9 @@ export const publicApiWebhookDelivery = pgTable(
     eventId: text("event_id").notNull(),
     eventType: text("event_type").$type<PublicApiWebhookEvent>().notNull(),
     requestUrl: text("request_url").notNull(),
-    requestBody: jsonb("request_body").$type<Record<string, unknown>>().notNull(),
+    requestBody: jsonb("request_body")
+      .$type<Record<string, unknown>>()
+      .notNull(),
     responseStatus: integer("response_status"),
     responseBody: text("response_body"),
     attemptCount: integer("attempt_count").default(0).notNull(),
@@ -820,7 +831,10 @@ export const organizationIntegration = pgTable(
     type: text("type").$type<IntegrationType>().notNull(),
     provider: text("provider").$type<IntegrationProvider>().notNull(),
     name: text("name").notNull(),
-    status: text("status").$type<IntegrationStatus>().default("ACTIVE").notNull(),
+    status: text("status")
+      .$type<IntegrationStatus>()
+      .default("ACTIVE")
+      .notNull(),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
@@ -878,7 +892,9 @@ export const integrationConnection = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("integration_connection_integration_uidx").on(table.integrationId),
+    uniqueIndex("integration_connection_integration_uidx").on(
+      table.integrationId,
+    ),
     index("integration_connection_org_id_idx").on(table.organizationId),
     foreignKey({
       columns: [table.integrationId, table.organizationId],
@@ -995,7 +1011,10 @@ export const integrationEventLog = pgTable(
     runId: text("run_id").references(() => integrationSyncRun.id, {
       onDelete: "cascade",
     }),
-    level: text("level").$type<IntegrationEventLevel>().default("info").notNull(),
+    level: text("level")
+      .$type<IntegrationEventLevel>()
+      .default("info")
+      .notNull(),
     event: text("event").notNull(),
     message: text("message").notNull(),
     details: jsonb("details").$type<Record<string, unknown>>(),
@@ -2254,6 +2273,7 @@ export type StandardSnapshot = {
   name: string;
   certificateNumber: string;
   calibrationDate: Date;
+  nextCalibrationDate: Date | null;
   uncertainty: number | null;
   uncertaintyUnit: string | null;
   coverageFactor: number;
@@ -2631,10 +2651,15 @@ export const jobCommercialSnapshot = pgTable(
     serviceId: integer("service_id")
       .notNull()
       .references(() => service.id, { onDelete: "restrict" }),
-    agreementId: integer("agreement_id").references(() => commercialAgreement.id, {
-      onDelete: "set null",
-    }),
-    sourceType: text("source_type").$type<JobCommercialSnapshotSource>().notNull(),
+    agreementId: integer("agreement_id").references(
+      () => commercialAgreement.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    sourceType: text("source_type")
+      .$type<JobCommercialSnapshotSource>()
+      .notNull(),
     serviceName: text("service_name").notNull(),
     priceCents: integer("price_cents"),
     currency: text("currency").default("BRL").notNull(),
@@ -2663,9 +2688,12 @@ export const billingDocument = pgTable(
     unitId: integer("unit_id")
       .notNull()
       .references(() => organizationUnit.id, { onDelete: "restrict" }),
-    agreementId: integer("agreement_id").references(() => commercialAgreement.id, {
-      onDelete: "set null",
-    }),
+    agreementId: integer("agreement_id").references(
+      () => commercialAgreement.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     documentNumber: text("document_number"),
     status: text("status")
       .$type<BillingDocumentStatus>()
@@ -2744,7 +2772,9 @@ export const billingDocumentItem = pgTable(
   (table) => [
     index("billing_document_item_document_idx").on(table.documentId),
     index("billing_document_item_job_idx").on(table.jobId),
-    index("billing_document_item_snapshot_idx").on(table.jobCommercialSnapshotId),
+    index("billing_document_item_snapshot_idx").on(
+      table.jobCommercialSnapshotId,
+    ),
   ],
 );
 
@@ -2830,7 +2860,10 @@ export const financialAuditLog = pgTable(
   },
   (table) => [
     index("financial_audit_log_org_idx").on(table.organizationId),
-    index("financial_audit_log_entity_idx").on(table.entityType, table.entityId),
+    index("financial_audit_log_entity_idx").on(
+      table.entityType,
+      table.entityId,
+    ),
     index("financial_audit_log_performed_at_idx").on(table.performedAt),
   ],
 );
@@ -3251,7 +3284,10 @@ export const billingCustomer = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    provider: text("provider").$type<CommercialProvider>().default("ASAAS").notNull(),
+    provider: text("provider")
+      .$type<CommercialProvider>()
+      .default("ASAAS")
+      .notNull(),
     providerCustomerId: text("provider_customer_id").notNull().unique(),
     status: text("status")
       .$type<BillingCustomerStatus>()
@@ -3262,7 +3298,8 @@ export const billingCustomer = pgTable(
     phone: text("phone"),
     taxId: text("tax_id"),
     addressSnapshot: jsonb("address_snapshot").$type<Record<string, unknown>>(),
-    providerSnapshot: jsonb("provider_snapshot").$type<Record<string, unknown>>(),
+    providerSnapshot:
+      jsonb("provider_snapshot").$type<Record<string, unknown>>(),
     createdBy: text("created_by").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -3309,7 +3346,10 @@ export const billingContact = pgTable(
   },
   (table) => [
     index("billing_contact_org_idx").on(table.organizationId),
-    index("billing_contact_primary_idx").on(table.organizationId, table.isPrimary),
+    index("billing_contact_primary_idx").on(
+      table.organizationId,
+      table.isPrimary,
+    ),
   ],
 );
 
@@ -3372,7 +3412,10 @@ export const commercialOffer = pgTable(
       .$type<CommercialOfferStatus>()
       .default("DRAFT")
       .notNull(),
-    provider: text("provider").$type<CommercialProvider>().default("ASAAS").notNull(),
+    provider: text("provider")
+      .$type<CommercialProvider>()
+      .default("ASAAS")
+      .notNull(),
     providerMode: text("provider_mode")
       .$type<CommercialProviderMode>()
       .notNull(),
@@ -3591,7 +3634,10 @@ export const paymentRecord = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    provider: text("provider").$type<CommercialProvider>().default("ASAAS").notNull(),
+    provider: text("provider")
+      .$type<CommercialProvider>()
+      .default("ASAAS")
+      .notNull(),
     providerCheckoutId: text("provider_checkout_id"),
     providerPaymentId: text("provider_payment_id"),
     providerSubscriptionId: text("provider_subscription_id"),
@@ -3611,7 +3657,8 @@ export const paymentRecord = pgTable(
     bankSlipUrl: text("bank_slip_url"),
     pixQrCodeUrl: text("pix_qr_code_url"),
     pixPayload: text("pix_payload"),
-    providerSnapshot: jsonb("provider_snapshot").$type<Record<string, unknown>>(),
+    providerSnapshot:
+      jsonb("provider_snapshot").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -3660,7 +3707,10 @@ export const providerWebhookEvent = pgTable(
   "provider_webhook_event",
   {
     id: serial("id").primaryKey(),
-    provider: text("provider").$type<CommercialProvider>().default("ASAAS").notNull(),
+    provider: text("provider")
+      .$type<CommercialProvider>()
+      .default("ASAAS")
+      .notNull(),
     eventId: text("event_id").notNull().unique(),
     eventType: text("event_type").notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
@@ -3669,7 +3719,10 @@ export const providerWebhookEvent = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("provider_webhook_event_uidx").on(table.provider, table.eventId),
+    uniqueIndex("provider_webhook_event_uidx").on(
+      table.provider,
+      table.eventId,
+    ),
     index("provider_webhook_event_type_idx").on(table.eventType),
     index("provider_webhook_event_created_idx").on(table.createdAt),
   ],
@@ -3693,25 +3746,31 @@ export const subscriptionRelations = relations(
   }),
 );
 
-export const billingCustomerRelations = relations(billingCustomer, ({ one, many }) => ({
-  organization: one(organization, {
-    fields: [billingCustomer.organizationId],
-    references: [organization.id],
+export const billingCustomerRelations = relations(
+  billingCustomer,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [billingCustomer.organizationId],
+      references: [organization.id],
+    }),
+    offers: many(commercialOffer),
   }),
-  offers: many(commercialOffer),
-}));
+);
 
-export const commercialDealRelations = relations(commercialDeal, ({ one, many }) => ({
-  organization: one(organization, {
-    fields: [commercialDeal.organizationId],
-    references: [organization.id],
+export const commercialDealRelations = relations(
+  commercialDeal,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [commercialDeal.organizationId],
+      references: [organization.id],
+    }),
+    primaryBillingContact: one(billingContact, {
+      fields: [commercialDeal.primaryBillingContactId],
+      references: [billingContact.id],
+    }),
+    offers: many(commercialOffer),
   }),
-  primaryBillingContact: one(billingContact, {
-    fields: [commercialDeal.primaryBillingContactId],
-    references: [billingContact.id],
-  }),
-  offers: many(commercialOffer),
-}));
+);
 
 export const commercialOfferRelations = relations(
   commercialOffer,
@@ -3735,17 +3794,20 @@ export const commercialOfferRelations = relations(
   }),
 );
 
-export const paymentRecordRelations = relations(paymentRecord, ({ one, many }) => ({
-  offer: one(commercialOffer, {
-    fields: [paymentRecord.commercialOfferId],
-    references: [commercialOffer.id],
+export const paymentRecordRelations = relations(
+  paymentRecord,
+  ({ one, many }) => ({
+    offer: one(commercialOffer, {
+      fields: [paymentRecord.commercialOfferId],
+      references: [commercialOffer.id],
+    }),
+    organization: one(organization, {
+      fields: [paymentRecord.organizationId],
+      references: [organization.id],
+    }),
+    statusHistory: many(paymentStatusHistory),
   }),
-  organization: one(organization, {
-    fields: [paymentRecord.organizationId],
-    references: [organization.id],
-  }),
-  statusHistory: many(paymentStatusHistory),
-}));
+);
 
 export const paymentStatusHistoryRelations = relations(
   paymentStatusHistory,
@@ -3816,7 +3878,10 @@ export const paymentHistoryRelations = relations(paymentRecord, ({ one }) => ({
   }),
 }));
 
-export const webhookEventLogRelations = relations(providerWebhookEvent, ({}) => ({}));
+export const webhookEventLogRelations = relations(
+  providerWebhookEvent,
+  ({}) => ({}),
+);
 
 // =============================================================================
 // NOTIFICATION SYSTEM - ISO 17025 Compliance Alerts & Operational Notifications

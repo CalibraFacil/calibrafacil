@@ -76,6 +76,7 @@ export type StandardSnapshot = {
     name: string;
     certificateNumber: string;
     calibrationDate: Date | string;
+    nextCalibrationDate?: Date | string | null;
     uncertainty: number | null;
     uncertaintyUnit: string | null;
     coverageFactor: number;
@@ -348,8 +349,8 @@ const styles = `
     background: #fafafa;
   }
   .footer {
-    margin-top: 24px;
-    padding-top: 12px;
+    margin-top: 12px;
+    padding-top: 8px;
     border-top: 1px solid #ccc;
     display: flex;
     justify-content: space-between;
@@ -357,7 +358,7 @@ const styles = `
     color: #666;
   }
   .signature-section {
-    margin-top: 32px;
+    margin-top: 16px;
     display: flex;
     justify-content: flex-end;
   }
@@ -375,7 +376,11 @@ const styles = `
     font-size: 9pt;
     font-style: italic;
     color: #666;
-    margin-top: 24px;
+    margin-top: 10px;
+  }
+  .closing-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .data-table {
     margin-top: 8px;
@@ -470,6 +475,14 @@ function formatValue(value: unknown): string {
     return formatCalibrationValue(value, { decimalSeparator: "," });
 }
 
+function formatPlainNumber(value: number, decimals = 1): string {
+    return value.toLocaleString("pt-BR", {
+        useGrouping: false,
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    });
+}
+
 function formatAddress(address: CustomerAddress | null): string {
     if (!address) return "-";
     const parts = [
@@ -524,7 +537,7 @@ function formatValueWithUnit(value: unknown, unit?: string): string {
 
 function formatReportedValue(
     entry: { formula?: MethodFormula },
-    value: unknown
+    value: unknown,
 ): string {
     const formatted = formatValue(value);
     const role = entry.formula?.reporting?.role;
@@ -546,7 +559,10 @@ function formatReportedValue(
     return formatted;
 }
 
-function getPointLabels(dataFields: MethodInputField[], data: Record<string, unknown> | null) {
+function getPointLabels(
+    dataFields: MethodInputField[],
+    data: Record<string, unknown> | null,
+) {
     const tableField = dataFields.find((field) => field.type === "table");
     const rows = tableField && data ? data[tableField.key] : null;
     if (!Array.isArray(rows)) {
@@ -555,8 +571,14 @@ function getPointLabels(dataFields: MethodInputField[], data: Record<string, unk
 
     return rows.map((row, index) => {
         const record = row as Record<string, unknown>;
-        const point = record.ponto ?? record.point ?? record.nominal ?? record.valor_nominal;
-        return point != null && point !== "" ? String(point) : String(index + 1);
+        const point =
+            record.ponto ??
+            record.point ??
+            record.nominal ??
+            record.valor_nominal;
+        return point != null && point !== ""
+            ? String(point)
+            : String(index + 1);
     });
 }
 
@@ -592,7 +614,9 @@ function DataTable({
                             {field.columns!.map((col) => (
                                 <td key={col.key}>
                                     {formatValue(
-                                        (row as Record<string, unknown>)[col.key]
+                                        (row as Record<string, unknown>)[
+                                            col.key
+                                        ],
                                     )}
                                 </td>
                             ))}
@@ -607,14 +631,14 @@ function DataTable({
 export function CertificateHtml({ job }: { job: JobData }) {
     const templateSnapshot = job.certificateTemplateSnapshot ?? null;
     const templateConfig = normalizeCertificateTemplateConfig(
-        templateSnapshot?.config
+        templateSnapshot?.config,
     );
     const dataFields = job.methodSnapshot?.dataFields || [];
     const formulas = job.methodSnapshot?.formulas || [];
 
     const assetSpecFields = dataFields.filter((f) => f.source === "asset_spec");
     const tableFields = dataFields.filter(
-        (f) => f.type === "table" && f.source !== "asset_spec"
+        (f) => f.type === "table" && f.source !== "asset_spec",
     );
 
     // Get environment data from structured snapshot
@@ -631,7 +655,20 @@ export function CertificateHtml({ job }: { job: JobData }) {
         formula?: MethodFormula;
     }> = [];
     if (job.results) {
+        const seenResultKeys = new Set<string>();
+        for (const formula of formulas) {
+            if (!(formula.outputKey in job.results)) continue;
+            seenResultKeys.add(formula.outputKey);
+            resultEntries.push({
+                key: formula.outputKey,
+                label: formula.label || formula.outputKey,
+                value: job.results[formula.outputKey],
+                unit: formula.unit,
+                formula,
+            });
+        }
         for (const [key, value] of Object.entries(job.results)) {
+            if (seenResultKeys.has(key)) continue;
             const formula = formulas.find((f) => f.outputKey === key);
             resultEntries.push({
                 key,
@@ -642,21 +679,45 @@ export function CertificateHtml({ job }: { job: JobData }) {
             });
         }
     }
-    const calibrationResultEntries = resultEntries.filter(
-        (entry) =>
-            entry.formula?.reporting?.group === "calibration_result" &&
-            entry.formula.reporting.includeInCertificate !== false
-    );
+    const calibrationResultRoleOrder = new Map<string, number>([
+        ["primary_result", 0],
+        ["expanded_uncertainty", 1],
+        ["coverage_factor", 2],
+        ["conformity_margin", 3],
+        ["auxiliary", 4],
+    ]);
+    const calibrationResultEntries = resultEntries
+        .filter(
+            (entry) =>
+                entry.formula?.reporting?.group === "calibration_result" &&
+                entry.formula.reporting.includeInCertificate !== false,
+        )
+        .sort((a, b) => {
+            const aOrder = calibrationResultRoleOrder.get(
+                a.formula?.reporting?.role ?? "",
+            );
+            const bOrder = calibrationResultRoleOrder.get(
+                b.formula?.reporting?.role ?? "",
+            );
+            return (aOrder ?? 99) - (bOrder ?? 99);
+        });
     const uncertaintyBudgetEntries = resultEntries.filter(
         (entry) =>
             entry.formula?.reporting?.group === "uncertainty_budget" &&
-            entry.formula.reporting.includeInCertificate !== false
+            entry.formula.reporting.includeInCertificate !== false,
     );
-    const genericResultEntries = resultEntries.filter(
-        (entry) =>
-            !entry.formula?.reporting?.group ||
-            entry.formula.reporting.group === "raw_calculation"
-    );
+    const hasStructuredResults =
+        calibrationResultEntries.length > 0 ||
+        uncertaintyBudgetEntries.length > 0;
+    const genericResultEntries = resultEntries.filter((entry) => {
+        if (entry.formula?.reporting?.includeInCertificate === false) {
+            return false;
+        }
+        if (entry.formula?.reporting?.group === "raw_calculation") {
+            return true;
+        }
+        return !hasStructuredResults && !entry.formula?.reporting?.group;
+    });
     const pointLabels = getPointLabels(dataFields, job.data);
     const calibrationResultRowCount = Math.max(
         pointLabels.length,
@@ -669,7 +730,10 @@ export function CertificateHtml({ job }: { job: JobData }) {
                 ? job.assetSnapshot?.specifications?.[field.assetSpecKey]
                 : undefined,
         }))
-        .filter(({ value }) => value !== null && value !== undefined && value !== "");
+        .filter(
+            ({ value }) =>
+                value !== null && value !== undefined && value !== "",
+        );
 
     const dynamicStyles = `
       :root {
@@ -719,29 +783,34 @@ export function CertificateHtml({ job }: { job: JobData }) {
                             )}
                             <div className="lab-info">
                                 <h1>{job.lab.name}</h1>
-                                {job.lab.cnpj && templateConfig.sections.showAccreditation && (
-                                    <p>CNPJ: {formatTaxId(job.lab.cnpj)}</p>
-                                )}
+                                {job.lab.cnpj &&
+                                    templateConfig.sections
+                                        .showAccreditation && (
+                                        <p>CNPJ: {formatTaxId(job.lab.cnpj)}</p>
+                                    )}
                                 {job.lab.accreditationNumber &&
-                                    templateConfig.sections.showAccreditation && (
-                                    <p>
-                                        {job.lab.accreditationNumber}
-                                        {job.lab.accreditationBody &&
-                                            ` - ${job.lab.accreditationBody}`}
-                                    </p>
-                                )}
+                                    templateConfig.sections
+                                        .showAccreditation && (
+                                        <p>
+                                            {job.lab.accreditationNumber}
+                                            {job.lab.accreditationBody &&
+                                                ` - ${job.lab.accreditationBody}`}
+                                        </p>
+                                    )}
                                 {formatLabAddress(job.lab) &&
                                     templateConfig.sections.showLabAddress && (
-                                    <p>{formatLabAddress(job.lab)}</p>
-                                )}
+                                        <p>{formatLabAddress(job.lab)}</p>
+                                    )}
                                 {(job.lab.phone || job.lab.email) &&
                                     templateConfig.sections.showLabContact && (
-                                    <p>
-                                        {job.lab.phone}
-                                        {job.lab.phone && job.lab.email && " | "}
-                                        {job.lab.email}
-                                    </p>
-                                )}
+                                        <p>
+                                            {job.lab.phone}
+                                            {job.lab.phone &&
+                                                job.lab.email &&
+                                                " | "}
+                                            {job.lab.email}
+                                        </p>
+                                    )}
                             </div>
                         </div>
                         <div className="cert-number">
@@ -751,37 +820,52 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     </div>
 
                     {/* Amendment Notice - ISO 17025 Clause 7.8.4.1 */}
-                    {job.supersedesId && templateConfig.sections.showAmendmentNotice && (
-                        <div className="amendment-notice">
-                            <h3>CERTIFICADO RETIFICADO</h3>
-                            <p>
-                                Este certificado <strong>substitui e cancela</strong> o certificado nº{" "}
-                                <strong>{job.originalJobId || `#${job.supersedesId}`}</strong>
-                            </p>
-                            <p>
-                                <strong>Retificação nº {job.amendmentNumber || 1}</strong>
-                            </p>
-                            {job.amendmentReason && (
+                    {job.supersedesId &&
+                        templateConfig.sections.showAmendmentNotice && (
+                            <div className="amendment-notice">
+                                <h3>CERTIFICADO RETIFICADO</h3>
                                 <p>
-                                    <strong>Motivo da retificação:</strong> {job.amendmentReason}
+                                    Este certificado{" "}
+                                    <strong>substitui e cancela</strong> o
+                                    certificado nº{" "}
+                                    <strong>
+                                        {job.originalJobId ||
+                                            `#${job.supersedesId}`}
+                                    </strong>
                                 </p>
-                            )}
-                            {job.originalApprovedAt && (
                                 <p>
-                                    Certificado original emitido em: {formatDate(job.originalApprovedAt)}
+                                    <strong>
+                                        Retificação nº{" "}
+                                        {job.amendmentNumber || 1}
+                                    </strong>
                                 </p>
-                            )}
-                        </div>
-                    )}
+                                {job.amendmentReason && (
+                                    <p>
+                                        <strong>Motivo da retificação:</strong>{" "}
+                                        {job.amendmentReason}
+                                    </p>
+                                )}
+                                {job.originalApprovedAt && (
+                                    <p>
+                                        Certificado original emitido em:{" "}
+                                        {formatDate(job.originalApprovedAt)}
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                     {templateConfig.content.introText && (
-                        <div className="intro">{templateConfig.content.introText}</div>
+                        <div className="intro">
+                            {templateConfig.content.introText}
+                        </div>
                     )}
 
                     {/* Superseded Watermark - appears on all pages */}
                     {job.supersededById && (
                         <div className="superseded-watermark">
-                            <span className="superseded-watermark-text">CANCELADO</span>
+                            <span className="superseded-watermark-text">
+                                CANCELADO
+                            </span>
                         </div>
                     )}
 
@@ -791,7 +875,9 @@ export function CertificateHtml({ job }: { job: JobData }) {
                         <div className="info-grid">
                             <div className="info-row">
                                 <span className="info-label">Nome:</span>
-                                <span className="info-value">{job.customer.name}</span>
+                                <span className="info-value">
+                                    {job.customer.name}
+                                </span>
                             </div>
                             <div className="info-row">
                                 <span className="info-label">CNPJ/CPF:</span>
@@ -805,22 +891,31 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                     {formatAddress(job.customer.address)}
                                 </span>
                             </div>
-                            {job.customer.phone && templateConfig.sections.showCustomerContact && (
-                                <div className="info-row">
-                                    <span className="info-label">Telefone:</span>
-                                    <span className="info-value">{job.customer.phone}</span>
-                                </div>
-                            )}
+                            {job.customer.phone &&
+                                templateConfig.sections.showCustomerContact && (
+                                    <div className="info-row">
+                                        <span className="info-label">
+                                            Telefone:
+                                        </span>
+                                        <span className="info-value">
+                                            {job.customer.phone}
+                                        </span>
+                                    </div>
+                                )}
                         </div>
                     </div>
 
                     {/* Asset Section */}
                     <div className="section">
-                        <div className="section-title">Instrumento Calibrado</div>
+                        <div className="section-title">
+                            Instrumento Calibrado
+                        </div>
                         <div className="info-grid">
                             <div className="info-row">
                                 <span className="info-label">Descrição:</span>
-                                <span className="info-value">{job.asset.name}</span>
+                                <span className="info-value">
+                                    {job.asset.name}
+                                </span>
                             </div>
                             <div className="info-row">
                                 <span className="info-label">Fabricante:</span>
@@ -830,15 +925,21 @@ export function CertificateHtml({ job }: { job: JobData }) {
                             </div>
                             <div className="info-row">
                                 <span className="info-label">Modelo:</span>
-                                <span className="info-value">{job.asset.model || "-"}</span>
+                                <span className="info-value">
+                                    {job.asset.model || "-"}
+                                </span>
                             </div>
                             <div className="info-row">
                                 <span className="info-label">Nº Série:</span>
-                                <span className="info-value">{job.asset.serialNumber}</span>
+                                <span className="info-value">
+                                    {job.asset.serialNumber}
+                                </span>
                             </div>
                             <div className="info-row">
                                 <span className="info-label">Tag:</span>
-                                <span className="info-value">{job.asset.tag}</span>
+                                <span className="info-value">
+                                    {job.asset.tag}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -851,9 +952,14 @@ export function CertificateHtml({ job }: { job: JobData }) {
                             <div className="info-grid">
                                 {assetSpecEntries.map(({ field, value }) => (
                                     <div className="info-row" key={field.key}>
-                                        <span className="info-label">{field.label}:</span>
+                                        <span className="info-label">
+                                            {field.label}:
+                                        </span>
                                         <span className="info-value">
-                                            {formatValueWithUnit(value, field.unit)}
+                                            {formatValueWithUnit(
+                                                value,
+                                                field.unit,
+                                            )}
                                         </span>
                                     </div>
                                 ))}
@@ -863,10 +969,14 @@ export function CertificateHtml({ job }: { job: JobData }) {
 
                     {/* Method */}
                     <div className="section">
-                        <div className="section-title">Método de Calibração</div>
+                        <div className="section-title">
+                            Método de Calibração
+                        </div>
                         <div className="info-grid">
                             <div className="info-row">
-                                <span className="info-label">Procedimento:</span>
+                                <span className="info-label">
+                                    Procedimento:
+                                </span>
                                 <span className="info-value">
                                     {job.methodSnapshot.methodName} (v
                                     {job.methodSnapshot.methodVersion})
@@ -883,135 +993,171 @@ export function CertificateHtml({ job }: { job: JobData }) {
 
                     {/* Environment */}
                     {templateConfig.sections.showEnvironmental &&
-                        (envTemperature != null || envHumidity != null || envPressure != null) && (
-                        <div className="section">
-                            <div className="section-title">Condições Ambientais</div>
-                            <div className="info-grid">
-                                {envTemperature != null && (
-                                    <div className="info-row">
-                                        <span className="info-label">Temperatura:</span>
-                                        <span className="info-value">
-                                            {formatNumber(envTemperature, 1)} °C
-                                        </span>
-                                    </div>
-                                )}
-                                {envHumidity != null && (
-                                    <div className="info-row">
-                                        <span className="info-label">Umidade:</span>
-                                        <span className="info-value">
-                                            {formatNumber(envHumidity, 1)} %
-                                        </span>
-                                    </div>
-                                )}
-                                {envPressure != null && (
-                                    <div className="info-row">
-                                        <span className="info-label">Pressão:</span>
-                                        <span className="info-value">
-                                            {formatNumber(envPressure, 1)} hPa
-                                        </span>
-                                    </div>
-                                )}
+                        (envTemperature != null ||
+                            envHumidity != null ||
+                            envPressure != null) && (
+                            <div className="section">
+                                <div className="section-title">
+                                    Condições Ambientais
+                                </div>
+                                <div className="info-grid">
+                                    {envTemperature != null && (
+                                        <div className="info-row">
+                                            <span className="info-label">
+                                                Temperatura:
+                                            </span>
+                                            <span className="info-value">
+                                                {formatNumber(
+                                                    envTemperature,
+                                                    1,
+                                                )}{" "}
+                                                °C
+                                            </span>
+                                        </div>
+                                    )}
+                                    {envHumidity != null && (
+                                        <div className="info-row">
+                                            <span className="info-label">
+                                                Umidade:
+                                            </span>
+                                            <span className="info-value">
+                                                {formatNumber(envHumidity, 1)}{" "}
+                                                %RH
+                                            </span>
+                                        </div>
+                                    )}
+                                    {envPressure != null && (
+                                        <div className="info-row">
+                                            <span className="info-label">
+                                                Pressão:
+                                            </span>
+                                            <span className="info-value">
+                                                {formatPlainNumber(
+                                                    envPressure,
+                                                    1,
+                                                )}{" "}
+                                                hPa
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
                     {/* Standards Used */}
                     {templateConfig.sections.showStandards &&
                         job.standardsSnapshot &&
                         job.standardsSnapshot.length > 0 && (
-                        <div className="section">
-                            <div className="section-title">Padrões Utilizados</div>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Padrão</th>
-                                        <th>Certificado</th>
-                                        <th>Incerteza</th>
-                                        <th>Validade</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {job.standardsSnapshot.map((std, i) => (
-                                        <tr key={i}>
-                                            <td>{std.name}</td>
-                                            <td>{std.certificateNumber}</td>
-                                            <td>
-                                                {std.certifiedValues &&
-                                                std.certifiedValues.length > 0
-                                                    ? "Vários (ver tabela)"
-                                                    : std.uncertainty !== null
-                                                      ? `±${formatNumber(std.uncertainty)} ${std.uncertaintyUnit || ""}`
-                                                      : "-"}
-                                            </td>
-                                            <td>{formatDate(std.calibrationDate)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-
-                            {/* Certified Values for Weight Sets */}
-                            {job.standardsSnapshot.some(
-                                (std) =>
-                                    std.certifiedValues &&
-                                    std.certifiedValues.length > 0
-                            ) && (
-                                <div className="data-table">
-                                    <div className="data-table-title">
-                                        Valores Certificados dos Padrões
-                                    </div>
-                                    <table>
-                                        <thead>
-                                            <tr>
-                                                <th>Padrão</th>
-                                                <th>Valor Nominal</th>
-                                                <th>Valor Certificado</th>
-                                                <th>Incerteza</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {job.standardsSnapshot.flatMap(
-                                                (std) =>
-                                                    std.certifiedValues?.map(
-                                                        (cv, i) => (
-                                                            <tr
-                                                                key={`${std.id}-${i}`}
-                                                            >
-                                                                <td>
-                                                                    {i === 0
-                                                                        ? std.name
-                                                                        : ""}
-                                                                </td>
-                                                                <td>
-                                                                    {cv.nominal}
-                                                                </td>
-                                                                <td>
-                                                                    {formatNumber(
-                                                                        cv.value
-                                                                    )}{" "}
-                                                                    {cv.unit}
-                                                                </td>
-                                                                <td>
-                                                                    ±
-                                                                    {formatNumber(
-                                                                        cv.uncertainty
-                                                                    )}{" "}
-                                                                    {cv.unit}
-                                                                </td>
-                                                            </tr>
-                                                        )
-                                                    ) || []
-                                            )}
-                                        </tbody>
-                                    </table>
+                            <div className="section">
+                                <div className="section-title">
+                                    Padrões Utilizados
                                 </div>
-                            )}
-                        </div>
-                    )}
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Padrão</th>
+                                            <th>Certificado</th>
+                                            <th>Incerteza</th>
+                                            <th>Validade</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {job.standardsSnapshot.map((std, i) => (
+                                            <tr key={i}>
+                                                <td>{std.name}</td>
+                                                <td>{std.certificateNumber}</td>
+                                                <td>
+                                                    {std.certifiedValues &&
+                                                    std.certifiedValues.length >
+                                                        0
+                                                        ? "Vários (ver tabela)"
+                                                        : std.uncertainty !==
+                                                            null
+                                                          ? `±${formatNumber(std.uncertainty)} ${std.uncertaintyUnit || ""}`
+                                                          : "-"}
+                                                </td>
+                                                <td>
+                                                    {formatDate(
+                                                        std.nextCalibrationDate ??
+                                                            std.calibrationDate,
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+
+                                {/* Certified Values for Weight Sets */}
+                                {job.standardsSnapshot.some(
+                                    (std) =>
+                                        std.certifiedValues &&
+                                        std.certifiedValues.length > 0,
+                                ) && (
+                                    <div className="data-table">
+                                        <div className="data-table-title">
+                                            Valores Certificados dos Padrões
+                                        </div>
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Padrão</th>
+                                                    <th>Valor Nominal</th>
+                                                    <th>Valor Certificado</th>
+                                                    <th>Incerteza</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {job.standardsSnapshot.flatMap(
+                                                    (std) =>
+                                                        std.certifiedValues?.map(
+                                                            (cv, i) => (
+                                                                <tr
+                                                                    key={`${std.id}-${i}`}
+                                                                >
+                                                                    <td>
+                                                                        {i === 0
+                                                                            ? std.name
+                                                                            : ""}
+                                                                    </td>
+                                                                    <td>
+                                                                        {
+                                                                            cv.nominal
+                                                                        }
+                                                                    </td>
+                                                                    <td>
+                                                                        {formatValue(
+                                                                            cv.value,
+                                                                        )}{" "}
+                                                                        {
+                                                                            cv.unit
+                                                                        }
+                                                                    </td>
+                                                                    <td>
+                                                                        ±
+                                                                        {formatValue(
+                                                                            cv.uncertainty,
+                                                                        )}{" "}
+                                                                        {
+                                                                            cv.unit
+                                                                        }
+                                                                    </td>
+                                                                </tr>
+                                                            ),
+                                                        ) || [],
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                     {/* Calibration Data Tables */}
                     {tableFields.length > 0 && job.data && (
                         <div className="section">
-                            <div className="section-title">Dados de Calibração</div>
+                            <div className="section-title">
+                                Dados de Calibração
+                            </div>
                             {tableFields.map((field) => {
                                 const tableData = job.data?.[field.key];
                                 if (!Array.isArray(tableData)) return null;
@@ -1030,187 +1176,211 @@ export function CertificateHtml({ job }: { job: JobData }) {
                     {templateConfig.sections.showResults &&
                         calibrationResultEntries.length > 0 &&
                         calibrationResultRowCount > 0 && (
-                        <div className="section">
-                            <div className="section-title">Resultado da Calibração</div>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Ponto</th>
-                                        {calibrationResultEntries.map(({ key, label, unit }) => (
-                                            <th key={key}>
-                                                {label}
-                                                {unit ? ` (${unit})` : ""}
-                                            </th>
-                                        ))}
-                                        {calibrationResultEntries.some(
-                                            (entry) =>
-                                                entry.formula?.reporting?.role ===
-                                                "conformity_margin"
-                                        ) && <th>Critério</th>}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {Array.from({
-                                        length: calibrationResultRowCount,
-                                    }).map((_, index) => {
-                                        const conformityEntry =
-                                            calibrationResultEntries.find(
+                            <div className="section">
+                                <div className="section-title">
+                                    Resultado da Calibração
+                                </div>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Ponto</th>
+                                            {calibrationResultEntries.map(
+                                                ({ key, label, unit }) => (
+                                                    <th key={key}>
+                                                        {label}
+                                                        {unit
+                                                            ? ` (${unit})`
+                                                            : ""}
+                                                    </th>
+                                                ),
+                                            )}
+                                            {calibrationResultEntries.some(
                                                 (entry) =>
-                                                    entry.formula?.reporting?.role ===
-                                                    "conformity_margin"
-                                            );
-                                        const conformityValue = conformityEntry
-                                            ? getIndexedValue(
-                                                  conformityEntry.value,
-                                                  index
-                                              )
-                                            : undefined;
-                                        const conformityNumber =
-                                            typeof conformityValue === "number"
-                                                ? conformityValue
-                                                : typeof conformityValue === "string"
-                                                  ? Number(conformityValue)
-                                                  : NaN;
+                                                    entry.formula?.reporting
+                                                        ?.role ===
+                                                    "conformity_margin",
+                                            ) && <th>Critério</th>}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {Array.from({
+                                            length: calibrationResultRowCount,
+                                        }).map((_, index) => {
+                                            const conformityEntry =
+                                                calibrationResultEntries.find(
+                                                    (entry) =>
+                                                        entry.formula?.reporting
+                                                            ?.role ===
+                                                        "conformity_margin",
+                                                );
+                                            const conformityValue =
+                                                conformityEntry
+                                                    ? getIndexedValue(
+                                                          conformityEntry.value,
+                                                          index,
+                                                      )
+                                                    : undefined;
+                                            const conformityNumber =
+                                                typeof conformityValue ===
+                                                "number"
+                                                    ? conformityValue
+                                                    : typeof conformityValue ===
+                                                        "string"
+                                                      ? Number(conformityValue)
+                                                      : NaN;
 
-                                        return (
-                                            <tr key={index}>
-                                                <td>
-                                                    {pointLabels[index] ??
-                                                        String(index + 1)}
-                                                </td>
-                                                {calibrationResultEntries.map(
-                                                    (entry) => (
-                                                        <td key={entry.key}>
-                                                            {formatReportedValue(
-                                                                entry,
-                                                                getIndexedValue(
-                                                                    entry.value,
-                                                                    index
-                                                                )
-                                                            )}
-                                                        </td>
-                                                    )
-                                                )}
-                                                {conformityEntry && (
+                                            return (
+                                                <tr key={index}>
                                                     <td>
-                                                        {Number.isFinite(
-                                                            conformityNumber
-                                                        )
-                                                            ? conformityNumber >= 0
-                                                                ? "Conforme"
-                                                                : "Não conforme"
-                                                            : "-"}
+                                                        {pointLabels[index] ??
+                                                            String(index + 1)}
                                                     </td>
-                                                )}
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                                    {calibrationResultEntries.map(
+                                                        (entry) => (
+                                                            <td key={entry.key}>
+                                                                {formatReportedValue(
+                                                                    entry,
+                                                                    getIndexedValue(
+                                                                        entry.value,
+                                                                        index,
+                                                                    ),
+                                                                )}
+                                                            </td>
+                                                        ),
+                                                    )}
+                                                    {conformityEntry && (
+                                                        <td>
+                                                            {Number.isFinite(
+                                                                conformityNumber,
+                                                            )
+                                                                ? conformityNumber >=
+                                                                  0
+                                                                    ? "Conforme"
+                                                                    : "Não conforme"
+                                                                : "-"}
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
 
                     {templateConfig.sections.showResults &&
                         uncertaintyBudgetEntries.length > 0 && (
-                        <div className="section">
-                            <div className="section-title">
-                                Orçamento de Incerteza
+                            <div className="section">
+                                <div className="section-title">
+                                    Orçamento de Incerteza
+                                </div>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Componente</th>
+                                            <th>Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {uncertaintyBudgetEntries.map(
+                                            ({ key, label, value, unit }) => (
+                                                <tr key={key}>
+                                                    <td>{label}</td>
+                                                    <td>
+                                                        {formatValue(value)}
+                                                        {unit ? ` ${unit}` : ""}
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Componente</th>
-                                        <th>Valor</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {uncertaintyBudgetEntries.map(
-                                        ({ key, label, value, unit }) => (
-                                            <tr key={key}>
-                                                <td>{label}</td>
-                                                <td>
-                                                    {formatValue(value)}
-                                                    {unit ? ` ${unit}` : ""}
-                                                </td>
-                                            </tr>
-                                        )
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                        )}
 
                     {/* Results */}
-                    {templateConfig.sections.showResults && genericResultEntries.length > 0 && (
-                        <div className="section">
-                            <div className="section-title">Resultados</div>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Parâmetro</th>
-                                        <th>Valor</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {genericResultEntries.map(({ key, label, value, unit }) => (
-                                        <tr key={key}>
-                                            <td>{label}</td>
-                                            <td>
-                                                {formatValue(value)}
-                                                {unit ? ` ${unit}` : ""}
-                                            </td>
+                    {templateConfig.sections.showResults &&
+                        genericResultEntries.length > 0 && (
+                            <div className="section">
+                                <div className="section-title">Resultados</div>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Parâmetro</th>
+                                            <th>Valor</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    {/* Signature - ISO 17025 Clause 7.8.2.1(q) */}
-                    {templateConfig.sections.showSignature && (
-                        <div className="signature-section">
-                            <div className="signature-box">
-                            {/* Visual signature image */}
-                            {job.approverSignatureUrl && (
-                                <img
-                                    src={job.approverSignatureUrl}
-                                    alt="Assinatura"
-                                    style={{
-                                        maxHeight: "60px",
-                                        maxWidth: "180px",
-                                        marginBottom: "4px",
-                                        display: "block",
-                                        marginLeft: "auto",
-                                        marginRight: "auto",
-                                    }}
-                                />
-                            )}
-                            <div className="signature-line">
-                                {job.lab.technicalManagerName ||
-                                    job.approverName ||
-                                    "-"}
+                                    </thead>
+                                    <tbody>
+                                        {genericResultEntries.map(
+                                            ({ key, label, value, unit }) => (
+                                                <tr key={key}>
+                                                    <td>{label}</td>
+                                                    <td>
+                                                        {formatValue(value)}
+                                                        {unit ? ` ${unit}` : ""}
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
-                            <div>
-                                {job.lab.technicalManagerTitle ||
-                                    "Responsável Técnico"}
-                            </div>
-                            <div style={{ fontSize: "8pt", color: "#666" }}>
-                                {formatDate(job.approvedAt)}
-                            </div>
-                        </div>
-                    </div>
-                    )}
-
-                    {/* Footer */}
-                    <div className="footer">
-                        <div>Emitido em: {formatDate(new Date())}</div>
-                        {templateConfig.content.footerNote && (
-                            <div>{templateConfig.content.footerNote}</div>
                         )}
-                    </div>
 
-                    {/* End of Document Marker (ISO requirement) */}
-                    <div className="end-marker">--- FIM DO CERTIFICADO ---</div>
+                    <div className="closing-block">
+                        {/* Signature - ISO 17025 Clause 7.8.2.1(q) */}
+                        {templateConfig.sections.showSignature && (
+                            <div className="signature-section">
+                                <div className="signature-box">
+                                    {/* Visual signature image */}
+                                    {job.approverSignatureUrl && (
+                                        <img
+                                            src={job.approverSignatureUrl}
+                                            alt="Assinatura"
+                                            style={{
+                                                maxHeight: "60px",
+                                                maxWidth: "180px",
+                                                marginBottom: "4px",
+                                                display: "block",
+                                                marginLeft: "auto",
+                                                marginRight: "auto",
+                                            }}
+                                        />
+                                    )}
+                                    <div className="signature-line">
+                                        {job.lab.technicalManagerName ||
+                                            job.approverName ||
+                                            "-"}
+                                    </div>
+                                    <div>
+                                        {job.lab.technicalManagerTitle ||
+                                            "Responsável Técnico"}
+                                    </div>
+                                    <div
+                                        style={{
+                                            fontSize: "8pt",
+                                            color: "#666",
+                                        }}
+                                    >
+                                        {formatDate(job.approvedAt)}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Footer */}
+                        <div className="footer">
+                            <div>Emitido em: {formatDate(new Date())}</div>
+                            {templateConfig.content.footerNote && (
+                                <div>{templateConfig.content.footerNote}</div>
+                            )}
+                        </div>
+
+                        {/* End of Document Marker (ISO requirement) */}
+                        <div className="end-marker">
+                            --- FIM DO CERTIFICADO ---
+                        </div>
+                    </div>
                 </div>
             </body>
         </html>
