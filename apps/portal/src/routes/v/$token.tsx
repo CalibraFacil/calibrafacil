@@ -46,9 +46,7 @@ function VerifyPage() {
   const verificationQuery = useQuery({
     queryKey: ["verification", token],
     queryFn: async (): Promise<VerificationData> => {
-      const response = await fetch(`${getApiBaseUrl()}/api/verify/${token}`, {
-        credentials: "include",
-      });
+      const response = await fetch(`${getApiBaseUrl()}/api/verify/${token}`);
 
       if (!response.ok) {
         if (response.status === 404 || response.status === 400) {
@@ -77,9 +75,6 @@ function VerifyPage() {
     try {
       const response = await fetch(
         `${getApiBaseUrl()}/api/verify/${token}/download`,
-        {
-          credentials: "include",
-        },
       );
 
       if (!response.ok) {
