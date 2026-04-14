@@ -295,7 +295,7 @@ function LandingPage() {
         <ComparisonSection />
         <WorkflowCardsSection />
         <PlatformSection />
-        <Pricing />
+        {/*<Pricing />*/}
         <LandingFAQ />
         <FinalCtaSection />
       </main>

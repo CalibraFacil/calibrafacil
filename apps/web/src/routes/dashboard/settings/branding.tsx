@@ -172,8 +172,8 @@ function BrandingSettingsPage() {
   )
   const draft =
     selectedTemplate && effectiveSelectedTemplateKey
-      ? draftsByTemplateKey[effectiveSelectedTemplateKey] ??
-        createTemplateDraft(selectedTemplate)
+      ? (draftsByTemplateKey[effectiveSelectedTemplateKey] ??
+        createTemplateDraft(selectedTemplate))
       : {
           name: '',
           config: DEFAULT_CERTIFICATE_TEMPLATE_CONFIG,
@@ -186,9 +186,9 @@ function BrandingSettingsPage() {
 
     setDraftsByTemplateKey((current) => {
       const base =
-        current[effectiveSelectedTemplateKey] ?? createTemplateDraft(selectedTemplate)
-      const nextDraft =
-        typeof updater === 'function' ? updater(base) : updater
+        current[effectiveSelectedTemplateKey] ??
+        createTemplateDraft(selectedTemplate)
+      const nextDraft = typeof updater === 'function' ? updater(base) : updater
 
       return {
         ...current,
@@ -490,9 +490,8 @@ function BrandingSettingsPage() {
         <CardHeader>
           <CardTitle>Branding</CardTitle>
           <CardDescription>
-            Workspace estruturado para templates de certificado. O motor de PDF
-            continua fixo, mas agora com mais força de marca, preview e gestão
-            operacional.
+            Edite seus templates de certificados, personalize layouts e
+            visualize o resultado em tempo real.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

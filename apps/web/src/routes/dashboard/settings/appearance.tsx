@@ -115,62 +115,6 @@ function AppearanceSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Branding e Portal</CardTitle>
-          <CardDescription>
-            A gestão de templates de certificado e do domínio do portal foi
-            separada em workspaces próprios para dar mais clareza ao lifecycle.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border bg-muted/20 p-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                <HugeiconsIcon icon={PaintBoardIcon} className="size-5" />
-              </div>
-              <div>
-                <p className="font-medium">Branding</p>
-                <p className="text-sm text-muted-foreground">
-                  Templates estruturados, preview e gestão do template padrão.
-                </p>
-              </div>
-            </div>
-            <Button
-              className="mt-4"
-              variant="outline"
-              nativeButton={false}
-              render={<Link to="/dashboard/settings/branding" />}
-            >
-              Abrir branding
-            </Button>
-          </div>
-
-          <div className="rounded-xl border bg-muted/20 p-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                <HugeiconsIcon icon={LinkSquare02Icon} className="size-5" />
-              </div>
-              <div>
-                <p className="font-medium">Portal Domain</p>
-                <p className="text-sm text-muted-foreground">
-                  Configure hostname, DNS, verificação e ativação do portal do
-                  cliente.
-                </p>
-              </div>
-            </div>
-            <Button
-              className="mt-4"
-              variant="outline"
-              nativeButton={false}
-              render={<Link to="/dashboard/settings/portal-domain" />}
-            >
-              Abrir domínio do portal
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <CardTitle>Visualização</CardTitle>
           <CardDescription>
             Prévia rápida de como a interface aparece com o tema selecionado.
@@ -200,7 +144,9 @@ function AppearanceSettingsPage() {
                   <div key={label} className="rounded-lg border bg-card p-3">
                     <div className="h-2 w-20 rounded bg-muted-foreground/20" />
                     <div className="mt-2 h-8 w-full rounded bg-muted" />
-                    <p className="mt-3 text-xs text-muted-foreground">{label}</p>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {label}
+                    </p>
                   </div>
                 ))}
               </div>
