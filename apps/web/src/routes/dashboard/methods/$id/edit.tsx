@@ -45,7 +45,7 @@ function EditMethodPage() {
   const updateMutation = useMutation({
     mutationFn: async (data: MethodData) => {
       const res = await api.api.methods[':id'].$put({
-        param: { id },
+        param: { id: String(method?.id ?? id) },
         json: {
           name: data.name,
           description: data.description,
@@ -54,6 +54,7 @@ function EditMethodPage() {
           formulas: data.formulas,
           validations: data.validations,
           uncertaintyParams: data.uncertaintyParams,
+          certificateContent: data.certificateContent,
         },
       })
 
@@ -78,14 +79,13 @@ function EditMethodPage() {
   const publishMutation = useMutation({
     mutationFn: async () => {
       const res = await api.api.methods[':id']['request-approval'].$post({
-        param: { id },
+        param: { id: String(method?.id ?? id) },
       })
 
       if (!res.ok) {
         const error = await res.json()
         throw new Error(
-          (error as { error?: string }).error ||
-            'Erro ao solicitar aprovação',
+          (error as { error?: string }).error || 'Erro ao solicitar aprovação',
         )
       }
 

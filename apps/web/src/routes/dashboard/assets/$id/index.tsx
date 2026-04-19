@@ -18,6 +18,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { SpecificationsDisplay } from '@/components/specifications-display'
 import type { SpecFieldDefinition } from '@/components/dynamic-specs-form'
+import {
+  ECCENTRICITY_INDICATOR_SPEC_KEY,
+  EccentricityIndicator,
+  isEccentricityIndicatorPosition,
+  isWeighingScaleAssetType,
+} from '@/components/eccentricity-indicator'
 
 export const Route = createFileRoute('/dashboard/assets/$id/')({
   head: () => ({
@@ -109,6 +115,19 @@ function AssetDetailPage() {
   // Get specifications and definition from asset
   const specifications = asset.specifications as Record<string, unknown> | null
   const definition = asset.assetTypeDefinition as SpecFieldDefinition[] | null
+  const visibleDefinition =
+    definition?.filter(
+      (field) => field.key !== ECCENTRICITY_INDICATOR_SPEC_KEY,
+    ) ?? null
+  const selectedIndicatorPosition = isEccentricityIndicatorPosition(
+    specifications?.[ECCENTRICITY_INDICATOR_SPEC_KEY],
+  )
+    ? specifications?.[ECCENTRICITY_INDICATOR_SPEC_KEY]
+    : null
+  const showEccentricityIndicator = isWeighingScaleAssetType({
+    name: asset.assetTypeName,
+    slug: asset.assetTypeSlug,
+  })
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -201,7 +220,7 @@ function AssetDetailPage() {
       </Card>
 
       {/* Technical Specifications */}
-      {definition && definition.length > 0 && (
+      {visibleDefinition && visibleDefinition.length > 0 && (
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Especificações Técnicas</CardTitle>
@@ -211,8 +230,27 @@ function AssetDetailPage() {
           </CardHeader>
           <CardContent>
             <SpecificationsDisplay
-              definition={definition}
+              definition={visibleDefinition}
               specifications={specifications}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {showEccentricityIndicator && (
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Indicador de Excentricidade</CardTitle>
+            <CardDescription>
+              Posição física do display/indicador em relação à plataforma de
+              carga.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EccentricityIndicator
+              value={selectedIndicatorPosition}
+              readOnly
+              className="border-t-0 pt-0"
             />
           </CardContent>
         </Card>

@@ -1,6 +1,10 @@
-import { Link } from "@tanstack/react-router"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { AlertCircleIcon, ViewIcon, ArrowRight02Icon } from "@hugeicons/core-free-icons"
+import { Link } from '@tanstack/react-router'
+import { HugeiconsIcon } from '@hugeicons/react'
+import {
+  AlertCircleIcon,
+  ViewIcon,
+  ArrowRight02Icon,
+} from '@hugeicons/core-free-icons'
 
 import {
   Card,
@@ -9,7 +13,7 @@ import {
   CardTitle,
   CardDescription,
   CardAction,
-} from "@/components/ui/card"
+} from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -17,20 +21,21 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
+} from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { jobRouteId } from '@/lib/route-identifiers'
 
 type JobStatus =
-  | "DRAFT"
-  | "IN_PROGRESS"
-  | "REVIEW"
-  | "GENERATING_PDF"
-  | "APPROVED"
-  | "REJECTED"
-  | "CANCELED"
-  | "SUPERSEDED"
+  | 'DRAFT'
+  | 'IN_PROGRESS'
+  | 'REVIEW'
+  | 'GENERATING_PDF'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'CANCELED'
+  | 'SUPERSEDED'
 
 interface RecentJob {
   id: number
@@ -51,33 +56,33 @@ interface RecentJobsTableProps {
 }
 
 const statusLabels: Record<JobStatus, string> = {
-  DRAFT: "Rascunho",
-  IN_PROGRESS: "Em Execução",
-  REVIEW: "Em Revisão",
-  GENERATING_PDF: "Gerando PDF",
-  APPROVED: "Aprovado",
-  REJECTED: "Rejeitado",
-  CANCELED: "Cancelado",
-  SUPERSEDED: "Retificado",
+  DRAFT: 'Rascunho',
+  IN_PROGRESS: 'Em Execução',
+  REVIEW: 'Em Revisão',
+  GENERATING_PDF: 'Gerando PDF',
+  APPROVED: 'Aprovado',
+  REJECTED: 'Rejeitado',
+  CANCELED: 'Cancelado',
+  SUPERSEDED: 'Retificado',
 }
 
 const statusVariants: Record<
   JobStatus,
-  "default" | "secondary" | "destructive" | "outline"
+  'default' | 'secondary' | 'destructive' | 'outline'
 > = {
-  DRAFT: "secondary",
-  IN_PROGRESS: "default",
-  REVIEW: "outline",
-  GENERATING_PDF: "outline",
-  APPROVED: "default",
-  REJECTED: "destructive",
-  CANCELED: "secondary",
-  SUPERSEDED: "outline",
+  DRAFT: 'secondary',
+  IN_PROGRESS: 'default',
+  REVIEW: 'outline',
+  GENERATING_PDF: 'outline',
+  APPROVED: 'default',
+  REJECTED: 'destructive',
+  CANCELED: 'secondary',
+  SUPERSEDED: 'outline',
 }
 
 function formatDate(dateString: string | null): string {
-  if (!dateString) return "-"
-  return new Date(dateString).toLocaleDateString("pt-BR")
+  if (!dateString) return '-'
+  return new Date(dateString).toLocaleDateString('pt-BR')
 }
 
 export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
@@ -138,17 +143,17 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
                   <TableCell className="font-mono font-medium">
                     <Link
                       to="/dashboard/jobs/$id"
-                      params={{ id: String(job.id) }}
+                      params={{ id: jobRouteId(job) }}
                       className="hover:underline"
                     >
                       {job.jobId}
                     </Link>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    {job.customerName || "-"}
+                    {job.customerName || '-'}
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
-                    {job.assetName || "-"}
+                    {job.assetName || '-'}
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
                     <div className="flex items-center gap-2">
@@ -160,7 +165,7 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
                       )}
                       <span
                         className={
-                          job.isOverdue ? "text-destructive font-medium" : ""
+                          job.isOverdue ? 'text-destructive font-medium' : ''
                         }
                       >
                         {formatDate(job.dueDate)}
@@ -178,7 +183,7 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
                       render={
                         <Link
                           to="/dashboard/jobs/$id"
-                          params={{ id: String(job.id) }}
+                          params={{ id: jobRouteId(job) }}
                         />
                       }
                     >
@@ -196,18 +201,18 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
 }
 
 function StatusBadge({ status }: { status: JobStatus }) {
-  const isGenerating = status === "GENERATING_PDF"
+  const isGenerating = status === 'GENERATING_PDF'
 
   return (
     <Badge
       variant={statusVariants[status]}
       className={
         isGenerating
-          ? "bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700"
-          : ""
+          ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
+          : ''
       }
     >
-      {isGenerating ? "Gerando..." : statusLabels[status]}
+      {isGenerating ? 'Gerando...' : statusLabels[status]}
     </Badge>
   )
 }

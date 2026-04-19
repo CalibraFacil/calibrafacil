@@ -41,6 +41,7 @@ export const verifyRouter = new Hono()
       .select({
         id: calibrationJob.id,
         jobId: calibrationJob.jobId,
+        certificateName: calibrationJob.certificateName,
         status: calibrationJob.status,
         certificateUrl: calibrationJob.certificateUrl,
         performedAt: calibrationJob.performedAt,

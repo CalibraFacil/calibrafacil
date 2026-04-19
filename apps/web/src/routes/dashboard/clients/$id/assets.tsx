@@ -41,6 +41,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
+import { assetRouteId } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/clients/$id/assets')({
   component: ClientEquipmentTab,
@@ -74,11 +75,25 @@ function formatDate(date: string | Date | null | undefined): string {
 function ClientEquipmentTab() {
   const navigate = useNavigate()
   const { id } = useParams({ from: '/dashboard/clients/$id/assets' })
-  const customerId = parseInt(id, 10)
 
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const limit = 20
+
+  const { data: customer, isLoading: customerLoading } = useQuery({
+    queryKey: ['customer', id],
+    queryFn: async () => {
+      const res = await api.api.customers[':id'].$get({
+        param: { id },
+      })
+      if (!res.ok) {
+        throw new Error('Falha ao carregar cliente')
+      }
+      return res.json() as Promise<{ id: number }>
+    },
+  })
+
+  const customerId = customer?.id
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['assets', 'customer', customerId, page, limit, search],
@@ -98,7 +113,7 @@ function ClientEquipmentTab() {
 
       return res.json()
     },
-    enabled: !isNaN(customerId),
+    enabled: customerId !== undefined,
   })
 
   return (
@@ -110,7 +125,12 @@ function ClientEquipmentTab() {
             <CardDescription>Ativos cadastrados deste cliente.</CardDescription>
           </div>
           <Button
-            render={<Link to="/dashboard/assets/new" search={{ customerId }} />}
+            render={
+              <Link
+                to="/dashboard/assets/new"
+                search={customerId ? { customerId } : {}}
+              />
+            }
           >
             <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
             Novo Ativo
@@ -138,7 +158,7 @@ function ClientEquipmentTab() {
         </div>
 
         {/* Loading state */}
-        {isLoading && <EquipmentTableSkeleton />}
+        {(customerLoading || isLoading) && <EquipmentTableSkeleton />}
 
         {/* Error state */}
         {error && (
@@ -165,7 +185,10 @@ function ClientEquipmentTab() {
               {!search && (
                 <Button
                   render={
-                    <Link to="/dashboard/assets/new" search={{ customerId }} />
+                    <Link
+                      to="/dashboard/assets/new"
+                      search={customerId ? { customerId } : {}}
+                    />
                   }
                 >
                   <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
@@ -199,7 +222,7 @@ function ClientEquipmentTab() {
                       onClick={() =>
                         navigate({
                           to: '/dashboard/assets/$id',
-                          params: { id: String(asset.id) },
+                          params: { id: assetRouteId(asset) },
                         })
                       }
                     >

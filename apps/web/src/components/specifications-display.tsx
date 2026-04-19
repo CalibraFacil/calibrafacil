@@ -1,4 +1,8 @@
 import type { SpecFieldDefinition } from './dynamic-specs-form'
+import {
+  formatWeighingRangeSpec,
+  isWeighingRangeSpecArray,
+} from './method-builder/weighing-range-utils'
 
 interface SpecificationsDisplayProps {
   /** The field definitions from the asset type */
@@ -43,18 +47,26 @@ export function SpecificationsDisplay({
         const value = specifications[field.key]
         let displayValue: string
 
-        if (field.type === 'number' && typeof value === 'number') {
+        if (
+          field.type === 'weighing_ranges' &&
+          isWeighingRangeSpecArray(value)
+        ) {
+          displayValue = value.map(formatWeighingRangeSpec).join('\n')
+        } else if (field.type === 'number' && typeof value === 'number') {
           displayValue = field.unit ? `${value} ${field.unit}` : String(value)
         } else {
           displayValue = String(value)
         }
 
         return (
-          <div key={field.key}>
+          <div
+            key={field.key}
+            className={field.type === 'weighing_ranges' ? 'sm:col-span-2' : ''}
+          >
             <label className="text-sm font-medium text-muted-foreground">
               {field.label}
             </label>
-            <p className="text-sm">{displayValue}</p>
+            <p className="whitespace-pre-line text-sm">{displayValue}</p>
           </div>
         )
       })}

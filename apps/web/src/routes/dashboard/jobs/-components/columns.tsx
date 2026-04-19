@@ -1,298 +1,329 @@
-import { type ColumnDef } from "@tanstack/react-table"
-import { Link } from "@tanstack/react-router"
-import { HugeiconsIcon } from "@hugeicons/react"
+import { type ColumnDef } from '@tanstack/react-table'
+import { Link } from '@tanstack/react-router'
+import { HugeiconsIcon } from '@hugeicons/react'
 import {
-    AlertCircleIcon,
-    Calendar03Icon,
-    MoreHorizontalIcon,
-    ViewIcon,
-} from "@hugeicons/core-free-icons"
+  AlertCircleIcon,
+  Calendar03Icon,
+  MoreHorizontalIcon,
+  ViewIcon,
+} from '@hugeicons/core-free-icons'
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { cn } from "@/lib/utils"
-import { getFinancialStatusLabel } from "@calibra-facil/shared"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
+import { getFinancialStatusLabel } from '@calibra-facil/shared'
+import { jobRouteId } from '@/lib/route-identifiers'
 
 // Animated dots for loading states
 function LoadingDots() {
-    return (
-        <span className="inline-flex" aria-hidden="true">
-            <span className="animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "0ms" }}>.</span>
-            <span className="animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "150ms" }}>.</span>
-            <span className="animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "300ms" }}>.</span>
-        </span>
-    )
+  return (
+    <span className="inline-flex" aria-hidden="true">
+      <span
+        className="animate-[bounce_1s_ease-in-out_infinite]"
+        style={{ animationDelay: '0ms' }}
+      >
+        .
+      </span>
+      <span
+        className="animate-[bounce_1s_ease-in-out_infinite]"
+        style={{ animationDelay: '150ms' }}
+      >
+        .
+      </span>
+      <span
+        className="animate-[bounce_1s_ease-in-out_infinite]"
+        style={{ animationDelay: '300ms' }}
+      >
+        .
+      </span>
+    </span>
+  )
 }
 
 type JobStatus =
-    | "DRAFT"
-    | "IN_PROGRESS"
-    | "REVIEW"
-    | "GENERATING_PDF"
-    | "APPROVED"
-    | "REJECTED"
-    | "CANCELED"
-    | "SUPERSEDED"
+  | 'DRAFT'
+  | 'IN_PROGRESS'
+  | 'REVIEW'
+  | 'GENERATING_PDF'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'CANCELED'
+  | 'SUPERSEDED'
 
 export interface Job {
-    id: number
-    jobId: string
-    status: JobStatus
-    dueDate: string | null
-    performedAt: string | null
-    createdAt: string
-    updatedAt: string
-    approvedAt: string | null
-    customerId: number
-    customerName: string | null
-    assetId: number
-    assetName: string | null
-    assetTag: string | null
-    serviceId: number
-    serviceName: string | null
-    technicianId: string | null
-    technicianName: string | null
-    methodName: string | null
-    methodVersion: number | null
-    isOverdue: boolean | null
-    daysUntilDue: number | null
-    financialStatus?: "UNBILLED" | "DRAFT" | "ISSUED" | "PAID" | "OVERDUE"
-    invoiceDocumentNumber?: string | null
-    invoiceEligibility?: boolean
-    overdueBalanceFlag?: boolean
+  id: number
+  jobId: string
+  status: JobStatus
+  dueDate: string | null
+  performedAt: string | null
+  createdAt: string
+  updatedAt: string
+  approvedAt: string | null
+  customerId: number
+  customerName: string | null
+  assetId: number
+  assetName: string | null
+  assetTag: string | null
+  serviceId: number
+  serviceName: string | null
+  technicianId: string | null
+  technicianName: string | null
+  methodName: string | null
+  methodVersion: number | null
+  isOverdue: boolean | null
+  daysUntilDue: number | null
+  financialStatus?: 'UNBILLED' | 'DRAFT' | 'ISSUED' | 'PAID' | 'OVERDUE'
+  invoiceDocumentNumber?: string | null
+  invoiceEligibility?: boolean
+  overdueBalanceFlag?: boolean
 }
 
 const statusLabels: Record<JobStatus, string> = {
-    DRAFT: "Rascunho",
-    IN_PROGRESS: "Em Execução",
-    REVIEW: "Em Revisão",
-    GENERATING_PDF: "Gerando PDF",
-    APPROVED: "Aprovado",
-    REJECTED: "Rejeitado",
-    CANCELED: "Cancelado",
-    SUPERSEDED: "Retificado",
+  DRAFT: 'Rascunho',
+  IN_PROGRESS: 'Em Execução',
+  REVIEW: 'Em Revisão',
+  GENERATING_PDF: 'Gerando PDF',
+  APPROVED: 'Aprovado',
+  REJECTED: 'Rejeitado',
+  CANCELED: 'Cancelado',
+  SUPERSEDED: 'Retificado',
 }
 
 const statusVariants: Record<
-    JobStatus,
-    "default" | "secondary" | "destructive" | "outline"
+  JobStatus,
+  'default' | 'secondary' | 'destructive' | 'outline'
 > = {
-    DRAFT: "secondary",
-    IN_PROGRESS: "default",
-    REVIEW: "outline",
-    GENERATING_PDF: "outline",
-    APPROVED: "default",
-    REJECTED: "destructive",
-    CANCELED: "secondary",
-    SUPERSEDED: "outline",
+  DRAFT: 'secondary',
+  IN_PROGRESS: 'default',
+  REVIEW: 'outline',
+  GENERATING_PDF: 'outline',
+  APPROVED: 'default',
+  REJECTED: 'destructive',
+  CANCELED: 'secondary',
+  SUPERSEDED: 'outline',
 }
 
 function formatDate(dateString: string | null): string {
-    if (!dateString) return "-"
-    return new Date(dateString).toLocaleDateString("pt-BR")
+  if (!dateString) return '-'
+  return new Date(dateString).toLocaleDateString('pt-BR')
 }
 
-function getFinancialVariant(status: Job["financialStatus"]) {
-    switch (status) {
-        case "PAID":
-            return "outline"
-        case "OVERDUE":
-            return "destructive"
-        case "ISSUED":
-            return "default"
-        case "DRAFT":
-            return "secondary"
-        case "UNBILLED":
-        default:
-            return "secondary"
-    }
+function getFinancialVariant(status: Job['financialStatus']) {
+  switch (status) {
+    case 'PAID':
+      return 'outline'
+    case 'OVERDUE':
+      return 'destructive'
+    case 'ISSUED':
+      return 'default'
+    case 'DRAFT':
+      return 'secondary'
+    case 'UNBILLED':
+    default:
+      return 'secondary'
+  }
 }
 
 export const jobsColumns: ColumnDef<Job>[] = [
-    {
-        accessorKey: "jobId",
-        header: "OS",
-        cell: ({ row }) => (
-            <Link
+  {
+    accessorKey: 'jobId',
+    header: 'OS',
+    cell: ({ row }) => (
+      <Link
+        to="/dashboard/jobs/$id"
+        params={{ id: jobRouteId(row.original) }}
+        className="font-mono font-medium hover:underline"
+      >
+        {row.original.jobId}
+      </Link>
+    ),
+  },
+  {
+    accessorKey: 'customerName',
+    header: 'Cliente',
+    cell: ({ row }) => row.original.customerName || '-',
+  },
+  {
+    accessorKey: 'assetName',
+    header: 'Ativo',
+    cell: ({ row }) => (
+      <div>
+        <span className="font-medium">{row.original.assetName}</span>
+        {row.original.assetTag && (
+          <span className="text-sm text-muted-foreground ml-2">
+            ({row.original.assetTag})
+          </span>
+        )}
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'serviceName',
+    header: 'Serviço',
+    cell: ({ row }) => (
+      <div>
+        {row.original.serviceName || '-'}
+        {row.original.methodName && (
+          <span className="block text-xs text-muted-foreground">
+            {row.original.methodName} v{row.original.methodVersion}
+          </span>
+        )}
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'technicianName',
+    header: 'Técnico',
+    cell: ({ row }) =>
+      row.original.technicianName || (
+        <span className="text-muted-foreground italic">Não atribuído</span>
+      ),
+  },
+  {
+    accessorKey: 'dueDate',
+    header: 'Prazo',
+    cell: ({ row }) => (
+      <div className="flex items-center gap-2">
+        {row.original.isOverdue && (
+          <HugeiconsIcon
+            icon={AlertCircleIcon}
+            className="h-4 w-4 text-destructive"
+          />
+        )}
+        <span
+          className={
+            row.original.isOverdue ? 'text-destructive font-medium' : ''
+          }
+        >
+          {formatDate(row.original.dueDate)}
+        </span>
+        {row.original.daysUntilDue !== null &&
+          row.original.daysUntilDue <= 7 &&
+          row.original.daysUntilDue > 0 && (
+            <Badge variant="outline" className="text-xs">
+              {row.original.daysUntilDue}d
+            </Badge>
+          )}
+      </div>
+    ),
+  },
+  {
+    accessorKey: 'financialStatus',
+    header: 'Financeiro',
+    cell: ({ row }) => {
+      const financialStatus = row.original.financialStatus ?? 'UNBILLED'
+
+      return (
+        <div>
+          <Badge variant={getFinancialVariant(financialStatus)}>
+            {getFinancialStatusLabel(financialStatus)}
+          </Badge>
+          {row.original.invoiceDocumentNumber && (
+            <span className="block text-xs text-muted-foreground mt-1">
+              {row.original.invoiceDocumentNumber}
+            </span>
+          )}
+        </div>
+      )
+    },
+  },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    cell: ({ row }) => {
+      const status = row.original.status
+      const isGenerating = status === 'GENERATING_PDF'
+
+      return (
+        <Badge
+          variant={statusVariants[status]}
+          className={
+            isGenerating
+              ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
+              : ''
+          }
+        >
+          {isGenerating && (
+            <span className="inline-flex">
+              <span className="animate-[ellipsis_1.5s_infinite]">
+                Gerando PDF
+              </span>
+              <span className="w-4 text-left">
+                <LoadingDots />
+              </span>
+            </span>
+          )}
+          {!isGenerating && statusLabels[status]}
+        </Badge>
+      )
+    },
+  },
+  {
+    id: 'actions',
+    cell: ({ row }) => (
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
+          <HugeiconsIcon icon={MoreHorizontalIcon} className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            render={(props) => (
+              <Link
+                {...props}
                 to="/dashboard/jobs/$id"
-                params={{ id: String(row.original.id) }}
-                className="font-mono font-medium hover:underline"
-            >
-                {row.original.jobId}
-            </Link>
-        ),
-    },
-    {
-        accessorKey: "customerName",
-        header: "Cliente",
-        cell: ({ row }) => row.original.customerName || "-",
-    },
-    {
-        accessorKey: "assetName",
-        header: "Ativo",
-        cell: ({ row }) => (
-            <div>
-                <span className="font-medium">{row.original.assetName}</span>
-                {row.original.assetTag && (
-                    <span className="text-sm text-muted-foreground ml-2">
-                        ({row.original.assetTag})
-                    </span>
-                )}
-            </div>
-        ),
-    },
-    {
-        accessorKey: "serviceName",
-        header: "Serviço",
-        cell: ({ row }) => (
-            <div>
-                {row.original.serviceName || "-"}
-                {row.original.methodName && (
-                    <span className="block text-xs text-muted-foreground">
-                        {row.original.methodName} v{row.original.methodVersion}
-                    </span>
-                )}
-            </div>
-        ),
-    },
-    {
-        accessorKey: "technicianName",
-        header: "Técnico",
-        cell: ({ row }) =>
-            row.original.technicianName || (
-                <span className="text-muted-foreground italic">Não atribuído</span>
-            ),
-    },
-    {
-        accessorKey: "dueDate",
-        header: "Prazo",
-        cell: ({ row }) => (
-            <div className="flex items-center gap-2">
-                {row.original.isOverdue && (
-                    <HugeiconsIcon
-                        icon={AlertCircleIcon}
-                        className="h-4 w-4 text-destructive"
-                    />
-                )}
-                <span
-                    className={
-                        row.original.isOverdue ? "text-destructive font-medium" : ""
-                    }
+                params={{ id: jobRouteId(row.original) }}
+                className={cn(props.className, 'w-full flex items-center')}
+              >
+                <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
+                Ver Detalhes
+              </Link>
+            )}
+          />
+          {row.original.status === 'DRAFT' && (
+            <DropdownMenuItem
+              render={(props) => (
+                <Link
+                  {...props}
+                  to="/dashboard/jobs/$id/execute"
+                  params={{ id: jobRouteId(row.original) }}
+                  className={cn(props.className, 'w-full flex items-center')}
                 >
-                    {formatDate(row.original.dueDate)}
-                </span>
-                {row.original.daysUntilDue !== null &&
-                    row.original.daysUntilDue <= 7 &&
-                    row.original.daysUntilDue > 0 && (
-                        <Badge variant="outline" className="text-xs">
-                            {row.original.daysUntilDue}d
-                        </Badge>
-                    )}
-            </div>
-        ),
-    },
-    {
-        accessorKey: "financialStatus",
-        header: "Financeiro",
-        cell: ({ row }) => {
-            const financialStatus = row.original.financialStatus ?? "UNBILLED"
-
-            return (
-                <div>
-                    <Badge variant={getFinancialVariant(financialStatus)}>
-                        {getFinancialStatusLabel(financialStatus)}
-                    </Badge>
-                    {row.original.invoiceDocumentNumber && (
-                        <span className="block text-xs text-muted-foreground mt-1">
-                            {row.original.invoiceDocumentNumber}
-                        </span>
-                    )}
-                </div>
-            )
-        },
-    },
-    {
-        accessorKey: "status",
-        header: "Status",
-        cell: ({ row }) => {
-            const status = row.original.status
-            const isGenerating = status === "GENERATING_PDF"
-
-            return (
-                <Badge
-                    variant={statusVariants[status]}
-                    className={isGenerating ? "bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700" : ""}
+                  <HugeiconsIcon
+                    icon={Calendar03Icon}
+                    className="mr-2 h-4 w-4"
+                  />
+                  Iniciar Execução
+                </Link>
+              )}
+            />
+          )}
+          {(row.original.status === 'IN_PROGRESS' ||
+            row.original.status === 'REJECTED') && (
+            <DropdownMenuItem
+              render={(props) => (
+                <Link
+                  {...props}
+                  to="/dashboard/jobs/$id/execute"
+                  params={{ id: jobRouteId(row.original) }}
+                  className={cn(props.className, 'w-full flex items-center')}
                 >
-                    {isGenerating && (
-                        <span className="inline-flex">
-                            <span className="animate-[ellipsis_1.5s_infinite]">Gerando PDF</span>
-                            <span className="w-4 text-left"><LoadingDots /></span>
-                        </span>
-                    )}
-                    {!isGenerating && statusLabels[status]}
-                </Badge>
-            )
-        },
-    },
-    {
-        id: "actions",
-        cell: ({ row }) => (
-            <DropdownMenu>
-                <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-                    <HugeiconsIcon icon={MoreHorizontalIcon} className="h-4 w-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                        render={(props) => (
-                            <Link
-                                {...props}
-                                to="/dashboard/jobs/$id"
-                                params={{ id: String(row.original.id) }}
-                                className={cn(props.className, "w-full flex items-center")}
-                            >
-                                <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
-                                Ver Detalhes
-                            </Link>
-                        )}
-                    />
-                    {row.original.status === "DRAFT" && (
-                        <DropdownMenuItem
-                            render={(props) => (
-                                <Link
-                                    {...props}
-                                    to="/dashboard/jobs/$id/execute"
-                                    params={{ id: String(row.original.id) }}
-                                    className={cn(props.className, "w-full flex items-center")}
-                                >
-                                    <HugeiconsIcon icon={Calendar03Icon} className="mr-2 h-4 w-4" />
-                                    Iniciar Execução
-                                </Link>
-                            )}
-                        />
-                    )}
-                    {(row.original.status === "IN_PROGRESS" || row.original.status === "REJECTED") && (
-                        <DropdownMenuItem
-                            render={(props) => (
-                                <Link
-                                    {...props}
-                                    to="/dashboard/jobs/$id/execute"
-                                    params={{ id: String(row.original.id) }}
-                                    className={cn(props.className, "w-full flex items-center")}
-                                >
-                                    <HugeiconsIcon icon={Calendar03Icon} className="mr-2 h-4 w-4" />
-                                    Continuar Execução
-                                </Link>
-                            )}
-                        />
-                    )}
-                </DropdownMenuContent>
-            </DropdownMenu>
-        ),
-    },
+                  <HugeiconsIcon
+                    icon={Calendar03Icon}
+                    className="mr-2 h-4 w-4"
+                  />
+                  Continuar Execução
+                </Link>
+              )}
+            />
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ),
+  },
 ]

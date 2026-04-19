@@ -49,6 +49,7 @@ import {
   type AssetsTableMeta,
   assetsColumns,
 } from './-components/columns'
+import { assetRouteId } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/assets/')({
   head: () => ({
@@ -155,7 +156,7 @@ function AssetsPage() {
   const handleRowClick = (asset: Asset) => {
     navigate({
       to: '/dashboard/assets/$id',
-      params: { id: String(asset.id) },
+      params: { id: assetRouteId(asset) },
     })
   }
 

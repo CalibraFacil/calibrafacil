@@ -44,6 +44,10 @@ interface CertifiedValue {
   value: number
   uncertainty: number
   unit: string
+  maxError?: number | null
+  drift?: number | null
+  buoyancy?: number | null
+  coverageFactor?: number | null
 }
 
 interface Standard {
@@ -73,7 +77,10 @@ interface Standard {
 
 const statusConfig: Record<
   StandardStatus,
-  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
+  {
+    label: string
+    variant: 'default' | 'secondary' | 'destructive' | 'outline'
+  }
 > = {
   ACTIVE: { label: 'Ativo', variant: 'default' },
   INACTIVE: { label: 'Inativo', variant: 'secondary' },
@@ -124,17 +131,16 @@ function getCalibrationBadge(daysUntilExpiry: number, isExpired: boolean) {
 function StandardDetailPage() {
   const { id } = Route.useParams()
   const navigate = useNavigate()
-  const standardId = parseInt(id, 10)
 
   const {
     data: standard,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['standards', standardId],
+    queryKey: ['standards', id],
     queryFn: async () => {
       const res = await api.api.standards[':id'].$get({
-        param: { id: String(standardId) },
+        param: { id },
       })
 
       if (!res.ok) {
@@ -143,14 +149,13 @@ function StandardDetailPage() {
 
       return res.json() as Promise<Standard>
     },
-    enabled: !isNaN(standardId),
   })
 
   const { data: auditLogData } = useQuery({
-    queryKey: ['standards', standardId, 'audit-log'],
+    queryKey: ['standards', id, 'audit-log'],
     queryFn: async () => {
       const res = await api.api.standards[':id']['audit-log'].$get({
-        param: { id: String(standardId) },
+        param: { id },
       })
 
       if (!res.ok) {
@@ -159,7 +164,6 @@ function StandardDetailPage() {
 
       return res.json() as Promise<{ data: AuditLogRecord[] }>
     },
-    enabled: !isNaN(standardId),
   })
 
   if (error) {
@@ -240,6 +244,13 @@ function StandardDetailPage() {
   )
   const hasCertifiedValues =
     standard.certifiedValues && standard.certifiedValues.length > 0
+  const hasAdvancedCertifiedValues = !!standard.certifiedValues?.some(
+    (cv) =>
+      cv.maxError != null ||
+      cv.drift != null ||
+      cv.buoyancy != null ||
+      cv.coverageFactor != null,
+  )
 
   return (
     <div className="space-y-6">
@@ -407,6 +418,22 @@ function StandardDetailPage() {
                         <th className="text-left py-2 px-3 font-medium text-muted-foreground">
                           Unidade
                         </th>
+                        {hasAdvancedCertifiedValues && (
+                          <>
+                            <th className="text-right py-2 px-3 font-medium text-muted-foreground">
+                              Erro máximo
+                            </th>
+                            <th className="text-right py-2 px-3 font-medium text-muted-foreground">
+                              Deriva
+                            </th>
+                            <th className="text-right py-2 px-3 font-medium text-muted-foreground">
+                              Empuxo
+                            </th>
+                            <th className="text-right py-2 px-3 font-medium text-muted-foreground">
+                              k
+                            </th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -423,6 +450,22 @@ function StandardDetailPage() {
                             ±{cv.uncertainty}
                           </td>
                           <td className="py-2 px-3">{cv.unit}</td>
+                          {hasAdvancedCertifiedValues && (
+                            <>
+                              <td className="py-2 px-3 text-right font-mono">
+                                {cv.maxError ?? '-'}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono">
+                                {cv.drift ?? '-'}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono">
+                                {cv.buoyancy ?? '-'}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono">
+                                {cv.coverageFactor ?? '-'}
+                              </td>
+                            </>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -464,7 +507,9 @@ function StandardDetailPage() {
                 <p className="text-xs text-muted-foreground">
                   Fator de Cobertura (k)
                 </p>
-                <p className="font-medium font-mono">{standard.coverageFactor}</p>
+                <p className="font-medium font-mono">
+                  {standard.coverageFactor}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Distribuição</p>

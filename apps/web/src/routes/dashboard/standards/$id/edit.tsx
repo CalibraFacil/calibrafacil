@@ -68,6 +68,10 @@ interface CertifiedValue {
   value: string
   uncertainty: string
   unit: string
+  maxError: string
+  drift: string
+  buoyancy: string
+  coverageFactor: string
 }
 
 interface FormData {
@@ -105,14 +109,13 @@ interface RenewFormData {
 
 function EditStandardPage() {
   const { id } = Route.useParams()
-  const standardId = parseInt(id, 10)
 
   // Fetch standard data
   const { data: standard, isLoading } = useQuery({
-    queryKey: ['standards', standardId],
+    queryKey: ['standards', id],
     queryFn: async () => {
       const res = await api.api.standards[':id'].$get({
-        param: { id: String(standardId) },
+        param: { id },
       })
 
       if (!res.ok) {
@@ -121,15 +124,14 @@ function EditStandardPage() {
 
       return res.json()
     },
-    enabled: !isNaN(standardId),
   })
 
   // Fetch audit log for ISO 17025 compliance (Clause 8.4)
   const { data: auditLogData } = useQuery({
-    queryKey: ['standards', standardId, 'audit-log'],
+    queryKey: ['standards', id, 'audit-log'],
     queryFn: async () => {
       const res = await api.api.standards[':id']['audit-log'].$get({
-        param: { id: String(standardId) },
+        param: { id },
       })
 
       if (!res.ok) {
@@ -138,7 +140,6 @@ function EditStandardPage() {
 
       return res.json() as Promise<{ data: AuditLogRecord[] }>
     },
-    enabled: !isNaN(standardId),
   })
 
   if (isLoading) {
@@ -166,9 +167,8 @@ function EditStandardPage() {
 
   return (
     <EditStandardForm
-      key={standard.id ?? standardId}
+      key={standard.id}
       standard={standard}
-      standardId={standardId}
       auditLogData={auditLogData?.data ?? []}
     />
   )
@@ -176,11 +176,9 @@ function EditStandardPage() {
 
 function EditStandardForm({
   standard,
-  standardId,
   auditLogData,
 }: {
   standard: StandardDetail
-  standardId: number
   auditLogData: Array<AuditLogRecord>
 }) {
   const navigate = useNavigate()
@@ -189,6 +187,8 @@ function EditStandardForm({
   const hasCertifiedValues = !!(
     standard.certifiedValues && standard.certifiedValues.length > 0
   )
+  const parseOptionalNumber = (value: string) =>
+    value.trim() === '' ? null : parseFloat(value)
 
   const [formData, setFormData] = useState<FormData>({
     name: standard.name,
@@ -217,11 +217,19 @@ function EditStandardForm({
             value: number
             uncertainty: number
             unit: string
+            maxError?: number | null
+            drift?: number | null
+            buoyancy?: number | null
+            coverageFactor?: number | null
           }) => ({
             nominal: cv.nominal,
             value: cv.value.toString(),
             uncertainty: cv.uncertainty.toString(),
             unit: cv.unit,
+            maxError: cv.maxError?.toString() || '',
+            drift: cv.drift?.toString() || '',
+            buoyancy: cv.buoyancy?.toString() || '',
+            coverageFactor: cv.coverageFactor?.toString() || '',
           }),
         )
       : [],
@@ -264,6 +272,10 @@ function EditStandardForm({
           value: parseFloat(cv.value),
           uncertainty: parseFloat(cv.uncertainty),
           unit: cv.unit,
+          maxError: parseOptionalNumber(cv.maxError),
+          drift: parseOptionalNumber(cv.drift),
+          buoyancy: parseOptionalNumber(cv.buoyancy),
+          coverageFactor: parseOptionalNumber(cv.coverageFactor),
         }))
         payload.referenceValue = null
         payload.uncertainty = null
@@ -280,7 +292,7 @@ function EditStandardForm({
       }
 
       const res = await api.api.standards[':id'].$put({
-        param: { id: String(standardId) },
+        param: { id: String(standard.id) },
         json: payload,
       })
 
@@ -324,6 +336,10 @@ function EditStandardForm({
           value: parseFloat(cv.value),
           uncertainty: parseFloat(cv.uncertainty),
           unit: cv.unit,
+          maxError: parseOptionalNumber(cv.maxError),
+          drift: parseOptionalNumber(cv.drift),
+          buoyancy: parseOptionalNumber(cv.buoyancy),
+          coverageFactor: parseOptionalNumber(cv.coverageFactor),
         }))
       } else {
         if (data.referenceValue) {
@@ -338,7 +354,7 @@ function EditStandardForm({
       }
 
       const res = await api.api.standards[':id'].renew.$post({
-        param: { id: String(standardId) },
+        param: { id: String(standard.id) },
         json: payload,
       })
 
@@ -386,6 +402,26 @@ function EditStandardForm({
     if (isMultiValue) {
       if (formData.certifiedValues.length === 0) {
         newErrors.certifiedValues = 'Adicione pelo menos um valor certificado'
+      } else {
+        for (let i = 0; i < formData.certifiedValues.length; i++) {
+          const cv = formData.certifiedValues[i]
+          if (!cv.nominal || !cv.value || !cv.uncertainty || !cv.unit) {
+            newErrors.certifiedValues = `Valor ${i + 1}: Preencha todos os campos`
+            break
+          }
+          for (const field of [
+            'maxError',
+            'drift',
+            'buoyancy',
+            'coverageFactor',
+          ] as const) {
+            if (cv[field] && Number.isNaN(parseFloat(cv[field]))) {
+              newErrors.certifiedValues = `Valor ${i + 1}: Campo avançado inválido`
+              break
+            }
+          }
+          if (newErrors.certifiedValues) break
+        }
       }
     }
 
@@ -443,7 +479,16 @@ function EditStandardForm({
       ...prev,
       certifiedValues: [
         ...prev.certifiedValues,
-        { nominal: '', value: '', uncertainty: '', unit: '' },
+        {
+          nominal: '',
+          value: '',
+          uncertainty: '',
+          unit: '',
+          maxError: '',
+          drift: '',
+          buoyancy: '',
+          coverageFactor: '',
+        },
       ],
     }))
   }
@@ -748,75 +793,157 @@ function EditStandardForm({
                   {formData.certifiedValues.map((cv, index) => (
                     <div
                       key={index}
-                      className="flex items-end gap-2 p-3 bg-muted/50 rounded-lg"
+                      className="space-y-3 rounded-lg bg-muted/50 p-3"
                     >
-                      <Field className="flex-1">
-                        <FieldLabel>Nominal</FieldLabel>
-                        <Input
-                          value={cv.nominal}
-                          onChange={(e) =>
-                            updateCertifiedValue(
-                              index,
-                              'nominal',
-                              e.target.value,
-                            )
-                          }
-                          disabled={updateMutation.isPending}
-                        />
-                      </Field>
-                      <Field className="flex-1">
-                        <FieldLabel>Valor Certificado</FieldLabel>
-                        <Input
-                          type="number"
-                          step="any"
-                          value={cv.value}
-                          onChange={(e) =>
-                            updateCertifiedValue(index, 'value', e.target.value)
-                          }
-                          disabled={updateMutation.isPending}
-                        />
-                      </Field>
-                      <Field className="flex-1">
-                        <FieldLabel>Incerteza</FieldLabel>
-                        <Input
-                          type="number"
-                          step="any"
-                          value={cv.uncertainty}
-                          onChange={(e) =>
-                            updateCertifiedValue(
-                              index,
-                              'uncertainty',
-                              e.target.value,
-                            )
-                          }
-                          disabled={updateMutation.isPending}
-                        />
-                      </Field>
-                      <Field className="w-24">
-                        <FieldLabel>Unidade</FieldLabel>
-                        <Input
-                          value={cv.unit}
-                          onChange={(e) =>
-                            updateCertifiedValue(index, 'unit', e.target.value)
-                          }
-                          disabled={updateMutation.isPending}
-                        />
-                      </Field>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeCertifiedValue(index)}
-                        disabled={
-                          updateMutation.isPending ||
-                          formData.certifiedValues.length <= 1
-                        }
-                      >
-                        <HugeiconsIcon
-                          icon={Delete02Icon}
-                          className="h-4 w-4"
-                        />
-                      </Button>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_1fr_120px_40px]">
+                        <Field>
+                          <FieldLabel>Nominal</FieldLabel>
+                          <Input
+                            value={cv.nominal}
+                            onChange={(e) =>
+                              updateCertifiedValue(
+                                index,
+                                'nominal',
+                                e.target.value,
+                              )
+                            }
+                            disabled={updateMutation.isPending}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Valor Certificado</FieldLabel>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={cv.value}
+                            onChange={(e) =>
+                              updateCertifiedValue(
+                                index,
+                                'value',
+                                e.target.value,
+                              )
+                            }
+                            disabled={updateMutation.isPending}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Incerteza</FieldLabel>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={cv.uncertainty}
+                            onChange={(e) =>
+                              updateCertifiedValue(
+                                index,
+                                'uncertainty',
+                                e.target.value,
+                              )
+                            }
+                            disabled={updateMutation.isPending}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Unidade</FieldLabel>
+                          <Input
+                            value={cv.unit}
+                            onChange={(e) =>
+                              updateCertifiedValue(
+                                index,
+                                'unit',
+                                e.target.value,
+                              )
+                            }
+                            disabled={updateMutation.isPending}
+                          />
+                        </Field>
+                        <div className="flex items-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeCertifiedValue(index)}
+                            disabled={
+                              updateMutation.isPending ||
+                              formData.certifiedValues.length <= 1
+                            }
+                          >
+                            <HugeiconsIcon
+                              icon={Delete02Icon}
+                              className="h-4 w-4"
+                            />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                        <Field>
+                          <FieldLabel>Erro máximo</FieldLabel>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={cv.maxError}
+                            onChange={(e) =>
+                              updateCertifiedValue(
+                                index,
+                                'maxError',
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Opcional"
+                            disabled={updateMutation.isPending}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Deriva</FieldLabel>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={cv.drift}
+                            onChange={(e) =>
+                              updateCertifiedValue(
+                                index,
+                                'drift',
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Opcional"
+                            disabled={updateMutation.isPending}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>Empuxo</FieldLabel>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={cv.buoyancy}
+                            onChange={(e) =>
+                              updateCertifiedValue(
+                                index,
+                                'buoyancy',
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Opcional"
+                            disabled={updateMutation.isPending}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel>k</FieldLabel>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={cv.coverageFactor}
+                            onChange={(e) =>
+                              updateCertifiedValue(
+                                index,
+                                'coverageFactor',
+                                e.target.value,
+                              )
+                            }
+                            placeholder="Padrão geral"
+                            disabled={updateMutation.isPending}
+                          />
+                        </Field>
+                      </div>
                     </div>
                   ))}
 

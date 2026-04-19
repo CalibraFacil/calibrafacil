@@ -12,6 +12,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { InputFieldDialog } from './input-field-dialog'
 import { FormulaDialog } from './formula-dialog'
 import { ValidationDialog } from './validation-dialog'
+import { CertificateContentPanel } from './certificate-content-panel'
 
 import type {
   MethodData,
@@ -77,6 +78,7 @@ export function ConfigurationPanel({
   // Section collapse state
   const [sectionsOpen, setSectionsOpen] = useState({
     basic: true,
+    certificate: true,
     inputs: true,
     formulas: true,
     validations: true,
@@ -248,6 +250,29 @@ export function ConfigurationPanel({
               </FieldDescription>
             </Field>
           </FieldGroup>
+        </CollapsibleContent>
+      </Collapsible>
+
+      {/* Certificate Content Section */}
+      <Collapsible
+        open={sectionsOpen.certificate}
+        onOpenChange={(open) =>
+          setSectionsOpen((s) => ({ ...s, certificate: open }))
+        }
+      >
+        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
+          <span className="font-medium">Conteúdo do Certificado</span>
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            className={`h-4 w-4 transition-transform ${sectionsOpen.certificate ? 'rotate-180' : ''}`}
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-2">
+          <CertificateContentPanel
+            content={method.certificateContent}
+            onChange={(certificateContent) => onChange({ certificateContent })}
+            disabled={disabled}
+          />
         </CollapsibleContent>
       </Collapsible>
 

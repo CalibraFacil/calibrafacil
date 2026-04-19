@@ -1276,6 +1276,32 @@ function createPreviewJob(config: CertificateTemplateConfig): JobData {
       methodId: 1,
       methodName: 'Calibração gravimétrica',
       methodVersion: 3,
+      certificateContent: {
+        procedureCode: 'PBT09',
+        referenceStandards: ['UKAS LAB 14', 'EURAMET cg-18'],
+        sections: [
+          {
+            kind: 'paragraphs',
+            title: 'MÉTODO',
+            paragraphs: [
+              'A calibração é realizada por meio de comparação direta entre os valores dos pesos padrão e a indicação da balança.',
+            ],
+          },
+          {
+            kind: 'definition_list',
+            title: 'CONVENÇÕES',
+            items: [
+              {
+                term: 'VC',
+                definition:
+                  'Valor Convencional, valor correspondente ao padrão utilizado.',
+              },
+              { term: 'EI', definition: 'Erro de Indicação, (VI - VC).' },
+              { term: 'U', definition: 'Incerteza expandida.' },
+            ],
+          },
+        ],
+      },
       dataFields: [
         { key: 'resolution', label: 'Resolução', type: 'number', unit: 'g' },
         {

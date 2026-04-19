@@ -69,7 +69,7 @@ import type {
 export type AssetTypeFieldDefinition = {
   key: string; // e.g., "resolution"
   label: string; // e.g., "Resolution (d)"
-  type: "text" | "number" | "select";
+  type: "text" | "number" | "select" | "weighing_ranges";
   options?: string[]; // For select type
   unit?: string; // e.g., "g", "°C", "mm"
   required?: boolean;
@@ -185,6 +185,115 @@ export const organization = pgTable(
     asaasCustomerId: text("asaas_customer_id"),
   },
   (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
+);
+
+export type CertificateSequenceResetScope =
+  | "never"
+  | "year"
+  | "month"
+  | "project";
+
+export type CertificateNumberingConfig = {
+  labCode: string;
+  projectCode?: string | null;
+  numberTemplate: string;
+  certificateNameTemplate: string;
+  sequence: {
+    resetScope: CertificateSequenceResetScope;
+    startAt: number;
+    increment: number;
+    padding: number;
+  };
+};
+
+export type CertificateNumberingSnapshot = {
+  profileId: number | null;
+  profileName: string;
+  config: CertificateNumberingConfig;
+  sequenceKey: string;
+  sequenceValue: number;
+  generatedAt: string;
+};
+
+export const certificateNumberingProfile = pgTable(
+  "certificate_numbering_profile",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").default("Padrao").notNull(),
+    config: jsonb("config").$type<CertificateNumberingConfig>().notNull(),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    updatedBy: text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("certificate_numbering_profile_org_uidx").on(
+      table.organizationId,
+    ),
+  ],
+);
+
+export const certificateNumberingSequence = pgTable(
+  "certificate_numbering_sequence",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    profileId: integer("profile_id")
+      .notNull()
+      .references(() => certificateNumberingProfile.id, {
+        onDelete: "cascade",
+      }),
+    sequenceKey: text("sequence_key").notNull(),
+    currentValue: integer("current_value").default(0).notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("certificate_numbering_sequence_uidx").on(
+      table.organizationId,
+      table.profileId,
+      table.sequenceKey,
+    ),
+  ],
+);
+
+export const certificateNumberingAuditLog = pgTable(
+  "certificate_numbering_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    profileId: integer("profile_id").references(
+      () => certificateNumberingProfile.id,
+      { onDelete: "set null" },
+    ),
+    action: text("action").notNull(),
+    changes: jsonb("changes").$type<Record<string, unknown>>(),
+    performedBy: text("performed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ipAddress: text("ip_address"),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("certificate_numbering_audit_org_idx").on(table.organizationId),
+    index("certificate_numbering_audit_profile_idx").on(table.profileId),
+  ],
 );
 
 export const member = pgTable(
@@ -1689,6 +1798,46 @@ export type MethodStatus =
   | "ARCHIVED";
 
 export type MethodInputSource = "manual" | "asset_spec";
+export type EccentricityIndicatorVariant = "circular_platform" | "road_scale";
+
+export type EccentricityIndicatorConfig = {
+  enabled?: boolean;
+  variant?: EccentricityIndicatorVariant;
+};
+
+export type WeighingRangeResolverConfig = {
+  enabled?: boolean;
+  assetSpecKey?: string;
+  pointColumn?: string;
+  pointUnit?: "mg" | "g" | "kg";
+  targetColumns?: {
+    rangeLabel?: string;
+    rangeMin?: string;
+    rangeMax?: string;
+    rangeUnit?: string;
+    resolution?: string;
+    resolutionUnit?: string;
+  };
+};
+
+export type MethodTableColumnRole =
+  | "standard_value"
+  | "mass_standard_composition";
+
+export type MassCompositionConfig = {
+  targetUnit?: "mg" | "g" | "kg";
+  optionSource?: "certified_values" | "composition_profiles";
+  targetColumns?: {
+    certifiedValue?: string;
+    compositionLabel?: string;
+    expandedUncertainty?: string;
+    maxError?: string;
+    drift?: string;
+    buoyancy?: string;
+  };
+  uncertaintyMode?: "expanded_rss";
+  quantityMode?: "linear_per_item_then_rss";
+};
 
 /**
  * Input field definition for method data collection.
@@ -1705,12 +1854,16 @@ export type MethodInputField = {
   source?: MethodInputSource;
   assetSpecKey?: string;
   allowOverride?: boolean;
+  eccentricityIndicator?: EccentricityIndicatorConfig;
+  weighingRangeResolver?: WeighingRangeResolverConfig;
   // For table type only:
   columns?: Array<{
     key: string;
     label: string;
     type: "text" | "number";
     unit?: string;
+    role?: MethodTableColumnRole;
+    massComposition?: MassCompositionConfig;
   }>;
 };
 
@@ -1761,6 +1914,30 @@ export type MethodTypeBComponent = {
   degreesOfFreedom?: number;
 };
 
+export type MethodCertificateContentSection =
+  | {
+      kind: "paragraphs";
+      title: string;
+      paragraphs: string[];
+    }
+  | {
+      kind: "definition_list";
+      title: string;
+      items: Array<{ term: string; definition: string }>;
+    }
+  | {
+      kind: "bullets";
+      title?: string;
+      items: string[];
+    };
+
+export type MethodCertificateContent = {
+  procedureCode?: string;
+  referenceStandards?: string[];
+  certifiedValuesDisplay?: "full" | "hidden";
+  sections?: MethodCertificateContentSection[];
+};
+
 /**
  * Calibration Method table - Versioned calibration templates
  * ISO 17025:2017 Clause 7.2 - Method Validation
@@ -1794,6 +1971,9 @@ export const calibrationMethod = pgTable(
       .$type<MethodTypeBComponent[]>()
       .default([])
       .notNull(),
+    certificateContent: jsonb(
+      "certificate_content",
+    ).$type<MethodCertificateContent>(),
     // Version chain - links to the parent version
     parentId: integer("parent_id"),
     // Timestamps and actors
@@ -2057,6 +2237,14 @@ export type CertifiedValue = {
   value: number; // Actual certified value, e.g., 100.005
   uncertainty: number; // Uncertainty for this specific value
   unit: string; // Unit, e.g., "g", "mg"
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
+  compositionProfile?: boolean;
+  profileKey?: string | null;
+  profileClass?: string | null;
+  profileQuantityAvailable?: number | null;
 };
 
 /**
@@ -2246,6 +2434,7 @@ export type MethodSnapshot = {
   formulas: MethodFormula[];
   validations: MethodValidation[];
   uncertaintyParams: MethodTypeBComponent[];
+  certificateContent?: MethodCertificateContent | null;
 };
 
 export type AssetSnapshot = {
@@ -2320,8 +2509,14 @@ export const calibrationJob = pgTable(
   "calibration_job",
   {
     id: serial("id").primaryKey(),
-    // Human-readable ID: "JOB-2024-0001" (per organization per year)
+    // Human-readable certificate number, unique within the laboratory.
     jobId: text("job_id").notNull(),
+    // Optional human-readable/document filename generated from lab-specific
+    // certificate naming rules. Older jobs keep this null and use jobId.
+    certificateName: text("certificate_name"),
+    certificateNumberingSnapshot: jsonb(
+      "certificate_numbering_snapshot",
+    ).$type<CertificateNumberingSnapshot>(),
     // Organization scope
     organizationId: text("organization_id")
       .notNull()

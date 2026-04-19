@@ -9,6 +9,7 @@ import type { MethodData } from '@/components/method-builder'
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { MethodBuilder } from '@/components/method-builder'
+import { methodRouteId } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/methods/new')({
   head: () => ({
@@ -32,6 +33,7 @@ function NewMethodPage() {
           formulas: data.formulas,
           validations: data.validations,
           uncertaintyParams: data.uncertaintyParams,
+          certificateContent: data.certificateContent,
         },
       })
 
@@ -42,14 +44,18 @@ function NewMethodPage() {
         )
       }
 
-      return res.json() as Promise<{ id: number }>
+      return res.json() as Promise<{
+        id: number
+        name: string
+        version: number
+      }>
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })
       toast.success('Método salvo como rascunho')
       navigate({
         to: '/dashboard/methods/$id/edit',
-        params: { id: String(data.id) },
+        params: { id: methodRouteId(data) },
       })
     },
     onError: (error) => {

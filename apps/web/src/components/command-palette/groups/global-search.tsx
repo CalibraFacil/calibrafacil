@@ -16,6 +16,11 @@ import {
   CommandItem,
   CommandShortcut,
 } from '@/components/ui/command'
+import {
+  assetRouteId,
+  clientRouteId,
+  jobRouteId,
+} from '@/lib/route-identifiers'
 
 type SearchMode = 'assets' | 'clients' | 'standards' | 'jobs' | null
 
@@ -25,6 +30,7 @@ type AssetSearchResult = {
   serialNumber: string
   assetTypeName: string
   customerName: string
+  customerTaxId: string | null
 }
 
 type ClientSearchResult = {
@@ -236,7 +242,7 @@ export function GlobalSearchGroup({
               onSelect={() => {
                 navigate({
                   to: '/dashboard/assets/$id',
-                  params: { id: String(asset.id) },
+                  params: { id: assetRouteId(asset) },
                 })
                 setOpen(false)
               }}
@@ -296,7 +302,7 @@ export function GlobalSearchGroup({
               onSelect={() => {
                 navigate({
                   to: '/dashboard/clients/$id',
-                  params: { id: String(client.id) },
+                  params: { id: clientRouteId(client) },
                 })
                 setOpen(false)
               }}
@@ -413,7 +419,7 @@ export function GlobalSearchGroup({
               onSelect={() => {
                 navigate({
                   to: '/dashboard/jobs/$id',
-                  params: { id: String(job.id) },
+                  params: { id: jobRouteId(job) },
                 })
                 setOpen(false)
               }}

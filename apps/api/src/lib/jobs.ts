@@ -18,6 +18,7 @@ import {
 import { notifyJobAssigned } from "@calibra-facil/notifications";
 import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "./finance";
+import { generateCertificateIdentity } from "./certificate-numbering";
 
 type JobDbExecutor = Pick<
   typeof db,
@@ -293,8 +294,15 @@ async function persistCalibrationJob(
     }
   }
 
-  const year = new Date().getFullYear();
-  const jobId = await generateJobId(params.organizationId, year, executor);
+  const certificateIdentity = await generateCertificateIdentity(
+    {
+      organizationId: params.organizationId,
+      generatedAt: new Date(),
+      performedBy: params.createdBy,
+    },
+    executor,
+  );
+  const jobId = certificateIdentity.certificateNumber;
 
   const methodSnapshot: MethodSnapshot = {
     methodId: methodData.id,
@@ -304,6 +312,7 @@ async function persistCalibrationJob(
     formulas: methodData.formulas,
     validations: methodData.validations,
     uncertaintyParams: methodData.uncertaintyParams,
+    certificateContent: methodData.certificateContent ?? null,
   };
 
   validateRequiredAssetSpecs(
@@ -339,6 +348,8 @@ async function persistCalibrationJob(
     .insert(calibrationJob)
     .values({
       jobId,
+      certificateName: certificateIdentity.certificateName,
+      certificateNumberingSnapshot: certificateIdentity.snapshot,
       organizationId: params.organizationId,
       unitId: params.unitId,
       customerId: assetData.customerId,

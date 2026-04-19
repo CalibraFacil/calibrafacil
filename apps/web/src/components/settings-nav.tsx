@@ -65,6 +65,12 @@ const settingsNavItems: Array<SettingsNavItem> = [
     icon: <HugeiconsIcon icon={Certificate01Icon} className="size-4" />,
   },
   {
+    value: 'certificate-numbering',
+    label: 'Numeração',
+    href: '/dashboard/settings/certificate-numbering',
+    icon: <HugeiconsIcon icon={Certificate01Icon} className="size-4" />,
+  },
+  {
     value: 'environment',
     label: 'Ambiente',
     href: '/dashboard/settings/environment',
