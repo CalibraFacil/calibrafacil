@@ -5,7 +5,6 @@ import {
   Key01Icon,
   LinkSquare02Icon,
   Notification01Icon,
-  PaintBoardIcon,
   Settings02Icon,
   ShieldKeyIcon,
   UserIcon,
@@ -45,12 +44,6 @@ const settingsNavItems: Array<SettingsNavItem> = [
     label: 'Portal Domain',
     href: '/dashboard/settings/portal-domain',
     icon: <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" />,
-  },
-  {
-    value: 'branding',
-    label: 'Branding',
-    href: '/dashboard/settings/branding',
-    icon: <HugeiconsIcon icon={PaintBoardIcon} className="size-4" />,
   },
   {
     value: 'signature',
