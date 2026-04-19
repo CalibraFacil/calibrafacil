@@ -84,18 +84,24 @@ export class CalibrationEngine {
     input: FormulaExecutionInput,
   ): EngineResult<FormulaExecutionResult> {
     try {
-      const validated = FormulaExecutionInputSchema.parse(input);
+      const requestedPrecision = input.precision ?? this.config.precision;
+      const validated = FormulaExecutionInputSchema.parse({
+        ...input,
+        precision: requestedPrecision,
+      });
       const startTime = performance.now();
 
-      // Update precision if different from default
-      if (validated.precision !== this.config.precision) {
-        this.secureMath = createSecureMath({
-          ...this.config,
-          precision: validated.precision,
-        });
-      }
+      // Use a call-local evaluator for non-default precision so precision
+      // choices never leak into later formula executions on this engine.
+      const secureMath =
+        validated.precision === this.config.precision
+          ? this.secureMath
+          : createSecureMath({
+              ...this.config,
+              precision: validated.precision,
+            });
 
-      const result = this.secureMath.evaluate(
+      const result = secureMath.evaluate(
         validated.formula,
         validated.context as Record<string, unknown>,
       );

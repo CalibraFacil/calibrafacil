@@ -260,7 +260,7 @@ The t-distribution tables support the following confidence levels:
 - 0.9545 (95.45%, default)
 - 0.99 (99%)
 
-For other confidence levels, the closest supported level will be used with a console warning.
+For other confidence levels, the closest supported level is used.
 
 ---
 

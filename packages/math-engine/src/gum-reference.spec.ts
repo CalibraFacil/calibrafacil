@@ -102,7 +102,7 @@ describe("GUM Appendix H Reference Examples", () => {
       // u = 0.005 / √3 ≈ 0.00289
       expect(result.components[0]?.standardUncertainty).toBeCloseTo(
         0.00289,
-        GUM_TOLERANCE_DECIMALS
+        GUM_TOLERANCE_DECIMALS,
       );
     });
 
@@ -128,7 +128,7 @@ describe("GUM Appendix H Reference Examples", () => {
       // u = U / k = 0.1 / 2 = 0.05
       expect(result.components[0]?.standardUncertainty).toBeCloseTo(
         0.05,
-        GUM_TOLERANCE_DECIMALS
+        GUM_TOLERANCE_DECIMALS,
       );
     });
 
@@ -175,7 +175,11 @@ describe("GUM Appendix H Reference Examples", () => {
       // Type B with DOF = 50 (reliable estimate)
       const typeB = {
         components: [
-          { name: "reference", standardUncertainty: 0.05, degreesOfFreedom: 50 },
+          {
+            name: "reference",
+            standardUncertainty: 0.05,
+            degreesOfFreedom: 50,
+          },
         ],
         totalTypeB: 0.05,
       };
@@ -258,7 +262,7 @@ describe("GUM Appendix H Reference Examples", () => {
       // With r=-1 (anti-correlated): u_c would be 1 (|3-4|)
       expect(result.combinedStandardUncertainty).toBeCloseTo(
         5,
-        GUM_TOLERANCE_DECIMALS
+        GUM_TOLERANCE_DECIMALS,
       );
     });
   });
@@ -290,7 +294,9 @@ describe("GUM Appendix H Reference Examples", () => {
       expect(result95.coverageFactor).toBeLessThan(result9545.coverageFactor);
 
       // 99% confidence should have higher k than 95.45%
-      expect(result99.coverageFactor).toBeGreaterThan(result9545.coverageFactor);
+      expect(result99.coverageFactor).toBeGreaterThan(
+        result9545.coverageFactor,
+      );
 
       // Verify approximate values for DOF ≈ 100
       expect(result95.coverageFactor).toBeCloseTo(1.98, 1);
@@ -530,10 +536,10 @@ describe("GUM H.1 Complete Validation - End-Gauge Calibration", () => {
 
       // Combined uncertainty should double when coefficient doubles
       expect(result1.combinedStandardUncertainty).toBeCloseTo(0.05, 5);
-      expect(result2.combinedStandardUncertainty).toBeCloseTo(0.10, 5);
+      expect(result2.combinedStandardUncertainty).toBeCloseTo(0.1, 5);
       expect(result2.combinedStandardUncertainty).toBeCloseTo(
         result1.combinedStandardUncertainty * 2,
-        5
+        5,
       );
     });
   });
@@ -597,9 +603,8 @@ describe("T-Table Verification Against NIST/GUM References", () => {
     10: 3.17,
     30: 2.75,
     100: 2.63,
-    // Note: DOF >= 500 returns T_INFINITY=2.0 in current implementation
-    // Using DOF=200 to test within table bounds
     200: 2.6,
+    500: 2.576, // z-score for 99%
   };
 
   describe("95.45% confidence (k ≈ 2) - Primary calibration table", () => {
@@ -641,7 +646,7 @@ describe("T-Table Verification Against NIST/GUM References", () => {
 
         const result = calculateCombinedUncertainty({ typeB }, 0.95);
 
-        // Slightly larger tolerance due to table interpolation
+        // Slightly larger tolerance due to table rounding and ceiling lookup
         expect(result.coverageFactor).toBeCloseTo(expected, 1);
       });
     });
@@ -697,6 +702,25 @@ describe("T-Table Verification Against NIST/GUM References", () => {
       // Should be essentially 2.0 (normal distribution limit)
       expect(result.coverageFactor).toBeCloseTo(2.0, 1);
     });
+
+    it("Very large DOF should use confidence-specific normal limits", () => {
+      const typeB = {
+        components: [
+          { name: "test", standardUncertainty: 1, degreesOfFreedom: 1000 },
+        ],
+        totalTypeB: 1,
+      };
+
+      expect(
+        calculateCombinedUncertainty({ typeB }, 0.95).coverageFactor,
+      ).toBeCloseTo(1.96, 3);
+      expect(
+        calculateCombinedUncertainty({ typeB }, 0.9545).coverageFactor,
+      ).toBeCloseTo(2.0, 3);
+      expect(
+        calculateCombinedUncertainty({ typeB }, 0.99).coverageFactor,
+      ).toBeCloseTo(2.576, 3);
+    });
   });
 });
 
@@ -716,7 +740,7 @@ describe("Distribution Divisor Verification (GUM Table F.1)", () => {
     // u = a/√3 = 1/1.732 ≈ 0.577
     expect(result.components[0]?.standardUncertainty).toBeCloseTo(
       1 / Math.sqrt(3),
-      5
+      5,
     );
   });
 
@@ -729,7 +753,7 @@ describe("Distribution Divisor Verification (GUM Table F.1)", () => {
     // u = a/√6 = 1/2.449 ≈ 0.408
     expect(result.components[0]?.standardUncertainty).toBeCloseTo(
       1 / Math.sqrt(6),
-      5
+      5,
     );
   });
 
@@ -742,13 +766,18 @@ describe("Distribution Divisor Verification (GUM Table F.1)", () => {
     // u = a/√2 = 1/1.414 ≈ 0.707
     expect(result.components[0]?.standardUncertainty).toBeCloseTo(
       1 / Math.sqrt(2),
-      5
+      5,
     );
   });
 
   it("Normal with k: u = U/k (divisor = coverageFactor)", () => {
     const component = [
-      { name: "test", value: 1, distribution: "normal" as const, coverageFactor: 2 },
+      {
+        name: "test",
+        value: 1,
+        distribution: "normal" as const,
+        coverageFactor: 2,
+      },
     ];
     const result = calculateTypeB(component);
 

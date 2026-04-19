@@ -20,7 +20,8 @@ export const DISTRIBUTION_DIVISORS: Record<DistributionType, number> = {
  *
  * These values are z-scores from the standard normal distribution.
  * Use these for quick estimates when DOF > 100.
- * For finite DOF, use getCoverageFactor() which interpolates from T_TABLES.
+ * For finite DOF, use getCoverageFactor() which performs a conservative
+ * ceiling lookup from T_TABLES.
  *
  * Source: NIST/SEMATECH e-Handbook of Statistical Methods
  * URL: https://www.itl.nist.gov/div898/handbook/eda/section3/eda3671.htm
@@ -194,10 +195,11 @@ export type SupportedConfidenceLevel =
 export const T_TABLE = T_TABLE_95_45;
 
 /**
- * Coverage factor for infinite degrees of freedom (DOF → ∞)
+ * Legacy coverage factor for infinite degrees of freedom (DOF → ∞)
  *
  * At infinite DOF, the t-distribution converges to the normal distribution.
- * For p = 0.9545, this equals exactly 2.0 (k = 2).
+ * For p = 0.9545, this equals exactly 2.0 (k = 2). For other confidence
+ * levels, use the confidence-specific values in COVERAGE_FACTORS.
  */
 export const T_INFINITY = 2.0;
 

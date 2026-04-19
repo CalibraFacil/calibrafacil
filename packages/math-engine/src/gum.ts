@@ -27,9 +27,9 @@
  */
 
 import {
+  COVERAGE_FACTORS,
   DISTRIBUTION_DIVISORS,
   T_TABLES,
-  T_TABLE,
   T_INFINITY,
   SUPPORTED_CONFIDENCE_LEVELS,
 } from "./constants";
@@ -111,7 +111,7 @@ export function calculateTypeB(components: TypeBComponent[]): TypeBResult {
 
   // RSS of all Type B components
   const totalTypeB = Math.sqrt(
-    results.reduce((acc, r) => acc + Math.pow(r.standardUncertainty, 2), 0)
+    results.reduce((acc, r) => acc + Math.pow(r.standardUncertainty, 2), 0),
   );
 
   return {
@@ -135,15 +135,10 @@ export function calculateTypeB(components: TypeBComponent[]): TypeBResult {
  */
 function getCoverageFactor(
   dof: number,
-  confidenceLevel: number = 0.9545
+  confidenceLevel: number = 0.9545,
 ): { factor: number; actualLevel: number } {
-  let actualLevel = confidenceLevel;
-
-  if (dof >= 500) {
-    return { factor: T_INFINITY, actualLevel };
-  }
-
   // Select the appropriate t-table for the confidence level
+  let actualLevel = confidenceLevel;
   const levelKey = confidenceLevel.toFixed(4);
   let table = T_TABLES[levelKey];
 
@@ -152,9 +147,16 @@ function getCoverageFactor(
     actualLevel = SUPPORTED_CONFIDENCE_LEVELS.reduce((prev, curr) =>
       Math.abs(curr - confidenceLevel) < Math.abs(prev - confidenceLevel)
         ? curr
-        : prev
+        : prev,
     );
     table = T_TABLES[actualLevel.toFixed(4)]!;
+  }
+
+  // At high DOF, the t-distribution converges to the normal distribution.
+  // The limiting z-score is confidence-level specific: 95% -> 1.96,
+  // 95.45% -> 2.0, 99% -> 2.576.
+  if (dof >= 500) {
+    return { factor: getAsymptoticCoverageFactor(actualLevel), actualLevel };
   }
 
   // Find the closest DOF in the table (ceiling lookup)
@@ -168,25 +170,36 @@ function getCoverageFactor(
     }
   }
 
-  return { factor: T_INFINITY, actualLevel };
+  return { factor: getAsymptoticCoverageFactor(actualLevel), actualLevel };
+}
+
+function getAsymptoticCoverageFactor(confidenceLevel: number): number {
+  switch (confidenceLevel.toFixed(4)) {
+    case "0.9500":
+      return COVERAGE_FACTORS["95.00"];
+    case "0.9545":
+      return COVERAGE_FACTORS["95.45"];
+    case "0.9900":
+      return COVERAGE_FACTORS["99.00"];
+    default:
+      return T_INFINITY;
+  }
 }
 
 // ============================================
 // Welch-Satterthwaite effective degrees of freedom
 // ============================================
 function calculateEffectiveDOF(
-  uncertainties: Array<{ value: number; dof: number }>
+  uncertainties: Array<{ value: number; dof: number }>,
 ): number {
   const uc4 = Math.pow(
-    Math.sqrt(
-      uncertainties.reduce((acc, u) => acc + Math.pow(u.value, 2), 0)
-    ),
-    4
+    Math.sqrt(uncertainties.reduce((acc, u) => acc + Math.pow(u.value, 2), 0)),
+    4,
   );
 
   const denominator = uncertainties.reduce(
     (acc, u) => acc + Math.pow(u.value, 4) / u.dof,
-    0
+    0,
   );
 
   if (denominator === 0) return Infinity;
@@ -228,7 +241,7 @@ function calculateEffectiveDOF(
  */
 export function calculateCombinedUncertainty(
   input: CombinedUncertaintyInput,
-  confidenceLevel: number = 0.9545
+  confidenceLevel: number = 0.9545,
 ): CombinedUncertaintyResult {
   const uncertainties: Array<{ value: number; dof: number }> = [];
 
@@ -258,7 +271,7 @@ export function calculateCombinedUncertainty(
 
   // Combined standard uncertainty: u_c = √(∑u_i²)
   const combinedStandardUncertainty = Math.sqrt(
-    uncertainties.reduce((acc, u) => acc + Math.pow(u.value, 2), 0)
+    uncertainties.reduce((acc, u) => acc + Math.pow(u.value, 2), 0),
   );
 
   // Welch-Satterthwaite effective degrees of freedom
