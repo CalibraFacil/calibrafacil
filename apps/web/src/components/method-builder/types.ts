@@ -4,12 +4,54 @@
 
 export type MethodInputType = 'text' | 'number' | 'select' | 'table'
 export type MethodInputSource = 'manual' | 'asset_spec'
+export type EccentricityIndicatorVariant = 'circular_platform' | 'road_scale'
+
+export interface EccentricityIndicatorConfig {
+  enabled?: boolean
+  variant?: EccentricityIndicatorVariant
+}
+
+export interface WeighingRangeResolverConfig {
+  enabled?: boolean
+  assetSpecKey?: string
+  pointColumn?: string
+  pointUnit?: 'mg' | 'g' | 'kg'
+  targetColumns?: {
+    rangeLabel?: string
+    rangeMin?: string
+    rangeMax?: string
+    rangeUnit?: string
+    resolution?: string
+    resolutionUnit?: string
+  }
+}
+
+export type MethodTableColumnRole =
+  | 'standard_value'
+  | 'mass_standard_composition'
+
+export interface MassCompositionConfig {
+  targetUnit?: 'mg' | 'g' | 'kg'
+  optionSource?: 'certified_values' | 'composition_profiles'
+  targetColumns?: {
+    certifiedValue?: string
+    compositionLabel?: string
+    expandedUncertainty?: string
+    maxError?: string
+    drift?: string
+    buoyancy?: string
+  }
+  uncertaintyMode?: 'expanded_rss'
+  quantityMode?: 'linear_per_item_then_rss'
+}
 
 export interface MethodTableColumn {
   key: string
   label: string
   type: 'text' | 'number'
   unit?: string
+  role?: MethodTableColumnRole
+  massComposition?: MassCompositionConfig
 }
 
 export interface MethodInputField {
@@ -24,6 +66,8 @@ export interface MethodInputField {
   source?: MethodInputSource
   assetSpecKey?: string
   allowOverride?: boolean
+  eccentricityIndicator?: EccentricityIndicatorConfig
+  weighingRangeResolver?: WeighingRangeResolverConfig
 }
 
 export interface MethodFormulaReporting {
@@ -61,6 +105,30 @@ export interface MethodTypeBComponent {
   degreesOfFreedom?: number
 }
 
+export type MethodCertificateContentSection =
+  | {
+      kind: 'paragraphs'
+      title: string
+      paragraphs: Array<string>
+    }
+  | {
+      kind: 'definition_list'
+      title: string
+      items: Array<{ term: string; definition: string }>
+    }
+  | {
+      kind: 'bullets'
+      title?: string
+      items: Array<string>
+    }
+
+export interface MethodCertificateContent {
+  procedureCode?: string
+  referenceStandards?: Array<string>
+  certifiedValuesDisplay?: 'full' | 'hidden'
+  sections?: Array<MethodCertificateContentSection>
+}
+
 export type MethodStatus =
   | 'DRAFT'
   | 'PENDING_APPROVAL'
@@ -81,6 +149,7 @@ export interface MethodData {
   formulas: Array<MethodFormula>
   validations: Array<MethodValidation>
   uncertaintyParams: Array<MethodTypeBComponent>
+  certificateContent?: MethodCertificateContent | null
 }
 
 export interface FormulaResult {
@@ -109,4 +178,8 @@ export const defaultMethodData: MethodData = {
   formulas: [],
   validations: [],
   uncertaintyParams: [],
+  certificateContent: {
+    referenceStandards: [],
+    sections: [],
+  },
 }

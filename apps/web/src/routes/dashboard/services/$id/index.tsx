@@ -27,6 +27,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { methodRouteId } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/services/$id/')({
   component: ServiceDetailPage,
@@ -38,6 +39,7 @@ interface Service {
   description: string | null
   methodId: number | null
   methodName: string | null
+  methodVersion: number | null
   methodStatus: string | null
   assetTypeId: number | null
   assetTypeName: string | null
@@ -276,7 +278,14 @@ function ServiceDetailPage() {
                   <div className="flex items-center gap-2">
                     <Link
                       to="/dashboard/methods/$id"
-                      params={{ id: String(service.methodId) }}
+                      params={{
+                        id: service.methodVersion
+                          ? methodRouteId({
+                              name: service.methodName,
+                              version: service.methodVersion,
+                            })
+                          : String(service.methodId),
+                      }}
                       className="text-primary hover:underline font-medium"
                     >
                       {service.methodName}
@@ -305,7 +314,9 @@ function ServiceDetailPage() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">Nenhum método vinculado</p>
+                  <p className="text-muted-foreground">
+                    Nenhum método vinculado
+                  </p>
                 )}
               </div>
 
@@ -339,8 +350,8 @@ function ServiceDetailPage() {
                   </p>
                   <p className="text-sm text-amber-700 dark:text-amber-300">
                     Este serviço não possui um método de calibração vinculado.
-                    Vincular um método permite utilizar o cálculo automatizado de
-                    incerteza e gerar certificados padronizados.
+                    Vincular um método permite utilizar o cálculo automatizado
+                    de incerteza e gerar certificados padronizados.
                   </p>
                 </div>
               </div>

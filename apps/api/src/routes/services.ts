@@ -21,6 +21,10 @@ import { withCache, withInvalidation } from "../middleware/cache";
 import { CACHE_TTL } from "../lib/cache";
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
 import { buildUnitScopeCondition } from "../lib/units";
+import {
+  buildServiceRouteIdentifier,
+  parseLegacyNumericIdentifier,
+} from "../lib/route-identifiers";
 
 /**
  * Services Router - Commercial Service Catalog (Product Registry)
@@ -36,6 +40,50 @@ import { buildUnitScopeCondition } from "../lib/units";
  * - PUT /:id: service:update (admin, owner - LAB only)
  * - DELETE /:id: service:delete (admin, owner - LAB only) - soft delete
  */
+async function resolveServiceRouteId(
+  identifier: string,
+  member: AuthVariables["member"],
+): Promise<number | null> {
+  const legacyId = parseLegacyNumericIdentifier(identifier);
+  const directConditions = [eq(service.name, identifier)];
+
+  if (legacyId !== null) {
+    directConditions.unshift(eq(service.id, legacyId));
+  }
+
+  const [directMatch] = await db
+    .select({ id: service.id })
+    .from(service)
+    .where(
+      and(
+        eq(service.organizationId, member.organizationId),
+        buildUnitScopeCondition(service.unitId, member),
+        or(...directConditions)!,
+      ),
+    )
+    .limit(1);
+
+  if (directMatch) {
+    return directMatch.id;
+  }
+
+  const scopedServices = await db
+    .select({ id: service.id, name: service.name })
+    .from(service)
+    .where(
+      and(
+        eq(service.organizationId, member.organizationId),
+        buildUnitScopeCondition(service.unitId, member),
+      ),
+    );
+
+  const match = scopedServices.find(
+    (candidate) => buildServiceRouteIdentifier(candidate) === identifier,
+  );
+
+  return match?.id ?? null;
+}
+
 export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List services with pagination and filtering
@@ -91,6 +139,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
           description: service.description,
           methodId: service.methodId,
           methodName: calibrationMethod.name,
+          methodVersion: calibrationMethod.version,
           methodStatus: calibrationMethod.status,
           assetTypeId: service.assetTypeId,
           assetTypeName: assetType.name,
@@ -126,9 +175,9 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id/label", ...withLabPermission({ service: ["read"] }), async (c) => {
     const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+    const id = await resolveServiceRouteId(c.req.param("id"), member);
 
-    if (isNaN(id)) {
+    if (id === null) {
       return c.json({ error: "ID inválido" }, 400);
     }
 
@@ -159,9 +208,9 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id", ...withLabPermission({ service: ["read"] }), async (c) => {
     const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+    const id = await resolveServiceRouteId(c.req.param("id"), member);
 
-    if (isNaN(id)) {
+    if (id === null) {
       return c.json({ error: "ID inválido" }, 400);
     }
 
@@ -172,6 +221,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
         description: service.description,
         methodId: service.methodId,
         methodName: calibrationMethod.name,
+        methodVersion: calibrationMethod.version,
         methodStatus: calibrationMethod.status,
         assetTypeId: service.assetTypeId,
         assetTypeName: assetType.name,
@@ -312,10 +362,10 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
       const input = c.req.valid("json");
+      const id = await resolveServiceRouteId(c.req.param("id"), member);
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID inválido" }, 400);
       }
 
@@ -476,9 +526,9 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveServiceRouteId(c.req.param("id"), member);
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID inválido" }, 400);
       }
 
@@ -530,9 +580,9 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ service: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveServiceRouteId(c.req.param("id"), member);
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID inválido" }, 400);
       }
 

@@ -12,6 +12,7 @@ import { api } from '@/utils/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { clientRouteId } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/assets/$id')({
   component: AssetDetailLayout,
@@ -96,7 +97,12 @@ function AssetDetailLayout() {
                   <span>-</span>
                   <Link
                     to="/dashboard/clients/$id"
-                    params={{ id: String(asset.customerId) }}
+                    params={{
+                      id: clientRouteId({
+                        name: asset.customerName,
+                        taxId: asset.customerTaxId,
+                      }),
+                    }}
                     className="hover:underline"
                   >
                     {asset.customerName}

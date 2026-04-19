@@ -40,6 +40,7 @@ import {
   type MethodsTableMeta,
   methodsColumns,
 } from './-components/columns'
+import { methodRouteId } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/methods/')({
   head: () => ({
@@ -132,14 +133,14 @@ function MethodsListPage() {
           (error as { error?: string }).error || 'Erro ao criar nova versão',
         )
       }
-      return res.json() as Promise<{ id: number }>
+      return res.json() as Promise<Method>
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })
       toast.success('Nova versão criada')
       navigate({
         to: '/dashboard/methods/$id/edit',
-        params: { id: String(data.id) },
+        params: { id: methodRouteId(data) },
       })
     },
     onError: (error) => {

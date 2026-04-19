@@ -1,4 +1,4 @@
-import { createFileRoute, useParams } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -29,6 +29,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import { clientRouteId } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/clients/$id/info')({
   component: ClientInfoTab,
@@ -109,6 +110,7 @@ function ClientInfoForm({
   }
   customerId: string
 }) {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [addressOpen, setAddressOpen] = useState(false)
 
@@ -142,6 +144,15 @@ function ClientInfoForm({
       queryClient.invalidateQueries({ queryKey: ['customer', customerId] })
       queryClient.invalidateQueries({ queryKey: ['customers'] })
       toast.success('Cliente atualizado com sucesso!')
+      navigate({
+        to: '/dashboard/clients/$id/info',
+        params: {
+          id: clientRouteId({
+            name: name.trim(),
+            taxId: taxId.trim() || null,
+          }),
+        },
+      })
     },
     onError: (error) => {
       toast.error(error.message || 'Erro ao atualizar cliente')
@@ -191,15 +202,21 @@ function ClientInfoForm({
           />
           <SummaryItem
             label="Documentos vencidos"
-            value={String(customer.financialSummary?.overdueDocumentsCount ?? 0)}
+            value={String(
+              customer.financialSummary?.overdueDocumentsCount ?? 0,
+            )}
           />
           <SummaryItem
             label="Saldo em aberto"
-            value={formatMoney(customer.financialSummary?.openBalanceCents ?? 0)}
+            value={formatMoney(
+              customer.financialSummary?.openBalanceCents ?? 0,
+            )}
           />
           <SummaryItem
             label="Saldo vencido"
-            value={formatMoney(customer.financialSummary?.overdueBalanceCents ?? 0)}
+            value={formatMoney(
+              customer.financialSummary?.overdueBalanceCents ?? 0,
+            )}
           />
         </CardContent>
       </Card>
@@ -214,155 +231,159 @@ function ClientInfoForm({
         <CardContent>
           <form onSubmit={handleSubmit}>
             <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="name">Nome / Razão Social</FieldLabel>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value)
-                  setFormError(null)
-                }}
-                disabled={updateMutation.isPending}
-                placeholder="Nome da empresa ou pessoa"
-              />
-              {formError && <FieldError>{formError}</FieldError>}
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="taxId">CNPJ / CPF</FieldLabel>
-              <Input
-                id="taxId"
-                value={taxId}
-                onChange={(e) => setTaxId(e.target.value)}
-                disabled={updateMutation.isPending}
-                placeholder="00.000.000/0000-00"
-              />
-              <FieldDescription>
-                Documento de identificação fiscal.
-              </FieldDescription>
-            </Field>
-
-            <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <FieldLabel htmlFor="name">Nome / Razão Social</FieldLabel>
                 <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="name"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value)
+                    setFormError(null)
+                  }}
                   disabled={updateMutation.isPending}
-                  placeholder="contato@empresa.com"
+                  placeholder="Nome da empresa ou pessoa"
                 />
+                {formError && <FieldError>{formError}</FieldError>}
               </Field>
 
               <Field>
-                <FieldLabel htmlFor="phone">Telefone</FieldLabel>
+                <FieldLabel htmlFor="taxId">CNPJ / CPF</FieldLabel>
                 <Input
-                  id="phone"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  id="taxId"
+                  value={taxId}
+                  onChange={(e) => setTaxId(e.target.value)}
                   disabled={updateMutation.isPending}
-                  placeholder="(11) 99999-9999"
+                  placeholder="00.000.000/0000-00"
                 />
+                <FieldDescription>
+                  Documento de identificação fiscal.
+                </FieldDescription>
               </Field>
-            </div>
 
-            <Collapsible open={addressOpen} onOpenChange={setAddressOpen}>
-              <CollapsibleTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    type="button"
-                    className="flex w-full items-center justify-between px-0 hover:bg-transparent"
-                  />
-                }
-              >
-                <span className="text-sm font-medium">Endereço</span>
-                <HugeiconsIcon
-                  icon={ArrowDown01Icon}
-                  className={`size-4 transition-transform ${addressOpen ? 'rotate-180' : ''}`}
-                />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-4 pt-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor="cep">CEP</FieldLabel>
-                    <Input
-                      id="cep"
-                      value={address.cep || ''}
-                      onChange={(e) => updateAddress('cep', e.target.value)}
-                      disabled={updateMutation.isPending}
-                      placeholder="00000-000"
-                    />
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="number">Número</FieldLabel>
-                    <Input
-                      id="number"
-                      value={address.number || ''}
-                      onChange={(e) => updateAddress('number', e.target.value)}
-                      disabled={updateMutation.isPending}
-                      placeholder="123"
-                    />
-                  </Field>
-                </div>
-
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor="street">Rua</FieldLabel>
+                  <FieldLabel htmlFor="email">Email</FieldLabel>
                   <Input
-                    id="street"
-                    value={address.street || ''}
-                    onChange={(e) => updateAddress('street', e.target.value)}
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     disabled={updateMutation.isPending}
-                    placeholder="Nome da rua"
+                    placeholder="contato@empresa.com"
                   />
                 </Field>
 
                 <Field>
-                  <FieldLabel htmlFor="neighbourhood">Bairro</FieldLabel>
+                  <FieldLabel htmlFor="phone">Telefone</FieldLabel>
                   <Input
-                    id="neighbourhood"
-                    value={address.neighbourhood || ''}
-                    onChange={(e) =>
-                      updateAddress('neighbourhood', e.target.value)
-                    }
+                    id="phone"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     disabled={updateMutation.isPending}
-                    placeholder="Nome do bairro"
+                    placeholder="(11) 99999-9999"
                   />
                 </Field>
+              </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+              <Collapsible open={addressOpen} onOpenChange={setAddressOpen}>
+                <CollapsibleTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      className="flex w-full items-center justify-between px-0 hover:bg-transparent"
+                    />
+                  }
+                >
+                  <span className="text-sm font-medium">Endereço</span>
+                  <HugeiconsIcon
+                    icon={ArrowDown01Icon}
+                    className={`size-4 transition-transform ${addressOpen ? 'rotate-180' : ''}`}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 pt-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="cep">CEP</FieldLabel>
+                      <Input
+                        id="cep"
+                        value={address.cep || ''}
+                        onChange={(e) => updateAddress('cep', e.target.value)}
+                        disabled={updateMutation.isPending}
+                        placeholder="00000-000"
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="number">Número</FieldLabel>
+                      <Input
+                        id="number"
+                        value={address.number || ''}
+                        onChange={(e) =>
+                          updateAddress('number', e.target.value)
+                        }
+                        disabled={updateMutation.isPending}
+                        placeholder="123"
+                      />
+                    </Field>
+                  </div>
+
                   <Field>
-                    <FieldLabel htmlFor="city">Cidade</FieldLabel>
+                    <FieldLabel htmlFor="street">Rua</FieldLabel>
                     <Input
-                      id="city"
-                      value={address.city || ''}
-                      onChange={(e) => updateAddress('city', e.target.value)}
+                      id="street"
+                      value={address.street || ''}
+                      onChange={(e) => updateAddress('street', e.target.value)}
                       disabled={updateMutation.isPending}
-                      placeholder="São Paulo"
+                      placeholder="Nome da rua"
                     />
                   </Field>
 
                   <Field>
-                    <FieldLabel htmlFor="state">Estado</FieldLabel>
+                    <FieldLabel htmlFor="neighbourhood">Bairro</FieldLabel>
                     <Input
-                      id="state"
-                      value={address.state || ''}
-                      onChange={(e) => updateAddress('state', e.target.value)}
+                      id="neighbourhood"
+                      value={address.neighbourhood || ''}
+                      onChange={(e) =>
+                        updateAddress('neighbourhood', e.target.value)
+                      }
                       disabled={updateMutation.isPending}
-                      placeholder="SP"
-                      maxLength={2}
+                      placeholder="Nome do bairro"
                     />
                   </Field>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="city">Cidade</FieldLabel>
+                      <Input
+                        id="city"
+                        value={address.city || ''}
+                        onChange={(e) => updateAddress('city', e.target.value)}
+                        disabled={updateMutation.isPending}
+                        placeholder="São Paulo"
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="state">Estado</FieldLabel>
+                      <Input
+                        id="state"
+                        value={address.state || ''}
+                        onChange={(e) => updateAddress('state', e.target.value)}
+                        disabled={updateMutation.isPending}
+                        placeholder="SP"
+                        maxLength={2}
+                      />
+                    </Field>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               <div className="flex justify-end pt-4">
                 <Button type="submit" disabled={updateMutation.isPending}>
-                  {updateMutation.isPending ? 'Salvando...' : 'Salvar alterações'}
+                  {updateMutation.isPending
+                    ? 'Salvando...'
+                    : 'Salvar alterações'}
                 </Button>
               </div>
             </FieldGroup>

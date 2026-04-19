@@ -43,6 +43,10 @@ import {
   PortalServiceAccountError,
   removePortalMemberAsService,
 } from "../lib/portal-service-account";
+import {
+  parseLegacyNumericIdentifier,
+  slugifyRouteIdentifier,
+} from "../lib/route-identifiers";
 
 const CommandPaletteCustomerSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -69,6 +73,51 @@ function generateUniqueSlug(name: string): string {
   const baseSlug = slugify(name);
   const randomSuffix = Math.random().toString(36).substring(2, 8);
   return `${baseSlug}-${randomSuffix}`;
+}
+
+async function resolveCustomerRouteId(
+  identifier: string,
+  labOrganizationId: string,
+): Promise<number | null> {
+  const legacyId = parseLegacyNumericIdentifier(identifier);
+  const directConditions = [eq(customer.taxId, identifier)];
+
+  if (legacyId !== null) {
+    directConditions.unshift(eq(customer.id, legacyId));
+  }
+
+  const [directMatch] = await db
+    .select({ id: customer.id })
+    .from(customer)
+    .where(
+      and(
+        eq(customer.labOrganizationId, labOrganizationId),
+        or(...directConditions)!,
+      ),
+    )
+    .limit(1);
+
+  if (directMatch) {
+    return directMatch.id;
+  }
+
+  const scopedCustomers = await db
+    .select({
+      id: customer.id,
+      name: customer.name,
+      taxId: customer.taxId,
+    })
+    .from(customer)
+    .where(eq(customer.labOrganizationId, labOrganizationId));
+
+  const match = scopedCustomers.find(
+    (candidate) =>
+      (candidate.taxId &&
+        slugifyRouteIdentifier(candidate.taxId) === identifier) ||
+      slugifyRouteIdentifier(candidate.name) === identifier,
+  );
+
+  return match?.id ?? null;
 }
 
 export const customersRouter = new Hono<{ Variables: AuthVariables }>()
@@ -250,10 +299,13 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   // GET /:id/label - Get customer label by ID
   // =========================================================================
   .get("/:id/label", ...withLabPermission({ client: ["read"] }), async (c) => {
-    const id = parseInt(c.req.param("id"), 10);
     const memberData = c.get("member");
+    const id = await resolveCustomerRouteId(
+      c.req.param("id"),
+      memberData.organizationId,
+    );
 
-    if (isNaN(id)) {
+    if (id === null) {
       return c.json({ error: "ID invalido" }, 400);
     }
 
@@ -282,10 +334,13 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
   // GET /:id - Get customer by ID
   // =========================================================================
   .get("/:id", ...withLabPermission({ client: ["read"] }), async (c) => {
-    const id = parseInt(c.req.param("id"), 10);
     const memberData = c.get("member");
+    const id = await resolveCustomerRouteId(
+      c.req.param("id"),
+      memberData.organizationId,
+    );
 
-    if (isNaN(id)) {
+    if (id === null) {
       return c.json({ error: "ID invalido" }, 400);
     }
 
@@ -315,12 +370,15 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     withInvalidation("customers"),
     zValidator("json", UpdateCustomerSchema),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const input = c.req.valid("json");
       const session = c.get("session");
       const memberData = c.get("member");
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -390,11 +448,14 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ client: ["delete"] }),
     withInvalidation("customers"),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const session = c.get("session");
       const memberData = c.get("member");
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -453,10 +514,13 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/members",
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const memberData = c.get("member");
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -506,10 +570,13 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/invitations",
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const memberData = c.get("member");
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -560,13 +627,16 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     requireFeature("portal"), // Requires PROFESSIONAL+ plan
     zValidator("json", CreatePortalInvitationSchema),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const { email, role } = c.req.valid("json");
       const session = c.get("session");
       const memberData = c.get("member");
       const portalRole = role || PORTAL_MANAGEABLE_MEMBER_ROLES[0];
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -636,11 +706,14 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/invitations/:invId/resend",
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const invId = c.req.param("invId");
       const memberData = c.get("member");
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -720,12 +793,15 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/invitations/:invId",
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const invId = c.req.param("invId");
       const session = c.get("session");
       const memberData = c.get("member");
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -808,12 +884,15 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/members/:memberId",
     ...withLabPermission({ client: ["manage_portal"] }),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const memberId = c.req.param("memberId");
       const session = c.get("session");
       const memberData = c.get("member");
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -911,12 +990,15 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ client: ["update"] }),
     zValidator("json", UpdateComplianceSchema),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const { compliance, reason } = c.req.valid("json");
       const session = c.get("session");
       const memberData = c.get("member");
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -1010,11 +1092,14 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ client: ["manage_portal"] }),
     zValidator("query", AuditLogQuerySchema),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const { page, limit } = c.req.valid("query");
       const memberData = c.get("member");
+      const id = await resolveCustomerRouteId(
+        c.req.param("id"),
+        memberData.organizationId,
+      );
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
