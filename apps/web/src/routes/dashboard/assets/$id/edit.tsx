@@ -40,6 +40,14 @@ import {
   DynamicSpecsForm,
   type SpecFieldDefinition,
 } from '@/components/dynamic-specs-form'
+import {
+  ECCENTRICITY_INDICATOR_SPEC_KEY,
+  EccentricityIndicator,
+  type EccentricityIndicatorPosition,
+  isEccentricityIndicatorPosition,
+  isWeighingScaleAssetType,
+} from '@/components/eccentricity-indicator'
+import { assetRouteId } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/assets/$id/edit')({
   head: () => ({
@@ -78,6 +86,7 @@ type AssetData = {
   status: string
   customerName?: string | null
   assetTypeName?: string | null
+  assetTypeSlug?: string | null
   lastCalibrationDate?: string | Date | null
   nextCalibrationDate?: string | Date | null
   comments?: string | null
@@ -197,6 +206,23 @@ function EditAssetForm({
     return asset.assetTypeDefinition as SpecFieldDefinition[]
   }, [asset.assetTypeDefinition])
 
+  const visibleAssetTypeDefinition = useMemo(() => {
+    return assetTypeDefinition.filter(
+      (field) => field.key !== ECCENTRICITY_INDICATOR_SPEC_KEY,
+    )
+  }, [assetTypeDefinition])
+
+  const selectedIndicatorPosition = isEccentricityIndicatorPosition(
+    formData.specifications[ECCENTRICITY_INDICATOR_SPEC_KEY],
+  )
+    ? formData.specifications[ECCENTRICITY_INDICATOR_SPEC_KEY]
+    : null
+
+  const showEccentricityIndicator = isWeighingScaleAssetType({
+    name: asset.assetTypeName,
+    slug: asset.assetTypeSlug,
+  })
+
   const updateMutation = useMutation({
     mutationFn: async (data: FormData) => {
       const res = await api.api.assets[':id'].$put({
@@ -233,7 +259,10 @@ function EditAssetForm({
       queryClient.invalidateQueries({ queryKey: ['assets'] })
       queryClient.invalidateQueries({ queryKey: ['asset', assetId] })
       toast.success('Ativo atualizado com sucesso!')
-      navigate({ to: '/dashboard/assets/$id', params: { id: assetId } })
+      navigate({
+        to: '/dashboard/assets/$id',
+        params: { id: assetRouteId({ tag: formData.tag }) },
+      })
     },
     onError: (error) => {
       toast.error(error.message)
@@ -262,7 +291,13 @@ function EditAssetForm({
       for (const field of assetTypeDefinition) {
         if (field.required) {
           const value = formData.specifications[field.key]
-          if (value === undefined || value === null || value === '') {
+          if (
+            value === undefined ||
+            value === null ||
+            value === '' ||
+            (field.type === 'weighing_ranges' &&
+              (!Array.isArray(value) || value.length === 0))
+          ) {
             newErrors[`spec_${field.key}`] = `${field.label} é obrigatório`
           }
         }
@@ -291,6 +326,20 @@ function EditAssetForm({
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
+  }
+
+  const updateIndicatorPosition = (
+    position: EccentricityIndicatorPosition | null,
+  ) => {
+    const specifications = { ...formData.specifications }
+
+    if (position) {
+      specifications[ECCENTRICITY_INDICATOR_SPEC_KEY] = position
+    } else {
+      delete specifications[ECCENTRICITY_INDICATOR_SPEC_KEY]
+    }
+
+    updateField('specifications', specifications)
   }
 
   // Get specification errors in the format expected by DynamicSpecsForm
@@ -442,13 +491,21 @@ function EditAssetForm({
               </Field>
 
               {/* Dynamic Specifications Form */}
-              {assetTypeDefinition.length > 0 && (
+              {visibleAssetTypeDefinition.length > 0 && (
                 <DynamicSpecsForm
-                  definition={assetTypeDefinition}
+                  definition={visibleAssetTypeDefinition}
                   value={formData.specifications}
                   onChange={(specs) => updateField('specifications', specs)}
                   disabled={updateMutation.isPending}
                   errors={specErrors}
+                />
+              )}
+
+              {showEccentricityIndicator && (
+                <EccentricityIndicator
+                  value={selectedIndicatorPosition}
+                  onChange={updateIndicatorPosition}
+                  disabled={updateMutation.isPending}
                 />
               )}
 
@@ -500,7 +557,9 @@ function EditAssetForm({
                 <Button
                   type="button"
                   variant="outline"
-                  render={<Link to="/dashboard/assets/$id" params={{ id: assetId }} />}
+                  render={
+                    <Link to="/dashboard/assets/$id" params={{ id: assetId }} />
+                  }
                   disabled={updateMutation.isPending}
                 >
                   Cancelar

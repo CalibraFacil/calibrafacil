@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/empty'
 import { DataTable } from '@/components/ui/data-table'
 import { type Client, clientsColumns } from './-components/columns'
+import { clientRouteId } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/clients/')({
   head: () => ({
@@ -72,7 +73,7 @@ function ClientsPage() {
   const handleRowClick = (client: Client) => {
     navigate({
       to: '/dashboard/clients/$id',
-      params: { id: String(client.id) },
+      params: { id: clientRouteId(client) },
     })
   }
 
@@ -162,11 +163,7 @@ function ClientsPage() {
 
           {/* Loading state when no data yet */}
           {isLoading && !data && (
-            <DataTable
-              columns={clientsColumns}
-              data={[]}
-              isLoading={true}
-            />
+            <DataTable columns={clientsColumns} data={[]} isLoading={true} />
           )}
         </CardContent>
       </Card>

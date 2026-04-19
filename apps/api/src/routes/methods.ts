@@ -23,9 +23,49 @@ import { requireFeature } from "../middleware/tier-guard";
 import { withCache, withInvalidation } from "../middleware/cache";
 import { CACHE_TTL } from "../lib/cache";
 import { alias } from "drizzle-orm/pg-core";
+import {
+  buildMethodRouteIdentifier,
+  parseLegacyNumericIdentifier,
+} from "../lib/route-identifiers";
 
 const technicalReviewerUser = alias(user, "technicalReviewerUser");
 const approverUser = alias(user, "approverUser");
+
+async function resolveMethodRouteId(
+  identifier: string,
+  organizationId: string,
+): Promise<number | null> {
+  const legacyId = parseLegacyNumericIdentifier(identifier);
+
+  if (legacyId) {
+    const [method] = await db
+      .select({ id: calibrationMethod.id })
+      .from(calibrationMethod)
+      .where(
+        and(
+          eq(calibrationMethod.id, legacyId),
+          eq(calibrationMethod.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+
+    if (method) return method.id;
+  }
+
+  const methods = await db
+    .select({
+      id: calibrationMethod.id,
+      name: calibrationMethod.name,
+      version: calibrationMethod.version,
+    })
+    .from(calibrationMethod)
+    .where(eq(calibrationMethod.organizationId, organizationId));
+
+  return (
+    methods.find((method) => buildMethodRouteIdentifier(method) === identifier)
+      ?.id ?? null
+  );
+}
 
 export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -90,6 +130,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             dataFields: calibrationMethod.dataFields,
             formulas: calibrationMethod.formulas,
             validations: calibrationMethod.validations,
+            certificateContent: calibrationMethod.certificateContent,
             createdAt: calibrationMethod.createdAt,
             publishedAt: calibrationMethod.publishedAt,
             parentId: calibrationMethod.parentId,
@@ -125,10 +166,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       const [method] = await db
@@ -158,10 +202,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id", ...withLabPermission({ template: ["read"] }), async (c) => {
     const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+    const id = await resolveMethodRouteId(
+      c.req.param("id"),
+      member.organizationId,
+    );
 
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
+    if (id === null) {
+      return c.json({ error: "Método nao encontrado" }, 404);
     }
 
     try {
@@ -179,6 +226,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           formulas: calibrationMethod.formulas,
           validations: calibrationMethod.validations,
           uncertaintyParams: calibrationMethod.uncertaintyParams,
+          certificateContent: calibrationMethod.certificateContent,
           parentId: calibrationMethod.parentId,
           createdAt: calibrationMethod.createdAt,
           createdByName: user.name,
@@ -264,6 +312,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             formulas: input.formulas,
             validations: input.validations,
             uncertaintyParams: input.uncertaintyParams,
+            certificateContent: input.certificateContent ?? null,
             createdBy: session.user.id,
           })
           .returning();
@@ -300,11 +349,14 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {
@@ -399,6 +451,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             new: input.uncertaintyParams,
           };
         }
+        if (input.certificateContent !== undefined) {
+          updateData.certificateContent = input.certificateContent;
+          changes.certificateContent = {
+            old: existing.certificateContent,
+            new: input.certificateContent,
+          };
+        }
 
         if (Object.keys(updateData).length === 0) {
           return c.json(existing);
@@ -439,10 +498,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {
@@ -516,10 +578,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {
@@ -585,10 +650,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {
@@ -695,11 +763,14 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
       const { reason } = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {
@@ -769,10 +840,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {
@@ -878,10 +952,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {
@@ -943,10 +1020,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {
@@ -1028,6 +1108,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             formulas: existing.formulas,
             validations: existing.validations,
             uncertaintyParams: existing.uncertaintyParams,
+            certificateContent: existing.certificateContent,
             parentId: existing.id,
             createdBy: session.user.id,
           })
@@ -1067,10 +1148,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     withInvalidation("methods"),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {
@@ -1118,10 +1202,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {
@@ -1177,10 +1264,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     requireFeature("advanced_audit_trail"),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+      );
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Método nao encontrado" }, 404);
       }
 
       try {

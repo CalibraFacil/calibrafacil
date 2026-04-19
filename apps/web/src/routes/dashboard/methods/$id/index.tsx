@@ -104,7 +104,7 @@ function MethodDetailPage() {
   const technicalReviewMutation = useMutation({
     mutationFn: async () => {
       const res = await api.api.methods[':id']['technical-review'].$post({
-        param: { id },
+        param: { id: String(method?.id ?? id) },
       })
 
       if (!res.ok) {
@@ -129,7 +129,7 @@ function MethodDetailPage() {
   const qualityApproveMutation = useMutation({
     mutationFn: async () => {
       const res = await api.api.methods[':id']['quality-approve'].$post({
-        param: { id },
+        param: { id: String(method?.id ?? id) },
       })
 
       if (!res.ok) {
@@ -154,14 +154,15 @@ function MethodDetailPage() {
   const returnToDraftMutation = useMutation({
     mutationFn: async (reason: string) => {
       const res = await api.api.methods[':id']['return-to-draft'].$post({
-        param: { id },
+        param: { id: String(method?.id ?? id) },
         json: { reason },
       })
 
       if (!res.ok) {
         const error = await res.json()
         throw new Error(
-          (error as { error?: string }).error || 'Erro ao retornar para rascunho',
+          (error as { error?: string }).error ||
+            'Erro ao retornar para rascunho',
         )
       }
 
@@ -381,6 +382,49 @@ function MethodDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Certificate Content */}
+          {method.certificateContent &&
+            ((method.certificateContent.procedureCode ?? '').trim() ||
+              (method.certificateContent.referenceStandards?.length ?? 0) > 0 ||
+              (method.certificateContent.sections?.length ?? 0) > 0) && (
+              <div>
+                <h3 className="font-semibold mb-2">Conteúdo do Certificado</h3>
+                <div className="grid gap-2">
+                  {method.certificateContent.procedureCode && (
+                    <div className="p-2 border rounded bg-muted/30">
+                      <span className="font-medium">Procedimento</span>
+                      <span className="text-sm text-muted-foreground ml-2">
+                        {method.certificateContent.procedureCode}
+                      </span>
+                    </div>
+                  )}
+                  {(method.certificateContent.referenceStandards?.length ?? 0) >
+                    0 && (
+                    <div className="p-2 border rounded bg-muted/30">
+                      <span className="font-medium">Normas de referência</span>
+                      <span className="text-sm text-muted-foreground ml-2">
+                        {method.certificateContent.referenceStandards?.join(
+                          ', ',
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {method.certificateContent.sections?.map((section, index) => (
+                    <div key={index} className="p-2 border rounded bg-muted/30">
+                      <span className="font-medium">
+                        {'title' in section && section.title
+                          ? section.title
+                          : 'Notas'}
+                      </span>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        ({section.kind})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
           {/* Data Fields */}
           <div>

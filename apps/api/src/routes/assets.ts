@@ -22,6 +22,10 @@ import {
 } from "../middleware/permission";
 import { withCache, withInvalidation } from "../middleware/cache";
 import { buildUnitScopeCondition } from "../lib/units";
+import {
+  parseLegacyNumericIdentifier,
+  slugifyRouteIdentifier,
+} from "../lib/route-identifiers";
 
 const CommandPaletteAssetSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -32,6 +36,67 @@ function getAssetScopeCondition(member: MemberData) {
   return member.organizationType === "LAB"
     ? buildUnitScopeCondition(asset.unitId, member)
     : undefined;
+}
+
+async function resolveAssetRouteId(
+  identifier: string,
+  member: MemberData,
+): Promise<number | null> {
+  const legacyId = parseLegacyNumericIdentifier(identifier);
+  const directConditions = [
+    eq(asset.tag, identifier),
+    eq(asset.serialNumber, identifier),
+  ];
+
+  if (legacyId !== null) {
+    directConditions.unshift(eq(asset.id, legacyId));
+  }
+
+  const [directMatch] = await db
+    .select({ id: asset.id })
+    .from(asset)
+    .innerJoin(customer, eq(asset.customerId, customer.id))
+    .where(
+      and(
+        or(...directConditions)!,
+        member.organizationType === "LAB"
+          ? eq(customer.labOrganizationId, member.organizationId)
+          : undefined,
+        getAssetScopeCondition(member),
+        isNull(asset.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (directMatch) {
+    return directMatch.id;
+  }
+
+  const scopedAssets = await db
+    .select({
+      id: asset.id,
+      tag: asset.tag,
+      serialNumber: asset.serialNumber,
+    })
+    .from(asset)
+    .innerJoin(customer, eq(asset.customerId, customer.id))
+    .where(
+      and(
+        member.organizationType === "LAB"
+          ? eq(customer.labOrganizationId, member.organizationId)
+          : undefined,
+        getAssetScopeCondition(member),
+        isNull(asset.deletedAt),
+      ),
+    );
+
+  const match = scopedAssets.find(
+    (candidate) =>
+      slugifyRouteIdentifier(candidate.tag) === identifier ||
+      slugifyRouteIdentifier(candidate.serialNumber) === identifier,
+  );
+
+  return match?.id ?? null;
 }
 
 export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
@@ -185,6 +250,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             serialNumber: asset.serialNumber,
             assetTypeName: assetType.name,
             customerName: customer.name,
+            customerTaxId: customer.taxId,
           })
           .from(asset)
           .innerJoin(customer, eq(asset.customerId, customer.id))
@@ -291,6 +357,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             id: asset.id,
             customerId: asset.customerId,
             customerName: customer.name,
+            customerTaxId: customer.taxId,
             assetTypeId: asset.assetTypeId,
             assetTypeName: assetType.name,
             assetTypeSlug: assetType.slug,
@@ -348,10 +415,10 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/label",
     ...withLabPermission({ equipment: ["read"] }),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const member = c.get("member");
+      const id = await resolveAssetRouteId(c.req.param("id"), member);
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID inválido" }, 400);
       }
 
@@ -402,10 +469,10 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
   // GET /:id - Get asset by ID
   // =========================================================================
   .get("/:id", ...withLabPermission({ equipment: ["read"] }), async (c) => {
-    const id = parseInt(c.req.param("id"), 10);
     const member = c.get("member");
+    const id = await resolveAssetRouteId(c.req.param("id"), member);
 
-    if (isNaN(id)) {
+    if (id === null) {
       return c.json({ error: "ID inválido" }, 400);
     }
 
@@ -415,6 +482,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           id: asset.id,
           customerId: asset.customerId,
           customerName: customer.name,
+          customerTaxId: customer.taxId,
           assetTypeId: asset.assetTypeId,
           assetTypeName: assetType.name,
           assetTypeSlug: assetType.slug,
@@ -477,12 +545,12 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
     withInvalidation("assets"),
     zValidator("json", UpdateAssetSchema),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const input = c.req.valid("json");
       const session = c.get("session");
       const member = c.get("member");
+      const id = await resolveAssetRouteId(c.req.param("id"), member);
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -628,11 +696,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ equipment: ["delete"] }),
     withInvalidation("assets"),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const session = c.get("session");
       const member = c.get("member");
+      const id = await resolveAssetRouteId(c.req.param("id"), member);
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID invalido" }, 400);
       }
 
@@ -720,10 +788,10 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/audit-log",
     ...withLabPermission({ equipment: ["read"] }),
     async (c) => {
-      const id = parseInt(c.req.param("id"), 10);
       const member = c.get("member");
+      const id = await resolveAssetRouteId(c.req.param("id"), member);
 
-      if (isNaN(id)) {
+      if (id === null) {
         return c.json({ error: "ID inválido" }, 400);
       }
 
@@ -732,12 +800,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const [existingAsset] = await db
           .select({ id: asset.id, customerId: asset.customerId })
           .from(asset)
-          .where(
-            and(
-              eq(asset.id, id),
-              getAssetScopeCondition(member),
-            ),
-          )
+          .where(and(eq(asset.id, id), getAssetScopeCondition(member)))
           .limit(1);
 
         if (!existingAsset) {

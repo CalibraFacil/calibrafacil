@@ -44,6 +44,13 @@ import {
   DynamicSpecsForm,
   type SpecFieldDefinition,
 } from '@/components/dynamic-specs-form'
+import {
+  ECCENTRICITY_INDICATOR_SPEC_KEY,
+  EccentricityIndicator,
+  type EccentricityIndicatorPosition,
+  isEccentricityIndicatorPosition,
+  isWeighingScaleAssetType,
+} from '@/components/eccentricity-indicator'
 
 const statusLabels: Record<FormData['status'], string> = {
   ACTIVE: 'Ativo',
@@ -168,6 +175,23 @@ function NewAssetPage() {
     )
   }, [formData.assetTypeId, assetTypesData?.data])
 
+  const visibleAssetTypeDefinition = useMemo(() => {
+    return (
+      selectedAssetType?.definition.filter(
+        (field) => field.key !== ECCENTRICITY_INDICATOR_SPEC_KEY,
+      ) ?? []
+    )
+  }, [selectedAssetType?.definition])
+
+  const selectedIndicatorPosition = isEccentricityIndicatorPosition(
+    formData.specifications[ECCENTRICITY_INDICATOR_SPEC_KEY],
+  )
+    ? formData.specifications[ECCENTRICITY_INDICATOR_SPEC_KEY]
+    : null
+
+  const showEccentricityIndicator =
+    selectedAssetType !== null && isWeighingScaleAssetType(selectedAssetType)
+
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
       if (!data.customerId) {
@@ -248,7 +272,13 @@ function NewAssetPage() {
       for (const field of selectedAssetType.definition) {
         if (field.required) {
           const value = formData.specifications[field.key]
-          if (value === undefined || value === null || value === '') {
+          if (
+            value === undefined ||
+            value === null ||
+            value === '' ||
+            (field.type === 'weighing_ranges' &&
+              (!Array.isArray(value) || value.length === 0))
+          ) {
             newErrors[`spec_${field.key}`] = `${field.label} é obrigatório`
           }
         }
@@ -277,6 +307,20 @@ function NewAssetPage() {
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: undefined }))
     }
+  }
+
+  const updateIndicatorPosition = (
+    position: EccentricityIndicatorPosition | null,
+  ) => {
+    const specifications = { ...formData.specifications }
+
+    if (position) {
+      specifications[ECCENTRICITY_INDICATOR_SPEC_KEY] = position
+    } else {
+      delete specifications[ECCENTRICITY_INDICATOR_SPEC_KEY]
+    }
+
+    updateField('specifications', specifications)
   }
 
   // Handle asset type change - reset specifications when type changes
@@ -520,13 +564,21 @@ function NewAssetPage() {
               </Field>
 
               {/* Dynamic Specifications Form */}
-              {selectedAssetType && selectedAssetType.definition.length > 0 && (
+              {visibleAssetTypeDefinition.length > 0 && (
                 <DynamicSpecsForm
-                  definition={selectedAssetType.definition}
+                  definition={visibleAssetTypeDefinition}
                   value={formData.specifications}
                   onChange={(specs) => updateField('specifications', specs)}
                   disabled={createMutation.isPending}
                   errors={specErrors}
+                />
+              )}
+
+              {showEccentricityIndicator && (
+                <EccentricityIndicator
+                  value={selectedIndicatorPosition}
+                  onChange={updateIndicatorPosition}
+                  disabled={createMutation.isPending}
                 />
               )}
 

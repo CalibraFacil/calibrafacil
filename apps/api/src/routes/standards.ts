@@ -19,11 +19,67 @@ import {
 import { withCache, withInvalidation } from "../middleware/cache";
 import { eq, and, or, ilike, desc, count, isNull, lte, gte } from "drizzle-orm";
 import { buildUnitScopeCondition } from "../lib/units";
+import {
+  parseLegacyNumericIdentifier,
+  slugifyRouteIdentifier,
+} from "../lib/route-identifiers";
 
 const CommandPaletteStandardSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
   limit: z.coerce.number().min(1).max(10).default(5),
 });
+
+async function resolveStandardRouteId(
+  identifier: string,
+  member: AuthVariables["member"],
+): Promise<number | null> {
+  const legacyId = parseLegacyNumericIdentifier(identifier);
+
+  const directConditions = [
+    eq(referenceStandard.organizationId, member.organizationId),
+    buildUnitScopeCondition(referenceStandard.unitId, member),
+    isNull(referenceStandard.deletedAt),
+  ];
+
+  const [directMatch] = await db
+    .select({
+      id: referenceStandard.id,
+    })
+    .from(referenceStandard)
+    .where(
+      and(
+        ...directConditions,
+        legacyId
+          ? or(
+              eq(referenceStandard.id, legacyId),
+              eq(referenceStandard.serialNumber, identifier),
+              eq(referenceStandard.certificateNumber, identifier),
+            )
+          : or(
+              eq(referenceStandard.serialNumber, identifier),
+              eq(referenceStandard.certificateNumber, identifier),
+            ),
+      ),
+    )
+    .limit(1);
+
+  if (directMatch) return directMatch.id;
+
+  const standards = await db
+    .select({
+      id: referenceStandard.id,
+      serialNumber: referenceStandard.serialNumber,
+    })
+    .from(referenceStandard)
+    .where(and(...directConditions));
+
+  return (
+    standards.find(
+      (standard) =>
+        slugifyRouteIdentifier(standard.serialNumber) === identifier,
+    )?.id ?? null
+  );
+}
 
 /**
  * Reference Standards Router - Lab's Own Calibration Equipment (ISO 17025 Clause 6.4)
@@ -202,10 +258,10 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ standard: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveStandardRouteId(c.req.param("id"), member);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
       }
 
       const [found] = await db
@@ -237,10 +293,10 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id", ...withLabPermission({ standard: ["read"] }), async (c) => {
     const member = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+    const id = await resolveStandardRouteId(c.req.param("id"), member);
 
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
+    if (id === null) {
+      return c.json({ error: "Padrão não encontrado" }, 404);
     }
 
     const [found] = await db
@@ -357,11 +413,11 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveStandardRouteId(c.req.param("id"), member);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
       }
 
       // Get existing standard
@@ -565,10 +621,10 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveStandardRouteId(c.req.param("id"), member);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
       }
 
       const [existing] = await db
@@ -623,11 +679,11 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveStandardRouteId(c.req.param("id"), member);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
       }
 
       // Get existing standard
@@ -759,10 +815,10 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ standard: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveStandardRouteId(c.req.param("id"), member);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
       }
 
       // Verify standard exists and belongs to organization

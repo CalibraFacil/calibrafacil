@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/empty'
 import { DataTable } from '@/components/ui/data-table'
 import { cn } from '@/lib/utils'
+import { jobRouteId } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/clients/$id/calibrations')({
   component: ClientCalibrationsTab,
@@ -140,7 +141,7 @@ const calibrationColumns: ColumnDef<Job>[] = [
     cell: ({ row }) => (
       <Link
         to="/dashboard/jobs/$id"
-        params={{ id: String(row.original.id) }}
+        params={{ id: jobRouteId(row.original) }}
         className="font-mono font-medium hover:underline"
       >
         {row.original.jobId}
@@ -233,7 +234,7 @@ const calibrationColumns: ColumnDef<Job>[] = [
               <Link
                 {...props}
                 to="/dashboard/jobs/$id"
-                params={{ id: String(row.original.id) }}
+                params={{ id: jobRouteId(row.original) }}
                 className={cn(props.className, 'w-full flex items-center')}
               >
                 <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
@@ -247,10 +248,13 @@ const calibrationColumns: ColumnDef<Job>[] = [
                 <Link
                   {...props}
                   to="/dashboard/jobs/$id/execute"
-                  params={{ id: String(row.original.id) }}
+                  params={{ id: jobRouteId(row.original) }}
                   className={cn(props.className, 'w-full flex items-center')}
                 >
-                  <HugeiconsIcon icon={Calendar03Icon} className="mr-2 h-4 w-4" />
+                  <HugeiconsIcon
+                    icon={Calendar03Icon}
+                    className="mr-2 h-4 w-4"
+                  />
                   Iniciar Execução
                 </Link>
               )}
@@ -263,10 +267,13 @@ const calibrationColumns: ColumnDef<Job>[] = [
                 <Link
                   {...props}
                   to="/dashboard/jobs/$id/execute"
-                  params={{ id: String(row.original.id) }}
+                  params={{ id: jobRouteId(row.original) }}
                   className={cn(props.className, 'w-full flex items-center')}
                 >
-                  <HugeiconsIcon icon={Calendar03Icon} className="mr-2 h-4 w-4" />
+                  <HugeiconsIcon
+                    icon={Calendar03Icon}
+                    className="mr-2 h-4 w-4"
+                  />
                   Continuar Execução
                 </Link>
               )}
@@ -280,13 +287,27 @@ const calibrationColumns: ColumnDef<Job>[] = [
 
 function ClientCalibrationsTab() {
   const { id } = useParams({ from: '/dashboard/clients/$id/calibrations' })
-  const customerId = parseInt(id, 10)
 
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('')
 
   const limit = 20
+
+  const { data: customer } = useQuery({
+    queryKey: ['customer', id],
+    queryFn: async () => {
+      const res = await api.api.customers[':id'].$get({
+        param: { id },
+      })
+      if (!res.ok) {
+        throw new Error('Falha ao carregar cliente')
+      }
+      return res.json() as Promise<{ id: number }>
+    },
+  })
+
+  const customerId = customer?.id
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['jobs', 'customer', customerId, page, search, statusFilter],
@@ -315,7 +336,7 @@ function ClientCalibrationsTab() {
         }
       }>
     },
-    enabled: !isNaN(customerId),
+    enabled: customerId !== undefined,
   })
 
   const handleSearch = (e: React.FormEvent) => {
@@ -353,9 +374,7 @@ function ClientCalibrationsTab() {
             }}
           >
             <SelectTrigger className="w-44">
-              <span>
-                {statusFilter ? statusLabels[statusFilter] : 'Todos'}
-              </span>
+              <span>{statusFilter ? statusLabels[statusFilter] : 'Todos'}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">Todos</SelectItem>

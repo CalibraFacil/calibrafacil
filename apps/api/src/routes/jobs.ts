@@ -69,15 +69,13 @@ import {
   extractKeyFromUrl,
   type R2Env,
 } from "../lib/storage";
-import {
-  createCalibrationJob,
-  generateJobId,
-  jobCreationClientErrors,
-} from "../lib/jobs";
+import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
+import { generateCertificateIdentity } from "../lib/certificate-numbering";
 import { loadJobFinancialContexts } from "../lib/finance";
 import { alias } from "drizzle-orm/pg-core";
 import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
+import { parseLegacyNumericIdentifier } from "../lib/route-identifiers";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
@@ -87,6 +85,32 @@ const CommandPaletteJobSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
   limit: z.coerce.number().min(1).max(10).default(5),
 });
+
+async function resolveJobRouteId(
+  identifier: string,
+  memberData: AuthVariables["member"],
+): Promise<number | null> {
+  const legacyId = parseLegacyNumericIdentifier(identifier);
+
+  const [job] = await db
+    .select({ id: calibrationJob.id })
+    .from(calibrationJob)
+    .where(
+      and(
+        legacyId
+          ? or(
+              eq(calibrationJob.id, legacyId),
+              eq(calibrationJob.jobId, identifier),
+            )
+          : eq(calibrationJob.jobId, identifier),
+        eq(calibrationJob.organizationId, memberData.organizationId),
+        buildUnitScopeCondition(calibrationJob.unitId, memberData),
+      ),
+    )
+    .limit(1);
+
+  return job?.id ?? null;
+}
 
 /**
  * Check if environmental readings are within configured limits.
@@ -468,7 +492,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(calibrationJob.organizationId, memberData.organizationId),
               buildUnitScopeCondition(calibrationJob.unitId, memberData),
-              ilike(calibrationJob.jobId, `%${query}%`),
+              or(
+                ilike(calibrationJob.jobId, `%${query}%`),
+                ilike(calibrationJob.certificateName, `%${query}%`),
+              )!,
             ),
           )
           .orderBy(desc(calibrationJob.createdAt))
@@ -514,7 +541,12 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       ];
 
       if (query) {
-        conditions.push(ilike(calibrationJob.jobId, `%${query}%`));
+        conditions.push(
+          or(
+            ilike(calibrationJob.jobId, `%${query}%`),
+            ilike(calibrationJob.certificateName, `%${query}%`),
+          )!,
+        );
       }
 
       if (status) {
@@ -576,6 +608,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         .select({
           id: calibrationJob.id,
           jobId: calibrationJob.jobId,
+          certificateName: calibrationJob.certificateName,
           status: calibrationJob.status,
           dueDate: calibrationJob.dueDate,
           performedAt: calibrationJob.performedAt,
@@ -648,10 +681,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       const [job] = await db
@@ -690,16 +723,19 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id", ...withLabPermission({ calibration: ["read"] }), async (c) => {
     const memberData = c.get("member");
-    const id = parseInt(c.req.param("id"), 10);
+    const id = await resolveJobRouteId(c.req.param("id"), memberData);
 
-    if (isNaN(id)) {
-      return c.json({ error: "ID invalido" }, 400);
+    if (id === null) {
+      return c.json({ error: "Job nao encontrado" }, 404);
     }
 
     const [job] = await db
       .select({
         id: calibrationJob.id,
         jobId: calibrationJob.jobId,
+        certificateName: calibrationJob.certificateName,
+        certificateNumberingSnapshot:
+          calibrationJob.certificateNumberingSnapshot,
         organizationId: calibrationJob.organizationId,
         status: calibrationJob.status,
         dueDate: calibrationJob.dueDate,
@@ -883,11 +919,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       // Get existing job
@@ -1041,11 +1077,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       // Get existing job
@@ -1221,11 +1257,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       // Get existing job
@@ -1364,11 +1400,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       // Get existing job
@@ -1501,11 +1537,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       // Get existing job
@@ -1632,11 +1668,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       // Get existing job
@@ -1713,11 +1749,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       // Get existing job
@@ -1791,11 +1827,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       // Get existing job
@@ -1843,15 +1879,20 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         amendmentNumber = (originalJob.amendmentNumber || 0) + 1;
       }
 
-      // Generate new Job ID for the amended job
-      const year = new Date().getFullYear();
-      const newJobId = await generateJobId(memberData.organizationId, year);
+      // Generate a lab-specific certificate number for the amended job.
+      const certificateIdentity = await generateCertificateIdentity({
+        organizationId: memberData.organizationId,
+        generatedAt: new Date(),
+        performedBy: session.user.id,
+      });
 
       // Create new job as a clone of the original
       const [amendedJob] = await db
         .insert(calibrationJob)
         .values({
-          jobId: newJobId,
+          jobId: certificateIdentity.certificateNumber,
+          certificateName: certificateIdentity.certificateName,
+          certificateNumberingSnapshot: certificateIdentity.snapshot,
           organizationId: originalJob.organizationId,
           unitId: originalJob.unitId,
           customerId: originalJob.customerId,
@@ -1967,11 +2008,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const handlerStartedAt = performance.now();
       const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
 
       try {
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
+        if (id === null) {
+          return c.json({ error: "Job nao encontrado" }, 404);
         }
 
         // Verify job exists and belongs to organization
@@ -2116,10 +2157,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       // Verify job exists and belongs to organization
@@ -2223,10 +2264,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       const [job] = await db
@@ -2267,10 +2308,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       const [job] = await db
@@ -2331,10 +2372,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
       }
 
       const [job] = await db
