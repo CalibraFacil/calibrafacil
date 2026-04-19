@@ -720,6 +720,8 @@ export const MethodCertificateContentSchema = z.object({
   procedureCode: z.string().trim().optional(),
   referenceStandards: z.array(z.string().trim()).default([]),
   certifiedValuesDisplay: z.enum(["full", "hidden"]).optional(),
+  massCompositionDisplay: z.enum(["full", "hidden"]).optional(),
+  uncertaintyBudgetDisplay: z.enum(["full", "hidden"]).optional(),
   sections: z.array(MethodCertificateContentSectionSchema).default([]),
 });
 

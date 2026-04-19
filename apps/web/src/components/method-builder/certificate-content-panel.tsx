@@ -36,6 +36,16 @@ const certifiedValuesDisplayLabels = {
   hidden: 'Ocultar tabela completa',
 } as const
 
+const massCompositionDisplayLabels = {
+  full: 'Exibir rastreabilidade por ponto',
+  hidden: 'Ocultar rastreabilidade por ponto',
+} as const
+
+const uncertaintyBudgetDisplayLabels = {
+  full: 'Exibir orçamento de incerteza',
+  hidden: 'Ocultar orçamento de incerteza',
+} as const
+
 function normalizeContent(
   content: MethodCertificateContent | null | undefined,
 ): Required<MethodCertificateContent> {
@@ -43,6 +53,8 @@ function normalizeContent(
     procedureCode: content?.procedureCode ?? '',
     referenceStandards: content?.referenceStandards ?? [],
     certifiedValuesDisplay: content?.certifiedValuesDisplay ?? 'full',
+    massCompositionDisplay: content?.massCompositionDisplay ?? 'full',
+    uncertaintyBudgetDisplay: content?.uncertaintyBudgetDisplay ?? 'full',
     sections: content?.sections ?? [],
   }
 }
@@ -239,6 +251,72 @@ export function CertificateContentPanel({
         <FieldDescription>
           Use a tabela completa apenas quando o modelo de certificado exigir a
           listagem de cada valor certificado do conjunto.
+        </FieldDescription>
+      </Field>
+
+      <Field>
+        <FieldLabel>Composição dos padrões por ponto</FieldLabel>
+        <Select
+          value={current.massCompositionDisplay}
+          onValueChange={(value) =>
+            update({
+              massCompositionDisplay:
+                value as MethodCertificateContent['massCompositionDisplay'],
+            })
+          }
+          disabled={disabled}
+        >
+          <SelectTrigger>
+            <SelectValue>
+              {massCompositionDisplayLabels[current.massCompositionDisplay]}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(massCompositionDisplayLabels).map(
+              ([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ),
+            )}
+          </SelectContent>
+        </Select>
+        <FieldDescription>
+          Controle a tabela detalhada de rastreabilidade criada a partir das
+          composições de pesos usadas nos pontos.
+        </FieldDescription>
+      </Field>
+
+      <Field>
+        <FieldLabel>Orçamento de incerteza</FieldLabel>
+        <Select
+          value={current.uncertaintyBudgetDisplay}
+          onValueChange={(value) =>
+            update({
+              uncertaintyBudgetDisplay:
+                value as MethodCertificateContent['uncertaintyBudgetDisplay'],
+            })
+          }
+          disabled={disabled}
+        >
+          <SelectTrigger>
+            <SelectValue>
+              {uncertaintyBudgetDisplayLabels[current.uncertaintyBudgetDisplay]}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(uncertaintyBudgetDisplayLabels).map(
+              ([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ),
+            )}
+          </SelectContent>
+        </Select>
+        <FieldDescription>
+          Alguns certificados apresentam apenas os resultados finais com U, k e
+          Veff, sem abrir os componentes intermediários.
         </FieldDescription>
       </Field>
 

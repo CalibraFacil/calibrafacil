@@ -126,6 +126,8 @@ export interface MethodCertificateContent {
   procedureCode?: string
   referenceStandards?: Array<string>
   certifiedValuesDisplay?: 'full' | 'hidden'
+  massCompositionDisplay?: 'full' | 'hidden'
+  uncertaintyBudgetDisplay?: 'full' | 'hidden'
   sections?: Array<MethodCertificateContentSection>
 }
 

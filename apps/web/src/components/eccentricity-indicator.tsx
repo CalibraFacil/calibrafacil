@@ -10,11 +10,10 @@ export const ECCENTRICITY_INDICATOR_SPEC_KEY = 'eccentricityIndicatorPosition'
 
 export type EccentricityIndicatorVariant = 'circular_platform' | 'road_scale'
 export type EccentricityIndicatorPosition =
-  | 'A'
-  | 'B'
-  | 'C'
-  | 'D'
-  | 'E'
+  | 'top'
+  | 'right'
+  | 'bottom'
+  | 'left'
   | '1'
   | '2'
   | '3'
@@ -29,34 +28,28 @@ type PositionOption = {
 
 export const CIRCULAR_ECCENTRICITY_INDICATOR_OPTIONS: PositionOption[] = [
   {
-    value: 'A',
+    value: 'top',
     label: 'Superior',
-    diagramLabel: 'A',
-    className: 'left-1/2 top-0 -translate-x-1/2 -translate-y-1/2',
+    diagramLabel: '',
+    className: 'left-1/2 top-0 -translate-x-1/2',
   },
   {
-    value: 'B',
+    value: 'right',
     label: 'Lateral Direito',
-    diagramLabel: 'B',
-    className: 'right-0 top-1/2 -translate-y-1/2 translate-x-1/2',
+    diagramLabel: '',
+    className: 'right-0 top-1/2 -translate-y-1/2',
   },
   {
-    value: 'C',
+    value: 'bottom',
     label: 'Inferior',
-    diagramLabel: 'C',
-    className: 'bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2',
+    diagramLabel: '',
+    className: 'bottom-0 left-1/2 -translate-x-1/2',
   },
   {
-    value: 'D',
+    value: 'left',
     label: 'Lateral Esquerdo',
-    diagramLabel: 'D',
-    className: 'left-0 top-1/2 -translate-x-1/2 -translate-y-1/2',
-  },
-  {
-    value: 'E',
-    label: 'Centro',
-    diagramLabel: 'E',
-    className: 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+    diagramLabel: '',
+    className: 'left-0 top-1/2 -translate-y-1/2',
   },
 ]
 
@@ -121,7 +114,7 @@ export function getEccentricityIndicatorLabel(
   )
 
   return option
-    ? `${option.value} - ${option.label}`
+    ? formatPositionOptionLabel(option, variant)
     : 'Nenhum ponto selecionado'
 }
 
@@ -201,9 +194,9 @@ export function EccentricityIndicator({
                           <button
                             type="button"
                             aria-pressed={selected}
-                            aria-label={`${option.value} - ${option.label}. ${getPointDescription(option.value, variant)}`}
+                            aria-label={`${formatPositionOptionLabel(option, variant)}. ${getPointDescription(option.value, variant)}`}
                             aria-disabled={!isInteractive}
-                            title={`${option.value} - ${option.label}: ${getPointDescription(option.value, variant)}`}
+                            title={`${formatPositionOptionLabel(option, variant)}: ${getPointDescription(option.value, variant)}`}
                             onClick={() => togglePosition(option.value)}
                             className={cn(
                               'mx-auto flex size-11 items-center justify-center rounded-md border bg-background text-sm font-semibold shadow-xs transition-colors',
@@ -238,19 +231,34 @@ export function EccentricityIndicator({
               </div>
             </div>
           ) : (
-            <div className="relative aspect-square w-full max-w-64">
+            <div className="relative aspect-square w-full max-w-72">
               <div
-                className="absolute inset-0 rounded-full border-2 border-border bg-muted/20"
+                className="absolute inset-16 rounded-full border-2 border-border bg-muted/20"
                 aria-hidden="true"
               />
               <div
-                className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-border"
+                className="absolute bottom-8 left-1/2 top-8 w-px -translate-x-1/2 bg-border"
                 aria-hidden="true"
               />
               <div
-                className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-border"
+                className="absolute left-8 right-8 top-1/2 h-px -translate-y-1/2 bg-border"
                 aria-hidden="true"
               />
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[55%] text-2xl font-semibold">
+                A
+              </span>
+              <span className="absolute left-[39%] top-[39%] -translate-x-1/2 -translate-y-1/2 text-2xl font-semibold">
+                B
+              </span>
+              <span className="absolute left-[61%] top-[39%] -translate-x-1/2 -translate-y-1/2 text-2xl font-semibold">
+                C
+              </span>
+              <span className="absolute left-[61%] top-[61%] -translate-x-1/2 -translate-y-1/2 text-2xl font-semibold">
+                D
+              </span>
+              <span className="absolute left-[39%] top-[61%] -translate-x-1/2 -translate-y-1/2 text-2xl font-semibold">
+                E
+              </span>
 
               {options.map((option) => {
                 const selected = value === option.value
@@ -262,27 +270,33 @@ export function EccentricityIndicator({
                         <button
                           type="button"
                           aria-pressed={selected}
-                          aria-label={`${option.value} - ${option.label}. ${getPointDescription(option.value, variant)}`}
+                          aria-label={`${formatPositionOptionLabel(option, variant)}. ${getPointDescription(option.value, variant)}`}
                           aria-disabled={!isInteractive}
-                          title={`${option.value} - ${option.label}: ${getPointDescription(option.value, variant)}`}
+                          title={`${formatPositionOptionLabel(option, variant)}: ${getPointDescription(option.value, variant)}`}
                           onClick={() => togglePosition(option.value)}
                           className={cn(
-                            'absolute z-10 flex size-11 items-center justify-center rounded-md border bg-background text-sm font-semibold shadow-xs transition-colors',
+                            'absolute z-10 flex size-11 items-center justify-center rounded-md border text-sm font-semibold shadow-xs transition-all',
                             'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none',
                             selected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border text-foreground hover:bg-muted',
+                              ? 'border-primary bg-primary shadow-md ring-4 ring-primary/15'
+                              : 'border-border bg-background hover:border-primary/50 hover:bg-muted',
                             !isInteractive && 'cursor-default',
                             option.className,
                           )}
-                        />
+                        >
+                          <span className="sr-only">
+                            {formatPositionOptionLabel(option, variant)}
+                          </span>
+                        </button>
                       }
                     >
-                      {option.diagramLabel}
+                      <span className="sr-only">
+                        {formatPositionOptionLabel(option, variant)}
+                      </span>
                     </TooltipTrigger>
                     <TooltipContent>
                       <span className="font-medium">
-                        {option.value} - {option.label}
+                        {formatPositionOptionLabel(option, variant)}
                       </span>
                       <span className="block text-background/80">
                         {getPointDescription(option.value, variant)}
@@ -297,6 +311,15 @@ export function EccentricityIndicator({
       </div>
     </div>
   )
+}
+
+function formatPositionOptionLabel(
+  option: PositionOption,
+  variant: EccentricityIndicatorVariant,
+) {
+  return variant === 'road_scale'
+    ? `${option.value} - ${option.label}`
+    : option.label
 }
 
 function getPointDescription(
@@ -319,18 +342,16 @@ function getPointDescription(
   }
 
   switch (position) {
-    case 'A':
-      return 'Extremidade superior da plataforma'
-    case 'B':
-      return 'Extremidade direita da plataforma'
-    case 'C':
-      return 'Extremidade inferior da plataforma'
-    case 'D':
-      return 'Extremidade esquerda da plataforma'
-    case 'E':
-      return 'Centro geométrico da plataforma'
+    case 'top':
+      return 'Indicador posicionado acima da plataforma'
+    case 'right':
+      return 'Indicador posicionado à direita da plataforma'
+    case 'bottom':
+      return 'Indicador posicionado abaixo da plataforma'
+    case 'left':
+      return 'Indicador posicionado à esquerda da plataforma'
     default:
-      return 'Ponto da plataforma'
+      return 'Posição do indicador'
   }
 }
 
