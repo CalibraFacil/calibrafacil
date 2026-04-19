@@ -8,11 +8,10 @@ import {
 
 const ECCENTRICITY_INDICATOR_SPEC_KEY = "eccentricityIndicatorPosition";
 const ECCENTRICITY_INDICATOR_OPTIONS = [
-  { value: "A", label: "Superior", className: "point-a" },
-  { value: "B", label: "Lateral Direito", className: "point-b" },
-  { value: "C", label: "Inferior", className: "point-c" },
-  { value: "D", label: "Lateral Esquerdo", className: "point-d" },
-  { value: "E", label: "Centro", className: "point-e" },
+  { value: "top", label: "Superior", className: "box-top" },
+  { value: "right", label: "Lateral Direito", className: "box-right" },
+  { value: "bottom", label: "Inferior", className: "box-bottom" },
+  { value: "left", label: "Lateral Esquerdo", className: "box-left" },
 ] as const;
 const ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS = [
   { value: "1", label: "Seção 1", className: "road-point-1" },
@@ -20,6 +19,13 @@ const ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS = [
   { value: "3", label: "Seção 3", className: "road-point-3" },
   { value: "4", label: "Seção 4", className: "road-point-4" },
 ] as const;
+const CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES = {
+  A: "eccentricity-load-a",
+  B: "eccentricity-load-b",
+  C: "eccentricity-load-c",
+  D: "eccentricity-load-d",
+  E: "eccentricity-load-e",
+} as const;
 const MAX_PRINT_TABLE_COLUMNS = 8;
 const MAX_CALIBRATION_RESULT_COLUMNS = 6;
 
@@ -173,6 +179,8 @@ type MethodCertificateContent = {
   procedureCode?: string;
   referenceStandards?: string[];
   certifiedValuesDisplay?: "full" | "hidden";
+  massCompositionDisplay?: "full" | "hidden";
+  uncertaintyBudgetDisplay?: "full" | "hidden";
   sections?: MethodCertificateContentSection[];
 };
 
@@ -640,7 +648,7 @@ const styles = `
   .eccentricity-certificate {
     border: 1px solid #ddd;
     padding: 10px;
-    min-height: 190px;
+    min-height: 170px;
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -652,80 +660,104 @@ const styles = `
   }
   .eccentricity-diagram {
     position: relative;
-    width: 128px;
-    height: 128px;
-    margin: 12px auto 10px;
+    width: 150px;
+    height: 150px;
+    margin: 8px auto 6px;
   }
   .eccentricity-circle {
     position: absolute;
-    inset: 10px;
-    border: 1.5px solid #555;
+    left: 38px;
+    top: 38px;
+    width: 74px;
+    height: 74px;
+    border: 1.5px solid #111;
     border-radius: 999px;
   }
   .eccentricity-line-v {
     position: absolute;
     top: 10px;
-    bottom: 10px;
+    height: 130px;
     left: 50%;
     width: 1px;
-    background: #555;
+    background: #111;
   }
   .eccentricity-line-h {
     position: absolute;
     left: 10px;
-    right: 10px;
+    width: 130px;
     top: 50%;
     height: 1px;
-    background: #555;
+    background: #111;
   }
   .eccentricity-point {
     position: absolute;
-    width: 22px;
-    height: 22px;
-    border: 1px solid #555;
-    background: #fff;
     color: #111;
-    font-size: 8pt;
+    font-size: 12pt;
     font-weight: 700;
-    line-height: 20px;
     text-align: center;
+    z-index: 2;
   }
-  .eccentricity-point.selected {
+  .eccentricity-load-a {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -52%);
+    background: #fff;
+    padding: 0 4px;
+    line-height: 1.05;
+  }
+  .eccentricity-load-b {
+    left: 54px;
+    top: 50px;
+  }
+  .eccentricity-load-c {
+    right: 54px;
+    top: 50px;
+  }
+  .eccentricity-load-d {
+    right: 54px;
+    bottom: 45px;
+  }
+  .eccentricity-load-e {
+    left: 54px;
+    bottom: 45px;
+  }
+  .eccentricity-toggle {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 1.3px solid #111;
+    background: #fff;
+  }
+  .eccentricity-toggle.selected {
     border-color: var(--template-primary);
     background: var(--template-primary);
-    color: #fff;
   }
-  .eccentricity-point.point-a {
+  .eccentricity-toggle.box-top {
     left: 50%;
     top: 0;
     transform: translateX(-50%);
   }
-  .eccentricity-point.point-b {
+  .eccentricity-toggle.box-right {
     right: 0;
     top: 50%;
     transform: translateY(-50%);
   }
-  .eccentricity-point.point-c {
+  .eccentricity-toggle.box-bottom {
     left: 50%;
     bottom: 0;
     transform: translateX(-50%);
   }
-  .eccentricity-point.point-d {
+  .eccentricity-toggle.box-left {
     left: 0;
     top: 50%;
     transform: translateY(-50%);
   }
-  .eccentricity-point.point-e {
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-  }
   .eccentricity-status {
-    border: 1px solid #ddd;
-    padding: 5px;
     font-size: 8pt;
     text-align: center;
     font-weight: 600;
+    border: 0;
+    padding: 0;
   }
   .road-eccentricity-diagram {
     margin: 12px auto 10px;
@@ -1047,6 +1079,38 @@ function normalizeText(value: string | null | undefined) {
     .toLowerCase();
 }
 
+function getCircularEccentricityLoadPositions(
+  field: MethodInputField,
+  data: unknown[],
+) {
+  const positionColumn = field.columns?.find((column) => {
+    const text = normalizeText(`${column.key} ${column.label}`);
+    return text.includes("posicao") || text.includes("ponto");
+  });
+
+  if (!positionColumn) {
+    return Object.keys(CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES);
+  }
+
+  const positions: string[] = [];
+  for (const row of data) {
+    if (!row || typeof row !== "object") continue;
+
+    const rawValue = (row as Record<string, unknown>)[positionColumn.key];
+    const value = formatValue(rawValue).trim().toUpperCase();
+    if (
+      value in CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES &&
+      !positions.includes(value)
+    ) {
+      positions.push(value);
+    }
+  }
+
+  return positions.length > 0
+    ? positions
+    : Object.keys(CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES);
+}
+
 function isInformationBulletSection(items: string[]) {
   const text = normalizeText(items.join(" "));
   return (
@@ -1216,9 +1280,11 @@ function isEccentricityCalibrationField(field: MethodInputField) {
 function CertificateEccentricityDiagram({
   selectedPosition,
   variant,
+  loadPositions,
 }: {
   selectedPosition: EccentricityIndicatorPosition | null;
   variant: EccentricityIndicatorVariant;
+  loadPositions?: string[];
 }) {
   const options =
     variant === "road_scale"
@@ -1227,6 +1293,9 @@ function CertificateEccentricityDiagram({
   const selectedOption = options.find(
     (option) => option.value === selectedPosition,
   );
+  const circularLoadPositions = (
+    loadPositions ?? Object.keys(CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES)
+  ).filter((position) => position in CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES);
 
   return (
     <div className="eccentricity-certificate">
@@ -1253,22 +1322,32 @@ function CertificateEccentricityDiagram({
           <div className="eccentricity-circle" />
           <div className="eccentricity-line-v" />
           <div className="eccentricity-line-h" />
+          {circularLoadPositions.map((position) => (
+            <div
+              key={position}
+              className={`eccentricity-point ${
+                CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES[
+                  position as keyof typeof CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES
+                ]
+              }`}
+            >
+              {position}
+            </div>
+          ))}
           {options.map((option) => (
             <div
               key={option.value}
-              className={`eccentricity-point ${option.className} ${
+              className={`eccentricity-toggle ${option.className} ${
                 selectedPosition === option.value ? "selected" : ""
               }`}
-            >
-              {option.value}
-            </div>
+            />
           ))}
         </div>
       )}
       <div className="eccentricity-status">
         {selectedOption
-          ? `${selectedOption.value} - ${selectedOption.label}`
-          : "Nenhum ponto selecionado"}
+          ? `Posição do indicador: ${selectedOption.label}`
+          : "Posição do indicador"}
       </div>
     </div>
   );
@@ -1532,6 +1611,19 @@ export function CertificateHtml({ job }: { job: JobData }) {
     methodCertificateContent?.certifiedValuesDisplay ??
     (massCompositionRows.length > 0 ? "hidden" : "full");
   const showCertifiedValuesTable = certifiedValuesDisplay === "full";
+  const massCompositionDisplay =
+    methodCertificateContent?.massCompositionDisplay ??
+    (certifiedValuesDisplay === "hidden" ? "hidden" : "full");
+  const showMassCompositionTraceability =
+    massCompositionRows.length > 0 && massCompositionDisplay === "full";
+  const uncertaintyBudgetDisplay =
+    methodCertificateContent?.uncertaintyBudgetDisplay ??
+    (certifiedValuesDisplay === "hidden" &&
+    isBalanceLikeMethod(job.methodSnapshot)
+      ? "hidden"
+      : "full");
+  const showUncertaintyBudget =
+    uncertaintyBudgetEntries.length > 0 && uncertaintyBudgetDisplay === "full";
 
   const dynamicStyles = `
       :root {
@@ -1924,6 +2016,14 @@ export function CertificateHtml({ job }: { job: JobData }) {
                           eccentricityVariant,
                         )}
                         variant={eccentricityVariant}
+                        loadPositions={
+                          eccentricityVariant === "circular_platform"
+                            ? getCircularEccentricityLoadPositions(
+                                field,
+                                tableData,
+                              )
+                            : undefined
+                        }
                       />
                     </div>
                   );
@@ -1936,7 +2036,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
             </div>
           )}
 
-          {massCompositionRows.length > 0 && (
+          {showMassCompositionTraceability && (
             <div className="section">
               <div className="section-title">
                 Composição dos Padrões por Ponto
@@ -2066,33 +2166,32 @@ export function CertificateHtml({ job }: { job: JobData }) {
               </div>
             )}
 
-          {templateConfig.sections.showResults &&
-            uncertaintyBudgetEntries.length > 0 && (
-              <div className="section">
-                <div className="section-title">Orçamento de Incerteza</div>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Componente</th>
-                      <th>Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {uncertaintyBudgetEntries.map(
-                      ({ key, label, value, unit }) => (
-                        <tr key={key}>
-                          <td>{label}</td>
-                          <td>
-                            {formatValue(value)}
-                            {unit ? ` ${unit}` : ""}
-                          </td>
-                        </tr>
-                      ),
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          {templateConfig.sections.showResults && showUncertaintyBudget && (
+            <div className="section">
+              <div className="section-title">Orçamento de Incerteza</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Componente</th>
+                    <th>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {uncertaintyBudgetEntries.map(
+                    ({ key, label, value, unit }) => (
+                      <tr key={key}>
+                        <td>{label}</td>
+                        <td>
+                          {formatValue(value)}
+                          {unit ? ` ${unit}` : ""}
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Results */}
           {templateConfig.sections.showResults &&

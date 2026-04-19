@@ -1935,6 +1935,8 @@ export type MethodCertificateContent = {
   procedureCode?: string;
   referenceStandards?: string[];
   certifiedValuesDisplay?: "full" | "hidden";
+  massCompositionDisplay?: "full" | "hidden";
+  uncertaintyBudgetDisplay?: "full" | "hidden";
   sections?: MethodCertificateContentSection[];
 };
 

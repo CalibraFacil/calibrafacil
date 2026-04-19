@@ -205,11 +205,47 @@ const statusLabels: Record<string, string> = {
   CANCELED: 'Cancelado',
 }
 
+const CIRCULAR_ECCENTRICITY_LOAD_POSITIONS = ['A', 'B', 'C', 'D', 'E']
+
+function normalizeText(value: string | null | undefined) {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
 function getEccentricityIndicatorVariant(
   field: MethodInputField | undefined,
 ): EccentricityIndicatorVariant | null {
   if (!field?.eccentricityIndicator?.enabled) return null
   return field.eccentricityIndicator.variant ?? 'circular_platform'
+}
+
+function getCircularEccentricityLoadPositions(
+  field: MethodInputField,
+  rows: Array<Record<string, unknown>>,
+) {
+  const positionColumn = field.columns?.find((column) => {
+    const text = normalizeText(`${column.key} ${column.label}`)
+    return text.includes('posicao') || text.includes('ponto')
+  })
+
+  if (!positionColumn) return undefined
+
+  const positions: string[] = []
+  for (const row of rows) {
+    const value = String(row[positionColumn.key] ?? '')
+      .trim()
+      .toUpperCase()
+    if (
+      CIRCULAR_ECCENTRICITY_LOAD_POSITIONS.includes(value) &&
+      !positions.includes(value)
+    ) {
+      positions.push(value)
+    }
+  }
+
+  return positions.length > 0 ? positions : undefined
 }
 
 function getInitialIndicatorPosition(job: JobData) {
@@ -907,6 +943,14 @@ function ExecuteJobForm({
               value={selectedIndicatorPosition}
               onChange={updateIndicatorPosition}
               variant={fieldEccentricityVariant}
+              loadPositions={
+                fieldEccentricityVariant === 'circular_platform'
+                  ? getCircularEccentricityLoadPositions(
+                      field,
+                      (value as Array<Record<string, unknown>>) || [],
+                    )
+                  : undefined
+              }
               disabled={!isEditable}
               className="max-w-4xl"
             />
