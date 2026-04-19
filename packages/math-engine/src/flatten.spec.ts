@@ -99,6 +99,23 @@ describe("Data Flattening", () => {
       });
 
       expect(result["customKey"]).toBe(42);
+      expect(result["anotherKey"]).toBeUndefined();
+    });
+
+    it("should apply include keys to flattened nested values", () => {
+      const data = {
+        point1: { reading: 10.5, nominal: 10 },
+        point2: { reading: 20.5, nominal: 20 },
+      };
+
+      const result = flattenForExecution(data, {
+        includeKeys: ["point1_reading", "nominal"],
+      });
+
+      expect(result["point1_reading"]).toBe(10.5);
+      expect(result["point1_nominal"]).toBe(10);
+      expect(result["point2_nominal"]).toBe(20);
+      expect(result["point2_reading"]).toBeUndefined();
     });
 
     it("should apply custom exclude keys", () => {
@@ -214,6 +231,35 @@ describe("Data Flattening", () => {
 
       // All 3 readings should be preserved (they come from different sources)
       expect(readings.filter((r) => r === 10).length).toBe(3);
+    });
+
+    it("should not extract ambiguous nominal/reference/target value fields", () => {
+      const data = {
+        point: {
+          value: 10.1,
+          nominal_value: 10,
+          reference_value: 9.99,
+          target_value: 10,
+        },
+        reference_values: [1, 2, 3],
+      };
+
+      const readings = extractReadings(data);
+
+      expect(readings).toEqual([10.1]);
+    });
+
+    it("should extract numbered reading keys without substring matching", () => {
+      const data = {
+        reading1: 10,
+        reading_2: 10.1,
+        leitura3: 9.9,
+        nominal_reading_reference: 100,
+      };
+
+      const readings = extractReadings(data);
+
+      expect(readings).toEqual([10, 10.1, 9.9]);
     });
 
     it("should preserve repeated array readings", () => {
@@ -409,6 +455,16 @@ describe("Data Flattening", () => {
       const result = flattenForExecution(data, { normalizeUnits: false });
 
       expect(result["mass"]).toBe("500 g");
+    });
+
+    it("should preserve strings with unknown units instead of coercing to numbers", () => {
+      const data = {
+        mass: "10 foo",
+      };
+
+      const result = flattenForExecution(data, { normalizeUnits: true });
+
+      expect(result["mass"]).toBe("10 foo");
     });
   });
 

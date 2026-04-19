@@ -1,8 +1,4 @@
-import {
-  EXCLUDE_KEYS,
-  UNIT_TO_SI,
-  UNIT_VALUE_PATTERN,
-} from "./constants";
+import { EXCLUDE_KEYS, UNIT_TO_SI, UNIT_VALUE_PATTERN } from "./constants";
 import type { FormulaContext, UnitValue } from "./types";
 
 // ============================================
@@ -77,8 +73,10 @@ function processValue(
       if (normalized) {
         return normalized.value;
       }
-      // If unit not recognized, return the numeric value
-      return parsed.value;
+      // Unknown units must not be silently stripped in laboratory data.
+      // Preserve the original string so formulas cannot accidentally treat
+      // "10 foo" as a dimensionless numeric 10.
+      return val;
     }
   }
 
@@ -100,6 +98,15 @@ function shouldExcludeKey(key: string, excludeSet: Set<string>): boolean {
   return false;
 }
 
+function shouldIncludeKey(
+  key: string,
+  leafKey: string,
+  includeSet: Set<string>,
+): boolean {
+  if (includeSet.size === 0) return true;
+  return includeSet.has(key) || includeSet.has(leafKey);
+}
+
 // ============================================
 // Main flatten function
 // ============================================
@@ -109,11 +116,17 @@ export function flattenForExecution(
 ): FormulaContext {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const excludeSet = new Set([...EXCLUDE_KEYS, ...opts.excludeKeys]);
+  const includeSet = new Set(opts.includeKeys);
 
   const result: FormulaContext = {};
   const inputsUsed: string[] = [];
 
-  function flatten(obj: unknown, currentKey: string, depth: number): void {
+  function flatten(
+    obj: unknown,
+    currentKey: string,
+    depth: number,
+    leafKey: string = currentKey,
+  ): void {
     if (depth > opts.maxDepth) return;
 
     if (obj === null || obj === undefined) {
@@ -131,6 +144,9 @@ export function flattenForExecution(
       typeof obj === "string" ||
       typeof obj === "boolean"
     ) {
+      if (!shouldIncludeKey(currentKey, leafKey, includeSet)) {
+        return;
+      }
       const processed = processValue(obj, opts.normalizeUnits);
       if (processed !== null) {
         result[currentKey] = processed;
@@ -152,8 +168,10 @@ export function flattenForExecution(
         isAllNumeric && (numericValues.length > 0 || opts.preserveArrays);
 
       if (shouldProcess) {
+        const includeArray = shouldIncludeKey(currentKey, leafKey, includeSet);
+
         // Preserve array if option is enabled (for vector math: mean, std, etc.)
-        if (opts.preserveArrays) {
+        if (opts.preserveArrays && includeArray) {
           result[currentKey] = numericValues; // Could be [] - that's valid!
           inputsUsed.push(currentKey);
         }
@@ -162,20 +180,25 @@ export function flattenForExecution(
         if (opts.includeArrayIndices && numericValues.length > 0) {
           numericValues.forEach((item, index) => {
             const key = `${currentKey}_${index}`;
-            result[key] = item;
-            inputsUsed.push(key);
+            if (includeArray || shouldIncludeKey(key, leafKey, includeSet)) {
+              result[key] = item;
+              inputsUsed.push(key);
+            }
           });
         }
 
         // Store count for aggregate functions (0 for empty arrays)
-        result[`${currentKey}_count`] = numericValues.length;
-        inputsUsed.push(`${currentKey}_count`);
+        const countKey = `${currentKey}_count`;
+        if (includeArray || shouldIncludeKey(countKey, leafKey, includeSet)) {
+          result[countKey] = numericValues.length;
+          inputsUsed.push(countKey);
+        }
         return;
       }
 
       // For mixed/object arrays, flatten each element
       obj.forEach((item, index) => {
-        flatten(item, `${currentKey}_${index}`, depth + 1);
+        flatten(item, `${currentKey}_${index}`, depth + 1, leafKey);
       });
       return;
     }
@@ -184,7 +207,7 @@ export function flattenForExecution(
     if (typeof obj === "object") {
       for (const [key, value] of Object.entries(obj)) {
         const newKey = currentKey ? `${currentKey}_${key}` : key;
-        flatten(value, newKey, depth + 1);
+        flatten(value, newKey, depth + 1, key);
       }
     }
   }
@@ -200,8 +223,11 @@ export function flattenForExecution(
 /**
  * Extract numeric readings from nested data structure
  *
- * Traverses the data object to find numeric values associated with reading keys
- * (e.g., "reading", "value", "leitura", "measured").
+ * Traverses the data object to find numeric values associated with explicit
+ * reading keys (e.g., "reading", "value", "leitura", "measured").
+ * Matching is conservative: exact key, plural form, or a numbered suffix such
+ * as "reading1" / "leitura_2". Ambiguous fields like "nominal_value" or
+ * "reference_value" are intentionally not treated as Type A observations.
  *
  * IMPORTANT: All readings are preserved, including duplicates.
  * In metrology, repeated identical readings are valid and statistically
@@ -216,18 +242,27 @@ export function extractReadings(
   readingKeys: string[] = ["reading", "value", "leitura", "measured"],
 ): number[] {
   const readings: number[] = [];
+  const normalizedReadingKeys = readingKeys.map((key) => key.toLowerCase());
+
+  function isReadingKey(key: string): boolean {
+    const lowerKey = key.toLowerCase();
+    return normalizedReadingKeys.some((readingKey) => {
+      if (lowerKey === readingKey || lowerKey === `${readingKey}s`) {
+        return true;
+      }
+
+      return new RegExp(`^${escapeRegExp(readingKey)}[-_]?\\d+$`).test(
+        lowerKey,
+      );
+    });
+  }
 
   function extract(obj: unknown, parentKey: string = ""): void {
     if (obj === null || obj === undefined) return;
 
     if (typeof obj === "number") {
       // Only add if parent key suggests it's a reading
-      const isReadingKey = readingKeys.some(
-        (rk) =>
-          parentKey.toLowerCase().includes(rk.toLowerCase()) ||
-          parentKey === "",
-      );
-      if (isReadingKey) {
+      if (parentKey && isReadingKey(parentKey)) {
         readings.push(obj);
       }
       return;
@@ -236,7 +271,9 @@ export function extractReadings(
     if (Array.isArray(obj)) {
       for (const item of obj) {
         if (typeof item === "number") {
-          readings.push(item);
+          if (parentKey && isReadingKey(parentKey)) {
+            readings.push(item);
+          }
         } else {
           extract(item, parentKey);
         }
@@ -246,11 +283,9 @@ export function extractReadings(
 
     if (typeof obj === "object") {
       for (const [key, value] of Object.entries(obj)) {
-        const isReadingKey = readingKeys.some((rk) =>
-          key.toLowerCase().includes(rk.toLowerCase()),
-        );
+        const keyIsReading = isReadingKey(key);
 
-        if (isReadingKey) {
+        if (keyIsReading) {
           if (typeof value === "number") {
             readings.push(value);
             // Don't recurse - we've already captured the value
@@ -284,6 +319,10 @@ export function extractReadings(
   extract(data);
 
   return readings;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // ============================================

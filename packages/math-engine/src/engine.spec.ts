@@ -142,6 +142,49 @@ describe("CalibrationEngine", () => {
         expect(result.data.resultAsNumber).toBeCloseTo(2e20, 10);
       }
     });
+
+    it("should not leak per-call precision into subsequent formula evaluations", () => {
+      const engine = createEngine({ precision: 32 });
+
+      const lowPrecision = engine.evaluateFormula({
+        formula: "1 / 7",
+        context: {},
+        precision: 8,
+      });
+      const defaultPrecision = engine.evaluateFormula({
+        formula: "1 / 7",
+        context: {},
+      });
+      const mediumPrecision = engine.evaluateFormula({
+        formula: "1 / 7",
+        context: {},
+        precision: 16,
+      });
+      const defaultPrecisionAgain = engine.evaluateFormula({
+        formula: "1 / 7",
+        context: {},
+      });
+
+      expect(lowPrecision.success).toBe(true);
+      expect(defaultPrecision.success).toBe(true);
+      expect(mediumPrecision.success).toBe(true);
+      expect(defaultPrecisionAgain.success).toBe(true);
+      if (
+        lowPrecision.success &&
+        defaultPrecision.success &&
+        mediumPrecision.success &&
+        defaultPrecisionAgain.success
+      ) {
+        expect(lowPrecision.data.result).toBe("0.14285714");
+        expect(mediumPrecision.data.result).toBe("0.1428571428571429");
+        expect(defaultPrecision.data.result).toBe(
+          "0.14285714285714285714285714285714",
+        );
+        expect(defaultPrecisionAgain.data.result).toBe(
+          "0.14285714285714285714285714285714",
+        );
+      }
+    });
   });
 
   describe("Vector Math Support", () => {

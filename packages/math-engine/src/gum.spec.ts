@@ -15,20 +15,18 @@ describe("GUM Calculations", () => {
       expect(result.sampleSize).toBe(5);
       expect(result.degreesOfFreedom).toBe(4);
       // u_A = s / sqrt(n) should be less than s
-      expect(result.standardUncertainty).toBeLessThan(
-        result.standardDeviation
-      );
+      expect(result.standardUncertainty).toBeLessThan(result.standardDeviation);
     });
 
     it("should throw error for insufficient readings", () => {
       expect(() => calculateTypeA({ readings: [10] })).toThrow(
-        "At least 2 readings"
+        "At least 2 readings",
       );
     });
 
     it("should throw error for empty readings", () => {
       expect(() => calculateTypeA({ readings: [] })).toThrow(
-        "At least 2 readings"
+        "At least 2 readings",
       );
     });
 
@@ -62,7 +60,8 @@ describe("GUM Calculations", () => {
     it("should match known verification values", () => {
       // Example: 10 repeated measurements
       const readings = [
-        100.02, 99.98, 100.01, 99.99, 100.0, 100.01, 99.97, 100.03, 100.0, 99.99,
+        100.02, 99.98, 100.01, 99.99, 100.0, 100.01, 99.97, 100.03, 100.0,
+        99.99,
       ];
       const result = calculateTypeA({ readings });
 
@@ -217,7 +216,7 @@ describe("GUM Calculations", () => {
       expect(result.coverageFactor).toBeGreaterThanOrEqual(2);
       expect(result.expandedUncertainty).toBeCloseTo(
         result.coverageFactor * result.combinedStandardUncertainty,
-        10
+        10,
       );
     });
 
@@ -253,7 +252,7 @@ describe("GUM Calculations", () => {
 
     it("should throw error when no uncertainties provided", () => {
       expect(() => calculateCombinedUncertainty({})).toThrow(
-        "At least one uncertainty component"
+        "At least one uncertainty component",
       );
     });
 
@@ -303,20 +302,17 @@ describe("GUM Calculations", () => {
         sampleSize: 10,
       };
 
-      const result = calculateCombinedUncertainty(
-        { typeA },
-        0.9545
-      );
+      const result = calculateCombinedUncertainty({ typeA }, 0.9545);
 
       const resultWithCoeff = calculateCombinedUncertainty(
         { typeA, sensitivityCoefficients: { typeA: 2 } },
-        0.9545
+        0.9545,
       );
 
       // With coefficient of 2, the combined uncertainty should be doubled
       expect(resultWithCoeff.combinedStandardUncertainty).toBeCloseTo(
         result.combinedStandardUncertainty * 2,
-        10
+        10,
       );
     });
 
@@ -332,6 +328,28 @@ describe("GUM Calculations", () => {
       const result = calculateCombinedUncertainty({ typeA }, 0.99);
 
       expect(result.confidenceLevel).toBe(0.99);
+    });
+
+    it("should use confidence-specific normal factors for DOF >= 500", () => {
+      const typeB = {
+        components: [
+          {
+            name: "reference",
+            standardUncertainty: 1,
+            degreesOfFreedom: 1000,
+          },
+        ],
+        totalTypeB: 1,
+      };
+
+      const result95 = calculateCombinedUncertainty({ typeB }, 0.95);
+      const result9545 = calculateCombinedUncertainty({ typeB }, 0.9545);
+      const result99 = calculateCombinedUncertainty({ typeB }, 0.99);
+
+      expect(result95.effectiveDegreesOfFreedom).toBe(1000);
+      expect(result95.coverageFactor).toBeCloseTo(1.96, 12);
+      expect(result9545.coverageFactor).toBeCloseTo(2.0, 12);
+      expect(result99.coverageFactor).toBeCloseTo(2.576, 12);
     });
   });
 });
