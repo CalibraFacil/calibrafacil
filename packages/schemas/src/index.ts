@@ -144,6 +144,78 @@ export const AuditLogQuerySchema = z.object({
 export type AuditLogQuery = z.infer<typeof AuditLogQuerySchema>;
 
 // =============================================================================
+// CERTIFICATE NUMBERING SCHEMAS
+// =============================================================================
+
+export const CertificateSequenceResetScopeSchema = z.enum([
+  "never",
+  "year",
+  "month",
+  "project",
+]);
+
+export const CertificateNumberingConfigSchema = z.object({
+  labCode: z
+    .string()
+    .trim()
+    .min(1, "Codigo do laboratorio e obrigatorio")
+    .max(32, "Codigo do laboratorio deve ter no maximo 32 caracteres")
+    .default("CAL"),
+  projectCode: z
+    .string()
+    .trim()
+    .max(32, "Codigo do projeto deve ter no maximo 32 caracteres")
+    .nullable()
+    .optional()
+    .or(z.literal("")),
+  numberTemplate: z
+    .string()
+    .trim()
+    .min(1, "Formato do numero e obrigatorio")
+    .max(160, "Formato do numero deve ter no maximo 160 caracteres")
+    .default("{labCode}-{yyyy}-{seq}"),
+  certificateNameTemplate: z
+    .string()
+    .trim()
+    .min(1, "Convencao de nome e obrigatoria")
+    .max(200, "Convencao de nome deve ter no maximo 200 caracteres")
+    .default("Certificado {number}"),
+  sequence: z
+    .object({
+      resetScope: CertificateSequenceResetScopeSchema.default("year"),
+      startAt: z.coerce.number().int().min(0).max(999999999).default(1),
+      increment: z.coerce.number().int().min(1).max(1000).default(1),
+      padding: z.coerce.number().int().min(1).max(12).default(4),
+    })
+    .default({
+      resetScope: "year",
+      startAt: 1,
+      increment: 1,
+      padding: 4,
+    }),
+});
+
+export const UpdateCertificateNumberingProfileSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Nome do perfil e obrigatorio")
+    .max(120, "Nome do perfil deve ter no maximo 120 caracteres")
+    .default("Padrao"),
+  config: CertificateNumberingConfigSchema,
+});
+
+export type CertificateSequenceResetScope = z.infer<
+  typeof CertificateSequenceResetScopeSchema
+>;
+export type CertificateNumberingConfig = z.infer<
+  typeof CertificateNumberingConfigSchema
+>;
+export type UpdateCertificateNumberingProfileInput = z.infer<
+  typeof UpdateCertificateNumberingProfileSchema
+>;
+
+// =============================================================================
 // ASSET TYPE SCHEMAS - Dynamic Instrument Classification
 // =============================================================================
 
@@ -153,7 +225,7 @@ export type AuditLogQuery = z.infer<typeof AuditLogQuerySchema>;
 export const AssetTypeFieldSchema = z.object({
   key: z.string().min(1, "Chave é obrigatória"),
   label: z.string().min(1, "Rótulo é obrigatório"),
-  type: z.enum(["text", "number", "select"]),
+  type: z.enum(["text", "number", "select", "weighing_ranges"]),
   options: z.array(z.string()).optional(),
   unit: z.string().optional(),
   required: z.boolean().optional(),
@@ -395,6 +467,30 @@ export type MethodStatus = z.infer<typeof MethodStatusSchema>;
 /**
  * Table column definition for table-type inputs
  */
+export const MethodTableColumnRoleSchema = z.enum([
+  "standard_value",
+  "mass_standard_composition",
+]);
+export type MethodTableColumnRole = z.infer<typeof MethodTableColumnRoleSchema>;
+
+export const MassCompositionConfigSchema = z.object({
+  targetUnit: z.enum(["mg", "g", "kg"]).optional(),
+  optionSource: z.enum(["certified_values", "composition_profiles"]).optional(),
+  targetColumns: z
+    .object({
+      certifiedValue: z.string().optional(),
+      compositionLabel: z.string().optional(),
+      expandedUncertainty: z.string().optional(),
+      maxError: z.string().optional(),
+      drift: z.string().optional(),
+      buoyancy: z.string().optional(),
+    })
+    .optional(),
+  uncertaintyMode: z.enum(["expanded_rss"]).optional(),
+  quantityMode: z.enum(["linear_per_item_then_rss"]).optional(),
+});
+export type MassCompositionConfig = z.infer<typeof MassCompositionConfigSchema>;
+
 export const MethodTableColumnSchema = z.object({
   key: z
     .string()
@@ -406,12 +502,51 @@ export const MethodTableColumnSchema = z.object({
   label: z.string().min(1, "Rótulo é obrigatório"),
   type: z.enum(["text", "number"]),
   unit: z.string().optional(),
+  role: MethodTableColumnRoleSchema.optional(),
+  massComposition: MassCompositionConfigSchema.optional(),
 });
 
 export type MethodTableColumn = z.infer<typeof MethodTableColumnSchema>;
 
 export const MethodInputSourceSchema = z.enum(["manual", "asset_spec"]);
 export type MethodInputSource = z.infer<typeof MethodInputSourceSchema>;
+
+export const EccentricityIndicatorVariantSchema = z.enum([
+  "circular_platform",
+  "road_scale",
+]);
+export type EccentricityIndicatorVariant = z.infer<
+  typeof EccentricityIndicatorVariantSchema
+>;
+
+export const EccentricityIndicatorConfigSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+  variant:
+    EccentricityIndicatorVariantSchema.optional().default("circular_platform"),
+});
+export type EccentricityIndicatorConfig = z.infer<
+  typeof EccentricityIndicatorConfigSchema
+>;
+
+export const WeighingRangeResolverConfigSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+  assetSpecKey: z.string().min(1).optional(),
+  pointColumn: z.string().min(1).optional(),
+  pointUnit: z.enum(["mg", "g", "kg"]).optional(),
+  targetColumns: z
+    .object({
+      rangeLabel: z.string().optional(),
+      rangeMin: z.string().optional(),
+      rangeMax: z.string().optional(),
+      rangeUnit: z.string().optional(),
+      resolution: z.string().optional(),
+      resolutionUnit: z.string().optional(),
+    })
+    .optional(),
+});
+export type WeighingRangeResolverConfig = z.infer<
+  typeof WeighingRangeResolverConfigSchema
+>;
 
 /**
  * Input field definition for method data collection
@@ -435,6 +570,8 @@ export const MethodInputFieldSchema = z
     source: MethodInputSourceSchema.optional().default("manual"),
     assetSpecKey: z.string().optional(),
     allowOverride: z.boolean().optional().default(false),
+    eccentricityIndicator: EccentricityIndicatorConfigSchema.optional(),
+    weighingRangeResolver: WeighingRangeResolverConfigSchema.optional(),
   })
   .refine(
     (data) => {
@@ -551,6 +688,45 @@ export const MethodTypeBComponentSchema = z.object({
 
 export type MethodTypeBComponent = z.infer<typeof MethodTypeBComponentSchema>;
 
+export const MethodCertificateContentSectionSchema = z.discriminatedUnion(
+  "kind",
+  [
+    z.object({
+      kind: z.literal("paragraphs"),
+      title: z.string().trim(),
+      paragraphs: z.array(z.string().trim()).default([]),
+    }),
+    z.object({
+      kind: z.literal("definition_list"),
+      title: z.string().trim(),
+      items: z
+        .array(
+          z.object({
+            term: z.string().trim(),
+            definition: z.string().trim(),
+          }),
+        )
+        .default([]),
+    }),
+    z.object({
+      kind: z.literal("bullets"),
+      title: z.string().trim().optional(),
+      items: z.array(z.string().trim()).default([]),
+    }),
+  ],
+);
+
+export const MethodCertificateContentSchema = z.object({
+  procedureCode: z.string().trim().optional(),
+  referenceStandards: z.array(z.string().trim()).default([]),
+  certifiedValuesDisplay: z.enum(["full", "hidden"]).optional(),
+  sections: z.array(MethodCertificateContentSectionSchema).default([]),
+});
+
+export type MethodCertificateContent = z.infer<
+  typeof MethodCertificateContentSchema
+>;
+
 /**
  * Schema for creating a new method
  */
@@ -564,6 +740,7 @@ export const CreateMethodSchema = z.object({
   formulas: z.array(MethodFormulaSchema).default([]),
   validations: z.array(MethodValidationSchema).default([]),
   uncertaintyParams: z.array(MethodTypeBComponentSchema).default([]),
+  certificateContent: MethodCertificateContentSchema.nullable().optional(),
 });
 
 export type CreateMethodInput = z.infer<typeof CreateMethodSchema>;
@@ -696,6 +873,14 @@ export const CertifiedValueSchema = z.object({
   value: z.coerce.number({ message: "Valor certificado e obrigatorio" }),
   uncertainty: z.coerce.number().positive("Incerteza deve ser positiva"),
   unit: z.string().min(1, "Unidade e obrigatoria"),
+  maxError: z.coerce.number().nullable().optional(),
+  drift: z.coerce.number().nullable().optional(),
+  buoyancy: z.coerce.number().nullable().optional(),
+  coverageFactor: z.coerce.number().positive().nullable().optional(),
+  compositionProfile: z.boolean().optional(),
+  profileKey: z.string().nullable().optional(),
+  profileClass: z.string().nullable().optional(),
+  profileQuantityAvailable: z.coerce.number().nullable().optional(),
 });
 
 export type CertifiedValue = z.infer<typeof CertifiedValueSchema>;
@@ -843,6 +1028,7 @@ export const MethodSnapshotSchema = z.object({
   formulas: z.array(MethodFormulaSchema),
   validations: z.array(MethodValidationSchema),
   uncertaintyParams: z.array(MethodTypeBComponentSchema),
+  certificateContent: MethodCertificateContentSchema.nullable().optional(),
 });
 
 export type MethodSnapshot = z.infer<typeof MethodSnapshotSchema>;

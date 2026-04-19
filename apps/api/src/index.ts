@@ -42,10 +42,14 @@ import { sessionsRouter } from "./routes/sessions";
 import { ssoRouter } from "./routes/sso";
 import { apiKeysRouter } from "./routes/api-keys";
 import { publicApiRouter } from "./routes/public-api";
-import { publicApiV2DocsRouter, publicApiV2Router } from "./routes/public-api-v2";
+import {
+  publicApiV2DocsRouter,
+  publicApiV2Router,
+} from "./routes/public-api-v2";
 import { isAllowedPortalOrigin } from "./lib/portal-domains";
 import { portalDomainsRouter } from "./routes/portal-domains";
 import { certificateTemplatesRouter } from "./routes/certificate-templates";
+import { certificateNumberingRouter } from "./routes/certificate-numbering";
 import { unitsRouter } from "./routes/units";
 import { integrationsRouter } from "./routes/integrations";
 import { customerSuccessRouter } from "./routes/customer-success";
@@ -178,9 +182,8 @@ app.use("*", async (c, next) => {
     | { connectionString?: string }
     | undefined;
   if ((c.env.NODE_ENV ?? "").toLowerCase() !== "production") {
-    const localConnectionString =
-      (c.env as Record<string, unknown>)
-        .CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE;
+    const localConnectionString = (c.env as Record<string, unknown>)
+      .CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE;
 
     if (
       typeof localConnectionString === "string" &&
@@ -285,6 +288,7 @@ const routes = app
   .route("/api/api-keys", apiKeysRouter)
   .route("/api/portal-domains", portalDomainsRouter)
   .route("/api/certificate-templates", certificateTemplatesRouter)
+  .route("/api/certificate-numbering", certificateNumberingRouter)
   .route("/api/units", unitsRouter)
   .route("/api/integrations", integrationsRouter)
   .route("/api/customer-success", customerSuccessRouter)
