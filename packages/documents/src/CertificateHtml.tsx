@@ -1,172 +1,341 @@
 import {
-    type CertificateTemplateSnapshot,
-    formatCalibrationValue,
-    normalizeCertificateTemplateConfig,
+  type CertificateTemplateSnapshot,
+  formatCalibrationValue,
+  normalizeCertificateTemplateConfig,
 } from "@calibra-facil/shared";
 
 // Types for certificate generation (standalone, does not depend on @calibra-facil/db)
 
+const ECCENTRICITY_INDICATOR_SPEC_KEY = "eccentricityIndicatorPosition";
+const ECCENTRICITY_INDICATOR_OPTIONS = [
+  { value: "A", label: "Superior", className: "point-a" },
+  { value: "B", label: "Lateral Direito", className: "point-b" },
+  { value: "C", label: "Inferior", className: "point-c" },
+  { value: "D", label: "Lateral Esquerdo", className: "point-d" },
+  { value: "E", label: "Centro", className: "point-e" },
+] as const;
+const ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS = [
+  { value: "1", label: "Seção 1", className: "road-point-1" },
+  { value: "2", label: "Seção 2", className: "road-point-2" },
+  { value: "3", label: "Seção 3", className: "road-point-3" },
+  { value: "4", label: "Seção 4", className: "road-point-4" },
+] as const;
+const MAX_PRINT_TABLE_COLUMNS = 8;
+const MAX_CALIBRATION_RESULT_COLUMNS = 6;
+
+const BALANCE_INFORMATION_SECTION: MethodCertificateContentSection = {
+  kind: "bullets",
+  title: "INFORMAÇÕES",
+  items: [
+    "A incerteza expandida de medição relatada é declarada como a incerteza padrão de medição multiplicada pelo fator de abrangência k, o qual para uma distribuição t-Student, com Veff graus de liberdade efetivos corresponde a uma probabilidade de abrangência de aproximadamente 95%. A incerteza padrão de medição foi determinada de acordo com a publicação EA-4/02. Os valores de k e Veff são apresentados na tabela de resultados.",
+    "Os resultados deste certificado referem-se exclusivamente ao instrumento submetido à calibração específica, não sendo extensivo a quaisquer lotes.",
+    "Este certificado não tem valor para fins de metrologia legal.",
+    "Os resultados são válidos somente para o estado do instrumento no momento da calibração.",
+  ],
+};
+
+const BALANCE_FALLBACK_CERTIFICATE_SECTIONS: MethodCertificateContentSection[] =
+  [
+    {
+      kind: "paragraphs",
+      title: "MÉTODO",
+      paragraphs: [
+        "A calibração é realizada por meio de comparação direta entre os valores dos pesos padrão e a indicação da balança.",
+      ],
+    },
+    {
+      kind: "definition_list",
+      title: "CONVENÇÕES",
+      items: [
+        {
+          term: "VC",
+          definition:
+            "Valor Convencional, valor correspondente ao padrão utilizado.",
+        },
+        {
+          term: "EI",
+          definition: "Erro de Indicação, (VI - VC).",
+        },
+        {
+          term: "U",
+          definition: "Incerteza expandida.",
+        },
+      ],
+    },
+    BALANCE_INFORMATION_SECTION,
+  ];
+
+type EccentricityIndicatorVariant = "circular_platform" | "road_scale";
+
+type EccentricityIndicatorPosition =
+  | (typeof ECCENTRICITY_INDICATOR_OPTIONS)[number]["value"]
+  | (typeof ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS)[number]["value"];
+
 export type CustomerAddress = {
-    cep?: string;
-    number?: string;
-    street?: string;
-    neighbourhood?: string;
-    city?: string;
-    state?: string;
+  cep?: string;
+  number?: string;
+  street?: string;
+  neighbourhood?: string;
+  city?: string;
+  state?: string;
 };
 
 // Method input field definition (from method builder)
 export type MethodInputField = {
+  key: string;
+  label: string;
+  type: "text" | "number" | "select" | "table";
+  unit?: string;
+  required?: boolean;
+  options?: string[];
+  defaultValue?: string | number;
+  source?: "manual" | "asset_spec";
+  assetSpecKey?: string;
+  allowOverride?: boolean;
+  eccentricityIndicator?: {
+    enabled?: boolean;
+    variant?: "circular_platform" | "road_scale";
+  };
+  weighingRangeResolver?: {
+    enabled?: boolean;
+    assetSpecKey?: string;
+    pointColumn?: string;
+    pointUnit?: "mg" | "g" | "kg";
+    targetColumns?: {
+      rangeLabel?: string;
+      rangeMin?: string;
+      rangeMax?: string;
+      rangeUnit?: string;
+      resolution?: string;
+      resolutionUnit?: string;
+    };
+  };
+  columns?: Array<{
     key: string;
     label: string;
-    type: "text" | "number" | "select" | "table";
+    type: "text" | "number";
     unit?: string;
-    required?: boolean;
-    options?: string[];
-    defaultValue?: string | number;
-    source?: "manual" | "asset_spec";
-    assetSpecKey?: string;
-    allowOverride?: boolean;
-    columns?: Array<{
-        key: string;
-        label: string;
-        type: "text" | "number";
-        unit?: string;
-    }>;
+    role?: "standard_value" | "mass_standard_composition";
+    massComposition?: {
+      targetUnit?: "mg" | "g" | "kg";
+      optionSource?: "certified_values" | "composition_profiles";
+      targetColumns?: {
+        certifiedValue?: string;
+        compositionLabel?: string;
+        expandedUncertainty?: string;
+        maxError?: string;
+        drift?: string;
+        buoyancy?: string;
+      };
+    };
+  }>;
 };
 
 export type MethodFormulaReporting = {
-    includeInCertificate?: boolean;
-    role?:
-        | "primary_result"
-        | "expanded_uncertainty"
-        | "coverage_factor"
-        | "conformity_margin"
-        | "uncertainty_component"
-        | "auxiliary";
-    group?: "calibration_result" | "uncertainty_budget" | "raw_calculation";
+  includeInCertificate?: boolean;
+  role?:
+    | "primary_result"
+    | "expanded_uncertainty"
+    | "coverage_factor"
+    | "conformity_margin"
+    | "uncertainty_component"
+    | "auxiliary";
+  group?: "calibration_result" | "uncertainty_budget" | "raw_calculation";
 };
 
 // Method formula definition (for labeling results)
 export type MethodFormula = {
-    outputKey: string;
-    expression: string;
-    label?: string;
-    unit?: string;
-    reporting?: MethodFormulaReporting;
+  outputKey: string;
+  expression: string;
+  label?: string;
+  unit?: string;
+  reporting?: MethodFormulaReporting;
 };
 
+type MethodCertificateContentSection =
+  | {
+      kind: "paragraphs";
+      title: string;
+      paragraphs: string[];
+    }
+  | {
+      kind: "definition_list";
+      title: string;
+      items: Array<{ term: string; definition: string }>;
+    }
+  | {
+      kind: "bullets";
+      title?: string;
+      items: string[];
+    };
+
+type MethodCertificateContent = {
+  procedureCode?: string;
+  referenceStandards?: string[];
+  certifiedValuesDisplay?: "full" | "hidden";
+  sections?: MethodCertificateContentSection[];
+};
+
+type MethodTableColumn = NonNullable<MethodInputField["columns"]>[number];
+
 export type MethodSnapshot = {
-    methodId: number;
-    methodName: string;
-    methodVersion: number;
-    dataFields?: MethodInputField[];
-    formulas?: MethodFormula[];
+  methodId: number;
+  methodName: string;
+  methodVersion: number;
+  dataFields?: MethodInputField[];
+  formulas?: MethodFormula[];
+  certificateContent?: MethodCertificateContent | null;
 };
 
 export type CertifiedValue = {
-    nominal: string;
-    value: number;
-    uncertainty: number;
-    unit: string;
+  nominal: string;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
 };
 
 export type StandardSnapshot = {
-    id: number;
-    name: string;
-    certificateNumber: string;
-    calibrationDate: Date | string;
-    nextCalibrationDate?: Date | string | null;
-    uncertainty: number | null;
-    uncertaintyUnit: string | null;
-    coverageFactor: number;
-    certifiedValues?: CertifiedValue[] | null;
+  id: number;
+  name: string;
+  certificateNumber: string;
+  calibrationDate: Date | string;
+  nextCalibrationDate?: Date | string | null;
+  uncertainty: number | null;
+  uncertaintyUnit: string | null;
+  coverageFactor: number;
+  certifiedValues?: CertifiedValue[] | null;
 };
 
 export type EnvironmentalSnapshot = {
-    temperature: number | null;
-    humidity: number | null;
-    pressure: number | null;
-    recordedAt: string;
-    recordedBy: string;
-    limits: {
-        temperature?: { min: number; max: number };
-        humidity?: { min: number; max: number };
-        pressure?: { min: number; max: number };
-    } | null;
-    withinLimits: boolean;
-    outOfLimitsJustification: string | null;
+  temperature: number | null;
+  humidity: number | null;
+  pressure: number | null;
+  recordedAt: string;
+  recordedBy: string;
+  limits: {
+    temperature?: { min: number; max: number };
+    humidity?: { min: number; max: number };
+    pressure?: { min: number; max: number };
+  } | null;
+  withinLimits: boolean;
+  outOfLimitsJustification: string | null;
+};
+
+type MassCompositionItem = {
+  standardId: number;
+  standardIds?: number[];
+  standardName: string;
+  certificateNumber: string;
+  certifiedValueIndex: number;
+  nominal: string;
+  quantity: number;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  coverageFactor: number;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  compositionProfile?: boolean;
+  profileKey?: string | null;
+  profileClass?: string | null;
+};
+
+type MassCompositionValue = {
+  kind: "mass_standard_composition";
+  targetUnit: "mg" | "g" | "kg";
+  label: string;
+  items: MassCompositionItem[];
+  totals: {
+    certifiedValue: number;
+    expandedUncertainty: number | null;
+    maxError: number | null;
+    drift: number | null;
+    buoyancy: number | null;
+  };
+  warnings: string[];
+};
+
+type MassCompositionCertificateRow = {
+  point: string;
+  composition: string;
+  item: MassCompositionItem;
 };
 
 export type AssetSnapshot = {
-    assetId: number;
-    assetTypeId: number;
-    assetTypeName: string;
-    assetTypeSlug: string;
-    name: string;
-    tag: string;
-    serialNumber: string;
-    manufacturer: string | null;
-    model: string | null;
-    specifications: Record<string, unknown> | null;
-    capturedAt: string;
+  assetId: number;
+  assetTypeId: number;
+  assetTypeName: string;
+  assetTypeSlug: string;
+  name: string;
+  tag: string;
+  serialNumber: string;
+  manufacturer: string | null;
+  model: string | null;
+  specifications: Record<string, unknown> | null;
+  capturedAt: string;
 };
 
 export type JobData = {
-    jobId: string;
-    organizationId?: string | null;
-    unitId?: number | null;
-    performedAt: Date | null;
-    approvedAt: Date | null;
-    environmentalSnapshot?: EnvironmentalSnapshot | null;
-    lab: {
-        name: string;
-        cnpj?: string | null;
-        accreditationNumber?: string | null;
-        accreditationBody?: string | null;
-        street?: string | null;
-        number?: string | null;
-        complement?: string | null;
-        neighbourhood?: string | null;
-        city?: string | null;
-        state?: string | null;
-        cep?: string | null;
-        phone?: string | null;
-        email?: string | null;
-        website?: string | null;
-        technicalManagerName?: string | null;
-        technicalManagerTitle?: string | null;
-    };
-    customer: {
-        name: string;
-        taxId?: string | null;
-        phone?: string | null;
-        email?: string | null;
-        address: CustomerAddress | null;
-    };
-    asset: {
-        name: string;
-        serialNumber: string;
-        tag: string;
-        model: string | null;
-        manufacturer: string | null;
-    };
-    methodSnapshot: MethodSnapshot;
-    assetSnapshot?: AssetSnapshot | null;
-    standardsSnapshot: StandardSnapshot[] | null;
-    data: Record<string, unknown> | null;
-    results: Record<string, unknown> | null;
-    approverName: string | null;
-    certificateTemplateSnapshot?: CertificateTemplateSnapshot | null;
-    // Visual signature image URL (presigned URL) - ISO 17025 Clause 7.8.2.1(q)
-    approverSignatureUrl?: string | null;
-    // Amendment fields - ISO 17025 Clause 7.8.4.1
-    supersedesId?: number | null;
-    supersededById?: number | null;
-    amendmentNumber?: number | null;
-    amendmentReason?: string | null;
-    originalJobId?: string | null; // Human-readable ID of the superseded job
-    originalApprovedAt?: Date | null;
+  jobId: string;
+  certificateName?: string | null;
+  organizationId?: string | null;
+  unitId?: number | null;
+  performedAt: Date | null;
+  approvedAt: Date | null;
+  environmentalSnapshot?: EnvironmentalSnapshot | null;
+  lab: {
+    name: string;
+    cnpj?: string | null;
+    accreditationNumber?: string | null;
+    accreditationBody?: string | null;
+    street?: string | null;
+    number?: string | null;
+    complement?: string | null;
+    neighbourhood?: string | null;
+    city?: string | null;
+    state?: string | null;
+    cep?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    website?: string | null;
+    technicalManagerName?: string | null;
+    technicalManagerTitle?: string | null;
+  };
+  customer: {
+    name: string;
+    taxId?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address: CustomerAddress | null;
+  };
+  asset: {
+    name: string;
+    serialNumber: string;
+    tag: string;
+    model: string | null;
+    manufacturer: string | null;
+  };
+  methodSnapshot: MethodSnapshot;
+  assetSnapshot?: AssetSnapshot | null;
+  standardsSnapshot: StandardSnapshot[] | null;
+  data: Record<string, unknown> | null;
+  results: Record<string, unknown> | null;
+  approverName: string | null;
+  certificateTemplateSnapshot?: CertificateTemplateSnapshot | null;
+  // Visual signature image URL (presigned URL) - ISO 17025 Clause 7.8.2.1(q)
+  approverSignatureUrl?: string | null;
+  // Amendment fields - ISO 17025 Clause 7.8.4.1
+  supersedesId?: number | null;
+  supersededById?: number | null;
+  amendmentNumber?: number | null;
+  amendmentReason?: string | null;
+  originalJobId?: string | null; // Human-readable ID of the superseded job
+  originalApprovedAt?: Date | null;
 };
 
 const styles = `
@@ -335,12 +504,16 @@ const styles = `
     width: 100%;
     border-collapse: collapse;
     font-size: 9pt;
+    table-layout: fixed;
   }
   th, td {
     border: 1px solid #ddd;
     padding: 6px 8px;
     text-align: left;
-    white-space: pre-line;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    vertical-align: top;
   }
   th {
     background: var(--template-accent);
@@ -386,8 +559,8 @@ const styles = `
   }
   .data-table {
     margin-top: 8px;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: auto;
+    page-break-inside: auto;
   }
   .data-table-title {
     font-weight: 600;
@@ -396,6 +569,197 @@ const styles = `
     font-size: 10pt;
     break-after: avoid;
     page-break-after: avoid;
+  }
+  .table-chunk + .table-chunk {
+    margin-top: 8px;
+  }
+  .data-table-subtitle {
+    font-size: 8pt;
+    font-weight: 600;
+    color: #666;
+    margin: 4px 0;
+  }
+  .wide-table {
+    font-size: 7pt;
+    line-height: 1.18;
+  }
+  .wide-table th,
+  .wide-table td {
+    padding: 3px 4px;
+  }
+  .result-table {
+    font-variant-numeric: tabular-nums;
+  }
+  .method-content {
+    font-size: 9pt;
+  }
+  .method-content-section {
+    margin-top: 8px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .method-content-section h4 {
+    font-size: 9pt;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 3px;
+  }
+  .method-content-section p {
+    margin-bottom: 4px;
+    text-align: justify;
+  }
+  .method-content-section ul {
+    margin: 0;
+    padding-left: 16px;
+  }
+  .method-content-section li {
+    margin-bottom: 3px;
+  }
+  .definition-list {
+    margin: 0;
+  }
+  .definition-list div {
+    margin-bottom: 3px;
+  }
+  .definition-list dt {
+    display: inline;
+    font-weight: 700;
+  }
+  .definition-list dd {
+    display: inline;
+    margin: 0;
+  }
+  .eccentricity-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 190px;
+    gap: 12px;
+    align-items: start;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .eccentricity-certificate {
+    border: 1px solid #ddd;
+    padding: 10px;
+    min-height: 190px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .eccentricity-title {
+    font-size: 8pt;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 8px;
+  }
+  .eccentricity-diagram {
+    position: relative;
+    width: 128px;
+    height: 128px;
+    margin: 12px auto 10px;
+  }
+  .eccentricity-circle {
+    position: absolute;
+    inset: 10px;
+    border: 1.5px solid #555;
+    border-radius: 999px;
+  }
+  .eccentricity-line-v {
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    left: 50%;
+    width: 1px;
+    background: #555;
+  }
+  .eccentricity-line-h {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: 50%;
+    height: 1px;
+    background: #555;
+  }
+  .eccentricity-point {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border: 1px solid #555;
+    background: #fff;
+    color: #111;
+    font-size: 8pt;
+    font-weight: 700;
+    line-height: 20px;
+    text-align: center;
+  }
+  .eccentricity-point.selected {
+    border-color: var(--template-primary);
+    background: var(--template-primary);
+    color: #fff;
+  }
+  .eccentricity-point.point-a {
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+  }
+  .eccentricity-point.point-b {
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .eccentricity-point.point-c {
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+  }
+  .eccentricity-point.point-d {
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .eccentricity-point.point-e {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .eccentricity-status {
+    border: 1px solid #ddd;
+    padding: 5px;
+    font-size: 8pt;
+    text-align: center;
+    font-weight: 600;
+  }
+  .road-eccentricity-diagram {
+    margin: 12px auto 10px;
+    text-align: center;
+  }
+  .road-eccentricity-platform {
+    width: 165px;
+    height: 42px;
+    border: 1.5px solid #555;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    align-items: center;
+    margin: 0 auto 16px;
+  }
+  .road-eccentricity-point {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #111;
+    line-height: 24px;
+    text-align: center;
+  }
+  .road-eccentricity-point.selected {
+    background: var(--template-primary);
+    color: #fff;
+  }
+  .road-eccentricity-indicator {
+    width: 34px;
+    height: 18px;
+    border: 1.5px solid #555;
+    margin: 0 auto 4px;
+  }
+  .road-eccentricity-label {
+    font-size: 8pt;
+    font-weight: 600;
   }
   .calibration-data-section {
     break-inside: avoid;
@@ -458,294 +822,718 @@ const styles = `
 `;
 
 function formatDate(date: Date | null | string): string {
-    if (!date) return "-";
-    const d = typeof date === "string" ? new Date(date) : date;
-    return d.toLocaleDateString("pt-BR");
+  if (!date) return "-";
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleDateString("pt-BR");
 }
 
 function formatNumber(value: number, minDecimals = 4): string {
-    let decimals = minDecimals;
+  let decimals = minDecimals;
 
-    // Auto-expand precision for small numbers (ISO 17025 compliance)
-    const abs = Math.abs(value);
-    if (abs > 0) {
-        if (abs < 0.0001) decimals = 5;
-        if (abs < 0.00001) decimals = 6;
-        if (abs < 0.000001) decimals = 7;
-    }
+  // Auto-expand precision for small numbers (ISO 17025 compliance)
+  const abs = Math.abs(value);
+  if (abs > 0) {
+    if (abs < 0.0001) decimals = 5;
+    if (abs < 0.00001) decimals = 6;
+    if (abs < 0.000001) decimals = 7;
+  }
 
-    return value.toLocaleString("pt-BR", {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-    });
+  return value.toLocaleString("pt-BR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
 function formatValue(value: unknown): string {
-    if (value === null || value === undefined) return "-";
-    return formatCalibrationValue(value, { decimalSeparator: "," });
+  if (value === null || value === undefined) return "-";
+  if (isMassCompositionValue(value)) return formatMassCompositionCell(value);
+  return formatCalibrationValue(value, { decimalSeparator: "," });
 }
 
 function formatPlainNumber(value: number, decimals = 1): string {
-    return value.toLocaleString("pt-BR", {
-        useGrouping: false,
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-    });
+  return value.toLocaleString("pt-BR", {
+    useGrouping: false,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
 function formatAddress(address: CustomerAddress | null): string {
-    if (!address) return "-";
-    const parts = [
-        address.street,
-        address.number,
-        address.neighbourhood,
-        address.city,
-        address.state,
-        address.cep,
-    ].filter(Boolean);
-    return parts.join(", ") || "-";
+  if (!address) return "-";
+  const parts = [
+    address.street,
+    address.number,
+    address.neighbourhood,
+    address.city,
+    address.state,
+    address.cep,
+  ].filter(Boolean);
+  return parts.join(", ") || "-";
 }
 
 function formatLabAddress(lab: JobData["lab"]): string | null {
-    const parts = [
-        lab.street,
-        lab.number,
-        lab.complement,
-        lab.neighbourhood,
-        lab.city,
-        lab.state,
-        lab.cep,
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(", ") : null;
+  const parts = [
+    lab.street,
+    lab.number,
+    lab.complement,
+    lab.neighbourhood,
+    lab.city,
+    lab.state,
+    lab.cep,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : null;
 }
 
 function formatTaxId(taxId: string | null | undefined): string {
-    if (!taxId) return "-";
-    // Format CNPJ: XX.XXX.XXX/XXXX-XX
-    if (taxId.length === 14) {
-        return `${taxId.slice(0, 2)}.${taxId.slice(2, 5)}.${taxId.slice(5, 8)}/${taxId.slice(8, 12)}-${taxId.slice(12)}`;
-    }
-    // Format CPF: XXX.XXX.XXX-XX
-    if (taxId.length === 11) {
-        return `${taxId.slice(0, 3)}.${taxId.slice(3, 6)}.${taxId.slice(6, 9)}-${taxId.slice(9)}`;
-    }
-    return taxId;
+  if (!taxId) return "-";
+  // Format CNPJ: XX.XXX.XXX/XXXX-XX
+  if (taxId.length === 14) {
+    return `${taxId.slice(0, 2)}.${taxId.slice(2, 5)}.${taxId.slice(5, 8)}/${taxId.slice(8, 12)}-${taxId.slice(12)}`;
+  }
+  // Format CPF: XXX.XXX.XXX-XX
+  if (taxId.length === 11) {
+    return `${taxId.slice(0, 3)}.${taxId.slice(3, 6)}.${taxId.slice(6, 9)}-${taxId.slice(9)}`;
+  }
+  return taxId;
 }
 
 function getArrayLength(value: unknown): number {
-    return Array.isArray(value) ? value.length : 0;
+  return Array.isArray(value) ? value.length : 0;
 }
 
 function getIndexedValue(value: unknown, index: number): unknown {
-    return Array.isArray(value) ? value[index] : value;
+  return Array.isArray(value) ? value[index] : value;
 }
 
 function formatValueWithUnit(value: unknown, unit?: string): string {
-    const formatted = formatValue(value);
-    return unit ? `${formatted} ${unit}` : formatted;
+  const formatted = formatValue(value);
+  return unit ? `${formatted} ${unit}` : formatted;
+}
+
+function hasCertifiedValues(std: StandardSnapshot): boolean {
+  return !!std.certifiedValues?.length;
+}
+
+function formatStandardUncertainty(
+  std: StandardSnapshot,
+  showCertifiedValuesTable: boolean,
+): string {
+  if (hasCertifiedValues(std)) {
+    return showCertifiedValuesTable
+      ? "Vários (ver tabela)"
+      : "Conforme certificado";
+  }
+
+  return std.uncertainty !== null
+    ? `±${formatNumber(std.uncertainty)} ${std.uncertaintyUnit || ""}`
+    : "-";
+}
+
+function isMassCompositionValue(value: unknown): value is MassCompositionValue {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === "mass_standard_composition" &&
+    Array.isArray((value as { items?: unknown }).items)
+  );
+}
+
+function formatMassCompositionCell(value: MassCompositionValue): string {
+  return value.label || "-";
+}
+
+function getCompositionPointLabel(
+  field: MethodInputField,
+  row: Record<string, unknown>,
+  index: number,
+): string {
+  const preferredKeys = [
+    "ponto",
+    "point",
+    "valor_padrao",
+    "valor_nominal",
+    "nominal",
+  ];
+
+  for (const key of preferredKeys) {
+    const value = row[key];
+    if (value !== null && value !== undefined && value !== "") {
+      return formatValue(value);
+    }
+  }
+
+  return `${field.label} ${index + 1}`;
+}
+
+function collectMassCompositions(
+  dataFields: MethodInputField[],
+  data: Record<string, unknown> | null | undefined,
+): MassCompositionCertificateRow[] {
+  if (!data) return [];
+
+  const rows: MassCompositionCertificateRow[] = [];
+  for (const field of dataFields) {
+    if (field.type !== "table") continue;
+    const tableData = data[field.key];
+    if (!Array.isArray(tableData)) continue;
+
+    tableData.forEach((rowValue, rowIndex) => {
+      if (typeof rowValue !== "object" || rowValue === null) return;
+      const row = rowValue as Record<string, unknown>;
+      const point = getCompositionPointLabel(field, row, rowIndex);
+
+      for (const value of Object.values(row)) {
+        if (!isMassCompositionValue(value)) continue;
+        for (const item of value.items) {
+          rows.push({
+            point,
+            composition: value.label,
+            item,
+          });
+        }
+      }
+    });
+  }
+
+  return rows;
 }
 
 function formatReportedValue(
-    entry: { formula?: MethodFormula },
-    value: unknown,
+  entry: { formula?: MethodFormula },
+  value: unknown,
 ): string {
-    const formatted = formatValue(value);
-    const role = entry.formula?.reporting?.role;
-    const numeric =
-        typeof value === "number"
-            ? value
-            : typeof value === "string"
-              ? Number(value)
-              : NaN;
+  const formatted = formatValue(value);
+  const role = entry.formula?.reporting?.role;
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : NaN;
 
-    if (role === "expanded_uncertainty" && formatted !== "-") {
-        return `±${formatted.replace(/^[+-]/, "")}`;
-    }
+  if (role === "expanded_uncertainty" && formatted !== "-") {
+    return `±${formatted.replace(/^[+-]/, "")}`;
+  }
 
-    if (role === "primary_result" && Number.isFinite(numeric) && numeric > 0) {
-        return `+${formatted}`;
-    }
+  if (role === "primary_result" && Number.isFinite(numeric) && numeric > 0) {
+    return `+${formatted}`;
+  }
 
-    return formatted;
+  return formatted;
 }
 
 function getPointLabels(
-    dataFields: MethodInputField[],
-    data: Record<string, unknown> | null,
+  dataFields: MethodInputField[],
+  data: Record<string, unknown> | null,
 ) {
-    const tableField = dataFields.find((field) => field.type === "table");
-    const rows = tableField && data ? data[tableField.key] : null;
-    if (!Array.isArray(rows)) {
-        return [] as string[];
-    }
+  const tableField = dataFields.find((field) => field.type === "table");
+  const rows = tableField && data ? data[tableField.key] : null;
+  if (!Array.isArray(rows)) {
+    return [] as string[];
+  }
 
-    return rows.map((row, index) => {
-        const record = row as Record<string, unknown>;
-        const point =
-            record.ponto ??
-            record.point ??
-            record.nominal ??
-            record.valor_nominal;
-        return point != null && point !== ""
-            ? String(point)
-            : String(index + 1);
-    });
+  return rows.map((row, index) => {
+    const record = row as Record<string, unknown>;
+    const point =
+      record.ponto ?? record.point ?? record.nominal ?? record.valor_nominal;
+    return point != null && point !== "" ? String(point) : String(index + 1);
+  });
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function isInformationBulletSection(items: string[]) {
+  const text = normalizeText(items.join(" "));
+  return (
+    text.includes("metrologia legal") ||
+    text.includes("ea-4/02") ||
+    text.includes("estado do instrumento")
+  );
+}
+
+function isBalanceLikeMethod(methodSnapshot: MethodSnapshot | undefined) {
+  const methodText = normalizeText(
+    `${methodSnapshot?.methodName ?? ""} ${methodSnapshot?.dataFields
+      ?.map((field) => `${field.key} ${field.label}`)
+      .join(" ")}`,
+  );
+
+  return (
+    methodText.includes("balanca") ||
+    methodText.includes("balance") ||
+    methodText.includes("pesagem")
+  );
+}
+
+function hasCertificateInformationSection(
+  sections: MethodCertificateContentSection[],
+) {
+  const text = normalizeText(
+    sections
+      .map((section) => {
+        if (section.kind === "definition_list") {
+          return section.items
+            .map((item) => `${item.term} ${item.definition}`)
+            .join(" ");
+        }
+        if (section.kind === "bullets") {
+          return `${section.title ?? ""} ${section.items.join(" ")}`;
+        }
+        return `${section.title} ${section.paragraphs.join(" ")}`;
+      })
+      .join(" "),
+  );
+
+  return (
+    text.includes("informacoes") ||
+    text.includes("ea-4/02") ||
+    text.includes("metrologia legal")
+  );
+}
+
+function getEffectiveMethodCertificateSections(
+  content: MethodCertificateContent | null | undefined,
+  methodSnapshot: MethodSnapshot | undefined,
+) {
+  const sections = content?.sections ?? [];
+  const hasConfiguredSections = hasMethodCertificateSections(content);
+  const isBalanceMethod = isBalanceLikeMethod(methodSnapshot);
+
+  if (hasConfiguredSections) {
+    return isBalanceMethod && !hasCertificateInformationSection(sections)
+      ? [...sections, BALANCE_INFORMATION_SECTION]
+      : sections;
+  }
+
+  return isBalanceMethod ? BALANCE_FALLBACK_CERTIFICATE_SECTIONS : sections;
+}
+
+function getPrintableColumnChunks(columns: MethodTableColumn[]) {
+  if (columns.length <= MAX_PRINT_TABLE_COLUMNS) {
+    return [columns];
+  }
+
+  const anchorColumns = columns.slice(0, 1);
+  const remainingColumns = columns.slice(1);
+  const columnsPerChunk = Math.max(
+    1,
+    MAX_PRINT_TABLE_COLUMNS - anchorColumns.length,
+  );
+  const chunks: MethodTableColumn[][] = [];
+
+  for (
+    let index = 0;
+    index < remainingColumns.length;
+    index += columnsPerChunk
+  ) {
+    chunks.push([
+      ...anchorColumns,
+      ...remainingColumns.slice(index, index + columnsPerChunk),
+    ]);
+  }
+
+  return chunks;
+}
+
+function chunkArray<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function isEccentricityIndicatorPosition(
+  value: unknown,
+  variant: EccentricityIndicatorVariant = "circular_platform",
+): value is EccentricityIndicatorPosition {
+  const options =
+    variant === "road_scale"
+      ? ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS
+      : ECCENTRICITY_INDICATOR_OPTIONS;
+
+  return (
+    typeof value === "string" &&
+    options.some((option) => option.value === value)
+  );
+}
+
+function getEccentricityIndicatorVariant(
+  field: MethodInputField | undefined,
+): EccentricityIndicatorVariant | null {
+  if (!field?.eccentricityIndicator?.enabled) return null;
+  return field.eccentricityIndicator.variant ?? "circular_platform";
+}
+
+function getEccentricityIndicatorPosition(
+  job: JobData,
+  variant: EccentricityIndicatorVariant,
+) {
+  const savedValue = job.data?.[ECCENTRICITY_INDICATOR_SPEC_KEY];
+  if (isEccentricityIndicatorPosition(savedValue, variant)) {
+    return savedValue;
+  }
+
+  const assetValue =
+    job.assetSnapshot?.specifications?.[ECCENTRICITY_INDICATOR_SPEC_KEY];
+  if (isEccentricityIndicatorPosition(assetValue, variant)) {
+    return assetValue;
+  }
+
+  return null;
+}
+
+function isEccentricityCalibrationField(field: MethodInputField) {
+  if (field.eccentricityIndicator?.enabled) {
+    return true;
+  }
+
+  const fieldText = normalizeText(`${field.key} ${field.label}`);
+  if (fieldText.includes("excentric") || fieldText.includes("eccentric")) {
+    return true;
+  }
+
+  const columnText = normalizeText(
+    field.columns?.map((column) => `${column.key} ${column.label}`).join(" "),
+  );
+
+  return (
+    field.type === "table" &&
+    (columnText.includes("ponto") || columnText.includes("point")) &&
+    (columnText.includes("indicacao") ||
+      columnText.includes("leitura") ||
+      columnText.includes("erro") ||
+      columnText.includes("reading") ||
+      columnText.includes("error"))
+  );
+}
+
+function CertificateEccentricityDiagram({
+  selectedPosition,
+  variant,
+}: {
+  selectedPosition: EccentricityIndicatorPosition | null;
+  variant: EccentricityIndicatorVariant;
+}) {
+  const options =
+    variant === "road_scale"
+      ? ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS
+      : ECCENTRICITY_INDICATOR_OPTIONS;
+  const selectedOption = options.find(
+    (option) => option.value === selectedPosition,
+  );
+
+  return (
+    <div className="eccentricity-certificate">
+      <div className="eccentricity-title">Posição do indicador da balança</div>
+      {variant === "road_scale" ? (
+        <div className="road-eccentricity-diagram" aria-hidden="true">
+          <div className="road-eccentricity-platform">
+            {options.map((option) => (
+              <div
+                key={option.value}
+                className={`road-eccentricity-point ${
+                  selectedPosition === option.value ? "selected" : ""
+                }`}
+              >
+                {option.value}
+              </div>
+            ))}
+          </div>
+          <div className="road-eccentricity-indicator" />
+          <div className="road-eccentricity-label">Posição do indicador</div>
+        </div>
+      ) : (
+        <div className="eccentricity-diagram" aria-hidden="true">
+          <div className="eccentricity-circle" />
+          <div className="eccentricity-line-v" />
+          <div className="eccentricity-line-h" />
+          {options.map((option) => (
+            <div
+              key={option.value}
+              className={`eccentricity-point ${option.className} ${
+                selectedPosition === option.value ? "selected" : ""
+              }`}
+            >
+              {option.value}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="eccentricity-status">
+        {selectedOption
+          ? `${selectedOption.value} - ${selectedOption.label}`
+          : "Nenhum ponto selecionado"}
+      </div>
+    </div>
+  );
 }
 
 // Render a data table based on method dataField definition
 function DataTable({
-    field,
-    data,
+  field,
+  data,
 }: {
-    field: MethodInputField;
-    data: unknown[];
+  field: MethodInputField;
+  data: unknown[];
 }) {
-    if (!field.columns || !Array.isArray(data) || data.length === 0) {
-        return null;
+  if (!field.columns || !Array.isArray(data) || data.length === 0) {
+    return null;
+  }
+
+  const columnChunks = getPrintableColumnChunks(field.columns);
+  const isWideTable = field.columns.length > MAX_PRINT_TABLE_COLUMNS;
+
+  return (
+    <div className="data-table">
+      <div className="data-table-title">{field.label}</div>
+      {columnChunks.map((columns, chunkIndex) => (
+        <div className="table-chunk" key={chunkIndex}>
+          {columnChunks.length > 1 && (
+            <div className="data-table-subtitle">
+              {chunkIndex === 0
+                ? "Colunas principais"
+                : `Continuação ${chunkIndex + 1}`}
+            </div>
+          )}
+          <table className={isWideTable ? "wide-table result-table" : ""}>
+            <thead>
+              <tr>
+                {columns.map((col) => (
+                  <th key={col.key}>
+                    {col.label}
+                    {col.unit ? ` (${col.unit})` : ""}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, i) => (
+                <tr key={i}>
+                  {columns.map((col) => (
+                    <td key={col.key}>
+                      {formatValue((row as Record<string, unknown>)[col.key])}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function hasMethodCertificateSections(
+  content: MethodCertificateContent | null | undefined,
+) {
+  return (content?.sections ?? []).some((section) => {
+    if (section.kind === "definition_list") {
+      return section.items.some(
+        (item) => item.term.trim() || item.definition.trim(),
+      );
     }
+    if (section.kind === "bullets") {
+      return section.items.some((item) => item.trim());
+    }
+    return section.paragraphs.some((paragraph) => paragraph.trim());
+  });
+}
+
+function renderMethodCertificateSection(
+  section: MethodCertificateContentSection,
+  index: number,
+) {
+  if (section.kind === "definition_list") {
+    const items = section.items.filter(
+      (item) => item.term.trim() || item.definition.trim(),
+    );
+    if (items.length === 0) return null;
 
     return (
-        <div className="data-table">
-            <div className="data-table-title">{field.label}</div>
-            <table>
-                <thead>
-                    <tr>
-                        {field.columns.map((col) => (
-                            <th key={col.key}>
-                                {col.label}
-                                {col.unit ? ` (${col.unit})` : ""}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {data.map((row, i) => (
-                        <tr key={i}>
-                            {field.columns!.map((col) => (
-                                <td key={col.key}>
-                                    {formatValue(
-                                        (row as Record<string, unknown>)[
-                                            col.key
-                                        ],
-                                    )}
-                                </td>
-                            ))}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+      <div className="method-content-section" key={index}>
+        <h4>{section.title}</h4>
+        <dl className="definition-list">
+          {items.map((item, itemIndex) => (
+            <div key={itemIndex}>
+              <dt>{item.term}:</dt> <dd>{item.definition}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
     );
+  }
+
+  if (section.kind === "bullets") {
+    const items = section.items.filter((item) => item.trim());
+    if (items.length === 0) return null;
+    const title =
+      section.title?.trim() ||
+      (isInformationBulletSection(items) ? "INFORMAÇÕES" : null);
+
+    return (
+      <div className="method-content-section" key={index}>
+        {title && <h4>{title}</h4>}
+        <ul>
+          {items.map((item, itemIndex) => (
+            <li key={itemIndex}>{item}</li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  const paragraphs = section.paragraphs.filter((paragraph) => paragraph.trim());
+  if (paragraphs.length === 0) return null;
+
+  return (
+    <div className="method-content-section" key={index}>
+      <h4>{section.title}</h4>
+      {paragraphs.map((paragraph, paragraphIndex) => (
+        <p key={paragraphIndex}>{paragraph}</p>
+      ))}
+    </div>
+  );
 }
 
 export function CertificateHtml({ job }: { job: JobData }) {
-    const templateSnapshot = job.certificateTemplateSnapshot ?? null;
-    const templateConfig = normalizeCertificateTemplateConfig(
-        templateSnapshot?.config,
+  const templateSnapshot = job.certificateTemplateSnapshot ?? null;
+  const templateConfig = normalizeCertificateTemplateConfig(
+    templateSnapshot?.config,
+  );
+  const dataFields = job.methodSnapshot?.dataFields || [];
+  const formulas = job.methodSnapshot?.formulas || [];
+  const methodCertificateContent =
+    job.methodSnapshot?.certificateContent ?? null;
+  const effectiveMethodCertificateSections =
+    getEffectiveMethodCertificateSections(
+      methodCertificateContent,
+      job.methodSnapshot,
     );
-    const dataFields = job.methodSnapshot?.dataFields || [];
-    const formulas = job.methodSnapshot?.formulas || [];
+  const shouldRenderMethodCertificateSections =
+    effectiveMethodCertificateSections.length > 0;
 
-    const assetSpecFields = dataFields.filter((f) => f.source === "asset_spec");
-    const tableFields = dataFields.filter(
-        (f) => f.type === "table" && f.source !== "asset_spec",
-    );
+  const assetSpecFields = dataFields.filter((f) => f.source === "asset_spec");
+  const tableFields = dataFields.filter(
+    (f) => f.type === "table" && f.source !== "asset_spec",
+  );
+  const eccentricityIndicatorFields = tableFields.filter(
+    (field) => field.eccentricityIndicator?.enabled,
+  );
+  const shouldRenderEccentricityDiagram =
+    eccentricityIndicatorFields.length > 0;
 
-    // Get environment data from structured snapshot
-    const envTemperature = job.environmentalSnapshot?.temperature ?? null;
-    const envHumidity = job.environmentalSnapshot?.humidity ?? null;
-    const envPressure = job.environmentalSnapshot?.pressure ?? null;
+  // Get environment data from structured snapshot
+  const envTemperature = job.environmentalSnapshot?.temperature ?? null;
+  const envHumidity = job.environmentalSnapshot?.humidity ?? null;
+  const envPressure = job.environmentalSnapshot?.pressure ?? null;
 
-    // Build results with labels from formulas
-    const resultEntries: Array<{
-        key: string;
-        label: string;
-        value: unknown;
-        unit?: string;
-        formula?: MethodFormula;
-    }> = [];
-    if (job.results) {
-        const seenResultKeys = new Set<string>();
-        for (const formula of formulas) {
-            if (!(formula.outputKey in job.results)) continue;
-            seenResultKeys.add(formula.outputKey);
-            resultEntries.push({
-                key: formula.outputKey,
-                label: formula.label || formula.outputKey,
-                value: job.results[formula.outputKey],
-                unit: formula.unit,
-                formula,
-            });
-        }
-        for (const [key, value] of Object.entries(job.results)) {
-            if (seenResultKeys.has(key)) continue;
-            const formula = formulas.find((f) => f.outputKey === key);
-            resultEntries.push({
-                key,
-                label: formula?.label || key,
-                value,
-                unit: formula?.unit,
-                formula,
-            });
-        }
+  // Build results with labels from formulas
+  const resultEntries: Array<{
+    key: string;
+    label: string;
+    value: unknown;
+    unit?: string;
+    formula?: MethodFormula;
+  }> = [];
+  if (job.results) {
+    const seenResultKeys = new Set<string>();
+    for (const formula of formulas) {
+      if (!(formula.outputKey in job.results)) continue;
+      seenResultKeys.add(formula.outputKey);
+      resultEntries.push({
+        key: formula.outputKey,
+        label: formula.label || formula.outputKey,
+        value: job.results[formula.outputKey],
+        unit: formula.unit,
+        formula,
+      });
     }
-    const calibrationResultRoleOrder = new Map<string, number>([
-        ["primary_result", 0],
-        ["expanded_uncertainty", 1],
-        ["coverage_factor", 2],
-        ["conformity_margin", 3],
-        ["auxiliary", 4],
-    ]);
-    const calibrationResultEntries = resultEntries
-        .filter(
-            (entry) =>
-                entry.formula?.reporting?.group === "calibration_result" &&
-                entry.formula.reporting.includeInCertificate !== false,
-        )
-        .sort((a, b) => {
-            const aOrder = calibrationResultRoleOrder.get(
-                a.formula?.reporting?.role ?? "",
-            );
-            const bOrder = calibrationResultRoleOrder.get(
-                b.formula?.reporting?.role ?? "",
-            );
-            return (aOrder ?? 99) - (bOrder ?? 99);
-        });
-    const uncertaintyBudgetEntries = resultEntries.filter(
-        (entry) =>
-            entry.formula?.reporting?.group === "uncertainty_budget" &&
-            entry.formula.reporting.includeInCertificate !== false,
-    );
-    const hasStructuredResults =
-        calibrationResultEntries.length > 0 ||
-        uncertaintyBudgetEntries.length > 0;
-    const genericResultEntries = resultEntries.filter((entry) => {
-        if (entry.formula?.reporting?.includeInCertificate === false) {
-            return false;
-        }
-        if (entry.formula?.reporting?.group === "raw_calculation") {
-            return true;
-        }
-        return !hasStructuredResults && !entry.formula?.reporting?.group;
+    for (const [key, value] of Object.entries(job.results)) {
+      if (seenResultKeys.has(key)) continue;
+      const formula = formulas.find((f) => f.outputKey === key);
+      resultEntries.push({
+        key,
+        label: formula?.label || key,
+        value,
+        unit: formula?.unit,
+        formula,
+      });
+    }
+  }
+  const calibrationResultRoleOrder = new Map<string, number>([
+    ["primary_result", 0],
+    ["expanded_uncertainty", 1],
+    ["coverage_factor", 2],
+    ["conformity_margin", 3],
+    ["auxiliary", 4],
+  ]);
+  const calibrationResultEntries = resultEntries
+    .filter(
+      (entry) =>
+        entry.formula?.reporting?.group === "calibration_result" &&
+        entry.formula.reporting.includeInCertificate !== false,
+    )
+    .sort((a, b) => {
+      const aOrder = calibrationResultRoleOrder.get(
+        a.formula?.reporting?.role ?? "",
+      );
+      const bOrder = calibrationResultRoleOrder.get(
+        b.formula?.reporting?.role ?? "",
+      );
+      return (aOrder ?? 99) - (bOrder ?? 99);
     });
-    const pointLabels = getPointLabels(dataFields, job.data);
-    const calibrationResultRowCount = Math.max(
-        pointLabels.length,
-        ...calibrationResultEntries.map((entry) => getArrayLength(entry.value)),
+  const uncertaintyBudgetEntries = resultEntries.filter(
+    (entry) =>
+      entry.formula?.reporting?.group === "uncertainty_budget" &&
+      entry.formula.reporting.includeInCertificate !== false,
+  );
+  const hasStructuredResults =
+    calibrationResultEntries.length > 0 || uncertaintyBudgetEntries.length > 0;
+  const genericResultEntries = resultEntries.filter((entry) => {
+    if (entry.formula?.reporting?.includeInCertificate === false) {
+      return false;
+    }
+    if (entry.formula?.reporting?.group === "raw_calculation") {
+      return true;
+    }
+    return !hasStructuredResults && !entry.formula?.reporting?.group;
+  });
+  const pointLabels = getPointLabels(dataFields, job.data);
+  const calibrationResultRowCount = Math.max(
+    pointLabels.length,
+    ...calibrationResultEntries.map((entry) => getArrayLength(entry.value)),
+  );
+  const calibrationResultChunks = chunkArray(
+    calibrationResultEntries,
+    MAX_CALIBRATION_RESULT_COLUMNS,
+  );
+  const conformityEntry = calibrationResultEntries.find(
+    (entry) => entry.formula?.reporting?.role === "conformity_margin",
+  );
+  const assetSpecEntries = assetSpecFields
+    .map((field) => ({
+      field,
+      value: field.assetSpecKey
+        ? job.assetSnapshot?.specifications?.[field.assetSpecKey]
+        : undefined,
+    }))
+    .filter(
+      ({ value }) => value !== null && value !== undefined && value !== "",
     );
-    const assetSpecEntries = assetSpecFields
-        .map((field) => ({
-            field,
-            value: field.assetSpecKey
-                ? job.assetSnapshot?.specifications?.[field.assetSpecKey]
-                : undefined,
-        }))
-        .filter(
-            ({ value }) =>
-                value !== null && value !== undefined && value !== "",
-        );
+  const massCompositionRows = collectMassCompositions(dataFields, job.data);
+  const certifiedValuesDisplay =
+    methodCertificateContent?.certifiedValuesDisplay ??
+    (massCompositionRows.length > 0 ? "hidden" : "full");
+  const showCertifiedValuesTable = certifiedValuesDisplay === "full";
 
-    const dynamicStyles = `
+  const dynamicStyles = `
       :root {
         --template-primary: ${templateConfig.theme.primaryColor};
         --template-accent: ${templateConfig.theme.accentColor};
@@ -764,635 +1552,626 @@ export function CertificateHtml({ job }: { job: JobData }) {
       }
     `;
 
-    return (
-        <html lang="pt-BR">
-            <head>
-                <meta charSet="UTF-8" />
-                <title>Certificado de Calibração - {job.jobId}</title>
-                <style
-                    dangerouslySetInnerHTML={{
-                        __html: `${dynamicStyles}\n${styles}`,
-                    }}
+  return (
+    <html lang="pt-BR">
+      <head>
+        <meta charSet="UTF-8" />
+        <title>
+          {job.certificateName || `Certificado de Calibração - ${job.jobId}`}
+        </title>
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `${dynamicStyles}\n${styles}`,
+          }}
+        />
+      </head>
+      <body>
+        <div
+          className={`certificate density-${templateConfig.layout.density} header-style-${templateConfig.layout.headerStyle} emphasis-${templateConfig.layout.emphasis}`}
+        >
+          {/* Header */}
+          <div className="header">
+            <div className="logo-section">
+              {templateConfig.theme.logoUrl ? (
+                <img
+                  src={templateConfig.theme.logoUrl}
+                  alt={job.lab.name}
+                  className="logo-image"
                 />
-            </head>
-            <body>
-                <div
-                    className={`certificate density-${templateConfig.layout.density} header-style-${templateConfig.layout.headerStyle} emphasis-${templateConfig.layout.emphasis}`}
-                >
-                    {/* Header */}
-                    <div className="header">
-                        <div className="logo-section">
-                            {templateConfig.theme.logoUrl ? (
-                                <img
-                                    src={templateConfig.theme.logoUrl}
-                                    alt={job.lab.name}
-                                    className="logo-image"
-                                />
-                            ) : (
-                                <div className="logo-placeholder">LAB</div>
-                            )}
-                            <div className="lab-info">
-                                <h1>{job.lab.name}</h1>
-                                {job.lab.cnpj &&
-                                    templateConfig.sections
-                                        .showAccreditation && (
-                                        <p>CNPJ: {formatTaxId(job.lab.cnpj)}</p>
-                                    )}
-                                {job.lab.accreditationNumber &&
-                                    templateConfig.sections
-                                        .showAccreditation && (
-                                        <p>
-                                            {job.lab.accreditationNumber}
-                                            {job.lab.accreditationBody &&
-                                                ` - ${job.lab.accreditationBody}`}
-                                        </p>
-                                    )}
-                                {formatLabAddress(job.lab) &&
-                                    templateConfig.sections.showLabAddress && (
-                                        <p>{formatLabAddress(job.lab)}</p>
-                                    )}
-                                {(job.lab.phone || job.lab.email) &&
-                                    templateConfig.sections.showLabContact && (
-                                        <p>
-                                            {job.lab.phone}
-                                            {job.lab.phone &&
-                                                job.lab.email &&
-                                                " | "}
-                                            {job.lab.email}
-                                        </p>
-                                    )}
-                            </div>
-                        </div>
-                        <div className="cert-number">
-                            <h2>{templateConfig.content.documentTitle}</h2>
-                            <div className="number">{job.jobId}</div>
-                        </div>
-                    </div>
+              ) : (
+                <div className="logo-placeholder">LAB</div>
+              )}
+              <div className="lab-info">
+                <h1>{job.lab.name}</h1>
+                {job.lab.cnpj && templateConfig.sections.showAccreditation && (
+                  <p>CNPJ: {formatTaxId(job.lab.cnpj)}</p>
+                )}
+                {job.lab.accreditationNumber &&
+                  templateConfig.sections.showAccreditation && (
+                    <p>
+                      {job.lab.accreditationNumber}
+                      {job.lab.accreditationBody &&
+                        ` - ${job.lab.accreditationBody}`}
+                    </p>
+                  )}
+                {formatLabAddress(job.lab) &&
+                  templateConfig.sections.showLabAddress && (
+                    <p>{formatLabAddress(job.lab)}</p>
+                  )}
+                {(job.lab.phone || job.lab.email) &&
+                  templateConfig.sections.showLabContact && (
+                    <p>
+                      {job.lab.phone}
+                      {job.lab.phone && job.lab.email && " | "}
+                      {job.lab.email}
+                    </p>
+                  )}
+              </div>
+            </div>
+            <div className="cert-number">
+              <h2>{templateConfig.content.documentTitle}</h2>
+              <div className="number">{job.jobId}</div>
+            </div>
+          </div>
 
-                    {/* Amendment Notice - ISO 17025 Clause 7.8.4.1 */}
-                    {job.supersedesId &&
-                        templateConfig.sections.showAmendmentNotice && (
-                            <div className="amendment-notice">
-                                <h3>CERTIFICADO RETIFICADO</h3>
-                                <p>
-                                    Este certificado{" "}
-                                    <strong>substitui e cancela</strong> o
-                                    certificado nº{" "}
-                                    <strong>
-                                        {job.originalJobId ||
-                                            `#${job.supersedesId}`}
-                                    </strong>
-                                </p>
-                                <p>
-                                    <strong>
-                                        Retificação nº{" "}
-                                        {job.amendmentNumber || 1}
-                                    </strong>
-                                </p>
-                                {job.amendmentReason && (
-                                    <p>
-                                        <strong>Motivo da retificação:</strong>{" "}
-                                        {job.amendmentReason}
-                                    </p>
-                                )}
-                                {job.originalApprovedAt && (
-                                    <p>
-                                        Certificado original emitido em:{" "}
-                                        {formatDate(job.originalApprovedAt)}
-                                    </p>
-                                )}
-                            </div>
-                        )}
+          {/* Amendment Notice - ISO 17025 Clause 7.8.4.1 */}
+          {job.supersedesId && templateConfig.sections.showAmendmentNotice && (
+            <div className="amendment-notice">
+              <h3>CERTIFICADO RETIFICADO</h3>
+              <p>
+                Este certificado <strong>substitui e cancela</strong> o
+                certificado nº{" "}
+                <strong>{job.originalJobId || `#${job.supersedesId}`}</strong>
+              </p>
+              <p>
+                <strong>Retificação nº {job.amendmentNumber || 1}</strong>
+              </p>
+              {job.amendmentReason && (
+                <p>
+                  <strong>Motivo da retificação:</strong> {job.amendmentReason}
+                </p>
+              )}
+              {job.originalApprovedAt && (
+                <p>
+                  Certificado original emitido em:{" "}
+                  {formatDate(job.originalApprovedAt)}
+                </p>
+              )}
+            </div>
+          )}
 
-                    {templateConfig.content.introText && (
-                        <div className="intro">
-                            {templateConfig.content.introText}
-                        </div>
-                    )}
+          {templateConfig.content.introText && (
+            <div className="intro">{templateConfig.content.introText}</div>
+          )}
 
-                    {/* Superseded Watermark - appears on all pages */}
-                    {job.supersededById && (
-                        <div className="superseded-watermark">
-                            <span className="superseded-watermark-text">
-                                CANCELADO
-                            </span>
-                        </div>
-                    )}
+          {/* Superseded Watermark - appears on all pages */}
+          {job.supersededById && (
+            <div className="superseded-watermark">
+              <span className="superseded-watermark-text">CANCELADO</span>
+            </div>
+          )}
 
-                    {/* Customer Section */}
-                    <div className="section">
-                        <div className="section-title">Cliente</div>
-                        <div className="info-grid">
-                            <div className="info-row">
-                                <span className="info-label">Nome:</span>
-                                <span className="info-value">
-                                    {job.customer.name}
-                                </span>
-                            </div>
-                            <div className="info-row">
-                                <span className="info-label">CNPJ/CPF:</span>
-                                <span className="info-value">
-                                    {formatTaxId(job.customer.taxId)}
-                                </span>
-                            </div>
-                            <div className="info-row">
-                                <span className="info-label">Endereço:</span>
-                                <span className="info-value">
-                                    {formatAddress(job.customer.address)}
-                                </span>
-                            </div>
-                            {job.customer.phone &&
-                                templateConfig.sections.showCustomerContact && (
-                                    <div className="info-row">
-                                        <span className="info-label">
-                                            Telefone:
-                                        </span>
-                                        <span className="info-value">
-                                            {job.customer.phone}
-                                        </span>
-                                    </div>
-                                )}
-                        </div>
-                    </div>
+          {/* Customer Section */}
+          <div className="section">
+            <div className="section-title">Cliente</div>
+            <div className="info-grid">
+              <div className="info-row">
+                <span className="info-label">Nome:</span>
+                <span className="info-value">{job.customer.name}</span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">CNPJ/CPF:</span>
+                <span className="info-value">
+                  {formatTaxId(job.customer.taxId)}
+                </span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">Endereço:</span>
+                <span className="info-value">
+                  {formatAddress(job.customer.address)}
+                </span>
+              </div>
+              {job.customer.phone &&
+                templateConfig.sections.showCustomerContact && (
+                  <div className="info-row">
+                    <span className="info-label">Telefone:</span>
+                    <span className="info-value">{job.customer.phone}</span>
+                  </div>
+                )}
+            </div>
+          </div>
 
-                    {/* Asset Section */}
-                    <div className="section">
-                        <div className="section-title">
-                            Instrumento Calibrado
-                        </div>
-                        <div className="info-grid">
-                            <div className="info-row">
-                                <span className="info-label">Descrição:</span>
-                                <span className="info-value">
-                                    {job.asset.name}
-                                </span>
-                            </div>
-                            <div className="info-row">
-                                <span className="info-label">Fabricante:</span>
-                                <span className="info-value">
-                                    {job.asset.manufacturer || "-"}
-                                </span>
-                            </div>
-                            <div className="info-row">
-                                <span className="info-label">Modelo:</span>
-                                <span className="info-value">
-                                    {job.asset.model || "-"}
-                                </span>
-                            </div>
-                            <div className="info-row">
-                                <span className="info-label">Nº Série:</span>
-                                <span className="info-value">
-                                    {job.asset.serialNumber}
-                                </span>
-                            </div>
-                            <div className="info-row">
-                                <span className="info-label">Tag:</span>
-                                <span className="info-value">
-                                    {job.asset.tag}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
+          {/* Asset Section */}
+          <div className="section">
+            <div className="section-title">Instrumento Calibrado</div>
+            <div className="info-grid">
+              <div className="info-row">
+                <span className="info-label">Descrição:</span>
+                <span className="info-value">{job.asset.name}</span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">Fabricante:</span>
+                <span className="info-value">
+                  {job.asset.manufacturer || "-"}
+                </span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">Modelo:</span>
+                <span className="info-value">{job.asset.model || "-"}</span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">Nº Série:</span>
+                <span className="info-value">{job.asset.serialNumber}</span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">Tag:</span>
+                <span className="info-value">{job.asset.tag}</span>
+              </div>
+            </div>
+          </div>
 
-                    {assetSpecEntries.length > 0 && (
-                        <div className="section">
-                            <div className="section-title">
-                                Características do Instrumento Consideradas
-                            </div>
-                            <div className="info-grid">
-                                {assetSpecEntries.map(({ field, value }) => (
-                                    <div className="info-row" key={field.key}>
-                                        <span className="info-label">
-                                            {field.label}:
-                                        </span>
-                                        <span className="info-value">
-                                            {formatValueWithUnit(
-                                                value,
-                                                field.unit,
-                                            )}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+          {assetSpecEntries.length > 0 && (
+            <div className="section">
+              <div className="section-title">
+                Características do Instrumento Consideradas
+              </div>
+              <div className="info-grid">
+                {assetSpecEntries.map(({ field, value }) => (
+                  <div className="info-row" key={field.key}>
+                    <span className="info-label">{field.label}:</span>
+                    <span className="info-value">
+                      {formatValueWithUnit(value, field.unit)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-                    {/* Method */}
-                    <div className="section">
-                        <div className="section-title">
-                            Método de Calibração
-                        </div>
-                        <div className="info-grid">
-                            <div className="info-row">
-                                <span className="info-label">
-                                    Procedimento:
-                                </span>
-                                <span className="info-value">
-                                    {job.methodSnapshot.methodName} (v
-                                    {job.methodSnapshot.methodVersion})
-                                </span>
-                            </div>
-                            <div className="info-row">
-                                <span className="info-label">Data:</span>
-                                <span className="info-value">
-                                    {formatDate(job.performedAt)}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Environment */}
-                    {templateConfig.sections.showEnvironmental &&
-                        (envTemperature != null ||
-                            envHumidity != null ||
-                            envPressure != null) && (
-                            <div className="section">
-                                <div className="section-title">
-                                    Condições Ambientais
-                                </div>
-                                <div className="info-grid">
-                                    {envTemperature != null && (
-                                        <div className="info-row">
-                                            <span className="info-label">
-                                                Temperatura:
-                                            </span>
-                                            <span className="info-value">
-                                                {formatNumber(
-                                                    envTemperature,
-                                                    1,
-                                                )}{" "}
-                                                °C
-                                            </span>
-                                        </div>
-                                    )}
-                                    {envHumidity != null && (
-                                        <div className="info-row">
-                                            <span className="info-label">
-                                                Umidade:
-                                            </span>
-                                            <span className="info-value">
-                                                {formatNumber(envHumidity, 1)}{" "}
-                                                %RH
-                                            </span>
-                                        </div>
-                                    )}
-                                    {envPressure != null && (
-                                        <div className="info-row">
-                                            <span className="info-label">
-                                                Pressão:
-                                            </span>
-                                            <span className="info-value">
-                                                {formatPlainNumber(
-                                                    envPressure,
-                                                    1,
-                                                )}{" "}
-                                                hPa
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                    {/* Standards Used */}
-                    {templateConfig.sections.showStandards &&
-                        job.standardsSnapshot &&
-                        job.standardsSnapshot.length > 0 && (
-                            <div className="section">
-                                <div className="section-title">
-                                    Padrões Utilizados
-                                </div>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Padrão</th>
-                                            <th>Certificado</th>
-                                            <th>Incerteza</th>
-                                            <th>Validade</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {job.standardsSnapshot.map((std, i) => (
-                                            <tr key={i}>
-                                                <td>{std.name}</td>
-                                                <td>{std.certificateNumber}</td>
-                                                <td>
-                                                    {std.certifiedValues &&
-                                                    std.certifiedValues.length >
-                                                        0
-                                                        ? "Vários (ver tabela)"
-                                                        : std.uncertainty !==
-                                                            null
-                                                          ? `±${formatNumber(std.uncertainty)} ${std.uncertaintyUnit || ""}`
-                                                          : "-"}
-                                                </td>
-                                                <td>
-                                                    {formatDate(
-                                                        std.nextCalibrationDate ??
-                                                            std.calibrationDate,
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-
-                                {/* Certified Values for Weight Sets */}
-                                {job.standardsSnapshot.some(
-                                    (std) =>
-                                        std.certifiedValues &&
-                                        std.certifiedValues.length > 0,
-                                ) && (
-                                    <div className="data-table">
-                                        <div className="data-table-title">
-                                            Valores Certificados dos Padrões
-                                        </div>
-                                        <table>
-                                            <thead>
-                                                <tr>
-                                                    <th>Padrão</th>
-                                                    <th>Valor Nominal</th>
-                                                    <th>Valor Certificado</th>
-                                                    <th>Incerteza</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {job.standardsSnapshot.flatMap(
-                                                    (std) =>
-                                                        std.certifiedValues?.map(
-                                                            (cv, i) => (
-                                                                <tr
-                                                                    key={`${std.id}-${i}`}
-                                                                >
-                                                                    <td>
-                                                                        {i === 0
-                                                                            ? std.name
-                                                                            : ""}
-                                                                    </td>
-                                                                    <td>
-                                                                        {
-                                                                            cv.nominal
-                                                                        }
-                                                                    </td>
-                                                                    <td>
-                                                                        {formatValue(
-                                                                            cv.value,
-                                                                        )}{" "}
-                                                                        {
-                                                                            cv.unit
-                                                                        }
-                                                                    </td>
-                                                                    <td>
-                                                                        ±
-                                                                        {formatValue(
-                                                                            cv.uncertainty,
-                                                                        )}{" "}
-                                                                        {
-                                                                            cv.unit
-                                                                        }
-                                                                    </td>
-                                                                </tr>
-                                                            ),
-                                                        ) || [],
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                    {/* Calibration Data Tables */}
-                    {tableFields.length > 0 && job.data && (
-                        <div className="section calibration-data-section">
-                            <div className="section-title">
-                                Dados de Calibração
-                            </div>
-                            {tableFields.map((field) => {
-                                const tableData = job.data?.[field.key];
-                                if (!Array.isArray(tableData)) return null;
-                                return (
-                                    <DataTable
-                                        key={field.key}
-                                        field={field}
-                                        data={tableData}
-                                    />
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {/* RBC-like Calibration Result */}
-                    {templateConfig.sections.showResults &&
-                        calibrationResultEntries.length > 0 &&
-                        calibrationResultRowCount > 0 && (
-                            <div className="section">
-                                <div className="section-title">
-                                    Resultado da Calibração
-                                </div>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Ponto</th>
-                                            {calibrationResultEntries.map(
-                                                ({ key, label, unit }) => (
-                                                    <th key={key}>
-                                                        {label}
-                                                        {unit
-                                                            ? ` (${unit})`
-                                                            : ""}
-                                                    </th>
-                                                ),
-                                            )}
-                                            {calibrationResultEntries.some(
-                                                (entry) =>
-                                                    entry.formula?.reporting
-                                                        ?.role ===
-                                                    "conformity_margin",
-                                            ) && <th>Critério</th>}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {Array.from({
-                                            length: calibrationResultRowCount,
-                                        }).map((_, index) => {
-                                            const conformityEntry =
-                                                calibrationResultEntries.find(
-                                                    (entry) =>
-                                                        entry.formula?.reporting
-                                                            ?.role ===
-                                                        "conformity_margin",
-                                                );
-                                            const conformityValue =
-                                                conformityEntry
-                                                    ? getIndexedValue(
-                                                          conformityEntry.value,
-                                                          index,
-                                                      )
-                                                    : undefined;
-                                            const conformityNumber =
-                                                typeof conformityValue ===
-                                                "number"
-                                                    ? conformityValue
-                                                    : typeof conformityValue ===
-                                                        "string"
-                                                      ? Number(conformityValue)
-                                                      : NaN;
-
-                                            return (
-                                                <tr key={index}>
-                                                    <td>
-                                                        {pointLabels[index] ??
-                                                            String(index + 1)}
-                                                    </td>
-                                                    {calibrationResultEntries.map(
-                                                        (entry) => (
-                                                            <td key={entry.key}>
-                                                                {formatReportedValue(
-                                                                    entry,
-                                                                    getIndexedValue(
-                                                                        entry.value,
-                                                                        index,
-                                                                    ),
-                                                                )}
-                                                            </td>
-                                                        ),
-                                                    )}
-                                                    {conformityEntry && (
-                                                        <td>
-                                                            {Number.isFinite(
-                                                                conformityNumber,
-                                                            )
-                                                                ? conformityNumber >=
-                                                                  0
-                                                                    ? "Conforme"
-                                                                    : "Não conforme"
-                                                                : "-"}
-                                                        </td>
-                                                    )}
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-
-                    {templateConfig.sections.showResults &&
-                        uncertaintyBudgetEntries.length > 0 && (
-                            <div className="section">
-                                <div className="section-title">
-                                    Orçamento de Incerteza
-                                </div>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Componente</th>
-                                            <th>Valor</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {uncertaintyBudgetEntries.map(
-                                            ({ key, label, value, unit }) => (
-                                                <tr key={key}>
-                                                    <td>{label}</td>
-                                                    <td>
-                                                        {formatValue(value)}
-                                                        {unit ? ` ${unit}` : ""}
-                                                    </td>
-                                                </tr>
-                                            ),
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-
-                    {/* Results */}
-                    {templateConfig.sections.showResults &&
-                        genericResultEntries.length > 0 && (
-                            <div className="section">
-                                <div className="section-title">Resultados</div>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Parâmetro</th>
-                                            <th>Valor</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {genericResultEntries.map(
-                                            ({ key, label, value, unit }) => (
-                                                <tr key={key}>
-                                                    <td>{label}</td>
-                                                    <td>
-                                                        {formatValue(value)}
-                                                        {unit ? ` ${unit}` : ""}
-                                                    </td>
-                                                </tr>
-                                            ),
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-
-                    <div className="closing-block">
-                        {/* Signature - ISO 17025 Clause 7.8.2.1(q) */}
-                        {templateConfig.sections.showSignature && (
-                            <div className="signature-section">
-                                <div className="signature-box">
-                                    {/* Visual signature image */}
-                                    {job.approverSignatureUrl && (
-                                        <img
-                                            src={job.approverSignatureUrl}
-                                            alt="Assinatura"
-                                            style={{
-                                                maxHeight: "60px",
-                                                maxWidth: "180px",
-                                                marginBottom: "4px",
-                                                display: "block",
-                                                marginLeft: "auto",
-                                                marginRight: "auto",
-                                            }}
-                                        />
-                                    )}
-                                    <div className="signature-line">
-                                        {job.lab.technicalManagerName ||
-                                            job.approverName ||
-                                            "-"}
-                                    </div>
-                                    <div>
-                                        {job.lab.technicalManagerTitle ||
-                                            "Responsável Técnico"}
-                                    </div>
-                                    <div
-                                        style={{
-                                            fontSize: "8pt",
-                                            color: "#666",
-                                        }}
-                                    >
-                                        {formatDate(job.approvedAt)}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Footer */}
-                        <div className="footer">
-                            <div>Emitido em: {formatDate(new Date())}</div>
-                            {templateConfig.content.footerNote && (
-                                <div>{templateConfig.content.footerNote}</div>
-                            )}
-                        </div>
-
-                        {/* End of Document Marker (ISO requirement) */}
-                        <div className="end-marker">
-                            --- FIM DO CERTIFICADO ---
-                        </div>
-                    </div>
+          {/* Method */}
+          <div className="section">
+            <div className="section-title">Método de Calibração</div>
+            <div className="info-grid">
+              <div className="info-row">
+                <span className="info-label">
+                  {methodCertificateContent?.procedureCode
+                    ? "Procedimento:"
+                    : "Método:"}
+                </span>
+                <span className="info-value">
+                  {methodCertificateContent?.procedureCode ||
+                    `${job.methodSnapshot.methodName} (v${job.methodSnapshot.methodVersion})`}
+                </span>
+              </div>
+              {methodCertificateContent?.procedureCode && (
+                <div className="info-row">
+                  <span className="info-label">Método:</span>
+                  <span className="info-value">
+                    {job.methodSnapshot.methodName} (v
+                    {job.methodSnapshot.methodVersion})
+                  </span>
                 </div>
-            </body>
-        </html>
-    );
+              )}
+              {(methodCertificateContent?.referenceStandards ?? []).some(
+                (item) => item.trim(),
+              ) && (
+                <div className="info-row">
+                  <span className="info-label">Norma de Ref.:</span>
+                  <span className="info-value">
+                    {methodCertificateContent?.referenceStandards
+                      ?.filter((item) => item.trim())
+                      .join(" e ")}
+                  </span>
+                </div>
+              )}
+              <div className="info-row">
+                <span className="info-label">Data:</span>
+                <span className="info-value">
+                  {formatDate(job.performedAt)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {shouldRenderMethodCertificateSections && (
+            <div className="section method-content">
+              {effectiveMethodCertificateSections.map((section, index) =>
+                renderMethodCertificateSection(section, index),
+              )}
+            </div>
+          )}
+
+          {/* Environment */}
+          {templateConfig.sections.showEnvironmental &&
+            (envTemperature != null ||
+              envHumidity != null ||
+              envPressure != null) && (
+              <div className="section">
+                <div className="section-title">Condições Ambientais</div>
+                <div className="info-grid">
+                  {envTemperature != null && (
+                    <div className="info-row">
+                      <span className="info-label">Temperatura:</span>
+                      <span className="info-value">
+                        {formatNumber(envTemperature, 1)} °C
+                      </span>
+                    </div>
+                  )}
+                  {envHumidity != null && (
+                    <div className="info-row">
+                      <span className="info-label">Umidade:</span>
+                      <span className="info-value">
+                        {formatNumber(envHumidity, 1)} %RH
+                      </span>
+                    </div>
+                  )}
+                  {envPressure != null && (
+                    <div className="info-row">
+                      <span className="info-label">Pressão:</span>
+                      <span className="info-value">
+                        {formatPlainNumber(envPressure, 1)} hPa
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+          {/* Standards Used */}
+          {templateConfig.sections.showStandards &&
+            job.standardsSnapshot &&
+            job.standardsSnapshot.length > 0 && (
+              <div className="section">
+                <div className="section-title">Padrões Utilizados</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Padrão</th>
+                      <th>Certificado</th>
+                      <th>Incerteza</th>
+                      <th>Validade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {job.standardsSnapshot.map((std, i) => (
+                      <tr key={i}>
+                        <td>{std.name}</td>
+                        <td>{std.certificateNumber}</td>
+                        <td>
+                          {formatStandardUncertainty(
+                            std,
+                            showCertifiedValuesTable,
+                          )}
+                        </td>
+                        <td>
+                          {formatDate(
+                            std.nextCalibrationDate ?? std.calibrationDate,
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Certified Values for Weight Sets */}
+                {showCertifiedValuesTable &&
+                  job.standardsSnapshot.some(hasCertifiedValues) && (
+                    <div className="data-table">
+                      <div className="data-table-title">
+                        Valores Certificados dos Padrões
+                      </div>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Padrão</th>
+                            <th>Valor Nominal</th>
+                            <th>Valor Certificado</th>
+                            <th>Incerteza</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {job.standardsSnapshot.flatMap(
+                            (std) =>
+                              std.certifiedValues?.map((cv, i) => (
+                                <tr key={`${std.id}-${i}`}>
+                                  <td>{i === 0 ? std.name : ""}</td>
+                                  <td>{cv.nominal}</td>
+                                  <td>
+                                    {formatValue(cv.value)} {cv.unit}
+                                  </td>
+                                  <td>
+                                    ±{formatValue(cv.uncertainty)} {cv.unit}
+                                  </td>
+                                </tr>
+                              )) || [],
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+              </div>
+            )}
+
+          {/* Calibration Data Tables */}
+          {tableFields.length > 0 && job.data && (
+            <div className="section calibration-data-section">
+              <div className="section-title">Dados de Calibração</div>
+              {tableFields.map((field) => {
+                const tableData = job.data?.[field.key];
+                if (!Array.isArray(tableData)) return null;
+                if (
+                  shouldRenderEccentricityDiagram &&
+                  isEccentricityCalibrationField(field)
+                ) {
+                  const eccentricityVariant =
+                    getEccentricityIndicatorVariant(field);
+                  if (!eccentricityVariant) {
+                    return (
+                      <DataTable
+                        key={field.key}
+                        field={field}
+                        data={tableData}
+                      />
+                    );
+                  }
+
+                  return (
+                    <div key={field.key} className="eccentricity-layout">
+                      <DataTable field={field} data={tableData} />
+                      <CertificateEccentricityDiagram
+                        selectedPosition={getEccentricityIndicatorPosition(
+                          job,
+                          eccentricityVariant,
+                        )}
+                        variant={eccentricityVariant}
+                      />
+                    </div>
+                  );
+                }
+
+                return (
+                  <DataTable key={field.key} field={field} data={tableData} />
+                );
+              })}
+            </div>
+          )}
+
+          {massCompositionRows.length > 0 && (
+            <div className="section">
+              <div className="section-title">
+                Composição dos Padrões por Ponto
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ponto</th>
+                    <th>Composição</th>
+                    <th>Padrão</th>
+                    <th>Certificado</th>
+                    <th>Valor certificado</th>
+                    <th>Incerteza</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {massCompositionRows.map((row, index) => (
+                    <tr
+                      key={`${row.item.standardId}-${row.item.certifiedValueIndex}-${index}`}
+                    >
+                      <td>{row.point}</td>
+                      <td>{row.composition}</td>
+                      <td>
+                        {row.item.quantity} x{" "}
+                        {row.item.compositionProfile
+                          ? (row.item.profileKey ?? row.item.nominal)
+                          : `${row.item.nominal} ${row.item.standardName}`}
+                      </td>
+                      <td>{row.item.certificateNumber}</td>
+                      <td>
+                        {formatValue(row.item.value)} {row.item.unit}
+                      </td>
+                      <td>
+                        ±{formatValue(row.item.uncertainty)} {row.item.unit}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* RBC-like Calibration Result */}
+          {templateConfig.sections.showResults &&
+            calibrationResultEntries.length > 0 &&
+            calibrationResultRowCount > 0 && (
+              <div className="section">
+                <div className="section-title">Resultado da Calibração</div>
+                {calibrationResultChunks.map((entries, chunkIndex) => {
+                  const isLastChunk =
+                    chunkIndex === calibrationResultChunks.length - 1;
+                  const includeCriterion = !!conformityEntry && isLastChunk;
+
+                  return (
+                    <div className="table-chunk" key={chunkIndex}>
+                      {calibrationResultChunks.length > 1 && (
+                        <div className="data-table-subtitle">
+                          {chunkIndex === 0
+                            ? "Resultados principais"
+                            : `Continuação ${chunkIndex + 1}`}
+                        </div>
+                      )}
+                      <table
+                        className={
+                          calibrationResultEntries.length >
+                          MAX_CALIBRATION_RESULT_COLUMNS
+                            ? "wide-table result-table"
+                            : "result-table"
+                        }
+                      >
+                        <thead>
+                          <tr>
+                            <th>Ponto</th>
+                            {entries.map(({ key, label, unit }) => (
+                              <th key={key}>
+                                {label}
+                                {unit ? ` (${unit})` : ""}
+                              </th>
+                            ))}
+                            {includeCriterion && <th>Critério</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.from({
+                            length: calibrationResultRowCount,
+                          }).map((_, index) => {
+                            const conformityValue = conformityEntry
+                              ? getIndexedValue(conformityEntry.value, index)
+                              : undefined;
+                            const conformityNumber =
+                              typeof conformityValue === "number"
+                                ? conformityValue
+                                : typeof conformityValue === "string"
+                                  ? Number(conformityValue)
+                                  : NaN;
+
+                            return (
+                              <tr key={index}>
+                                <td>
+                                  {pointLabels[index] ?? String(index + 1)}
+                                </td>
+                                {entries.map((entry) => (
+                                  <td key={entry.key}>
+                                    {formatReportedValue(
+                                      entry,
+                                      getIndexedValue(entry.value, index),
+                                    )}
+                                  </td>
+                                ))}
+                                {includeCriterion && (
+                                  <td>
+                                    {Number.isFinite(conformityNumber)
+                                      ? conformityNumber >= 0
+                                        ? "Conforme"
+                                        : "Não conforme"
+                                      : "-"}
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+          {templateConfig.sections.showResults &&
+            uncertaintyBudgetEntries.length > 0 && (
+              <div className="section">
+                <div className="section-title">Orçamento de Incerteza</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Componente</th>
+                      <th>Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {uncertaintyBudgetEntries.map(
+                      ({ key, label, value, unit }) => (
+                        <tr key={key}>
+                          <td>{label}</td>
+                          <td>
+                            {formatValue(value)}
+                            {unit ? ` ${unit}` : ""}
+                          </td>
+                        </tr>
+                      ),
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+          {/* Results */}
+          {templateConfig.sections.showResults &&
+            genericResultEntries.length > 0 && (
+              <div className="section">
+                <div className="section-title">Resultados</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Parâmetro</th>
+                      <th>Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {genericResultEntries.map(({ key, label, value, unit }) => (
+                      <tr key={key}>
+                        <td>{label}</td>
+                        <td>
+                          {formatValue(value)}
+                          {unit ? ` ${unit}` : ""}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+          <div className="closing-block">
+            {/* Signature - ISO 17025 Clause 7.8.2.1(q) */}
+            {templateConfig.sections.showSignature && (
+              <div className="signature-section">
+                <div className="signature-box">
+                  {/* Visual signature image */}
+                  {job.approverSignatureUrl && (
+                    <img
+                      src={job.approverSignatureUrl}
+                      alt="Assinatura"
+                      style={{
+                        maxHeight: "60px",
+                        maxWidth: "180px",
+                        marginBottom: "4px",
+                        display: "block",
+                        marginLeft: "auto",
+                        marginRight: "auto",
+                      }}
+                    />
+                  )}
+                  <div className="signature-line">
+                    {job.lab.technicalManagerName || job.approverName || "-"}
+                  </div>
+                  <div>
+                    {job.lab.technicalManagerTitle || "Responsável Técnico"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "8pt",
+                      color: "#666",
+                    }}
+                  >
+                    {formatDate(job.approvedAt)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="footer">
+              <div>Emitido em: {formatDate(new Date())}</div>
+              {templateConfig.content.footerNote && (
+                <div>{templateConfig.content.footerNote}</div>
+              )}
+            </div>
+
+            {/* End of Document Marker (ISO requirement) */}
+            <div className="end-marker">--- FIM DO CERTIFICADO ---</div>
+          </div>
+        </div>
+      </body>
+    </html>
+  );
 }

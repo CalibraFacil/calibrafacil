@@ -130,6 +130,8 @@ const defaultColumn: MethodTableColumn = {
   type: 'number',
 }
 
+const NO_TARGET_COLUMN = '__none'
+
 export function InputFieldDialog({
   open,
   onOpenChange,
@@ -176,6 +178,12 @@ function InputFieldDialogBody({
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [autoKey, setAutoKey] = useState(!initialData)
+  const directAssetSpecFields = assetTypeDefinition.filter(
+    (spec) => spec.type !== 'weighing_ranges',
+  )
+  const weighingRangeSpecFields = assetTypeDefinition.filter(
+    (spec) => spec.type === 'weighing_ranges',
+  )
 
   const handleLabelChange = (label: string) => {
     const updates: Partial<MethodInputField> = { label }
@@ -198,6 +206,8 @@ function InputFieldDialogBody({
     // Clear type-specific data when changing away
     if (type !== 'table') {
       updates.columns = undefined
+      updates.eccentricityIndicator = undefined
+      updates.weighingRangeResolver = undefined
     }
     if (type !== 'select') {
       updates.options = undefined
@@ -214,6 +224,8 @@ function InputFieldDialogBody({
           allowOverride: false,
           type: f.type === 'table' ? 'number' : f.type,
           columns: undefined,
+          eccentricityIndicator: undefined,
+          weighingRangeResolver: undefined,
         }
       }
 
@@ -227,7 +239,7 @@ function InputFieldDialogBody({
   }
 
   const handleAssetSpecChange = (assetSpecKey: string) => {
-    const spec = assetTypeDefinition.find((item) => item.key === assetSpecKey)
+    const spec = directAssetSpecFields.find((item) => item.key === assetSpecKey)
     setField((f) => ({
       ...f,
       assetSpecKey,
@@ -275,6 +287,38 @@ function InputFieldDialogBody({
   const removeColumn = (index: number) => {
     const newColumns = (field.columns || []).filter((_, i) => i !== index)
     setField((f) => ({ ...f, columns: newColumns }))
+  }
+
+  const updateWeighingRangeResolver = (
+    updates: Partial<NonNullable<MethodInputField['weighingRangeResolver']>>,
+  ) => {
+    setField((current) => ({
+      ...current,
+      weighingRangeResolver: {
+        ...current.weighingRangeResolver,
+        enabled: true,
+        ...updates,
+      },
+    }))
+  }
+
+  const setWeighingRangeTargetColumn = (
+    target: keyof NonNullable<
+      NonNullable<MethodInputField['weighingRangeResolver']>['targetColumns']
+    >,
+    value: string,
+  ) => {
+    setField((current) => ({
+      ...current,
+      weighingRangeResolver: {
+        ...current.weighingRangeResolver,
+        enabled: true,
+        targetColumns: {
+          ...current.weighingRangeResolver?.targetColumns,
+          [target]: value === NO_TARGET_COLUMN ? undefined : value,
+        },
+      },
+    }))
   }
 
   const addOption = () => {
@@ -329,6 +373,16 @@ function InputFieldDialogBody({
           newErrors.columns = 'Todas as colunas precisam de chave e rótulo'
         }
       }
+
+      if (field.weighingRangeResolver?.enabled) {
+        if (!field.weighingRangeResolver.assetSpecKey) {
+          newErrors.weighingRangeResolver =
+            'Selecione a especificação de faixas de pesagem'
+        } else if (!field.weighingRangeResolver.pointColumn) {
+          newErrors.weighingRangeResolver =
+            'Selecione a coluna do ponto de calibração'
+        }
+      }
     }
 
     if (field.source === 'asset_spec') {
@@ -356,6 +410,12 @@ function InputFieldDialogBody({
     } else {
       cleanedField.allowOverride = false
       cleanedField.columns = undefined
+      cleanedField.eccentricityIndicator = undefined
+      cleanedField.weighingRangeResolver = undefined
+    }
+    if (cleanedField.type !== 'table') {
+      cleanedField.eccentricityIndicator = undefined
+      cleanedField.weighingRangeResolver = undefined
     }
     if (cleanedField.type === 'select') {
       cleanedField.options = (cleanedField.options || []).filter((o) =>
@@ -365,6 +425,44 @@ function InputFieldDialogBody({
 
     onSave(cleanedField)
   }
+
+  const renderTargetColumnSelect = (
+    label: string,
+    target: keyof NonNullable<
+      NonNullable<MethodInputField['weighingRangeResolver']>['targetColumns']
+    >,
+  ) => (
+    <Field>
+      <FieldLabel>{label}</FieldLabel>
+      <Select
+        value={
+          field.weighingRangeResolver?.targetColumns?.[target] ??
+          NO_TARGET_COLUMN
+        }
+        onValueChange={(value) => setWeighingRangeTargetColumn(target, value)}
+      >
+        <SelectTrigger>
+          <span>
+            {field.weighingRangeResolver?.targetColumns?.[target]
+              ? (field.columns || []).find(
+                  (column) =>
+                    column.key ===
+                    field.weighingRangeResolver?.targetColumns?.[target],
+                )?.label || field.weighingRangeResolver?.targetColumns?.[target]
+              : 'Não preencher'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_TARGET_COLUMN}>Não preencher</SelectItem>
+          {(field.columns || []).map((column) => (
+            <SelectItem key={column.key} value={column.key}>
+              {column.label} ({column.key})
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  )
 
   return (
     <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -377,280 +475,498 @@ function InputFieldDialogBody({
         </DialogDescription>
       </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <Field>
-            <FieldLabel htmlFor="label">Rótulo *</FieldLabel>
-            <Input
-              id="label"
-              value={field.label}
-              onChange={(e) => handleLabelChange(e.target.value)}
-              placeholder="Ex: Leitura 1"
-            />
-            {errors.label && <FieldError>{errors.label}</FieldError>}
-          </Field>
+      <div className="space-y-4 py-4">
+        <Field>
+          <FieldLabel htmlFor="label">Rótulo *</FieldLabel>
+          <Input
+            id="label"
+            value={field.label}
+            onChange={(e) => handleLabelChange(e.target.value)}
+            placeholder="Ex: Leitura 1"
+          />
+          {errors.label && <FieldError>{errors.label}</FieldError>}
+        </Field>
 
-          <Field>
-            <FieldLabel htmlFor="key">Chave (variável) *</FieldLabel>
-            <Input
-              id="key"
-              value={field.key}
-              onChange={(e) => {
-                setAutoKey(false)
-                setField((f) => ({ ...f, key: e.target.value }))
-              }}
-              placeholder="Ex: leitura_1"
-            />
-            <FieldDescription>
-              Nome da variável usada nas fórmulas
-            </FieldDescription>
-            {errors.key && <FieldError>{errors.key}</FieldError>}
-          </Field>
+        <Field>
+          <FieldLabel htmlFor="key">Chave (variável) *</FieldLabel>
+          <Input
+            id="key"
+            value={field.key}
+            onChange={(e) => {
+              setAutoKey(false)
+              setField((f) => ({ ...f, key: e.target.value }))
+            }}
+            placeholder="Ex: leitura_1"
+          />
+          <FieldDescription>
+            Nome da variável usada nas fórmulas
+          </FieldDescription>
+          {errors.key && <FieldError>{errors.key}</FieldError>}
+        </Field>
 
-          <Field>
-            <FieldLabel htmlFor="source">Origem do valor</FieldLabel>
-            <Select
-              value={field.source ?? 'manual'}
-              onValueChange={(v) =>
-                handleSourceChange(v as MethodInputField['source'])
-              }
-            >
-              <SelectTrigger>
-                <span>
-                  {(field.source ?? 'manual') === 'asset_spec'
-                    ? 'Especificação do ativo'
-                    : 'Digitado na execução'}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="manual">Digitado na execução</SelectItem>
-                <SelectItem value="asset_spec">
-                  Especificação do ativo
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            {(field.source ?? 'manual') === 'asset_spec' && (
-              <FieldDescription>
-                Este valor será carregado automaticamente do ativo calibrado e
-                congelado no job.
-              </FieldDescription>
-            )}
-          </Field>
-
+        <Field>
+          <FieldLabel htmlFor="source">Origem do valor</FieldLabel>
+          <Select
+            value={field.source ?? 'manual'}
+            onValueChange={(v) =>
+              handleSourceChange(v as MethodInputField['source'])
+            }
+          >
+            <SelectTrigger>
+              <span>
+                {(field.source ?? 'manual') === 'asset_spec'
+                  ? 'Especificação do ativo'
+                  : 'Digitado na execução'}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="manual">Digitado na execução</SelectItem>
+              <SelectItem value="asset_spec">Especificação do ativo</SelectItem>
+            </SelectContent>
+          </Select>
           {(field.source ?? 'manual') === 'asset_spec' && (
-            <Field>
-              <FieldLabel htmlFor="assetSpecKey">
-                Especificação do ativo *
-              </FieldLabel>
-              <Select
-                value={field.assetSpecKey ?? ''}
-                onValueChange={handleAssetSpecChange}
-              >
-                <SelectTrigger>
-                  <span>
-                    {field.assetSpecKey
-                      ? assetTypeDefinition.find(
-                          (item) => item.key === field.assetSpecKey,
-                        )?.label || field.assetSpecKey
-                      : 'Selecione...'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {assetTypeDefinition.length === 0 ? (
-                    <SelectItem value="__empty" disabled>
-                      Selecione um tipo de instrumento no método
-                    </SelectItem>
-                  ) : (
-                    assetTypeDefinition.map((spec) => (
-                      <SelectItem key={spec.key} value={spec.key}>
-                        {spec.label} ({spec.key}
-                        {spec.unit ? ` [${spec.unit}]` : ''})
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              {errors.assetSpecKey && (
-                <FieldError>{errors.assetSpecKey}</FieldError>
-              )}
-            </Field>
+            <FieldDescription>
+              Este valor será carregado automaticamente do ativo calibrado e
+              congelado no job.
+            </FieldDescription>
           )}
+        </Field>
 
+        {(field.source ?? 'manual') === 'asset_spec' && (
           <Field>
-            <FieldLabel htmlFor="type">Tipo</FieldLabel>
+            <FieldLabel htmlFor="assetSpecKey">
+              Especificação do ativo *
+            </FieldLabel>
             <Select
-              value={field.type}
-              onValueChange={(v) =>
-                handleTypeChange(v as MethodInputField['type'])
-              }
-              disabled={(field.source ?? 'manual') === 'asset_spec'}
+              value={field.assetSpecKey ?? ''}
+              onValueChange={handleAssetSpecChange}
             >
               <SelectTrigger>
                 <span>
-                  {field.type === 'number'
-                    ? 'Número'
-                    : field.type === 'text'
-                      ? 'Texto'
-                      : field.type === 'select'
-                        ? 'Seleção'
-                        : 'Tabela'}
+                  {field.assetSpecKey
+                    ? assetTypeDefinition.find(
+                        (item) => item.key === field.assetSpecKey,
+                      )?.label || field.assetSpecKey
+                    : 'Selecione...'}
                 </span>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="number">Número</SelectItem>
-                <SelectItem value="text">Texto</SelectItem>
-                <SelectItem value="select">Seleção</SelectItem>
-                {(field.source ?? 'manual') !== 'asset_spec' && (
-                  <SelectItem value="table">Tabela</SelectItem>
+                {directAssetSpecFields.length === 0 ? (
+                  <SelectItem value="__empty" disabled>
+                    Selecione um tipo de instrumento no método
+                  </SelectItem>
+                ) : (
+                  directAssetSpecFields.map((spec) => (
+                    <SelectItem key={spec.key} value={spec.key}>
+                      {spec.label} ({spec.key}
+                      {spec.unit ? ` [${spec.unit}]` : ''})
+                    </SelectItem>
+                  ))
                 )}
               </SelectContent>
             </Select>
-            {errors.type && <FieldError>{errors.type}</FieldError>}
+            {errors.assetSpecKey && (
+              <FieldError>{errors.assetSpecKey}</FieldError>
+            )}
           </Field>
+        )}
 
-          {(field.type === 'number' || field.type === 'text') && (
-            <Field>
-              <FieldLabel htmlFor="unit">Unidade</FieldLabel>
-              <Input
-                id="unit"
-                value={field.unit || ''}
-                onChange={(e) =>
-                  setField((f) => ({ ...f, unit: e.target.value || undefined }))
-                }
-                placeholder="Ex: mm, g, degC"
-              />
-            </Field>
-          )}
+        <Field>
+          <FieldLabel htmlFor="type">Tipo</FieldLabel>
+          <Select
+            value={field.type}
+            onValueChange={(v) =>
+              handleTypeChange(v as MethodInputField['type'])
+            }
+            disabled={(field.source ?? 'manual') === 'asset_spec'}
+          >
+            <SelectTrigger>
+              <span>
+                {field.type === 'number'
+                  ? 'Número'
+                  : field.type === 'text'
+                    ? 'Texto'
+                    : field.type === 'select'
+                      ? 'Seleção'
+                      : 'Tabela'}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="number">Número</SelectItem>
+              <SelectItem value="text">Texto</SelectItem>
+              <SelectItem value="select">Seleção</SelectItem>
+              {(field.source ?? 'manual') !== 'asset_spec' && (
+                <SelectItem value="table">Tabela</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+          {errors.type && <FieldError>{errors.type}</FieldError>}
+        </Field>
 
+        {(field.type === 'number' || field.type === 'text') && (
           <Field>
-            <div className="flex items-center justify-between">
-              <FieldLabel htmlFor="required">Obrigatório</FieldLabel>
-              <Switch
-                id="required"
-                checked={field.required || false}
-                onCheckedChange={(checked) =>
-                  setField((f) => ({ ...f, required: checked }))
-                }
-              />
+            <FieldLabel htmlFor="unit">Unidade</FieldLabel>
+            <Input
+              id="unit"
+              value={field.unit || ''}
+              onChange={(e) =>
+                setField((f) => ({ ...f, unit: e.target.value || undefined }))
+              }
+              placeholder="Ex: mm, g, degC"
+            />
+          </Field>
+        )}
+
+        <Field>
+          <div className="flex items-center justify-between">
+            <FieldLabel htmlFor="required">Obrigatório</FieldLabel>
+            <Switch
+              id="required"
+              checked={field.required || false}
+              onCheckedChange={(checked) =>
+                setField((f) => ({ ...f, required: checked }))
+              }
+            />
+          </div>
+        </Field>
+
+        {/* Select Options */}
+        {field.type === 'select' && (
+          <Field>
+            <FieldLabel>Opcoes</FieldLabel>
+            <div className="space-y-2">
+              {(field.options || []).map((option, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    value={option}
+                    onChange={(e) => updateOption(index, e.target.value)}
+                    placeholder={`Opcao ${index + 1}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeOption(index)}
+                  >
+                    <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addOption}
+              >
+                <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                Adicionar Opcao
+              </Button>
+            </div>
+            {errors.options && <FieldError>{errors.options}</FieldError>}
+          </Field>
+        )}
+
+        {/* Table Columns */}
+        {field.type === 'table' && (
+          <Field>
+            <FieldLabel>Colunas da Tabela</FieldLabel>
+            <div className="space-y-2">
+              {(field.columns || []).map((column, index) => (
+                <div
+                  key={index}
+                  className="flex gap-2 items-start p-2 border rounded"
+                >
+                  <div className="flex-1 space-y-2">
+                    <Input
+                      value={column.label}
+                      onChange={(e) => updateColumnLabel(index, e.target.value)}
+                      placeholder="Rótulo"
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={column.key}
+                        onChange={(e) => updateColumnKey(index, e.target.value)}
+                        placeholder="Chave"
+                        className="flex-1"
+                      />
+                      <Select
+                        value={column.type}
+                        onValueChange={(v) =>
+                          updateColumn(index, {
+                            type: v as 'text' | 'number',
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-24">
+                          <span>
+                            {column.type === 'number' ? 'Num' : 'Texto'}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="number">Número</SelectItem>
+                          <SelectItem value="text">Texto</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={column.unit || ''}
+                        onChange={(e) =>
+                          updateColumn(index, {
+                            unit: e.target.value || undefined,
+                          })
+                        }
+                        placeholder="Un."
+                        className="w-16"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeColumn(index)}
+                  >
+                    <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addColumn}
+              >
+                <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                Adicionar Coluna
+              </Button>
+            </div>
+            {errors.columns && <FieldError>{errors.columns}</FieldError>}
+          </Field>
+        )}
+
+        {field.type === 'table' && (
+          <Field>
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <FieldLabel htmlFor="weighing-range-resolver-enabled">
+                    Resolver faixas de pesagem
+                  </FieldLabel>
+                  <FieldDescription>
+                    Usa uma especificação do ativo para preencher a resolução
+                    aplicável conforme o ponto de calibração informado.
+                  </FieldDescription>
+                </div>
+                <Switch
+                  id="weighing-range-resolver-enabled"
+                  checked={field.weighingRangeResolver?.enabled ?? false}
+                  onCheckedChange={(checked) =>
+                    setField((current) => ({
+                      ...current,
+                      weighingRangeResolver: checked
+                        ? {
+                            enabled: true,
+                            assetSpecKey:
+                              current.weighingRangeResolver?.assetSpecKey ??
+                              weighingRangeSpecFields[0]?.key,
+                            pointColumn:
+                              current.weighingRangeResolver?.pointColumn ??
+                              current.columns?.[0]?.key,
+                            targetColumns:
+                              current.weighingRangeResolver?.targetColumns ??
+                              {},
+                          }
+                        : undefined,
+                    }))
+                  }
+                />
+              </div>
+
+              {field.weighingRangeResolver?.enabled && (
+                <div className="space-y-3">
+                  <Field>
+                    <FieldLabel>Especificação de faixas no ativo</FieldLabel>
+                    <Select
+                      value={field.weighingRangeResolver.assetSpecKey ?? ''}
+                      onValueChange={(value) =>
+                        updateWeighingRangeResolver({ assetSpecKey: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <span>
+                          {field.weighingRangeResolver.assetSpecKey
+                            ? weighingRangeSpecFields.find(
+                                (spec) =>
+                                  spec.key ===
+                                  field.weighingRangeResolver?.assetSpecKey,
+                              )?.label ||
+                              field.weighingRangeResolver.assetSpecKey
+                            : 'Selecione...'}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {weighingRangeSpecFields.length === 0 ? (
+                          <SelectItem value="__empty" disabled>
+                            Nenhuma especificação de faixas no tipo de ativo
+                          </SelectItem>
+                        ) : (
+                          weighingRangeSpecFields.map((spec) => (
+                            <SelectItem key={spec.key} value={spec.key}>
+                              {spec.label} ({spec.key})
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel>Coluna do ponto</FieldLabel>
+                      <Select
+                        value={field.weighingRangeResolver.pointColumn ?? ''}
+                        onValueChange={(value) =>
+                          updateWeighingRangeResolver({ pointColumn: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <span>
+                            {field.weighingRangeResolver.pointColumn
+                              ? (field.columns || []).find(
+                                  (column) =>
+                                    column.key ===
+                                    field.weighingRangeResolver?.pointColumn,
+                                )?.label ||
+                                field.weighingRangeResolver.pointColumn
+                              : 'Selecione...'}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(field.columns || []).map((column) => (
+                            <SelectItem key={column.key} value={column.key}>
+                              {column.label} ({column.key})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+
+                    <Field>
+                      <FieldLabel>Unidade do ponto</FieldLabel>
+                      <Select
+                        value={field.weighingRangeResolver.pointUnit ?? ''}
+                        onValueChange={(value) =>
+                          updateWeighingRangeResolver({
+                            pointUnit: value as 'mg' | 'g' | 'kg',
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <span>
+                            {field.weighingRangeResolver.pointUnit ??
+                              'Usar unidade da coluna'}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="mg">mg</SelectItem>
+                          <SelectItem value="g">g</SelectItem>
+                          <SelectItem value="kg">kg</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {renderTargetColumnSelect('Faixa', 'rangeLabel')}
+                    {renderTargetColumnSelect('Resolução', 'resolution')}
+                    {renderTargetColumnSelect(
+                      'Unidade da resolução',
+                      'resolutionUnit',
+                    )}
+                    {renderTargetColumnSelect('Limite mínimo', 'rangeMin')}
+                    {renderTargetColumnSelect('Limite máximo', 'rangeMax')}
+                    {renderTargetColumnSelect('Unidade da faixa', 'rangeUnit')}
+                  </div>
+
+                  {errors.weighingRangeResolver && (
+                    <FieldError>{errors.weighingRangeResolver}</FieldError>
+                  )}
+                </div>
+              )}
             </div>
           </Field>
+        )}
 
-          {/* Select Options */}
-          {field.type === 'select' && (
-            <Field>
-              <FieldLabel>Opcoes</FieldLabel>
-              <div className="space-y-2">
-                {(field.options || []).map((option, index) => (
-                  <div key={index} className="flex gap-2">
-                    <Input
-                      value={option}
-                      onChange={(e) => updateOption(index, e.target.value)}
-                      placeholder={`Opcao ${index + 1}`}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeOption(index)}
-                    >
-                      <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addOption}
-                >
-                  <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-                  Adicionar Opcao
-                </Button>
+        {field.type === 'table' && (
+          <Field>
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <FieldLabel htmlFor="eccentricity-indicator-enabled">
+                    Diagrama de posição do indicador
+                  </FieldLabel>
+                  <FieldDescription>
+                    Renderiza o diagrama de excentricidade junto desta tabela na
+                    execução e no certificado.
+                  </FieldDescription>
+                </div>
+                <Switch
+                  id="eccentricity-indicator-enabled"
+                  checked={field.eccentricityIndicator?.enabled ?? false}
+                  onCheckedChange={(checked) =>
+                    setField((current) => ({
+                      ...current,
+                      eccentricityIndicator: checked
+                        ? {
+                            enabled: true,
+                            variant:
+                              current.eccentricityIndicator?.variant ??
+                              'circular_platform',
+                          }
+                        : undefined,
+                    }))
+                  }
+                />
               </div>
-              {errors.options && <FieldError>{errors.options}</FieldError>}
-            </Field>
-          )}
 
-          {/* Table Columns */}
-          {field.type === 'table' && (
-            <Field>
-              <FieldLabel>Colunas da Tabela</FieldLabel>
-              <div className="space-y-2">
-                {(field.columns || []).map((column, index) => (
-                  <div
-                    key={index}
-                    className="flex gap-2 items-start p-2 border rounded"
+              {field.eccentricityIndicator?.enabled && (
+                <Field>
+                  <FieldLabel>Tipo de diagrama</FieldLabel>
+                  <Select
+                    value={
+                      field.eccentricityIndicator.variant ?? 'circular_platform'
+                    }
+                    onValueChange={(value) =>
+                      setField((current) => ({
+                        ...current,
+                        eccentricityIndicator: {
+                          enabled: true,
+                          variant: value as 'circular_platform' | 'road_scale',
+                        },
+                      }))
+                    }
                   >
-                    <div className="flex-1 space-y-2">
-                      <Input
-                        value={column.label}
-                        onChange={(e) =>
-                          updateColumnLabel(index, e.target.value)
-                        }
-                        placeholder="Rótulo"
-                      />
-                      <div className="flex gap-2">
-                        <Input
-                          value={column.key}
-                          onChange={(e) =>
-                            updateColumnKey(index, e.target.value)
-                          }
-                          placeholder="Chave"
-                          className="flex-1"
-                        />
-                        <Select
-                          value={column.type}
-                          onValueChange={(v) =>
-                            updateColumn(index, {
-                              type: v as 'text' | 'number',
-                            })
-                          }
-                        >
-                          <SelectTrigger className="w-24">
-                            <span>
-                              {column.type === 'number' ? 'Num' : 'Texto'}
-                            </span>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="number">Número</SelectItem>
-                            <SelectItem value="text">Texto</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          value={column.unit || ''}
-                          onChange={(e) =>
-                            updateColumn(index, {
-                              unit: e.target.value || undefined,
-                            })
-                          }
-                          placeholder="Un."
-                          className="w-16"
-                        />
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeColumn(index)}
-                    >
-                      <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addColumn}
-                >
-                  <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-                  Adicionar Coluna
-                </Button>
-              </div>
-              {errors.columns && <FieldError>{errors.columns}</FieldError>}
-            </Field>
-          )}
-        </div>
+                    <SelectTrigger className="w-full">
+                      <span>
+                        {field.eccentricityIndicator.variant === 'road_scale'
+                          ? 'Balança rodoviária'
+                          : 'Balança normal / plataforma circular'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="circular_platform">
+                        Balança normal / plataforma circular
+                      </SelectItem>
+                      <SelectItem value="road_scale">
+                        Balança rodoviária / plataforma longitudinal
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+            </div>
+          </Field>
+        )}
+      </div>
 
       <DialogFooter>
         <Button variant="outline" onClick={() => onOpenChange(false)}>

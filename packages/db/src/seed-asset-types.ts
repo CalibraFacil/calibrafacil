@@ -35,6 +35,12 @@ const assetTypes: Array<{
         required: true,
       },
       {
+        key: "weighingRanges",
+        label: "Faixas de pesagem",
+        type: "weighing_ranges",
+        required: false,
+      },
+      {
         key: "linearity",
         label: "Linearidade",
         type: "number",
