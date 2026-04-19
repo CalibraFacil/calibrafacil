@@ -69,6 +69,7 @@ import { Route as DashboardSettingsIntegrationsRouteImport } from './routes/dash
 import { Route as DashboardSettingsEnvironmentRouteImport } from './routes/dashboard/settings/environment'
 import { Route as DashboardSettingsDangerRouteImport } from './routes/dashboard/settings/danger'
 import { Route as DashboardSettingsCertificatesRouteImport } from './routes/dashboard/settings/certificates'
+import { Route as DashboardSettingsCertificateNumberingRouteImport } from './routes/dashboard/settings/certificate-numbering'
 import { Route as DashboardSettingsBrandingRouteImport } from './routes/dashboard/settings/branding'
 import { Route as DashboardSettingsBillingRouteImport } from './routes/dashboard/settings/billing'
 import { Route as DashboardSettingsAuthenticationRouteImport } from './routes/dashboard/settings/authentication'
@@ -437,6 +438,12 @@ const DashboardSettingsCertificatesRoute =
     path: '/certificates',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
+const DashboardSettingsCertificateNumberingRoute =
+  DashboardSettingsCertificateNumberingRouteImport.update({
+    id: '/certificate-numbering',
+    path: '/certificate-numbering',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
 const DashboardSettingsBrandingRoute =
   DashboardSettingsBrandingRouteImport.update({
     id: '/branding',
@@ -779,6 +786,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
+  '/dashboard/settings/certificate-numbering': typeof DashboardSettingsCertificateNumberingRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
@@ -872,6 +880,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
+  '/dashboard/settings/certificate-numbering': typeof DashboardSettingsCertificateNumberingRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
@@ -986,6 +995,7 @@ export interface FileRoutesById {
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
+  '/dashboard/settings/certificate-numbering': typeof DashboardSettingsCertificateNumberingRoute
   '/dashboard/settings/certificates': typeof DashboardSettingsCertificatesRoute
   '/dashboard/settings/danger': typeof DashboardSettingsDangerRoute
   '/dashboard/settings/environment': typeof DashboardSettingsEnvironmentRoute
@@ -1101,6 +1111,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
     | '/dashboard/settings/branding'
+    | '/dashboard/settings/certificate-numbering'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
@@ -1194,6 +1205,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
     | '/dashboard/settings/branding'
+    | '/dashboard/settings/certificate-numbering'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
@@ -1307,6 +1319,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/billing'
     | '/dashboard/settings/branding'
+    | '/dashboard/settings/certificate-numbering'
     | '/dashboard/settings/certificates'
     | '/dashboard/settings/danger'
     | '/dashboard/settings/environment'
@@ -1797,6 +1810,13 @@ declare module '@tanstack/react-router' {
       path: '/certificates'
       fullPath: '/dashboard/settings/certificates'
       preLoaderRoute: typeof DashboardSettingsCertificatesRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
+    '/dashboard/settings/certificate-numbering': {
+      id: '/dashboard/settings/certificate-numbering'
+      path: '/certificate-numbering'
+      fullPath: '/dashboard/settings/certificate-numbering'
+      preLoaderRoute: typeof DashboardSettingsCertificateNumberingRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
     '/dashboard/settings/branding': {
@@ -2512,6 +2532,7 @@ interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsAuthenticationRoute: typeof DashboardSettingsAuthenticationRoute
   DashboardSettingsBillingRoute: typeof DashboardSettingsBillingRoute
   DashboardSettingsBrandingRoute: typeof DashboardSettingsBrandingRoute
+  DashboardSettingsCertificateNumberingRoute: typeof DashboardSettingsCertificateNumberingRoute
   DashboardSettingsCertificatesRoute: typeof DashboardSettingsCertificatesRoute
   DashboardSettingsDangerRoute: typeof DashboardSettingsDangerRoute
   DashboardSettingsEnvironmentRoute: typeof DashboardSettingsEnvironmentRoute
@@ -2531,6 +2552,8 @@ const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
     DashboardSettingsAuthenticationRoute: DashboardSettingsAuthenticationRoute,
     DashboardSettingsBillingRoute: DashboardSettingsBillingRoute,
     DashboardSettingsBrandingRoute: DashboardSettingsBrandingRoute,
+    DashboardSettingsCertificateNumberingRoute:
+      DashboardSettingsCertificateNumberingRoute,
     DashboardSettingsCertificatesRoute: DashboardSettingsCertificatesRoute,
     DashboardSettingsDangerRoute: DashboardSettingsDangerRoute,
     DashboardSettingsEnvironmentRoute: DashboardSettingsEnvironmentRoute,

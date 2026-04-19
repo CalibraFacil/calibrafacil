@@ -83,9 +83,7 @@ import {
   requireRole,
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
-import {
-  createClientOrganizationAsServiceOwner,
-} from "../lib/portal-service-account";
+import { createClientOrganizationAsServiceOwner } from "../lib/portal-service-account";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 
 const ListQuerySchema = z.object({
@@ -129,14 +127,17 @@ const PublicCreateRequestSchema = CreateCalibrationRequestSchema.extend({
     message: "Informe customerId ou customerExternalId",
     path: ["customerId"],
   })
-  .refine((value) => {
-    const totalAssetIds =
-      (value.assetIds?.length ?? 0) + (value.assetExternalIds?.length ?? 0);
-    return totalAssetIds > 0;
-  }, {
-    message: "Informe ao menos um ativo",
-    path: ["assetIds"],
-  });
+  .refine(
+    (value) => {
+      const totalAssetIds =
+        (value.assetIds?.length ?? 0) + (value.assetExternalIds?.length ?? 0);
+      return totalAssetIds > 0;
+    },
+    {
+      message: "Informe ao menos um ativo",
+      path: ["assetIds"],
+    },
+  );
 
 const UpdateRequestPublicSchema = z.object({
   observations: z.string().trim().max(2000).optional(),
@@ -195,7 +196,9 @@ function generateUniqueSlug(name: string) {
   return `${slugify(name)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function resolvePeriodRange(period: z.infer<typeof ReportQuerySchema>["period"]) {
+function resolvePeriodRange(
+  period: z.infer<typeof ReportQuerySchema>["period"],
+) {
   const now = new Date();
   const startDate = new Date(now);
 
@@ -442,7 +445,9 @@ async function withIdempotentMutation(
   return c.json(result.body, result.status);
 }
 
-function mapWebhookSubscription(record: typeof publicApiWebhookSubscription.$inferSelect) {
+function mapWebhookSubscription(
+  record: typeof publicApiWebhookSubscription.$inferSelect,
+) {
   return {
     id: record.id,
     name: record.name,
@@ -458,10 +463,7 @@ function mapWebhookSubscription(record: typeof publicApiWebhookSubscription.$inf
   };
 }
 
-function buildPathParameter(
-  name: string,
-  description: string,
-) {
+function buildPathParameter(name: string, description: string) {
   return {
     name,
     in: "path",
@@ -471,7 +473,11 @@ function buildPathParameter(
   };
 }
 
-function buildListOperation(summary: string, tag: string, extraParameters: any[] = []) {
+function buildListOperation(
+  summary: string,
+  tag: string,
+  extraParameters: any[] = [],
+) {
   return {
     tags: [tag],
     summary,
@@ -497,7 +503,10 @@ function buildListOperation(summary: string, tag: string, extraParameters: any[]
             schema: {
               type: "object",
               properties: {
-                data: { type: "array", items: { type: "object", additionalProperties: true } },
+                data: {
+                  type: "array",
+                  items: { type: "object", additionalProperties: true },
+                },
                 meta: { $ref: "#/components/schemas/ListMeta" },
               },
             },
@@ -510,7 +519,12 @@ function buildListOperation(summary: string, tag: string, extraParameters: any[]
   };
 }
 
-function buildDetailOperation(summary: string, tag: string, idName = "id", idDescription = "Identificador interno ou externalId") {
+function buildDetailOperation(
+  summary: string,
+  tag: string,
+  idName = "id",
+  idDescription = "Identificador interno ou externalId",
+) {
   return {
     tags: [tag],
     summary,
@@ -559,7 +573,8 @@ function buildMutationOperation(params: {
               name: "Idempotency-Key",
               in: "header",
               required: true,
-              description: "Chave obrigatória para evitar mutações duplicadas em integrações externas.",
+              description:
+                "Chave obrigatória para evitar mutações duplicadas em integrações externas.",
               schema: { type: "string" },
             },
           ]
@@ -672,23 +687,43 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
       responses: {
         BadRequest: {
           description: "Payload ou parâmetros inválidos",
-          content: { "application/json": { schema: { $ref: "#/components/schemas/PublicError" } } },
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/PublicError" },
+            },
+          },
         },
         Unauthorized: {
           description: "API key ausente ou inválida",
-          content: { "application/json": { schema: { $ref: "#/components/schemas/PublicError" } } },
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/PublicError" },
+            },
+          },
         },
         Forbidden: {
           description: "Scope insuficiente para a operação",
-          content: { "application/json": { schema: { $ref: "#/components/schemas/PublicError" } } },
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/PublicError" },
+            },
+          },
         },
         NotFound: {
           description: "Recurso não encontrado",
-          content: { "application/json": { schema: { $ref: "#/components/schemas/PublicError" } } },
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/PublicError" },
+            },
+          },
         },
         Conflict: {
           description: "Conflito de domínio, externalId ou estado",
-          content: { "application/json": { schema: { $ref: "#/components/schemas/PublicError" } } },
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/PublicError" },
+            },
+          },
         },
       },
     },
@@ -711,8 +746,11 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
         put: buildMutationOperation({
           summary: "Atualizar cliente",
           tag: "Customers",
-          requestBodyDescription: "Atualiza nome, contato e externalId do cliente.",
-          pathParameters: [buildPathParameter("id", "Identificador interno ou externalId")],
+          requestBodyDescription:
+            "Atualiza nome, contato e externalId do cliente.",
+          pathParameters: [
+            buildPathParameter("id", "Identificador interno ou externalId"),
+          ],
         }),
         delete: {
           tags: ["Customers"],
@@ -734,7 +772,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
                 "application/json": {
                   schema: {
                     type: "object",
-                    properties: { data: { type: "object", additionalProperties: true } },
+                    properties: {
+                      data: { type: "object", additionalProperties: true },
+                    },
                   },
                 },
               },
@@ -750,7 +790,11 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           { name: "query", in: "query", schema: { type: "string" } },
           { name: "unitId", in: "query", schema: { type: "integer" } },
           { name: "customerId", in: "query", schema: { type: "integer" } },
-          { name: "customerExternalId", in: "query", schema: { type: "string" } },
+          {
+            name: "customerExternalId",
+            in: "query",
+            schema: { type: "string" },
+          },
           { name: "status", in: "query", schema: { type: "string" } },
         ]),
         post: buildMutationOperation({
@@ -768,7 +812,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Atualizar ativo",
           tag: "Assets",
           requestBodyDescription: "Atualiza dados operacionais do ativo.",
-          pathParameters: [buildPathParameter("id", "Identificador interno ou externalId")],
+          pathParameters: [
+            buildPathParameter("id", "Identificador interno ou externalId"),
+          ],
         }),
         delete: {
           tags: ["Assets"],
@@ -790,7 +836,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
                 "application/json": {
                   schema: {
                     type: "object",
-                    properties: { data: { type: "object", additionalProperties: true } },
+                    properties: {
+                      data: { type: "object", additionalProperties: true },
+                    },
                   },
                 },
               },
@@ -823,7 +871,10 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
                   schema: {
                     type: "object",
                     properties: {
-                      data: { type: "array", items: { type: "object", additionalProperties: true } },
+                      data: {
+                        type: "array",
+                        items: { type: "object", additionalProperties: true },
+                      },
                     },
                   },
                 },
@@ -835,7 +886,12 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
         },
       },
       "/units/{id}": {
-        get: buildDetailOperation("Obter unidade", "Units", "id", "Identificador interno da unidade"),
+        get: buildDetailOperation(
+          "Obter unidade",
+          "Units",
+          "id",
+          "Identificador interno da unidade",
+        ),
       },
       "/reports/consolidated/executive-overview": {
         get: {
@@ -843,7 +899,11 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Visão executiva consolidada",
           security: [{ ApiKeyAuth: [] }],
           parameters: [
-            { name: "period", in: "query", schema: { type: "string", enum: ["7d", "30d", "90d", "month"] } },
+            {
+              name: "period",
+              in: "query",
+              schema: { type: "string", enum: ["7d", "30d", "90d", "month"] },
+            },
             { name: "unitIds", in: "query", schema: { type: "string" } },
           ],
           responses: {
@@ -866,7 +926,11 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Comparativo consolidado por unidade",
           security: [{ ApiKeyAuth: [] }],
           parameters: [
-            { name: "period", in: "query", schema: { type: "string", enum: ["7d", "30d", "90d", "month"] } },
+            {
+              name: "period",
+              in: "query",
+              schema: { type: "string", enum: ["7d", "30d", "90d", "month"] },
+            },
             { name: "unitIds", in: "query", schema: { type: "string" } },
           ],
           responses: {
@@ -890,7 +954,12 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
         ]),
       },
       "/certificates/{jobId}": {
-        get: buildDetailOperation("Obter metadados do certificado", "Certificates", "jobId", "Identificador do job"),
+        get: buildDetailOperation(
+          "Obter metadados do certificado",
+          "Certificates",
+          "jobId",
+          "Identificador do job",
+        ),
       },
       "/certificates/{jobId}/download": {
         get: {
@@ -918,7 +987,11 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           { name: "query", in: "query", schema: { type: "string" } },
           { name: "status", in: "query", schema: { type: "string" } },
           { name: "customerId", in: "query", schema: { type: "integer" } },
-          { name: "customerExternalId", in: "query", schema: { type: "string" } },
+          {
+            name: "customerExternalId",
+            in: "query",
+            schema: { type: "string" },
+          },
           { name: "unitId", in: "query", schema: { type: "integer" } },
         ]),
         post: buildMutationOperation({
@@ -936,7 +1009,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Atualizar solicitação",
           tag: "Requests",
           requestBodyDescription: "Atualiza observações e data solicitada.",
-          pathParameters: [buildPathParameter("id", "Identificador interno ou externalId")],
+          pathParameters: [
+            buildPathParameter("id", "Identificador interno ou externalId"),
+          ],
         }),
       },
       "/requests/{id}/cancel": {
@@ -944,7 +1019,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Cancelar solicitação",
           tag: "Requests",
           requestBodyDescription: "Cancela a solicitação com motivo explícito.",
-          pathParameters: [buildPathParameter("id", "Identificador interno ou externalId")],
+          pathParameters: [
+            buildPathParameter("id", "Identificador interno ou externalId"),
+          ],
           idempotent: true,
         }),
       },
@@ -953,7 +1030,11 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           { name: "query", in: "query", schema: { type: "string" } },
           { name: "status", in: "query", schema: { type: "string" } },
           { name: "customerId", in: "query", schema: { type: "integer" } },
-          { name: "customerExternalId", in: "query", schema: { type: "string" } },
+          {
+            name: "customerExternalId",
+            in: "query",
+            schema: { type: "string" },
+          },
           { name: "assetId", in: "query", schema: { type: "integer" } },
           { name: "assetExternalId", in: "query", schema: { type: "string" } },
           { name: "serviceId", in: "query", schema: { type: "integer" } },
@@ -974,13 +1055,17 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Atualizar ordem de serviço",
           tag: "Jobs",
           requestBodyDescription: "Atualiza campos mutáveis da OS.",
-          pathParameters: [buildPathParameter("id", "Identificador interno ou externalId")],
+          pathParameters: [
+            buildPathParameter("id", "Identificador interno ou externalId"),
+          ],
         }),
         delete: buildMutationOperation({
           summary: "Cancelar ordem de serviço",
           tag: "Jobs",
           requestBodyDescription: "Cancela a OS com motivo explícito.",
-          pathParameters: [buildPathParameter("id", "Identificador interno ou externalId")],
+          pathParameters: [
+            buildPathParameter("id", "Identificador interno ou externalId"),
+          ],
         }),
       },
       "/jobs/{id}/results": {
@@ -988,7 +1073,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Registrar resultados da OS",
           tag: "Jobs",
           requestBodyDescription: "Envia resultados executados para o job.",
-          pathParameters: [buildPathParameter("id", "Identificador interno ou externalId")],
+          pathParameters: [
+            buildPathParameter("id", "Identificador interno ou externalId"),
+          ],
         }),
       },
       "/jobs/{id}/submit": {
@@ -996,15 +1083,20 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Submeter OS para revisão",
           tag: "Jobs",
           requestBodyDescription: "Submete o job para etapa de revisão.",
-          pathParameters: [buildPathParameter("id", "Identificador interno ou externalId")],
+          pathParameters: [
+            buildPathParameter("id", "Identificador interno ou externalId"),
+          ],
         }),
       },
       "/jobs/{id}/approve": {
         post: buildMutationOperation({
           summary: "Aprovar OS",
           tag: "Jobs",
-          requestBodyDescription: "Aprova o job e libera certificado quando aplicável.",
-          pathParameters: [buildPathParameter("id", "Identificador interno ou externalId")],
+          requestBodyDescription:
+            "Aprova o job e libera certificado quando aplicável.",
+          pathParameters: [
+            buildPathParameter("id", "Identificador interno ou externalId"),
+          ],
         }),
       },
       "/jobs/{id}/reject": {
@@ -1012,7 +1104,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Rejeitar OS",
           tag: "Jobs",
           requestBodyDescription: "Rejeita o job com motivo explícito.",
-          pathParameters: [buildPathParameter("id", "Identificador interno ou externalId")],
+          pathParameters: [
+            buildPathParameter("id", "Identificador interno ou externalId"),
+          ],
         }),
       },
       "/webhooks": {
@@ -1028,7 +1122,10 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
                   schema: {
                     type: "object",
                     properties: {
-                      data: { type: "array", items: { type: "object", additionalProperties: true } },
+                      data: {
+                        type: "array",
+                        items: { type: "object", additionalProperties: true },
+                      },
                     },
                   },
                 },
@@ -1041,7 +1138,8 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
         post: buildMutationOperation({
           summary: "Criar subscription de webhook",
           tag: "Webhooks",
-          requestBodyDescription: "Configura endpoint, eventos e status da subscription.",
+          requestBodyDescription:
+            "Configura endpoint, eventos e status da subscription.",
           responseStatus: 201,
         }),
       },
@@ -1049,14 +1147,19 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
         patch: buildMutationOperation({
           summary: "Atualizar subscription de webhook",
           tag: "Webhooks",
-          requestBodyDescription: "Atualiza nome, eventos, status ou URL do destino.",
-          pathParameters: [buildPathParameter("id", "Identificador da subscription")],
+          requestBodyDescription:
+            "Atualiza nome, eventos, status ou URL do destino.",
+          pathParameters: [
+            buildPathParameter("id", "Identificador da subscription"),
+          ],
         }),
         delete: {
           tags: ["Webhooks"],
           summary: "Excluir subscription de webhook",
           security: [{ ApiKeyAuth: [] }],
-          parameters: [buildPathParameter("id", "Identificador da subscription")],
+          parameters: [
+            buildPathParameter("id", "Identificador da subscription"),
+          ],
           responses: {
             200: {
               description: "Subscription excluída",
@@ -1064,7 +1167,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
                 "application/json": {
                   schema: {
                     type: "object",
-                    properties: { data: { type: "object", additionalProperties: true } },
+                    properties: {
+                      data: { type: "object", additionalProperties: true },
+                    },
                   },
                 },
               },
@@ -1080,7 +1185,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           tags: ["Webhooks"],
           summary: "Disparar delivery de teste",
           security: [{ ApiKeyAuth: [] }],
-          parameters: [buildPathParameter("id", "Identificador da subscription")],
+          parameters: [
+            buildPathParameter("id", "Identificador da subscription"),
+          ],
           responses: {
             200: {
               description: "Delivery de teste emitido",
@@ -1088,7 +1195,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
                 "application/json": {
                   schema: {
                     type: "object",
-                    properties: { data: { type: "object", additionalProperties: true } },
+                    properties: {
+                      data: { type: "object", additionalProperties: true },
+                    },
                   },
                 },
               },
@@ -1104,7 +1213,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
           tags: ["Webhooks"],
           summary: "Listar deliveries do webhook",
           security: [{ ApiKeyAuth: [] }],
-          parameters: [buildPathParameter("id", "Identificador da subscription")],
+          parameters: [
+            buildPathParameter("id", "Identificador da subscription"),
+          ],
           responses: {
             200: {
               description: "Histórico de deliveries",
@@ -1113,7 +1224,10 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
                   schema: {
                     type: "object",
                     properties: {
-                      data: { type: "array", items: { type: "object", additionalProperties: true } },
+                      data: {
+                        type: "array",
+                        items: { type: "object", additionalProperties: true },
+                      },
                     },
                   },
                 },
@@ -1141,7 +1255,9 @@ function buildPublicApiV2OpenApiDocument(origin: string) {
                 "application/json": {
                   schema: {
                     type: "object",
-                    properties: { data: { type: "object", additionalProperties: true } },
+                    properties: {
+                      data: { type: "object", additionalProperties: true },
+                    },
                   },
                 },
               },
@@ -1176,13 +1292,10 @@ export const publicApiV2DocsRouter = new Hono<{
   .use("*", requireRole(["admin", "owner"]))
   .use("*", requireFeature("api"));
 
-publicApiV2DocsRouter.get(
-  "/openapi",
-  (c) => {
-    const origin = new URL(c.req.url).origin;
-    return c.json(buildPublicApiV2OpenApiDocument(origin));
-  },
-);
+publicApiV2DocsRouter.get("/openapi", (c) => {
+  const origin = new URL(c.req.url).origin;
+  return c.json(buildPublicApiV2OpenApiDocument(origin));
+});
 
 publicApiV2DocsRouter.get(
   "/reference",
@@ -1199,60 +1312,70 @@ publicApiV2DocsRouter.get(
 
 publicApiV2Router
   .use("*", requireApiKeyAuth)
-  .get("/customers", requireApiScope("customers:read"), zValidator("query", ListQuerySchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const { page, limit, query } = c.req.valid("query");
-    const offset = (page - 1) * limit;
-    const conditions = [eq(customer.labOrganizationId, apiKey.organizationId)];
-    if (query) {
-      conditions.push(
-        or(
-          ilike(customer.name, `%${query}%`),
-          ilike(customer.taxId, `%${query}%`),
-          ilike(customer.email, `%${query}%`),
-        )!,
-      );
-    }
+  .get(
+    "/customers",
+    requireApiScope("customers:read"),
+    zValidator("query", ListQuerySchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const { page, limit, query } = c.req.valid("query");
+      const offset = (page - 1) * limit;
+      const conditions = [
+        eq(customer.labOrganizationId, apiKey.organizationId),
+      ];
+      if (query) {
+        conditions.push(
+          or(
+            ilike(customer.name, `%${query}%`),
+            ilike(customer.taxId, `%${query}%`),
+            ilike(customer.email, `%${query}%`),
+          )!,
+        );
+      }
 
-    const [countResult, rows] = await Promise.all([
-      db.select({ total: count() }).from(customer).where(and(...conditions)),
-      db
-        .select({
-          id: customer.id,
-          name: customer.name,
-          taxId: customer.taxId,
-          email: customer.email,
-          phone: customer.phone,
-          address: customer.address,
-          createdAt: customer.createdAt,
-          updatedAt: customer.updatedAt,
-        })
-        .from(customer)
-        .where(and(...conditions))
-        .orderBy(customer.name)
-        .limit(limit)
-        .offset(offset),
-    ]);
+      const [countResult, rows] = await Promise.all([
+        db
+          .select({ total: count() })
+          .from(customer)
+          .where(and(...conditions)),
+        db
+          .select({
+            id: customer.id,
+            name: customer.name,
+            taxId: customer.taxId,
+            email: customer.email,
+            phone: customer.phone,
+            address: customer.address,
+            createdAt: customer.createdAt,
+            updatedAt: customer.updatedAt,
+          })
+          .from(customer)
+          .where(and(...conditions))
+          .orderBy(customer.name)
+          .limit(limit)
+          .offset(offset),
+      ]);
 
-    const externalIds = await getResourceExternalIdMap({
-      organizationId: apiKey.organizationId,
-      resourceType: "customer",
-      resourceIds: rows.map((row) => row.id),
-    });
+      const externalIds = await getResourceExternalIdMap({
+        organizationId: apiKey.organizationId,
+        resourceType: "customer",
+        resourceIds: rows.map((row) => row.id),
+      });
 
-    return c.json({
-      data: rows.map((row) => ({
-        ...row,
-        externalId: externalIds.get(String(row.id)) ?? null,
-      })),
-      meta: buildListMeta({
-        page,
-        limit,
-        total: countResult[0]?.total ?? 0,
-        filters: { query: query ?? null },
-      }),
-    });
-  })
+      return c.json({
+        data: rows.map((row) => ({
+          ...row,
+          externalId: externalIds.get(String(row.id)) ?? null,
+        })),
+        meta: buildListMeta({
+          page,
+          limit,
+          total: countResult[0]?.total ?? 0,
+          filters: { query: query ?? null },
+        }),
+      });
+    },
+  )
   .get("/customers/:id", requireApiScope("customers:read"), async (c) => {
     const apiKey = c.get("apiKey");
     const resolvedId = await resolveExternalResourceId({
@@ -1303,44 +1426,152 @@ publicApiV2Router
       },
     });
   })
-  .post("/customers", requireApiScope("customers:write"), zValidator("json", CreateCustomerSchema.extend({ externalId: z.string().trim().optional() })), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
+  .post(
+    "/customers",
+    requireApiScope("customers:write"),
+    zValidator(
+      "json",
+      CreateCustomerSchema.extend({ externalId: z.string().trim().optional() }),
+    ),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
 
-    return withIdempotentMutation(c, input, async () => {
-      const slug = generateUniqueSlug(input.name);
-      const orgResult = await createClientOrganizationAsServiceOwner({
-        name: input.name,
-        slug,
+      return withIdempotentMutation(c, input, async () => {
+        const slug = generateUniqueSlug(input.name);
+        const orgResult = await createClientOrganizationAsServiceOwner({
+          name: input.name,
+          slug,
+        });
+
+        if (!orgResult?.id) {
+          return {
+            status: 500,
+            body: buildPublicApiError({
+              code: "customer_create_failed",
+              message: "Falha ao criar organização do cliente",
+            }),
+          };
+        }
+
+        const [created] = await db
+          .insert(customer)
+          .values({
+            name: input.name,
+            taxId: input.taxId || null,
+            email: input.email || null,
+            phone: input.phone || null,
+            address: input.address || null,
+            authOrganizationId: orgResult.id,
+            labOrganizationId: apiKey.organizationId,
+          })
+          .returning();
+
+        await db.insert(customerAuditLog).values({
+          customerId: created!.id,
+          action: "create",
+          changes: { customer: { old: null, new: created } },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+        });
+
+        const externalId = input.externalId?.trim();
+        if (externalId) {
+          await upsertResourceExternalId({
+            organizationId: apiKey.organizationId,
+            apiKeyId: apiKey.id,
+            resourceType: "customer",
+            resourceId: created!.id,
+            externalId,
+          });
+        }
+
+        const body = {
+          data: {
+            ...created,
+            externalId: externalId ?? null,
+          },
+        };
+
+        await emitPublicApiWebhookEvent({
+          organizationId: apiKey.organizationId,
+          eventType: "customer.created",
+          payload: body.data,
+          env: c.env,
+        });
+
+        return {
+          status: 201,
+          body,
+          resourceType: "customer" as const,
+          resourceId: created!.id,
+        };
+      });
+    },
+  )
+  .put(
+    "/customers/:id",
+    requireApiScope("customers:write"),
+    zValidator(
+      "json",
+      UpdateCustomerSchema.extend({ externalId: z.string().trim().optional() }),
+    ),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const resolvedId = await resolveExternalResourceId({
+        organizationId: apiKey.organizationId,
+        resourceType: "customer",
+        value: c.req.param("id"),
       });
 
-      if (!orgResult?.id) {
-        return {
-          status: 500,
-          body: buildPublicApiError({
-            code: "customer_create_failed",
-            message: "Falha ao criar organização do cliente",
+      if (!resolvedId) {
+        return c.json(
+          buildPublicApiError({
+            code: "customer_not_found",
+            message: "Cliente não encontrado",
           }),
-        };
+          404,
+        );
       }
 
-      const [created] = await db
-        .insert(customer)
-        .values({
-          name: input.name,
-          taxId: input.taxId || null,
-          email: input.email || null,
-          phone: input.phone || null,
-          address: input.address || null,
-          authOrganizationId: orgResult.id,
-          labOrganizationId: apiKey.organizationId,
+      const [existing] = await db
+        .select()
+        .from(customer)
+        .where(
+          and(
+            eq(customer.id, resolvedId),
+            eq(customer.labOrganizationId, apiKey.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json(
+          buildPublicApiError({
+            code: "customer_not_found",
+            message: "Cliente não encontrado",
+          }),
+          404,
+        );
+      }
+
+      const [updated] = await db
+        .update(customer)
+        .set({
+          name: input.name ?? existing.name,
+          taxId: input.taxId ?? existing.taxId,
+          email: input.email ?? existing.email,
+          phone: input.phone ?? existing.phone,
+          address: input.address ?? existing.address,
         })
+        .where(eq(customer.id, existing.id))
         .returning();
 
       await db.insert(customerAuditLog).values({
-        customerId: created!.id,
-        action: "create",
-        changes: { customer: { old: null, new: created } },
+        customerId: existing.id,
+        action: "update",
+        changes: { customer: { old: existing, new: updated } },
         performedBy: apiKey.createdBy,
         ipAddress: getPublicApiRequestIp(c.req.raw.headers),
       });
@@ -1351,109 +1582,34 @@ publicApiV2Router
           organizationId: apiKey.organizationId,
           apiKeyId: apiKey.id,
           resourceType: "customer",
-          resourceId: created!.id,
+          resourceId: existing.id,
           externalId,
         });
       }
 
       const body = {
         data: {
-          ...created,
-          externalId: externalId ?? null,
+          ...updated,
+          externalId:
+            externalId ??
+            (await getResourceExternalId({
+              organizationId: apiKey.organizationId,
+              resourceType: "customer",
+              resourceId: existing.id,
+            })),
         },
       };
 
       await emitPublicApiWebhookEvent({
         organizationId: apiKey.organizationId,
-        eventType: "customer.created",
+        eventType: "customer.updated",
         payload: body.data,
         env: c.env,
       });
 
-      return {
-        status: 201,
-        body,
-        resourceType: "customer" as const,
-        resourceId: created!.id,
-      };
-    });
-  })
-  .put("/customers/:id", requireApiScope("customers:write"), zValidator("json", UpdateCustomerSchema.extend({ externalId: z.string().trim().optional() })), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "customer",
-      value: c.req.param("id"),
-    });
-
-    if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "customer_not_found", message: "Cliente não encontrado" }), 404);
-    }
-
-    const [existing] = await db
-      .select()
-      .from(customer)
-      .where(and(eq(customer.id, resolvedId), eq(customer.labOrganizationId, apiKey.organizationId)))
-      .limit(1);
-
-    if (!existing) {
-      return c.json(buildPublicApiError({ code: "customer_not_found", message: "Cliente não encontrado" }), 404);
-    }
-
-    const [updated] = await db
-      .update(customer)
-      .set({
-        name: input.name ?? existing.name,
-        taxId: input.taxId ?? existing.taxId,
-        email: input.email ?? existing.email,
-        phone: input.phone ?? existing.phone,
-        address: input.address ?? existing.address,
-      })
-      .where(eq(customer.id, existing.id))
-      .returning();
-
-    await db.insert(customerAuditLog).values({
-      customerId: existing.id,
-      action: "update",
-      changes: { customer: { old: existing, new: updated } },
-      performedBy: apiKey.createdBy,
-      ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-    });
-
-    const externalId = input.externalId?.trim();
-    if (externalId) {
-      await upsertResourceExternalId({
-        organizationId: apiKey.organizationId,
-        apiKeyId: apiKey.id,
-        resourceType: "customer",
-        resourceId: existing.id,
-        externalId,
-      });
-    }
-
-    const body = {
-      data: {
-        ...updated,
-        externalId:
-          externalId ??
-          (await getResourceExternalId({
-            organizationId: apiKey.organizationId,
-            resourceType: "customer",
-            resourceId: existing.id,
-          })),
-      },
-    };
-
-    await emitPublicApiWebhookEvent({
-      organizationId: apiKey.organizationId,
-      eventType: "customer.updated",
-      payload: body.data,
-      env: c.env,
-    });
-
-    return c.json(body);
-  })
+      return c.json(body);
+    },
+  )
   .delete("/customers/:id", requireApiScope("customers:write"), async (c) => {
     const apiKey = c.get("apiKey");
     const resolvedId = await resolveExternalResourceId({
@@ -1463,14 +1619,25 @@ publicApiV2Router
     });
 
     if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "customer_not_found", message: "Cliente não encontrado" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "customer_not_found",
+          message: "Cliente não encontrado",
+        }),
+        404,
+      );
     }
 
     return withIdempotentMutation(c, { customerId: resolvedId }, async () => {
       const [existing] = await db
         .select()
         .from(customer)
-        .where(and(eq(customer.id, resolvedId), eq(customer.labOrganizationId, apiKey.organizationId)))
+        .where(
+          and(
+            eq(customer.id, resolvedId),
+            eq(customer.labOrganizationId, apiKey.organizationId),
+          ),
+        )
         .limit(1);
 
       if (!existing) {
@@ -1492,7 +1659,9 @@ publicApiV2Router
       });
 
       await db.delete(customer).where(eq(customer.id, existing.id));
-      await db.delete(organization).where(eq(organization.id, existing.authOrganizationId));
+      await db
+        .delete(organization)
+        .where(eq(organization.id, existing.authOrganizationId));
 
       const body = { data: { id: existing.id, deleted: true } };
 
@@ -1518,87 +1687,109 @@ publicApiV2Router
       };
     });
   })
-  .get("/assets", requireApiScope("assets:read"), zValidator("query", ListQuerySchema.extend({
-    customerId: z.coerce.number().optional(),
-    customerExternalId: z.string().trim().optional(),
-    status: z.string().trim().optional(),
-  })), async (c) => {
-    const apiKey = c.get("apiKey");
-    const { page, limit, query, unitId, customerId, customerExternalId, status } = c.req.valid("query");
-    const offset = (page - 1) * limit;
-    const resolvedCustomerId = await resolveCustomerId({
-      organizationId: apiKey.organizationId,
-      customerId,
-      customerExternalId,
-    });
-
-    const conditions = [
-      eq(customer.labOrganizationId, apiKey.organizationId),
-      isNull(asset.deletedAt),
-      unitId ? eq(asset.unitId, unitId) : undefined,
-      resolvedCustomerId ? eq(asset.customerId, resolvedCustomerId) : undefined,
-      status ? eq(asset.status, status as any) : undefined,
-      query
-        ? or(
-            ilike(asset.name, `%${query}%`),
-            ilike(asset.tag, `%${query}%`),
-            ilike(asset.serialNumber, `%${query}%`),
-          )
-        : undefined,
-    ];
-
-    const [countResult, rows] = await Promise.all([
-      db.select({ total: count() }).from(asset).innerJoin(customer, eq(asset.customerId, customer.id)).where(and(...conditions)),
-      db
-        .select({
-          id: asset.id,
-          unitId: asset.unitId,
-          customerId: asset.customerId,
-          customerName: customer.name,
-          assetTypeId: asset.assetTypeId,
-          name: asset.name,
-          tag: asset.tag,
-          serialNumber: asset.serialNumber,
-          manufacturer: asset.manufacturer,
-          model: asset.model,
-          status: asset.status,
-          lastCalibrationDate: asset.lastCalibrationDate,
-          nextCalibrationDate: asset.nextCalibrationDate,
-          createdAt: asset.createdAt,
-          updatedAt: asset.updatedAt,
-        })
-        .from(asset)
-        .innerJoin(customer, eq(asset.customerId, customer.id))
-        .where(and(...conditions))
-        .orderBy(asset.name)
-        .limit(limit)
-        .offset(offset),
-    ]);
-
-    const externalIds = await getResourceExternalIdMap({
-      organizationId: apiKey.organizationId,
-      resourceType: "asset",
-      resourceIds: rows.map((row) => row.id),
-    });
-
-    return c.json({
-      data: rows.map((row) => ({
-        ...row,
-        externalId: externalIds.get(String(row.id)) ?? null,
-      })),
-      meta: buildListMeta({
+  .get(
+    "/assets",
+    requireApiScope("assets:read"),
+    zValidator(
+      "query",
+      ListQuerySchema.extend({
+        customerId: z.coerce.number().optional(),
+        customerExternalId: z.string().trim().optional(),
+        status: z.string().trim().optional(),
+      }),
+    ),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const {
         page,
         limit,
-        total: countResult[0]?.total ?? 0,
-        filters: {
-          query: query ?? null,
-          unitId: unitId ?? null,
-          customerId: resolvedCustomerId ?? null,
-          status: status ?? null,
-        },
-      }),
-    });
-  })
+        query,
+        unitId,
+        customerId,
+        customerExternalId,
+        status,
+      } = c.req.valid("query");
+      const offset = (page - 1) * limit;
+      const resolvedCustomerId = await resolveCustomerId({
+        organizationId: apiKey.organizationId,
+        customerId,
+        customerExternalId,
+      });
+
+      const conditions = [
+        eq(customer.labOrganizationId, apiKey.organizationId),
+        isNull(asset.deletedAt),
+        unitId ? eq(asset.unitId, unitId) : undefined,
+        resolvedCustomerId
+          ? eq(asset.customerId, resolvedCustomerId)
+          : undefined,
+        status ? eq(asset.status, status as any) : undefined,
+        query
+          ? or(
+              ilike(asset.name, `%${query}%`),
+              ilike(asset.tag, `%${query}%`),
+              ilike(asset.serialNumber, `%${query}%`),
+            )
+          : undefined,
+      ];
+
+      const [countResult, rows] = await Promise.all([
+        db
+          .select({ total: count() })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(and(...conditions)),
+        db
+          .select({
+            id: asset.id,
+            unitId: asset.unitId,
+            customerId: asset.customerId,
+            customerName: customer.name,
+            assetTypeId: asset.assetTypeId,
+            name: asset.name,
+            tag: asset.tag,
+            serialNumber: asset.serialNumber,
+            manufacturer: asset.manufacturer,
+            model: asset.model,
+            status: asset.status,
+            lastCalibrationDate: asset.lastCalibrationDate,
+            nextCalibrationDate: asset.nextCalibrationDate,
+            createdAt: asset.createdAt,
+            updatedAt: asset.updatedAt,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(and(...conditions))
+          .orderBy(asset.name)
+          .limit(limit)
+          .offset(offset),
+      ]);
+
+      const externalIds = await getResourceExternalIdMap({
+        organizationId: apiKey.organizationId,
+        resourceType: "asset",
+        resourceIds: rows.map((row) => row.id),
+      });
+
+      return c.json({
+        data: rows.map((row) => ({
+          ...row,
+          externalId: externalIds.get(String(row.id)) ?? null,
+        })),
+        meta: buildListMeta({
+          page,
+          limit,
+          total: countResult[0]?.total ?? 0,
+          filters: {
+            query: query ?? null,
+            unitId: unitId ?? null,
+            customerId: resolvedCustomerId ?? null,
+            status: status ?? null,
+          },
+        }),
+      });
+    },
+  )
   .get("/assets/:id", requireApiScope("assets:read"), async (c) => {
     const apiKey = c.get("apiKey");
     const resolvedId = await resolveExternalResourceId({
@@ -1608,7 +1799,13 @@ publicApiV2Router
     });
 
     if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "asset_not_found", message: "Ativo não encontrado" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "asset_not_found",
+          message: "Ativo não encontrado",
+        }),
+        404,
+      );
     }
 
     const [found] = await db
@@ -1633,11 +1830,23 @@ publicApiV2Router
       })
       .from(asset)
       .innerJoin(customer, eq(asset.customerId, customer.id))
-      .where(and(eq(asset.id, resolvedId), eq(customer.labOrganizationId, apiKey.organizationId), isNull(asset.deletedAt)))
+      .where(
+        and(
+          eq(asset.id, resolvedId),
+          eq(customer.labOrganizationId, apiKey.organizationId),
+          isNull(asset.deletedAt),
+        ),
+      )
       .limit(1);
 
     if (!found) {
-      return c.json(buildPublicApiError({ code: "asset_not_found", message: "Ativo não encontrado" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "asset_not_found",
+          message: "Ativo não encontrado",
+        }),
+        404,
+      );
     }
 
     return c.json({
@@ -1651,104 +1860,256 @@ publicApiV2Router
       },
     });
   })
-  .post("/assets", requireApiScope("assets:write"), zValidator("json", AssetCreatePublicSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
+  .post(
+    "/assets",
+    requireApiScope("assets:write"),
+    zValidator("json", AssetCreatePublicSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
 
-    return withIdempotentMutation(c, input, async () => {
-      const resolvedCustomerId = await resolveCustomerId({
+      return withIdempotentMutation(c, input, async () => {
+        const resolvedCustomerId = await resolveCustomerId({
+          organizationId: apiKey.organizationId,
+          customerId: input.customerId,
+          customerExternalId: input.customerExternalId,
+        });
+
+        if (!resolvedCustomerId) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "customer_not_found",
+              message: "Cliente não encontrado",
+            }),
+          };
+        }
+
+        const [foundCustomer, foundType, existingTag] = await Promise.all([
+          db.query.customer.findFirst({
+            where: and(
+              eq(customer.id, resolvedCustomerId),
+              eq(customer.labOrganizationId, apiKey.organizationId),
+            ),
+          }),
+          db.query.assetType.findFirst({
+            where: eq(assetType.id, input.assetTypeId),
+          }),
+          db.query.asset.findFirst({
+            where: eq(asset.tag, input.tag),
+          }),
+        ]);
+
+        if (!foundCustomer) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "customer_not_found",
+              message: "Cliente não encontrado",
+            }),
+          };
+        }
+
+        if (!foundType) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "asset_type_not_found",
+              message: "Tipo de instrumento não encontrado",
+            }),
+          };
+        }
+
+        if (existingTag) {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "asset_tag_conflict",
+              message: "Tag já está em uso",
+            }),
+          };
+        }
+
+        const unitId = await resolveUnitIdForWrite({
+          organizationId: apiKey.organizationId,
+          requestedUnitId: input.unitId,
+        });
+
+        const [created] = await db
+          .insert(asset)
+          .values({
+            unitId,
+            customerId: foundCustomer.id,
+            assetTypeId: input.assetTypeId,
+            name: input.name,
+            manufacturer: input.manufacturer || null,
+            model: input.model || null,
+            serialNumber: input.serialNumber,
+            tag: input.tag,
+            status: input.status || "ACTIVE",
+            lastCalibrationDate: input.lastCalibrationDate
+              ? new Date(input.lastCalibrationDate)
+              : null,
+            nextCalibrationDate: input.nextCalibrationDate
+              ? new Date(input.nextCalibrationDate)
+              : null,
+            comments: input.comments || null,
+            specifications: input.specifications || null,
+          })
+          .returning();
+
+        await db.insert(assetAuditLog).values({
+          assetId: created!.id,
+          action: "create",
+          changes: { asset: { old: null, new: created } },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+        });
+
+        const externalId = input.externalId?.trim();
+        if (externalId) {
+          await upsertResourceExternalId({
+            organizationId: apiKey.organizationId,
+            apiKeyId: apiKey.id,
+            resourceType: "asset",
+            resourceId: created!.id,
+            externalId,
+          });
+        }
+
+        const body = {
+          data: {
+            ...created,
+            externalId: externalId ?? null,
+          },
+        };
+
+        await emitPublicApiWebhookEvent({
+          organizationId: apiKey.organizationId,
+          eventType: "asset.created",
+          payload: body.data,
+          env: c.env,
+        });
+
+        return {
+          status: 201,
+          body,
+          resourceType: "asset" as const,
+          resourceId: created!.id,
+        };
+      });
+    },
+  )
+  .put(
+    "/assets/:id",
+    requireApiScope("assets:write"),
+    zValidator(
+      "json",
+      UpdateAssetSchema.extend({ externalId: z.string().trim().optional() }),
+    ),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const resolvedId = await resolveExternalResourceId({
         organizationId: apiKey.organizationId,
-        customerId: input.customerId,
-        customerExternalId: input.customerExternalId,
+        resourceType: "asset",
+        value: c.req.param("id"),
       });
 
-      if (!resolvedCustomerId) {
-        return {
-          status: 404,
-          body: buildPublicApiError({
-            code: "customer_not_found",
-            message: "Cliente não encontrado",
+      if (!resolvedId) {
+        return c.json(
+          buildPublicApiError({
+            code: "asset_not_found",
+            message: "Ativo não encontrado",
           }),
-        };
+          404,
+        );
       }
 
-      const [foundCustomer, foundType, existingTag] = await Promise.all([
-        db.query.customer.findFirst({
-          where: and(
-            eq(customer.id, resolvedCustomerId),
-            eq(customer.labOrganizationId, apiKey.organizationId),
-          ),
-        }),
-        db.query.assetType.findFirst({
-          where: eq(assetType.id, input.assetTypeId),
-        }),
-        db.query.asset.findFirst({
-          where: eq(asset.tag, input.tag),
-        }),
-      ]);
-
-      if (!foundCustomer) {
-        return {
-          status: 404,
-          body: buildPublicApiError({
-            code: "customer_not_found",
-            message: "Cliente não encontrado",
-          }),
-        };
-      }
-
-      if (!foundType) {
-        return {
-          status: 404,
-          body: buildPublicApiError({
-            code: "asset_type_not_found",
-            message: "Tipo de instrumento não encontrado",
-          }),
-        };
-      }
-
-      if (existingTag) {
-        return {
-          status: 409,
-          body: buildPublicApiError({
-            code: "asset_tag_conflict",
-            message: "Tag já está em uso",
-          }),
-        };
-      }
-
-      const unitId = await resolveUnitIdForWrite({
-        organizationId: apiKey.organizationId,
-        requestedUnitId: input.unitId,
-      });
-
-      const [created] = await db
-        .insert(asset)
-        .values({
-          unitId,
-          customerId: foundCustomer.id,
-          assetTypeId: input.assetTypeId,
-          name: input.name,
-          manufacturer: input.manufacturer || null,
-          model: input.model || null,
-          serialNumber: input.serialNumber,
-          tag: input.tag,
-          status: input.status || "ACTIVE",
-          lastCalibrationDate: input.lastCalibrationDate
-            ? new Date(input.lastCalibrationDate)
-            : null,
-          nextCalibrationDate: input.nextCalibrationDate
-            ? new Date(input.nextCalibrationDate)
-            : null,
-          comments: input.comments || null,
-          specifications: input.specifications || null,
+      const [existing] = await db
+        .select({
+          id: asset.id,
+          deletedAt: asset.deletedAt,
+          customerId: asset.customerId,
+          assetTypeId: asset.assetTypeId,
+          name: asset.name,
+          manufacturer: asset.manufacturer,
+          model: asset.model,
+          serialNumber: asset.serialNumber,
+          tag: asset.tag,
+          status: asset.status,
+          lastCalibrationDate: asset.lastCalibrationDate,
+          nextCalibrationDate: asset.nextCalibrationDate,
+          comments: asset.comments,
+          specifications: asset.specifications,
         })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .where(
+          and(
+            eq(asset.id, resolvedId),
+            eq(customer.labOrganizationId, apiKey.organizationId),
+            isNull(asset.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json(
+          buildPublicApiError({
+            code: "asset_not_found",
+            message: "Ativo não encontrado",
+          }),
+          404,
+        );
+      }
+
+      if (input.tag && input.tag !== existing.tag) {
+        const tagConflict = await db.query.asset.findFirst({
+          where: and(eq(asset.tag, input.tag), isNull(asset.deletedAt)),
+        });
+        if (tagConflict) {
+          return c.json(
+            buildPublicApiError({
+              code: "asset_tag_conflict",
+              message: "Tag já está em uso",
+            }),
+            409,
+          );
+        }
+      }
+
+      const [updated] = await db
+        .update(asset)
+        .set({
+          name: input.name ?? existing.name,
+          manufacturer: input.manufacturer ?? existing.manufacturer,
+          model: input.model ?? existing.model,
+          serialNumber: input.serialNumber ?? existing.serialNumber,
+          tag: input.tag ?? existing.tag,
+          status: input.status ?? existing.status,
+          lastCalibrationDate:
+            input.lastCalibrationDate === undefined
+              ? existing.lastCalibrationDate
+              : input.lastCalibrationDate
+                ? new Date(input.lastCalibrationDate)
+                : null,
+          nextCalibrationDate:
+            input.nextCalibrationDate === undefined
+              ? existing.nextCalibrationDate
+              : input.nextCalibrationDate
+                ? new Date(input.nextCalibrationDate)
+                : null,
+          comments: input.comments ?? existing.comments,
+          specifications: input.specifications ?? existing.specifications,
+        })
+        .where(eq(asset.id, existing.id))
         .returning();
 
       await db.insert(assetAuditLog).values({
-        assetId: created!.id,
-        action: "create",
-        changes: { asset: { old: null, new: created } },
+        assetId: existing.id,
+        action: "update",
+        changes: { asset: { old: existing, new: updated } },
         performedBy: apiKey.createdBy,
         ipAddress: getPublicApiRequestIp(c.req.raw.headers),
       });
@@ -1759,149 +2120,34 @@ publicApiV2Router
           organizationId: apiKey.organizationId,
           apiKeyId: apiKey.id,
           resourceType: "asset",
-          resourceId: created!.id,
+          resourceId: existing.id,
           externalId,
         });
       }
 
       const body = {
         data: {
-          ...created,
-          externalId: externalId ?? null,
+          ...updated,
+          externalId:
+            externalId ??
+            (await getResourceExternalId({
+              organizationId: apiKey.organizationId,
+              resourceType: "asset",
+              resourceId: existing.id,
+            })),
         },
       };
 
       await emitPublicApiWebhookEvent({
         organizationId: apiKey.organizationId,
-        eventType: "asset.created",
+        eventType: "asset.updated",
         payload: body.data,
         env: c.env,
       });
 
-      return {
-        status: 201,
-        body,
-        resourceType: "asset" as const,
-        resourceId: created!.id,
-      };
-    });
-  })
-  .put("/assets/:id", requireApiScope("assets:write"), zValidator("json", UpdateAssetSchema.extend({ externalId: z.string().trim().optional() })), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "asset",
-      value: c.req.param("id"),
-    });
-
-    if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "asset_not_found", message: "Ativo não encontrado" }), 404);
-    }
-
-    const [existing] = await db
-      .select({
-        id: asset.id,
-        deletedAt: asset.deletedAt,
-        customerId: asset.customerId,
-        assetTypeId: asset.assetTypeId,
-        name: asset.name,
-        manufacturer: asset.manufacturer,
-        model: asset.model,
-        serialNumber: asset.serialNumber,
-        tag: asset.tag,
-        status: asset.status,
-        lastCalibrationDate: asset.lastCalibrationDate,
-        nextCalibrationDate: asset.nextCalibrationDate,
-        comments: asset.comments,
-        specifications: asset.specifications,
-      })
-      .from(asset)
-      .innerJoin(customer, eq(asset.customerId, customer.id))
-      .where(and(eq(asset.id, resolvedId), eq(customer.labOrganizationId, apiKey.organizationId), isNull(asset.deletedAt)))
-      .limit(1);
-
-    if (!existing) {
-      return c.json(buildPublicApiError({ code: "asset_not_found", message: "Ativo não encontrado" }), 404);
-    }
-
-    if (input.tag && input.tag !== existing.tag) {
-      const tagConflict = await db.query.asset.findFirst({
-        where: and(eq(asset.tag, input.tag), isNull(asset.deletedAt)),
-      });
-      if (tagConflict) {
-        return c.json(buildPublicApiError({ code: "asset_tag_conflict", message: "Tag já está em uso" }), 409);
-      }
-    }
-
-    const [updated] = await db
-      .update(asset)
-      .set({
-        name: input.name ?? existing.name,
-        manufacturer: input.manufacturer ?? existing.manufacturer,
-        model: input.model ?? existing.model,
-        serialNumber: input.serialNumber ?? existing.serialNumber,
-        tag: input.tag ?? existing.tag,
-        status: input.status ?? existing.status,
-        lastCalibrationDate:
-          input.lastCalibrationDate === undefined
-            ? existing.lastCalibrationDate
-            : input.lastCalibrationDate
-              ? new Date(input.lastCalibrationDate)
-              : null,
-        nextCalibrationDate:
-          input.nextCalibrationDate === undefined
-            ? existing.nextCalibrationDate
-            : input.nextCalibrationDate
-              ? new Date(input.nextCalibrationDate)
-              : null,
-        comments: input.comments ?? existing.comments,
-        specifications: input.specifications ?? existing.specifications,
-      })
-      .where(eq(asset.id, existing.id))
-      .returning();
-
-    await db.insert(assetAuditLog).values({
-      assetId: existing.id,
-      action: "update",
-      changes: { asset: { old: existing, new: updated } },
-      performedBy: apiKey.createdBy,
-      ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-    });
-
-    const externalId = input.externalId?.trim();
-    if (externalId) {
-      await upsertResourceExternalId({
-        organizationId: apiKey.organizationId,
-        apiKeyId: apiKey.id,
-        resourceType: "asset",
-        resourceId: existing.id,
-        externalId,
-      });
-    }
-
-    const body = {
-      data: {
-        ...updated,
-        externalId:
-          externalId ??
-          (await getResourceExternalId({
-            organizationId: apiKey.organizationId,
-            resourceType: "asset",
-            resourceId: existing.id,
-          })),
-      },
-    };
-
-    await emitPublicApiWebhookEvent({
-      organizationId: apiKey.organizationId,
-      eventType: "asset.updated",
-      payload: body.data,
-      env: c.env,
-    });
-
-    return c.json(body);
-  })
+      return c.json(body);
+    },
+  )
   .delete("/assets/:id", requireApiScope("assets:write"), async (c) => {
     const apiKey = c.get("apiKey");
     const resolvedId = await resolveExternalResourceId({
@@ -1911,7 +2157,13 @@ publicApiV2Router
     });
 
     if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "asset_not_found", message: "Ativo não encontrado" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "asset_not_found",
+          message: "Ativo não encontrado",
+        }),
+        404,
+      );
     }
 
     return withIdempotentMutation(c, { assetId: resolvedId }, async () => {
@@ -1927,7 +2179,13 @@ publicApiV2Router
         })
         .from(asset)
         .innerJoin(customer, eq(asset.customerId, customer.id))
-        .where(and(eq(asset.id, resolvedId), eq(customer.labOrganizationId, apiKey.organizationId), isNull(asset.deletedAt)))
+        .where(
+          and(
+            eq(asset.id, resolvedId),
+            eq(customer.labOrganizationId, apiKey.organizationId),
+            isNull(asset.deletedAt),
+          ),
+        )
         .limit(1);
 
       if (!existing) {
@@ -1948,7 +2206,10 @@ publicApiV2Router
         ipAddress: getPublicApiRequestIp(c.req.raw.headers),
       });
 
-      await db.update(asset).set({ deletedAt: new Date() }).where(eq(asset.id, existing.id));
+      await db
+        .update(asset)
+        .set({ deletedAt: new Date() })
+        .where(eq(asset.id, existing.id));
 
       const body = { data: { id: existing.id, deleted: true } };
 
@@ -1974,47 +2235,89 @@ publicApiV2Router
       };
     });
   })
-  .get("/services", requireApiScope("services:read"), zValidator("query", ListQuerySchema.extend({ isActive: z.string().optional() })), async (c) => {
-    const apiKey = c.get("apiKey");
-    const { page, limit, query, unitId, isActive } = c.req.valid("query");
-    const offset = (page - 1) * limit;
-    const conditions = [
-      eq(service.organizationId, apiKey.organizationId),
-      unitId ? eq(service.unitId, unitId) : undefined,
-      isActive === "true" ? eq(service.isActive, true) : undefined,
-      isActive === "false" ? eq(service.isActive, false) : undefined,
-      query
-        ? or(
-            ilike(service.name, `%${query}%`),
-            ilike(service.description, `%${query}%`),
-          )
-        : undefined,
-    ];
+  .get(
+    "/services",
+    requireApiScope("services:read"),
+    zValidator(
+      "query",
+      ListQuerySchema.extend({ isActive: z.string().optional() }),
+    ),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const { page, limit, query, unitId, isActive } = c.req.valid("query");
+      const offset = (page - 1) * limit;
+      const conditions = [
+        eq(service.organizationId, apiKey.organizationId),
+        unitId ? eq(service.unitId, unitId) : undefined,
+        isActive === "true" ? eq(service.isActive, true) : undefined,
+        isActive === "false" ? eq(service.isActive, false) : undefined,
+        query
+          ? or(
+              ilike(service.name, `%${query}%`),
+              ilike(service.description, `%${query}%`),
+            )
+          : undefined,
+      ];
 
-    const [countResult, rows] = await Promise.all([
-      db.select({ total: count() }).from(service).where(and(...conditions)),
-      db.select().from(service).where(and(...conditions)).orderBy(service.name).limit(limit).offset(offset),
-    ]);
+      const [countResult, rows] = await Promise.all([
+        db
+          .select({ total: count() })
+          .from(service)
+          .where(and(...conditions)),
+        db
+          .select()
+          .from(service)
+          .where(and(...conditions))
+          .orderBy(service.name)
+          .limit(limit)
+          .offset(offset),
+      ]);
 
-    return c.json({
-      data: rows,
-      meta: buildListMeta({
-        page,
-        limit,
-        total: countResult[0]?.total ?? 0,
-        filters: { query: query ?? null, unitId: unitId ?? null, isActive: isActive ?? null },
-      }),
-    });
-  })
+      return c.json({
+        data: rows,
+        meta: buildListMeta({
+          page,
+          limit,
+          total: countResult[0]?.total ?? 0,
+          filters: {
+            query: query ?? null,
+            unitId: unitId ?? null,
+            isActive: isActive ?? null,
+          },
+        }),
+      });
+    },
+  )
   .get("/services/:id", requireApiScope("services:read"), async (c) => {
     const apiKey = c.get("apiKey");
     const id = Number.parseInt(c.req.param("id"), 10);
     if (Number.isNaN(id)) {
-      return c.json(buildPublicApiError({ code: "service_not_found", message: "Serviço não encontrado" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "service_not_found",
+          message: "Serviço não encontrado",
+        }),
+        404,
+      );
     }
-    const [found] = await db.select().from(service).where(and(eq(service.id, id), eq(service.organizationId, apiKey.organizationId))).limit(1);
+    const [found] = await db
+      .select()
+      .from(service)
+      .where(
+        and(
+          eq(service.id, id),
+          eq(service.organizationId, apiKey.organizationId),
+        ),
+      )
+      .limit(1);
     if (!found) {
-      return c.json(buildPublicApiError({ code: "service_not_found", message: "Serviço não encontrado" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "service_not_found",
+          message: "Serviço não encontrado",
+        }),
+        404,
+      );
     }
     return c.json({ data: found });
   })
@@ -2029,7 +2332,12 @@ publicApiV2Router
         isDefault: organizationUnit.isDefault,
       })
       .from(organizationUnit)
-      .where(and(eq(organizationUnit.organizationId, apiKey.organizationId), eq(organizationUnit.status, "ACTIVE")))
+      .where(
+        and(
+          eq(organizationUnit.organizationId, apiKey.organizationId),
+          eq(organizationUnit.status, "ACTIVE"),
+        ),
+      )
       .orderBy(organizationUnit.name);
     return c.json({ data: units });
   })
@@ -2037,40 +2345,320 @@ publicApiV2Router
     const apiKey = c.get("apiKey");
     const id = Number.parseInt(c.req.param("id"), 10);
     if (Number.isNaN(id)) {
-      return c.json(buildPublicApiError({ code: "unit_not_found", message: "Unidade não encontrada" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "unit_not_found",
+          message: "Unidade não encontrada",
+        }),
+        404,
+      );
     }
-    const [found] = await db.select().from(organizationUnit).where(and(eq(organizationUnit.id, id), eq(organizationUnit.organizationId, apiKey.organizationId))).limit(1);
+    const [found] = await db
+      .select()
+      .from(organizationUnit)
+      .where(
+        and(
+          eq(organizationUnit.id, id),
+          eq(organizationUnit.organizationId, apiKey.organizationId),
+        ),
+      )
+      .limit(1);
     if (!found) {
-      return c.json(buildPublicApiError({ code: "unit_not_found", message: "Unidade não encontrada" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "unit_not_found",
+          message: "Unidade não encontrada",
+        }),
+        404,
+      );
     }
     return c.json({ data: found });
   })
-  .get("/reports/consolidated/executive-overview", requireApiScope("reports:read"), zValidator("query", ReportQuerySchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("query");
-    const range = resolvePeriodRange(input.period);
-    const requestedUnitIds = parseRequestedUnitIds(input.unitIds);
+  .get(
+    "/reports/consolidated/executive-overview",
+    requireApiScope("reports:read"),
+    zValidator("query", ReportQuerySchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("query");
+      const range = resolvePeriodRange(input.period);
+      const requestedUnitIds = parseRequestedUnitIds(input.unitIds);
 
-    const availableUnits = await db
-      .select({
-        id: organizationUnit.id,
-        name: organizationUnit.name,
-        slug: organizationUnit.slug,
-      })
-      .from(organizationUnit)
-      .where(and(eq(organizationUnit.organizationId, apiKey.organizationId), eq(organizationUnit.status, "ACTIVE")))
-      .orderBy(organizationUnit.name);
+      const availableUnits = await db
+        .select({
+          id: organizationUnit.id,
+          name: organizationUnit.name,
+          slug: organizationUnit.slug,
+        })
+        .from(organizationUnit)
+        .where(
+          and(
+            eq(organizationUnit.organizationId, apiKey.organizationId),
+            eq(organizationUnit.status, "ACTIVE"),
+          ),
+        )
+        .orderBy(organizationUnit.name);
 
-    const selectedUnits = requestedUnitIds
-      ? availableUnits.filter((unit) => requestedUnitIds.includes(unit.id))
-      : availableUnits;
-    const selectedUnitIds = selectedUnits.map((unit) => unit.id);
-    const scopeSummary = buildReportScopeSummary({
-      selectedUnits,
-      availableUnits,
-    });
+      const selectedUnits = requestedUnitIds
+        ? availableUnits.filter((unit) => requestedUnitIds.includes(unit.id))
+        : availableUnits;
+      const selectedUnitIds = selectedUnits.map((unit) => unit.id);
+      const scopeSummary = buildReportScopeSummary({
+        selectedUnits,
+        availableUnits,
+      });
 
-    if (selectedUnitIds.length === 0) {
+      if (selectedUnitIds.length === 0) {
+        return c.json({
+          data: {
+            period: range.period,
+            label: getPeriodLabel(range.period),
+            range: {
+              startDate: range.startDate.toISOString(),
+              endDate: range.endDate.toISOString(),
+            },
+            availableUnits,
+            selectedUnits,
+            scopeSummary,
+            metrics: {
+              pendingCalibrations: 0,
+              approvedInPeriod: 0,
+              rejectedInPeriod: 0,
+              approvalRate: 0,
+              overdueJobs: 0,
+              expiringStandards: 0,
+              unitsIncluded: 0,
+              atRiskUnitsCount: 0,
+            },
+            highlights: {
+              highestVolumeUnit: null,
+              bestApprovalUnit: null,
+              attentionUnit: null,
+            },
+          },
+        });
+      }
+
+      const [
+        pendingResult,
+        approvedResult,
+        rejectedResult,
+        overdueResult,
+        expiringStandardsResult,
+        createdRows,
+        approvedRows,
+        rejectedRows,
+        overdueRows,
+        expiringRows,
+      ] = await Promise.all([
+        db
+          .select({ count: count() })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              inArray(calibrationJob.status, [
+                "DRAFT",
+                "IN_PROGRESS",
+                "REVIEW",
+              ]),
+            ),
+          ),
+        db
+          .select({ count: count() })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              eq(calibrationJob.status, "APPROVED"),
+              sql`${calibrationJob.approvedAt} >= ${range.startDate}`,
+            ),
+          ),
+        db
+          .select({ count: count() })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              eq(calibrationJob.status, "REJECTED"),
+              sql`${calibrationJob.rejectedAt} >= ${range.startDate}`,
+            ),
+          ),
+        db
+          .select({ count: count() })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              inArray(calibrationJob.status, [
+                "DRAFT",
+                "IN_PROGRESS",
+                "REVIEW",
+              ]),
+              sql`${calibrationJob.dueDate} < now()`,
+            ),
+          ),
+        db
+          .select({ count: count() })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.organizationId, apiKey.organizationId),
+              inArray(referenceStandard.unitId, selectedUnitIds),
+              sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
+            ),
+          ),
+        db
+          .select({
+            unitId: calibrationJob.unitId,
+            value: sql<number>`count(*)`,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              sql`${calibrationJob.createdAt} >= ${range.startDate}`,
+            ),
+          )
+          .groupBy(calibrationJob.unitId),
+        db
+          .select({
+            unitId: calibrationJob.unitId,
+            value: sql<number>`count(*)`,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              eq(calibrationJob.status, "APPROVED"),
+              sql`${calibrationJob.approvedAt} >= ${range.startDate}`,
+            ),
+          )
+          .groupBy(calibrationJob.unitId),
+        db
+          .select({
+            unitId: calibrationJob.unitId,
+            value: sql<number>`count(*)`,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              eq(calibrationJob.status, "REJECTED"),
+              sql`${calibrationJob.rejectedAt} >= ${range.startDate}`,
+            ),
+          )
+          .groupBy(calibrationJob.unitId),
+        db
+          .select({
+            unitId: calibrationJob.unitId,
+            value: sql<number>`count(*)`,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              inArray(calibrationJob.status, [
+                "DRAFT",
+                "IN_PROGRESS",
+                "REVIEW",
+              ]),
+              sql`${calibrationJob.dueDate} < now()`,
+            ),
+          )
+          .groupBy(calibrationJob.unitId),
+        db
+          .select({
+            unitId: referenceStandard.unitId,
+            value: sql<number>`count(*)`,
+          })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.organizationId, apiKey.organizationId),
+              inArray(referenceStandard.unitId, selectedUnitIds),
+              sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
+            ),
+          )
+          .groupBy(referenceStandard.unitId),
+      ]);
+
+      const createdByUnit = new Map(
+        createdRows.map((row) => [row.unitId, Number(row.value)]),
+      );
+      const approvedByUnit = new Map(
+        approvedRows.map((row) => [row.unitId, Number(row.value)]),
+      );
+      const rejectedByUnit = new Map(
+        rejectedRows.map((row) => [row.unitId, Number(row.value)]),
+      );
+      const overdueByUnit = new Map(
+        overdueRows.map((row) => [row.unitId, Number(row.value)]),
+      );
+      const expiringByUnit = new Map(
+        expiringRows.map((row) => [row.unitId, Number(row.value)]),
+      );
+
+      const comparison = selectedUnits.map((unit) => {
+        const created = createdByUnit.get(unit.id) ?? 0;
+        const approved = approvedByUnit.get(unit.id) ?? 0;
+        const rejected = rejectedByUnit.get(unit.id) ?? 0;
+        const overdue = overdueByUnit.get(unit.id) ?? 0;
+        const expiring = expiringByUnit.get(unit.id) ?? 0;
+        const approvalRate =
+          created > 0 ? Math.round((approved / created) * 100) : 0;
+        const healthStatus = getHealthStatus({
+          overdueNow: overdue,
+          rejectedInPeriod: rejected,
+          expiringStandardsSoon: expiring,
+        });
+
+        return {
+          unit,
+          createdInPeriod: created,
+          approvedInPeriod: approved,
+          rejectedInPeriod: rejected,
+          overdueNow: overdue,
+          expiringStandardsSoon: expiring,
+          approvalRate,
+          healthStatus,
+          healthReason: getHealthReason({
+            overdueNow: overdue,
+            rejectedInPeriod: rejected,
+            expiringStandardsSoon: expiring,
+          }),
+        };
+      });
+
+      const attentionCandidates = comparison.filter(
+        (row) => row.healthStatus !== "healthy",
+      );
+      const highestVolumeUnit =
+        [...comparison].sort(
+          (a, b) => b.createdInPeriod - a.createdInPeriod,
+        )[0] ?? null;
+      const bestApprovalUnit =
+        [...comparison].sort((a, b) => b.approvalRate - a.approvalRate)[0] ??
+        null;
+      const attentionUnit =
+        [...attentionCandidates].sort((a, b) => {
+          const severity = (status: string) =>
+            status === "critical" ? 2 : status === "attention" ? 1 : 0;
+          return (
+            severity(b.healthStatus) - severity(a.healthStatus) ||
+            b.rejectedInPeriod - a.rejectedInPeriod ||
+            a.approvalRate - b.approvalRate
+          );
+        })[0] ?? null;
+
       return c.json({
         data: {
           period: range.period,
@@ -2083,482 +2671,453 @@ publicApiV2Router
           selectedUnits,
           scopeSummary,
           metrics: {
-            pendingCalibrations: 0,
-            approvedInPeriod: 0,
-            rejectedInPeriod: 0,
-            approvalRate: 0,
-            overdueJobs: 0,
-            expiringStandards: 0,
-            unitsIncluded: 0,
-            atRiskUnitsCount: 0,
+            pendingCalibrations: pendingResult[0]?.count ?? 0,
+            approvedInPeriod: approvedResult[0]?.count ?? 0,
+            rejectedInPeriod: rejectedResult[0]?.count ?? 0,
+            approvalRate:
+              (approvedResult[0]?.count ?? 0) +
+                (rejectedResult[0]?.count ?? 0) >
+              0
+                ? Math.round(
+                    ((approvedResult[0]?.count ?? 0) /
+                      ((approvedResult[0]?.count ?? 0) +
+                        (rejectedResult[0]?.count ?? 0))) *
+                      100,
+                  )
+                : 0,
+            overdueJobs: overdueResult[0]?.count ?? 0,
+            expiringStandards: expiringStandardsResult[0]?.count ?? 0,
+            unitsIncluded: selectedUnits.length,
+            atRiskUnitsCount: comparison.filter(
+              (row) => row.healthStatus !== "healthy",
+            ).length,
           },
           highlights: {
-            highestVolumeUnit: null,
-            bestApprovalUnit: null,
-            attentionUnit: null,
+            highestVolumeUnit,
+            bestApprovalUnit,
+            attentionUnit,
           },
         },
       });
-    }
+    },
+  )
+  .get(
+    "/reports/consolidated/comparison",
+    requireApiScope("reports:read"),
+    zValidator("query", ReportQuerySchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("query");
+      const range = resolvePeriodRange(input.period);
+      const requestedUnitIds = parseRequestedUnitIds(input.unitIds);
 
-    const [
-      pendingResult,
-      approvedResult,
-      rejectedResult,
-      overdueResult,
-      expiringStandardsResult,
-      createdRows,
-      approvedRows,
-      rejectedRows,
-      overdueRows,
-      expiringRows,
-    ] = await Promise.all([
-      db
-        .select({ count: count() })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            inArray(calibrationJob.unitId, selectedUnitIds),
-            inArray(calibrationJob.status, ["DRAFT", "IN_PROGRESS", "REVIEW"]),
-          ),
-        ),
-      db
-        .select({ count: count() })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            inArray(calibrationJob.unitId, selectedUnitIds),
-            eq(calibrationJob.status, "APPROVED"),
-            sql`${calibrationJob.approvedAt} >= ${range.startDate}`,
-          ),
-        ),
-      db
-        .select({ count: count() })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            inArray(calibrationJob.unitId, selectedUnitIds),
-            eq(calibrationJob.status, "REJECTED"),
-            sql`${calibrationJob.rejectedAt} >= ${range.startDate}`,
-          ),
-        ),
-      db
-        .select({ count: count() })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            inArray(calibrationJob.unitId, selectedUnitIds),
-            inArray(calibrationJob.status, ["DRAFT", "IN_PROGRESS", "REVIEW"]),
-            sql`${calibrationJob.dueDate} < now()`,
-          ),
-        ),
-      db
-        .select({ count: count() })
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.organizationId, apiKey.organizationId),
-            inArray(referenceStandard.unitId, selectedUnitIds),
-            sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
-          ),
-        ),
-      db
+      const availableUnits = await db
         .select({
-          unitId: calibrationJob.unitId,
-          value: sql<number>`count(*)`,
+          id: organizationUnit.id,
+          name: organizationUnit.name,
+          slug: organizationUnit.slug,
         })
-        .from(calibrationJob)
+        .from(organizationUnit)
         .where(
           and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            inArray(calibrationJob.unitId, selectedUnitIds),
-            sql`${calibrationJob.createdAt} >= ${range.startDate}`,
+            eq(organizationUnit.organizationId, apiKey.organizationId),
+            eq(organizationUnit.status, "ACTIVE"),
           ),
         )
-        .groupBy(calibrationJob.unitId),
-      db
-        .select({
-          unitId: calibrationJob.unitId,
-          value: sql<number>`count(*)`,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            inArray(calibrationJob.unitId, selectedUnitIds),
-            eq(calibrationJob.status, "APPROVED"),
-            sql`${calibrationJob.approvedAt} >= ${range.startDate}`,
-          ),
-        )
-        .groupBy(calibrationJob.unitId),
-      db
-        .select({
-          unitId: calibrationJob.unitId,
-          value: sql<number>`count(*)`,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            inArray(calibrationJob.unitId, selectedUnitIds),
-            eq(calibrationJob.status, "REJECTED"),
-            sql`${calibrationJob.rejectedAt} >= ${range.startDate}`,
-          ),
-        )
-        .groupBy(calibrationJob.unitId),
-      db
-        .select({
-          unitId: calibrationJob.unitId,
-          value: sql<number>`count(*)`,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            inArray(calibrationJob.unitId, selectedUnitIds),
-            inArray(calibrationJob.status, ["DRAFT", "IN_PROGRESS", "REVIEW"]),
-            sql`${calibrationJob.dueDate} < now()`,
-          ),
-        )
-        .groupBy(calibrationJob.unitId),
-      db
-        .select({
-          unitId: referenceStandard.unitId,
-          value: sql<number>`count(*)`,
-        })
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.organizationId, apiKey.organizationId),
-            inArray(referenceStandard.unitId, selectedUnitIds),
-            sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
-          ),
-        )
-        .groupBy(referenceStandard.unitId),
-    ]);
+        .orderBy(organizationUnit.name);
 
-    const createdByUnit = new Map(createdRows.map((row) => [row.unitId, Number(row.value)]));
-    const approvedByUnit = new Map(approvedRows.map((row) => [row.unitId, Number(row.value)]));
-    const rejectedByUnit = new Map(rejectedRows.map((row) => [row.unitId, Number(row.value)]));
-    const overdueByUnit = new Map(overdueRows.map((row) => [row.unitId, Number(row.value)]));
-    const expiringByUnit = new Map(expiringRows.map((row) => [row.unitId, Number(row.value)]));
+      const selectedUnits = requestedUnitIds
+        ? availableUnits.filter((unit) => requestedUnitIds.includes(unit.id))
+        : availableUnits;
+      const selectedUnitIds = selectedUnits.map((unit) => unit.id);
 
-    const comparison = selectedUnits.map((unit) => {
-      const created = createdByUnit.get(unit.id) ?? 0;
-      const approved = approvedByUnit.get(unit.id) ?? 0;
-      const rejected = rejectedByUnit.get(unit.id) ?? 0;
-      const overdue = overdueByUnit.get(unit.id) ?? 0;
-      const expiring = expiringByUnit.get(unit.id) ?? 0;
-      const approvalRate = created > 0 ? Math.round((approved / created) * 100) : 0;
-      const healthStatus = getHealthStatus({
-        overdueNow: overdue,
-        rejectedInPeriod: rejected,
-        expiringStandardsSoon: expiring,
-      });
+      if (selectedUnitIds.length === 0) {
+        return c.json({ data: [] });
+      }
 
-      return {
-        unit,
-        createdInPeriod: created,
-        approvedInPeriod: approved,
-        rejectedInPeriod: rejected,
-        overdueNow: overdue,
-        expiringStandardsSoon: expiring,
-        approvalRate,
-        healthStatus,
-        healthReason: getHealthReason({
-          overdueNow: overdue,
-          rejectedInPeriod: rejected,
-          expiringStandardsSoon: expiring,
+      const [
+        createdRows,
+        approvedRows,
+        rejectedRows,
+        overdueRows,
+        expiringRows,
+      ] = await Promise.all([
+        db
+          .select({
+            unitId: calibrationJob.unitId,
+            value: sql<number>`count(*)`,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              sql`${calibrationJob.createdAt} >= ${range.startDate}`,
+            ),
+          )
+          .groupBy(calibrationJob.unitId),
+        db
+          .select({
+            unitId: calibrationJob.unitId,
+            value: sql<number>`count(*)`,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              eq(calibrationJob.status, "APPROVED"),
+              sql`${calibrationJob.approvedAt} >= ${range.startDate}`,
+            ),
+          )
+          .groupBy(calibrationJob.unitId),
+        db
+          .select({
+            unitId: calibrationJob.unitId,
+            value: sql<number>`count(*)`,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              eq(calibrationJob.status, "REJECTED"),
+              sql`${calibrationJob.rejectedAt} >= ${range.startDate}`,
+            ),
+          )
+          .groupBy(calibrationJob.unitId),
+        db
+          .select({
+            unitId: calibrationJob.unitId,
+            value: sql<number>`count(*)`,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              inArray(calibrationJob.unitId, selectedUnitIds),
+              inArray(calibrationJob.status, [
+                "DRAFT",
+                "IN_PROGRESS",
+                "REVIEW",
+              ]),
+              sql`${calibrationJob.dueDate} < now()`,
+            ),
+          )
+          .groupBy(calibrationJob.unitId),
+        db
+          .select({
+            unitId: referenceStandard.unitId,
+            value: sql<number>`count(*)`,
+          })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.organizationId, apiKey.organizationId),
+              inArray(referenceStandard.unitId, selectedUnitIds),
+              sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
+            ),
+          )
+          .groupBy(referenceStandard.unitId),
+      ]);
+
+      const createdByUnit = new Map(
+        createdRows.map((row) => [row.unitId, Number(row.value)]),
+      );
+      const approvedByUnit = new Map(
+        approvedRows.map((row) => [row.unitId, Number(row.value)]),
+      );
+      const rejectedByUnit = new Map(
+        rejectedRows.map((row) => [row.unitId, Number(row.value)]),
+      );
+      const overdueByUnit = new Map(
+        overdueRows.map((row) => [row.unitId, Number(row.value)]),
+      );
+      const expiringByUnit = new Map(
+        expiringRows.map((row) => [row.unitId, Number(row.value)]),
+      );
+
+      return c.json({
+        data: selectedUnits.map((unit) => {
+          const created = createdByUnit.get(unit.id) ?? 0;
+          const approved = approvedByUnit.get(unit.id) ?? 0;
+          const rejected = rejectedByUnit.get(unit.id) ?? 0;
+          const overdue = overdueByUnit.get(unit.id) ?? 0;
+          const expiring = expiringByUnit.get(unit.id) ?? 0;
+          return {
+            unit,
+            createdInPeriod: created,
+            approvedInPeriod: approved,
+            rejectedInPeriod: rejected,
+            approvalRate:
+              created > 0 ? Math.round((approved / created) * 100) : 0,
+            overdueNow: overdue,
+            expiringStandardsSoon: expiring,
+            healthStatus: getHealthStatus({
+              overdueNow: overdue,
+              rejectedInPeriod: rejected,
+              expiringStandardsSoon: expiring,
+            }),
+            healthReason: getHealthReason({
+              overdueNow: overdue,
+              rejectedInPeriod: rejected,
+              expiringStandardsSoon: expiring,
+            }),
+          };
         }),
-      };
-    });
+      });
+    },
+  )
+  .get(
+    "/certificates",
+    requireApiScope("certificates:read"),
+    zValidator(
+      "query",
+      ListQuerySchema.extend({ unitId: z.coerce.number().optional() }),
+    ),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const { page, limit, query, unitId } = c.req.valid("query");
+      const offset = (page - 1) * limit;
+      const conditions = [
+        eq(calibrationJob.organizationId, apiKey.organizationId),
+        inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+        unitId ? eq(calibrationJob.unitId, unitId) : undefined,
+        query ? ilike(calibrationJob.jobId, `%${query}%`) : undefined,
+      ];
 
-    const attentionCandidates = comparison.filter((row) => row.healthStatus !== "healthy");
-    const highestVolumeUnit = [...comparison].sort((a, b) => b.createdInPeriod - a.createdInPeriod)[0] ?? null;
-    const bestApprovalUnit = [...comparison].sort((a, b) => b.approvalRate - a.approvalRate)[0] ?? null;
-    const attentionUnit = [...attentionCandidates].sort((a, b) => {
-      const severity = (status: string) => (status === "critical" ? 2 : status === "attention" ? 1 : 0);
-      return severity(b.healthStatus) - severity(a.healthStatus) || b.rejectedInPeriod - a.rejectedInPeriod || a.approvalRate - b.approvalRate;
-    })[0] ?? null;
+      const [countResult, rows] = await Promise.all([
+        db
+          .select({ total: count() })
+          .from(calibrationJob)
+          .where(and(...conditions)),
+        db
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            certificateName: calibrationJob.certificateName,
+            status: calibrationJob.status,
+            approvedAt: calibrationJob.approvedAt,
+            verificationToken: calibrationJob.verificationToken,
+            certificateUrl: calibrationJob.certificateUrl,
+            unitId: calibrationJob.unitId,
+            assetName: asset.name,
+            customerName: customer.name,
+          })
+          .from(calibrationJob)
+          .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
+          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .where(and(...conditions))
+          .orderBy(desc(calibrationJob.approvedAt))
+          .limit(limit)
+          .offset(offset),
+      ]);
 
-    return c.json({
-      data: {
-        period: range.period,
-        label: getPeriodLabel(range.period),
-        range: {
-          startDate: range.startDate.toISOString(),
-          endDate: range.endDate.toISOString(),
-        },
-        availableUnits,
-        selectedUnits,
-        scopeSummary,
-        metrics: {
-          pendingCalibrations: pendingResult[0]?.count ?? 0,
-          approvedInPeriod: approvedResult[0]?.count ?? 0,
-          rejectedInPeriod: rejectedResult[0]?.count ?? 0,
-          approvalRate:
-            (approvedResult[0]?.count ?? 0) + (rejectedResult[0]?.count ?? 0) > 0
-              ? Math.round(
-                  ((approvedResult[0]?.count ?? 0) /
-                    ((approvedResult[0]?.count ?? 0) + (rejectedResult[0]?.count ?? 0))) *
-                    100,
-                )
-              : 0,
-          overdueJobs: overdueResult[0]?.count ?? 0,
-          expiringStandards: expiringStandardsResult[0]?.count ?? 0,
-          unitsIncluded: selectedUnits.length,
-          atRiskUnitsCount: comparison.filter((row) => row.healthStatus !== "healthy").length,
-        },
-        highlights: {
-          highestVolumeUnit,
-          bestApprovalUnit,
-          attentionUnit,
-        },
-      },
-    });
-  })
-  .get("/reports/consolidated/comparison", requireApiScope("reports:read"), zValidator("query", ReportQuerySchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("query");
-    const range = resolvePeriodRange(input.period);
-    const requestedUnitIds = parseRequestedUnitIds(input.unitIds);
-
-    const availableUnits = await db
-      .select({
-        id: organizationUnit.id,
-        name: organizationUnit.name,
-        slug: organizationUnit.slug,
-      })
-      .from(organizationUnit)
-      .where(and(eq(organizationUnit.organizationId, apiKey.organizationId), eq(organizationUnit.status, "ACTIVE")))
-      .orderBy(organizationUnit.name);
-
-    const selectedUnits = requestedUnitIds
-      ? availableUnits.filter((unit) => requestedUnitIds.includes(unit.id))
-      : availableUnits;
-    const selectedUnitIds = selectedUnits.map((unit) => unit.id);
-
-    if (selectedUnitIds.length === 0) {
-      return c.json({ data: [] });
-    }
-
-    const [createdRows, approvedRows, rejectedRows, overdueRows, expiringRows] = await Promise.all([
-      db.select({ unitId: calibrationJob.unitId, value: sql<number>`count(*)` }).from(calibrationJob).where(and(eq(calibrationJob.organizationId, apiKey.organizationId), inArray(calibrationJob.unitId, selectedUnitIds), sql`${calibrationJob.createdAt} >= ${range.startDate}`)).groupBy(calibrationJob.unitId),
-      db.select({ unitId: calibrationJob.unitId, value: sql<number>`count(*)` }).from(calibrationJob).where(and(eq(calibrationJob.organizationId, apiKey.organizationId), inArray(calibrationJob.unitId, selectedUnitIds), eq(calibrationJob.status, "APPROVED"), sql`${calibrationJob.approvedAt} >= ${range.startDate}`)).groupBy(calibrationJob.unitId),
-      db.select({ unitId: calibrationJob.unitId, value: sql<number>`count(*)` }).from(calibrationJob).where(and(eq(calibrationJob.organizationId, apiKey.organizationId), inArray(calibrationJob.unitId, selectedUnitIds), eq(calibrationJob.status, "REJECTED"), sql`${calibrationJob.rejectedAt} >= ${range.startDate}`)).groupBy(calibrationJob.unitId),
-      db.select({ unitId: calibrationJob.unitId, value: sql<number>`count(*)` }).from(calibrationJob).where(and(eq(calibrationJob.organizationId, apiKey.organizationId), inArray(calibrationJob.unitId, selectedUnitIds), inArray(calibrationJob.status, ["DRAFT", "IN_PROGRESS", "REVIEW"]), sql`${calibrationJob.dueDate} < now()`)).groupBy(calibrationJob.unitId),
-      db.select({ unitId: referenceStandard.unitId, value: sql<number>`count(*)` }).from(referenceStandard).where(and(eq(referenceStandard.organizationId, apiKey.organizationId), inArray(referenceStandard.unitId, selectedUnitIds), sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`)).groupBy(referenceStandard.unitId),
-    ]);
-
-    const createdByUnit = new Map(createdRows.map((row) => [row.unitId, Number(row.value)]));
-    const approvedByUnit = new Map(approvedRows.map((row) => [row.unitId, Number(row.value)]));
-    const rejectedByUnit = new Map(rejectedRows.map((row) => [row.unitId, Number(row.value)]));
-    const overdueByUnit = new Map(overdueRows.map((row) => [row.unitId, Number(row.value)]));
-    const expiringByUnit = new Map(expiringRows.map((row) => [row.unitId, Number(row.value)]));
-
-    return c.json({
-      data: selectedUnits.map((unit) => {
-        const created = createdByUnit.get(unit.id) ?? 0;
-        const approved = approvedByUnit.get(unit.id) ?? 0;
-        const rejected = rejectedByUnit.get(unit.id) ?? 0;
-        const overdue = overdueByUnit.get(unit.id) ?? 0;
-        const expiring = expiringByUnit.get(unit.id) ?? 0;
-        return {
-          unit,
-          createdInPeriod: created,
-          approvedInPeriod: approved,
-          rejectedInPeriod: rejected,
-          approvalRate: created > 0 ? Math.round((approved / created) * 100) : 0,
-          overdueNow: overdue,
-          expiringStandardsSoon: expiring,
-          healthStatus: getHealthStatus({
-            overdueNow: overdue,
-            rejectedInPeriod: rejected,
-            expiringStandardsSoon: expiring,
-          }),
-          healthReason: getHealthReason({
-            overdueNow: overdue,
-            rejectedInPeriod: rejected,
-            expiringStandardsSoon: expiring,
-          }),
-        };
-      }),
-    });
-  })
-  .get("/certificates", requireApiScope("certificates:read"), zValidator("query", ListQuerySchema.extend({ unitId: z.coerce.number().optional() })), async (c) => {
-    const apiKey = c.get("apiKey");
-    const { page, limit, query, unitId } = c.req.valid("query");
-    const offset = (page - 1) * limit;
-    const conditions = [
-      eq(calibrationJob.organizationId, apiKey.organizationId),
-      inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-      unitId ? eq(calibrationJob.unitId, unitId) : undefined,
-      query ? ilike(calibrationJob.jobId, `%${query}%`) : undefined,
-    ];
-
-    const [countResult, rows] = await Promise.all([
-      db.select({ total: count() }).from(calibrationJob).where(and(...conditions)),
-      db
+      return c.json({
+        data: rows,
+        meta: buildListMeta({
+          page,
+          limit,
+          total: countResult[0]?.total ?? 0,
+          filters: { query: query ?? null, unitId: unitId ?? null },
+        }),
+      });
+    },
+  )
+  .get(
+    "/certificates/:jobId",
+    requireApiScope("certificates:read"),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const jobId = c.req.param("jobId");
+      const [job] = await db
         .select({
           id: calibrationJob.id,
           jobId: calibrationJob.jobId,
+          certificateName: calibrationJob.certificateName,
           status: calibrationJob.status,
           approvedAt: calibrationJob.approvedAt,
           verificationToken: calibrationJob.verificationToken,
           certificateUrl: calibrationJob.certificateUrl,
           unitId: calibrationJob.unitId,
+          assetId: calibrationJob.assetId,
           assetName: asset.name,
+          customerId: calibrationJob.customerId,
           customerName: customer.name,
         })
         .from(calibrationJob)
         .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
         .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .where(and(...conditions))
-        .orderBy(desc(calibrationJob.approvedAt))
-        .limit(limit)
-        .offset(offset),
-    ]);
+        .where(
+          and(
+            eq(calibrationJob.organizationId, apiKey.organizationId),
+            eq(calibrationJob.jobId, jobId),
+            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+          ),
+        )
+        .limit(1);
 
-    return c.json({
-      data: rows,
-      meta: buildListMeta({
-        page,
-        limit,
-        total: countResult[0]?.total ?? 0,
-        filters: { query: query ?? null, unitId: unitId ?? null },
-      }),
-    });
-  })
-  .get("/certificates/:jobId", requireApiScope("certificates:read"), async (c) => {
-    const apiKey = c.get("apiKey");
-    const jobId = c.req.param("jobId");
-    const [job] = await db
-      .select({
-        id: calibrationJob.id,
-        jobId: calibrationJob.jobId,
-        status: calibrationJob.status,
-        approvedAt: calibrationJob.approvedAt,
-        verificationToken: calibrationJob.verificationToken,
-        certificateUrl: calibrationJob.certificateUrl,
-        unitId: calibrationJob.unitId,
-        assetId: calibrationJob.assetId,
-        assetName: asset.name,
-        customerId: calibrationJob.customerId,
-        customerName: customer.name,
-      })
-      .from(calibrationJob)
-      .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
-      .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-      .where(
-        and(
-          eq(calibrationJob.organizationId, apiKey.organizationId),
-          eq(calibrationJob.jobId, jobId),
-          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-        ),
-      )
-      .limit(1);
+      if (!job) {
+        return c.json(
+          buildPublicApiError({
+            code: "certificate_not_found",
+            message: "Certificado não encontrado",
+          }),
+          404,
+        );
+      }
 
-    if (!job) {
-      return c.json(buildPublicApiError({ code: "certificate_not_found", message: "Certificado não encontrado" }), 404);
-    }
-
-    return c.json({ data: job });
-  })
-  .get("/certificates/:jobId/download", requireApiScope("certificates:read"), async (c) => {
-    const apiKey = c.get("apiKey");
-    const jobId = c.req.param("jobId");
-    const [job] = await db
-      .select({
-        certificateUrl: calibrationJob.certificateUrl,
-      })
-      .from(calibrationJob)
-      .where(and(eq(calibrationJob.organizationId, apiKey.organizationId), eq(calibrationJob.jobId, jobId), inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"])))
-      .limit(1);
-
-    if (!job?.certificateUrl) {
-      return c.json(buildPublicApiError({ code: "certificate_not_found", message: "Certificado não encontrado" }), 404);
-    }
-
-    const r2 = createR2Client(c.env);
-    const key = extractKeyFromUrl(job.certificateUrl);
-    if (!key) {
-      return c.json(buildPublicApiError({ code: "certificate_not_ready", message: "Documento ainda não disponível" }), 400);
-    }
-
-    const downloadUrl = await generatePresignedUrl(
-      r2,
-      c.env.R2_BUCKET_NAME,
-      key,
-      300,
-    );
-    return c.redirect(downloadUrl, 302);
-  })
-  .get("/requests", requireApiScope("requests:read"), zValidator("query", ListQuerySchema.extend({ status: z.string().optional(), customerExternalId: z.string().trim().optional(), customerId: z.coerce.number().optional() })), async (c) => {
-    const apiKey = c.get("apiKey");
-    const { page, limit, query, status, unitId, customerId, customerExternalId } = c.req.valid("query");
-    const offset = (page - 1) * limit;
-    const resolvedCustomerId = await resolveCustomerId({
-      organizationId: apiKey.organizationId,
-      customerId,
-      customerExternalId,
-    });
-    const conditions = [
-      eq(calibrationRequest.organizationId, apiKey.organizationId),
-      unitId ? eq(calibrationRequest.unitId, unitId) : undefined,
-      status ? eq(calibrationRequest.status, status as any) : undefined,
-      resolvedCustomerId ? eq(calibrationRequest.customerId, resolvedCustomerId) : undefined,
-      query
-        ? sql`(${calibrationRequest.id}::text ilike ${`%${query}%`} or coalesce(${calibrationRequest.observations}, '') ilike ${`%${query}%`})`
-        : undefined,
-    ];
-
-    const [countResult, rows] = await Promise.all([
-      db.select({ total: count() }).from(calibrationRequest).where(and(...conditions)),
-      db
+      return c.json({ data: job });
+    },
+  )
+  .get(
+    "/certificates/:jobId/download",
+    requireApiScope("certificates:read"),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const jobId = c.req.param("jobId");
+      const [job] = await db
         .select({
-          id: calibrationRequest.id,
-          status: calibrationRequest.status,
-          observations: calibrationRequest.observations,
-          requestedDueDate: calibrationRequest.requestedDueDate,
-          submittedAt: calibrationRequest.submittedAt,
-          customerId: calibrationRequest.customerId,
-          customerName: customer.name,
-          unitId: calibrationRequest.unitId,
-          unitName: organizationUnit.name,
+          certificateUrl: calibrationJob.certificateUrl,
         })
-        .from(calibrationRequest)
-        .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
-        .leftJoin(organizationUnit, eq(calibrationRequest.unitId, organizationUnit.id))
-        .where(and(...conditions))
-        .orderBy(desc(calibrationRequest.submittedAt))
-        .limit(limit)
-        .offset(offset),
-    ]);
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.organizationId, apiKey.organizationId),
+            eq(calibrationJob.jobId, jobId),
+            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+          ),
+        )
+        .limit(1);
 
-    const externalIds = await getResourceExternalIdMap({
-      organizationId: apiKey.organizationId,
-      resourceType: "request",
-      resourceIds: rows.map((row) => row.id),
-    });
+      if (!job?.certificateUrl) {
+        return c.json(
+          buildPublicApiError({
+            code: "certificate_not_found",
+            message: "Certificado não encontrado",
+          }),
+          404,
+        );
+      }
 
-    return c.json({
-      data: rows.map((row) => ({
-        ...row,
-        externalId: externalIds.get(String(row.id)) ?? null,
-        unit: row.unitId ? { id: row.unitId, name: row.unitName ?? "Unidade removida" } : null,
-      })),
-      meta: buildListMeta({
+      const r2 = createR2Client(c.env);
+      const key = extractKeyFromUrl(job.certificateUrl);
+      if (!key) {
+        return c.json(
+          buildPublicApiError({
+            code: "certificate_not_ready",
+            message: "Documento ainda não disponível",
+          }),
+          400,
+        );
+      }
+
+      const downloadUrl = await generatePresignedUrl(
+        r2,
+        c.env.R2_BUCKET_NAME,
+        key,
+        300,
+      );
+      return c.redirect(downloadUrl, 302);
+    },
+  )
+  .get(
+    "/requests",
+    requireApiScope("requests:read"),
+    zValidator(
+      "query",
+      ListQuerySchema.extend({
+        status: z.string().optional(),
+        customerExternalId: z.string().trim().optional(),
+        customerId: z.coerce.number().optional(),
+      }),
+    ),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const {
         page,
         limit,
-        total: countResult[0]?.total ?? 0,
-        filters: { query: query ?? null, status: status ?? null, unitId: unitId ?? null, customerId: resolvedCustomerId ?? null },
-      }),
-    });
-  })
+        query,
+        status,
+        unitId,
+        customerId,
+        customerExternalId,
+      } = c.req.valid("query");
+      const offset = (page - 1) * limit;
+      const resolvedCustomerId = await resolveCustomerId({
+        organizationId: apiKey.organizationId,
+        customerId,
+        customerExternalId,
+      });
+      const conditions = [
+        eq(calibrationRequest.organizationId, apiKey.organizationId),
+        unitId ? eq(calibrationRequest.unitId, unitId) : undefined,
+        status ? eq(calibrationRequest.status, status as any) : undefined,
+        resolvedCustomerId
+          ? eq(calibrationRequest.customerId, resolvedCustomerId)
+          : undefined,
+        query
+          ? sql`(${calibrationRequest.id}::text ilike ${`%${query}%`} or coalesce(${calibrationRequest.observations}, '') ilike ${`%${query}%`})`
+          : undefined,
+      ];
+
+      const [countResult, rows] = await Promise.all([
+        db
+          .select({ total: count() })
+          .from(calibrationRequest)
+          .where(and(...conditions)),
+        db
+          .select({
+            id: calibrationRequest.id,
+            status: calibrationRequest.status,
+            observations: calibrationRequest.observations,
+            requestedDueDate: calibrationRequest.requestedDueDate,
+            submittedAt: calibrationRequest.submittedAt,
+            customerId: calibrationRequest.customerId,
+            customerName: customer.name,
+            unitId: calibrationRequest.unitId,
+            unitName: organizationUnit.name,
+          })
+          .from(calibrationRequest)
+          .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
+          .leftJoin(
+            organizationUnit,
+            eq(calibrationRequest.unitId, organizationUnit.id),
+          )
+          .where(and(...conditions))
+          .orderBy(desc(calibrationRequest.submittedAt))
+          .limit(limit)
+          .offset(offset),
+      ]);
+
+      const externalIds = await getResourceExternalIdMap({
+        organizationId: apiKey.organizationId,
+        resourceType: "request",
+        resourceIds: rows.map((row) => row.id),
+      });
+
+      return c.json({
+        data: rows.map((row) => ({
+          ...row,
+          externalId: externalIds.get(String(row.id)) ?? null,
+          unit: row.unitId
+            ? { id: row.unitId, name: row.unitName ?? "Unidade removida" }
+            : null,
+        })),
+        meta: buildListMeta({
+          page,
+          limit,
+          total: countResult[0]?.total ?? 0,
+          filters: {
+            query: query ?? null,
+            status: status ?? null,
+            unitId: unitId ?? null,
+            customerId: resolvedCustomerId ?? null,
+          },
+        }),
+      });
+    },
+  )
   .get("/requests/:id", requireApiScope("requests:read"), async (c) => {
     const apiKey = c.get("apiKey");
     const resolvedId = await resolveExternalResourceId({
@@ -2568,7 +3127,13 @@ publicApiV2Router
     });
 
     if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "request_not_found", message: "Solicitação não encontrada" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "request_not_found",
+          message: "Solicitação não encontrada",
+        }),
+        404,
+      );
     }
 
     const [found] = await db
@@ -2590,12 +3155,26 @@ publicApiV2Router
       })
       .from(calibrationRequest)
       .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
-      .leftJoin(organizationUnit, eq(calibrationRequest.unitId, organizationUnit.id))
-      .where(and(eq(calibrationRequest.id, resolvedId), eq(calibrationRequest.organizationId, apiKey.organizationId)))
+      .leftJoin(
+        organizationUnit,
+        eq(calibrationRequest.unitId, organizationUnit.id),
+      )
+      .where(
+        and(
+          eq(calibrationRequest.id, resolvedId),
+          eq(calibrationRequest.organizationId, apiKey.organizationId),
+        ),
+      )
       .limit(1);
 
     if (!found) {
-      return c.json(buildPublicApiError({ code: "request_not_found", message: "Solicitação não encontrada" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "request_not_found",
+          message: "Solicitação não encontrada",
+        }),
+        404,
+      );
     }
 
     const items = await db
@@ -2618,395 +3197,524 @@ publicApiV2Router
           resourceType: "request",
           resourceId: found.id,
         }),
-        unit: found.unitId ? { id: found.unitId, name: found.unitName ?? "Unidade removida" } : null,
+        unit: found.unitId
+          ? { id: found.unitId, name: found.unitName ?? "Unidade removida" }
+          : null,
         items,
       },
     });
   })
-  .post("/requests", requireApiScope("requests:write"), zValidator("json", PublicCreateRequestSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
+  .post(
+    "/requests",
+    requireApiScope("requests:write"),
+    zValidator("json", PublicCreateRequestSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
 
-    return withIdempotentMutation(c, input, async () => {
-      const resolvedCustomerId = await resolveCustomerId({
-        organizationId: apiKey.organizationId,
-        customerId: input.customerId,
-        customerExternalId: input.customerExternalId,
-      });
+      return withIdempotentMutation(c, input, async () => {
+        const resolvedCustomerId = await resolveCustomerId({
+          organizationId: apiKey.organizationId,
+          customerId: input.customerId,
+          customerExternalId: input.customerExternalId,
+        });
 
-      if (!resolvedCustomerId) {
-        return {
-          status: 404,
-          body: buildPublicApiError({ code: "customer_not_found", message: "Cliente não encontrado" }),
-        };
-      }
-
-      const assetIds = Array.from(new Set([
-        ...(input.assetIds ?? []),
-        ...(
-          await Promise.all((input.assetExternalIds ?? []).map((externalId) =>
-            resolveAssetId({
-              organizationId: apiKey.organizationId,
-              assetExternalId: externalId,
+        if (!resolvedCustomerId) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "customer_not_found",
+              message: "Cliente não encontrado",
             }),
-          ))
-        ).filter((value): value is number => !!value),
-      ]));
+          };
+        }
 
-      if (assetIds.length === 0) {
-        return {
-          status: 400,
-          body: buildPublicApiError({ code: "invalid_assets", message: "Informe ativos válidos" }),
-        };
-      }
+        const assetIds = Array.from(
+          new Set([
+            ...(input.assetIds ?? []),
+            ...(
+              await Promise.all(
+                (input.assetExternalIds ?? []).map((externalId) =>
+                  resolveAssetId({
+                    organizationId: apiKey.organizationId,
+                    assetExternalId: externalId,
+                  }),
+                ),
+              )
+            ).filter((value): value is number => !!value),
+          ]),
+        );
 
-      const foundCustomer = await db.query.customer.findFirst({
-        where: and(
-          eq(customer.id, resolvedCustomerId),
-          eq(customer.labOrganizationId, apiKey.organizationId),
-        ),
-      });
+        if (assetIds.length === 0) {
+          return {
+            status: 400,
+            body: buildPublicApiError({
+              code: "invalid_assets",
+              message: "Informe ativos válidos",
+            }),
+          };
+        }
 
-      if (!foundCustomer) {
-        return {
-          status: 404,
-          body: buildPublicApiError({ code: "customer_not_found", message: "Cliente não encontrado" }),
-        };
-      }
-
-      const assetsInScope = await db
-        .select({
-          id: asset.id,
-          unitId: asset.unitId,
-        })
-        .from(asset)
-        .where(
-          and(
-            inArray(asset.id, assetIds),
-            eq(asset.customerId, foundCustomer.id),
-            isNull(asset.deletedAt),
-            eq(asset.status, "ACTIVE"),
+        const foundCustomer = await db.query.customer.findFirst({
+          where: and(
+            eq(customer.id, resolvedCustomerId),
+            eq(customer.labOrganizationId, apiKey.organizationId),
           ),
-        );
+        });
 
-      if (assetsInScope.length !== assetIds.length) {
-        return {
-          status: 400,
-          body: buildPublicApiError({ code: "invalid_assets", message: "Um ou mais ativos não pertencem ao cliente" }),
-        };
-      }
+        if (!foundCustomer) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "customer_not_found",
+              message: "Cliente não encontrado",
+            }),
+          };
+        }
 
-      const unitIds = [...new Set(assetsInScope.map((item) => item.unitId))];
-      if (input.unitId && !unitIds.includes(input.unitId)) {
-        return {
-          status: 400,
-          body: buildPublicApiError({ code: "unit_asset_mismatch", message: "Os ativos não pertencem à unidade informada" }),
-        };
-      }
-
-      if (unitIds.length !== 1) {
-        return {
-          status: 400,
-          body: buildPublicApiError({ code: "multi_unit_request_not_allowed", message: "Selecione ativos da mesma unidade para criar a solicitação" }),
-        };
-      }
-
-      const requestedDueDate = input.requestedDueDate
-        ? new Date(input.requestedDueDate)
-        : null;
-
-      const created = await db.transaction(async (tx) => {
-        const [request] = await tx
-          .insert(calibrationRequest)
-          .values({
-            organizationId: apiKey.organizationId,
-            unitId: input.unitId ?? unitIds[0]!,
-            customerId: foundCustomer.id,
-            authOrganizationId: foundCustomer.authOrganizationId,
-            observations: input.observations || null,
-            requestedDueDate,
-            submittedBy: apiKey.createdBy,
+        const assetsInScope = await db
+          .select({
+            id: asset.id,
+            unitId: asset.unitId,
           })
-          .returning();
+          .from(asset)
+          .where(
+            and(
+              inArray(asset.id, assetIds),
+              eq(asset.customerId, foundCustomer.id),
+              isNull(asset.deletedAt),
+              eq(asset.status, "ACTIVE"),
+            ),
+          );
 
-        await tx.insert(calibrationRequestItem).values(
-          assetIds.map((assetId) => ({
-            requestId: request!.id,
-            assetId,
-          })),
-        );
+        if (assetsInScope.length !== assetIds.length) {
+          return {
+            status: 400,
+            body: buildPublicApiError({
+              code: "invalid_assets",
+              message: "Um ou mais ativos não pertencem ao cliente",
+            }),
+          };
+        }
 
-        await tx.insert(calibrationRequestAuditLog).values({
-          requestId: request!.id,
-          action: "create",
-          changes: {
-            initial: {
-              assetIds,
+        const unitIds = [...new Set(assetsInScope.map((item) => item.unitId))];
+        if (input.unitId && !unitIds.includes(input.unitId)) {
+          return {
+            status: 400,
+            body: buildPublicApiError({
+              code: "unit_asset_mismatch",
+              message: "Os ativos não pertencem à unidade informada",
+            }),
+          };
+        }
+
+        if (unitIds.length !== 1) {
+          return {
+            status: 400,
+            body: buildPublicApiError({
+              code: "multi_unit_request_not_allowed",
+              message:
+                "Selecione ativos da mesma unidade para criar a solicitação",
+            }),
+          };
+        }
+
+        const requestedDueDate = input.requestedDueDate
+          ? new Date(input.requestedDueDate)
+          : null;
+
+        const created = await db.transaction(async (tx) => {
+          const [request] = await tx
+            .insert(calibrationRequest)
+            .values({
+              organizationId: apiKey.organizationId,
+              unitId: input.unitId ?? unitIds[0]!,
+              customerId: foundCustomer.id,
+              authOrganizationId: foundCustomer.authOrganizationId,
               observations: input.observations || null,
-              requestedDueDate: requestedDueDate?.toISOString() ?? null,
+              requestedDueDate,
+              submittedBy: apiKey.createdBy,
+            })
+            .returning();
+
+          await tx.insert(calibrationRequestItem).values(
+            assetIds.map((assetId) => ({
+              requestId: request!.id,
+              assetId,
+            })),
+          );
+
+          await tx.insert(calibrationRequestAuditLog).values({
+            requestId: request!.id,
+            action: "create",
+            changes: {
+              initial: {
+                assetIds,
+                observations: input.observations || null,
+                requestedDueDate: requestedDueDate?.toISOString() ?? null,
+              },
             },
-          },
-          performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          });
+
+          return request!;
         });
 
-        return request!;
+        const externalId = input.externalId?.trim();
+        if (externalId) {
+          await upsertResourceExternalId({
+            organizationId: apiKey.organizationId,
+            apiKeyId: apiKey.id,
+            resourceType: "request",
+            resourceId: created.id,
+            externalId,
+          });
+        }
+
+        const body = {
+          data: {
+            id: created.id,
+            status: created.status,
+            externalId: externalId ?? null,
+          },
+        };
+
+        await emitPublicApiWebhookEvent({
+          organizationId: apiKey.organizationId,
+          eventType: "request.created",
+          payload: body.data,
+          env: c.env,
+        });
+
+        return {
+          status: 201,
+          body,
+          resourceType: "request" as const,
+          resourceId: created.id,
+        };
+      });
+    },
+  )
+  .patch(
+    "/requests/:id",
+    requireApiScope("requests:write"),
+    zValidator("json", UpdateRequestPublicSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const resolvedId = await resolveExternalResourceId({
+        organizationId: apiKey.organizationId,
+        resourceType: "request",
+        value: c.req.param("id"),
       });
 
-      const externalId = input.externalId?.trim();
-      if (externalId) {
-        await upsertResourceExternalId({
-          organizationId: apiKey.organizationId,
-          apiKeyId: apiKey.id,
-          resourceType: "request",
-          resourceId: created.id,
-          externalId,
-        });
+      if (!resolvedId) {
+        return c.json(
+          buildPublicApiError({
+            code: "request_not_found",
+            message: "Solicitação não encontrada",
+          }),
+          404,
+        );
       }
 
-      const body = {
-        data: {
-          id: created.id,
-          status: created.status,
-          externalId: externalId ?? null,
-        },
-      };
-
-      await emitPublicApiWebhookEvent({
-        organizationId: apiKey.organizationId,
-        eventType: "request.created",
-        payload: body.data,
-        env: c.env,
-      });
-
-      return {
-        status: 201,
-        body,
-        resourceType: "request" as const,
-        resourceId: created.id,
-      };
-    });
-  })
-  .patch("/requests/:id", requireApiScope("requests:write"), zValidator("json", UpdateRequestPublicSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "request",
-      value: c.req.param("id"),
-    });
-
-    if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "request_not_found", message: "Solicitação não encontrada" }), 404);
-    }
-
-    const [existing] = await db
-      .select()
-      .from(calibrationRequest)
-      .where(and(eq(calibrationRequest.id, resolvedId), eq(calibrationRequest.organizationId, apiKey.organizationId)))
-      .limit(1);
-
-    if (!existing) {
-      return c.json(buildPublicApiError({ code: "request_not_found", message: "Solicitação não encontrada" }), 404);
-    }
-
-    if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
-      return c.json(buildPublicApiError({ code: "request_not_editable", message: "Somente solicitações pendentes ou em revisão podem ser atualizadas" }), 409);
-    }
-
-    const [updated] = await db
-      .update(calibrationRequest)
-      .set({
-        observations: input.observations ?? existing.observations,
-        requestedDueDate:
-          input.requestedDueDate === undefined
-            ? existing.requestedDueDate
-            : input.requestedDueDate
-              ? new Date(input.requestedDueDate)
-              : null,
-      })
-      .where(eq(calibrationRequest.id, existing.id))
-      .returning();
-
-    await db.insert(calibrationRequestAuditLog).values({
-      requestId: existing.id,
-      action: "update",
-      changes: { request: { old: existing, new: updated } },
-      performedBy: apiKey.createdBy,
-      ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-    });
-
-    const body = {
-      data: {
-        ...updated,
-        externalId: await getResourceExternalId({
-          organizationId: apiKey.organizationId,
-          resourceType: "request",
-          resourceId: existing.id,
-        }),
-      },
-    };
-
-    await emitPublicApiWebhookEvent({
-      organizationId: apiKey.organizationId,
-      eventType: "request.updated",
-      payload: body.data,
-      env: c.env,
-    });
-
-    return c.json(body);
-  })
-  .post("/requests/:id/cancel", requireApiScope("requests:write"), zValidator("json", CancelRequestPublicSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "request",
-      value: c.req.param("id"),
-    });
-
-    if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "request_not_found", message: "Solicitação não encontrada" }), 404);
-    }
-
-    return withIdempotentMutation(c, input, async () => {
       const [existing] = await db
         .select()
         .from(calibrationRequest)
-        .where(and(eq(calibrationRequest.id, resolvedId), eq(calibrationRequest.organizationId, apiKey.organizationId)))
+        .where(
+          and(
+            eq(calibrationRequest.id, resolvedId),
+            eq(calibrationRequest.organizationId, apiKey.organizationId),
+          ),
+        )
         .limit(1);
 
       if (!existing) {
-        return {
-          status: 404,
-          body: buildPublicApiError({ code: "request_not_found", message: "Solicitação não encontrada" }),
-        };
+        return c.json(
+          buildPublicApiError({
+            code: "request_not_found",
+            message: "Solicitação não encontrada",
+          }),
+          404,
+        );
       }
 
-      if (!["PENDING", "UNDER_REVIEW", "APPROVED"].includes(existing.status)) {
-        return {
-          status: 409,
-          body: buildPublicApiError({ code: "request_not_cancelable", message: "A solicitação não pode ser cancelada neste status" }),
-        };
+      if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
+        return c.json(
+          buildPublicApiError({
+            code: "request_not_editable",
+            message:
+              "Somente solicitações pendentes ou em revisão podem ser atualizadas",
+          }),
+          409,
+        );
       }
 
       const [updated] = await db
         .update(calibrationRequest)
         .set({
-          status: "REJECTED",
-          rejectedBy: apiKey.createdBy,
-          rejectedAt: new Date(),
-          rejectionReason: input.reason,
+          observations: input.observations ?? existing.observations,
+          requestedDueDate:
+            input.requestedDueDate === undefined
+              ? existing.requestedDueDate
+              : input.requestedDueDate
+                ? new Date(input.requestedDueDate)
+                : null,
         })
         .where(eq(calibrationRequest.id, existing.id))
         .returning();
 
       await db.insert(calibrationRequestAuditLog).values({
         requestId: existing.id,
-        action: "reject",
-        changes: { status: { old: existing.status, new: "REJECTED" } },
+        action: "update",
+        changes: { request: { old: existing, new: updated } },
         performedBy: apiKey.createdBy,
         ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-        reason: input.reason,
       });
 
-      const body = { data: updated! };
+      const body = {
+        data: {
+          ...updated,
+          externalId: await getResourceExternalId({
+            organizationId: apiKey.organizationId,
+            resourceType: "request",
+            resourceId: existing.id,
+          }),
+        },
+      };
 
       await emitPublicApiWebhookEvent({
         organizationId: apiKey.organizationId,
-        eventType: "request.canceled",
-        payload: {
-          id: updated!.id,
-          status: updated!.status,
-          rejectionReason: updated!.rejectionReason,
-        },
+        eventType: "request.updated",
+        payload: body.data,
         env: c.env,
       });
 
-      return {
-        status: 200,
-        body,
-        resourceType: "request" as const,
-        resourceId: updated!.id,
-      };
-    });
-  })
-  .get("/jobs", requireApiScope("jobs:read"), zValidator("query", ListQuerySchema.extend({ status: z.string().optional(), customerId: z.coerce.number().optional(), customerExternalId: z.string().trim().optional(), assetExternalId: z.string().trim().optional(), assetId: z.coerce.number().optional(), serviceId: z.coerce.number().optional() })), async (c) => {
-    const apiKey = c.get("apiKey");
-    const { page, limit, query, status, unitId, customerId, customerExternalId, assetId, assetExternalId, serviceId } = c.req.valid("query");
-    const offset = (page - 1) * limit;
-    const resolvedCustomerId = await resolveCustomerId({ organizationId: apiKey.organizationId, customerId, customerExternalId });
-    const resolvedAssetId = await resolveAssetId({ organizationId: apiKey.organizationId, assetId, assetExternalId });
-    const conditions = [
-      eq(calibrationJob.organizationId, apiKey.organizationId),
-      unitId ? eq(calibrationJob.unitId, unitId) : undefined,
-      status ? eq(calibrationJob.status, status as any) : undefined,
-      resolvedCustomerId ? eq(calibrationJob.customerId, resolvedCustomerId) : undefined,
-      resolvedAssetId ? eq(calibrationJob.assetId, resolvedAssetId) : undefined,
-      serviceId ? eq(calibrationJob.serviceId, serviceId) : undefined,
-      query ? ilike(calibrationJob.jobId, `%${query}%`) : undefined,
-    ];
+      return c.json(body);
+    },
+  )
+  .post(
+    "/requests/:id/cancel",
+    requireApiScope("requests:write"),
+    zValidator("json", CancelRequestPublicSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const resolvedId = await resolveExternalResourceId({
+        organizationId: apiKey.organizationId,
+        resourceType: "request",
+        value: c.req.param("id"),
+      });
 
-    const [countResult, rows] = await Promise.all([
-      db.select({ total: count() }).from(calibrationJob).where(and(...conditions)),
-      db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          status: calibrationJob.status,
-          dueDate: calibrationJob.dueDate,
-          performedAt: calibrationJob.performedAt,
-          approvedAt: calibrationJob.approvedAt,
-          customerId: calibrationJob.customerId,
-          customerName: customer.name,
-          unitId: calibrationJob.unitId,
-          unitName: organizationUnit.name,
-          assetId: calibrationJob.assetId,
-          assetName: asset.name,
-          serviceId: calibrationJob.serviceId,
-          serviceName: service.name,
-          technicianId: calibrationJob.technicianId,
-          createdAt: calibrationJob.createdAt,
-          updatedAt: calibrationJob.updatedAt,
-        })
-        .from(calibrationJob)
-        .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
-        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .innerJoin(service, eq(calibrationJob.serviceId, service.id))
-        .leftJoin(organizationUnit, eq(calibrationJob.unitId, organizationUnit.id))
-        .where(and(...conditions))
-        .orderBy(desc(calibrationJob.createdAt))
-        .limit(limit)
-        .offset(offset),
-    ]);
+      if (!resolvedId) {
+        return c.json(
+          buildPublicApiError({
+            code: "request_not_found",
+            message: "Solicitação não encontrada",
+          }),
+          404,
+        );
+      }
 
-    const externalIds = await getResourceExternalIdMap({
-      organizationId: apiKey.organizationId,
-      resourceType: "job",
-      resourceIds: rows.map((row) => row.id),
-    });
+      return withIdempotentMutation(c, input, async () => {
+        const [existing] = await db
+          .select()
+          .from(calibrationRequest)
+          .where(
+            and(
+              eq(calibrationRequest.id, resolvedId),
+              eq(calibrationRequest.organizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1);
 
-    return c.json({
-      data: rows.map((row) => ({
-        ...row,
-        externalId: externalIds.get(String(row.id)) ?? null,
-        unit: row.unitId ? { id: row.unitId, name: row.unitName ?? "Unidade removida" } : null,
-      })),
-      meta: buildListMeta({
+        if (!existing) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "request_not_found",
+              message: "Solicitação não encontrada",
+            }),
+          };
+        }
+
+        if (
+          !["PENDING", "UNDER_REVIEW", "APPROVED"].includes(existing.status)
+        ) {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "request_not_cancelable",
+              message: "A solicitação não pode ser cancelada neste status",
+            }),
+          };
+        }
+
+        const [updated] = await db
+          .update(calibrationRequest)
+          .set({
+            status: "REJECTED",
+            rejectedBy: apiKey.createdBy,
+            rejectedAt: new Date(),
+            rejectionReason: input.reason,
+          })
+          .where(eq(calibrationRequest.id, existing.id))
+          .returning();
+
+        await db.insert(calibrationRequestAuditLog).values({
+          requestId: existing.id,
+          action: "reject",
+          changes: { status: { old: existing.status, new: "REJECTED" } },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          reason: input.reason,
+        });
+
+        const body = { data: updated! };
+
+        await emitPublicApiWebhookEvent({
+          organizationId: apiKey.organizationId,
+          eventType: "request.canceled",
+          payload: {
+            id: updated!.id,
+            status: updated!.status,
+            rejectionReason: updated!.rejectionReason,
+          },
+          env: c.env,
+        });
+
+        return {
+          status: 200,
+          body,
+          resourceType: "request" as const,
+          resourceId: updated!.id,
+        };
+      });
+    },
+  )
+  .get(
+    "/jobs",
+    requireApiScope("jobs:read"),
+    zValidator(
+      "query",
+      ListQuerySchema.extend({
+        status: z.string().optional(),
+        customerId: z.coerce.number().optional(),
+        customerExternalId: z.string().trim().optional(),
+        assetExternalId: z.string().trim().optional(),
+        assetId: z.coerce.number().optional(),
+        serviceId: z.coerce.number().optional(),
+      }),
+    ),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const {
         page,
         limit,
-        total: countResult[0]?.total ?? 0,
-        filters: {
-          query: query ?? null,
-          status: status ?? null,
-          unitId: unitId ?? null,
-          customerId: resolvedCustomerId ?? null,
-          assetId: resolvedAssetId ?? null,
-          serviceId: serviceId ?? null,
-        },
-      }),
-    });
-  })
+        query,
+        status,
+        unitId,
+        customerId,
+        customerExternalId,
+        assetId,
+        assetExternalId,
+        serviceId,
+      } = c.req.valid("query");
+      const offset = (page - 1) * limit;
+      const resolvedCustomerId = await resolveCustomerId({
+        organizationId: apiKey.organizationId,
+        customerId,
+        customerExternalId,
+      });
+      const resolvedAssetId = await resolveAssetId({
+        organizationId: apiKey.organizationId,
+        assetId,
+        assetExternalId,
+      });
+      const conditions = [
+        eq(calibrationJob.organizationId, apiKey.organizationId),
+        unitId ? eq(calibrationJob.unitId, unitId) : undefined,
+        status ? eq(calibrationJob.status, status as any) : undefined,
+        resolvedCustomerId
+          ? eq(calibrationJob.customerId, resolvedCustomerId)
+          : undefined,
+        resolvedAssetId
+          ? eq(calibrationJob.assetId, resolvedAssetId)
+          : undefined,
+        serviceId ? eq(calibrationJob.serviceId, serviceId) : undefined,
+        query ? ilike(calibrationJob.jobId, `%${query}%`) : undefined,
+      ];
+
+      const [countResult, rows] = await Promise.all([
+        db
+          .select({ total: count() })
+          .from(calibrationJob)
+          .where(and(...conditions)),
+        db
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            status: calibrationJob.status,
+            dueDate: calibrationJob.dueDate,
+            performedAt: calibrationJob.performedAt,
+            approvedAt: calibrationJob.approvedAt,
+            customerId: calibrationJob.customerId,
+            customerName: customer.name,
+            unitId: calibrationJob.unitId,
+            unitName: organizationUnit.name,
+            assetId: calibrationJob.assetId,
+            assetName: asset.name,
+            serviceId: calibrationJob.serviceId,
+            serviceName: service.name,
+            technicianId: calibrationJob.technicianId,
+            createdAt: calibrationJob.createdAt,
+            updatedAt: calibrationJob.updatedAt,
+          })
+          .from(calibrationJob)
+          .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
+          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .innerJoin(service, eq(calibrationJob.serviceId, service.id))
+          .leftJoin(
+            organizationUnit,
+            eq(calibrationJob.unitId, organizationUnit.id),
+          )
+          .where(and(...conditions))
+          .orderBy(desc(calibrationJob.createdAt))
+          .limit(limit)
+          .offset(offset),
+      ]);
+
+      const externalIds = await getResourceExternalIdMap({
+        organizationId: apiKey.organizationId,
+        resourceType: "job",
+        resourceIds: rows.map((row) => row.id),
+      });
+
+      return c.json({
+        data: rows.map((row) => ({
+          ...row,
+          externalId: externalIds.get(String(row.id)) ?? null,
+          unit: row.unitId
+            ? { id: row.unitId, name: row.unitName ?? "Unidade removida" }
+            : null,
+        })),
+        meta: buildListMeta({
+          page,
+          limit,
+          total: countResult[0]?.total ?? 0,
+          filters: {
+            query: query ?? null,
+            status: status ?? null,
+            unitId: unitId ?? null,
+            customerId: resolvedCustomerId ?? null,
+            assetId: resolvedAssetId ?? null,
+            serviceId: serviceId ?? null,
+          },
+        }),
+      });
+    },
+  )
   .get("/jobs/:id", requireApiScope("jobs:read"), async (c) => {
     const apiKey = c.get("apiKey");
     const resolvedId = await resolveExternalResourceId({
@@ -3016,7 +3724,13 @@ publicApiV2Router
     });
 
     if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "job_not_found",
+          message: "OS não encontrada",
+        }),
+        404,
+      );
     }
 
     const [job] = await db
@@ -3053,15 +3767,29 @@ publicApiV2Router
       })
       .from(calibrationJob)
       .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
-      .leftJoin(organizationUnit, eq(calibrationJob.unitId, organizationUnit.id))
+      .leftJoin(
+        organizationUnit,
+        eq(calibrationJob.unitId, organizationUnit.id),
+      )
       .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
       .leftJoin(service, eq(calibrationJob.serviceId, service.id))
       .leftJoin(user, eq(calibrationJob.technicianId, user.id))
-      .where(and(eq(calibrationJob.id, resolvedId), eq(calibrationJob.organizationId, apiKey.organizationId)))
+      .where(
+        and(
+          eq(calibrationJob.id, resolvedId),
+          eq(calibrationJob.organizationId, apiKey.organizationId),
+        ),
+      )
       .limit(1);
 
     if (!job) {
-      return c.json(buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "job_not_found",
+          message: "OS não encontrada",
+        }),
+        404,
+      );
     }
 
     return c.json({
@@ -3072,548 +3800,797 @@ publicApiV2Router
           resourceType: "job",
           resourceId: job.id,
         }),
-        unit: job.unitId ? { id: job.unitId, name: job.unitName ?? "Unidade removida" } : null,
+        unit: job.unitId
+          ? { id: job.unitId, name: job.unitName ?? "Unidade removida" }
+          : null,
       },
     });
   })
-  .post("/jobs", requireApiScope("jobs:write"), zValidator("json", JobCreatePublicSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
+  .post(
+    "/jobs",
+    requireApiScope("jobs:write"),
+    zValidator("json", JobCreatePublicSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
 
-    return withIdempotentMutation(c, input, async () => {
-      const assetId = await resolveAssetId({
+      return withIdempotentMutation(c, input, async () => {
+        const assetId = await resolveAssetId({
+          organizationId: apiKey.organizationId,
+          assetId: input.assetId,
+          assetExternalId: input.assetExternalId,
+        });
+
+        if (!assetId) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "asset_not_found",
+              message: "Ativo não encontrado",
+            }),
+          };
+        }
+
+        const unitId = await resolveUnitIdForWrite({
+          organizationId: apiKey.organizationId,
+          requestedUnitId: input.unitId,
+        });
+
+        try {
+          const created = await createCalibrationJob({
+            organizationId: apiKey.organizationId,
+            unitId,
+            createdBy: apiKey.createdBy,
+            assetId,
+            serviceId: input.serviceId,
+            technicianId: input.technicianId,
+            dueDate: input.dueDate,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          });
+
+          const externalId = input.externalId?.trim();
+          if (externalId) {
+            await upsertResourceExternalId({
+              organizationId: apiKey.organizationId,
+              apiKeyId: apiKey.id,
+              resourceType: "job",
+              resourceId: created.id,
+              externalId,
+            });
+          }
+
+          const body = {
+            data: {
+              id: created.id,
+              jobId: created.jobId,
+              status: created.status,
+              dueDate: created.dueDate,
+              externalId: externalId ?? null,
+            },
+          };
+
+          await emitPublicApiWebhookEvent({
+            organizationId: apiKey.organizationId,
+            eventType: "job.created",
+            payload: body.data,
+            env: c.env,
+          });
+
+          return {
+            status: 201,
+            body,
+            resourceType: "job" as const,
+            resourceId: created.id,
+          };
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Falha ao criar OS";
+          return {
+            status: jobCreationClientErrors.has(message) ? 400 : 500,
+            body: buildPublicApiError({
+              code: "job_create_failed",
+              message,
+            }),
+          };
+        }
+      });
+    },
+  )
+  .patch(
+    "/jobs/:id",
+    requireApiScope("jobs:write"),
+    zValidator(
+      "json",
+      UpdateJobSchema.extend({ externalId: z.string().trim().optional() }),
+    ),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const resolvedId = await resolveExternalResourceId({
         organizationId: apiKey.organizationId,
-        assetId: input.assetId,
-        assetExternalId: input.assetExternalId,
+        resourceType: "job",
+        value: c.req.param("id"),
       });
 
-      if (!assetId) {
-        return {
-          status: 404,
-          body: buildPublicApiError({ code: "asset_not_found", message: "Ativo não encontrado" }),
-        };
+      if (!resolvedId) {
+        return c.json(
+          buildPublicApiError({
+            code: "job_not_found",
+            message: "OS não encontrada",
+          }),
+          404,
+        );
       }
 
-      const unitId = await resolveUnitIdForWrite({
-        organizationId: apiKey.organizationId,
-        requestedUnitId: input.unitId,
+      const [existing] = await db
+        .select()
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, resolvedId),
+            eq(calibrationJob.organizationId, apiKey.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json(
+          buildPublicApiError({
+            code: "job_not_found",
+            message: "OS não encontrada",
+          }),
+          404,
+        );
+      }
+
+      if (existing.status === "APPROVED" || existing.status === "CANCELED") {
+        return c.json(
+          buildPublicApiError({
+            code: "job_not_editable",
+            message: `Não é possível atualizar uma OS com status ${existing.status}`,
+          }),
+          409,
+        );
+      }
+
+      const [updated] = await db
+        .update(calibrationJob)
+        .set({
+          technicianId:
+            input.technicianId === undefined
+              ? existing.technicianId
+              : input.technicianId,
+          dueDate:
+            input.dueDate === undefined
+              ? existing.dueDate
+              : input.dueDate
+                ? new Date(input.dueDate)
+                : null,
+          status: input.status ?? existing.status,
+        })
+        .where(eq(calibrationJob.id, existing.id))
+        .returning();
+
+      await db.insert(jobAuditLog).values({
+        jobId: existing.id,
+        action: "update",
+        changes: { job: { old: existing, new: updated } },
+        performedBy: apiKey.createdBy,
+        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
       });
 
-      try {
-        const created = await createCalibrationJob({
+      const externalId = input.externalId?.trim();
+      if (externalId) {
+        await upsertResourceExternalId({
           organizationId: apiKey.organizationId,
-          unitId,
-          createdBy: apiKey.createdBy,
-          assetId,
-          serviceId: input.serviceId,
-          technicianId: input.technicianId,
-          dueDate: input.dueDate,
+          apiKeyId: apiKey.id,
+          resourceType: "job",
+          resourceId: existing.id,
+          externalId,
+        });
+      }
+
+      const body = {
+        data: {
+          ...updated,
+          externalId:
+            externalId ??
+            (await getResourceExternalId({
+              organizationId: apiKey.organizationId,
+              resourceType: "job",
+              resourceId: existing.id,
+            })),
+        },
+      };
+
+      await emitPublicApiWebhookEvent({
+        organizationId: apiKey.organizationId,
+        eventType: "job.updated",
+        payload: body.data,
+        env: c.env,
+      });
+
+      return c.json(body);
+    },
+  )
+  .post(
+    "/jobs/:id/results",
+    requireApiScope("jobs:write"),
+    zValidator("json", ExecuteJobSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const resolvedId = await resolveExternalResourceId({
+        organizationId: apiKey.organizationId,
+        resourceType: "job",
+        value: c.req.param("id"),
+      });
+
+      if (!resolvedId) {
+        return c.json(
+          buildPublicApiError({
+            code: "job_not_found",
+            message: "OS não encontrada",
+          }),
+          404,
+        );
+      }
+
+      return withIdempotentMutation(c, input, async () => {
+        const [existing] = await db
+          .select()
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, resolvedId),
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "job_not_found",
+              message: "OS não encontrada",
+            }),
+          };
+        }
+
+        if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "job_not_executable",
+              message: "A OS não aceita atualização de resultados neste status",
+            }),
+          };
+        }
+
+        const [updated] = await db
+          .update(calibrationJob)
+          .set({
+            status: "IN_PROGRESS",
+            data: input.data,
+            results: input.results ?? existing.results,
+          })
+          .where(eq(calibrationJob.id, existing.id))
+          .returning();
+
+        await db.insert(jobAuditLog).values({
+          jobId: existing.id,
+          action: "execute",
+          changes: {
+            data: { old: existing.data, new: input.data },
+            results: {
+              old: existing.results,
+              new: input.results ?? existing.results,
+            },
+          },
+          performedBy: apiKey.createdBy,
           ipAddress: getPublicApiRequestIp(c.req.raw.headers),
         });
 
-        const externalId = input.externalId?.trim();
-        if (externalId) {
-          await upsertResourceExternalId({
-            organizationId: apiKey.organizationId,
-            apiKeyId: apiKey.id,
-            resourceType: "job",
-            resourceId: created.id,
-            externalId,
-          });
-        }
-
-        const body = {
-          data: {
-            id: created.id,
-            jobId: created.jobId,
-            status: created.status,
-            dueDate: created.dueDate,
-            externalId: externalId ?? null,
-          },
-        };
+        const body = { data: updated! };
 
         await emitPublicApiWebhookEvent({
           organizationId: apiKey.organizationId,
-          eventType: "job.created",
+          eventType: "job.results_submitted",
           payload: body.data,
           env: c.env,
         });
 
         return {
-          status: 201,
+          status: 200,
           body,
           resourceType: "job" as const,
-          resourceId: created.id,
+          resourceId: updated!.id,
         };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Falha ao criar OS";
-        return {
-          status: jobCreationClientErrors.has(message) ? 400 : 500,
-          body: buildPublicApiError({
-            code: "job_create_failed",
-            message,
-          }),
-        };
-      }
-    });
-  })
-  .patch("/jobs/:id", requireApiScope("jobs:write"), zValidator("json", UpdateJobSchema.extend({ externalId: z.string().trim().optional() })), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "job",
-      value: c.req.param("id"),
-    });
-
-    if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }), 404);
-    }
-
-    const [existing] = await db
-      .select()
-      .from(calibrationJob)
-      .where(and(eq(calibrationJob.id, resolvedId), eq(calibrationJob.organizationId, apiKey.organizationId)))
-      .limit(1);
-
-    if (!existing) {
-      return c.json(buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }), 404);
-    }
-
-    if (existing.status === "APPROVED" || existing.status === "CANCELED") {
-      return c.json(buildPublicApiError({ code: "job_not_editable", message: `Não é possível atualizar uma OS com status ${existing.status}` }), 409);
-    }
-
-    const [updated] = await db
-      .update(calibrationJob)
-      .set({
-        technicianId:
-          input.technicianId === undefined ? existing.technicianId : input.technicianId,
-        dueDate:
-          input.dueDate === undefined
-            ? existing.dueDate
-            : input.dueDate
-              ? new Date(input.dueDate)
-              : null,
-        status: input.status ?? existing.status,
-      })
-      .where(eq(calibrationJob.id, existing.id))
-      .returning();
-
-    await db.insert(jobAuditLog).values({
-      jobId: existing.id,
-      action: "update",
-      changes: { job: { old: existing, new: updated } },
-      performedBy: apiKey.createdBy,
-      ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-    });
-
-    const externalId = input.externalId?.trim();
-    if (externalId) {
-      await upsertResourceExternalId({
+      });
+    },
+  )
+  .post(
+    "/jobs/:id/submit",
+    requireApiScope("jobs:write"),
+    zValidator("json", SubmitForReviewSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const resolvedId = await resolveExternalResourceId({
         organizationId: apiKey.organizationId,
-        apiKeyId: apiKey.id,
         resourceType: "job",
-        resourceId: existing.id,
-        externalId,
+        value: c.req.param("id"),
       });
-    }
 
-    const body = {
-      data: {
-        ...updated,
-        externalId:
-          externalId ??
-          (await getResourceExternalId({
-            organizationId: apiKey.organizationId,
-            resourceType: "job",
-            resourceId: existing.id,
-          })),
-      },
-    };
+      if (!resolvedId) {
+        return c.json(
+          buildPublicApiError({
+            code: "job_not_found",
+            message: "OS não encontrada",
+          }),
+          404,
+        );
+      }
 
-    await emitPublicApiWebhookEvent({
-      organizationId: apiKey.organizationId,
-      eventType: "job.updated",
-      payload: body.data,
-      env: c.env,
-    });
+      return withIdempotentMutation(c, input, async () => {
+        const [existing] = await db
+          .select()
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, resolvedId),
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1);
 
-    return c.json(body);
-  })
-  .post("/jobs/:id/results", requireApiScope("jobs:write"), zValidator("json", ExecuteJobSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "job",
-      value: c.req.param("id"),
-    });
+        if (!existing) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "job_not_found",
+              message: "OS não encontrada",
+            }),
+          };
+        }
 
-    if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }), 404);
-    }
+        if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "job_not_submittable",
+              message: "A OS não pode ser submetida neste status",
+            }),
+          };
+        }
 
-    return withIdempotentMutation(c, input, async () => {
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(and(eq(calibrationJob.id, resolvedId), eq(calibrationJob.organizationId, apiKey.organizationId)))
-        .limit(1);
+        const [updated] = await db
+          .update(calibrationJob)
+          .set({
+            data: input.data,
+            status: "REVIEW",
+            performedAt: new Date(),
+          })
+          .where(eq(calibrationJob.id, existing.id))
+          .returning();
 
-      if (!existing) {
+        await db.insert(jobAuditLog).values({
+          jobId: existing.id,
+          action: "submit",
+          changes: {
+            status: { old: existing.status, new: "REVIEW" },
+            data: { old: existing.data, new: input.data },
+          },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+        });
+
         return {
-          status: 404,
-          body: buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }),
+          status: 200,
+          body: { data: updated! },
+          resourceType: "job" as const,
+          resourceId: updated!.id,
         };
+      });
+    },
+  )
+  .post(
+    "/jobs/:id/approve",
+    requireApiScope("jobs:write"),
+    zValidator("json", ApproveJobSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const resolvedId = await resolveExternalResourceId({
+        organizationId: apiKey.organizationId,
+        resourceType: "job",
+        value: c.req.param("id"),
+      });
+
+      if (!resolvedId) {
+        return c.json(
+          buildPublicApiError({
+            code: "job_not_found",
+            message: "OS não encontrada",
+          }),
+          404,
+        );
       }
 
-      if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+      return withIdempotentMutation(c, input, async () => {
+        const [existing] = await db
+          .select()
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, resolvedId),
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "job_not_found",
+              message: "OS não encontrada",
+            }),
+          };
+        }
+
+        if (existing.status !== "REVIEW") {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "job_not_approvable",
+              message: "A OS precisa estar em revisão para ser aprovada",
+            }),
+          };
+        }
+
+        const [updated] = await db
+          .update(calibrationJob)
+          .set({
+            status: "GENERATING_PDF",
+            approvedBy: apiKey.createdBy,
+            approvedAt: new Date(),
+            rejectedBy: null,
+            rejectedAt: null,
+            rejectionReason: null,
+          })
+          .where(eq(calibrationJob.id, existing.id))
+          .returning();
+
+        await db.insert(jobAuditLog).values({
+          jobId: existing.id,
+          action: "approve",
+          changes: { status: { old: existing.status, new: "GENERATING_PDF" } },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          reason: input.reason,
+        });
+
+        await emitPublicApiWebhookEvent({
+          organizationId: apiKey.organizationId,
+          eventType: "job.approved",
+          payload: {
+            id: updated!.id,
+            jobId: updated!.jobId,
+            status: updated!.status,
+          },
+          env: c.env,
+        });
+
         return {
-          status: 409,
-          body: buildPublicApiError({ code: "job_not_executable", message: "A OS não aceita atualização de resultados neste status" }),
+          status: 200,
+          body: { data: updated! },
+          resourceType: "job" as const,
+          resourceId: updated!.id,
         };
-      }
-
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({
-          status: "IN_PROGRESS",
-          data: input.data,
-          results: input.results ?? existing.results,
-        })
-        .where(eq(calibrationJob.id, existing.id))
-        .returning();
-
-      await db.insert(jobAuditLog).values({
-        jobId: existing.id,
-        action: "execute",
-        changes: {
-          data: { old: existing.data, new: input.data },
-          results: { old: existing.results, new: input.results ?? existing.results },
-        },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
       });
-
-      const body = { data: updated! };
-
-      await emitPublicApiWebhookEvent({
+    },
+  )
+  .post(
+    "/jobs/:id/reject",
+    requireApiScope("jobs:write"),
+    zValidator("json", RejectJobSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const resolvedId = await resolveExternalResourceId({
         organizationId: apiKey.organizationId,
-        eventType: "job.results_submitted",
-        payload: body.data,
-        env: c.env,
+        resourceType: "job",
+        value: c.req.param("id"),
       });
-
-      return {
-        status: 200,
-        body,
-        resourceType: "job" as const,
-        resourceId: updated!.id,
-      };
-    });
-  })
-  .post("/jobs/:id/submit", requireApiScope("jobs:write"), zValidator("json", SubmitForReviewSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "job",
-      value: c.req.param("id"),
-    });
-
-    if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }), 404);
-    }
-
-    return withIdempotentMutation(c, input, async () => {
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(and(eq(calibrationJob.id, resolvedId), eq(calibrationJob.organizationId, apiKey.organizationId)))
-        .limit(1);
-
-      if (!existing) {
-        return { status: 404, body: buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }) };
+      if (!resolvedId) {
+        return c.json(
+          buildPublicApiError({
+            code: "job_not_found",
+            message: "OS não encontrada",
+          }),
+          404,
+        );
       }
 
-      if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
-        return { status: 409, body: buildPublicApiError({ code: "job_not_submittable", message: "A OS não pode ser submetida neste status" }) };
-      }
+      return withIdempotentMutation(c, input, async () => {
+        const [existing] = await db
+          .select()
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, resolvedId),
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1);
 
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({
-          data: input.data,
-          status: "REVIEW",
-          performedAt: new Date(),
-        })
-        .where(eq(calibrationJob.id, existing.id))
-        .returning();
+        if (!existing) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "job_not_found",
+              message: "OS não encontrada",
+            }),
+          };
+        }
 
-      await db.insert(jobAuditLog).values({
-        jobId: existing.id,
-        action: "submit",
-        changes: {
-          status: { old: existing.status, new: "REVIEW" },
-          data: { old: existing.data, new: input.data },
-        },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+        if (existing.status !== "REVIEW") {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "job_not_rejectable",
+              message: "A OS precisa estar em revisão para ser rejeitada",
+            }),
+          };
+        }
+
+        const [updated] = await db
+          .update(calibrationJob)
+          .set({
+            status: "REJECTED",
+            rejectedBy: apiKey.createdBy,
+            rejectedAt: new Date(),
+            rejectionReason: input.reason,
+          })
+          .where(eq(calibrationJob.id, existing.id))
+          .returning();
+
+        await db.insert(jobAuditLog).values({
+          jobId: existing.id,
+          action: "reject",
+          changes: { status: { old: existing.status, new: "REJECTED" } },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          reason: input.reason,
+        });
+
+        return {
+          status: 200,
+          body: { data: updated! },
+          resourceType: "job" as const,
+          resourceId: updated!.id,
+        };
       });
-
-      return {
-        status: 200,
-        body: { data: updated! },
-        resourceType: "job" as const,
-        resourceId: updated!.id,
-      };
-    });
-  })
-  .post("/jobs/:id/approve", requireApiScope("jobs:write"), zValidator("json", ApproveJobSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "job",
-      value: c.req.param("id"),
-    });
-
-    if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }), 404);
-    }
-
-    return withIdempotentMutation(c, input, async () => {
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(and(eq(calibrationJob.id, resolvedId), eq(calibrationJob.organizationId, apiKey.organizationId)))
-        .limit(1);
-
-      if (!existing) {
-        return { status: 404, body: buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }) };
-      }
-
-      if (existing.status !== "REVIEW") {
-        return { status: 409, body: buildPublicApiError({ code: "job_not_approvable", message: "A OS precisa estar em revisão para ser aprovada" }) };
-      }
-
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({
-          status: "GENERATING_PDF",
-          approvedBy: apiKey.createdBy,
-          approvedAt: new Date(),
-          rejectedBy: null,
-          rejectedAt: null,
-          rejectionReason: null,
-        })
-        .where(eq(calibrationJob.id, existing.id))
-        .returning();
-
-      await db.insert(jobAuditLog).values({
-        jobId: existing.id,
-        action: "approve",
-        changes: { status: { old: existing.status, new: "GENERATING_PDF" } },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-        reason: input.reason,
-      });
-
-      await emitPublicApiWebhookEvent({
+    },
+  )
+  .delete(
+    "/jobs/:id",
+    requireApiScope("jobs:write"),
+    zValidator("json", CancelJobSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const resolvedId = await resolveExternalResourceId({
         organizationId: apiKey.organizationId,
-        eventType: "job.approved",
-        payload: { id: updated!.id, jobId: updated!.jobId, status: updated!.status },
-        env: c.env,
+        resourceType: "job",
+        value: c.req.param("id"),
       });
-
-      return { status: 200, body: { data: updated! }, resourceType: "job" as const, resourceId: updated!.id };
-    });
-  })
-  .post("/jobs/:id/reject", requireApiScope("jobs:write"), zValidator("json", RejectJobSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "job",
-      value: c.req.param("id"),
-    });
-    if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }), 404);
-    }
-
-    return withIdempotentMutation(c, input, async () => {
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(and(eq(calibrationJob.id, resolvedId), eq(calibrationJob.organizationId, apiKey.organizationId)))
-        .limit(1);
-
-      if (!existing) {
-        return { status: 404, body: buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }) };
+      if (!resolvedId) {
+        return c.json(
+          buildPublicApiError({
+            code: "job_not_found",
+            message: "OS não encontrada",
+          }),
+          404,
+        );
       }
 
-      if (existing.status !== "REVIEW") {
-        return { status: 409, body: buildPublicApiError({ code: "job_not_rejectable", message: "A OS precisa estar em revisão para ser rejeitada" }) };
-      }
+      return withIdempotentMutation(c, input, async () => {
+        const [existing] = await db
+          .select()
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, resolvedId),
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1);
 
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({
-          status: "REJECTED",
-          rejectedBy: apiKey.createdBy,
-          rejectedAt: new Date(),
-          rejectionReason: input.reason,
-        })
-        .where(eq(calibrationJob.id, existing.id))
-        .returning();
+        if (!existing) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "job_not_found",
+              message: "OS não encontrada",
+            }),
+          };
+        }
 
-      await db.insert(jobAuditLog).values({
-        jobId: existing.id,
-        action: "reject",
-        changes: { status: { old: existing.status, new: "REJECTED" } },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-        reason: input.reason,
+        if (existing.status === "APPROVED") {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "job_not_cancelable",
+              message: "Não é possível cancelar uma OS aprovada",
+            }),
+          };
+        }
+
+        const [updated] = await db
+          .update(calibrationJob)
+          .set({ status: "CANCELED" })
+          .where(eq(calibrationJob.id, existing.id))
+          .returning();
+
+        await db.insert(jobAuditLog).values({
+          jobId: existing.id,
+          action: "cancel",
+          changes: { status: { old: existing.status, new: "CANCELED" } },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          reason: input.reason,
+        });
+
+        await emitPublicApiWebhookEvent({
+          organizationId: apiKey.organizationId,
+          eventType: "job.canceled",
+          payload: {
+            id: updated!.id,
+            jobId: updated!.jobId,
+            status: updated!.status,
+          },
+          env: c.env,
+        });
+
+        return {
+          status: 200,
+          body: { data: updated! },
+          resourceType: "job" as const,
+          resourceId: updated!.id,
+        };
       });
-
-      return { status: 200, body: { data: updated! }, resourceType: "job" as const, resourceId: updated!.id };
-    });
-  })
-  .delete("/jobs/:id", requireApiScope("jobs:write"), zValidator("json", CancelJobSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const resolvedId = await resolveExternalResourceId({
-      organizationId: apiKey.organizationId,
-      resourceType: "job",
-      value: c.req.param("id"),
-    });
-    if (!resolvedId) {
-      return c.json(buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }), 404);
-    }
-
-    return withIdempotentMutation(c, input, async () => {
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(and(eq(calibrationJob.id, resolvedId), eq(calibrationJob.organizationId, apiKey.organizationId)))
-        .limit(1);
-
-      if (!existing) {
-        return { status: 404, body: buildPublicApiError({ code: "job_not_found", message: "OS não encontrada" }) };
-      }
-
-      if (existing.status === "APPROVED") {
-        return { status: 409, body: buildPublicApiError({ code: "job_not_cancelable", message: "Não é possível cancelar uma OS aprovada" }) };
-      }
-
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({ status: "CANCELED" })
-        .where(eq(calibrationJob.id, existing.id))
-        .returning();
-
-      await db.insert(jobAuditLog).values({
-        jobId: existing.id,
-        action: "cancel",
-        changes: { status: { old: existing.status, new: "CANCELED" } },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-        reason: input.reason,
-      });
-
-      await emitPublicApiWebhookEvent({
-        organizationId: apiKey.organizationId,
-        eventType: "job.canceled",
-        payload: { id: updated!.id, jobId: updated!.jobId, status: updated!.status },
-        env: c.env,
-      });
-
-      return { status: 200, body: { data: updated! }, resourceType: "job" as const, resourceId: updated!.id };
-    });
-  })
+    },
+  )
   .get("/webhooks", requireApiScope("webhooks:manage"), async (c) => {
     const apiKey = c.get("apiKey");
     const subscriptions = await db
       .select()
       .from(publicApiWebhookSubscription)
-      .where(eq(publicApiWebhookSubscription.organizationId, apiKey.organizationId))
+      .where(
+        eq(publicApiWebhookSubscription.organizationId, apiKey.organizationId),
+      )
       .orderBy(desc(publicApiWebhookSubscription.createdAt));
     return c.json({ data: subscriptions.map(mapWebhookSubscription) });
   })
-  .post("/webhooks", requireApiScope("webhooks:manage"), zValidator("json", WebhookSubscriptionSchema), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
+  .post(
+    "/webhooks",
+    requireApiScope("webhooks:manage"),
+    zValidator("json", WebhookSubscriptionSchema),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
 
-    return withIdempotentMutation(c, input, async () => {
-      const secret = createWebhookSecret(c.env);
-      const [created] = await db
-        .insert(publicApiWebhookSubscription)
-        .values({
-          id: crypto.randomUUID(),
-          organizationId: apiKey.organizationId,
-          name: input.name,
-          targetUrl: input.targetUrl,
-          events: input.events,
-          status: input.status ?? "ACTIVE",
-          secretPrefix: secret.prefix,
-          encryptedSecret: secret.encryptedSecret,
-          secretIv: secret.secretIv,
-          createdBy: apiKey.createdBy,
+      return withIdempotentMutation(c, input, async () => {
+        const secret = createWebhookSecret(c.env);
+        const [created] = await db
+          .insert(publicApiWebhookSubscription)
+          .values({
+            id: crypto.randomUUID(),
+            organizationId: apiKey.organizationId,
+            name: input.name,
+            targetUrl: input.targetUrl,
+            events: input.events,
+            status: input.status ?? "ACTIVE",
+            secretPrefix: secret.prefix,
+            encryptedSecret: secret.encryptedSecret,
+            secretIv: secret.secretIv,
+            createdBy: apiKey.createdBy,
+          })
+          .returning();
+
+        return {
+          status: 201,
+          body: {
+            data: mapWebhookSubscription(created!),
+            secret: secret.raw,
+          },
+        };
+      });
+    },
+  )
+  .patch(
+    "/webhooks/:id",
+    requireApiScope("webhooks:manage"),
+    zValidator("json", WebhookSubscriptionSchema.partial()),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const input = c.req.valid("json");
+      const [existing] = await db
+        .select()
+        .from(publicApiWebhookSubscription)
+        .where(
+          and(
+            eq(publicApiWebhookSubscription.id, c.req.param("id")),
+            eq(
+              publicApiWebhookSubscription.organizationId,
+              apiKey.organizationId,
+            ),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        return c.json(
+          buildPublicApiError({
+            code: "webhook_not_found",
+            message: "Webhook não encontrado",
+          }),
+          404,
+        );
+      }
+
+      const [updated] = await db
+        .update(publicApiWebhookSubscription)
+        .set({
+          name: input.name ?? existing.name,
+          targetUrl: input.targetUrl ?? existing.targetUrl,
+          events: input.events ?? existing.events,
+          status: input.status ?? existing.status,
+          updatedBy: apiKey.createdBy,
         })
+        .where(eq(publicApiWebhookSubscription.id, existing.id))
         .returning();
 
-      return {
-        status: 201,
-        body: {
-          data: mapWebhookSubscription(created!),
-          secret: secret.raw,
-        },
-      };
-    });
-  })
-  .patch("/webhooks/:id", requireApiScope("webhooks:manage"), zValidator("json", WebhookSubscriptionSchema.partial()), async (c) => {
-    const apiKey = c.get("apiKey");
-    const input = c.req.valid("json");
-    const [existing] = await db
-      .select()
-      .from(publicApiWebhookSubscription)
-      .where(and(eq(publicApiWebhookSubscription.id, c.req.param("id")), eq(publicApiWebhookSubscription.organizationId, apiKey.organizationId)))
-      .limit(1);
-
-    if (!existing) {
-      return c.json(buildPublicApiError({ code: "webhook_not_found", message: "Webhook não encontrado" }), 404);
-    }
-
-    const [updated] = await db
-      .update(publicApiWebhookSubscription)
-      .set({
-        name: input.name ?? existing.name,
-        targetUrl: input.targetUrl ?? existing.targetUrl,
-        events: input.events ?? existing.events,
-        status: input.status ?? existing.status,
-        updatedBy: apiKey.createdBy,
-      })
-      .where(eq(publicApiWebhookSubscription.id, existing.id))
-      .returning();
-
-    return c.json({ data: mapWebhookSubscription(updated!) });
-  })
+      return c.json({ data: mapWebhookSubscription(updated!) });
+    },
+  )
   .delete("/webhooks/:id", requireApiScope("webhooks:manage"), async (c) => {
     const apiKey = c.get("apiKey");
     return withIdempotentMutation(c, { id: c.req.param("id") }, async () => {
       const [existing] = await db
         .select()
         .from(publicApiWebhookSubscription)
-        .where(and(eq(publicApiWebhookSubscription.id, c.req.param("id")), eq(publicApiWebhookSubscription.organizationId, apiKey.organizationId)))
+        .where(
+          and(
+            eq(publicApiWebhookSubscription.id, c.req.param("id")),
+            eq(
+              publicApiWebhookSubscription.organizationId,
+              apiKey.organizationId,
+            ),
+          ),
+        )
         .limit(1);
 
       if (!existing) {
-        return { status: 404, body: buildPublicApiError({ code: "webhook_not_found", message: "Webhook não encontrado" }) };
+        return {
+          status: 404,
+          body: buildPublicApiError({
+            code: "webhook_not_found",
+            message: "Webhook não encontrado",
+          }),
+        };
       }
 
-      await db.delete(publicApiWebhookSubscription).where(eq(publicApiWebhookSubscription.id, existing.id));
-      return { status: 200, body: { data: { id: existing.id, deleted: true } } };
+      await db
+        .delete(publicApiWebhookSubscription)
+        .where(eq(publicApiWebhookSubscription.id, existing.id));
+      return {
+        status: 200,
+        body: { data: { id: existing.id, deleted: true } },
+      };
     });
   })
   .post("/webhooks/:id/test", requireApiScope("webhooks:manage"), async (c) => {
@@ -3621,11 +4598,25 @@ publicApiV2Router
     const [existing] = await db
       .select()
       .from(publicApiWebhookSubscription)
-      .where(and(eq(publicApiWebhookSubscription.id, c.req.param("id")), eq(publicApiWebhookSubscription.organizationId, apiKey.organizationId)))
+      .where(
+        and(
+          eq(publicApiWebhookSubscription.id, c.req.param("id")),
+          eq(
+            publicApiWebhookSubscription.organizationId,
+            apiKey.organizationId,
+          ),
+        ),
+      )
       .limit(1);
 
     if (!existing) {
-      return c.json(buildPublicApiError({ code: "webhook_not_found", message: "Webhook não encontrado" }), 404);
+      return c.json(
+        buildPublicApiError({
+          code: "webhook_not_found",
+          message: "Webhook não encontrado",
+        }),
+        404,
+      );
     }
 
     await emitPublicApiWebhookEvent({
@@ -3640,28 +4631,47 @@ publicApiV2Router
 
     return c.json({ data: { id: existing.id, tested: true } });
   })
-  .get("/webhooks/:id/deliveries", requireApiScope("webhooks:manage"), async (c) => {
-    const apiKey = c.get("apiKey");
-    const deliveries = await db
-      .select()
-      .from(publicApiWebhookDelivery)
-      .where(and(eq(publicApiWebhookDelivery.subscriptionId, c.req.param("id")), eq(publicApiWebhookDelivery.organizationId, apiKey.organizationId)))
-      .orderBy(desc(publicApiWebhookDelivery.createdAt))
-      .limit(50);
-    return c.json({ data: deliveries });
-  })
-  .post("/webhooks/:id/deliveries/:deliveryId/replay", requireApiScope("webhooks:manage"), async (c) => {
-    const apiKey = c.get("apiKey");
-    const replay = await replayPublicApiWebhookDelivery({
-      organizationId: apiKey.organizationId,
-      subscriptionId: c.req.param("id"),
-      deliveryId: c.req.param("deliveryId"),
-      env: c.env,
-    });
+  .get(
+    "/webhooks/:id/deliveries",
+    requireApiScope("webhooks:manage"),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const deliveries = await db
+        .select()
+        .from(publicApiWebhookDelivery)
+        .where(
+          and(
+            eq(publicApiWebhookDelivery.subscriptionId, c.req.param("id")),
+            eq(publicApiWebhookDelivery.organizationId, apiKey.organizationId),
+          ),
+        )
+        .orderBy(desc(publicApiWebhookDelivery.createdAt))
+        .limit(50);
+      return c.json({ data: deliveries });
+    },
+  )
+  .post(
+    "/webhooks/:id/deliveries/:deliveryId/replay",
+    requireApiScope("webhooks:manage"),
+    async (c) => {
+      const apiKey = c.get("apiKey");
+      const replay = await replayPublicApiWebhookDelivery({
+        organizationId: apiKey.organizationId,
+        subscriptionId: c.req.param("id"),
+        deliveryId: c.req.param("deliveryId"),
+        env: c.env,
+      });
 
-    if (!replay) {
-      return c.json(buildPublicApiError({ code: "webhook_delivery_not_found", message: "Entrega não encontrada" }), 404);
-    }
+      if (!replay) {
+        return c.json(
+          buildPublicApiError({
+            code: "webhook_delivery_not_found",
+            message: "Entrega não encontrada",
+          }),
+          404,
+        );
+      }
 
-    return c.json({ data: replay });
-  });
+      return c.json({ data: replay });
+    },
+  );

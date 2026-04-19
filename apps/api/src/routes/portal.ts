@@ -37,7 +37,9 @@ import {
 } from "../lib/storage";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 
-function getPortalHostOrigin(c: { req: { header: (name: string) => string | undefined } }) {
+function getPortalHostOrigin(c: {
+  req: { header: (name: string) => string | undefined };
+}) {
   return c.req.header("origin") ?? c.req.header("referer") ?? null;
 }
 
@@ -294,6 +296,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         .select({
           id: calibrationJob.id,
           jobId: calibrationJob.jobId,
+          certificateName: calibrationJob.certificateName,
           status: calibrationJob.status,
           performedAt: calibrationJob.performedAt,
           approvedAt: calibrationJob.approvedAt,
@@ -496,6 +499,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         .select({
           certificateUrl: calibrationJob.certificateUrl,
           jobId: calibrationJob.jobId,
+          certificateName: calibrationJob.certificateName,
         })
         .from(calibrationJob)
         .where(
@@ -522,10 +526,20 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
 
       return c.json({
         url,
-        filename: `certificado-${certificate.jobId}.pdf`,
+        filename: `${sanitizeCertificateFilename(certificate.certificateName || `certificado-${certificate.jobId}`)}.pdf`,
       });
     } catch (error) {
       console.error("Error generating certificate download URL:", error);
       return c.json({ error: "Erro ao gerar link de download" }, 500);
     }
   });
+
+function sanitizeCertificateFilename(value: string) {
+  const sanitized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+  return sanitized || "certificado";
+}

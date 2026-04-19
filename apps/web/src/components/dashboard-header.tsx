@@ -34,6 +34,7 @@ const routeLabels: Record<string, string> = {
   '/dashboard/settings/appearance': 'Aparência',
   '/dashboard/settings/signature': 'Assinatura',
   '/dashboard/settings/certificates': 'Certificados ICP',
+  '/dashboard/settings/certificate-numbering': 'Numeração de Certificados',
   '/dashboard/settings/danger': 'Zona de Perigo',
   '/dashboard/customer-success': 'Customer Success',
   '/dashboard/internal': 'Operação Interna',
