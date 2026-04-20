@@ -14,9 +14,14 @@ import {
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 
-import { CommandGroup, CommandItem, CommandShortcut } from '@/components/ui/command'
+import {
+  CommandGroup,
+  CommandItem,
+  CommandShortcut,
+} from '@/components/ui/command'
 import { useCommandPalette } from '../command-context'
 import { api } from '@/utils/api'
+import { apiRouteParam } from '@/lib/route-identifiers'
 
 type ContextAction = {
   id: string
@@ -31,8 +36,14 @@ type ContextAction = {
  * Extract job ID from pathname like /dashboard/jobs/123
  */
 function extractJobId(pathname: string): string | null {
-  const match = pathname.match(/^\/dashboard\/jobs\/([\w-]+)$/)
-  return match ? match[1] : null
+  const match = pathname.match(/^\/dashboard\/jobs\/([^/]+)$/)
+  if (!match) return null
+
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return match[1]
+  }
 }
 
 type ActionContext = {
@@ -46,27 +57,34 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
   const { pathname, setOpen, queryClient, navigate } = ctx
 
   // Job page context actions
-  if (/^\/dashboard\/jobs\/[\w-]+$/.test(pathname)) {
+  if (/^\/dashboard\/jobs\/[^/]+$/.test(pathname)) {
     const jobId = extractJobId(pathname)
 
     return [
       {
         id: 'approve-job',
         label: 'Aprovar Ordem de Serviço',
-        icon: <HugeiconsIcon icon={CheckmarkCircle02Icon} className="text-green-500" />,
+        icon: (
+          <HugeiconsIcon
+            icon={CheckmarkCircle02Icon}
+            className="text-green-500"
+          />
+        ),
         shortcut: '⌘⏎',
         onSelect: async () => {
           if (!jobId) return
 
           try {
             const res = await api.api.jobs[':id'].approve.$post({
-              param: { id: jobId },
+              param: { id: apiRouteParam(jobId) },
               json: { reason: 'Aprovado via comando rápido' },
             })
 
             if (!res.ok) {
               const error = await res.json()
-              throw new Error((error as { error?: string }).error || 'Erro ao aprovar')
+              throw new Error(
+                (error as { error?: string }).error || 'Erro ao aprovar',
+              )
             }
 
             queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
@@ -75,7 +93,9 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
             })
             setOpen(false)
           } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Erro ao aprovar job')
+            toast.error(
+              error instanceof Error ? error.message : 'Erro ao aprovar job',
+            )
           }
         },
       },
@@ -104,12 +124,14 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
 
           try {
             const res = await api.api.jobs[':id']['generate-label'].$post({
-              param: { id: jobId },
+              param: { id: apiRouteParam(jobId) },
             })
 
             if (!res.ok) {
               const error = await res.json()
-              throw new Error((error as { error?: string }).error || 'Erro ao gerar etiqueta')
+              throw new Error(
+                (error as { error?: string }).error || 'Erro ao gerar etiqueta',
+              )
             }
 
             queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
@@ -118,7 +140,9 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
             })
             setOpen(false)
           } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Erro ao gerar etiqueta')
+            toast.error(
+              error instanceof Error ? error.message : 'Erro ao gerar etiqueta',
+            )
           }
         },
       },
@@ -142,7 +166,9 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
       {
         id: 'mark-out-of-service',
         label: 'Marcar Fora de Serviço',
-        icon: <HugeiconsIcon icon={AlertCircleIcon} className="text-yellow-500" />,
+        icon: (
+          <HugeiconsIcon icon={AlertCircleIcon} className="text-yellow-500" />
+        ),
         onSelect: () => {
           toast.info('Funcionalidade em desenvolvimento', {
             description: 'Esta ação estará disponível em breve.',
@@ -182,7 +208,9 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
       {
         id: 'mark-standard-out-of-service',
         label: 'Marcar Padrão Fora de Serviço',
-        icon: <HugeiconsIcon icon={AlertCircleIcon} className="text-yellow-500" />,
+        icon: (
+          <HugeiconsIcon icon={AlertCircleIcon} className="text-yellow-500" />
+        ),
         onSelect: () => {
           toast.info('Funcionalidade em desenvolvimento', {
             description: 'Esta ação estará disponível em breve.',
@@ -246,7 +274,9 @@ export function ContextGroup() {
         >
           {action.icon}
           <span>{action.label}</span>
-          {action.shortcut && <CommandShortcut>{action.shortcut}</CommandShortcut>}
+          {action.shortcut && (
+            <CommandShortcut>{action.shortcut}</CommandShortcut>
+          )}
         </CommandItem>
       ))}
     </CommandGroup>
