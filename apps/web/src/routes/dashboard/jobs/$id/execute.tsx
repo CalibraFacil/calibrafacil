@@ -18,6 +18,7 @@ import { createEngine, flattenForExecution } from '@calibra-facil/math-engine'
 import type { FormulaContext } from '@calibra-facil/math-engine'
 
 import { api } from '@/utils/api'
+import { apiRouteParam } from '@/lib/route-identifiers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -236,6 +237,7 @@ function getInitialIndicatorPosition(job: JobData) {
 
 function ExecuteJobPage() {
   const { id } = Route.useParams()
+  const apiJobId = apiRouteParam(id)
   // Math engine
   const engine = useMemo(() => createEngine(), [])
 
@@ -247,7 +249,7 @@ function ExecuteJobPage() {
   } = useQuery({
     queryKey: ['jobs', id],
     queryFn: async () => {
-      const res = await api.api.jobs[':id'].$get({ param: { id } })
+      const res = await api.api.jobs[':id'].$get({ param: { id: apiJobId } })
       if (!res.ok) throw new Error('Falha ao carregar job')
       return res.json() as Promise<JobData>
     },
@@ -809,7 +811,7 @@ function ExecuteJobForm({
     mutationFn: async () => {
       const normalizedData = normalizeFormData(formData)
       const res = await api.api.jobs[':id'].execute.$post({
-        param: { id: jobId },
+        param: { id: apiRouteParam(jobId) },
         json: {
           selectedStandardIds: buildSelectedStandardPayload(normalizedData),
           data: normalizedData,
@@ -841,7 +843,7 @@ function ExecuteJobForm({
     mutationFn: async () => {
       const normalizedData = normalizeFormData(formData)
       const res = await api.api.jobs[':id'].submit.$post({
-        param: { id: jobId },
+        param: { id: apiRouteParam(jobId) },
         json: {
           selectedStandardIds: buildSelectedStandardPayload(normalizedData),
           data: normalizedData,

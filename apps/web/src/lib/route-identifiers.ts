@@ -24,6 +24,16 @@ export function jobRouteId(job: { jobId: string }): string {
   return job.jobId
 }
 
+export function apiRouteParam(value: string | number): string {
+  const stringValue = String(value)
+
+  try {
+    return encodeURIComponent(decodeURIComponent(stringValue))
+  } catch {
+    return encodeURIComponent(stringValue)
+  }
+}
+
 export function assetRouteId(asset: { tag: string }): string {
   return slugifyRouteIdentifier(asset.tag)
 }
