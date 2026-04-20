@@ -80,6 +80,16 @@ export const ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS: PositionOption[] = [
   },
 ]
 
+const CIRCULAR_LOAD_POINT_CLASSES: Record<string, string> = {
+  A: 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-[55%]',
+  B: 'left-[39%] top-[39%] -translate-x-1/2 -translate-y-1/2',
+  C: 'left-[61%] top-[39%] -translate-x-1/2 -translate-y-1/2',
+  D: 'left-[61%] top-[61%] -translate-x-1/2 -translate-y-1/2',
+  E: 'left-[39%] top-[61%] -translate-x-1/2 -translate-y-1/2',
+}
+
+const DEFAULT_CIRCULAR_LOAD_POINTS = Object.keys(CIRCULAR_LOAD_POINT_CLASSES)
+
 export const ECCENTRICITY_INDICATOR_OPTIONS = [
   ...CIRCULAR_ECCENTRICITY_INDICATOR_OPTIONS,
   ...ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS,
@@ -137,6 +147,7 @@ type EccentricityIndicatorProps = {
   value?: EccentricityIndicatorPosition | null
   onChange?: (value: EccentricityIndicatorPosition | null) => void
   variant?: EccentricityIndicatorVariant
+  loadPositions?: string[]
   disabled?: boolean
   readOnly?: boolean
   className?: string
@@ -146,6 +157,7 @@ export function EccentricityIndicator({
   value = null,
   onChange,
   variant = 'circular_platform',
+  loadPositions,
   disabled = false,
   readOnly = false,
   className,
@@ -153,6 +165,13 @@ export function EccentricityIndicator({
   const options = getEccentricityIndicatorOptions(variant)
   const selectedOption = options.find((option) => option.value === value)
   const isInteractive = !disabled && !readOnly && Boolean(onChange)
+  const circularLoadPositions = loadPositions?.filter(
+    (position) => position in CIRCULAR_LOAD_POINT_CLASSES,
+  ).length
+    ? loadPositions.filter(
+        (position) => position in CIRCULAR_LOAD_POINT_CLASSES,
+      )
+    : DEFAULT_CIRCULAR_LOAD_POINTS
 
   const togglePosition = (position: EccentricityIndicatorPosition) => {
     if (!isInteractive) return
@@ -244,21 +263,18 @@ export function EccentricityIndicator({
                 className="absolute left-8 right-8 top-1/2 h-px -translate-y-1/2 bg-border"
                 aria-hidden="true"
               />
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[55%] text-2xl font-semibold">
-                A
-              </span>
-              <span className="absolute left-[39%] top-[39%] -translate-x-1/2 -translate-y-1/2 text-2xl font-semibold">
-                B
-              </span>
-              <span className="absolute left-[61%] top-[39%] -translate-x-1/2 -translate-y-1/2 text-2xl font-semibold">
-                C
-              </span>
-              <span className="absolute left-[61%] top-[61%] -translate-x-1/2 -translate-y-1/2 text-2xl font-semibold">
-                D
-              </span>
-              <span className="absolute left-[39%] top-[61%] -translate-x-1/2 -translate-y-1/2 text-2xl font-semibold">
-                E
-              </span>
+              {circularLoadPositions.map((position) => (
+                <span
+                  key={position}
+                  className={cn(
+                    'absolute z-10 px-1 text-2xl font-semibold leading-none',
+                    position === 'A' && 'bg-background',
+                    CIRCULAR_LOAD_POINT_CLASSES[position],
+                  )}
+                >
+                  {position}
+                </span>
+              ))}
 
               {options.map((option) => {
                 const selected = value === option.value

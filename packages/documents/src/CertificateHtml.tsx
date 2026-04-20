@@ -22,6 +22,13 @@ const ROAD_SCALE_ECCENTRICITY_INDICATOR_OPTIONS = [
   { value: "3", label: "Seção 3", className: "road-point-3" },
   { value: "4", label: "Seção 4", className: "road-point-4" },
 ] as const;
+const CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES = {
+  A: "eccentricity-load-a",
+  B: "eccentricity-load-b",
+  C: "eccentricity-load-c",
+  D: "eccentricity-load-d",
+  E: "eccentricity-load-e",
+} as const;
 const MAX_PRINT_TABLE_COLUMNS = 8;
 const MAX_CALIBRATION_RESULT_COLUMNS = 6;
 
@@ -691,11 +698,15 @@ const styles = `
     font-size: 12pt;
     font-weight: 700;
     text-align: center;
+    z-index: 2;
   }
   .eccentricity-load-a {
     left: 50%;
     top: 50%;
     transform: translate(-50%, -52%);
+    background: #fff;
+    padding: 0 4px;
+    line-height: 1.05;
   }
   .eccentricity-load-b {
     left: 54px;
@@ -1071,6 +1082,38 @@ function normalizeText(value: string | null | undefined) {
     .toLowerCase();
 }
 
+function getCircularEccentricityLoadPositions(
+  field: MethodInputField,
+  data: unknown[],
+) {
+  const positionColumn = field.columns?.find((column) => {
+    const text = normalizeText(`${column.key} ${column.label}`);
+    return text.includes("posicao") || text.includes("ponto");
+  });
+
+  if (!positionColumn) {
+    return Object.keys(CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES);
+  }
+
+  const positions: string[] = [];
+  for (const row of data) {
+    if (!row || typeof row !== "object") continue;
+
+    const rawValue = (row as Record<string, unknown>)[positionColumn.key];
+    const value = formatValue(rawValue).trim().toUpperCase();
+    if (
+      value in CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES &&
+      !positions.includes(value)
+    ) {
+      positions.push(value);
+    }
+  }
+
+  return positions.length > 0
+    ? positions
+    : Object.keys(CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES);
+}
+
 function isInformationBulletSection(items: string[]) {
   const text = normalizeText(items.join(" "));
   return (
@@ -1240,9 +1283,11 @@ function isEccentricityCalibrationField(field: MethodInputField) {
 function CertificateEccentricityDiagram({
   selectedPosition,
   variant,
+  loadPositions,
 }: {
   selectedPosition: EccentricityIndicatorPosition | null;
   variant: EccentricityIndicatorVariant;
+  loadPositions?: string[];
 }) {
   const options =
     variant === "road_scale"
@@ -1251,6 +1296,9 @@ function CertificateEccentricityDiagram({
   const selectedOption = options.find(
     (option) => option.value === selectedPosition,
   );
+  const circularLoadPositions = (
+    loadPositions ?? Object.keys(CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES)
+  ).filter((position) => position in CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES);
 
   return (
     <div className="eccentricity-certificate">
@@ -1277,11 +1325,18 @@ function CertificateEccentricityDiagram({
           <div className="eccentricity-circle" />
           <div className="eccentricity-line-v" />
           <div className="eccentricity-line-h" />
-          <div className="eccentricity-point eccentricity-load-a">A</div>
-          <div className="eccentricity-point eccentricity-load-b">B</div>
-          <div className="eccentricity-point eccentricity-load-c">C</div>
-          <div className="eccentricity-point eccentricity-load-d">D</div>
-          <div className="eccentricity-point eccentricity-load-e">E</div>
+          {circularLoadPositions.map((position) => (
+            <div
+              key={position}
+              className={`eccentricity-point ${
+                CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES[
+                  position as keyof typeof CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES
+                ]
+              }`}
+            >
+              {position}
+            </div>
+          ))}
           {options.map((option) => (
             <div
               key={option.value}
@@ -2462,6 +2517,14 @@ export function CertificateHtml({ job }: { job: JobData }) {
                           eccentricityVariant,
                         )}
                         variant={eccentricityVariant}
+                        loadPositions={
+                          eccentricityVariant === "circular_platform"
+                            ? getCircularEccentricityLoadPositions(
+                                field,
+                                tableData,
+                              )
+                            : undefined
+                        }
                       />
                     </div>
                   );
