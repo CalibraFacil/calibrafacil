@@ -43,6 +43,7 @@ import {
 import { Field, FieldLabel } from '@/components/ui/field'
 import { getFinancialStatusLabel } from '@calibra-facil/shared'
 import { ApprovedJobRecord } from './-components/approved-job-record'
+import { apiRouteParam } from '@/lib/route-identifiers'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/')({
     head: () => ({
@@ -131,6 +132,7 @@ interface Technician {
 
 function JobDetailPage() {
     const { id } = Route.useParams()
+    const apiJobId = apiRouteParam(id)
     const navigate = useNavigate()
     const queryClient = useQueryClient()
 
@@ -158,7 +160,7 @@ function JobDetailPage() {
         queryKey: ['jobs', id],
         queryFn: async () => {
             const res = await api.api.jobs[':id'].$get({
-                param: { id },
+                param: { id: apiJobId },
             })
             if (!res.ok) {
                 throw new Error('Falha ao carregar job')
@@ -188,7 +190,7 @@ function JobDetailPage() {
     const approveMutation = useMutation({
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].approve.$post({
-                param: { id },
+                param: { id: apiJobId },
                 json: {
                     reason: 'Aprovado',
                     environmentalJustification: envJustification || undefined,
@@ -215,7 +217,7 @@ function JobDetailPage() {
     const rejectMutation = useMutation({
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].reject.$post({
-                param: { id },
+                param: { id: apiJobId },
                 json: { reason: rejectReason },
             })
             if (!res.ok) {
@@ -239,7 +241,7 @@ function JobDetailPage() {
     const cancelMutation = useMutation({
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].$delete({
-                param: { id },
+                param: { id: apiJobId },
                 json: { reason: cancelReason },
             })
             if (!res.ok) {
@@ -264,7 +266,7 @@ function JobDetailPage() {
     const assignMutation = useMutation({
         mutationFn: async () => {
             const res = await api.api.jobs[':id'].assign.$post({
-                param: { id },
+                param: { id: apiJobId },
                 json: { technicianId: selectedTechnician },
             })
             if (!res.ok) {

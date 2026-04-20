@@ -27,8 +27,54 @@ import {
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import { and, desc, eq, ne } from "drizzle-orm";
 
+const BlockFrameSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number().positive(),
+  height: z.number().positive(),
+});
+
+const TemplateBlockSchema = z.object({
+  id: z.string().min(1).max(120),
+  type: z.enum([
+    "lab_header",
+    "certificate_title",
+    "customer_info",
+    "asset_info",
+    "method_summary",
+    "environmental_conditions",
+    "standards",
+    "results",
+    "uncertainty_budget",
+    "signature",
+    "footer_note",
+    "qr_code",
+    "free_text",
+  ]),
+  frame: BlockFrameSchema,
+  label: z.string().max(120).optional(),
+  binding: z.string().max(160).optional(),
+  content: z
+    .object({
+      text: z.string().max(2000).optional(),
+    })
+    .optional(),
+  locked: z.boolean().optional(),
+  fixedSize: z.boolean().optional(),
+});
+
+const TemplatePageSchema = z.object({
+  id: z.string().min(1).max(120),
+  label: z.string().min(1).max(120),
+  size: z.literal("A4"),
+  orientation: z.literal("portrait"),
+  width: z.number().positive(),
+  height: z.number().positive(),
+  blocks: z.array(TemplateBlockSchema).max(80),
+});
+
 const TemplateConfigSchema = z.object({
-  version: z.literal(1).optional(),
+  version: z.literal(2).optional(),
   theme: z
     .object({
       primaryColor: z.string().trim().min(4).max(32).optional(),
@@ -63,6 +109,7 @@ const TemplateConfigSchema = z.object({
       emphasis: z.enum(["brand", "formal", "neutral"]).optional(),
     })
     .optional(),
+  pages: z.array(TemplatePageSchema).max(12).optional(),
 });
 
 const CreateTemplateSchema = z.object({
@@ -104,8 +151,11 @@ function getApiBaseUrl(): string {
   return process.env.API_URL || "https://localhost:3000";
 }
 
-function buildTemplateLogoKey(organizationId: string, templateId: number): string {
-  return `branding-logos/${organizationId}/${templateId}/${Date.now()}-${randomUUID()}`;
+function buildTemplateLogoKey(
+  organizationId: string,
+  templateId: number,
+): string {
+  return `certificate-template-logos/${organizationId}/${templateId}/${Date.now()}-${randomUUID()}`;
 }
 
 function encodeLogoAssetKey(key: string): string {
@@ -123,7 +173,9 @@ function decodeLogoAssetKey(key: string): string | null {
 function buildTemplateLogoUrl(key: string): string {
   return `${getApiBaseUrl()}/api/certificate-templates/logo/${encodeLogoAssetKey(key)}`;
 }
-export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>()
+export const certificateTemplatesRouter = new Hono<{
+  Variables: AuthVariables;
+}>()
   .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
     const member = c.get("member");
     const access = await getOrganizationPlanAccess(member.organizationId);
@@ -151,7 +203,9 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
         templates.length > 0
           ? templates.map((template) => ({
               ...template,
-              config: normalizeCertificateTemplateConfig(template.config as any),
+              config: normalizeCertificateTemplateConfig(
+                template.config as any,
+              ),
             }))
           : [
               {
@@ -489,7 +543,10 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
           version: existing.version + 1,
           config: toTemplateConfigRecord(
             normalizeCertificateTemplateConfig({
-              ...(existing.config as Record<string, unknown> | null | undefined),
+              ...(existing.config as
+                | Record<string, unknown>
+                | null
+                | undefined),
               ...(input.config as Record<string, unknown> | undefined),
               theme: {
                 ...(((existing.config as any)?.theme ?? {}) as Record<
@@ -519,8 +576,7 @@ export const certificateTemplatesRouter = new Hono<{ Variables: AuthVariables }>
                 >),
                 ...((input.config?.layout as Record<string, unknown>) ?? {}),
               },
-            } as unknown as Partial<CertificateTemplateConfig>,
-            ),
+            } as unknown as Partial<CertificateTemplateConfig>),
           ),
           updatedAt: new Date(),
         })

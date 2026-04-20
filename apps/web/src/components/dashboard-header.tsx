@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import { api } from '@/utils/api'
+import { apiRouteParam } from '@/lib/route-identifiers'
 
 const routeLabels: Record<string, string> = {
   // Dashboard
@@ -392,7 +393,7 @@ export function DashboardHeader({
       if (jobCachedLabel) return jobCachedLabel
 
       const res = await api.api.jobs[':id'].label.$get({
-        param: { id: jobId! },
+        param: { id: apiRouteParam(jobId!) },
       })
       return parseLabelResponse(res, 'job')
     },

@@ -2,6 +2,7 @@ import {
   AlertCircleIcon,
   Book02Icon,
   Building02Icon,
+  Certificate01Icon,
   ClipboardIcon,
   CreditCardIcon,
   CustomerSupportIcon,
@@ -71,6 +72,11 @@ const data = {
       title: 'Ordens de Serviço',
       url: '/dashboard/jobs',
       icon: <HugeiconsIcon icon={ClipboardIcon} />,
+    },
+    {
+      title: 'Editor de Certificados',
+      url: '/dashboard/certificate-designer',
+      icon: <HugeiconsIcon icon={Certificate01Icon} />,
     },
     {
       title: 'Solicitações',

@@ -1,4 +1,7 @@
+import { Fragment, type ReactNode } from "react";
 import {
+  type CertificateTemplateBlock,
+  type CertificateTemplateConfig,
   type CertificateTemplateSnapshot,
   formatCalibrationValue,
   normalizeCertificateTemplateConfig,
@@ -1481,11 +1484,509 @@ function renderMethodCertificateSection(
   );
 }
 
+const v2Styles = `
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: #fff;
+    color: #111827;
+    font-family: Arial, sans-serif;
+  }
+  .certificate-v2-page {
+    position: relative;
+    width: 210mm;
+    height: 297mm;
+    background: #fff;
+    page-break-after: always;
+    overflow: hidden;
+  }
+  .certificate-v2-page:last-child {
+    page-break-after: auto;
+  }
+  .certificate-block {
+    position: absolute;
+    overflow: hidden;
+    font-size: 8.5pt;
+    line-height: 1.32;
+  }
+  .certificate-block h1,
+  .certificate-block h2,
+  .certificate-block h3,
+  .certificate-block p {
+    margin: 0;
+  }
+  .v2-block-box {
+    width: 100%;
+    height: 100%;
+    border: 0.2mm solid #d1d5db;
+    padding: 2mm;
+    overflow: hidden;
+  }
+  .v2-block-title {
+    margin-bottom: 1.5mm;
+    color: var(--template-primary);
+    font-size: 7pt;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .v2-kv {
+    display: grid;
+    grid-template-columns: 24mm minmax(0, 1fr);
+    gap: 1mm;
+  }
+  .v2-kv dt {
+    color: #4b5563;
+    font-weight: 700;
+  }
+  .v2-kv dd {
+    margin: 0;
+    min-width: 0;
+  }
+  .v2-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5pt;
+  }
+  .v2-table th,
+  .v2-table td {
+    border: 0.2mm solid #d1d5db;
+    padding: 1mm;
+    text-align: left;
+    vertical-align: top;
+  }
+  .v2-table th {
+    background: var(--template-accent);
+    color: #111827;
+    font-weight: 700;
+  }
+  .v2-muted {
+    color: #4b5563;
+  }
+  .v2-logo-row {
+    display: grid;
+    grid-template-columns: 22mm minmax(0, 1fr);
+    gap: 2mm;
+    align-items: start;
+  }
+  .v2-logo {
+    max-width: 20mm;
+    max-height: 18mm;
+    object-fit: contain;
+  }
+  .v2-logo-placeholder {
+    display: grid;
+    width: 18mm;
+    height: 18mm;
+    place-items: center;
+    border: 0.3mm solid var(--template-primary);
+    color: var(--template-primary);
+    font-weight: 700;
+  }
+  .v2-certificate-title {
+    width: 100%;
+    height: 100%;
+    border-left: 1mm solid var(--template-primary);
+    padding-left: 3mm;
+    text-align: right;
+  }
+  .v2-certificate-title h1 {
+    color: var(--template-primary);
+    font-size: 13pt;
+    line-height: 1.1;
+  }
+  .v2-certificate-title .number {
+    margin-top: 3mm;
+    font-size: 11pt;
+    font-weight: 700;
+  }
+  .v2-signature {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+    justify-content: flex-end;
+    text-align: center;
+  }
+  .v2-signature img {
+    max-height: 15mm;
+    object-fit: contain;
+  }
+  .v2-signature-line {
+    margin-top: 2mm;
+    border-top: 0.2mm solid #111827;
+    padding-top: 1mm;
+  }
+  .v2-qr {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
+    border: 0.4mm solid #111827;
+    background:
+      linear-gradient(90deg, #111827 50%, transparent 50%) 0 0 / 4mm 4mm,
+      linear-gradient(#111827 50%, transparent 50%) 0 0 / 4mm 4mm;
+  }
+  .superseded-watermark {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  .superseded-watermark-text {
+    color: rgba(239, 68, 68, 0.18);
+    font-size: 72pt;
+    font-weight: bold;
+    letter-spacing: 8px;
+    transform: rotate(-45deg);
+    white-space: nowrap;
+  }
+`;
+
+function CertificateHtmlV2({
+  job,
+  templateConfig,
+}: {
+  job: JobData;
+  templateConfig: CertificateTemplateConfig;
+}) {
+  const dynamicStyles = `
+      :root {
+        --template-primary: ${templateConfig.theme.primaryColor};
+        --template-accent: ${templateConfig.theme.accentColor};
+      }
+    `;
+
+  return (
+    <html lang="pt-BR">
+      <head>
+        <meta charSet="UTF-8" />
+        <title>
+          {job.certificateName || `Certificado de Calibração - ${job.jobId}`}
+        </title>
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `${dynamicStyles}\n${v2Styles}`,
+          }}
+        />
+      </head>
+      <body>
+        {templateConfig.pages.map((page) => (
+          <div
+            key={page.id}
+            className="certificate-v2-page"
+            style={{
+              width: `${page.width}mm`,
+              height: `${page.height}mm`,
+            }}
+          >
+            {page.blocks.map((block) => (
+              <div
+                key={block.id}
+                className={`certificate-block certificate-block-${block.type}`}
+                style={{
+                  left: `${block.frame.x}mm`,
+                  top: `${block.frame.y}mm`,
+                  width: `${block.frame.width}mm`,
+                  height: `${block.frame.height}mm`,
+                }}
+              >
+                {renderV2Block(block, job, templateConfig)}
+              </div>
+            ))}
+          </div>
+        ))}
+        {job.supersededById && (
+          <div className="superseded-watermark">
+            <div className="superseded-watermark-text">SUBSTITUÍDO</div>
+          </div>
+        )}
+      </body>
+    </html>
+  );
+}
+
+function renderV2Block(
+  block: CertificateTemplateBlock,
+  job: JobData,
+  templateConfig: CertificateTemplateConfig,
+) {
+  switch (block.type) {
+    case "lab_header":
+      return (
+        <div className="v2-logo-row">
+          {templateConfig.theme.logoUrl ? (
+            <img
+              src={templateConfig.theme.logoUrl}
+              alt={job.lab.name}
+              className="v2-logo"
+            />
+          ) : (
+            <div className="v2-logo-placeholder">LAB</div>
+          )}
+          <div>
+            <h2>{job.lab.name}</h2>
+            {job.lab.cnpj && <p>CNPJ: {formatTaxId(job.lab.cnpj)}</p>}
+            {job.lab.accreditationNumber && (
+              <p>
+                {job.lab.accreditationNumber}
+                {job.lab.accreditationBody && ` - ${job.lab.accreditationBody}`}
+              </p>
+            )}
+            {formatLabAddress(job.lab) && (
+              <p className="v2-muted">{formatLabAddress(job.lab)}</p>
+            )}
+          </div>
+        </div>
+      );
+    case "certificate_title":
+      return (
+        <div className="v2-certificate-title">
+          <h1>{templateConfig.content.documentTitle}</h1>
+          <div className="number">{job.certificateName || job.jobId}</div>
+          <p className="v2-muted">Aprovado em {formatDate(job.approvedAt)}</p>
+        </div>
+      );
+    case "customer_info":
+      return (
+        <V2Box title="Cliente">
+          <V2KeyValues
+            rows={[
+              ["Cliente", job.customer.name],
+              ["CPF/CNPJ", formatTaxId(job.customer.taxId)],
+              [
+                "Contato",
+                [job.customer.phone, job.customer.email]
+                  .filter(Boolean)
+                  .join(" | ") || "-",
+              ],
+              ["Endereço", formatAddress(job.customer.address ?? null)],
+            ]}
+          />
+        </V2Box>
+      );
+    case "asset_info":
+      return (
+        <V2Box title="Instrumento">
+          <V2KeyValues
+            rows={[
+              ["Descrição", job.asset.name],
+              ["Fabricante", job.asset.manufacturer || "-"],
+              ["Modelo", job.asset.model || "-"],
+              ["Série", job.asset.serialNumber || "-"],
+              ["Tag", job.asset.tag || "-"],
+            ]}
+          />
+        </V2Box>
+      );
+    case "method_summary":
+      return (
+        <V2Box title="Método">
+          <p>
+            {job.methodSnapshot?.methodName || "-"} v
+            {job.methodSnapshot?.methodVersion ?? "-"}
+          </p>
+          {job.methodSnapshot?.certificateContent?.procedureCode && (
+            <p>
+              Procedimento:{" "}
+              {job.methodSnapshot.certificateContent.procedureCode}
+            </p>
+          )}
+        </V2Box>
+      );
+    case "environmental_conditions":
+      return (
+        <V2Box title="Condições ambientais">
+          <V2KeyValues
+            rows={[
+              [
+                "Temperatura",
+                formatValueWithUnit(
+                  job.environmentalSnapshot?.temperature,
+                  "°C",
+                ),
+              ],
+              [
+                "Umidade",
+                formatValueWithUnit(job.environmentalSnapshot?.humidity, "%"),
+              ],
+              [
+                "Pressão",
+                formatValueWithUnit(job.environmentalSnapshot?.pressure, "kPa"),
+              ],
+            ]}
+          />
+        </V2Box>
+      );
+    case "standards":
+      return (
+        <V2Box title="Padrões utilizados">
+          <table className="v2-table">
+            <thead>
+              <tr>
+                <th>Padrão</th>
+                <th>Certificado</th>
+                <th>Validade</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(job.standardsSnapshot ?? []).map((standard) => (
+                <tr key={`${standard.id}-${standard.certificateNumber}`}>
+                  <td>{standard.name}</td>
+                  <td>{standard.certificateNumber}</td>
+                  <td>{formatDate(standard.calibrationDate)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </V2Box>
+      );
+    case "results":
+      return (
+        <V2Box title="Resultados">
+          <table className="v2-table">
+            <thead>
+              <tr>
+                <th>Grandeza</th>
+                <th>Resultado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {getV2ResultRows(job).map((row) => (
+                <tr key={row.label}>
+                  <td>{row.label}</td>
+                  <td>{row.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </V2Box>
+      );
+    case "uncertainty_budget":
+      return (
+        <V2Box title="Orçamento de incerteza">
+          <table className="v2-table">
+            <tbody>
+              {getV2UncertaintyRows(job).map((row) => (
+                <tr key={row.label}>
+                  <td>{row.label}</td>
+                  <td>{row.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </V2Box>
+      );
+    case "signature":
+      return (
+        <div className="v2-signature">
+          {job.approverSignatureUrl && (
+            <img
+              src={job.approverSignatureUrl}
+              alt={job.approverName || "Assinatura"}
+            />
+          )}
+          <div className="v2-signature-line">
+            <strong>{job.approverName || job.lab.technicalManagerName}</strong>
+            <div className="v2-muted">
+              {job.lab.technicalManagerTitle || "Responsável técnico"}
+            </div>
+          </div>
+        </div>
+      );
+    case "footer_note":
+      return (
+        <p className="v2-muted">
+          {templateConfig.content.footerNote ||
+            "Este certificado somente pode ser reproduzido integralmente."}
+        </p>
+      );
+    case "qr_code":
+      return <div className="v2-qr" aria-label="Código de verificação" />;
+    case "free_text":
+      return <p>{block.content?.text || block.binding || ""}</p>;
+  }
+}
+
+function V2Box({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="v2-block-box">
+      <div className="v2-block-title">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function V2KeyValues({ rows }: { rows: Array<[string, string]> }) {
+  return (
+    <dl className="v2-kv">
+      {rows.map(([key, value]) => (
+        <Fragment key={key}>
+          <dt>{key}</dt>
+          <dd>{value || "-"}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
+function getV2ResultRows(
+  job: JobData,
+): Array<{ label: string; value: string }> {
+  const formulas = job.methodSnapshot?.formulas ?? [];
+  const results = job.results ?? {};
+  const rows = formulas
+    .filter((formula) => formula.outputKey in results)
+    .map((formula) => ({
+      label: formula.label || formula.outputKey,
+      value: formatValueWithUnit(results[formula.outputKey], formula.unit),
+    }));
+
+  if (rows.length > 0) {
+    return rows;
+  }
+
+  return Object.entries(results).map(([key, value]) => ({
+    label: key,
+    value: formatValue(value),
+  }));
+}
+
+function getV2UncertaintyRows(
+  job: JobData,
+): Array<{ label: string; value: string }> {
+  const formulas = job.methodSnapshot?.formulas ?? [];
+  const results = job.results ?? {};
+
+  return formulas
+    .filter(
+      (formula) =>
+        formula.reporting?.group === "uncertainty_budget" &&
+        formula.outputKey in results,
+    )
+    .map((formula) => ({
+      label: formula.label || formula.outputKey,
+      value: formatValueWithUnit(results[formula.outputKey], formula.unit),
+    }));
+}
+
 export function CertificateHtml({ job }: { job: JobData }) {
   const templateSnapshot = job.certificateTemplateSnapshot ?? null;
   const templateConfig = normalizeCertificateTemplateConfig(
     templateSnapshot?.config,
   );
+
+  if (Number(templateConfig.version) === 2) {
+    return <CertificateHtmlV2 job={job} templateConfig={templateConfig} />;
+  }
+
   const dataFields = job.methodSnapshot?.dataFields || [];
   const formulas = job.methodSnapshot?.formulas || [];
   const methodCertificateContent =
