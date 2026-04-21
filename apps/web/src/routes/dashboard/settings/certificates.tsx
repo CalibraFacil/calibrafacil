@@ -2,7 +2,6 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useActiveOrganization } from '@calibra-facil/auth/client'
 import {
   Add01Icon,
   Certificate01Icon,
@@ -18,6 +17,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
+import { useDashboardUnits } from '@/hooks/use-dashboard-units'
 import { api } from '@/utils/api'
 import {
   Card,
@@ -95,46 +95,15 @@ interface Certificate {
   status: 'valid' | 'expired' | 'not_yet_valid' | 'revoked'
 }
 
-interface UnitContextResponse {
-  activeUnitId: number | null
-  activeUnitName: string | null
-  selectedUnitScope: 'all' | 'unit'
-  data: Array<{
-    id: number
-    name: string
-    slug: string
-    role: string
-  }>
-}
-
 function CertificatesSettingsPage() {
-  const { data: activeOrg } = useActiveOrganization()
   const queryClient = useQueryClient()
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null)
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false)
   const [certToRevoke, setCertToRevoke] = useState<Certificate | null>(null)
 
-  const unitContextQuery = useQuery({
-    queryKey: ['dashboard-units', activeOrg?.id ?? 'no-org'],
-    enabled: Boolean(activeOrg?.id),
-    queryFn: async () => {
-      const response = await api.api.units.$get()
-      if (!response.ok) {
-        throw new Error('Falha ao carregar contexto de unidades')
-      }
-
-      return (await response.json()) as UnitContextResponse
-    },
-  })
-
-  const selectedUnit =
-    unitContextQuery.data?.selectedUnitScope === 'unit'
-      ? (unitContextQuery.data.data ?? []).find(
-          (unit) => unit.id === unitContextQuery.data?.activeUnitId,
-        ) ?? null
-      : null
-  const isConsolidated = unitContextQuery.data?.selectedUnitScope === 'all'
+  const { isCheckingAccess, isConsolidated, selectedUnit } =
+    useDashboardUnits()
 
   // Fetch certificates
   const { data, isLoading, error } = useQuery({
@@ -192,7 +161,7 @@ function CertificatesSettingsPage() {
     },
   })
 
-  if (unitContextQuery.isLoading || (selectedUnit && isLoading)) {
+  if (isCheckingAccess || (selectedUnit && isLoading)) {
     return <CertificatesSkeleton />
   }
 

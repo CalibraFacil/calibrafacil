@@ -2,7 +2,6 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useActiveOrganization } from '@calibra-facil/auth/client'
 import {
   ThermometerIcon,
   Add01Icon,
@@ -12,6 +11,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
+import { useDashboardUnits } from '@/hooks/use-dashboard-units'
 import { api } from '@/utils/api'
 import {
   Card,
@@ -76,18 +76,6 @@ interface AssetType {
   slug: string
 }
 
-interface UnitContextResponse {
-  activeUnitId: number | null
-  activeUnitName: string | null
-  selectedUnitScope: 'all' | 'unit'
-  data: Array<{
-    id: number
-    name: string
-    slug: string
-    role: string
-  }>
-}
-
 interface LimitFormState {
   assetTypeId: number | null
   temperatureMin: string
@@ -109,33 +97,14 @@ const emptyForm: LimitFormState = {
 }
 
 function EnvironmentSettingsPage() {
-  const { data: activeOrg } = useActiveOrganization()
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState<LimitFormState>(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [dialogMode, setDialogMode] = useState<'default' | 'override'>('default')
 
-  const unitContextQuery = useQuery({
-    queryKey: ['dashboard-units', activeOrg?.id ?? 'no-org'],
-    enabled: Boolean(activeOrg?.id),
-    queryFn: async () => {
-      const response = await api.api.units.$get()
-      if (!response.ok) {
-        throw new Error('Falha ao carregar contexto de unidades')
-      }
-
-      return (await response.json()) as UnitContextResponse
-    },
-  })
-
-  const selectedUnit =
-    unitContextQuery.data?.selectedUnitScope === 'unit'
-      ? (unitContextQuery.data.data ?? []).find(
-          (unit) => unit.id === unitContextQuery.data?.activeUnitId,
-        ) ?? null
-      : null
-  const isConsolidated = unitContextQuery.data?.selectedUnitScope === 'all'
+  const { isCheckingAccess, isConsolidated, selectedUnit } =
+    useDashboardUnits()
 
   // Fetch all limits for the selected unit
   const { data: limitsData, isLoading } = useQuery({
@@ -259,7 +228,7 @@ function EnvironmentSettingsPage() {
     (at) => !usedAssetTypeIds.has(at.id),
   )
 
-  if (unitContextQuery.isLoading) {
+  if (isCheckingAccess) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-28 w-full" />

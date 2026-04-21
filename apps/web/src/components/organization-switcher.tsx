@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 
 import {
   Building02Icon,
@@ -16,7 +16,7 @@ import {
   useListOrganizations,
 } from '@calibra-facil/auth/client'
 
-import { api } from '@/utils/api'
+import { useDashboardUnits } from '@/hooks/use-dashboard-units'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,21 +39,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 const DASHBOARD_ORG_KEY = 'dashboard-active-org'
 const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
 
-type UnitSummary = {
-  id: number
-  name: string
-  slug: string
-  role: string
-}
-
-type UnitsResponse = {
-  activeUnitId: number | null
-  activeUnitName: string | null
-  selectedUnitScope: 'all' | 'unit'
-  canAccessAllUnits: boolean
-  data: UnitSummary[]
-}
-
 export function OrganizationSwitcher() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -61,42 +46,17 @@ export function OrganizationSwitcher() {
   const { data: allOrganizations, isPending: isLoadingOrgs } =
     useListOrganizations()
   const { data: activeOrg } = useActiveOrganization()
+  const {
+    currentUnitLabel,
+    currentUnitValue,
+    data: unitsData,
+    hasMultiUnit,
+  } = useDashboardUnits()
 
   const organizations = React.useMemo(() => {
     if (!allOrganizations) return []
     return allOrganizations.filter((org) => org.type !== 'CLIENT')
   }, [allOrganizations])
-
-  const unitsQuery = useQuery({
-    queryKey: ['dashboard-units', activeOrg?.id ?? 'no-org'],
-    enabled: Boolean(activeOrg?.id),
-    queryFn: async () => {
-      const response = await api.api.units.$get()
-      if (!response.ok) {
-        throw new Error('Falha ao carregar unidades')
-      }
-
-      return (await response.json()) as UnitsResponse
-    },
-  })
-
-  const currentUnitValue = React.useMemo(() => {
-    if (!unitsQuery.data) return ''
-    if (unitsQuery.data.selectedUnitScope === 'all') return 'all'
-    return unitsQuery.data.activeUnitId ? String(unitsQuery.data.activeUnitId) : ''
-  }, [unitsQuery.data])
-
-  const currentUnitLabel = React.useMemo(() => {
-    if (!unitsQuery.data) {
-      return activeOrg?.slug ?? 'Nenhum selecionado'
-    }
-
-    if (unitsQuery.data.selectedUnitScope === 'all') {
-      return 'Todas as unidades'
-    }
-
-    return unitsQuery.data.activeUnitName ?? activeOrg?.slug ?? 'Nenhuma unidade'
-  }, [activeOrg?.slug, unitsQuery.data])
 
   const handleSetActiveOrganization = async (orgId: string) => {
     await organization.setActive({ organizationId: orgId })
@@ -190,7 +150,7 @@ export function OrganizationSwitcher() {
               </DropdownMenuRadioGroup>
             </DropdownMenuGroup>
 
-            {activeOrg?.id && unitsQuery.data ? (
+            {activeOrg?.id && hasMultiUnit && unitsData ? (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
@@ -201,7 +161,7 @@ export function OrganizationSwitcher() {
                     value={currentUnitValue}
                     onValueChange={handleSetActiveUnit}
                   >
-                    {unitsQuery.data.canAccessAllUnits ? (
+                    {unitsData.canAccessAllUnits ? (
                       <DropdownMenuRadioItem value="all">
                         <HugeiconsIcon icon={MapsIcon} className="size-4" />
                         <div className="min-w-0">
@@ -213,7 +173,7 @@ export function OrganizationSwitcher() {
                       </DropdownMenuRadioItem>
                     ) : null}
 
-                    {unitsQuery.data.data.map((unit) => (
+                    {unitsData.data.map((unit) => (
                       <DropdownMenuRadioItem
                         key={unit.id}
                         value={String(unit.id)}
