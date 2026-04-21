@@ -48,6 +48,7 @@ import {
   isWeighingScaleAssetType,
 } from '@/components/eccentricity-indicator'
 import { assetRouteId } from '@/lib/route-identifiers'
+import { isMassAssetTypeDefinition, type MassUnit } from '@calibra-facil/shared'
 
 export const Route = createFileRoute('/dashboard/assets/$id/edit')({
   head: () => ({
@@ -92,6 +93,7 @@ type AssetData = {
   comments?: string | null
   specifications?: Record<string, unknown> | null
   assetTypeDefinition?: SpecFieldDefinition[] | null
+  baseMeasurementUnit?: MassUnit | null
 }
 
 function parseDate(date: string | Date | null | undefined): Date | undefined {
@@ -219,6 +221,10 @@ function EditAssetForm({
     : null
 
   const showEccentricityIndicator = isWeighingScaleAssetType({
+    name: asset.assetTypeName,
+    slug: asset.assetTypeSlug,
+  })
+  const requiresMassBaseUnit = isMassAssetTypeDefinition(assetTypeDefinition, {
     name: asset.assetTypeName,
     slug: asset.assetTypeSlug,
   })
@@ -395,6 +401,17 @@ function EditAssetForm({
                 </FieldDescription>
               </Field>
 
+              {requiresMassBaseUnit && (
+                <Field>
+                  <FieldLabel>Unidade Base do Instrumento</FieldLabel>
+                  <Input value={asset.baseMeasurementUnit ?? '-'} disabled />
+                  <FieldDescription>
+                    A unidade base é fixada no cadastro e só pode ser alterada
+                    via migração explícita.
+                  </FieldDescription>
+                </Field>
+              )}
+
               {/* Name */}
               <Field>
                 <FieldLabel htmlFor="name">Nome do Equipamento *</FieldLabel>
@@ -498,6 +515,7 @@ function EditAssetForm({
                   onChange={(specs) => updateField('specifications', specs)}
                   disabled={updateMutation.isPending}
                   errors={specErrors}
+                  activeMassUnit={asset.baseMeasurementUnit ?? null}
                 />
               )}
 

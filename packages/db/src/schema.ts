@@ -56,6 +56,7 @@ import type {
   SupportRequestPriority,
   SupportRequestStatus,
   ReceivableInstallmentStatus,
+  MassUnit,
 } from "@calibra-facil/shared";
 
 // =============================================================================
@@ -1694,6 +1695,7 @@ export const asset = pgTable(
     serialNumber: text("serial_number").notNull(), // Manufacturer's serial number
     tag: text("tag").notNull().unique(), // Internal Lab ID / Asset ID (unique across lab)
     status: text("status").$type<AssetStatus>().default("ACTIVE").notNull(),
+    baseMeasurementUnit: text("base_measurement_unit").$type<MassUnit>(),
     lastCalibrationDate: timestamp("last_calibration_date"),
     nextCalibrationDate: timestamp("next_calibration_date"),
     comments: text("comments"), // Additional notes about the equipment
@@ -2444,6 +2446,7 @@ export type AssetSnapshot = {
   assetTypeId: number;
   assetTypeName: string;
   assetTypeSlug: string;
+  baseMeasurementUnit: MassUnit | null;
   name: string;
   tag: string;
   serialNumber: string;

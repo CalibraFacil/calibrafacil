@@ -51,6 +51,7 @@ import {
   isEccentricityIndicatorPosition,
   isWeighingScaleAssetType,
 } from '@/components/eccentricity-indicator'
+import { isMassAssetTypeDefinition, type MassUnit } from '@calibra-facil/shared'
 
 const statusLabels: Record<FormData['status'], string> = {
   ACTIVE: 'Ativo',
@@ -75,6 +76,7 @@ interface FormData {
   serialNumber: string
   tag: string
   status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'SCRAPPED'
+  baseMeasurementUnit: MassUnit | null
   lastCalibrationDate: Date | undefined
   nextCalibrationDate: Date | undefined
   comments: string
@@ -90,6 +92,7 @@ const initialFormData: FormData = {
   serialNumber: '',
   tag: '',
   status: 'ACTIVE',
+  baseMeasurementUnit: null,
   lastCalibrationDate: undefined,
   nextCalibrationDate: undefined,
   comments: '',
@@ -191,6 +194,9 @@ function NewAssetPage() {
 
   const showEccentricityIndicator =
     selectedAssetType !== null && isWeighingScaleAssetType(selectedAssetType)
+  const requiresMassBaseUnit =
+    selectedAssetType !== null &&
+    isMassAssetTypeDefinition(selectedAssetType.definition, selectedAssetType)
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -211,6 +217,7 @@ function NewAssetPage() {
           serialNumber: data.serialNumber,
           tag: data.tag,
           status: data.status,
+          baseMeasurementUnit: data.baseMeasurementUnit,
           lastCalibrationDate:
             data.lastCalibrationDate?.toISOString() || undefined,
           nextCalibrationDate:
@@ -265,6 +272,10 @@ function NewAssetPage() {
 
     if (!formData.tag.trim()) {
       newErrors.tag = 'Tag é obrigatória'
+    }
+
+    if (requiresMassBaseUnit && !formData.baseMeasurementUnit) {
+      newErrors.baseMeasurementUnit = 'Selecione a unidade base do instrumento'
     }
 
     // Validate required specification fields
@@ -328,6 +339,7 @@ function NewAssetPage() {
     setFormData((prev) => ({
       ...prev,
       assetTypeId: typeId,
+      baseMeasurementUnit: null,
       specifications: {}, // Reset specifications when type changes
     }))
     // Clear type error
@@ -563,6 +575,42 @@ function NewAssetPage() {
                 </Select>
               </Field>
 
+              {requiresMassBaseUnit && (
+                <Field>
+                  <FieldLabel htmlFor="baseMeasurementUnit">
+                    Unidade Base do Instrumento *
+                  </FieldLabel>
+                  <Select
+                    value={formData.baseMeasurementUnit ?? ''}
+                    onValueChange={(value) =>
+                      updateField(
+                        'baseMeasurementUnit',
+                        (value || null) as FormData['baseMeasurementUnit'],
+                      )
+                    }
+                    disabled={createMutation.isPending}
+                  >
+                    <SelectTrigger id="baseMeasurementUnit">
+                      <span>
+                        {formData.baseMeasurementUnit || 'Selecione a unidade'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kg">kg</SelectItem>
+                      <SelectItem value="g">g</SelectItem>
+                      <SelectItem value="mg">mg</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>
+                    Esta unidade será usada em todo o ciclo do ativo e não
+                    poderá ser alterada depois do cadastro.
+                  </FieldDescription>
+                  {errors.baseMeasurementUnit && (
+                    <FieldError>{errors.baseMeasurementUnit}</FieldError>
+                  )}
+                </Field>
+              )}
+
               {/* Dynamic Specifications Form */}
               {visibleAssetTypeDefinition.length > 0 && (
                 <DynamicSpecsForm
@@ -571,6 +619,7 @@ function NewAssetPage() {
                   onChange={(specs) => updateField('specifications', specs)}
                   disabled={createMutation.isPending}
                   errors={specErrors}
+                  activeMassUnit={formData.baseMeasurementUnit}
                 />
               )}
 

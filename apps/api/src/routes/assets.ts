@@ -8,6 +8,7 @@ import {
   customer,
   assetType,
   user,
+  type AssetTypeFieldDefinition,
 } from "@calibra-facil/db/schema";
 import {
   CreateAssetSchema,
@@ -26,6 +27,11 @@ import {
   parseLegacyNumericIdentifier,
   slugifyRouteIdentifier,
 } from "../lib/route-identifiers";
+import {
+  denormalizeAssetSpecificationsForResponse,
+  normalizeAssetSpecificationsFromInput,
+  resolveAssetBaseMeasurementUnit,
+} from "../lib/asset-measurement";
 
 const CommandPaletteAssetSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -36,6 +42,25 @@ function getAssetScopeCondition(member: MemberData) {
   return member.organizationType === "LAB"
     ? buildUnitScopeCondition(asset.unitId, member)
     : undefined;
+}
+
+function serializeAssetForResponse<
+  T extends {
+    specifications: Record<string, unknown> | null;
+    assetTypeDefinition?: AssetTypeFieldDefinition[] | null;
+    baseMeasurementUnit?: "mg" | "g" | "kg" | null;
+  },
+>(assetRecord: T): T {
+  const specifications = denormalizeAssetSpecificationsForResponse({
+    specifications: assetRecord.specifications,
+    definition: assetRecord.assetTypeDefinition,
+    baseMeasurementUnit: assetRecord.baseMeasurementUnit,
+  });
+
+  return {
+    ...assetRecord,
+    specifications: specifications ?? null,
+  };
 }
 
 async function resolveAssetRouteId(
@@ -148,6 +173,15 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Tipo de instrumento não encontrado" }, 404);
         }
 
+        const baseMeasurementUnitResult = resolveAssetBaseMeasurementUnit(
+          foundAssetType,
+          input.baseMeasurementUnit,
+        );
+
+        if (!baseMeasurementUnitResult.ok) {
+          return c.json({ error: baseMeasurementUnitResult.error }, 400);
+        }
+
         // Validate specifications against asset type definition
         if (foundAssetType.definition && input.specifications) {
           const requiredFields = foundAssetType.definition.filter(
@@ -185,6 +219,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const nextCalibrationDate = input.nextCalibrationDate
           ? new Date(input.nextCalibrationDate)
           : null;
+        const normalizedSpecifications = normalizeAssetSpecificationsFromInput({
+          specifications: input.specifications || null,
+          definition: foundAssetType.definition,
+          baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
+        });
 
         // Create asset
         const [newAsset] = await db
@@ -199,10 +238,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             serialNumber: input.serialNumber,
             tag: input.tag,
             status: input.status || "ACTIVE",
+            baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
             lastCalibrationDate,
             nextCalibrationDate,
             comments: input.comments || null,
-            specifications: input.specifications || null,
+            specifications: normalizedSpecifications.specifications || null,
           })
           .returning();
 
@@ -214,7 +254,13 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         await db.insert(assetAuditLog).values({
           assetId: newAsset.id,
           action: "create",
-          changes: { asset: { old: null, new: newAsset } },
+          changes: {
+            asset: { old: null, new: newAsset },
+            unitConversions:
+              normalizedSpecifications.conversions.length > 0
+                ? normalizedSpecifications.conversions
+                : undefined,
+          },
           performedBy: session.user.id,
           ipAddress:
             c.req.header("x-forwarded-for") ??
@@ -222,7 +268,13 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             null,
         });
 
-        return c.json(newAsset, 201);
+        return c.json(
+          serializeAssetForResponse({
+            ...newAsset,
+            assetTypeDefinition: foundAssetType.definition,
+          }),
+          201,
+        );
       } catch (error) {
         console.error("Error creating asset:", error);
         return c.json({ error: "Erro ao criar ativo" }, 500);
@@ -361,12 +413,14 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             assetTypeId: asset.assetTypeId,
             assetTypeName: assetType.name,
             assetTypeSlug: assetType.slug,
+            assetTypeDefinition: assetType.definition,
             name: asset.name,
             manufacturer: asset.manufacturer,
             model: asset.model,
             serialNumber: asset.serialNumber,
             tag: asset.tag,
             status: asset.status,
+            baseMeasurementUnit: asset.baseMeasurementUnit,
             specifications: asset.specifications,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
@@ -393,7 +447,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const total = countResult[0]?.total ?? 0;
 
         return c.json({
-          data: assets,
+          data: assets.map((item) => serializeAssetForResponse(item)),
           pagination: {
             page,
             limit,
@@ -493,6 +547,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           serialNumber: asset.serialNumber,
           tag: asset.tag,
           status: asset.status,
+          baseMeasurementUnit: asset.baseMeasurementUnit,
           specifications: asset.specifications,
           lastCalibrationDate: asset.lastCalibrationDate,
           nextCalibrationDate: asset.nextCalibrationDate,
@@ -529,7 +584,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         }
       }
 
-      return c.json(foundAsset);
+      return c.json(serializeAssetForResponse(foundAsset));
     } catch (error) {
       console.error("Error getting asset:", error);
       return c.json({ error: "Erro ao buscar ativo" }, 500);
@@ -557,8 +612,27 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
       try {
         // Get existing asset (exclude soft-deleted)
         const [existingAsset] = await db
-          .select()
+          .select({
+            id: asset.id,
+            unitId: asset.unitId,
+            customerId: asset.customerId,
+            assetTypeId: asset.assetTypeId,
+            specifications: asset.specifications,
+            name: asset.name,
+            manufacturer: asset.manufacturer,
+            model: asset.model,
+            serialNumber: asset.serialNumber,
+            tag: asset.tag,
+            status: asset.status,
+            baseMeasurementUnit: asset.baseMeasurementUnit,
+            lastCalibrationDate: asset.lastCalibrationDate,
+            nextCalibrationDate: asset.nextCalibrationDate,
+            comments: asset.comments,
+            deletedAt: asset.deletedAt,
+            assetTypeDefinition: assetType.definition,
+          })
           .from(asset)
+          .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
           .where(
             and(
               eq(asset.id, id),
@@ -617,6 +691,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         const updateData: Record<string, unknown> = {
           updatedAt: new Date(),
         };
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
 
         if (input.name !== undefined) updateData.name = input.name;
         if (input.manufacturer !== undefined)
@@ -632,11 +707,24 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           updateData.nextCalibrationDate = nextCalibrationDate;
         if (input.comments !== undefined)
           updateData.comments = input.comments || null;
-        if (input.specifications !== undefined)
-          updateData.specifications = input.specifications || null;
+        if (input.specifications !== undefined) {
+          const normalizedSpecifications =
+            normalizeAssetSpecificationsFromInput({
+              specifications: input.specifications || null,
+              definition: existingAsset.assetTypeDefinition,
+              baseMeasurementUnit: existingAsset.baseMeasurementUnit,
+            });
+          updateData.specifications =
+            normalizedSpecifications.specifications || null;
+          if (normalizedSpecifications.conversions.length > 0) {
+            changes.unitConversions = {
+              old: null,
+              new: normalizedSpecifications.conversions,
+            };
+          }
+        }
 
         // Build changes object for audit log
-        const changes: Record<string, { old: unknown; new: unknown }> = {};
         for (const [key, value] of Object.entries(updateData)) {
           if (key === "updatedAt") continue;
           const oldValue = existingAsset[key as keyof typeof existingAsset];
@@ -680,7 +768,12 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           });
         }
 
-        return c.json(updatedAsset);
+        return c.json(
+          serializeAssetForResponse({
+            ...updatedAsset,
+            assetTypeDefinition: existingAsset.assetTypeDefinition,
+          }),
+        );
       } catch (error) {
         console.error("Error updating asset:", error);
         return c.json({ error: "Erro ao atualizar ativo" }, 500);

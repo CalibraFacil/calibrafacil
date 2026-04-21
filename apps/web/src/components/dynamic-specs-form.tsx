@@ -7,6 +7,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
+import { resolveMassDisplayUnit, type MassUnit } from '@calibra-facil/shared'
 
 /**
  * Field definition for dynamic asset specifications.
@@ -41,6 +42,8 @@ interface DynamicSpecsFormProps {
   disabled?: boolean
   /** Field-level errors */
   errors?: Record<string, string>
+  /** Active asset mass unit for mass-based instruments */
+  activeMassUnit?: MassUnit | null
 }
 
 /**
@@ -53,6 +56,7 @@ export function DynamicSpecsForm({
   onChange,
   disabled = false,
   errors = {},
+  activeMassUnit = null,
 }: DynamicSpecsFormProps) {
   const updateField = (key: string, fieldValue: unknown) => {
     onChange({
@@ -83,9 +87,9 @@ export function DynamicSpecsForm({
         label: `Faixa ${ranges.length + 1}`,
         min: null,
         max: null,
-        rangeUnit: 'kg',
+        rangeUnit: activeMassUnit ?? 'kg',
         resolution: null,
-        resolutionUnit: 'g',
+        resolutionUnit: activeMassUnit ?? 'g',
       },
     ])
   }
@@ -99,6 +103,9 @@ export function DynamicSpecsForm({
       ranges.filter((_, itemIndex) => itemIndex !== index),
     )
   }
+
+  const getDisplayUnit = (unit?: string) =>
+    resolveMassDisplayUnit(activeMassUnit, unit) ?? unit
 
   if (!definition || definition.length === 0) {
     return null
@@ -131,7 +138,11 @@ export function DynamicSpecsForm({
                   ).map((range, index) => (
                     <div
                       key={index}
-                      className="grid gap-2 rounded-md bg-muted/40 p-2 md:grid-cols-[1fr_90px_90px_80px_100px_80px_auto]"
+                      className={`grid gap-2 rounded-md bg-muted/40 p-2 ${
+                        activeMassUnit
+                          ? 'md:grid-cols-[1fr_100px_100px_120px_auto]'
+                          : 'md:grid-cols-[1fr_90px_90px_80px_100px_80px_auto]'
+                      }`}
                     >
                       <Input
                         value={range.label}
@@ -173,16 +184,22 @@ export function DynamicSpecsForm({
                         placeholder="Max"
                         disabled={disabled}
                       />
-                      <Input
-                        value={range.rangeUnit}
-                        onChange={(event) =>
-                          updateWeighingRange(field.key, index, {
-                            rangeUnit: event.target.value,
-                          })
-                        }
-                        placeholder="kg"
-                        disabled={disabled}
-                      />
+                      {activeMassUnit ? (
+                        <div className="flex items-center rounded-md border bg-background px-3 text-sm text-muted-foreground">
+                          {activeMassUnit}
+                        </div>
+                      ) : (
+                        <Input
+                          value={range.rangeUnit}
+                          onChange={(event) =>
+                            updateWeighingRange(field.key, index, {
+                              rangeUnit: event.target.value,
+                            })
+                          }
+                          placeholder="kg"
+                          disabled={disabled}
+                        />
+                      )}
                       <Input
                         type="number"
                         step="any"
@@ -198,16 +215,22 @@ export function DynamicSpecsForm({
                         placeholder="Res."
                         disabled={disabled}
                       />
-                      <Input
-                        value={range.resolutionUnit}
-                        onChange={(event) =>
-                          updateWeighingRange(field.key, index, {
-                            resolutionUnit: event.target.value,
-                          })
-                        }
-                        placeholder="g"
-                        disabled={disabled}
-                      />
+                      {activeMassUnit ? (
+                        <div className="flex items-center rounded-md border bg-background px-3 text-sm text-muted-foreground">
+                          {activeMassUnit}
+                        </div>
+                      ) : (
+                        <Input
+                          value={range.resolutionUnit}
+                          onChange={(event) =>
+                            updateWeighingRange(field.key, index, {
+                              resolutionUnit: event.target.value,
+                            })
+                          }
+                          placeholder="g"
+                          disabled={disabled}
+                        />
+                      )}
                       <Button
                         type="button"
                         variant="outline"
@@ -262,11 +285,13 @@ export function DynamicSpecsForm({
                       updateField(field.key, val === '' ? '' : parseFloat(val))
                     }}
                     disabled={disabled}
-                    className={field.unit ? 'rounded-r-none' : ''}
+                    className={
+                      getDisplayUnit(field.unit) ? 'rounded-r-none' : ''
+                    }
                   />
-                  {field.unit && (
+                  {getDisplayUnit(field.unit) && (
                     <span className="inline-flex items-center px-3 text-sm text-muted-foreground bg-muted border border-l-0 border-input rounded-r-md">
-                      {field.unit}
+                      {getDisplayUnit(field.unit)}
                     </span>
                   )}
                 </div>

@@ -50,7 +50,16 @@ import {
   collectMassCompositionStandardIds,
   type MassCompositionOption,
 } from '@/components/method-builder/mass-composition-utils'
-import { formatCalibrationValue } from '@calibra-facil/shared'
+import {
+  convertMassValue,
+  denormalizeMethodDataForDisplay,
+  denormalizeMethodResultsForDisplay,
+  formatCalibrationValue,
+  isMassMeasurementUnit,
+  normalizeMethodDataForStorage,
+  resolveMassDisplayUnit,
+  type MassUnit,
+} from '@calibra-facil/shared'
 import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
   EccentricityIndicator,
@@ -149,6 +158,7 @@ interface AssetSnapshot {
   assetTypeId: number
   assetTypeName: string
   assetTypeSlug: string
+  baseMeasurementUnit?: MassUnit | null
   name: string
   tag: string
   serialNumber: string
@@ -271,6 +281,44 @@ function getInitialIndicatorPosition(job: JobData) {
   return null
 }
 
+function resolveFieldForDisplay(
+  field: MethodInputField,
+  baseMeasurementUnit: MassUnit | null | undefined,
+): MethodInputField {
+  if (!baseMeasurementUnit) {
+    return field
+  }
+
+  return {
+    ...field,
+    unit: resolveMassDisplayUnit(baseMeasurementUnit, field.unit),
+    weighingRangeResolver: field.weighingRangeResolver
+      ? {
+          ...field.weighingRangeResolver,
+          pointUnit:
+            (resolveMassDisplayUnit(
+              baseMeasurementUnit,
+              field.weighingRangeResolver.pointUnit,
+            ) as MassUnit | undefined) ?? field.weighingRangeResolver.pointUnit,
+        }
+      : field.weighingRangeResolver,
+    columns: field.columns?.map((column) => ({
+      ...column,
+      unit: resolveMassDisplayUnit(baseMeasurementUnit, column.unit),
+      massComposition: column.massComposition
+        ? {
+            ...column.massComposition,
+            targetUnit:
+              column.massComposition.targetUnit &&
+              isMassMeasurementUnit(column.massComposition.targetUnit)
+                ? baseMeasurementUnit
+                : column.massComposition.targetUnit,
+          }
+        : column.massComposition,
+    })),
+  }
+}
+
 function ExecuteJobPage() {
   const { id } = Route.useParams()
   const apiJobId = apiRouteParam(id)
@@ -381,10 +429,48 @@ function ExecuteJobForm({
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const initialIndicatorPosition = getInitialIndicatorPosition(job)
+  const assetBaseMeasurementUnit =
+    job.assetSnapshot?.baseMeasurementUnit ?? null
+  const displayUnitFor = useCallback(
+    (unit?: string | null) =>
+      resolveMassDisplayUnit(assetBaseMeasurementUnit, unit) ??
+      unit ??
+      undefined,
+    [assetBaseMeasurementUnit],
+  )
+  const convertValueToDisplayUnit = useCallback(
+    (value: number, unit?: string | null) => {
+      if (!assetBaseMeasurementUnit || !isMassMeasurementUnit(unit)) {
+        return value
+      }
+
+      return convertMassValue(value, unit, assetBaseMeasurementUnit) ?? value
+    },
+    [assetBaseMeasurementUnit],
+  )
+  const convertCanonicalValueToDisplayUnit = useCallback(
+    (value: unknown, unit?: string | null) => {
+      if (
+        typeof value !== 'number' ||
+        !assetBaseMeasurementUnit ||
+        !isMassMeasurementUnit(unit)
+      ) {
+        return value
+      }
+
+      return convertMassValue(value, 'g', assetBaseMeasurementUnit) ?? value
+    },
+    [assetBaseMeasurementUnit],
+  )
 
   // Form state
   const [formData, setFormData] = useState<Record<string, unknown>>(() => {
-    const initialData = job.data ?? {}
+    const initialData =
+      denormalizeMethodDataForDisplay(
+        job.data ?? {},
+        job.methodSnapshot.dataFields,
+        assetBaseMeasurementUnit,
+      ) ?? {}
 
     return initialIndicatorPosition
       ? {
@@ -435,6 +521,20 @@ function ExecuteJobForm({
       ),
     [job.methodSnapshot.dataFields],
   )
+  const displayManualFields = useMemo(
+    () =>
+      manualFields.map((field) =>
+        resolveFieldForDisplay(field, assetBaseMeasurementUnit),
+      ),
+    [assetBaseMeasurementUnit, manualFields],
+  )
+  const displayAssetSpecFields = useMemo(
+    () =>
+      assetSpecFields.map((field) =>
+        resolveFieldForDisplay(field, assetBaseMeasurementUnit),
+      ),
+    [assetBaseMeasurementUnit, assetSpecFields],
+  )
 
   const hasMassCompositionColumns = useMemo(
     () =>
@@ -465,6 +565,74 @@ function ExecuteJobForm({
     ? formData[ECCENTRICITY_INDICATOR_SPEC_KEY]
     : null
 
+  // Normalize form data before building formula context or sending payloads.
+  const normalizeFormData = useCallback(
+    (data: Record<string, unknown>): Record<string, unknown> => {
+      const normalized: Record<string, unknown> = {}
+      const manualKeys = new Set(manualFields.map((field) => field.key))
+      for (const [key, value] of Object.entries(data)) {
+        if (
+          !manualKeys.has(key) &&
+          !(
+            showEccentricityIndicator && key === ECCENTRICITY_INDICATOR_SPEC_KEY
+          )
+        ) {
+          continue
+        }
+        if (key === ECCENTRICITY_INDICATOR_SPEC_KEY) {
+          if (
+            isEccentricityIndicatorPosition(
+              value,
+              eccentricityIndicatorVariant ?? undefined,
+            )
+          ) {
+            normalized[key] = value
+          }
+          continue
+        }
+        if (Array.isArray(value)) {
+          normalized[key] = value.map((row) => {
+            if (typeof row === 'object' && row !== null) {
+              const normalizedRow: Record<string, unknown> = {}
+              for (const [cellKey, cellValue] of Object.entries(
+                row as Record<string, unknown>,
+              )) {
+                normalizedRow[cellKey] =
+                  typeof cellValue === 'string' &&
+                  /^-?\d*\.?\d+$/.test(cellValue)
+                    ? parseFloat(cellValue)
+                    : cellValue
+              }
+              return normalizedRow
+            }
+            return row
+          })
+        } else if (typeof value === 'string' && /^-?\d*\.?\d+$/.test(value)) {
+          normalized[key] = parseFloat(value)
+        } else {
+          normalized[key] = value
+        }
+      }
+      return normalized
+    },
+    [manualFields, showEccentricityIndicator, eccentricityIndicatorVariant],
+  )
+
+  const parsedFormData = useMemo(
+    () => normalizeFormData(formData),
+    [formData, normalizeFormData],
+  )
+
+  const normalizedFormData = useMemo(() => {
+    return (
+      normalizeMethodDataForStorage(
+        parsedFormData,
+        job.methodSnapshot.dataFields,
+        assetBaseMeasurementUnit,
+      ).data ?? parsedFormData
+    )
+  }, [assetBaseMeasurementUnit, job.methodSnapshot.dataFields, parsedFormData])
+
   const missingAssetSpecFields = useMemo(
     () =>
       assetSpecFields.filter((field) => {
@@ -494,7 +662,7 @@ function ExecuteJobForm({
         continue
       }
 
-      const value = formData[field.key]
+      const value = normalizedFormData[field.key]
 
       if (field.type === 'table' && field.columns) {
         const rows = Array.isArray(value) ? value : []
@@ -525,17 +693,28 @@ function ExecuteJobForm({
 
     for (const std of selectedStandards) {
       const prefix = `std_${std.id}`
-      processedData[`${prefix}_uncertainty`] = std.uncertainty
+      processedData[`${prefix}_uncertainty`] =
+        std.uncertainty != null && isMassMeasurementUnit(std.uncertaintyUnit)
+          ? convertMassValue(std.uncertainty, std.uncertaintyUnit, 'g')
+          : std.uncertainty
       processedData[`${prefix}_k`] = std.coverageFactor
-      processedData[`${prefix}_drift`] = std.drift
+      processedData[`${prefix}_drift`] =
+        std.drift != null && std.certifiedValues?.[0]?.unit
+          ? (convertMassValue(std.drift, std.certifiedValues[0].unit, 'g') ??
+            std.drift)
+          : std.drift
 
       // Flatten certified values for easy formula access
       if (std.certifiedValues) {
         for (const cv of std.certifiedValues) {
           // Normalize nominal name (e.g., "100g" -> "100g")
           const key = cv.nominal.replace(/\s+/g, '')
-          processedData[`${prefix}_${key}`] = cv.value
-          processedData[`${prefix}_${key}_u`] = cv.uncertainty
+          processedData[`${prefix}_${key}`] = isMassMeasurementUnit(cv.unit)
+            ? (convertMassValue(cv.value, cv.unit, 'g') ?? cv.value)
+            : cv.value
+          processedData[`${prefix}_${key}_u`] = isMassMeasurementUnit(cv.unit)
+            ? (convertMassValue(cv.uncertainty, cv.unit, 'g') ?? cv.uncertainty)
+            : cv.uncertainty
         }
       }
     }
@@ -552,7 +731,7 @@ function ExecuteJobForm({
     }
 
     return flattenForExecution(processedData, { preserveArrays: true })
-  }, [formData, job, standardsData, selectedStandardIds, environment])
+  }, [normalizedFormData, job, standardsData, selectedStandardIds, environment])
 
   // Evaluate formulas
   const formulaResults = useMemo(() => {
@@ -560,6 +739,7 @@ function ExecuteJobForm({
 
     const results: Record<string, FormulaResult> = {}
     const runningContext: Record<string, unknown> = { ...context }
+    const rawResultValues: Record<string, unknown> = {}
 
     for (const formula of job.methodSnapshot.formulas) {
       const result = engine.evaluateFormula({
@@ -569,19 +749,38 @@ function ExecuteJobForm({
 
       if (result.success) {
         const rawValue = result.data.result
-        const displayValue = formatCalibrationValue(rawValue, {
-          wrapArrays: true,
-        })
-
-        results[formula.outputKey] = { value: rawValue, displayValue }
+        rawResultValues[formula.outputKey] = rawValue
         runningContext[formula.outputKey] = rawValue
       } else {
         results[formula.outputKey] = { error: result.error.message }
       }
     }
 
+    const displayResultValues =
+      denormalizeMethodResultsForDisplay(
+        rawResultValues,
+        job.methodSnapshot.formulas,
+        assetBaseMeasurementUnit,
+      ) ?? rawResultValues
+
+    for (const formula of job.methodSnapshot.formulas) {
+      const rawValue = rawResultValues[formula.outputKey]
+      if (rawValue === undefined) {
+        continue
+      }
+
+      const displayValue = formatCalibrationValue(
+        displayResultValues[formula.outputKey] ?? rawValue,
+        {
+          wrapArrays: true,
+        },
+      )
+
+      results[formula.outputKey] = { value: rawValue, displayValue }
+    }
+
     return results
-  }, [engine, job, context])
+  }, [assetBaseMeasurementUnit, engine, job, context])
 
   // Evaluate validations
   const validationResults = useMemo((): ValidationResult[] => {
@@ -626,18 +825,27 @@ function ExecuteJobForm({
       if (std.certifiedValues) {
         for (const cv of std.certifiedValues) {
           if (cv.compositionProfile) continue
+          const displayValue = convertValueToDisplayUnit(cv.value, cv.unit)
+          const displayUncertainty = convertValueToDisplayUnit(
+            cv.uncertainty,
+            cv.unit,
+          )
+          const displayUnit = displayUnitFor(cv.unit) ?? cv.unit
           options.push({
             label: cv.nominal,
-            value: cv.value,
-            uncertainty: cv.uncertainty,
-            unit: cv.unit,
+            value: typeof displayValue === 'number' ? displayValue : cv.value,
+            uncertainty:
+              typeof displayUncertainty === 'number'
+                ? displayUncertainty
+                : cv.uncertainty,
+            unit: displayUnit,
             standardName: std.name,
           })
         }
       }
     }
     return options
-  }, [standardsData])
+  }, [convertValueToDisplayUnit, displayUnitFor, standardsData])
 
   const massCompositionOptions = useMemo((): MassCompositionOption[] => {
     const individualOptions: MassCompositionOption[] = []
@@ -651,9 +859,25 @@ function ExecuteJobForm({
         const drift = cv.drift ?? std.drift
         const isProfile = cv.compositionProfile === true
         const profileKey = cv.profileKey ?? cv.nominal
+        const displayUnit = displayUnitFor(cv.unit) ?? cv.unit
+        const displayValue = convertValueToDisplayUnit(cv.value, cv.unit)
+        const displayUncertainty = convertValueToDisplayUnit(
+          cv.uncertainty,
+          cv.unit,
+        )
+        const displayMaxError =
+          cv.maxError == null
+            ? null
+            : convertValueToDisplayUnit(cv.maxError, cv.unit)
+        const displayDrift =
+          drift == null ? null : convertValueToDisplayUnit(drift, cv.unit)
+        const displayBuoyancy =
+          cv.buoyancy == null
+            ? null
+            : convertValueToDisplayUnit(cv.buoyancy, cv.unit)
 
         if (isProfile) {
-          const key = `${profileKey}:${cv.unit}`
+          const key = `${profileKey}:${displayUnit}`
           const existing = profileOptions.get(key)
           const existingIds = existing?.standardIds ?? []
           const standardIds = Array.from(new Set([...existingIds, std.id]))
@@ -665,13 +889,18 @@ function ExecuteJobForm({
             certificateNumber: 'Rastreabilidade via padrões selecionados',
             certifiedValueIndex,
             nominal: cv.nominal,
-            value: cv.value,
-            uncertainty: cv.uncertainty,
-            unit: cv.unit,
+            value: typeof displayValue === 'number' ? displayValue : cv.value,
+            uncertainty:
+              typeof displayUncertainty === 'number'
+                ? displayUncertainty
+                : cv.uncertainty,
+            unit: displayUnit,
             coverageFactor,
-            maxError: cv.maxError ?? null,
-            drift: drift ?? null,
-            buoyancy: cv.buoyancy ?? null,
+            maxError:
+              typeof displayMaxError === 'number' ? displayMaxError : null,
+            drift: typeof displayDrift === 'number' ? displayDrift : null,
+            buoyancy:
+              typeof displayBuoyancy === 'number' ? displayBuoyancy : null,
             compositionProfile: true,
             profileKey,
             profileClass: cv.profileClass ?? null,
@@ -686,20 +915,25 @@ function ExecuteJobForm({
           certificateNumber: std.certificateNumber,
           certifiedValueIndex,
           nominal: cv.nominal,
-          value: cv.value,
-          uncertainty: cv.uncertainty,
-          unit: cv.unit,
+          value: typeof displayValue === 'number' ? displayValue : cv.value,
+          uncertainty:
+            typeof displayUncertainty === 'number'
+              ? displayUncertainty
+              : cv.uncertainty,
+          unit: displayUnit,
           coverageFactor,
-          maxError: cv.maxError ?? null,
-          drift: drift ?? null,
-          buoyancy: cv.buoyancy ?? null,
+          maxError:
+            typeof displayMaxError === 'number' ? displayMaxError : null,
+          drift: typeof displayDrift === 'number' ? displayDrift : null,
+          buoyancy:
+            typeof displayBuoyancy === 'number' ? displayBuoyancy : null,
           optionLabel: `${cv.nominal} - ${std.name} (${std.certificateNumber})`,
         })
       })
     }
 
     return [...individualOptions, ...profileOptions.values()]
-  }, [standardsData])
+  }, [convertValueToDisplayUnit, displayUnitFor, standardsData])
 
   // Update field
   const updateField = useCallback((key: string, value: unknown) => {
@@ -721,60 +955,6 @@ function ExecuteJobForm({
       })
     },
     [],
-  )
-
-  // Normalize form data: convert string numbers to actual numbers before API calls
-  const normalizeFormData = useCallback(
-    (data: Record<string, unknown>): Record<string, unknown> => {
-      const normalized: Record<string, unknown> = {}
-      const manualKeys = new Set(manualFields.map((field) => field.key))
-      for (const [key, value] of Object.entries(data)) {
-        if (
-          !manualKeys.has(key) &&
-          !(
-            showEccentricityIndicator && key === ECCENTRICITY_INDICATOR_SPEC_KEY
-          )
-        ) {
-          continue
-        }
-        if (key === ECCENTRICITY_INDICATOR_SPEC_KEY) {
-          if (
-            isEccentricityIndicatorPosition(
-              value,
-              eccentricityIndicatorVariant ?? undefined,
-            )
-          ) {
-            normalized[key] = value
-          }
-          continue
-        }
-        if (Array.isArray(value)) {
-          // Handle table data - normalize each row
-          normalized[key] = value.map((row) => {
-            if (typeof row === 'object' && row !== null) {
-              const normalizedRow: Record<string, unknown> = {}
-              for (const [cellKey, cellValue] of Object.entries(
-                row as Record<string, unknown>,
-              )) {
-                normalizedRow[cellKey] =
-                  typeof cellValue === 'string' &&
-                  /^-?\d*\.?\d+$/.test(cellValue)
-                    ? parseFloat(cellValue)
-                    : cellValue
-              }
-              return normalizedRow
-            }
-            return row
-          })
-        } else if (typeof value === 'string' && /^-?\d*\.?\d+$/.test(value)) {
-          normalized[key] = parseFloat(value)
-        } else {
-          normalized[key] = value
-        }
-      }
-      return normalized
-    },
-    [manualFields, showEccentricityIndicator, eccentricityIndicatorVariant],
   )
 
   // Build environment payload (only send if any value is set)
@@ -845,12 +1025,11 @@ function ExecuteJobForm({
   // Save draft mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const normalizedData = normalizeFormData(formData)
       const res = await api.api.jobs[':id'].execute.$post({
         param: { id: apiRouteParam(jobId) },
         json: {
-          selectedStandardIds: buildSelectedStandardPayload(normalizedData),
-          data: normalizedData,
+          selectedStandardIds: buildSelectedStandardPayload(parsedFormData),
+          data: parsedFormData,
           results: Object.fromEntries(
             Object.entries(formulaResults)
               .filter(([, r]) => r.value !== undefined)
@@ -877,12 +1056,11 @@ function ExecuteJobForm({
   // Submit for review mutation
   const submitMutation = useMutation({
     mutationFn: async () => {
-      const normalizedData = normalizeFormData(formData)
       const res = await api.api.jobs[':id'].submit.$post({
         param: { id: apiRouteParam(jobId) },
         json: {
-          selectedStandardIds: buildSelectedStandardPayload(normalizedData),
-          data: normalizedData,
+          selectedStandardIds: buildSelectedStandardPayload(parsedFormData),
+          data: parsedFormData,
           results: Object.fromEntries(
             Object.entries(formulaResults)
               .filter(([, r]) => r.value !== undefined)
@@ -1173,7 +1351,12 @@ function ExecuteJobForm({
                             <p className="text-xs text-muted-foreground">
                               Cert: {std.certificateNumber}
                               {std.uncertainty != null &&
-                                ` | U: ${std.uncertainty} ${std.uncertaintyUnit || ''}`}
+                                ` | U: ${formatCalibrationValue(
+                                  convertValueToDisplayUnit(
+                                    std.uncertainty,
+                                    std.uncertaintyUnit,
+                                  ),
+                                )} ${displayUnitFor(std.uncertaintyUnit) || ''}`}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1455,12 +1638,16 @@ function ExecuteJobForm({
                       </div>
                     ))}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {assetSpecFields.map((field) => {
-                        const value = field.assetSpecKey
+                      {displayAssetSpecFields.map((field) => {
+                        const rawValue = field.assetSpecKey
                           ? job.assetSnapshot?.specifications?.[
                               field.assetSpecKey
                             ]
                           : undefined
+                        const value = convertCanonicalValueToDisplayUnit(
+                          rawValue,
+                          field.unit,
+                        )
                         return (
                           <div
                             key={field.key}
@@ -1527,7 +1714,7 @@ function ExecuteJobForm({
                         disabled={!isEditable}
                       />
                     )}
-                  {manualFields.map(renderField)}
+                  {displayManualFields.map(renderField)}
                 </CardContent>
               </CollapsibleContent>
             </Collapsible>
@@ -1575,9 +1762,9 @@ function ExecuteJobForm({
                           ) : result?.value !== undefined ? (
                             <span className="font-mono text-sm">
                               {result.displayValue}
-                              {formula.unit && (
+                              {displayUnitFor(formula.unit) && (
                                 <span className="text-xs text-muted-foreground ml-1">
-                                  {formula.unit}
+                                  {displayUnitFor(formula.unit)}
                                 </span>
                               )}
                             </span>

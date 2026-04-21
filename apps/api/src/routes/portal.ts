@@ -35,6 +35,7 @@ import {
   extractKeyFromUrl,
   type R2Env,
 } from "../lib/storage";
+import { denormalizeAssetSpecificationsForResponse } from "../lib/asset-measurement";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 
 function getPortalHostOrigin(c: {
@@ -178,12 +179,14 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
             assetTypeId: asset.assetTypeId,
             assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
             assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
+            assetTypeDefinition: assetType.definition,
             name: asset.name,
             manufacturer: asset.manufacturer,
             model: asset.model,
             serialNumber: asset.serialNumber,
             tag: asset.tag,
             status: asset.status,
+            baseMeasurementUnit: asset.baseMeasurementUnit,
             specifications: asset.specifications,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
@@ -200,7 +203,15 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
           .offset(offset);
 
         return c.json({
-          data: assets,
+          data: assets.map((assetItem) => ({
+            ...assetItem,
+            specifications:
+              denormalizeAssetSpecificationsForResponse({
+                specifications: assetItem.specifications,
+                definition: assetItem.assetTypeDefinition,
+                baseMeasurementUnit: assetItem.baseMeasurementUnit,
+              }) ?? null,
+          })),
           pagination: {
             page,
             limit,

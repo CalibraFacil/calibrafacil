@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { SpecificationsDisplay } from '@/components/specifications-display'
 import type { SpecFieldDefinition } from '@/components/dynamic-specs-form'
+import type { MassUnit } from '@calibra-facil/shared'
 import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
   EccentricityIndicator,
@@ -33,6 +34,24 @@ export const Route = createFileRoute('/dashboard/assets/$id/')({
 })
 
 type AssetStatus = 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'SCRAPPED'
+
+type AssetDetail = {
+  assetTypeName?: string | null
+  assetTypeSlug?: string | null
+  name: string
+  tag: string
+  serialNumber: string
+  manufacturer?: string | null
+  model?: string | null
+  status: AssetStatus
+  customerName?: string | null
+  lastCalibrationDate?: string | Date | null
+  nextCalibrationDate?: string | Date | null
+  comments?: string | null
+  specifications?: Record<string, unknown> | null
+  assetTypeDefinition?: SpecFieldDefinition[] | null
+  baseMeasurementUnit?: MassUnit | null
+}
 
 const statusLabels: Record<AssetStatus, string> = {
   ACTIVE: 'Ativo',
@@ -63,7 +82,7 @@ function AssetDetailPage() {
       if (!res.ok) {
         throw new Error('Falha ao carregar ativo')
       }
-      return res.json()
+      return res.json() as Promise<AssetDetail>
     },
   })
 
@@ -186,6 +205,16 @@ function AssetDetailPage() {
               </Badge>
             </p>
           </div>
+          {asset.baseMeasurementUnit && (
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">
+                Unidade Base
+              </label>
+              <p className="text-sm">
+                <Badge variant="outline">{asset.baseMeasurementUnit}</Badge>
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -232,6 +261,7 @@ function AssetDetailPage() {
             <SpecificationsDisplay
               definition={visibleDefinition}
               specifications={specifications}
+              activeMassUnit={asset.baseMeasurementUnit ?? null}
             />
           </CardContent>
         </Card>

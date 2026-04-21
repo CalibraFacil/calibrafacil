@@ -49,6 +49,7 @@ import {
 } from "../middleware/permission";
 import {
   type CertificateTemplateSnapshot,
+  normalizeMethodDataForStorage,
 } from "@calibra-facil/shared";
 import { requirePlanLimit } from "../middleware/tier-guard";
 import { withCache, withInvalidation } from "../middleware/cache";
@@ -219,6 +220,7 @@ async function buildAssetSnapshot(
       serialNumber: asset.serialNumber,
       manufacturer: asset.manufacturer,
       model: asset.model,
+      baseMeasurementUnit: asset.baseMeasurementUnit,
       specifications: asset.specifications,
       assetTypeName: assetType.name,
       assetTypeSlug: assetType.slug,
@@ -241,6 +243,7 @@ async function buildAssetSnapshot(
       assetTypeId: row.assetTypeId,
       assetTypeName: row.assetTypeName,
       assetTypeSlug: row.assetTypeSlug,
+      baseMeasurementUnit: row.baseMeasurementUnit,
       name: row.name,
       tag: row.tag,
       serialNumber: row.serialNumber,
@@ -780,6 +783,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         assetSerialNumber: asset.serialNumber,
         assetManufacturer: asset.manufacturer,
         assetModel: asset.model,
+        assetBaseMeasurementUnit: asset.baseMeasurementUnit,
         assetSpecifications: asset.specifications,
         assetTypeName: assetType.name,
         assetTypeSlug: assetType.slug,
@@ -826,6 +830,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             assetTypeId: job.assetTypeId ?? 0,
             assetTypeName: job.assetTypeName ?? "",
             assetTypeSlug: job.assetTypeSlug ?? "",
+            baseMeasurementUnit: job.assetBaseMeasurementUnit ?? null,
             name: job.assetName ?? "",
             tag: job.assetTag ?? "",
             serialNumber: job.assetSerialNumber ?? "",
@@ -1324,6 +1329,12 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         session.user.id,
       );
 
+      const normalizedData = normalizeMethodDataForStorage(
+        input.data,
+        (existing.methodSnapshot.dataFields ?? []) as MethodInputField[],
+        assetSnapshotResult.snapshot.baseMeasurementUnit ?? null,
+      );
+
       const nextStandardsSnapshot =
         standardsResult.snapshot === undefined
           ? existing.standardsSnapshot
@@ -1331,7 +1342,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       const nextEnvironmentalSnapshot =
         environmentalSnapshot ?? existing.environmentalSnapshot;
       const nextAssetSnapshot = assetSnapshotResult.snapshot;
-      const nextData = stripAssetSpecData(input.data, existing.methodSnapshot);
+      const nextData = stripAssetSpecData(
+        normalizedData.data,
+        existing.methodSnapshot,
+      );
 
       // Update job with execution data and set status to REVIEW
       const [updated] = await db
@@ -1372,6 +1386,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
                 new: environmentalSnapshot,
               }
             : undefined,
+          unitConversions:
+            normalizedData.conversions.length > 0
+              ? normalizedData.conversions
+              : undefined,
           assetSnapshot: existing.assetSnapshot
             ? undefined
             : { old: null, new: nextAssetSnapshot },
@@ -1467,6 +1485,12 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         session.user.id,
       );
 
+      const normalizedData = normalizeMethodDataForStorage(
+        input.data,
+        (existing.methodSnapshot.dataFields ?? []) as MethodInputField[],
+        assetSnapshotResult.snapshot.baseMeasurementUnit ?? null,
+      );
+
       const nextStandardsSnapshot =
         standardsResult.snapshot === undefined
           ? existing.standardsSnapshot
@@ -1474,7 +1498,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       const nextEnvironmentalSnapshot =
         environmentalSnapshot ?? existing.environmentalSnapshot;
       const nextAssetSnapshot = assetSnapshotResult.snapshot;
-      const nextData = stripAssetSpecData(input.data, existing.methodSnapshot);
+      const nextData = stripAssetSpecData(
+        normalizedData.data,
+        existing.methodSnapshot,
+      );
 
       // Determine new status
       const newStatus =
@@ -1517,6 +1544,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
                 new: environmentalSnapshot,
               }
             : undefined,
+          unitConversions:
+            normalizedData.conversions.length > 0
+              ? normalizedData.conversions
+              : undefined,
           assetSnapshot: existing.assetSnapshot
             ? undefined
             : { old: null, new: nextAssetSnapshot },
