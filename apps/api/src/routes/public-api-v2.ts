@@ -38,6 +38,7 @@ import {
   UpdateCustomerSchema,
   UpdateJobSchema,
 } from "@calibra-facil/schemas";
+import { type CertificateTemplateSnapshot } from "@calibra-facil/shared";
 import {
   and,
   count,
@@ -65,6 +66,10 @@ import {
   storeIdempotencyRecord,
   upsertResourceExternalId,
 } from "../lib/public-api";
+import {
+  getEffectiveCertificateTemplateSnapshot,
+  serializeCertificateTemplateSnapshot,
+} from "../lib/certificate-template-snapshots";
 import {
   createR2Client,
   extractKeyFromUrl,
@@ -4250,12 +4255,26 @@ publicApiV2Router
           };
         }
 
+        const effectiveTemplateSnapshot =
+          (existing.certificateTemplateSnapshot as
+            | CertificateTemplateSnapshot
+            | null
+            | undefined) ??
+          (await getEffectiveCertificateTemplateSnapshot(
+            apiKey.organizationId,
+          ));
+
         const [updated] = await db
           .update(calibrationJob)
           .set({
             status: "GENERATING_PDF",
             approvedBy: apiKey.createdBy,
             approvedAt: new Date(),
+            certificateTemplateId:
+              existing.certificateTemplateId ?? effectiveTemplateSnapshot.id,
+            certificateTemplateSnapshot:
+              existing.certificateTemplateSnapshot ??
+              serializeCertificateTemplateSnapshot(effectiveTemplateSnapshot),
             rejectedBy: null,
             rejectedAt: null,
             rejectionReason: null,

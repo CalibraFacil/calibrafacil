@@ -47,6 +47,9 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import {
+  type CertificateTemplateSnapshot,
+} from "@calibra-facil/shared";
 import { requirePlanLimit } from "../middleware/tier-guard";
 import { withCache, withInvalidation } from "../middleware/cache";
 import { selectEffectiveEnvironmentalLimits } from "../lib/unit-operational-settings";
@@ -76,6 +79,10 @@ import { alias } from "drizzle-orm/pg-core";
 import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
 import { parseLegacyNumericIdentifier } from "../lib/route-identifiers";
+import {
+  getEffectiveCertificateTemplateSnapshot,
+  serializeCertificateTemplateSnapshot,
+} from "../lib/certificate-template-snapshots";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
@@ -1605,6 +1612,15 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(eq(calibrationJob.id, id));
       }
 
+      const effectiveTemplateSnapshot =
+        (existing.certificateTemplateSnapshot as
+          | CertificateTemplateSnapshot
+          | null
+          | undefined) ??
+        (await getEffectiveCertificateTemplateSnapshot(
+          memberData.organizationId,
+        ));
+
       // Update job status to GENERATING_PDF and set approver info
       // (we set approved_by now so the PDF worker can fetch it)
       const [updated] = await db
@@ -1613,6 +1629,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           status: "GENERATING_PDF",
           approvedBy: session.user.id,
           approvedAt: new Date(),
+          certificateTemplateId:
+            existing.certificateTemplateId ?? effectiveTemplateSnapshot.id,
+          certificateTemplateSnapshot:
+            existing.certificateTemplateSnapshot ??
+            serializeCertificateTemplateSnapshot(effectiveTemplateSnapshot),
         })
         .where(eq(calibrationJob.id, id))
         .returning();
@@ -1885,6 +1906,14 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         generatedAt: new Date(),
         performedBy: session.user.id,
       });
+      const amendmentTemplateSnapshot =
+        (originalJob.certificateTemplateSnapshot as
+          | CertificateTemplateSnapshot
+          | null
+          | undefined) ??
+        (await getEffectiveCertificateTemplateSnapshot(
+          originalJob.organizationId,
+        ));
 
       // Create new job as a clone of the original
       const [amendedJob] = await db
@@ -1901,6 +1930,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           technicianId: originalJob.technicianId,
           methodSnapshot: originalJob.methodSnapshot,
           standardsSnapshot: originalJob.standardsSnapshot,
+          certificateTemplateId:
+            originalJob.certificateTemplateId ?? amendmentTemplateSnapshot.id,
+          certificateTemplateSnapshot:
+            originalJob.certificateTemplateSnapshot ??
+            serializeCertificateTemplateSnapshot(amendmentTemplateSnapshot),
           status: "DRAFT", // Start in DRAFT for corrections
           dueDate: originalJob.dueDate,
           data: originalJob.data, // Clone calibration data
