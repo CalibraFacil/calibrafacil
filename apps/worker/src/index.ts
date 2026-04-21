@@ -124,6 +124,7 @@ async function fetchJobData(
       cj.amendment_reason,
       -- Organization (Lab) info
       o.name as lab_name,
+      o.logo as lab_logo,
       o.cnpj as lab_cnpj,
       o.accreditation_number as lab_accreditation_number,
       o.accreditation_body as lab_accreditation_body,
@@ -261,6 +262,7 @@ async function fetchJobData(
     approvedAt: row.approved_at,
     lab: {
       name: row.lab_name || "Laboratório de Calibração",
+      logo: row.lab_logo,
       cnpj: row.lab_cnpj,
       accreditationNumber: row.lab_accreditation_number,
       accreditationBody: row.lab_accreditation_body,
