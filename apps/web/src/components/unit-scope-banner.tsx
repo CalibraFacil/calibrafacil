@@ -1,27 +1,14 @@
-import { useMemo } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 
-import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api } from '@/utils/api'
+import { useDashboardUnits } from '@/hooks/use-dashboard-units'
 import { cn } from '@/lib/utils'
 
 const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
 
-type UnitSummary = {
-  id: number
-  name: string
-  slug: string
-  role: string
-}
-
-type UnitsResponse = {
-  activeUnitId: number | null
-  activeUnitName: string | null
-  selectedUnitScope: 'all' | 'unit'
-  canAccessAllUnits: boolean
+type GovernanceViewer = {
   viewer: {
     isGlobalManager: boolean
     canManageOrganizationUnits: boolean
@@ -42,35 +29,34 @@ type UnitsResponse = {
     label: string
     description: string
   }
-  data: UnitSummary[]
+}
+
+type UnitScopeResponse = GovernanceViewer & {
+  activeUnitId: number | null
+  activeUnitName: string | null
+  selectedUnitScope: 'all' | 'unit'
+  canAccessAllUnits: boolean
+  data: Array<{
+    id: number
+    name: string
+    slug: string
+    role: string
+  }>
 }
 
 export function UnitScopeBanner() {
   const queryClient = useQueryClient()
-  const { data: activeOrg } = useActiveOrganization()
+  const { activeOrg, data, hasMultiUnit, isCheckingAccess, unitsQuery } =
+    useDashboardUnits()
+  const currentValue = data
+    ? data.selectedUnitScope === 'all'
+      ? 'all'
+      : data.activeUnitId
+        ? String(data.activeUnitId)
+        : ''
+    : ''
 
-  const unitsQuery = useQuery({
-    queryKey: ['dashboard-units', activeOrg?.id ?? 'no-org'],
-    enabled: Boolean(activeOrg?.id),
-    queryFn: async () => {
-      const response = await api.api.units.$get()
-      if (!response.ok) {
-        throw new Error('Falha ao carregar escopo operacional')
-      }
-
-      return (await response.json()) as UnitsResponse
-    },
-  })
-
-  const currentValue = useMemo(() => {
-    if (!unitsQuery.data) return ''
-    if (unitsQuery.data.selectedUnitScope === 'all') return 'all'
-    return unitsQuery.data.activeUnitId
-      ? String(unitsQuery.data.activeUnitId)
-      : ''
-  }, [unitsQuery.data])
-
-  if (!activeOrg?.id) {
+  if (!activeOrg?.id || isCheckingAccess || !hasMultiUnit) {
     return null
   }
 
@@ -78,15 +64,13 @@ export function UnitScopeBanner() {
     return <Skeleton className="h-28 w-full rounded-2xl" />
   }
 
-  if (!unitsQuery.data) {
+  if (!data) {
     return null
   }
 
-  const { data, scopeSummary, viewer } = unitsQuery.data
+  const { scopeSummary, viewer } = data as UnitScopeResponse
   const shouldRender =
-    data.length > 1 ||
-    viewer.canViewGovernance ||
-    unitsQuery.data.canAccessAllUnits
+    data.data.length > 1 || viewer.canViewGovernance || data.canAccessAllUnits
 
   if (!shouldRender) {
     return null
@@ -129,7 +113,7 @@ export function UnitScopeBanner() {
         </div>
 
         <div className="flex flex-wrap gap-2 xl:max-w-[56rem] xl:justify-end">
-          {unitsQuery.data.canAccessAllUnits ? (
+          {data.canAccessAllUnits ? (
             <Button
               type="button"
               size="sm"
@@ -144,7 +128,7 @@ export function UnitScopeBanner() {
             </Button>
           ) : null}
 
-          {data.map((unit) => {
+          {data.data.map((unit) => {
             const isActive = currentValue === String(unit.id)
             const roleLabel =
               unit.role === 'unit_admin'
