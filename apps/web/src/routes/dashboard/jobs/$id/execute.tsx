@@ -565,6 +565,74 @@ function ExecuteJobForm({
     ? formData[ECCENTRICITY_INDICATOR_SPEC_KEY]
     : null
 
+  // Normalize form data before building formula context or sending payloads.
+  const normalizeFormData = useCallback(
+    (data: Record<string, unknown>): Record<string, unknown> => {
+      const normalized: Record<string, unknown> = {}
+      const manualKeys = new Set(manualFields.map((field) => field.key))
+      for (const [key, value] of Object.entries(data)) {
+        if (
+          !manualKeys.has(key) &&
+          !(
+            showEccentricityIndicator && key === ECCENTRICITY_INDICATOR_SPEC_KEY
+          )
+        ) {
+          continue
+        }
+        if (key === ECCENTRICITY_INDICATOR_SPEC_KEY) {
+          if (
+            isEccentricityIndicatorPosition(
+              value,
+              eccentricityIndicatorVariant ?? undefined,
+            )
+          ) {
+            normalized[key] = value
+          }
+          continue
+        }
+        if (Array.isArray(value)) {
+          normalized[key] = value.map((row) => {
+            if (typeof row === 'object' && row !== null) {
+              const normalizedRow: Record<string, unknown> = {}
+              for (const [cellKey, cellValue] of Object.entries(
+                row as Record<string, unknown>,
+              )) {
+                normalizedRow[cellKey] =
+                  typeof cellValue === 'string' &&
+                  /^-?\d*\.?\d+$/.test(cellValue)
+                    ? parseFloat(cellValue)
+                    : cellValue
+              }
+              return normalizedRow
+            }
+            return row
+          })
+        } else if (typeof value === 'string' && /^-?\d*\.?\d+$/.test(value)) {
+          normalized[key] = parseFloat(value)
+        } else {
+          normalized[key] = value
+        }
+      }
+      return normalized
+    },
+    [manualFields, showEccentricityIndicator, eccentricityIndicatorVariant],
+  )
+
+  const parsedFormData = useMemo(
+    () => normalizeFormData(formData),
+    [formData, normalizeFormData],
+  )
+
+  const normalizedFormData = useMemo(() => {
+    return (
+      normalizeMethodDataForStorage(
+        parsedFormData,
+        job.methodSnapshot.dataFields,
+        assetBaseMeasurementUnit,
+      ).data ?? parsedFormData
+    )
+  }, [assetBaseMeasurementUnit, job.methodSnapshot.dataFields, parsedFormData])
+
   const missingAssetSpecFields = useMemo(
     () =>
       assetSpecFields.filter((field) => {
@@ -888,75 +956,6 @@ function ExecuteJobForm({
     },
     [],
   )
-
-  // Normalize form data: convert string numbers to actual numbers before API calls
-  const normalizeFormData = useCallback(
-    (data: Record<string, unknown>): Record<string, unknown> => {
-      const normalized: Record<string, unknown> = {}
-      const manualKeys = new Set(manualFields.map((field) => field.key))
-      for (const [key, value] of Object.entries(data)) {
-        if (
-          !manualKeys.has(key) &&
-          !(
-            showEccentricityIndicator && key === ECCENTRICITY_INDICATOR_SPEC_KEY
-          )
-        ) {
-          continue
-        }
-        if (key === ECCENTRICITY_INDICATOR_SPEC_KEY) {
-          if (
-            isEccentricityIndicatorPosition(
-              value,
-              eccentricityIndicatorVariant ?? undefined,
-            )
-          ) {
-            normalized[key] = value
-          }
-          continue
-        }
-        if (Array.isArray(value)) {
-          // Handle table data - normalize each row
-          normalized[key] = value.map((row) => {
-            if (typeof row === 'object' && row !== null) {
-              const normalizedRow: Record<string, unknown> = {}
-              for (const [cellKey, cellValue] of Object.entries(
-                row as Record<string, unknown>,
-              )) {
-                normalizedRow[cellKey] =
-                  typeof cellValue === 'string' &&
-                  /^-?\d*\.?\d+$/.test(cellValue)
-                    ? parseFloat(cellValue)
-                    : cellValue
-              }
-              return normalizedRow
-            }
-            return row
-          })
-        } else if (typeof value === 'string' && /^-?\d*\.?\d+$/.test(value)) {
-          normalized[key] = parseFloat(value)
-        } else {
-          normalized[key] = value
-        }
-      }
-      return normalized
-    },
-    [manualFields, showEccentricityIndicator, eccentricityIndicatorVariant],
-  )
-
-  const parsedFormData = useMemo(
-    () => normalizeFormData(formData),
-    [formData, normalizeFormData],
-  )
-
-  const normalizedFormData = useMemo(() => {
-    return (
-      normalizeMethodDataForStorage(
-        parsedFormData,
-        job.methodSnapshot.dataFields,
-        assetBaseMeasurementUnit,
-      ).data ?? parsedFormData
-    )
-  }, [assetBaseMeasurementUnit, job.methodSnapshot.dataFields, parsedFormData])
 
   // Build environment payload (only send if any value is set)
   const environmentPayload = useMemo(() => {
