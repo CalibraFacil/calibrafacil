@@ -301,7 +301,6 @@ export type JobData = {
   environmentalSnapshot?: EnvironmentalSnapshot | null;
   lab: {
     name: string;
-    logo?: string | null;
     cnpj?: string | null;
     accreditationNumber?: string | null;
     accreditationBody?: string | null;
@@ -349,13 +348,6 @@ export type JobData = {
   originalJobId?: string | null; // Human-readable ID of the superseded job
   originalApprovedAt?: Date | null;
 };
-
-function getCertificateLogoUrl(
-  job: JobData,
-  templateConfig: CertificateTemplateConfig,
-): string | null {
-  return templateConfig.theme.logoUrl ?? job.lab.logo ?? null;
-}
 
 const styles = `
   @page {
@@ -1726,15 +1718,13 @@ function renderV2Block(
   job: JobData,
   templateConfig: CertificateTemplateConfig,
 ) {
-  const logoUrl = getCertificateLogoUrl(job, templateConfig);
-
   switch (block.type) {
     case "lab_header":
       return (
         <div className="v2-logo-row">
-          {logoUrl ? (
+          {templateConfig.theme.logoUrl ? (
             <img
-              src={logoUrl}
+              src={templateConfig.theme.logoUrl}
               alt={job.lab.name}
               className="v2-logo"
             />
@@ -1992,7 +1982,6 @@ export function CertificateHtml({ job }: { job: JobData }) {
   const templateConfig = normalizeCertificateTemplateConfig(
     templateSnapshot?.config,
   );
-  const logoUrl = getCertificateLogoUrl(job, templateConfig);
 
   if (Number(templateConfig.version) === 2) {
     return <CertificateHtmlV2 job={job} templateConfig={templateConfig} />;
@@ -2176,9 +2165,9 @@ export function CertificateHtml({ job }: { job: JobData }) {
           {/* Header */}
           <div className="header">
             <div className="logo-section">
-              {logoUrl ? (
+              {templateConfig.theme.logoUrl ? (
                 <img
-                  src={logoUrl}
+                  src={templateConfig.theme.logoUrl}
                   alt={job.lab.name}
                   className="logo-image"
                 />
