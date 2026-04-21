@@ -3,12 +3,14 @@ import {
   formatWeighingRangeSpec,
   isWeighingRangeSpecArray,
 } from './method-builder/weighing-range-utils'
+import { resolveMassDisplayUnit, type MassUnit } from '@calibra-facil/shared'
 
 interface SpecificationsDisplayProps {
   /** The field definitions from the asset type */
   definition: SpecFieldDefinition[]
   /** Current specification values */
   specifications: Record<string, unknown> | null | undefined
+  activeMassUnit?: MassUnit | null
 }
 
 /**
@@ -18,6 +20,7 @@ interface SpecificationsDisplayProps {
 export function SpecificationsDisplay({
   definition,
   specifications,
+  activeMassUnit = null,
 }: SpecificationsDisplayProps) {
   if (!definition || definition.length === 0 || !specifications) {
     return (
@@ -53,7 +56,8 @@ export function SpecificationsDisplay({
         ) {
           displayValue = value.map(formatWeighingRangeSpec).join('\n')
         } else if (field.type === 'number' && typeof value === 'number') {
-          displayValue = field.unit ? `${value} ${field.unit}` : String(value)
+          const displayUnit = resolveMassDisplayUnit(activeMassUnit, field.unit)
+          displayValue = displayUnit ? `${value} ${displayUnit}` : String(value)
         } else {
           displayValue = String(value)
         }

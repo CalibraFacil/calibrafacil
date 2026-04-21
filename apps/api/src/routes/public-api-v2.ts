@@ -90,6 +90,11 @@ import {
 import { requireFeature } from "../middleware/tier-guard";
 import { createClientOrganizationAsServiceOwner } from "../lib/portal-service-account";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
+import {
+  denormalizeAssetSpecificationsForResponse,
+  normalizeAssetSpecificationsFromInput,
+  resolveAssetBaseMeasurementUnit,
+} from "../lib/asset-measurement";
 
 const ListQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -1751,19 +1756,23 @@ publicApiV2Router
             customerId: asset.customerId,
             customerName: customer.name,
             assetTypeId: asset.assetTypeId,
+            assetTypeDefinition: assetType.definition,
             name: asset.name,
             tag: asset.tag,
             serialNumber: asset.serialNumber,
             manufacturer: asset.manufacturer,
             model: asset.model,
             status: asset.status,
+            baseMeasurementUnit: asset.baseMeasurementUnit,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
+            specifications: asset.specifications,
             createdAt: asset.createdAt,
             updatedAt: asset.updatedAt,
           })
           .from(asset)
           .innerJoin(customer, eq(asset.customerId, customer.id))
+          .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
           .where(and(...conditions))
           .orderBy(asset.name)
           .limit(limit)
@@ -1779,6 +1788,12 @@ publicApiV2Router
       return c.json({
         data: rows.map((row) => ({
           ...row,
+          specifications:
+            denormalizeAssetSpecificationsForResponse({
+              specifications: row.specifications,
+              definition: row.assetTypeDefinition,
+              baseMeasurementUnit: row.baseMeasurementUnit,
+            }) ?? null,
           externalId: externalIds.get(String(row.id)) ?? null,
         })),
         meta: buildListMeta({
@@ -1820,12 +1835,14 @@ publicApiV2Router
         customerId: asset.customerId,
         customerName: customer.name,
         assetTypeId: asset.assetTypeId,
+        assetTypeDefinition: assetType.definition,
         name: asset.name,
         tag: asset.tag,
         serialNumber: asset.serialNumber,
         manufacturer: asset.manufacturer,
         model: asset.model,
         status: asset.status,
+        baseMeasurementUnit: asset.baseMeasurementUnit,
         lastCalibrationDate: asset.lastCalibrationDate,
         nextCalibrationDate: asset.nextCalibrationDate,
         comments: asset.comments,
@@ -1835,6 +1852,7 @@ publicApiV2Router
       })
       .from(asset)
       .innerJoin(customer, eq(asset.customerId, customer.id))
+      .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
       .where(
         and(
           eq(asset.id, resolvedId),
@@ -1857,6 +1875,12 @@ publicApiV2Router
     return c.json({
       data: {
         ...found,
+        specifications:
+          denormalizeAssetSpecificationsForResponse({
+            specifications: found.specifications,
+            definition: found.assetTypeDefinition,
+            baseMeasurementUnit: found.baseMeasurementUnit,
+          }) ?? null,
         externalId: await getResourceExternalId({
           organizationId: apiKey.organizationId,
           resourceType: "asset",
@@ -1939,6 +1963,25 @@ publicApiV2Router
           organizationId: apiKey.organizationId,
           requestedUnitId: input.unitId,
         });
+        const baseMeasurementUnitResult = resolveAssetBaseMeasurementUnit(
+          foundType,
+          input.baseMeasurementUnit,
+        );
+
+        if (!baseMeasurementUnitResult.ok) {
+          return {
+            status: 400,
+            body: buildPublicApiError({
+              code: "asset_base_measurement_unit_required",
+              message: baseMeasurementUnitResult.error,
+            }),
+          };
+        }
+        const normalizedSpecifications = normalizeAssetSpecificationsFromInput({
+          specifications: input.specifications || null,
+          definition: foundType.definition,
+          baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
+        });
 
         const [created] = await db
           .insert(asset)
@@ -1952,6 +1995,7 @@ publicApiV2Router
             serialNumber: input.serialNumber,
             tag: input.tag,
             status: input.status || "ACTIVE",
+            baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
             lastCalibrationDate: input.lastCalibrationDate
               ? new Date(input.lastCalibrationDate)
               : null,
@@ -1959,14 +2003,20 @@ publicApiV2Router
               ? new Date(input.nextCalibrationDate)
               : null,
             comments: input.comments || null,
-            specifications: input.specifications || null,
+            specifications: normalizedSpecifications.specifications || null,
           })
           .returning();
 
         await db.insert(assetAuditLog).values({
           assetId: created!.id,
           action: "create",
-          changes: { asset: { old: null, new: created } },
+          changes: {
+            asset: { old: null, new: created },
+            unitConversions:
+              normalizedSpecifications.conversions.length > 0
+                ? normalizedSpecifications.conversions
+                : undefined,
+          },
           performedBy: apiKey.createdBy,
           ipAddress: getPublicApiRequestIp(c.req.raw.headers),
         });
@@ -1985,6 +2035,12 @@ publicApiV2Router
         const body = {
           data: {
             ...created,
+            specifications:
+              denormalizeAssetSpecificationsForResponse({
+                specifications: created!.specifications,
+                definition: foundType.definition,
+                baseMeasurementUnit: created!.baseMeasurementUnit,
+              }) ?? null,
             externalId: externalId ?? null,
           },
         };
@@ -2037,6 +2093,7 @@ publicApiV2Router
           deletedAt: asset.deletedAt,
           customerId: asset.customerId,
           assetTypeId: asset.assetTypeId,
+          baseMeasurementUnit: asset.baseMeasurementUnit,
           name: asset.name,
           manufacturer: asset.manufacturer,
           model: asset.model,
@@ -2047,9 +2104,11 @@ publicApiV2Router
           nextCalibrationDate: asset.nextCalibrationDate,
           comments: asset.comments,
           specifications: asset.specifications,
+          assetTypeDefinition: assetType.definition,
         })
         .from(asset)
         .innerJoin(customer, eq(asset.customerId, customer.id))
+        .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
         .where(
           and(
             eq(asset.id, resolvedId),
@@ -2084,6 +2143,15 @@ publicApiV2Router
         }
       }
 
+      const normalizedSpecifications =
+        input.specifications !== undefined
+          ? normalizeAssetSpecificationsFromInput({
+              specifications: input.specifications ?? null,
+              definition: existing.assetTypeDefinition,
+              baseMeasurementUnit: existing.baseMeasurementUnit,
+            })
+          : null;
+
       const [updated] = await db
         .update(asset)
         .set({
@@ -2106,7 +2174,8 @@ publicApiV2Router
                 ? new Date(input.nextCalibrationDate)
                 : null,
           comments: input.comments ?? existing.comments,
-          specifications: input.specifications ?? existing.specifications,
+          specifications:
+            normalizedSpecifications?.specifications ?? existing.specifications,
         })
         .where(eq(asset.id, existing.id))
         .returning();
@@ -2114,7 +2183,12 @@ publicApiV2Router
       await db.insert(assetAuditLog).values({
         assetId: existing.id,
         action: "update",
-        changes: { asset: { old: existing, new: updated } },
+        changes: {
+          asset: { old: existing, new: updated },
+          unitConversions: normalizedSpecifications?.conversions.length
+            ? normalizedSpecifications.conversions
+            : undefined,
+        },
         performedBy: apiKey.createdBy,
         ipAddress: getPublicApiRequestIp(c.req.raw.headers),
       });

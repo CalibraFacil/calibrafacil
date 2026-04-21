@@ -60,9 +60,16 @@ import {
 } from '@/components/audit-timeline'
 import { api } from '@/utils/api'
 import { toast } from 'sonner'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { formatCalibrationValue } from '@calibra-facil/shared'
+import {
+  convertMassValue,
+  denormalizeMethodDataForDisplay,
+  denormalizeMethodResultsForDisplay,
+  formatCalibrationValue,
+  resolveMassDisplayUnit,
+  type MassUnit,
+} from '@calibra-facil/shared'
 import { Spinner } from '@/components/ui/spinner'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
@@ -101,6 +108,10 @@ interface StandardSnapshot {
   drift: number | null
 }
 
+interface AssetSnapshot {
+  baseMeasurementUnit?: MassUnit | null
+}
+
 interface ApprovedJob {
   id: number
   jobId: string
@@ -113,6 +124,7 @@ interface ApprovedJob {
   data: Record<string, unknown> | null
   results: Record<string, unknown> | null
   standardsSnapshot?: StandardSnapshot[] | null
+  assetSnapshot?: AssetSnapshot | null
   technicianName: string | null
   approvedBy: string | null
   approverName?: string | null
@@ -167,6 +179,8 @@ export function ApprovedJobRecord({
   onRefresh,
 }: ApprovedJobRecordProps) {
   const { methodSnapshot, data, results, standardsSnapshot } = job
+  const assetBaseMeasurementUnit =
+    job.assetSnapshot?.baseMeasurementUnit ?? null
   const navigate = useNavigate()
   const [isDownloading, setIsDownloading] = useState(false)
   const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)
@@ -176,6 +190,26 @@ export function ApprovedJobRecord({
   const [isAmendDialogOpen, setIsAmendDialogOpen] = useState(false)
   const [amendmentReason, setAmendmentReason] = useState('')
   const [isAmending, setIsAmending] = useState(false)
+  const displayUnitFor = (unit?: string | null) =>
+    resolveMassDisplayUnit(assetBaseMeasurementUnit, unit) ?? unit ?? undefined
+  const displayData = useMemo(
+    () =>
+      denormalizeMethodDataForDisplay(
+        data,
+        methodSnapshot.dataFields,
+        assetBaseMeasurementUnit,
+      ) ?? data,
+    [assetBaseMeasurementUnit, data, methodSnapshot.dataFields],
+  )
+  const displayResults = useMemo(
+    () =>
+      denormalizeMethodResultsForDisplay(
+        results,
+        methodSnapshot.formulas,
+        assetBaseMeasurementUnit,
+      ) ?? results,
+    [assetBaseMeasurementUnit, methodSnapshot.formulas, results],
+  )
 
   const handleDownloadCertificate = async () => {
     setIsDownloading(true)
@@ -285,7 +319,7 @@ export function ApprovedJobRecord({
 
   // Render a single field value (read-only)
   const renderFieldValue = (field: MethodSnapshot['dataFields'][0]) => {
-    const value = data?.[field.key]
+    const value = displayData?.[field.key]
 
     if (field.type === 'table' && field.columns && Array.isArray(value)) {
       return (
@@ -295,9 +329,9 @@ export function ApprovedJobRecord({
               {field.columns.map((col) => (
                 <TableHead key={col.key}>
                   {col.label}
-                  {col.unit && (
+                  {displayUnitFor(col.unit) && (
                     <span className="text-xs text-muted-foreground ml-1">
-                      ({col.unit})
+                      ({displayUnitFor(col.unit)})
                     </span>
                   )}
                 </TableHead>
@@ -309,7 +343,7 @@ export function ApprovedJobRecord({
               <TableRow key={idx}>
                 {field.columns!.map((col) => (
                   <TableCell key={col.key} className="font-mono">
-                    {formatValue(row[col.key], col.unit)}
+                    {formatValue(row[col.key], displayUnitFor(col.unit))}
                   </TableCell>
                 ))}
               </TableRow>
@@ -319,12 +353,16 @@ export function ApprovedJobRecord({
       )
     }
 
-    return <span className="font-mono">{formatValue(value, field.unit)}</span>
+    return (
+      <span className="font-mono">
+        {formatValue(value, displayUnitFor(field.unit))}
+      </span>
+    )
   }
 
   // Render formula result (from stored results, no recalculation)
   const renderResult = (formula: MethodSnapshot['formulas'][0]) => {
-    const value = results?.[formula.outputKey]
+    const value = displayResults?.[formula.outputKey]
     const validation = methodSnapshot.validations.find((v) =>
       v.expression.includes(formula.outputKey),
     )
@@ -337,15 +375,15 @@ export function ApprovedJobRecord({
           <span className="font-medium">
             {formula.label || formula.outputKey}
           </span>
-          {formula.unit && (
+          {displayUnitFor(formula.unit) && (
             <span className="text-xs text-muted-foreground ml-1">
-              ({formula.unit})
+              ({displayUnitFor(formula.unit)})
             </span>
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-mono text-base sm:text-lg break-all">
-            {formatValue(value, formula.unit)}
+            {formatValue(value, displayUnitFor(formula.unit))}
           </span>
           {validation && isPassed && (
             <Badge variant="default" className="bg-green-600 shrink-0">
@@ -695,8 +733,18 @@ export function ApprovedJobRecord({
                           <p>Calibrado em: {formatDate(std.calibrationDate)}</p>
                           {std.uncertainty != null && (
                             <p className="font-mono text-muted-foreground">
-                              U = {std.uncertainty} {std.uncertaintyUnit || ''}{' '}
-                              (k={std.coverageFactor})
+                              U ={' '}
+                              {formatCalibrationValue(
+                                assetBaseMeasurementUnit && std.uncertaintyUnit
+                                  ? (convertMassValue(
+                                      std.uncertainty,
+                                      std.uncertaintyUnit,
+                                      assetBaseMeasurementUnit,
+                                    ) ?? std.uncertainty)
+                                  : std.uncertainty,
+                              )}{' '}
+                              {displayUnitFor(std.uncertaintyUnit) || ''} (k=
+                              {std.coverageFactor})
                             </p>
                           )}
                         </div>
@@ -721,8 +769,10 @@ export function ApprovedJobRecord({
                 <div key={field.key}>
                   <Label className="text-sm font-medium text-muted-foreground mb-2 block">
                     {field.label}
-                    {field.unit && (
-                      <span className="text-xs ml-1">({field.unit})</span>
+                    {displayUnitFor(field.unit) && (
+                      <span className="text-xs ml-1">
+                        ({displayUnitFor(field.unit)})
+                      </span>
                     )}
                   </Label>
                   <div className="bg-muted/30 rounded-lg p-3 border border-muted">

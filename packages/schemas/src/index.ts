@@ -284,6 +284,8 @@ export const AssetStatusSchema = z.enum([
 ]);
 
 export type AssetStatus = z.infer<typeof AssetStatusSchema>;
+export const MassUnitSchema = z.enum(["mg", "g", "kg"]);
+export type MassUnit = z.infer<typeof MassUnitSchema>;
 
 /**
  * Schema for creating a new asset
@@ -297,6 +299,7 @@ export const CreateAssetSchema = z.object({
   serialNumber: z.string().min(1, "Número de série é obrigatório"),
   tag: z.string().min(1, "Tag é obrigatória"),
   status: AssetStatusSchema.optional().default("ACTIVE"),
+  baseMeasurementUnit: MassUnitSchema.optional().nullable(),
   lastCalibrationDate: z.string().optional(),
   nextCalibrationDate: z.string().optional(),
   comments: z.string().optional(),
@@ -312,6 +315,7 @@ export type CreateAssetInput = z.infer<typeof CreateAssetSchema>;
 export const UpdateAssetSchema = CreateAssetSchema.partial().omit({
   customerId: true,
   assetTypeId: true,
+  baseMeasurementUnit: true,
 });
 
 export type UpdateAssetInput = z.infer<typeof UpdateAssetSchema>;

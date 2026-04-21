@@ -3,8 +3,12 @@ import {
   type CertificateTemplateBlock,
   type CertificateTemplateConfig,
   type CertificateTemplateSnapshot,
+  convertMassValue,
   formatCalibrationValue,
+  isMassMeasurementUnit,
   normalizeCertificateTemplateConfig,
+  resolveMassDisplayUnit,
+  type MassUnit,
 } from "@calibra-facil/shared";
 
 // Types for certificate generation (standalone, does not depend on @calibra-facil/db)
@@ -282,6 +286,7 @@ export type AssetSnapshot = {
   assetTypeId: number;
   assetTypeName: string;
   assetTypeSlug: string;
+  baseMeasurementUnit?: MassUnit | null;
   name: string;
   tag: string;
   serialNumber: string;
@@ -945,6 +950,81 @@ function formatValueWithUnit(value: unknown, unit?: string): string {
   return unit ? `${formatted} ${unit}` : formatted;
 }
 
+function resolveDocumentDisplayUnit(
+  assetBaseMeasurementUnit: MassUnit | null | undefined,
+  literalUnit: string | null | undefined,
+) {
+  return (
+    resolveMassDisplayUnit(assetBaseMeasurementUnit, literalUnit) ??
+    literalUnit ??
+    undefined
+  );
+}
+
+function convertCanonicalValueForDisplay(
+  value: unknown,
+  literalUnit: string | null | undefined,
+  assetBaseMeasurementUnit: MassUnit | null | undefined,
+) {
+  if (
+    typeof value !== "number" ||
+    !assetBaseMeasurementUnit ||
+    !isMassMeasurementUnit(literalUnit)
+  ) {
+    return value;
+  }
+
+  return convertMassValue(value, "g", assetBaseMeasurementUnit) ?? value;
+}
+
+function convertOriginalUnitValueForDisplay(
+  value: unknown,
+  originalUnit: string | null | undefined,
+  assetBaseMeasurementUnit: MassUnit | null | undefined,
+) {
+  if (
+    typeof value !== "number" ||
+    !assetBaseMeasurementUnit ||
+    !isMassMeasurementUnit(originalUnit)
+  ) {
+    return value;
+  }
+
+  return (
+    convertMassValue(value, originalUnit, assetBaseMeasurementUnit) ?? value
+  );
+}
+
+function formatCanonicalValueWithResolvedUnit(
+  value: unknown,
+  literalUnit: string | null | undefined,
+  assetBaseMeasurementUnit: MassUnit | null | undefined,
+): string {
+  return formatValueWithUnit(
+    convertCanonicalValueForDisplay(
+      value,
+      literalUnit,
+      assetBaseMeasurementUnit,
+    ),
+    resolveDocumentDisplayUnit(assetBaseMeasurementUnit, literalUnit),
+  );
+}
+
+function formatOriginalUnitValueWithResolvedUnit(
+  value: unknown,
+  originalUnit: string | null | undefined,
+  assetBaseMeasurementUnit: MassUnit | null | undefined,
+): string {
+  return formatValueWithUnit(
+    convertOriginalUnitValueForDisplay(
+      value,
+      originalUnit,
+      assetBaseMeasurementUnit,
+    ),
+    resolveDocumentDisplayUnit(assetBaseMeasurementUnit, originalUnit),
+  );
+}
+
 function hasCertifiedValues(std: StandardSnapshot): boolean {
   return !!std.certifiedValues?.length;
 }
@@ -952,6 +1032,7 @@ function hasCertifiedValues(std: StandardSnapshot): boolean {
 function formatStandardUncertainty(
   std: StandardSnapshot,
   showCertifiedValuesTable: boolean,
+  assetBaseMeasurementUnit: MassUnit | null | undefined,
 ): string {
   if (hasCertifiedValues(std)) {
     return showCertifiedValuesTable
@@ -960,7 +1041,18 @@ function formatStandardUncertainty(
   }
 
   return std.uncertainty !== null
-    ? `±${formatNumber(std.uncertainty)} ${std.uncertaintyUnit || ""}`
+    ? `±${formatCalibrationValue(
+        convertOriginalUnitValueForDisplay(
+          std.uncertainty,
+          std.uncertaintyUnit,
+          assetBaseMeasurementUnit,
+        ),
+      )} ${
+        resolveDocumentDisplayUnit(
+          assetBaseMeasurementUnit,
+          std.uncertaintyUnit,
+        ) || ""
+      }`
     : "-";
 }
 
@@ -1036,8 +1128,15 @@ function collectMassCompositions(
 function formatReportedValue(
   entry: { formula?: MethodFormula },
   value: unknown,
+  assetBaseMeasurementUnit: MassUnit | null | undefined,
 ): string {
-  const formatted = formatValue(value);
+  const formatted = formatValue(
+    convertCanonicalValueForDisplay(
+      value,
+      entry.formula?.unit,
+      assetBaseMeasurementUnit,
+    ),
+  );
   const role = entry.formula?.reporting?.role;
   const numeric =
     typeof value === "number"
@@ -1360,9 +1459,11 @@ function CertificateEccentricityDiagram({
 function DataTable({
   field,
   data,
+  assetBaseMeasurementUnit,
 }: {
   field: MethodInputField;
   data: unknown[];
+  assetBaseMeasurementUnit?: MassUnit | null;
 }) {
   if (!field.columns || !Array.isArray(data) || data.length === 0) {
     return null;
@@ -1389,7 +1490,15 @@ function DataTable({
                 {columns.map((col) => (
                   <th key={col.key}>
                     {col.label}
-                    {col.unit ? ` (${col.unit})` : ""}
+                    {resolveDocumentDisplayUnit(
+                      assetBaseMeasurementUnit,
+                      col.unit,
+                    )
+                      ? ` (${resolveDocumentDisplayUnit(
+                          assetBaseMeasurementUnit,
+                          col.unit,
+                        )})`
+                      : ""}
                   </th>
                 ))}
               </tr>
@@ -1399,7 +1508,11 @@ function DataTable({
                 <tr key={i}>
                   {columns.map((col) => (
                     <td key={col.key}>
-                      {formatValue((row as Record<string, unknown>)[col.key])}
+                      {formatCanonicalValueWithResolvedUnit(
+                        (row as Record<string, unknown>)[col.key],
+                        col.unit,
+                        assetBaseMeasurementUnit,
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -1940,13 +2053,19 @@ function V2KeyValues({ rows }: { rows: Array<[string, string]> }) {
 function getV2ResultRows(
   job: JobData,
 ): Array<{ label: string; value: string }> {
+  const assetBaseMeasurementUnit =
+    job.assetSnapshot?.baseMeasurementUnit ?? null;
   const formulas = job.methodSnapshot?.formulas ?? [];
   const results = job.results ?? {};
   const rows = formulas
     .filter((formula) => formula.outputKey in results)
     .map((formula) => ({
       label: formula.label || formula.outputKey,
-      value: formatValueWithUnit(results[formula.outputKey], formula.unit),
+      value: formatCanonicalValueWithResolvedUnit(
+        results[formula.outputKey],
+        formula.unit,
+        assetBaseMeasurementUnit,
+      ),
     }));
 
   if (rows.length > 0) {
@@ -1962,6 +2081,8 @@ function getV2ResultRows(
 function getV2UncertaintyRows(
   job: JobData,
 ): Array<{ label: string; value: string }> {
+  const assetBaseMeasurementUnit =
+    job.assetSnapshot?.baseMeasurementUnit ?? null;
   const formulas = job.methodSnapshot?.formulas ?? [];
   const results = job.results ?? {};
 
@@ -1973,7 +2094,11 @@ function getV2UncertaintyRows(
     )
     .map((formula) => ({
       label: formula.label || formula.outputKey,
-      value: formatValueWithUnit(results[formula.outputKey], formula.unit),
+      value: formatCanonicalValueWithResolvedUnit(
+        results[formula.outputKey],
+        formula.unit,
+        assetBaseMeasurementUnit,
+      ),
     }));
 }
 
@@ -2008,6 +2133,8 @@ export function CertificateHtml({ job }: { job: JobData }) {
   );
   const shouldRenderEccentricityDiagram =
     eccentricityIndicatorFields.length > 0;
+  const assetBaseMeasurementUnit =
+    job.assetSnapshot?.baseMeasurementUnit ?? null;
 
   // Get environment data from structured snapshot
   const envTemperature = job.environmentalSnapshot?.temperature ?? null;
@@ -2313,7 +2440,11 @@ export function CertificateHtml({ job }: { job: JobData }) {
                   <div className="info-row" key={field.key}>
                     <span className="info-label">{field.label}:</span>
                     <span className="info-value">
-                      {formatValueWithUnit(value, field.unit)}
+                      {formatCanonicalValueWithResolvedUnit(
+                        value,
+                        field.unit,
+                        assetBaseMeasurementUnit,
+                      )}
                     </span>
                   </div>
                 ))}
@@ -2434,6 +2565,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
                           {formatStandardUncertainty(
                             std,
                             showCertifiedValuesTable,
+                            assetBaseMeasurementUnit,
                           )}
                         </td>
                         <td>
@@ -2470,10 +2602,25 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                   <td>{i === 0 ? std.name : ""}</td>
                                   <td>{cv.nominal}</td>
                                   <td>
-                                    {formatValue(cv.value)} {cv.unit}
+                                    {formatOriginalUnitValueWithResolvedUnit(
+                                      cv.value,
+                                      cv.unit,
+                                      assetBaseMeasurementUnit,
+                                    )}
                                   </td>
                                   <td>
-                                    ±{formatValue(cv.uncertainty)} {cv.unit}
+                                    ±
+                                    {formatCalibrationValue(
+                                      convertOriginalUnitValueForDisplay(
+                                        cv.uncertainty,
+                                        cv.unit,
+                                        assetBaseMeasurementUnit,
+                                      ),
+                                    )}{" "}
+                                    {resolveDocumentDisplayUnit(
+                                      assetBaseMeasurementUnit,
+                                      cv.unit,
+                                    )}
                                   </td>
                                 </tr>
                               )) || [],
@@ -2504,13 +2651,18 @@ export function CertificateHtml({ job }: { job: JobData }) {
                         key={field.key}
                         field={field}
                         data={tableData}
+                        assetBaseMeasurementUnit={assetBaseMeasurementUnit}
                       />
                     );
                   }
 
                   return (
                     <div key={field.key} className="eccentricity-layout">
-                      <DataTable field={field} data={tableData} />
+                      <DataTable
+                        field={field}
+                        data={tableData}
+                        assetBaseMeasurementUnit={assetBaseMeasurementUnit}
+                      />
                       <CertificateEccentricityDiagram
                         selectedPosition={getEccentricityIndicatorPosition(
                           job,
@@ -2531,7 +2683,12 @@ export function CertificateHtml({ job }: { job: JobData }) {
                 }
 
                 return (
-                  <DataTable key={field.key} field={field} data={tableData} />
+                  <DataTable
+                    key={field.key}
+                    field={field}
+                    data={tableData}
+                    assetBaseMeasurementUnit={assetBaseMeasurementUnit}
+                  />
                 );
               })}
             </div>
@@ -2568,10 +2725,25 @@ export function CertificateHtml({ job }: { job: JobData }) {
                       </td>
                       <td>{row.item.certificateNumber}</td>
                       <td>
-                        {formatValue(row.item.value)} {row.item.unit}
+                        {formatOriginalUnitValueWithResolvedUnit(
+                          row.item.value,
+                          row.item.unit,
+                          assetBaseMeasurementUnit,
+                        )}
                       </td>
                       <td>
-                        ±{formatValue(row.item.uncertainty)} {row.item.unit}
+                        ±
+                        {formatCalibrationValue(
+                          convertOriginalUnitValueForDisplay(
+                            row.item.uncertainty,
+                            row.item.unit,
+                            assetBaseMeasurementUnit,
+                          ),
+                        )}{" "}
+                        {resolveDocumentDisplayUnit(
+                          assetBaseMeasurementUnit,
+                          row.item.unit,
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -2614,7 +2786,15 @@ export function CertificateHtml({ job }: { job: JobData }) {
                             {entries.map(({ key, label, unit }) => (
                               <th key={key}>
                                 {label}
-                                {unit ? ` (${unit})` : ""}
+                                {resolveDocumentDisplayUnit(
+                                  assetBaseMeasurementUnit,
+                                  unit,
+                                )
+                                  ? ` (${resolveDocumentDisplayUnit(
+                                      assetBaseMeasurementUnit,
+                                      unit,
+                                    )})`
+                                  : ""}
                               </th>
                             ))}
                             {includeCriterion && <th>Critério</th>}
@@ -2644,6 +2824,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
                                     {formatReportedValue(
                                       entry,
                                       getIndexedValue(entry.value, index),
+                                      assetBaseMeasurementUnit,
                                     )}
                                   </td>
                                 ))}
