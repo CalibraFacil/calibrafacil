@@ -1017,12 +1017,12 @@ function ServiceOrderDetailPage() {
           className="min-w-0 gap-4"
         >
           <div className="overflow-x-auto overflow-y-hidden rounded-lg bg-muted/40 p-1 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]">
-            <TabsList className="grid h-auto min-w-[620px] grid-cols-4 bg-transparent p-0 md:min-w-0 md:w-full">
+            <TabsList className="grid min-w-[620px] grid-cols-4 bg-transparent p-0 group-data-horizontal/tabs:h-11 md:min-w-0 md:w-full">
               {workflowTabs.map((tab) => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="min-h-10 px-3 text-sm active:scale-[0.96] transition-transform"
+                  className="h-10 min-h-10 px-3 text-sm active:scale-[0.96] transition-transform"
                 >
                   <HugeiconsIcon icon={tab.icon} className="size-4" />
                   <span className="text-balance">{tab.label}</span>
