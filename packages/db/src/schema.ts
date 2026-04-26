@@ -3692,11 +3692,9 @@ export const serviceOrderNumberingSequence = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("service_order_numbering_sequence_uidx").on(
-      table.organizationId,
-      table.unitId,
-      table.sequenceKey,
-    ),
+    unique("service_order_numbering_sequence_uidx")
+      .on(table.organizationId, table.unitId, table.sequenceKey)
+      .nullsNotDistinct(),
   ],
 );
 

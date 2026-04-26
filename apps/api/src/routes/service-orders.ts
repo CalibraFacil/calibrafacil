@@ -447,6 +447,25 @@ async function getQuoteForAction(serviceOrderId: number, quoteId: number) {
   return quote ?? null;
 }
 
+async function getScopedServiceOrder(
+  id: number,
+  member: AuthVariables["member"],
+) {
+  const [order] = await db
+    .select()
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.id, id),
+        eq(serviceOrder.organizationId, member.organizationId),
+        buildUnitScopeCondition(serviceOrder.unitId, member),
+      ),
+    )
+    .limit(1);
+
+  return order ?? null;
+}
+
 export const serviceOrdersRouter = new Hono<{
   Bindings: ServiceOrderEnv;
   Variables: AuthVariables;
@@ -967,7 +986,10 @@ export const serviceOrdersRouter = new Hono<{
     ...withLabPermission({ service_order: ["read"] }),
     zValidator("param", IdParamSchema),
     async (c) => {
+      const member = c.get("member");
       const { id } = c.req.valid("param");
+      const order = await getScopedServiceOrder(id, member);
+      if (!order) return c.json({ error: "OS nao encontrada" }, 404);
       const [document] = await db
         .select()
         .from(serviceOrderIntakeDocument)
@@ -991,7 +1013,10 @@ export const serviceOrdersRouter = new Hono<{
     ...withLabPermission({ service_order: ["read"] }),
     zValidator("param", IdParamSchema),
     async (c) => {
+      const member = c.get("member");
       const { id } = c.req.valid("param");
+      const order = await getScopedServiceOrder(id, member);
+      if (!order) return c.json({ error: "OS nao encontrada" }, 404);
       const [tag] = await db
         .select()
         .from(serviceOrderTag)
@@ -1276,8 +1301,28 @@ export const serviceOrdersRouter = new Hono<{
     ),
     zValidator("json", UpdateServiceOrderEvaluationSchema),
     async (c) => {
-      const { evaluationId } = c.req.valid("param");
+      const member = c.get("member");
+      const { id, evaluationId } = c.req.valid("param");
       const input = c.req.valid("json");
+      const [existingEvaluation] = await db
+        .select({ id: serviceOrderEvaluation.id })
+        .from(serviceOrderEvaluation)
+        .innerJoin(
+          serviceOrder,
+          eq(serviceOrderEvaluation.serviceOrderId, serviceOrder.id),
+        )
+        .where(
+          and(
+            eq(serviceOrder.id, id),
+            eq(serviceOrder.organizationId, member.organizationId),
+            buildUnitScopeCondition(serviceOrder.unitId, member),
+            eq(serviceOrderEvaluation.id, evaluationId),
+          ),
+        )
+        .limit(1);
+      if (!existingEvaluation) {
+        return c.json({ error: "Avaliacao nao encontrada" }, 404);
+      }
       const [updated] = await db
         .update(serviceOrderEvaluation)
         .set({ ...input, updatedAt: new Date() })
@@ -1599,11 +1644,19 @@ export const serviceOrdersRouter = new Hono<{
     ...withLabPermission({ service_order: ["read"] }),
     zValidator("param", QuoteParamSchema),
     async (c) => {
-      const { quoteId } = c.req.valid("param");
+      const member = c.get("member");
+      const { id, quoteId } = c.req.valid("param");
+      const order = await getScopedServiceOrder(id, member);
+      if (!order) return c.json({ error: "OS nao encontrada" }, 404);
       const [quote] = await db
         .select()
         .from(serviceOrderQuote)
-        .where(eq(serviceOrderQuote.id, quoteId))
+        .where(
+          and(
+            eq(serviceOrderQuote.id, quoteId),
+            eq(serviceOrderQuote.serviceOrderId, id),
+          ),
+        )
         .limit(1);
       if (!quote?.pdfR2Key) return c.json({ error: "PDF indisponivel" }, 404);
       const client = createR2Client(c.env);
@@ -1622,13 +1675,10 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", IdParamSchema),
     zValidator("json", StartServiceOrderExecutionSchema),
     async (c) => {
+      const member = c.get("member");
       const session = c.get("session");
       const { id } = c.req.valid("param");
-      const [order] = await db
-        .select()
-        .from(serviceOrder)
-        .where(eq(serviceOrder.id, id))
-        .limit(1);
+      const order = await getScopedServiceOrder(id, member);
       if (!order) return c.json({ error: "OS nao encontrada" }, 404);
       const [execution] = await db
         .insert(serviceOrderExecution)
@@ -1642,7 +1692,13 @@ export const serviceOrdersRouter = new Hono<{
       await db
         .update(serviceOrder)
         .set({ status: "repair_in_progress", repairStartedAt: new Date() })
-        .where(eq(serviceOrder.id, id));
+        .where(
+          and(
+            eq(serviceOrder.id, id),
+            eq(serviceOrder.organizationId, member.organizationId),
+            buildUnitScopeCondition(serviceOrder.unitId, member),
+          ),
+        );
       await recordServiceOrderEvent({
         organizationId: order.organizationId,
         unitId: order.unitId,
@@ -1660,12 +1716,23 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", IdParamSchema),
     zValidator("json", UpdateServiceOrderExecutionSchema),
     async (c) => {
+      const member = c.get("member");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
       const [execution] = await db
-        .select()
+        .select({ id: serviceOrderExecution.id })
         .from(serviceOrderExecution)
-        .where(eq(serviceOrderExecution.serviceOrderId, id))
+        .innerJoin(
+          serviceOrder,
+          eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
+        )
+        .where(
+          and(
+            eq(serviceOrder.id, id),
+            eq(serviceOrder.organizationId, member.organizationId),
+            buildUnitScopeCondition(serviceOrder.unitId, member),
+          ),
+        )
         .limit(1);
       if (!execution) return c.json({ error: "Execucao nao iniciada" }, 404);
       if (input.items) {
@@ -1695,13 +1762,24 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", IdParamSchema),
     zValidator("json", FinishServiceOrderExecutionSchema),
     async (c) => {
+      const member = c.get("member");
       const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
       const [execution] = await db
-        .select()
+        .select({ id: serviceOrderExecution.id })
         .from(serviceOrderExecution)
-        .where(eq(serviceOrderExecution.serviceOrderId, id))
+        .innerJoin(
+          serviceOrder,
+          eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
+        )
+        .where(
+          and(
+            eq(serviceOrder.id, id),
+            eq(serviceOrder.organizationId, member.organizationId),
+            buildUnitScopeCondition(serviceOrder.unitId, member),
+          ),
+        )
         .limit(1);
       if (!execution) return c.json({ error: "Execucao nao iniciada" }, 404);
       if (input.items) {
@@ -1713,11 +1791,7 @@ export const serviceOrdersRouter = new Hono<{
       const nextStatus = input.calibrationRequiredAfterRepair
         ? "awaiting_calibration"
         : "awaiting_final_review";
-      const [order] = await db
-        .select()
-        .from(serviceOrder)
-        .where(eq(serviceOrder.id, id))
-        .limit(1);
+      const order = await getScopedServiceOrder(id, member);
       if (!order) return c.json({ error: "OS nao encontrada" }, 404);
       await db.transaction(async (tx) => {
         await tx
@@ -1851,6 +1925,7 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", IdParamSchema),
     zValidator("json", CancelServiceOrderSchema),
     async (c) => {
+      const member = c.get("member");
       const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
@@ -1861,7 +1936,13 @@ export const serviceOrdersRouter = new Hono<{
           canceledAt: new Date(),
           cancelReason: input.reason,
         })
-        .where(eq(serviceOrder.id, id))
+        .where(
+          and(
+            eq(serviceOrder.id, id),
+            eq(serviceOrder.organizationId, member.organizationId),
+            buildUnitScopeCondition(serviceOrder.unitId, member),
+          ),
+        )
         .returning();
       if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
       await recordServiceOrderEvent({
