@@ -13,7 +13,18 @@ import {
   type AuthVariables,
   addServerTiming,
 } from "../middleware/permission";
-import { eq, and, count, sql, gte, lte, inArray, desc } from "drizzle-orm";
+import {
+  eq,
+  and,
+  count,
+  sql,
+  gte,
+  lte,
+  inArray,
+  desc,
+  asc,
+  isNull,
+} from "drizzle-orm";
 import { withCache } from "../middleware/cache";
 import { CACHE_TTL } from "../lib/cache";
 import { getExecuteRows } from "../lib/db";
@@ -47,6 +58,10 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const thirtyDaysFromNow = new Date(now);
       thirtyDaysFromNow.setDate(now.getDate() + 30);
+      const endOfToday = new Date(now);
+      endOfToday.setHours(23, 59, 59, 999);
+      const sevenDaysFromNow = new Date(now);
+      sevenDaysFromNow.setDate(now.getDate() + 7);
       const ninetyDaysAgo = new Date(now);
       ninetyDaysAgo.setDate(now.getDate() - 90);
       const jobUnitScopeCondition = buildUnitScopeCondition(
@@ -74,6 +89,11 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           rejectedResult,
           expiringStandardsResult,
           overdueResult,
+          dueTodayResult,
+          dueNextSevenDaysResult,
+          statusBreakdownResult,
+          reviewQueueResult,
+          standardsWatchlistResult,
           trendResult,
           recentJobsResult,
         ] = await Promise.all([
@@ -130,6 +150,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
               and(
                 eq(referenceStandard.organizationId, memberData.organizationId),
                 standardUnitScopeCondition,
+                isNull(referenceStandard.deletedAt),
                 eq(referenceStandard.status, "ACTIVE"),
                 lte(referenceStandard.nextCalibrationDate, thirtyDaysFromNow),
                 gte(referenceStandard.nextCalibrationDate, now),
@@ -153,7 +174,118 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
               ),
             ),
 
-          // 6. Calibration trend (last 90 days, aggregated by day)
+          // 6. Due today (including currently overdue work still open)
+          db
+            .select({ count: count() })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.organizationId, memberData.organizationId),
+                jobUnitScopeCondition,
+                lte(calibrationJob.dueDate, endOfToday),
+                inArray(calibrationJob.status, [
+                  "DRAFT",
+                  "IN_PROGRESS",
+                  "REVIEW",
+                ]),
+              ),
+            ),
+
+          // 7. Due in the next 7 days
+          db
+            .select({ count: count() })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.organizationId, memberData.organizationId),
+                jobUnitScopeCondition,
+                gte(calibrationJob.dueDate, now),
+                lte(calibrationJob.dueDate, sevenDaysFromNow),
+                inArray(calibrationJob.status, [
+                  "DRAFT",
+                  "IN_PROGRESS",
+                  "REVIEW",
+                ]),
+              ),
+            ),
+
+          // 8. Status distribution for the active work queue
+          db
+            .select({
+              status: calibrationJob.status,
+              count: count(),
+            })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.organizationId, memberData.organizationId),
+                jobUnitScopeCondition,
+                inArray(calibrationJob.status, [
+                  "DRAFT",
+                  "IN_PROGRESS",
+                  "REVIEW",
+                  "GENERATING_PDF",
+                ]),
+              ),
+            )
+            .groupBy(calibrationJob.status),
+
+          // 9. Jobs waiting for technical/quality review
+          db
+            .select({
+              id: calibrationJob.id,
+              jobId: calibrationJob.jobId,
+              status: calibrationJob.status,
+              dueDate: calibrationJob.dueDate,
+              createdAt: calibrationJob.createdAt,
+              customerName: customer.name,
+              assetName: asset.name,
+              serviceName: service.name,
+              technicianName: user.name,
+            })
+            .from(calibrationJob)
+            .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
+            .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+            .leftJoin(service, eq(calibrationJob.serviceId, service.id))
+            .leftJoin(user, eq(calibrationJob.technicianId, user.id))
+            .where(
+              and(
+                eq(calibrationJob.organizationId, memberData.organizationId),
+                jobUnitScopeCondition,
+                eq(calibrationJob.status, "REVIEW"),
+              ),
+            )
+            .orderBy(
+              asc(calibrationJob.dueDate),
+              desc(calibrationJob.createdAt),
+            )
+            .limit(5),
+
+          // 10. Standards requiring traceability attention
+          db
+            .select({
+              id: referenceStandard.id,
+              name: referenceStandard.name,
+              serialNumber: referenceStandard.serialNumber,
+              certificateNumber: referenceStandard.certificateNumber,
+              nextCalibrationDate: referenceStandard.nextCalibrationDate,
+              status: referenceStandard.status,
+            })
+            .from(referenceStandard)
+            .where(
+              and(
+                eq(referenceStandard.organizationId, memberData.organizationId),
+                standardUnitScopeCondition,
+                isNull(referenceStandard.deletedAt),
+                eq(referenceStandard.status, "ACTIVE"),
+                gte(referenceStandard.nextCalibrationDate, now),
+                lte(referenceStandard.nextCalibrationDate, thirtyDaysFromNow),
+              ),
+            )
+            .orderBy(asc(referenceStandard.nextCalibrationDate))
+            .limit(5),
+
+          // 11. Calibration trend (last 90 days, aggregated by day)
           // Note: Convert dates to ISO strings for raw SQL to avoid postgres driver issues
           db.execute(sql`
           SELECT
@@ -171,7 +303,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           ORDER BY date ASC
         `),
 
-          // 7. Recent jobs (last 10)
+          // 12. Recent jobs (last 10)
           db
             .select({
               id: calibrationJob.id,
@@ -213,6 +345,12 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           totalDecisions > 0
             ? Math.round((approvedThisMonth / totalDecisions) * 100 * 10) / 10
             : 100; // Default to 100% if no decisions made
+        const dueToday = dueTodayResult[0]?.count ?? 0;
+        const dueNextSevenDays = dueNextSevenDaysResult[0]?.count ?? 0;
+        const statusBreakdown = statusBreakdownResult.map((row) => ({
+          status: row.status,
+          count: row.count,
+        }));
 
         // Format trend data
         // db.execute returns array directly for postgres driver
@@ -227,14 +365,20 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           rejected: parseInt(row.rejected, 10) || 0,
         }));
 
-        // Format recent jobs with computed isOverdue
-        const recentJobs = recentJobsResult.map((job) => ({
+        const withOverdueFlag = <
+          T extends { dueDate: Date | null; status: string },
+        >(
+          job: T,
+        ) => ({
           ...job,
           isOverdue:
             job.dueDate &&
             job.dueDate < now &&
             ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
-        }));
+        });
+
+        const reviewQueue = reviewQueueResult.map(withOverdueFlag);
+        const recentJobs = recentJobsResult.map(withOverdueFlag);
 
         return c.json({
           pendingCalibrations,
@@ -243,6 +387,11 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           approvalRate,
           expiringStandards,
           overdueJobs,
+          dueToday,
+          dueNextSevenDays,
+          statusBreakdown,
+          reviewQueue,
+          standardsWatchlist: standardsWatchlistResult,
           calibrationTrend,
           recentJobs,
         });

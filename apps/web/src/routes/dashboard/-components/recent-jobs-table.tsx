@@ -88,10 +88,10 @@ function formatDate(dateString: string | null): string {
 export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
   if (isLoading) {
     return (
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader>
           <Skeleton className="h-5 w-48" />
-          <Skeleton className="h-4 w-40 mt-1" />
+          <Skeleton className="mt-1 h-4 w-40" />
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -105,28 +105,31 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
   }
 
   return (
-    <Card>
+    <Card className="rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.05),0_16px_40px_rgba(0,0,0,0.05)]">
       <CardHeader>
-        <CardTitle>Calibrações Recentes</CardTitle>
-        <CardDescription>Últimas 10 calibrações</CardDescription>
+        <CardTitle className="text-balance">Atividade recente</CardTitle>
+        <CardDescription>
+          Últimas calibrações criadas no laboratório.
+        </CardDescription>
         <CardAction>
           <Button
             variant="ghost"
             size="sm"
+            className="min-h-10 active:scale-[0.96] transition-transform"
             render={<Link to="/dashboard/jobs" />}
           >
-            Ver Todas
-            <HugeiconsIcon icon={ArrowRight02Icon} className="ml-1 size-4" />
+            Ver todas
+            <HugeiconsIcon icon={ArrowRight02Icon} className="size-4" />
           </Button>
         </CardAction>
       </CardHeader>
       <CardContent>
         {jobs.length === 0 ? (
-          <div className="flex h-32 items-center justify-center text-muted-foreground">
+          <div className="flex h-32 items-center justify-center rounded-xl bg-muted/30 text-center text-sm text-muted-foreground">
             Nenhuma calibração encontrada
           </div>
         ) : (
-          <Table>
+          <Table className="[&_td]:h-12">
             <TableHeader>
               <TableRow>
                 <TableHead>Calibração</TableHead>
@@ -139,12 +142,12 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
             </TableHeader>
             <TableBody>
               {jobs.map((job) => (
-                <TableRow key={job.id}>
-                  <TableCell className="font-mono font-medium">
+                <TableRow key={job.id} className="group">
+                  <TableCell className="font-mono font-medium tabular-nums">
                     <Link
                       to="/dashboard/jobs/$id"
                       params={{ id: jobRouteId(job) }}
-                      className="hover:underline"
+                      className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {job.jobId}
                     </Link>
@@ -160,7 +163,7 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
                       {job.isOverdue && (
                         <HugeiconsIcon
                           icon={AlertCircleIcon}
-                          className="h-4 w-4 text-destructive"
+                          className="size-4 text-destructive"
                         />
                       )}
                       <span
@@ -178,8 +181,8 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
                   <TableCell>
                     <Button
                       variant="ghost"
-                      size="icon"
-                      className="size-8"
+                      size="icon-sm"
+                      className="active:scale-[0.96] transition-transform"
                       render={
                         <Link
                           to="/dashboard/jobs/$id"
@@ -187,7 +190,7 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
                         />
                       }
                     >
-                      <HugeiconsIcon icon={ViewIcon} className="h-4 w-4" />
+                      <HugeiconsIcon icon={ViewIcon} className="size-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
