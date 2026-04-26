@@ -107,8 +107,8 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Ordens de Serviço Recentes</CardTitle>
-        <CardDescription>Últimas 10 ordens de calibração</CardDescription>
+        <CardTitle>Calibrações Recentes</CardTitle>
+        <CardDescription>Últimas 10 calibrações</CardDescription>
         <CardAction>
           <Button
             variant="ghost"
@@ -123,13 +123,13 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
       <CardContent>
         {jobs.length === 0 ? (
           <div className="flex h-32 items-center justify-center text-muted-foreground">
-            Nenhuma ordem de serviço encontrada
+            Nenhuma calibração encontrada
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>OS</TableHead>
+                <TableHead>Calibração</TableHead>
                 <TableHead className="hidden sm:table-cell">Cliente</TableHead>
                 <TableHead className="hidden md:table-cell">Ativo</TableHead>
                 <TableHead className="hidden lg:table-cell">Prazo</TableHead>

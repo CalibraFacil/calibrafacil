@@ -14,14 +14,18 @@ import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as VTokenRouteImport } from './routes/v/$token'
+import { Route as ServiceOrderAccessTokenRouteImport } from './routes/service-order-access/$token'
 import { Route as AuthenticatedSettingsRouteRouteImport } from './routes/_authenticated/settings/route'
+import { Route as AuthenticatedServiceOrdersRouteRouteImport } from './routes/_authenticated/service-orders/route'
 import { Route as AuthenticatedRequestsRouteRouteImport } from './routes/_authenticated/requests/route'
 import { Route as AuthenticatedAssetsRouteRouteImport } from './routes/_authenticated/assets/route'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedServiceOrdersIndexRouteImport } from './routes/_authenticated/service-orders/index'
 import { Route as AuthenticatedRequestsIndexRouteImport } from './routes/_authenticated/requests/index'
 import { Route as AuthenticatedCertificatesIndexRouteImport } from './routes/_authenticated/certificates/index'
 import { Route as AuthenticatedAssetsIndexRouteImport } from './routes/_authenticated/assets/index'
 import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
+import { Route as AuthenticatedServiceOrdersIdRouteImport } from './routes/_authenticated/service-orders/$id'
 import { Route as AuthenticatedRequestsNewRouteImport } from './routes/_authenticated/requests/new'
 import { Route as AuthenticatedRequestsIdRouteImport } from './routes/_authenticated/requests/$id'
 import { Route as AuthenticatedCertificatesIdRouteImport } from './routes/_authenticated/certificates/$id'
@@ -50,10 +54,21 @@ const VTokenRoute = VTokenRouteImport.update({
   path: '/v/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServiceOrderAccessTokenRoute = ServiceOrderAccessTokenRouteImport.update({
+  id: '/service-order-access/$token',
+  path: '/service-order-access/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedSettingsRouteRoute =
   AuthenticatedSettingsRouteRouteImport.update({
     id: '/settings',
     path: '/settings',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedServiceOrdersRouteRoute =
+  AuthenticatedServiceOrdersRouteRouteImport.update({
+    id: '/service-orders',
+    path: '/service-orders',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedRequestsRouteRoute =
@@ -73,6 +88,12 @@ const AuthenticatedSettingsIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedSettingsRouteRoute,
+  } as any)
+const AuthenticatedServiceOrdersIndexRoute =
+  AuthenticatedServiceOrdersIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedServiceOrdersRouteRoute,
   } as any)
 const AuthenticatedRequestsIndexRoute =
   AuthenticatedRequestsIndexRouteImport.update({
@@ -98,6 +119,12 @@ const AuthenticatedSettingsAppearanceRoute =
     path: '/appearance',
     getParentRoute: () => AuthenticatedSettingsRouteRoute,
   } as any)
+const AuthenticatedServiceOrdersIdRoute =
+  AuthenticatedServiceOrdersIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedServiceOrdersRouteRoute,
+  } as any)
 const AuthenticatedRequestsNewRoute =
   AuthenticatedRequestsNewRouteImport.update({
     id: '/new',
@@ -121,30 +148,37 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof SignInRoute
   '/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
   '/requests': typeof AuthenticatedRequestsRouteRouteWithChildren
+  '/service-orders': typeof AuthenticatedServiceOrdersRouteRouteWithChildren
   '/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
+  '/service-order-access/$token': typeof ServiceOrderAccessTokenRoute
   '/v/$token': typeof VTokenRoute
   '/': typeof AuthenticatedIndexRoute
   '/certificates/$id': typeof AuthenticatedCertificatesIdRoute
   '/requests/$id': typeof AuthenticatedRequestsIdRoute
   '/requests/new': typeof AuthenticatedRequestsNewRoute
+  '/service-orders/$id': typeof AuthenticatedServiceOrdersIdRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/assets/': typeof AuthenticatedAssetsIndexRoute
   '/certificates': typeof AuthenticatedCertificatesIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
+  '/service-orders/': typeof AuthenticatedServiceOrdersIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/accept-invite': typeof AcceptInviteRoute
   '/sign-in': typeof SignInRoute
+  '/service-order-access/$token': typeof ServiceOrderAccessTokenRoute
   '/v/$token': typeof VTokenRoute
   '/': typeof AuthenticatedIndexRoute
   '/certificates/$id': typeof AuthenticatedCertificatesIdRoute
   '/requests/$id': typeof AuthenticatedRequestsIdRoute
   '/requests/new': typeof AuthenticatedRequestsNewRoute
+  '/service-orders/$id': typeof AuthenticatedServiceOrdersIdRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/assets': typeof AuthenticatedAssetsIndexRoute
   '/certificates': typeof AuthenticatedCertificatesIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
+  '/service-orders': typeof AuthenticatedServiceOrdersIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -154,16 +188,20 @@ export interface FileRoutesById {
   '/sign-in': typeof SignInRoute
   '/_authenticated/assets': typeof AuthenticatedAssetsRouteRouteWithChildren
   '/_authenticated/requests': typeof AuthenticatedRequestsRouteRouteWithChildren
+  '/_authenticated/service-orders': typeof AuthenticatedServiceOrdersRouteRouteWithChildren
   '/_authenticated/settings': typeof AuthenticatedSettingsRouteRouteWithChildren
+  '/service-order-access/$token': typeof ServiceOrderAccessTokenRoute
   '/v/$token': typeof VTokenRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/certificates/$id': typeof AuthenticatedCertificatesIdRoute
   '/_authenticated/requests/$id': typeof AuthenticatedRequestsIdRoute
   '/_authenticated/requests/new': typeof AuthenticatedRequestsNewRoute
+  '/_authenticated/service-orders/$id': typeof AuthenticatedServiceOrdersIdRoute
   '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/_authenticated/assets/': typeof AuthenticatedAssetsIndexRoute
   '/_authenticated/certificates/': typeof AuthenticatedCertificatesIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
+  '/_authenticated/service-orders/': typeof AuthenticatedServiceOrdersIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -173,30 +211,37 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/assets'
     | '/requests'
+    | '/service-orders'
     | '/settings'
+    | '/service-order-access/$token'
     | '/v/$token'
     | '/'
     | '/certificates/$id'
     | '/requests/$id'
     | '/requests/new'
+    | '/service-orders/$id'
     | '/settings/appearance'
     | '/assets/'
     | '/certificates'
     | '/requests/'
+    | '/service-orders/'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/accept-invite'
     | '/sign-in'
+    | '/service-order-access/$token'
     | '/v/$token'
     | '/'
     | '/certificates/$id'
     | '/requests/$id'
     | '/requests/new'
+    | '/service-orders/$id'
     | '/settings/appearance'
     | '/assets'
     | '/certificates'
     | '/requests'
+    | '/service-orders'
     | '/settings'
   id:
     | '__root__'
@@ -205,16 +250,20 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/_authenticated/assets'
     | '/_authenticated/requests'
+    | '/_authenticated/service-orders'
     | '/_authenticated/settings'
+    | '/service-order-access/$token'
     | '/v/$token'
     | '/_authenticated/'
     | '/_authenticated/certificates/$id'
     | '/_authenticated/requests/$id'
     | '/_authenticated/requests/new'
+    | '/_authenticated/service-orders/$id'
     | '/_authenticated/settings/appearance'
     | '/_authenticated/assets/'
     | '/_authenticated/certificates/'
     | '/_authenticated/requests/'
+    | '/_authenticated/service-orders/'
     | '/_authenticated/settings/'
   fileRoutesById: FileRoutesById
 }
@@ -222,6 +271,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AcceptInviteRoute: typeof AcceptInviteRoute
   SignInRoute: typeof SignInRoute
+  ServiceOrderAccessTokenRoute: typeof ServiceOrderAccessTokenRoute
   VTokenRoute: typeof VTokenRoute
 }
 
@@ -262,11 +312,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/service-order-access/$token': {
+      id: '/service-order-access/$token'
+      path: '/service-order-access/$token'
+      fullPath: '/service-order-access/$token'
+      preLoaderRoute: typeof ServiceOrderAccessTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/service-orders': {
+      id: '/_authenticated/service-orders'
+      path: '/service-orders'
+      fullPath: '/service-orders'
+      preLoaderRoute: typeof AuthenticatedServiceOrdersRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/requests': {
@@ -289,6 +353,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/'
       preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/service-orders/': {
+      id: '/_authenticated/service-orders/'
+      path: '/'
+      fullPath: '/service-orders/'
+      preLoaderRoute: typeof AuthenticatedServiceOrdersIndexRouteImport
+      parentRoute: typeof AuthenticatedServiceOrdersRouteRoute
     }
     '/_authenticated/requests/': {
       id: '/_authenticated/requests/'
@@ -317,6 +388,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings/appearance'
       preLoaderRoute: typeof AuthenticatedSettingsAppearanceRouteImport
       parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
+    '/_authenticated/service-orders/$id': {
+      id: '/_authenticated/service-orders/$id'
+      path: '/$id'
+      fullPath: '/service-orders/$id'
+      preLoaderRoute: typeof AuthenticatedServiceOrdersIdRouteImport
+      parentRoute: typeof AuthenticatedServiceOrdersRouteRoute
     }
     '/_authenticated/requests/new': {
       id: '/_authenticated/requests/new'
@@ -374,6 +452,22 @@ const AuthenticatedRequestsRouteRouteWithChildren =
     AuthenticatedRequestsRouteRouteChildren,
   )
 
+interface AuthenticatedServiceOrdersRouteRouteChildren {
+  AuthenticatedServiceOrdersIdRoute: typeof AuthenticatedServiceOrdersIdRoute
+  AuthenticatedServiceOrdersIndexRoute: typeof AuthenticatedServiceOrdersIndexRoute
+}
+
+const AuthenticatedServiceOrdersRouteRouteChildren: AuthenticatedServiceOrdersRouteRouteChildren =
+  {
+    AuthenticatedServiceOrdersIdRoute: AuthenticatedServiceOrdersIdRoute,
+    AuthenticatedServiceOrdersIndexRoute: AuthenticatedServiceOrdersIndexRoute,
+  }
+
+const AuthenticatedServiceOrdersRouteRouteWithChildren =
+  AuthenticatedServiceOrdersRouteRoute._addFileChildren(
+    AuthenticatedServiceOrdersRouteRouteChildren,
+  )
+
 interface AuthenticatedSettingsRouteRouteChildren {
   AuthenticatedSettingsAppearanceRoute: typeof AuthenticatedSettingsAppearanceRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
@@ -393,6 +487,7 @@ const AuthenticatedSettingsRouteRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAssetsRouteRoute: typeof AuthenticatedAssetsRouteRouteWithChildren
   AuthenticatedRequestsRouteRoute: typeof AuthenticatedRequestsRouteRouteWithChildren
+  AuthenticatedServiceOrdersRouteRoute: typeof AuthenticatedServiceOrdersRouteRouteWithChildren
   AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedCertificatesIdRoute: typeof AuthenticatedCertificatesIdRoute
@@ -402,6 +497,8 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAssetsRouteRoute: AuthenticatedAssetsRouteRouteWithChildren,
   AuthenticatedRequestsRouteRoute: AuthenticatedRequestsRouteRouteWithChildren,
+  AuthenticatedServiceOrdersRouteRoute:
+    AuthenticatedServiceOrdersRouteRouteWithChildren,
   AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedCertificatesIdRoute: AuthenticatedCertificatesIdRoute,
@@ -415,6 +512,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AcceptInviteRoute: AcceptInviteRoute,
   SignInRoute: SignInRoute,
+  ServiceOrderAccessTokenRoute: ServiceOrderAccessTokenRoute,
   VTokenRoute: VTokenRoute,
 }
 export const routeTree = rootRouteImport

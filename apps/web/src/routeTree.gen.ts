@@ -33,6 +33,7 @@ import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitati
 import { Route as DashboardStandardsRouteRouteImport } from './routes/dashboard/standards/route'
 import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
 import { Route as DashboardServicesRouteRouteImport } from './routes/dashboard/services/route'
+import { Route as DashboardServiceOrdersRouteRouteImport } from './routes/dashboard/service-orders/route'
 import { Route as DashboardRequestsRouteRouteImport } from './routes/dashboard/requests/route'
 import { Route as DashboardPersonnelRouteRouteImport } from './routes/dashboard/personnel/route'
 import { Route as DashboardNcRouteRouteImport } from './routes/dashboard/nc/route'
@@ -47,6 +48,7 @@ import { Route as BackofficeOrganizationsRouteRouteImport } from './routes/backo
 import { Route as BackofficeCustomerSuccessRouteRouteImport } from './routes/backoffice/customer-success/route'
 import { Route as DashboardStandardsIndexRouteImport } from './routes/dashboard/standards/index'
 import { Route as DashboardServicesIndexRouteImport } from './routes/dashboard/services/index'
+import { Route as DashboardServiceOrdersIndexRouteImport } from './routes/dashboard/service-orders/index'
 import { Route as DashboardRequestsIndexRouteImport } from './routes/dashboard/requests/index'
 import { Route as DashboardPersonnelIndexRouteImport } from './routes/dashboard/personnel/index'
 import { Route as DashboardNcIndexRouteImport } from './routes/dashboard/nc/index'
@@ -76,6 +78,8 @@ import { Route as DashboardSettingsBillingRouteImport } from './routes/dashboard
 import { Route as DashboardSettingsAuthenticationRouteImport } from './routes/dashboard/settings/authentication'
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
 import { Route as DashboardServicesNewRouteImport } from './routes/dashboard/services/new'
+import { Route as DashboardServiceOrdersNewRouteImport } from './routes/dashboard/service-orders/new'
+import { Route as DashboardServiceOrdersIdRouteImport } from './routes/dashboard/service-orders/$id'
 import { Route as DashboardPersonnelNewRouteImport } from './routes/dashboard/personnel/new'
 import { Route as DashboardNcNewRouteImport } from './routes/dashboard/nc/new'
 import { Route as DashboardMethodsNewRouteImport } from './routes/dashboard/methods/new'
@@ -246,6 +250,12 @@ const DashboardServicesRouteRoute = DashboardServicesRouteRouteImport.update({
   path: '/services',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardServiceOrdersRouteRoute =
+  DashboardServiceOrdersRouteRouteImport.update({
+    id: '/service-orders',
+    path: '/service-orders',
+    getParentRoute: () => DashboardRouteRoute,
+  } as any)
 const DashboardRequestsRouteRoute = DashboardRequestsRouteRouteImport.update({
   id: '/requests',
   path: '/requests',
@@ -318,6 +328,12 @@ const DashboardServicesIndexRoute = DashboardServicesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardServicesRouteRoute,
 } as any)
+const DashboardServiceOrdersIndexRoute =
+  DashboardServiceOrdersIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => DashboardServiceOrdersRouteRoute,
+  } as any)
 const DashboardRequestsIndexRoute = DashboardRequestsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -480,6 +496,18 @@ const DashboardServicesNewRoute = DashboardServicesNewRouteImport.update({
   path: '/new',
   getParentRoute: () => DashboardServicesRouteRoute,
 } as any)
+const DashboardServiceOrdersNewRoute =
+  DashboardServiceOrdersNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => DashboardServiceOrdersRouteRoute,
+  } as any)
+const DashboardServiceOrdersIdRoute =
+  DashboardServiceOrdersIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => DashboardServiceOrdersRouteRoute,
+  } as any)
 const DashboardPersonnelNewRoute = DashboardPersonnelNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -753,6 +781,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/nc': typeof DashboardNcRouteRouteWithChildren
   '/dashboard/personnel': typeof DashboardPersonnelRouteRouteWithChildren
   '/dashboard/requests': typeof DashboardRequestsRouteRouteWithChildren
+  '/dashboard/service-orders': typeof DashboardServiceOrdersRouteRouteWithChildren
   '/dashboard/services': typeof DashboardServicesRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
@@ -789,6 +818,8 @@ export interface FileRoutesByFullPath {
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
   '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
+  '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
+  '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
@@ -818,6 +849,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/nc/': typeof DashboardNcIndexRoute
   '/dashboard/personnel/': typeof DashboardPersonnelIndexRoute
   '/dashboard/requests/': typeof DashboardRequestsIndexRoute
+  '/dashboard/service-orders/': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services/': typeof DashboardServicesIndexRoute
   '/dashboard/standards/': typeof DashboardStandardsIndexRoute
   '/backoffice/customer-success/accounts/$id': typeof BackofficeCustomerSuccessAccountsIdRoute
@@ -884,6 +916,8 @@ export interface FileRoutesByTo {
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
   '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
+  '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
+  '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
@@ -913,6 +947,7 @@ export interface FileRoutesByTo {
   '/dashboard/nc': typeof DashboardNcIndexRoute
   '/dashboard/personnel': typeof DashboardPersonnelIndexRoute
   '/dashboard/requests': typeof DashboardRequestsIndexRoute
+  '/dashboard/service-orders': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services': typeof DashboardServicesIndexRoute
   '/dashboard/standards': typeof DashboardStandardsIndexRoute
   '/backoffice/customer-success/accounts/$id': typeof BackofficeCustomerSuccessAccountsIdRoute
@@ -964,6 +999,7 @@ export interface FileRoutesById {
   '/dashboard/nc': typeof DashboardNcRouteRouteWithChildren
   '/dashboard/personnel': typeof DashboardPersonnelRouteRouteWithChildren
   '/dashboard/requests': typeof DashboardRequestsRouteRouteWithChildren
+  '/dashboard/service-orders': typeof DashboardServiceOrdersRouteRouteWithChildren
   '/dashboard/services': typeof DashboardServicesRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
@@ -1000,6 +1036,8 @@ export interface FileRoutesById {
   '/dashboard/methods/new': typeof DashboardMethodsNewRoute
   '/dashboard/nc/new': typeof DashboardNcNewRoute
   '/dashboard/personnel/new': typeof DashboardPersonnelNewRoute
+  '/dashboard/service-orders/$id': typeof DashboardServiceOrdersIdRoute
+  '/dashboard/service-orders/new': typeof DashboardServiceOrdersNewRoute
   '/dashboard/services/new': typeof DashboardServicesNewRoute
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
@@ -1029,6 +1067,7 @@ export interface FileRoutesById {
   '/dashboard/nc/': typeof DashboardNcIndexRoute
   '/dashboard/personnel/': typeof DashboardPersonnelIndexRoute
   '/dashboard/requests/': typeof DashboardRequestsIndexRoute
+  '/dashboard/service-orders/': typeof DashboardServiceOrdersIndexRoute
   '/dashboard/services/': typeof DashboardServicesIndexRoute
   '/dashboard/standards/': typeof DashboardStandardsIndexRoute
   '/backoffice/customer-success/accounts/$id': typeof BackofficeCustomerSuccessAccountsIdRoute
@@ -1081,6 +1120,7 @@ export interface FileRouteTypes {
     | '/dashboard/nc'
     | '/dashboard/personnel'
     | '/dashboard/requests'
+    | '/dashboard/service-orders'
     | '/dashboard/services'
     | '/dashboard/settings'
     | '/dashboard/standards'
@@ -1117,6 +1157,8 @@ export interface FileRouteTypes {
     | '/dashboard/methods/new'
     | '/dashboard/nc/new'
     | '/dashboard/personnel/new'
+    | '/dashboard/service-orders/$id'
+    | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
@@ -1146,6 +1188,7 @@ export interface FileRouteTypes {
     | '/dashboard/nc/'
     | '/dashboard/personnel/'
     | '/dashboard/requests/'
+    | '/dashboard/service-orders/'
     | '/dashboard/services/'
     | '/dashboard/standards/'
     | '/backoffice/customer-success/accounts/$id'
@@ -1212,6 +1255,8 @@ export interface FileRouteTypes {
     | '/dashboard/methods/new'
     | '/dashboard/nc/new'
     | '/dashboard/personnel/new'
+    | '/dashboard/service-orders/$id'
+    | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
@@ -1241,6 +1286,7 @@ export interface FileRouteTypes {
     | '/dashboard/nc'
     | '/dashboard/personnel'
     | '/dashboard/requests'
+    | '/dashboard/service-orders'
     | '/dashboard/services'
     | '/dashboard/standards'
     | '/backoffice/customer-success/accounts/$id'
@@ -1291,6 +1337,7 @@ export interface FileRouteTypes {
     | '/dashboard/nc'
     | '/dashboard/personnel'
     | '/dashboard/requests'
+    | '/dashboard/service-orders'
     | '/dashboard/services'
     | '/dashboard/settings'
     | '/dashboard/standards'
@@ -1327,6 +1374,8 @@ export interface FileRouteTypes {
     | '/dashboard/methods/new'
     | '/dashboard/nc/new'
     | '/dashboard/personnel/new'
+    | '/dashboard/service-orders/$id'
+    | '/dashboard/service-orders/new'
     | '/dashboard/services/new'
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
@@ -1356,6 +1405,7 @@ export interface FileRouteTypes {
     | '/dashboard/nc/'
     | '/dashboard/personnel/'
     | '/dashboard/requests/'
+    | '/dashboard/service-orders/'
     | '/dashboard/services/'
     | '/dashboard/standards/'
     | '/backoffice/customer-success/accounts/$id'
@@ -1573,6 +1623,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardServicesRouteRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/service-orders': {
+      id: '/dashboard/service-orders'
+      path: '/service-orders'
+      fullPath: '/dashboard/service-orders'
+      preLoaderRoute: typeof DashboardServiceOrdersRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/requests': {
       id: '/dashboard/requests'
       path: '/requests'
@@ -1670,6 +1727,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/services/'
       preLoaderRoute: typeof DashboardServicesIndexRouteImport
       parentRoute: typeof DashboardServicesRouteRoute
+    }
+    '/dashboard/service-orders/': {
+      id: '/dashboard/service-orders/'
+      path: '/'
+      fullPath: '/dashboard/service-orders/'
+      preLoaderRoute: typeof DashboardServiceOrdersIndexRouteImport
+      parentRoute: typeof DashboardServiceOrdersRouteRoute
     }
     '/dashboard/requests/': {
       id: '/dashboard/requests/'
@@ -1873,6 +1937,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/services/new'
       preLoaderRoute: typeof DashboardServicesNewRouteImport
       parentRoute: typeof DashboardServicesRouteRoute
+    }
+    '/dashboard/service-orders/new': {
+      id: '/dashboard/service-orders/new'
+      path: '/new'
+      fullPath: '/dashboard/service-orders/new'
+      preLoaderRoute: typeof DashboardServiceOrdersNewRouteImport
+      parentRoute: typeof DashboardServiceOrdersRouteRoute
+    }
+    '/dashboard/service-orders/$id': {
+      id: '/dashboard/service-orders/$id'
+      path: '/$id'
+      fullPath: '/dashboard/service-orders/$id'
+      preLoaderRoute: typeof DashboardServiceOrdersIdRouteImport
+      parentRoute: typeof DashboardServiceOrdersRouteRoute
     }
     '/dashboard/personnel/new': {
       id: '/dashboard/personnel/new'
@@ -2527,6 +2605,24 @@ const DashboardRequestsRouteRouteWithChildren =
     DashboardRequestsRouteRouteChildren,
   )
 
+interface DashboardServiceOrdersRouteRouteChildren {
+  DashboardServiceOrdersIdRoute: typeof DashboardServiceOrdersIdRoute
+  DashboardServiceOrdersNewRoute: typeof DashboardServiceOrdersNewRoute
+  DashboardServiceOrdersIndexRoute: typeof DashboardServiceOrdersIndexRoute
+}
+
+const DashboardServiceOrdersRouteRouteChildren: DashboardServiceOrdersRouteRouteChildren =
+  {
+    DashboardServiceOrdersIdRoute: DashboardServiceOrdersIdRoute,
+    DashboardServiceOrdersNewRoute: DashboardServiceOrdersNewRoute,
+    DashboardServiceOrdersIndexRoute: DashboardServiceOrdersIndexRoute,
+  }
+
+const DashboardServiceOrdersRouteRouteWithChildren =
+  DashboardServiceOrdersRouteRoute._addFileChildren(
+    DashboardServiceOrdersRouteRouteChildren,
+  )
+
 interface DashboardServicesRouteRouteChildren {
   DashboardServicesNewRoute: typeof DashboardServicesNewRoute
   DashboardServicesIndexRoute: typeof DashboardServicesIndexRoute
@@ -2623,6 +2719,7 @@ interface DashboardRouteRouteChildren {
   DashboardNcRouteRoute: typeof DashboardNcRouteRouteWithChildren
   DashboardPersonnelRouteRoute: typeof DashboardPersonnelRouteRouteWithChildren
   DashboardRequestsRouteRoute: typeof DashboardRequestsRouteRouteWithChildren
+  DashboardServiceOrdersRouteRoute: typeof DashboardServiceOrdersRouteRouteWithChildren
   DashboardServicesRouteRoute: typeof DashboardServicesRouteRouteWithChildren
   DashboardSettingsRouteRoute: typeof DashboardSettingsRouteRouteWithChildren
   DashboardStandardsRouteRoute: typeof DashboardStandardsRouteRouteWithChildren
@@ -2643,6 +2740,8 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardNcRouteRoute: DashboardNcRouteRouteWithChildren,
   DashboardPersonnelRouteRoute: DashboardPersonnelRouteRouteWithChildren,
   DashboardRequestsRouteRoute: DashboardRequestsRouteRouteWithChildren,
+  DashboardServiceOrdersRouteRoute:
+    DashboardServiceOrdersRouteRouteWithChildren,
   DashboardServicesRouteRoute: DashboardServicesRouteRouteWithChildren,
   DashboardSettingsRouteRoute: DashboardSettingsRouteRouteWithChildren,
   DashboardStandardsRouteRoute: DashboardStandardsRouteRouteWithChildren,

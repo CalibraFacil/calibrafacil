@@ -137,7 +137,7 @@ function LoadingDots() {
 const calibrationColumns: ColumnDef<Job>[] = [
   {
     accessorKey: 'jobId',
-    header: 'OS',
+    header: 'Calibração',
     cell: ({ row }) => (
       <Link
         to="/dashboard/jobs/$id"
@@ -360,7 +360,7 @@ function ClientCalibrationsTab() {
               className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2"
             />
             <Input
-              placeholder="Buscar por numero da OS..."
+              placeholder="Buscar por número da calibração..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"

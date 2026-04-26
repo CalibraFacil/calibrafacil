@@ -38,7 +38,7 @@ import {
 
 export const Route = createFileRoute('/dashboard/jobs/new')({
   head: () => ({
-    meta: [{ title: 'Nova Ordem de Servico | CalibraFacil' }],
+    meta: [{ title: 'Nova Calibração | CalibraFacil' }],
   }),
   component: NewJobPage,
 })
@@ -349,7 +349,7 @@ function NewJobPage() {
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Nova Ordem de Servico</CardTitle>
+              <CardTitle>Nova Calibração</CardTitle>
               <CardDescription>
                 Crie uma nova ordem de calibracao selecionando cliente, ativo e
                 servico

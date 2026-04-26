@@ -35,7 +35,7 @@ import { type Job, jobsColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/jobs/')({
   head: () => ({
-    meta: [{ title: 'Ordens de Serviço | CalibraFacil' }],
+    meta: [{ title: 'Calibrações | CalibraFacil' }],
   }),
   component: JobsListPage,
 })
@@ -91,7 +91,7 @@ function JobsListPage() {
       })
 
       if (!res.ok) {
-        throw new Error('Falha ao carregar ordens de serviço')
+        throw new Error('Falha ao carregar calibrações')
       }
 
       return res.json() as Promise<{
@@ -128,7 +128,7 @@ function JobsListPage() {
       <Card>
         <CardContent className="pt-6">
           <p className="text-red-500">
-            Erro ao carregar ordens de serviço: {error.message}
+            Erro ao carregar calibrações: {error.message}
           </p>
         </CardContent>
       </Card>
@@ -140,16 +140,16 @@ function JobsListPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Ordens de Serviço</CardTitle>
+            <CardTitle>Calibrações</CardTitle>
             <CardDescription>
-              Gerencie as calibrações do laboratório
+              Gerencie jobs de calibração e emissão de certificados
             </CardDescription>
           </div>
           <Button
             render={
               <Link to="/dashboard/jobs/new">
                 <HugeiconsIcon icon={PlusSignIcon} className="mr-2 h-4 w-4" />
-                Nova Ordem
+                Nova Calibração
               </Link>
             }
           />
@@ -158,7 +158,7 @@ function JobsListPage() {
           {/* Filters */}
           <form onSubmit={handleSearch} className="flex gap-4 mb-6">
             <Input
-              placeholder="Buscar por número da OS..."
+              placeholder="Buscar por número da calibração..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-xs"
@@ -198,11 +198,11 @@ function JobsListPage() {
                 <EmptyMedia variant="icon">
                   <HugeiconsIcon icon={ClipboardIcon} />
                 </EmptyMedia>
-                <EmptyTitle>Nenhuma ordem de serviço encontrada</EmptyTitle>
+                <EmptyTitle>Nenhuma calibração encontrada</EmptyTitle>
                 <EmptyDescription>
                   {search || statusFilter
                     ? 'Nenhuma ordem encontrada para os filtros aplicados.'
-                    : 'Comece criando sua primeira ordem de serviço'}
+                    : 'Comece criando sua primeira calibração'}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -212,7 +212,7 @@ function JobsListPage() {
                       icon={PlusSignIcon}
                       className="mr-2 size-4"
                     />
-                    Nova Ordem
+                    Nova Calibração
                   </Button>
                 )}
                 {(search || statusFilter) && (

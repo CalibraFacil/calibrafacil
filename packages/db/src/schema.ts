@@ -57,6 +57,18 @@ import type {
   SupportRequestStatus,
   ReceivableInstallmentStatus,
   MassUnit,
+  ServiceOrderActorType,
+  ServiceOrderClosingReason,
+  ServiceOrderDeliveryMethod,
+  ServiceOrderEventType,
+  ServiceOrderExecutionResult,
+  ServiceOrderIntakeType,
+  ServiceOrderItemType,
+  ServiceOrderManualApprovalEvidenceType,
+  ServiceOrderPriority,
+  ServiceOrderQuoteStatus,
+  ServiceOrderRecommendedAction,
+  ServiceOrderStatus,
 } from "@calibra-facil/shared";
 
 // =============================================================================
@@ -2728,7 +2740,8 @@ export type FinancialAuditEntityType =
   | "snapshot"
   | "document"
   | "installment"
-  | "receipt";
+  | "receipt"
+  | "service_order";
 
 export const commercialAgreement = pgTable(
   "commercial_agreement",
@@ -2958,6 +2971,7 @@ export const billingDocumentItem = pgTable(
       () => jobCommercialSnapshot.id,
       { onDelete: "set null" },
     ),
+    serviceOrderId: integer("service_order_id"),
     description: text("description").notNull(),
     quantity: integer("quantity").default(1).notNull(),
     unitPriceCents: integer("unit_price_cents").notNull(),
@@ -2975,6 +2989,7 @@ export const billingDocumentItem = pgTable(
     index("billing_document_item_snapshot_idx").on(
       table.jobCommercialSnapshotId,
     ),
+    index("billing_document_item_service_order_idx").on(table.serviceOrderId),
   ],
 );
 
@@ -3065,6 +3080,652 @@ export const financialAuditLog = pgTable(
       table.entityId,
     ),
     index("financial_audit_log_performed_at_idx").on(table.performedAt),
+  ],
+);
+
+// =============================================================================
+// SERVICE ORDER - Operational intake, repair, quote and delivery workflow
+// =============================================================================
+
+export type ServiceOrderNumberingScope = "organization" | "unit";
+
+export type ServiceOrderSignatureData = {
+  signerName: string;
+  signedAt?: string;
+  dataUrl: string;
+};
+
+export const serviceOrder = pgTable(
+  "service_order",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
+    serviceOrderNumber: text("service_order_number").notNull(),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "restrict" }),
+    clientContactId: integer("client_contact_id"),
+    clientContactSnapshot: jsonb("client_contact_snapshot").$type<
+      Record<string, unknown>
+    >(),
+    assetId: integer("asset_id")
+      .notNull()
+      .references(() => asset.id, { onDelete: "restrict" }),
+    intakeType: text("intake_type")
+      .$type<ServiceOrderIntakeType>()
+      .default("counter")
+      .notNull(),
+    sourceServiceOrderId: integer("source_service_order_id"),
+    status: text("status")
+      .$type<ServiceOrderStatus>()
+      .default("opened")
+      .notNull(),
+    priority: text("priority")
+      .$type<ServiceOrderPriority>()
+      .default("normal")
+      .notNull(),
+    openedAt: timestamp("opened_at").defaultNow().notNull(),
+    openedByUserId: text("opened_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    responsibleTechnicianId: text("responsible_technician_id").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    evaluatedAt: timestamp("evaluated_at"),
+    quotedAt: timestamp("quoted_at"),
+    approvedAt: timestamp("approved_at"),
+    rejectedAt: timestamp("rejected_at"),
+    repairStartedAt: timestamp("repair_started_at"),
+    repairFinishedAt: timestamp("repair_finished_at"),
+    readyAt: timestamp("ready_at"),
+    deliveredAt: timestamp("delivered_at"),
+    deliveredToName: text("delivered_to_name"),
+    deliveredToDocument: text("delivered_to_document"),
+    deliveryNotes: text("delivery_notes"),
+    closedAt: timestamp("closed_at"),
+    canceledAt: timestamp("canceled_at"),
+    cancelReason: text("cancel_reason"),
+    claimedDefect: text("claimed_defect").notNull(),
+    intakeCondition: text("intake_condition").notNull(),
+    accessories: text("accessories"),
+    oldSealNumber: text("old_seal_number"),
+    newSealNumber: text("new_seal_number"),
+    repairedSealNumber: text("repaired_seal_number"),
+    inmetroRepairSealNumber: text("inmetro_repair_seal_number"),
+    inmetroRepairSealIssuedAt: timestamp("inmetro_repair_seal_issued_at"),
+    inmetroRepairSealAppliedAt: timestamp("inmetro_repair_seal_applied_at"),
+    inmetroRepairSealAppliedByUserId: text(
+      "inmetro_repair_seal_applied_by_user_id",
+    ).references(() => user.id, { onDelete: "set null" }),
+    inmetroRepairSealNotes: text("inmetro_repair_seal_notes"),
+    invoiceRemittanceNumber: text("invoice_remittance_number"),
+    invoiceRemittanceKey: text("invoice_remittance_key"),
+    invoiceRemittanceIssuedAt: timestamp("invoice_remittance_issued_at"),
+    carrierName: text("carrier_name"),
+    carrierDocument: text("carrier_document"),
+    thirdPartyName: text("third_party_name"),
+    thirdPartyDocument: text("third_party_document"),
+    thirdPartyPhone: text("third_party_phone"),
+    deliveryMethod: text("delivery_method")
+      .$type<ServiceOrderDeliveryMethod>()
+      .default("pickup_at_lab")
+      .notNull(),
+    internalNotes: text("internal_notes"),
+    clientVisibleNotes: text("client_visible_notes"),
+    totalQuotedCents: integer("total_quoted_cents").default(0).notNull(),
+    totalApprovedCents: integer("total_approved_cents").default(0).notNull(),
+    evaluationFeeCents: integer("evaluation_fee_cents").default(0).notNull(),
+    evaluationFeeApplied: boolean("evaluation_fee_applied")
+      .default(false)
+      .notNull(),
+    warrantyUntil: timestamp("warranty_until"),
+    warrantyTerms: text("warranty_terms"),
+    closingReason: text("closing_reason").$type<ServiceOrderClosingReason>(),
+    billingDocumentId: integer("billing_document_id").references(
+      () => billingDocument.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("service_order_org_number_uidx").on(
+      table.organizationId,
+      table.serviceOrderNumber,
+    ),
+    index("service_order_org_status_opened_idx").on(
+      table.organizationId,
+      table.status,
+      table.openedAt,
+    ),
+    index("service_order_unit_status_idx").on(table.unitId, table.status),
+    index("service_order_customer_idx").on(table.customerId),
+    index("service_order_asset_idx").on(table.assetId),
+    index("service_order_technician_idx").on(table.responsibleTechnicianId),
+    index("service_order_source_idx").on(table.sourceServiceOrderId),
+    index("service_order_billing_document_idx").on(table.billingDocumentId),
+  ],
+);
+
+export const serviceOrderAssetSnapshot = pgTable(
+  "service_order_asset_snapshot",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .unique()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    assetId: integer("asset_id")
+      .notNull()
+      .references(() => asset.id, { onDelete: "restrict" }),
+    assetName: text("asset_name").notNull(),
+    assetType: text("asset_type"),
+    manufacturer: text("manufacturer"),
+    model: text("model"),
+    serialNumber: text("serial_number"),
+    patrimonyNumber: text("patrimony_number"),
+    capacity: text("capacity"),
+    resolution: text("resolution"),
+    inventoryCode: text("inventory_code"),
+    clientAssetCode: text("client_asset_code"),
+    observedIdentification: text("observed_identification"),
+    photos: jsonb("photos").$type<string[]>().default([]).notNull(),
+    specifications: jsonb("specifications").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("service_order_asset_snapshot_asset_idx").on(table.assetId),
+  ],
+);
+
+export const serviceOrderIntakeDocument = pgTable(
+  "service_order_intake_document",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    documentNumber: text("document_number").notNull(),
+    version: integer("version").default(1).notNull(),
+    type: text("type").default("combined").notNull(),
+    pdfR2Key: text("pdf_r2_key"),
+    issuedAt: timestamp("issued_at"),
+    issuedByUserId: text("issued_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    accessTokenHash: text("access_token_hash"),
+    qrCodePayload: text("qr_code_payload"),
+    signatureData: jsonb("signature_data").$type<ServiceOrderSignatureData>(),
+    canceledAt: timestamp("canceled_at"),
+    canceledReason: text("canceled_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("service_order_intake_document_order_idx").on(table.serviceOrderId),
+    uniqueIndex("service_order_intake_document_number_version_uidx").on(
+      table.documentNumber,
+      table.version,
+    ),
+  ],
+);
+
+export const serviceOrderTag = pgTable(
+  "service_order_tag",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    tagNumber: text("tag_number").notNull(),
+    labelTemplateId: integer("label_template_id"),
+    pdfR2Key: text("pdf_r2_key"),
+    printedAt: timestamp("printed_at"),
+    printedByUserId: text("printed_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("service_order_tag_order_idx").on(table.serviceOrderId),
+    uniqueIndex("service_order_tag_number_uidx").on(table.tagNumber),
+  ],
+);
+
+export const serviceOrderDeliveryDocument = pgTable(
+  "service_order_delivery_document",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    documentNumber: text("document_number").notNull(),
+    version: integer("version").default(1).notNull(),
+    pdfR2Key: text("pdf_r2_key"),
+    issuedAt: timestamp("issued_at"),
+    issuedByUserId: text("issued_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    technicianSignatureData: jsonb(
+      "technician_signature_data",
+    ).$type<ServiceOrderSignatureData>(),
+    clientSignatureData: jsonb(
+      "client_signature_data",
+    ).$type<ServiceOrderSignatureData>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("service_order_delivery_document_order_idx").on(table.serviceOrderId),
+    uniqueIndex("service_order_delivery_document_number_version_uidx").on(
+      table.documentNumber,
+      table.version,
+    ),
+  ],
+);
+
+export const serviceOrderEvaluation = pgTable(
+  "service_order_evaluation",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    technicianId: text("technician_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    evaluatedAt: timestamp("evaluated_at").defaultNow().notNull(),
+    diagnosis: text("diagnosis").notNull(),
+    detectedIssues: text("detected_issues"),
+    recommendedAction: text("recommended_action")
+      .$type<ServiceOrderRecommendedAction>()
+      .notNull(),
+    requiresQuote: boolean("requires_quote").default(true).notNull(),
+    requiresClientApproval: boolean("requires_client_approval")
+      .default(true)
+      .notNull(),
+    calibrationRecommended: boolean("calibration_recommended")
+      .default(false)
+      .notNull(),
+    photos: jsonb("photos").$type<string[]>().default([]).notNull(),
+    internalNotes: text("internal_notes"),
+    clientVisibleNotes: text("client_visible_notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("service_order_evaluation_order_idx").on(table.serviceOrderId),
+    index("service_order_evaluation_technician_idx").on(table.technicianId),
+  ],
+);
+
+export const serviceOrderQuote = pgTable(
+  "service_order_quote",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    quoteNumber: text("quote_number").notNull(),
+    version: integer("version").default(1).notNull(),
+    status: text("status")
+      .$type<ServiceOrderQuoteStatus>()
+      .default("draft")
+      .notNull(),
+    subtotalServicesCents: integer("subtotal_services_cents")
+      .default(0)
+      .notNull(),
+    subtotalPartsCents: integer("subtotal_parts_cents").default(0).notNull(),
+    discountCents: integer("discount_cents").default(0).notNull(),
+    freightCents: integer("freight_cents").default(0).notNull(),
+    totalCents: integer("total_cents").default(0).notNull(),
+    validUntil: timestamp("valid_until"),
+    paymentTerms: text("payment_terms"),
+    deliveryEstimate: text("delivery_estimate"),
+    warrantyTerms: text("warranty_terms"),
+    clientMessage: text("client_message"),
+    internalNotes: text("internal_notes"),
+    sentAt: timestamp("sent_at"),
+    sentByUserId: text("sent_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    approvedAt: timestamp("approved_at"),
+    approvedByPortalUserId: text("approved_by_portal_user_id").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    approvedManuallyByUserId: text("approved_manually_by_user_id").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    manualApprovalByName: text("manual_approval_by_name"),
+    manualApprovalEvidenceType: text(
+      "manual_approval_evidence_type",
+    ).$type<ServiceOrderManualApprovalEvidenceType>(),
+    manualApprovalEvidenceText: text("manual_approval_evidence_text"),
+    rejectedAt: timestamp("rejected_at"),
+    rejectionReason: text("rejection_reason"),
+    pdfR2Key: text("pdf_r2_key"),
+    portalAccessTokenHash: text("portal_access_token_hash"),
+    createdByUserId: text("created_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("service_order_quote_order_status_idx").on(
+      table.serviceOrderId,
+      table.status,
+    ),
+    uniqueIndex("service_order_quote_order_version_uidx").on(
+      table.serviceOrderId,
+      table.version,
+    ),
+    uniqueIndex("service_order_quote_number_version_uidx").on(
+      table.quoteNumber,
+      table.version,
+    ),
+    index("service_order_quote_token_idx").on(table.portalAccessTokenHash),
+  ],
+);
+
+export const serviceOrderQuoteItem = pgTable(
+  "service_order_quote_item",
+  {
+    id: serial("id").primaryKey(),
+    quoteId: integer("quote_id")
+      .notNull()
+      .references(() => serviceOrderQuote.id, { onDelete: "cascade" }),
+    type: text("type").$type<ServiceOrderItemType>().notNull(),
+    description: text("description").notNull(),
+    quantity: real("quantity").default(1).notNull(),
+    unit: text("unit").default("un").notNull(),
+    unitPriceCents: integer("unit_price_cents").notNull(),
+    totalPriceCents: integer("total_price_cents").notNull(),
+    taxable: boolean("taxable").default(true).notNull(),
+    warrantyCovered: boolean("warranty_covered").default(false).notNull(),
+    warrantyUntil: timestamp("warranty_until"),
+    warrantyTerms: text("warranty_terms"),
+    notes: text("notes"),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("service_order_quote_item_quote_idx").on(table.quoteId)],
+);
+
+export const serviceOrderExecution = pgTable(
+  "service_order_execution",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .unique()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    startedByUserId: text("started_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    finishedAt: timestamp("finished_at"),
+    finishedByUserId: text("finished_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    servicePerformed: text("service_performed"),
+    partsUsedSummary: text("parts_used_summary"),
+    technicalNotes: text("technical_notes"),
+    technicianSignatureData: jsonb(
+      "technician_signature_data",
+    ).$type<ServiceOrderSignatureData>(),
+    clientSignatureData: jsonb(
+      "client_signature_data",
+    ).$type<ServiceOrderSignatureData>(),
+    calibrationRequiredAfterRepair: boolean("calibration_required_after_repair")
+      .default(false)
+      .notNull(),
+    result: text("result").$type<ServiceOrderExecutionResult>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("service_order_execution_order_idx").on(table.serviceOrderId),
+  ],
+);
+
+export const serviceOrderExecutionItem = pgTable(
+  "service_order_execution_item",
+  {
+    id: serial("id").primaryKey(),
+    executionId: integer("execution_id")
+      .notNull()
+      .references(() => serviceOrderExecution.id, { onDelete: "cascade" }),
+    quoteItemId: integer("quote_item_id").references(
+      () => serviceOrderQuoteItem.id,
+      { onDelete: "set null" },
+    ),
+    type: text("type").$type<ServiceOrderItemType>().notNull(),
+    description: text("description").notNull(),
+    quantity: real("quantity").default(1).notNull(),
+    unit: text("unit").default("un").notNull(),
+    unitCostCents: integer("unit_cost_cents").default(0).notNull(),
+    unitPriceCents: integer("unit_price_cents").notNull(),
+    totalPriceCents: integer("total_price_cents").notNull(),
+    technicianId: text("technician_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    sortOrder: integer("sort_order").default(0).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("service_order_execution_item_execution_idx").on(table.executionId),
+    index("service_order_execution_item_quote_item_idx").on(table.quoteItemId),
+  ],
+);
+
+export const serviceOrderEventLog = pgTable(
+  "service_order_event_log",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "cascade" }),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    actorType: text("actor_type").$type<ServiceOrderActorType>().notNull(),
+    actorId: text("actor_id"),
+    eventType: text("event_type").$type<ServiceOrderEventType>().notNull(),
+    oldValue: jsonb("old_value").$type<Record<string, unknown>>(),
+    newValue: jsonb("new_value").$type<Record<string, unknown>>(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("service_order_event_order_created_idx").on(
+      table.serviceOrderId,
+      table.createdAt,
+    ),
+    index("service_order_event_org_unit_created_idx").on(
+      table.organizationId,
+      table.unitId,
+      table.createdAt,
+    ),
+    index("service_order_event_type_idx").on(table.eventType),
+  ],
+);
+
+export const serviceOrderAttachment = pgTable(
+  "service_order_attachment",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    uploadedByUserId: text("uploaded_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    r2Key: text("r2_key").notNull(),
+    visibility: text("visibility").default("internal").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("service_order_attachment_order_idx").on(table.serviceOrderId),
+  ],
+);
+
+export const serviceOrderCertificateLink = pgTable(
+  "service_order_certificate_link",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    certificateJobId: integer("certificate_job_id")
+      .notNull()
+      .references(() => calibrationJob.id, { onDelete: "cascade" }),
+    linkedByUserId: text("linked_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    linkedAt: timestamp("linked_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("service_order_certificate_link_uidx").on(
+      table.serviceOrderId,
+      table.certificateJobId,
+    ),
+    index("service_order_certificate_link_job_idx").on(table.certificateJobId),
+  ],
+);
+
+export const serviceOrderSettings = pgTable(
+  "service_order_settings",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    numberingTemplate: text("numbering_template")
+      .default("OS-{YYYY}-{SEQ}")
+      .notNull(),
+    numberingScope: text("numbering_scope")
+      .$type<ServiceOrderNumberingScope>()
+      .default("unit")
+      .notNull(),
+    defaultIntakeTerms: text("default_intake_terms"),
+    defaultQuoteTerms: text("default_quote_terms"),
+    requirePhotoOnIntake: boolean("require_photo_on_intake")
+      .default(false)
+      .notNull(),
+    requireInvoiceOrJustification: boolean("require_invoice_or_justification")
+      .default(false)
+      .notNull(),
+    allowPublicQuoteApproval: boolean("allow_public_quote_approval")
+      .default(true)
+      .notNull(),
+    requirePortalLoginForApproval: boolean("require_portal_login_for_approval")
+      .default(false)
+      .notNull(),
+    autoEmailOnOpen: boolean("auto_email_on_open").default(true).notNull(),
+    autoEmailOnQuoteSent: boolean("auto_email_on_quote_sent")
+      .default(true)
+      .notNull(),
+    autoEmailOnReady: boolean("auto_email_on_ready").default(true).notNull(),
+    autoEmailOnClose: boolean("auto_email_on_close").default(false).notNull(),
+    showValuesInPortal: boolean("show_values_in_portal")
+      .default(true)
+      .notNull(),
+    defaultQuoteValidityDays: integer("default_quote_validity_days")
+      .default(15)
+      .notNull(),
+    defaultWarrantyTerms: text("default_warranty_terms"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("service_order_settings_org_uidx").on(table.organizationId),
+  ],
+);
+
+export const serviceOrderNumberingSequence = pgTable(
+  "service_order_numbering_sequence",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "cascade",
+    }),
+    sequenceKey: text("sequence_key").notNull(),
+    currentValue: integer("current_value").default(0).notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    unique("service_order_numbering_sequence_uidx")
+      .on(table.organizationId, table.unitId, table.sequenceKey)
+      .nullsNotDistinct(),
+  ],
+);
+
+export const serviceOrderPublicAccessToken = pgTable(
+  "service_order_public_access_token",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    quoteId: integer("quote_id").references(() => serviceOrderQuote.id, {
+      onDelete: "cascade",
+    }),
+    tokenHash: text("token_hash").notNull(),
+    scope: text("scope").default("service_order").notNull(),
+    expiresAt: timestamp("expires_at"),
+    revokedAt: timestamp("revoked_at"),
+    lastViewedAt: timestamp("last_viewed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("service_order_public_access_token_hash_uidx").on(
+      table.tokenHash,
+    ),
+    index("service_order_public_access_token_order_idx").on(
+      table.serviceOrderId,
+    ),
+    index("service_order_public_access_token_quote_idx").on(table.quoteId),
   ],
 );
 
@@ -3269,6 +3930,162 @@ export const jobAuditLogRelations = relations(jobAuditLog, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const serviceOrderRelations = relations(
+  serviceOrder,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [serviceOrder.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [serviceOrder.unitId],
+      references: [organizationUnit.id],
+    }),
+    customer: one(customer, {
+      fields: [serviceOrder.customerId],
+      references: [customer.id],
+    }),
+    asset: one(asset, {
+      fields: [serviceOrder.assetId],
+      references: [asset.id],
+    }),
+    openedByUser: one(user, {
+      fields: [serviceOrder.openedByUserId],
+      references: [user.id],
+      relationName: "serviceOrderOpenedBy",
+    }),
+    responsibleTechnician: one(user, {
+      fields: [serviceOrder.responsibleTechnicianId],
+      references: [user.id],
+      relationName: "serviceOrderResponsibleTechnician",
+    }),
+    billingDocument: one(billingDocument, {
+      fields: [serviceOrder.billingDocumentId],
+      references: [billingDocument.id],
+    }),
+    assetSnapshot: one(serviceOrderAssetSnapshot),
+    intakeDocuments: many(serviceOrderIntakeDocument),
+    tags: many(serviceOrderTag),
+    deliveryDocuments: many(serviceOrderDeliveryDocument),
+    evaluations: many(serviceOrderEvaluation),
+    quotes: many(serviceOrderQuote),
+    execution: one(serviceOrderExecution),
+    events: many(serviceOrderEventLog),
+    attachments: many(serviceOrderAttachment),
+    certificateLinks: many(serviceOrderCertificateLink),
+  }),
+);
+
+export const serviceOrderAssetSnapshotRelations = relations(
+  serviceOrderAssetSnapshot,
+  ({ one }) => ({
+    serviceOrder: one(serviceOrder, {
+      fields: [serviceOrderAssetSnapshot.serviceOrderId],
+      references: [serviceOrder.id],
+    }),
+    asset: one(asset, {
+      fields: [serviceOrderAssetSnapshot.assetId],
+      references: [asset.id],
+    }),
+  }),
+);
+
+export const serviceOrderDeliveryDocumentRelations = relations(
+  serviceOrderDeliveryDocument,
+  ({ one }) => ({
+    serviceOrder: one(serviceOrder, {
+      fields: [serviceOrderDeliveryDocument.serviceOrderId],
+      references: [serviceOrder.id],
+    }),
+    issuedByUser: one(user, {
+      fields: [serviceOrderDeliveryDocument.issuedByUserId],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const serviceOrderQuoteRelations = relations(
+  serviceOrderQuote,
+  ({ one, many }) => ({
+    serviceOrder: one(serviceOrder, {
+      fields: [serviceOrderQuote.serviceOrderId],
+      references: [serviceOrder.id],
+    }),
+    createdByUser: one(user, {
+      fields: [serviceOrderQuote.createdByUserId],
+      references: [user.id],
+    }),
+    items: many(serviceOrderQuoteItem),
+  }),
+);
+
+export const serviceOrderQuoteItemRelations = relations(
+  serviceOrderQuoteItem,
+  ({ one }) => ({
+    quote: one(serviceOrderQuote, {
+      fields: [serviceOrderQuoteItem.quoteId],
+      references: [serviceOrderQuote.id],
+    }),
+  }),
+);
+
+export const serviceOrderExecutionRelations = relations(
+  serviceOrderExecution,
+  ({ one, many }) => ({
+    serviceOrder: one(serviceOrder, {
+      fields: [serviceOrderExecution.serviceOrderId],
+      references: [serviceOrder.id],
+    }),
+    items: many(serviceOrderExecutionItem),
+  }),
+);
+
+export const serviceOrderExecutionItemRelations = relations(
+  serviceOrderExecutionItem,
+  ({ one }) => ({
+    execution: one(serviceOrderExecution, {
+      fields: [serviceOrderExecutionItem.executionId],
+      references: [serviceOrderExecution.id],
+    }),
+    quoteItem: one(serviceOrderQuoteItem, {
+      fields: [serviceOrderExecutionItem.quoteItemId],
+      references: [serviceOrderQuoteItem.id],
+    }),
+  }),
+);
+
+export const serviceOrderEventLogRelations = relations(
+  serviceOrderEventLog,
+  ({ one }) => ({
+    serviceOrder: one(serviceOrder, {
+      fields: [serviceOrderEventLog.serviceOrderId],
+      references: [serviceOrder.id],
+    }),
+    organization: one(organization, {
+      fields: [serviceOrderEventLog.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [serviceOrderEventLog.unitId],
+      references: [organizationUnit.id],
+    }),
+  }),
+);
+
+export const serviceOrderCertificateLinkRelations = relations(
+  serviceOrderCertificateLink,
+  ({ one }) => ({
+    serviceOrder: one(serviceOrder, {
+      fields: [serviceOrderCertificateLink.serviceOrderId],
+      references: [serviceOrder.id],
+    }),
+    certificateJob: one(calibrationJob, {
+      fields: [serviceOrderCertificateLink.certificateJobId],
+      references: [calibrationJob.id],
+    }),
+  }),
+);
 
 export const calibrationRequestRelations = relations(
   calibrationRequest,

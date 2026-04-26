@@ -64,6 +64,41 @@
       "when": 1776729600000,
       "tag": "0008_asset_base_measurement_unit",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777075200000,
+      "tag": "0009_service_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777161600000,
+      "tag": "0010_service_order_numbering_sequence_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777248000000,
+      "tag": "0011_service_order_settings_unique_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777334400000,
+      "tag": "0012_service_order_delivery_receipts",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1777420800000,
+      "tag": "0013_service_order_numbering_nulls_not_distinct",
+      "breakpoints": true
     }
   ]
 }

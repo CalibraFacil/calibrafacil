@@ -374,18 +374,27 @@ async function loadPayloads(
 
     return result.rows.map((row) => ({
         externalId: `billing_document:${row.id}`,
+        documentNumber: row.job_id ?? null,
         organizationId,
         unitId: row.unit_id,
         unitName: row.unit_name ?? null,
-        jobId: row.job_id,
         customerExternalId: row.customer_id ? `customer:${row.customer_id}` : null,
         customerName: row.customer_name ?? null,
-        serviceName: row.service_name ?? null,
-        amountCents: row.amount,
+        totalCents: Number(row.amount ?? 0),
         currency: row.currency ?? "BRL",
-        issuedAt: toIso(row.approved_at),
-        dueAt: toIso(row.due_date),
-        status: "ready",
+        issueDate: toIso(row.approved_at),
+        dueDate: toIso(row.due_date),
+        status: "issued" as const,
+        items: [
+            {
+                lineId: `calibration_job:${row.id}:service`,
+                jobId: row.job_id ?? null,
+                description: row.service_name ?? "Servico de calibracao",
+                quantity: 1,
+                unitPriceCents: Number(row.amount ?? 0),
+                totalCents: Number(row.amount ?? 0),
+            },
+        ],
     }));
 }
 

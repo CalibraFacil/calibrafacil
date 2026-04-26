@@ -188,7 +188,7 @@ function RequestDetailPage() {
               </p>
               {item.convertedJobCode && (
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Convertida na OS {item.convertedJobCode}
+                  Convertida na calibração {item.convertedJobCode}
                   {item.convertedServiceName &&
                     ` · ${item.convertedServiceName}`}
                 </p>

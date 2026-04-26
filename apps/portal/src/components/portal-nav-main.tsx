@@ -41,6 +41,11 @@ const navItems: Array<NavItem> = [
     icon: <HugeiconsIcon icon={Notebook01Icon} />,
   },
   {
+    title: "Ordens de Serviço",
+    url: "/service-orders",
+    icon: <HugeiconsIcon icon={Notebook01Icon} />,
+  },
+  {
     title: "Certificados",
     url: "/certificates",
     icon: <HugeiconsIcon icon={File01Icon} />,
