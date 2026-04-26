@@ -1,4 +1,4 @@
-import { createLabAuth } from "@calibra-facil/auth";
+import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
 import {
   INTERNAL_ROLES,
   PORTAL_MANAGEABLE_MEMBER_ROLES,
@@ -12,23 +12,9 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { and, eq, lt, ne, or, SQL } from "drizzle-orm";
-import { Resend } from "resend";
 import { getPortalBaseUrlForClientOrganization } from "./portal-domains";
 
 const DEFAULT_INVITATION_EXPIRATION_SECONDS = 60 * 60 * 24 * 7; // 7 days
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function sanitizeMailHeader(value: string): string {
-  return value.replace(/[\r\n]+/g, " ").trim();
-}
 
 export class PortalServiceAccountError extends Error {
   status: number;
@@ -139,50 +125,23 @@ async function sendPortalInvitationEmail(params: {
   inviterName: string;
   inviterEmail: string;
 }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    throw new PortalServiceAccountError(
-      "RESEND_API_KEY nao configurado",
-      500,
-      "RESEND_NOT_CONFIGURED",
-    );
-  }
-
-  const from =
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.EMAIL_FROM ||
-    "Calibra Facil <noreply@calibrafacil.com>";
   const invitationUrl = await getInvitationUrl(
     params.organizationId,
     params.invitationId,
   );
-  const escapedOrganizationName = escapeHtml(params.organizationName);
-  const escapedRole = escapeHtml(params.role);
-  const escapedInviterName = escapeHtml(params.inviterName);
-  const escapedInviterEmail = escapeHtml(params.inviterEmail);
-  const escapedInvitationUrl = escapeHtml(invitationUrl);
-  const subject = sanitizeMailHeader(`Convite para ${params.organizationName}`);
+  const portalOrigin = new URL(invitationUrl).origin;
+  const portalAuth = createPortalAuth() as any;
 
-  const resend = new Resend(apiKey);
-  await resend.emails.send({
-    from,
-    to: params.recipientEmail,
-    subject,
-    html: `
-      <p>Ola,</p>
-      <p>Voce recebeu um convite para acessar o portal de <strong>${escapedOrganizationName}</strong>.</p>
-      <p>Funcao: <strong>${escapedRole}</strong></p>
-      <p>Convidado por: ${escapedInviterName} (${escapedInviterEmail})</p>
-      <p><a href="${escapedInvitationUrl}">Aceitar convite</a></p>
-      <p>Se voce nao esperava este convite, ignore este email.</p>
-    `,
-    text: [
-      "Voce recebeu um convite para acessar o portal.",
-      `Organizacao: ${params.organizationName}`,
-      `Funcao: ${params.role}`,
-      `Convidado por: ${params.inviterName} (${params.inviterEmail})`,
-      `Aceitar convite: ${invitationUrl}`,
-    ].join("\n"),
+  await portalAuth.api.signInMagicLink({
+    body: {
+      email: params.recipientEmail,
+      callbackURL: invitationUrl,
+      newUserCallbackURL: invitationUrl,
+      errorCallbackURL: `${portalOrigin}/sign-in?error=magic-link`,
+    },
+    headers: new Headers({
+      origin: portalOrigin,
+    }),
   });
 }
 

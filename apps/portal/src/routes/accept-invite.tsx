@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { portalAuthClient, usePortalSession } from "@calibra-facil/auth/client";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -40,18 +40,10 @@ type InvitationData = {
 
 function AcceptInvitePage() {
   const { token } = Route.useSearch();
-  const navigate = useNavigate();
   const { data: session, isPending: sessionLoading } = usePortalSession();
 
   const [submitting, setSubmitting] = useState(false);
-
-  // Track if invitation was already accepted to prevent duplicate calls
-  const invitationAcceptedRef = useRef(false);
-
-  // Form state
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [linkSent, setLinkSent] = useState(false);
   const invitationQuery = useQuery({
     queryKey: ["portal-invitation", token],
     queryFn: async (): Promise<InvitationData> => {
@@ -59,9 +51,12 @@ function AcceptInvitePage() {
         throw new Error("Token de convite não fornecido.");
       }
 
-      const response = await fetch(`${getApiBaseUrl()}/api/invitations/${token}`, {
-        credentials: "include",
-      });
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/invitations/${token}`,
+        {
+          credentials: "include",
+        },
+      );
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -93,55 +88,37 @@ function AcceptInvitePage() {
 
     if (!invitation || !token) return;
 
-    if (password !== confirmPassword) {
-      toast.error("As senhas não coincidem");
-      return;
-    }
-
-    if (password.length < 8) {
-      toast.error("A senha deve ter pelo menos 8 caracteres");
-      return;
-    }
-
     setSubmitting(true);
 
     try {
-      // Atomic signup with invitation acceptance
-      // This creates the user AND adds them to the organization in a single transaction
-      // The invitationId parameter tells Better Auth to automatically accept the invitation
-      const result = await portalAuthClient.signUp.email({
+      const callbackURL =
+        typeof window !== "undefined"
+          ? new URL(
+              `/accept-invite?token=${token}`,
+              window.location.origin,
+            ).toString()
+          : `/accept-invite?token=${token}`;
+      const result = await portalAuthClient.signIn.magicLink({
         email: invitation.email,
-        password,
-        name,
-        callbackURL: "/",
+        callbackURL,
+        newUserCallbackURL: callbackURL,
+        errorCallbackURL:
+          typeof window !== "undefined"
+            ? `${window.location.origin}/sign-in?error=magic-link`
+            : undefined,
       });
 
       if (result.error) {
-        toast.error(result.error.message || "Erro ao criar conta");
+        toast.error(result.error.message || "Erro ao enviar link de acesso");
         setSubmitting(false);
         return;
       }
 
-      // Mark as accepted BEFORE calling acceptInvitation to prevent useEffect from also calling it
-      invitationAcceptedRef.current = true;
-
-      // After signup, accept the invitation to join the organization
-      const acceptResult = await portalAuthClient.organization.acceptInvitation(
-        {
-          invitationId: invitation.id,
-        },
-      );
-
-      if (acceptResult.error) {
-        // User created but couldn't accept invitation - still consider it a success
-        // as they can accept later
-        console.error("Failed to accept invitation:", acceptResult.error);
-      }
-
-      toast.success("Conta criada com sucesso!");
-      navigate({ to: "/" });
+      setLinkSent(true);
+      toast.success("Link de acesso enviado");
     } catch {
-      toast.error("Erro ao criar conta");
+      toast.error("Erro ao enviar link de acesso");
+    } finally {
       setSubmitting(false);
     }
   };
@@ -214,7 +191,10 @@ function AcceptInvitePage() {
 
   // If user is logged in with matching email, show accepting state
   if (session) {
-    if (session.user.email !== invitation.email) {
+    if (
+      session.user.email.trim().toLowerCase() !==
+      invitation.email.trim().toLowerCase()
+    ) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
           <Card className="w-full max-w-md">
@@ -232,12 +212,12 @@ function AcceptInvitePage() {
     return <LoggedInInviteAcceptance invitation={invitation} />;
   }
 
-  // New user signup form
+  // New users receive a magic link, then return here authenticated.
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Criar sua conta</CardTitle>
+          <CardTitle className="text-2xl">Acessar convite</CardTitle>
           <CardDescription>
             Você foi convidado para acessar{" "}
             <strong>{invitation.organizationName}</strong> no CalibraFácil.
@@ -256,53 +236,25 @@ function AcceptInvitePage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome completo</Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="Seu nome"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                autoFocus
-              />
-            </div>
+            {linkSent ? (
+              <div className="bg-primary/10 text-primary rounded-md p-4 text-sm">
+                Enviamos um link seguro para este email. Abra o link para
+                finalizar o convite.
+              </div>
+            ) : null}
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Mínimo 8 caracteres"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar senha</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Repita a senha"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={8}
-              />
-            </div>
-
-            <Button type="submit" className="w-full" disabled={submitting}>
+            <Button
+              type="submit"
+              className="w-full active:scale-[0.96] transition-transform"
+              disabled={submitting}
+            >
               {submitting ? (
                 <>
                   <Spinner className="mr-2" />
-                  Criando conta...
+                  Enviando link...
                 </>
               ) : (
-                "Criar conta e acessar"
+                "Receber link de acesso"
               )}
             </Button>
           </form>
@@ -318,7 +270,11 @@ function LoggedInInviteAcceptance({
   invitation: InvitationData;
 }) {
   const organizationsQuery = useQuery({
-    queryKey: ["portal-organizations", "accept-invite", invitation.organizationSlug],
+    queryKey: [
+      "portal-organizations",
+      "accept-invite",
+      invitation.organizationSlug,
+    ],
     queryFn: async () => {
       const orgsResult = await portalAuthClient.organization.list();
       return orgsResult.data ?? [];
