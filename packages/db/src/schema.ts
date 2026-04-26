@@ -3163,10 +3163,6 @@ export const serviceOrder = pgTable(
     inmetroRepairSealAppliedByUserId: text(
       "inmetro_repair_seal_applied_by_user_id",
     ).references(() => user.id, { onDelete: "set null" }),
-    inmetroRepairSealEvidenceR2Key: text("inmetro_repair_seal_evidence_r2_key"),
-    inmetroRepairSealEvidenceContentType: text(
-      "inmetro_repair_seal_evidence_content_type",
-    ),
     inmetroRepairSealNotes: text("inmetro_repair_seal_notes"),
     invoiceRemittanceNumber: text("invoice_remittance_number"),
     invoiceRemittanceKey: text("invoice_remittance_key"),

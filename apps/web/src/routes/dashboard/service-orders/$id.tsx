@@ -15,7 +15,7 @@ import {
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 
-import { api, resolveApiURL } from '@/utils/api'
+import { api } from '@/utils/api'
 import {
   EventTimeline,
   type EventTimelineItem,
@@ -180,7 +180,6 @@ type ServiceOrderDetail = {
   inmetroRepairSealNumber?: string | null
   inmetroRepairSealIssuedAt?: string | null
   inmetroRepairSealAppliedAt?: string | null
-  inmetroRepairSealEvidenceR2Key?: string | null
   inmetroRepairSealNotes?: string | null
   deliveredAt?: string | null
   deliveredToName?: string | null
@@ -606,8 +605,6 @@ function ServiceOrderDetailPage() {
   const [repairSealNumber, setRepairSealNumber] = useState('')
   const [repairSealNotes, setRepairSealNotes] = useState('')
   const [repairSealApplied, setRepairSealApplied] = useState(false)
-  const [repairSealEvidenceFile, setRepairSealEvidenceFile] =
-    useState<File | null>(null)
   const [technicianSignerName, setTechnicianSignerName] = useState('')
   const [technicianSignatureDataUrl, setTechnicianSignatureDataUrl] =
     useState('')
@@ -892,42 +889,6 @@ function ServiceOrderDetailPage() {
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : 'Erro ao salvar selo',
-      )
-    },
-  })
-
-  const uploadRepairSealEvidence = useMutation({
-    mutationFn: async () => {
-      if (!repairSealEvidenceFile) {
-        throw new Error('Selecione a evidência do selo aplicado.')
-      }
-      const form = new FormData()
-      form.set('evidence', repairSealEvidenceFile)
-      const activeOrgId = window.localStorage.getItem('dashboard-active-org')
-      const activeUnitId = activeOrgId
-        ? window.localStorage.getItem(`dashboard-active-unit:${activeOrgId}`)
-        : null
-      const headers = new Headers()
-      if (activeUnitId) headers.set('x-active-unit-id', activeUnitId)
-      const response = await fetch(
-        resolveApiURL(`/api/service-orders/${id}/repair-seal/evidence`),
-        {
-          method: 'POST',
-          credentials: 'include',
-          headers,
-          body: form,
-        },
-      )
-      if (!response.ok) throw new Error('Erro ao enviar evidência do selo')
-    },
-    onSuccess: () => {
-      toast.success('Evidência do selo enviada')
-      setRepairSealEvidenceFile(null)
-      queryClient.invalidateQueries({ queryKey: ['service-order', id] })
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : 'Erro ao enviar evidência',
       )
     },
   })
@@ -1674,14 +1635,12 @@ function ServiceOrderDetailPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Evidência do selo aplicado</Label>
-                  <Input
-                    type="file"
-                    accept="image/png,image/jpeg,application/pdf"
-                    onChange={(event) =>
-                      setRepairSealEvidenceFile(event.target.files?.[0] ?? null)
-                    }
-                  />
+                  <Label>Status do selo físico</Label>
+                  <div className="flex min-h-10 items-center rounded-md bg-background px-3 text-sm shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]">
+                    {repairSealApplied
+                      ? 'Aplicado na via do laboratório'
+                      : 'Pendente de aplicação física'}
+                  </div>
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Observações do selo</Label>
@@ -1698,7 +1657,7 @@ function ServiceOrderDetailPage() {
                       setRepairSealApplied(Boolean(checked))
                     }
                   />
-                  Selo físico aplicado / pronto para evidência
+                  Selo físico aplicado
                 </label>
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button
@@ -1708,17 +1667,6 @@ function ServiceOrderDetailPage() {
                     disabled={updateRepairSeal.isPending}
                   >
                     Salvar selo
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="active:scale-[0.96] transition-transform"
-                    onClick={() => uploadRepairSealEvidence.mutate()}
-                    disabled={
-                      !repairSealEvidenceFile ||
-                      uploadRepairSealEvidence.isPending
-                    }
-                  >
-                    Enviar evidência
                   </Button>
                 </div>
               </div>

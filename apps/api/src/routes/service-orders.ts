@@ -86,7 +86,6 @@ import {
 import {
   createR2Client,
   generatePresignedUrl,
-  uploadToR2,
   type R2Env,
 } from "../lib/storage";
 
@@ -195,10 +194,6 @@ async function getServiceOrderDetail(
       inmetroRepairSealNumber: serviceOrder.inmetroRepairSealNumber,
       inmetroRepairSealIssuedAt: serviceOrder.inmetroRepairSealIssuedAt,
       inmetroRepairSealAppliedAt: serviceOrder.inmetroRepairSealAppliedAt,
-      inmetroRepairSealEvidenceR2Key:
-        serviceOrder.inmetroRepairSealEvidenceR2Key,
-      inmetroRepairSealEvidenceContentType:
-        serviceOrder.inmetroRepairSealEvidenceContentType,
       inmetroRepairSealNotes: serviceOrder.inmetroRepairSealNotes,
       invoiceRemittanceNumber: serviceOrder.invoiceRemittanceNumber,
       invoiceRemittanceKey: serviceOrder.invoiceRemittanceKey,
@@ -1148,81 +1143,6 @@ export const serviceOrdersRouter = new Hono<{
         actorId: session.user.id,
         eventType: "service_order.repair_seal_updated",
         metadata: { inmetroRepairSealNumber: input.inmetroRepairSealNumber },
-      });
-      return c.json({ data: updated });
-    },
-  )
-  .post(
-    "/:id/repair-seal/evidence",
-    ...withLabPermission({ service_order: ["deliver"] }),
-    zValidator("param", IdParamSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const { id } = c.req.valid("param");
-      const [order] = await db
-        .select()
-        .from(serviceOrder)
-        .where(
-          and(
-            eq(serviceOrder.id, id),
-            eq(serviceOrder.organizationId, member.organizationId),
-            buildUnitScopeCondition(serviceOrder.unitId, member),
-          ),
-        )
-        .limit(1);
-      if (!order) return c.json({ error: "OS nao encontrada" }, 404);
-
-      const form = await c.req.formData();
-      const evidence = form.get("evidence");
-      if (!(evidence instanceof File)) {
-        return c.json({ error: "Arquivo de evidencia obrigatorio" }, 400);
-      }
-      if (
-        !["image/png", "image/jpeg", "application/pdf"].includes(evidence.type)
-      ) {
-        return c.json({ error: "Formato de evidencia invalido" }, 400);
-      }
-      if (evidence.size > 8 * 1024 * 1024) {
-        return c.json({ error: "Evidencia deve ter no maximo 8 MB" }, 400);
-      }
-
-      const ext =
-        evidence.type === "application/pdf"
-          ? "pdf"
-          : evidence.type === "image/png"
-            ? "png"
-            : "jpg";
-      const key = `org/${encodeURIComponent(order.organizationId)}/${order.openedAt.getUTCFullYear()}/service-orders/${encodeURIComponent(order.serviceOrderNumber)}/repair-seal-evidence.${ext}`;
-      const client = createR2Client(c.env);
-      await uploadToR2(
-        client,
-        c.env.R2_BUCKET_NAME,
-        key,
-        await evidence.arrayBuffer(),
-        evidence.type,
-      );
-      const [updated] = await db
-        .update(serviceOrder)
-        .set({
-          inmetroRepairSealEvidenceR2Key: key,
-          inmetroRepairSealEvidenceContentType: evidence.type,
-          inmetroRepairSealAppliedAt:
-            order.inmetroRepairSealAppliedAt ?? new Date(),
-          inmetroRepairSealAppliedByUserId: session.user.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(serviceOrder.id, id))
-        .returning();
-      if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
-      await recordServiceOrderEvent({
-        organizationId: updated.organizationId,
-        unitId: updated.unitId,
-        serviceOrderId: id,
-        actorType: "lab_user",
-        actorId: session.user.id,
-        eventType: "service_order.repair_seal_updated",
-        metadata: { evidenceUploaded: true },
       });
       return c.json({ data: updated });
     },

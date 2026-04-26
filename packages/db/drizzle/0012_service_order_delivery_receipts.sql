@@ -2,8 +2,6 @@ ALTER TABLE "service_order"
 ADD COLUMN "inmetro_repair_seal_issued_at" timestamp,
 ADD COLUMN "inmetro_repair_seal_applied_at" timestamp,
 ADD COLUMN "inmetro_repair_seal_applied_by_user_id" text,
-ADD COLUMN "inmetro_repair_seal_evidence_r2_key" text,
-ADD COLUMN "inmetro_repair_seal_evidence_content_type" text,
 ADD COLUMN "inmetro_repair_seal_notes" text;
 
 ALTER TABLE "service_order"
