@@ -75,6 +75,8 @@ const routeLabels: Record<string, string> = {
   // Calibration jobs
   '/dashboard/jobs': 'Calibrações',
   '/dashboard/service-orders': 'Ordens de Serviço',
+  '/dashboard/service-orders/new': 'Nova OS',
+  '/dashboard/service-orders/$id': 'Ordem de Serviço',
   '/dashboard/jobs/new': 'Nova Calibração',
   '/dashboard/jobs/$id': 'Calibração',
   '/dashboard/jobs/$id/execute': 'Executar',
@@ -157,6 +159,7 @@ function extractEntityIds(pathname: string): {
   methodId?: string
   jobId?: string
   serviceId?: string
+  serviceOrderId?: string
   standardId?: string
   ncId?: string
   capaId?: string
@@ -210,6 +213,13 @@ function extractEntityIds(pathname: string): {
     if (id !== 'new') result.serviceId = id
   }
 
+  // /dashboard/service-orders/:id/...
+  const serviceOrdersIndex = parts.indexOf('service-orders')
+  if (serviceOrdersIndex !== -1 && parts[serviceOrdersIndex + 1]) {
+    const id = parts[serviceOrdersIndex + 1]
+    if (id !== 'new') result.serviceOrderId = id
+  }
+
   // /dashboard/standards/:id/...
   const standardsIndex = parts.indexOf('standards')
   if (standardsIndex !== -1 && parts[standardsIndex + 1]) {
@@ -259,6 +269,7 @@ export function DashboardHeader({
     methodId,
     jobId,
     serviceId,
+    serviceOrderId,
     standardId,
     ncId,
     capaId,
@@ -289,6 +300,13 @@ export function DashboardHeader({
     queryClient,
     [['services', serviceId]],
     (cached) => (cached as { name?: string } | undefined)?.name,
+  )
+  const serviceOrderCachedLabel = getCachedLabel(
+    queryClient,
+    [['service-order', serviceOrderId]],
+    (cached) =>
+      (cached as { serviceOrderNumber?: string } | undefined)
+        ?.serviceOrderNumber,
   )
   const standardCachedLabel = getCachedLabel(
     queryClient,
@@ -321,6 +339,9 @@ export function DashboardHeader({
   const jobDetailFetchCount = useIsFetching({ queryKey: ['jobs', jobId] })
   const serviceDetailFetchCount = useIsFetching({
     queryKey: ['services', serviceId],
+  })
+  const serviceOrderDetailFetchCount = useIsFetching({
+    queryKey: ['service-order', serviceOrderId],
   })
   const standardDetailFetchCount = useIsFetching({
     queryKey: ['standards', standardId],
@@ -424,6 +445,31 @@ export function DashboardHeader({
     staleTime: LABEL_STALE_TIME,
   })
 
+  const { data: serviceOrderLabel } = useQuery({
+    queryKey: ['service-orders', serviceOrderId, 'label'],
+    queryFn: async () => {
+      if (serviceOrderCachedLabel) return serviceOrderCachedLabel
+
+      const res = await api.api['service-orders'][':id'].$get({
+        param: { id: serviceOrderId! },
+      })
+      if (!res.ok) {
+        if (res.status === 404) return null
+        throw new Error('Failed to fetch service order label')
+      }
+      const data = (await res.json()) as {
+        data?: { serviceOrderNumber?: string }
+      }
+      return data.data?.serviceOrderNumber ?? null
+    },
+    enabled:
+      !suspendEntityQueries &&
+      !!serviceOrderId &&
+      !serviceOrderCachedLabel &&
+      serviceOrderDetailFetchCount === 0,
+    staleTime: LABEL_STALE_TIME,
+  })
+
   const { data: standardLabel } = useQuery({
     queryKey: ['standards', standardId, 'label'],
     queryFn: async () => {
@@ -519,6 +565,11 @@ export function DashboardHeader({
     if (serviceId && serviceDisplayLabel) {
       names[serviceId] = serviceDisplayLabel
     }
+    const serviceOrderDisplayLabel =
+      serviceOrderCachedLabel ?? serviceOrderLabel ?? null
+    if (serviceOrderId && serviceOrderDisplayLabel) {
+      names[serviceOrderId] = serviceOrderDisplayLabel
+    }
     const standardDisplayLabel = standardCachedLabel ?? standardLabel ?? null
     if (standardId && standardDisplayLabel) {
       names[standardId] = standardDisplayLabel
@@ -553,6 +604,9 @@ export function DashboardHeader({
     serviceId,
     serviceCachedLabel,
     serviceLabel,
+    serviceOrderId,
+    serviceOrderCachedLabel,
+    serviceOrderLabel,
     standardId,
     standardCachedLabel,
     standardLabel,
