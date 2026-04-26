@@ -9,7 +9,7 @@
   },
   "description": "",
   "scripts": {
-    "build": "tsc"
+    "build": "tsgo"
   },
   "dependencies": {
     "@better-auth/sso": "^1.4.18",

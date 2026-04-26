@@ -7,8 +7,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc",
-    "check-types": "tsc --noEmit",
+    "build": "tsgo",
+    "check-types": "tsgo --noEmit",
     "test": "vitest",
     "test:run": "vitest run"
   },

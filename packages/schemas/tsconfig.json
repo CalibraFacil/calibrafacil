@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
-      "@calibra-facil/schemas": ["./packages/schemas/src/index.ts"],
+      "@calibra-facil/schemas": ["./src/index.ts"],
     },
   },
 }
