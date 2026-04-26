@@ -223,11 +223,19 @@ function Field({ label, value }: { label: string; value?: unknown }) {
   );
 }
 
-function Cell({ label, value }: { label: string; value?: unknown }) {
+function Cell({
+  label,
+  value,
+  fallback,
+}: {
+  label: string;
+  value?: unknown;
+  fallback?: string;
+}) {
   return (
     <td>
       <span className="cell-label">{label}</span>
-      <span className="cell-value">{text(value)}</span>
+      <span className="cell-value">{text(value, fallback)}</span>
     </td>
   );
 }
@@ -553,8 +561,13 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
             <Cell
               label="Nº selo reparado Inmetro"
               value={data.intake.inmetroRepairSealNumber}
+              fallback=""
             />
-            <Cell label="Lacre novo" value={data.intake.newSealNumber} />
+            <Cell
+              label="Lacre novo"
+              value={data.intake.newSealNumber}
+              fallback=""
+            />
           </tr>
         </tbody>
       </table>

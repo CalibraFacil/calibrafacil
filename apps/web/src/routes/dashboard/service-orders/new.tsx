@@ -51,10 +51,7 @@ type IntakeType =
   | 'internal'
   | 'warranty_return'
 type Priority = 'normal' | 'urgent' | 'contract' | 'warranty'
-type DeliveryMethod =
-  | 'pickup_at_lab'
-  | 'ship_to_client'
-  | 'third_party_pickup'
+type DeliveryMethod = 'pickup_at_lab' | 'ship_to_client' | 'third_party_pickup'
 
 type FormData = {
   customerId: number | null
@@ -66,8 +63,6 @@ type FormData = {
   intakeCondition: string
   accessories: string
   oldSealNumber: string
-  newSealNumber: string
-  inmetroRepairSealNumber: string
   invoiceRemittanceNumber: string
   invoiceRemittanceKey: string
   carrierName: string
@@ -114,8 +109,6 @@ const initialFormData: FormData = {
   intakeCondition: '',
   accessories: '',
   oldSealNumber: '',
-  newSealNumber: '',
-  inmetroRepairSealNumber: '',
   invoiceRemittanceNumber: '',
   invoiceRemittanceKey: '',
   carrierName: '',
@@ -164,7 +157,12 @@ function NewServiceOrderPage() {
   })
 
   const { data: assetsData, isLoading: assetsLoading } = useQuery({
-    queryKey: ['assets', 'service-order-open', formData.customerId, assetSearch],
+    queryKey: [
+      'assets',
+      'service-order-open',
+      formData.customerId,
+      assetSearch,
+    ],
     queryFn: async () => {
       if (!formData.customerId) return { data: [] }
 
@@ -184,7 +182,10 @@ function NewServiceOrderPage() {
 
   const selectedCustomer = useMemo(() => {
     if (!formData.customerId) return null
-    return customersData?.data.find((item) => item.id === formData.customerId) ?? null
+    return (
+      customersData?.data.find((item) => item.id === formData.customerId) ??
+      null
+    )
   }, [customersData?.data, formData.customerId])
 
   const selectedAsset = useMemo(() => {
@@ -212,8 +213,6 @@ function NewServiceOrderPage() {
           intakeCondition: formData.intakeCondition.trim(),
           accessories: toOptional(formData.accessories),
           oldSealNumber: toOptional(formData.oldSealNumber),
-          newSealNumber: toOptional(formData.newSealNumber),
-          inmetroRepairSealNumber: toOptional(formData.inmetroRepairSealNumber),
           invoiceRemittanceNumber: toOptional(formData.invoiceRemittanceNumber),
           invoiceRemittanceKey: toOptional(formData.invoiceRemittanceKey),
           carrierName:
@@ -311,7 +310,10 @@ function NewServiceOrderPage() {
     if (formData.intakeType === 'carrier' && !formData.carrierName.trim()) {
       nextErrors.carrierName = 'Informe a transportadora'
     }
-    if (formData.intakeType === 'third_party' && !formData.thirdPartyName.trim()) {
+    if (
+      formData.intakeType === 'third_party' &&
+      !formData.thirdPartyName.trim()
+    ) {
       nextErrors.thirdPartyName = 'Informe o portador terceiro'
     }
 
@@ -358,7 +360,10 @@ function NewServiceOrderPage() {
                         size="sm"
                         render={<Link to="/dashboard/clients/new" />}
                       >
-                        <HugeiconsIcon icon={PlusSignIcon} className="mr-1 size-3" />
+                        <HugeiconsIcon
+                          icon={PlusSignIcon}
+                          className="mr-1 size-3"
+                        />
                         Novo cliente
                       </Button>
                     </div>
@@ -429,7 +434,10 @@ function NewServiceOrderPage() {
                         disabled={!formData.customerId}
                         render={<Link to="/dashboard/assets/new" />}
                       >
-                        <HugeiconsIcon icon={PlusSignIcon} className="mr-1 size-3" />
+                        <HugeiconsIcon
+                          icon={PlusSignIcon}
+                          className="mr-1 size-3"
+                        />
                         Novo ativo
                       </Button>
                     </div>
@@ -439,7 +447,9 @@ function NewServiceOrderPage() {
                         updateField('assetId', value ? Number(value) : null)
                         setAssetSearch('')
                       }}
-                      disabled={!formData.customerId || createMutation.isPending}
+                      disabled={
+                        !formData.customerId || createMutation.isPending
+                      }
                     >
                       <ComboboxInput
                         placeholder={
@@ -464,7 +474,10 @@ function NewServiceOrderPage() {
                               : 'Nenhum instrumento encontrado para este cliente'}
                           </ComboboxEmpty>
                           {assetsData?.data.map((asset) => (
-                            <ComboboxItem key={asset.id} value={String(asset.id)}>
+                            <ComboboxItem
+                              key={asset.id}
+                              value={String(asset.id)}
+                            >
                               <div className="flex flex-col">
                                 <span>
                                   {asset.name}{' '}
@@ -490,7 +503,9 @@ function NewServiceOrderPage() {
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
-                    {errors.assetId && <FieldError>{errors.assetId}</FieldError>}
+                    {errors.assetId && (
+                      <FieldError>{errors.assetId}</FieldError>
+                    )}
                     <FieldDescription>
                       A OS é uma por instrumento; o sistema congela estes dados
                       no comprovante.
@@ -506,14 +521,25 @@ function NewServiceOrderPage() {
                     <NativeSelect
                       value={formData.intakeType}
                       onChange={(event) =>
-                        updateField('intakeType', event.target.value as IntakeType)
+                        updateField(
+                          'intakeType',
+                          event.target.value as IntakeType,
+                        )
                       }
                       className="w-full"
                     >
-                      <NativeSelectOption value="counter">Balcão</NativeSelectOption>
-                      <NativeSelectOption value="carrier">Transportadora</NativeSelectOption>
-                      <NativeSelectOption value="third_party">Portador terceiro</NativeSelectOption>
-                      <NativeSelectOption value="internal">Interna</NativeSelectOption>
+                      <NativeSelectOption value="counter">
+                        Balcão
+                      </NativeSelectOption>
+                      <NativeSelectOption value="carrier">
+                        Transportadora
+                      </NativeSelectOption>
+                      <NativeSelectOption value="third_party">
+                        Portador terceiro
+                      </NativeSelectOption>
+                      <NativeSelectOption value="internal">
+                        Interna
+                      </NativeSelectOption>
                       <NativeSelectOption value="warranty_return">
                         Retorno em garantia
                       </NativeSelectOption>
@@ -529,10 +555,18 @@ function NewServiceOrderPage() {
                       }
                       className="w-full"
                     >
-                      <NativeSelectOption value="normal">Normal</NativeSelectOption>
-                      <NativeSelectOption value="urgent">Urgente</NativeSelectOption>
-                      <NativeSelectOption value="contract">Contrato</NativeSelectOption>
-                      <NativeSelectOption value="warranty">Garantia</NativeSelectOption>
+                      <NativeSelectOption value="normal">
+                        Normal
+                      </NativeSelectOption>
+                      <NativeSelectOption value="urgent">
+                        Urgente
+                      </NativeSelectOption>
+                      <NativeSelectOption value="contract">
+                        Contrato
+                      </NativeSelectOption>
+                      <NativeSelectOption value="warranty">
+                        Garantia
+                      </NativeSelectOption>
                     </NativeSelect>
                     <FieldDescription>
                       Quando marcado como garantia, o comprovante destaca o
@@ -692,27 +726,6 @@ function NewServiceOrderPage() {
                       }
                     />
                   </Field>
-                  <Field>
-                    <FieldLabel>Lacre novo</FieldLabel>
-                    <Input
-                      value={formData.newSealNumber}
-                      onChange={(event) =>
-                        updateField('newSealNumber', event.target.value)
-                      }
-                    />
-                  </Field>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field>
-                    <FieldLabel>Selo reparado Inmetro</FieldLabel>
-                    <Input
-                      value={formData.inmetroRepairSealNumber}
-                      onChange={(event) =>
-                        updateField('inmetroRepairSealNumber', event.target.value)
-                      }
-                    />
-                  </Field>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -721,7 +734,10 @@ function NewServiceOrderPage() {
                     <Input
                       value={formData.invoiceRemittanceNumber}
                       onChange={(event) =>
-                        updateField('invoiceRemittanceNumber', event.target.value)
+                        updateField(
+                          'invoiceRemittanceNumber',
+                          event.target.value,
+                        )
                       }
                     />
                   </Field>
@@ -761,7 +777,9 @@ function NewServiceOrderPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => navigate({ to: '/dashboard/service-orders' })}
+                    onClick={() =>
+                      navigate({ to: '/dashboard/service-orders' })
+                    }
                     disabled={createMutation.isPending}
                   >
                     Cancelar
