@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev --port 3000 --local-protocol http",
     "build": "echo 'API build handled by Wrangler'",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "deploy": "wrangler deploy",
     "test": "vitest",
     "test:run": "vitest run",

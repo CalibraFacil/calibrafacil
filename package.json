@@ -12,6 +12,7 @@
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
+    "@typescript/native-preview": "beta",
     "oxlint": "^0.16.10",
     "prettier": "^3.7.4",
     "turbo": "^2.6.3",

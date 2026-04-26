@@ -8,8 +8,8 @@
   },
   "description": "Notification service for CalibraFacil - handles in-app and email notifications",
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc"
+    "build": "tsgo",
+    "typecheck": "tsgo"
   },
   "keywords": [
     "notifications",
