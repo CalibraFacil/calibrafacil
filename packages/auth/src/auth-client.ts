@@ -1,5 +1,9 @@
 /// <reference path="./vite-env.d.ts" />
-import { adminClient, organizationClient } from "better-auth/client/plugins";
+import {
+  adminClient,
+  magicLinkClient,
+  organizationClient,
+} from "better-auth/client/plugins";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ssoClient } from "@better-auth/sso/client";
 import { ac, platformAc, platformRoles, roles } from "./access";
@@ -83,7 +87,7 @@ export const portalAuthClient = createBetterAuthClient({
   sessionOptions: {
     refetchOnWindowFocus: false,
   },
-  plugins: [organizationPluginConfig],
+  plugins: [magicLinkClient(), organizationPluginConfig],
 });
 
 /**

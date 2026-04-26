@@ -1,6 +1,6 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { portalSignIn } from "@calibra-facil/auth/client";
+import { portalAuthClient } from "@calibra-facil/auth/client";
 import { z } from "zod";
 
 import { BrandLockup, BrandMark } from "@/components/brand";
@@ -11,6 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
+  error: z.string().optional(),
 });
 
 export const Route = createFileRoute("/sign-in")({
@@ -19,32 +20,42 @@ export const Route = createFileRoute("/sign-in")({
 });
 
 function SignInPage() {
-  const navigate = useNavigate();
-  const { redirect } = Route.useSearch();
+  const { redirect, error: magicLinkError } = Route.useSearch();
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  function getCallbackURL() {
+    if (typeof window === "undefined") return redirect || "/";
+
+    return new URL(redirect || "/", window.location.origin).toString();
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
 
-    const { error } = await portalSignIn.email({
-      email,
-      password,
+    const normalizedEmail = email.trim().toLowerCase();
+    const { error } = await portalAuthClient.signIn.magicLink({
+      email: normalizedEmail,
+      callbackURL: getCallbackURL(),
+      errorCallbackURL:
+        typeof window !== "undefined"
+          ? `${window.location.origin}/sign-in?error=magic-link`
+          : undefined,
     });
 
     setIsLoading(false);
 
     if (error) {
-      setError(error.message ?? "Falha ao entrar");
+      setError(error.message ?? "Falha ao enviar link de acesso");
       return;
     }
 
-    navigate({ to: redirect || "/" });
+    setSentTo(normalizedEmail);
   }
 
   return (
@@ -57,20 +68,36 @@ function SignInPage() {
         </div>
 
         <div className="flex flex-1 items-center justify-center">
-          <form onSubmit={handleSubmit} className="flex w-full max-w-xs flex-col gap-6">
+          <form
+            onSubmit={handleSubmit}
+            className="flex w-full max-w-xs flex-col gap-6"
+          >
             <div className="flex flex-col items-center gap-3 text-center">
               <BrandMark className="size-12" />
               <h1 className="text-2xl font-bold">Portal do Cliente</h1>
               <p className="text-muted-foreground text-sm text-balance">
-                Entre com seu email e senha para acessar certificados e documentos.
+                Informe seu email para receber um link seguro de acesso.
               </p>
             </div>
+
+            {magicLinkError && !error && (
+              <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
+                Link inválido ou expirado. Solicite um novo link de acesso.
+              </div>
+            )}
 
             {error && (
               <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
                 {error}
               </div>
             )}
+
+            {sentTo ? (
+              <div className="bg-primary/10 text-primary rounded-md p-4 text-sm">
+                Enviamos um link de acesso para <strong>{sentTo}</strong>. Ele
+                expira em poucos minutos.
+              </div>
+            ) : null}
 
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
@@ -85,28 +112,33 @@ function SignInPage() {
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Sua senha"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-
-            <Button type="submit" disabled={isLoading}>
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="active:scale-[0.96] transition-transform"
+            >
               {isLoading ? (
                 <>
                   <Spinner className="mr-2" />
-                  Entrando...
+                  Enviando...
                 </>
               ) : (
-                "Entrar"
+                "Receber link de acesso"
               )}
             </Button>
+
+            {sentTo ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSentTo(null);
+                  setError(null);
+                }}
+              >
+                Usar outro email
+              </Button>
+            ) : null}
 
             <p className="text-center text-sm text-muted-foreground text-balance">
               Não possui uma conta? Entre em contato com o laboratório para
@@ -124,8 +156,9 @@ function SignInPage() {
         <div className="relative z-10 mt-auto max-w-md">
           <blockquote className="space-y-2">
             <p className="text-lg">
-              &ldquo;Centralize certificados, históricos de calibração e documentos
-              do laboratório em uma experiência simples para o cliente.&rdquo;
+              &ldquo;Centralize certificados, históricos de calibração e
+              documentos do laboratório em uma experiência simples para o
+              cliente.&rdquo;
             </p>
             <footer className="text-sm">Portal CalibraFácil</footer>
           </blockquote>

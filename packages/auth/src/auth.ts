@@ -4,14 +4,21 @@ import { APIError } from "better-auth/api";
 import { randomBytes } from "node:crypto";
 import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import { admin as adminPlugin, organization } from "better-auth/plugins";
+import { magicLink } from "better-auth/plugins/magic-link";
 import { oneTimeToken } from "better-auth/plugins/one-time-token";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
 import { OrganizationInvitationEmail } from "@calibra-facil/email";
 import { hasEntitlement } from "@calibra-facil/shared";
-import { ac, platformAc, platformRoles, roles } from "./access";
+import {
+  PORTAL_ACCESS_ROLES,
+  ac,
+  platformAc,
+  platformRoles,
+  roles,
+} from "./access";
 
 let devFallbackAuthSecret: string | null = null;
 
@@ -167,6 +174,7 @@ function createTrustedOrigins(
 
   return async (request?: Request) => {
     const origins = new Set(baseOrigins);
+    const requestUrl = request ? new URL(request.url) : null;
     const issuerOrigin = normalizeDynamicTrustedOrigin(
       request?.headers.get("x-sso-issuer-origin") ?? null,
       isProduction,
@@ -183,6 +191,24 @@ function createTrustedOrigins(
 
     if (requestOrigin && (await isActivePortalCustomOrigin(requestOrigin))) {
       origins.add(requestOrigin);
+    }
+
+    for (const callbackParam of [
+      "callbackURL",
+      "newUserCallbackURL",
+      "errorCallbackURL",
+    ]) {
+      const callbackOrigin = normalizeDynamicTrustedOrigin(
+        requestUrl?.searchParams.get(callbackParam) ?? null,
+        isProduction,
+      );
+
+      if (
+        callbackOrigin &&
+        (await isActivePortalCustomOrigin(callbackOrigin))
+      ) {
+        origins.add(callbackOrigin);
+      }
     }
 
     return [...origins];
@@ -215,6 +241,220 @@ async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function sanitizeMailHeader(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function readCallbackUrlFromMagicLinkContext(ctx: unknown): string | null {
+  if (!ctx || typeof ctx !== "object" || !("body" in ctx)) return null;
+
+  const body = (ctx as { body?: Record<string, unknown> }).body;
+  const callbackURL = body?.callbackURL;
+
+  return typeof callbackURL === "string" ? callbackURL : null;
+}
+
+function readInvitationIdFromCallbackUrl(
+  callbackURL: string | null,
+): string | null {
+  if (!callbackURL) return null;
+
+  try {
+    const url = new URL(callbackURL);
+    const token = url.searchParams.get("token")?.trim();
+
+    if (url.pathname !== "/accept-invite" || !token) {
+      return null;
+    }
+
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+async function findPendingPortalInvitation(
+  email: string,
+  invitationId?: string | null,
+) {
+  const conditions = [
+    eq(schema.invitation.email, email),
+    eq(schema.invitation.status, "pending"),
+    gt(schema.invitation.expiresAt, new Date()),
+    eq(schema.organization.type, "CLIENT"),
+  ];
+
+  if (invitationId) {
+    conditions.push(eq(schema.invitation.id, invitationId));
+  }
+
+  const [pendingInvitation] = await getDb()
+    .select({
+      id: schema.invitation.id,
+      email: schema.invitation.email,
+      role: schema.invitation.role,
+      organizationName: schema.organization.name,
+    })
+    .from(schema.invitation)
+    .innerJoin(
+      schema.organization,
+      eq(schema.invitation.organizationId, schema.organization.id),
+    )
+    .where(and(...conditions))
+    .limit(1);
+
+  return pendingInvitation ?? null;
+}
+
+async function hasExistingPortalAccess(email: string): Promise<boolean> {
+  const [existingPortalMember] = await getDb()
+    .select({ id: schema.member.id })
+    .from(schema.member)
+    .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+    .innerJoin(
+      schema.organization,
+      eq(schema.member.organizationId, schema.organization.id),
+    )
+    .where(
+      and(
+        eq(schema.user.email, email),
+        eq(schema.organization.type, "CLIENT"),
+        inArray(schema.member.role, PORTAL_ACCESS_ROLES),
+      ),
+    )
+    .limit(1);
+
+  return Boolean(existingPortalMember);
+}
+
+async function sendPortalMagicLink(
+  data: { email: string; url: string },
+  ctx?: unknown,
+) {
+  const normalizedEmail = data.email.trim().toLowerCase();
+  const callbackURL = readCallbackUrlFromMagicLinkContext(ctx);
+  const invitationId = readInvitationIdFromCallbackUrl(callbackURL);
+  const pendingInvitation = await findPendingPortalInvitation(
+    normalizedEmail,
+    invitationId,
+  );
+  const hasPortalAccess =
+    Boolean(pendingInvitation) ||
+    (await hasExistingPortalAccess(normalizedEmail));
+
+  if (!hasPortalAccess) {
+    console.warn(
+      `[Portal Auth] Suppressed magic link for non-portal email: ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const apiKey = process.env.RESEND_API_KEY;
+  const subject = pendingInvitation
+    ? sanitizeMailHeader(`Convite para ${pendingInvitation.organizationName}`)
+    : "Acesse o Portal CalibraFacil";
+  let magicLinkUrl = data.url;
+
+  if (pendingInvitation && !invitationId && callbackURL) {
+    try {
+      const callbackOrigin = new URL(callbackURL).origin;
+      const invitationCallbackURL = `${callbackOrigin}/accept-invite?token=${pendingInvitation.id}`;
+      const url = new URL(data.url);
+      url.searchParams.set("callbackURL", invitationCallbackURL);
+      url.searchParams.set("newUserCallbackURL", invitationCallbackURL);
+      magicLinkUrl = url.toString();
+    } catch {
+      magicLinkUrl = data.url;
+    }
+  }
+
+  if (!apiKey) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("RESEND_API_KEY is required to send portal magic links");
+    }
+
+    console.info(
+      `[Better Auth] Portal magic link for ${normalizedEmail}: ${magicLinkUrl}`,
+    );
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.EMAIL_FROM ||
+    "Calibra Facil <noreply@calibrafacil.com>";
+  const escapedUrl = escapeHtml(magicLinkUrl);
+  const escapedOrgName = pendingInvitation
+    ? escapeHtml(pendingInvitation.organizationName)
+    : null;
+
+  await resend.emails.send({
+    from: fromEmail,
+    to: normalizedEmail,
+    subject,
+    html: pendingInvitation
+      ? `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+          <h2>Acesse o portal do cliente</h2>
+          <p>Voce recebeu um convite para acessar <strong>${escapedOrgName}</strong> no Calibra Facil.</p>
+          <p>
+            <a
+              href="${escapedUrl}"
+              style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;"
+            >
+              Aceitar convite
+            </a>
+          </p>
+          <p>Este link expira em poucos minutos. Se voce nao esperava este convite, ignore esta mensagem.</p>
+          <p><small>Se o botao nao funcionar, copie e cole este link no navegador:</small><br />${escapedUrl}</p>
+        </div>
+      `
+      : `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+          <h2>Acesse o Portal Calibra Facil</h2>
+          <p>Use o link abaixo para entrar no portal do cliente.</p>
+          <p>
+            <a
+              href="${escapedUrl}"
+              style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;"
+            >
+              Entrar no portal
+            </a>
+          </p>
+          <p>Este link expira em poucos minutos. Se voce nao solicitou acesso, ignore esta mensagem.</p>
+          <p><small>Se o botao nao funcionar, copie e cole este link no navegador:</small><br />${escapedUrl}</p>
+        </div>
+      `,
+    text: pendingInvitation
+      ? [
+          `Convite para ${pendingInvitation.organizationName}`,
+          "",
+          "Use o link abaixo para aceitar o convite e acessar o portal:",
+          magicLinkUrl,
+          "",
+          "Se voce nao esperava este convite, ignore esta mensagem.",
+        ].join("\n")
+      : [
+          "Acesse o Portal Calibra Facil",
+          "",
+          "Use o link abaixo para entrar no portal:",
+          magicLinkUrl,
+          "",
+          "Se voce nao solicitou acesso, ignore esta mensagem.",
+        ].join("\n"),
+  });
 }
 
 // Organization plugin configuration factory
@@ -309,7 +549,8 @@ function createOrganizationPlugin() {
 function createSharedConfig() {
   const isProduction = process.env.NODE_ENV === "production";
   const configuredApiUrl = readEnv("API_URL");
-  const crossSubDomainCookieDomain = getCookieDomainFromApiUrl(configuredApiUrl);
+  const crossSubDomainCookieDomain =
+    getCookieDomainFromApiUrl(configuredApiUrl);
   const useCrossSubDomainCookies =
     isProduction || Boolean(crossSubDomainCookieDomain);
   const useSecureCookies =
@@ -318,7 +559,7 @@ function createSharedConfig() {
   const defaultSameSite: "lax" | "none" = useCrossSubDomainCookies
     ? "none"
     : "lax";
-  const sessionCookieStrategy: "jwe" = "jwe";
+  const sessionCookieStrategy = "jwe" as const;
 
   return {
     secret: authSecret,
@@ -560,6 +801,9 @@ export function createPortalAuth() {
     ...sharedConfig,
     basePath: "/api/auth/portal",
     baseURL,
+    emailAndPassword: {
+      enabled: false,
+    },
     databaseHooks: {
       session: {
         create: {
@@ -590,7 +834,18 @@ export function createPortalAuth() {
       ...sharedConfig.advanced,
       cookiePrefix: "portal",
     },
-    plugins: [createOrganizationPlugin()],
+    plugins: [
+      magicLink({
+        expiresIn: 60 * 10,
+        sendMagicLink: sendPortalMagicLink,
+        storeToken: "hashed",
+        rateLimit: {
+          window: 60,
+          max: 5,
+        },
+      }),
+      createOrganizationPlugin(),
+    ],
   });
 }
 

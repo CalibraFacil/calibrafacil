@@ -5,13 +5,16 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
 import {
+  portalAuthClient,
   portalOrganization,
   portalSignOut,
   usePortalActiveOrganization,
   usePortalSession,
 } from "@calibra-facil/auth/client";
+import { toast } from "sonner";
 import { PortalSidebar } from "@/components/portal-sidebar";
 import { PortalHeader } from "@/components/portal-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -24,6 +27,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import { getApiBaseUrl } from "@/lib/utils";
 
@@ -83,18 +88,16 @@ function PortalLayout() {
   const storedOrgId =
     typeof window !== "undefined" ? localStorage.getItem(PORTAL_ORG_KEY) : null;
   const storedOrg = storedOrgId
-    ? clientOrganizations.find((org) => org.id === storedOrgId) ?? null
+    ? (clientOrganizations.find((org) => org.id === storedOrgId) ?? null)
     : null;
   const activeClientOrg =
     activeOrg?.type === "CLIENT"
-      ? clientOrganizations.find((org) => org.id === activeOrg.id) ?? null
+      ? (clientOrganizations.find((org) => org.id === activeOrg.id) ?? null)
       : null;
-  const targetOrg = storedOrg ?? activeClientOrg ?? clientOrganizations[0] ?? null;
+  const targetOrg =
+    storedOrg ?? activeClientOrg ?? clientOrganizations[0] ?? null;
   const needsPortalOrgSwitch = Boolean(
-    session &&
-      hasClientAccess &&
-      targetOrg &&
-      activeOrg?.id !== targetOrg.id,
+    session && hasClientAccess && targetOrg && activeOrg?.id !== targetOrg.id,
   );
 
   // Show loading state
@@ -159,12 +162,16 @@ function PortalLayout() {
   return (
     <SidebarProvider>
       {targetOrg ? (
-        <PersistPortalOrgSelection key={targetOrg.id} organizationId={targetOrg.id} />
+        <PersistPortalOrgSelection
+          key={targetOrg.id}
+          organizationId={targetOrg.id}
+        />
       ) : null}
       <PortalSidebar />
       <SidebarInset>
         <PortalHeader />
-        <main className="flex-1 p-4">
+        <main className="flex-1 space-y-4 p-4">
+          {session.user.name.trim() ? null : <CompleteProfilePrompt />}
           <Outlet />
         </main>
       </SidebarInset>
@@ -174,20 +181,109 @@ function PortalLayout() {
 
 function PortalOrgSwitcher({ organizationId }: { organizationId: string }) {
   useMountEffect(() => {
-    void portalOrganization
-      .setActive({ organizationId })
-      .then(() => {
-        localStorage.setItem(PORTAL_ORG_KEY, organizationId);
-      });
+    void portalOrganization.setActive({ organizationId }).then(() => {
+      localStorage.setItem(PORTAL_ORG_KEY, organizationId);
+    });
   });
 
   return null;
 }
 
-function PersistPortalOrgSelection({ organizationId }: { organizationId: string }) {
+function PersistPortalOrgSelection({
+  organizationId,
+}: {
+  organizationId: string;
+}) {
   useMountEffect(() => {
     localStorage.setItem(PORTAL_ORG_KEY, organizationId);
   });
 
   return null;
+}
+
+function CompleteProfilePrompt() {
+  const [name, setName] = useState("");
+  const [dismissed, setDismissed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  if (dismissed) return null;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmedName = name.trim();
+
+    if (!trimmedName) {
+      toast.error("Informe seu nome para atualizar o perfil");
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const result = await portalAuthClient.updateUser({ name: trimmedName });
+
+      if (result.error) {
+        throw new Error(result.error.message ?? "Falha ao atualizar perfil");
+      }
+
+      toast.success("Perfil atualizado");
+      setDismissed(true);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Falha ao atualizar perfil",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Complete seu perfil</CardTitle>
+        <CardDescription>
+          Informe seu nome para identificar suas ações no portal.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-3 sm:flex-row"
+        >
+          <div className="grid flex-1 gap-2">
+            <Label htmlFor="portal-profile-name">Nome completo</Label>
+            <Input
+              id="portal-profile-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Seu nome"
+            />
+          </div>
+          <div className="flex items-end gap-2">
+            <Button
+              type="submit"
+              disabled={submitting}
+              className="active:scale-[0.96] transition-transform"
+            >
+              {submitting ? (
+                <>
+                  <Spinner className="mr-2" />
+                  Salvando...
+                </>
+              ) : (
+                "Salvar"
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDismissed(true)}
+            >
+              Depois
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
 }
