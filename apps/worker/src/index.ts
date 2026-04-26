@@ -6,9 +6,11 @@ import {
   type JobData,
   LabelHtml,
   type LabelData,
+  ServiceOrderDeliveryReceiptHtml,
   ServiceOrderIntakeDocumentHtml,
   ServiceOrderQuoteHtml,
   ServiceOrderTagHtml,
+  type ServiceOrderDeliveryReceiptData,
   type ServiceOrderDocumentData,
   type ServiceOrderQuoteData,
   type ServiceOrderTagData,
@@ -47,7 +49,8 @@ type QueueMessage =
       type:
         | "SERVICE_ORDER_INTAKE_DOCUMENT"
         | "SERVICE_ORDER_TAG"
-        | "SERVICE_ORDER_QUOTE";
+        | "SERVICE_ORDER_QUOTE"
+        | "SERVICE_ORDER_DELIVERY_RECEIPT";
       serviceOrderId: number;
       documentId?: number;
       tagId?: number;
@@ -115,7 +118,7 @@ function buildServiceOrderR2Key(params: {
   orgId: string;
   serviceOrderNumber: string;
   year: number;
-  type: "INTAKE" | "TAG" | "QUOTE";
+  type: "INTAKE" | "TAG" | "QUOTE" | "DELIVERY";
   version?: number;
   tagNumber?: string;
   quoteNumber?: string;
@@ -127,6 +130,9 @@ function buildServiceOrderR2Key(params: {
   );
   if (params.type === "INTAKE") {
     return `org/${orgId}/${params.year}/service-orders/${serviceOrderNumber}/intake-v${params.version ?? 1}.pdf`;
+  }
+  if (params.type === "DELIVERY") {
+    return `org/${orgId}/${params.year}/service-orders/${serviceOrderNumber}/delivery-v${params.version ?? 1}.pdf`;
   }
   if (params.type === "TAG") {
     const tag = encodeKeyPart("tagNumber", params.tagNumber ?? "tag");
@@ -778,7 +784,10 @@ async function processServiceOrderIntakeDocument(
     });
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
@@ -822,7 +831,9 @@ async function processServiceOrderTag(
       openedAt: data.opened_at,
       qrCodeDataUrl: `data:image/svg+xml;base64,${btoa(qrSvg)}`,
     };
-    const html = renderToString(React.createElement(ServiceOrderTagHtml, { tag }));
+    const html = renderToString(
+      React.createElement(ServiceOrderTagHtml, { tag }),
+    );
     const pdfBuffer = await generatePdfFromHtml(page, html);
     const year = getYearFromDateish(data.opened_at, "openedAt");
     const tagNumber =
@@ -853,7 +864,10 @@ async function processServiceOrderTag(
     });
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
@@ -907,7 +921,9 @@ async function processServiceOrderQuote(
         totalCents: quote.row.total_cents,
       },
     };
-    const html = renderToString(React.createElement(ServiceOrderQuoteHtml, { data }));
+    const html = renderToString(
+      React.createElement(ServiceOrderQuoteHtml, { data }),
+    );
     const pdfBuffer = await generatePdfFromHtml(page, html);
     const year = getYearFromDateish(base.openedAt, "openedAt");
     const orgId = await withDbClient(env, async (client) => {
@@ -929,14 +945,167 @@ async function processServiceOrderQuote(
       httpMetadata: { contentType: "application/pdf" },
     });
     await withDbClient(env, (client) =>
-      client.query(`UPDATE service_order_quote SET pdf_r2_key = $2 WHERE id = $1`, [
-        quoteId,
-        key,
-      ]),
+      client.query(
+        `UPDATE service_order_quote SET pdf_r2_key = $2 WHERE id = $1`,
+        [quoteId, key],
+      ),
     );
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function processServiceOrderDeliveryReceipt(
+  env: Env,
+  page: Page,
+  serviceOrderId: number,
+  documentId: number | undefined,
+  userId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const base = await withDbClient(env, (client) =>
+      fetchServiceOrderDocumentData(client, serviceOrderId),
+    );
+    if (!base) return { success: false, error: "Service order not found" };
+
+    const payload = await withDbClient(env, async (client) => {
+      const documentResult = await client.query(
+        `
+        SELECT *
+        FROM service_order_delivery_document
+        WHERE service_order_id = $1
+          AND ($2::integer IS NULL OR id = $2)
+        ORDER BY version DESC
+        LIMIT 1
+        `,
+        [serviceOrderId, documentId ?? null],
+      );
+      const orderResult = await client.query(
+        `
+        SELECT organization_id, service_order_number, opened_at, delivered_at,
+          delivered_to_name, delivered_to_document, delivery_method, delivery_notes,
+          inmetro_repair_seal_number, inmetro_repair_seal_issued_at
+        FROM service_order
+        WHERE id = $1
+        `,
+        [serviceOrderId],
+      );
+      const executionResult = await client.query(
+        `
+        SELECT *
+        FROM service_order_execution
+        WHERE service_order_id = $1
+        LIMIT 1
+        `,
+        [serviceOrderId],
+      );
+      const execution = executionResult.rows[0];
+      const itemsResult = execution
+        ? await client.query(
+            `
+            SELECT description, quantity, unit, unit_price_cents, total_price_cents, type
+            FROM service_order_execution_item
+            WHERE execution_id = $1
+            ORDER BY sort_order, id
+            `,
+            [execution.id],
+          )
+        : { rows: [] };
+      return {
+        document: documentResult.rows[0],
+        order: orderResult.rows[0],
+        execution,
+        items: itemsResult.rows,
+      };
+    });
+
+    if (!payload.document) {
+      return { success: false, error: "Delivery document not found" };
+    }
+    if (!payload.order)
+      return { success: false, error: "Service order not found" };
+
+    const items = payload.items.map((item) => ({
+      description: item.description,
+      quantity: item.quantity,
+      unit: item.unit,
+      unitPriceCents: item.unit_price_cents,
+      totalPriceCents: item.total_price_cents,
+      type: item.type,
+    }));
+    const subtotalPartsCents = items
+      .filter((item) => item.type === "part")
+      .reduce((total, item) => total + item.totalPriceCents, 0);
+    const subtotalServicesCents = items
+      .filter((item) => item.type !== "part")
+      .reduce((total, item) => total + item.totalPriceCents, 0);
+    const totalCents = items.reduce(
+      (total, item) => total + item.totalPriceCents,
+      0,
+    );
+
+    const data: ServiceOrderDeliveryReceiptData = {
+      ...base,
+      delivery: {
+        documentNumber: payload.document.document_number,
+        version: payload.document.version,
+        issuedAt: payload.document.issued_at,
+        deliveredAt: payload.order.delivered_at,
+        deliveredToName: payload.order.delivered_to_name,
+        deliveredToDocument: payload.order.delivered_to_document,
+        deliveryMethod: payload.order.delivery_method,
+        deliveryNotes: payload.order.delivery_notes,
+        inmetroRepairSealNumber: payload.order.inmetro_repair_seal_number,
+        inmetroRepairSealIssuedAt: payload.order.inmetro_repair_seal_issued_at,
+        technicianSignature: payload.document.technician_signature_data,
+        clientSignature: payload.document.client_signature_data,
+      },
+      execution: {
+        servicePerformed: payload.execution?.service_performed,
+        partsUsedSummary: payload.execution?.parts_used_summary,
+        technicalNotes: payload.execution?.technical_notes,
+        result: payload.execution?.result,
+        finishedAt: payload.execution?.finished_at,
+        items,
+        subtotalServicesCents,
+        subtotalPartsCents,
+        totalCents,
+      },
+    };
+
+    const html = renderToString(
+      React.createElement(ServiceOrderDeliveryReceiptHtml, { data }),
+    );
+    const pdfBuffer = await generatePdfFromHtml(page, html);
+    const year = getYearFromDateish(base.openedAt, "openedAt");
+    const key = buildServiceOrderR2Key({
+      orgId: payload.order.organization_id,
+      serviceOrderNumber: base.serviceOrderNumber,
+      year,
+      type: "DELIVERY",
+      version: payload.document.version,
+    });
+    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
+      httpMetadata: { contentType: "application/pdf" },
+    });
+    await withDbClient(env, (client) =>
+      client.query(
+        `UPDATE service_order_delivery_document
+         SET pdf_r2_key = $2, issued_at = COALESCE(issued_at, now()), issued_by_user_id = COALESCE(issued_by_user_id, $3)
+         WHERE id = $1`,
+        [payload.document.id, key, userId],
+      ),
+    );
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
@@ -1333,7 +1502,8 @@ export default {
           if (
             body.type === "SERVICE_ORDER_INTAKE_DOCUMENT" ||
             body.type === "SERVICE_ORDER_TAG" ||
-            body.type === "SERVICE_ORDER_QUOTE"
+            body.type === "SERVICE_ORDER_QUOTE" ||
+            body.type === "SERVICE_ORDER_DELIVERY_RECEIPT"
           ) {
             let result: { success: boolean; error?: string };
             if (body.type === "SERVICE_ORDER_INTAKE_DOCUMENT") {
@@ -1352,16 +1522,27 @@ export default {
                 body.tagId,
                 body.userId,
               );
-            } else {
+            } else if (body.type === "SERVICE_ORDER_QUOTE") {
               result = await processServiceOrderQuote(
                 env,
                 page,
                 body.serviceOrderId,
                 body.quoteId,
               );
+            } else {
+              result = await processServiceOrderDeliveryReceipt(
+                env,
+                page,
+                body.serviceOrderId,
+                body.documentId,
+                body.userId,
+              );
             }
             if (!result.success) {
-              console.error(`[${body.type} ${body.serviceOrderId}] Failed:`, result.error);
+              console.error(
+                `[${body.type} ${body.serviceOrderId}] Failed:`,
+                result.error,
+              );
             }
             msg.ack();
             continue;

@@ -51,7 +51,8 @@ export const SERVICE_ORDER_INTAKE_TYPES = [
   "internal",
   "warranty_return",
 ] as const;
-export type ServiceOrderIntakeType = (typeof SERVICE_ORDER_INTAKE_TYPES)[number];
+export type ServiceOrderIntakeType =
+  (typeof SERVICE_ORDER_INTAKE_TYPES)[number];
 
 export const SERVICE_ORDER_DELIVERY_METHODS = [
   "pickup_at_lab",
@@ -142,6 +143,8 @@ export const SERVICE_ORDER_EVENT_TYPES = [
   "service_order.quote_rejected_manually",
   "service_order.repair_started",
   "service_order.repair_finished",
+  "service_order.delivery_document_issued",
+  "service_order.repair_seal_updated",
   "service_order.ready_for_pickup",
   "service_order.delivered",
   "service_order.closed",
@@ -153,8 +156,7 @@ export const SERVICE_ORDER_EVENT_TYPES = [
   "service_order.portal_viewed",
   "service_order.public_link_viewed",
 ] as const;
-export type ServiceOrderEventType =
-  (typeof SERVICE_ORDER_EVENT_TYPES)[number];
+export type ServiceOrderEventType = (typeof SERVICE_ORDER_EVENT_TYPES)[number];
 
 export const SERVICE_ORDER_MANUAL_APPROVAL_EVIDENCE_TYPES = [
   "phone",
@@ -199,9 +201,9 @@ export const SERVICE_ORDER_ALLOWED_TRANSITIONS: Record<
 };
 
 export function isServiceOrderFinalStatus(status: ServiceOrderStatus) {
-  return (SERVICE_ORDER_FINAL_STATUSES as readonly ServiceOrderStatus[]).includes(
-    status,
-  );
+  return (
+    SERVICE_ORDER_FINAL_STATUSES as readonly ServiceOrderStatus[]
+  ).includes(status);
 }
 
 export function canTransitionServiceOrderStatus(

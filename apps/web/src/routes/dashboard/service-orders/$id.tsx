@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -15,8 +15,11 @@ import {
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
-import { EventTimeline, type EventTimelineItem } from '@/components/event-timeline'
+import { api, resolveApiURL } from '@/utils/api'
+import {
+  EventTimeline,
+  type EventTimelineItem,
+} from '@/components/event-timeline'
 import { ServiceOrderIntakeDocumentHtml } from '@calibra-facil/documents'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -117,6 +120,20 @@ type ServiceOrderExecution = {
   items: ServiceOrderQuoteItem[]
 }
 
+type ServiceOrderSignatureData = {
+  signerName: string
+  signedAt?: string
+  dataUrl: string
+}
+
+type ServiceOrderDeliveryDocument = {
+  id: number
+  documentNumber: string
+  version: number
+  pdfR2Key?: string | null
+  issuedAt?: string | null
+}
+
 type ServiceOrderDetail = {
   id: number
   serviceOrderNumber: string
@@ -161,12 +178,22 @@ type ServiceOrderDetail = {
   oldSealNumber?: string | null
   newSealNumber?: string | null
   inmetroRepairSealNumber?: string | null
+  inmetroRepairSealIssuedAt?: string | null
+  inmetroRepairSealAppliedAt?: string | null
+  inmetroRepairSealEvidenceR2Key?: string | null
+  inmetroRepairSealNotes?: string | null
+  deliveredAt?: string | null
+  deliveredToName?: string | null
+  deliveredToDocument?: string | null
+  deliveryMethod?: 'pickup_at_lab' | 'ship_to_client' | 'third_party_pickup'
+  deliveryNotes?: string | null
   clientVisibleNotes?: string | null
   internalNotes?: string | null
   openedAt: string
   evaluations: ServiceOrderEvaluation[]
   quotes: ServiceOrderQuote[]
   execution?: ServiceOrderExecution | null
+  deliveryDocuments: ServiceOrderDeliveryDocument[]
   events: Array<{
     id: number
     eventType: string
@@ -206,7 +233,9 @@ function parseMoneyToCents(value: string) {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : Number.NaN
 }
 
-function createEmptyQuoteItem(type: ServiceOrderItemType = 'service'): QuoteDraftItem {
+function createEmptyQuoteItem(
+  type: ServiceOrderItemType = 'service',
+): QuoteDraftItem {
   return {
     id: crypto.randomUUID(),
     type,
@@ -278,6 +307,12 @@ const executionResultLabels: Record<ServiceOrderExecutionResult, string> = {
   sent_to_third_party: 'Enviado a terceiro',
 }
 
+const deliveryMethodLabels = {
+  pickup_at_lab: 'Retirada no laboratório',
+  ship_to_client: 'Envio ao cliente',
+  third_party_pickup: 'Retirada por terceiro',
+} as const
+
 const serviceOrderEventLabels: Record<string, string> = {
   'service_order.created': 'OS criada',
   'service_order.intake_document_issued': 'Comprovante emitido',
@@ -292,6 +327,8 @@ const serviceOrderEventLabels: Record<string, string> = {
   'service_order.quote_rejected_by_client': 'Orçamento recusado pelo cliente',
   'service_order.repair_started': 'Execução iniciada',
   'service_order.repair_finished': 'Execução finalizada',
+  'service_order.delivery_document_issued': 'Comprovante de entrega emitido',
+  'service_order.repair_seal_updated': 'Selo de reparado atualizado',
   'service_order.ready_for_pickup': 'Disponível para retirada',
   'service_order.delivered': 'Entregue ao cliente',
   'service_order.closed': 'OS encerrada',
@@ -305,7 +342,8 @@ function buildServiceOrderTimelineItems(
   return events.map((event) => {
     const isDocument = event.eventType.includes('document')
     const isExecution =
-      event.eventType.includes('repair') || event.eventType.includes('execution')
+      event.eventType.includes('repair') ||
+      event.eventType.includes('execution')
     const isApproval = event.eventType.includes('approved')
     const isDelivery =
       event.eventType.includes('delivered') ||
@@ -387,8 +425,7 @@ function buildServiceOrderIntakeHtml(order: ServiceOrderDetail) {
           tag: order.assetTag ?? null,
           capacity: snapshot?.capacity ?? null,
           resolution: snapshot?.resolution ?? null,
-          observedIdentification:
-            snapshot?.observedIdentification ?? null,
+          observedIdentification: snapshot?.observedIdentification ?? null,
         },
         intake: {
           claimedDefect: order.claimedDefect,
@@ -436,6 +473,106 @@ function openServiceOrderIntakePreview(order: ServiceOrderDetail) {
   }
 }
 
+function SignaturePad({
+  label,
+  signerName,
+  onSignerNameChange,
+  onDataUrlChange,
+}: {
+  label: string
+  signerName: string
+  onSignerNameChange: (value: string) => void
+  onDataUrlChange: (value: string) => void
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const drawingRef = useRef(false)
+
+  function getContext() {
+    const canvas = canvasRef.current
+    if (!canvas) return null
+    const rect = canvas.getBoundingClientRect()
+    const ratio = window.devicePixelRatio || 1
+    if (canvas.width !== Math.round(rect.width * ratio)) {
+      canvas.width = Math.round(rect.width * ratio)
+      canvas.height = Math.round(rect.height * ratio)
+      const ctx = canvas.getContext('2d')
+      ctx?.scale(ratio, ratio)
+      if (ctx) {
+        ctx.lineWidth = 1.8
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.strokeStyle = '#111827'
+      }
+    }
+    return canvas.getContext('2d')
+  }
+
+  function point(event: PointerEvent<HTMLCanvasElement>) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top }
+  }
+
+  function finishSignature() {
+    drawingRef.current = false
+    const canvas = canvasRef.current
+    if (canvas) onDataUrlChange(canvas.toDataURL('image/png'))
+  }
+
+  function clearSignature() {
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d')
+    if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height)
+    onDataUrlChange('')
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg bg-muted/40 p-3">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <div className="space-y-2">
+          <Label>{label}</Label>
+          <Input
+            value={signerName}
+            onChange={(event) => onSignerNameChange(event.target.value)}
+            placeholder="Nome de quem assina"
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="min-h-10 active:scale-[0.96] transition-transform"
+          onClick={clearSignature}
+        >
+          Limpar
+        </Button>
+      </div>
+      <canvas
+        ref={canvasRef}
+        className="h-28 w-full rounded-md bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] touch-none"
+        onPointerDown={(event) => {
+          const ctx = getContext()
+          if (!ctx) return
+          drawingRef.current = true
+          event.currentTarget.setPointerCapture(event.pointerId)
+          const { x, y } = point(event)
+          ctx.beginPath()
+          ctx.moveTo(x, y)
+        }}
+        onPointerMove={(event) => {
+          if (!drawingRef.current) return
+          const ctx = getContext()
+          if (!ctx) return
+          const { x, y } = point(event)
+          ctx.lineTo(x, y)
+          ctx.stroke()
+        }}
+        onPointerUp={finishSignature}
+        onPointerCancel={finishSignature}
+      />
+    </div>
+  )
+}
+
 function ServiceOrderDetailPage() {
   const { id } = Route.useParams()
   const queryClient = useQueryClient()
@@ -461,6 +598,21 @@ function ServiceOrderDetailPage() {
     useState<ServiceOrderExecutionResult>('repaired')
   const [executionRequiresCalibration, setExecutionRequiresCalibration] =
     useState(false)
+  const [deliveryMethod, setDeliveryMethod] =
+    useState<keyof typeof deliveryMethodLabels>('pickup_at_lab')
+  const [deliveredToName, setDeliveredToName] = useState('')
+  const [deliveredToDocument, setDeliveredToDocument] = useState('')
+  const [deliveryNotes, setDeliveryNotes] = useState('')
+  const [repairSealNumber, setRepairSealNumber] = useState('')
+  const [repairSealNotes, setRepairSealNotes] = useState('')
+  const [repairSealApplied, setRepairSealApplied] = useState(false)
+  const [repairSealEvidenceFile, setRepairSealEvidenceFile] =
+    useState<File | null>(null)
+  const [technicianSignerName, setTechnicianSignerName] = useState('')
+  const [technicianSignatureDataUrl, setTechnicianSignatureDataUrl] =
+    useState('')
+  const [clientSignerName, setClientSignerName] = useState('')
+  const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState('')
 
   const orderQuery = useQuery({
     queryKey: ['service-order', id],
@@ -477,9 +629,13 @@ function ServiceOrderDetailPage() {
   const order = orderQuery.data
   const latestEvaluation = order?.evaluations[0]
   const latestQuote = order?.quotes[0]
-  const draftQuotes = order?.quotes.filter((quote) => quote.status === 'draft') ?? []
-  const approvedQuote = order?.quotes.find((quote) => quote.status === 'approved')
+  const draftQuotes =
+    order?.quotes.filter((quote) => quote.status === 'draft') ?? []
+  const approvedQuote = order?.quotes.find(
+    (quote) => quote.status === 'approved',
+  )
   const quoteTotal = useMemo(() => quoteItemsTotal(quoteItems), [quoteItems])
+  const latestDeliveryDocument = order?.deliveryDocuments[0]
 
   useEffect(() => {
     if (!latestEvaluation) return
@@ -491,6 +647,17 @@ function ServiceOrderDetailPage() {
     setCalibrationRecommended(latestEvaluation.calibrationRecommended)
     setEvaluationClientNotes(latestEvaluation.clientVisibleNotes ?? '')
   }, [latestEvaluation])
+
+  useEffect(() => {
+    if (!order) return
+    setDeliveryMethod(order.deliveryMethod ?? 'pickup_at_lab')
+    setDeliveredToName(order.deliveredToName ?? '')
+    setDeliveredToDocument(order.deliveredToDocument ?? '')
+    setDeliveryNotes(order.deliveryNotes ?? '')
+    setRepairSealNumber(order.inmetroRepairSealNumber ?? '')
+    setRepairSealNotes(order.inmetroRepairSealNotes ?? '')
+    setRepairSealApplied(Boolean(order.inmetroRepairSealAppliedAt))
+  }, [order])
 
   const saveEvaluation = useMutation({
     mutationFn: async () => {
@@ -519,11 +686,15 @@ function ServiceOrderDetailPage() {
       if (!response.ok) throw new Error('Erro ao salvar avaliação')
     },
     onSuccess: () => {
-      toast.success(latestEvaluation ? 'Avaliação atualizada' : 'Avaliação registrada')
+      toast.success(
+        latestEvaluation ? 'Avaliação atualizada' : 'Avaliação registrada',
+      )
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Erro ao salvar avaliação')
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao salvar avaliação',
+      )
     },
   })
 
@@ -545,7 +716,9 @@ function ServiceOrderDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Erro ao salvar orçamento')
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao salvar orçamento',
+      )
     },
   })
 
@@ -570,13 +743,17 @@ function ServiceOrderDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Erro ao emitir orçamento')
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao emitir orçamento',
+      )
     },
   })
 
   const startExecution = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'][':id'].execution.start.$post({
+      const response = await api.api['service-orders'][
+        ':id'
+      ].execution.start.$post({
         param: { id },
         json: { notes: executionTechnicalNotes || null },
       })
@@ -590,7 +767,9 @@ function ServiceOrderDetailPage() {
 
   const finishExecution = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'][':id'].execution.finish.$post({
+      const response = await api.api['service-orders'][
+        ':id'
+      ].execution.finish.$post({
         param: { id },
         json: {
           servicePerformed: executionServicePerformed,
@@ -615,7 +794,9 @@ function ServiceOrderDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Erro ao finalizar execução')
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao finalizar execução',
+      )
     },
   })
 
@@ -669,8 +850,170 @@ function ServiceOrderDetailPage() {
 
   const openTag = useMutation({
     mutationFn: async () => {
+      const response = await api.api['service-orders'][':id']['tag.pdf'].$get({
+        param: { id },
+      })
+      if (!response.ok) throw new Error('PDF ainda indisponível')
+      const result = await response.json()
+      window.open(result.url, '_blank', 'noopener,noreferrer')
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível abrir a etiqueta',
+      )
+    },
+  })
+
+  const updateRepairSeal = useMutation({
+    mutationFn: async () => {
       const response = await api.api['service-orders'][':id'][
-        'tag.pdf'
+        'repair-seal'
+      ].$patch({
+        param: { id },
+        json: {
+          inmetroRepairSealNumber: repairSealNumber || null,
+          inmetroRepairSealIssuedAt: repairSealNumber
+            ? new Date().toISOString()
+            : null,
+          inmetroRepairSealAppliedAt: repairSealApplied
+            ? new Date().toISOString()
+            : null,
+          inmetroRepairSealNotes: repairSealNotes || null,
+        },
+      })
+      if (!response.ok) throw new Error('Erro ao salvar selo de reparado')
+    },
+    onSuccess: () => {
+      toast.success('Selo de reparado atualizado')
+      queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao salvar selo',
+      )
+    },
+  })
+
+  const uploadRepairSealEvidence = useMutation({
+    mutationFn: async () => {
+      if (!repairSealEvidenceFile) {
+        throw new Error('Selecione a evidência do selo aplicado.')
+      }
+      const form = new FormData()
+      form.set('evidence', repairSealEvidenceFile)
+      const activeOrgId = window.localStorage.getItem('dashboard-active-org')
+      const activeUnitId = activeOrgId
+        ? window.localStorage.getItem(`dashboard-active-unit:${activeOrgId}`)
+        : null
+      const headers = new Headers()
+      if (activeUnitId) headers.set('x-active-unit-id', activeUnitId)
+      const response = await fetch(
+        resolveApiURL(`/api/service-orders/${id}/repair-seal/evidence`),
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers,
+          body: form,
+        },
+      )
+      if (!response.ok) throw new Error('Erro ao enviar evidência do selo')
+    },
+    onSuccess: () => {
+      toast.success('Evidência do selo enviada')
+      setRepairSealEvidenceFile(null)
+      queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao enviar evidência',
+      )
+    },
+  })
+
+  const deliverOrder = useMutation({
+    mutationFn: async () => {
+      if (!deliveredToName.trim()) throw new Error('Informe o recebedor.')
+      const response = await api.api['service-orders'][':id'].deliver.$post({
+        param: { id },
+        json: {
+          deliveryMethod,
+          deliveredToName,
+          deliveredToDocument: deliveredToDocument || null,
+          deliveryNotes: deliveryNotes || null,
+          inmetroRepairSealNumber: repairSealNumber || null,
+        },
+      })
+      if (!response.ok) throw new Error('Erro ao registrar entrega')
+    },
+    onSuccess: () => {
+      toast.success('Entrega registrada')
+      queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao registrar entrega',
+      )
+    },
+  })
+
+  function buildSignature(
+    signerName: string,
+    dataUrl: string,
+  ): ServiceOrderSignatureData | null {
+    if (!signerName.trim() && !dataUrl) return null
+    if (!signerName.trim() || !dataUrl) {
+      throw new Error('Informe o nome e assine nos dois campos obrigatórios.')
+    }
+    return {
+      signerName: signerName.trim(),
+      signedAt: new Date().toISOString(),
+      dataUrl,
+    }
+  }
+
+  const issueDeliveryDocument = useMutation({
+    mutationFn: async () => {
+      const technicianSignature = buildSignature(
+        technicianSignerName,
+        technicianSignatureDataUrl,
+      )
+      const clientSignature = buildSignature(
+        clientSignerName,
+        clientSignatureDataUrl,
+      )
+      if (!technicianSignature || !clientSignature) {
+        throw new Error('Assinatura do técnico e do cliente são obrigatórias.')
+      }
+      const response = await api.api['service-orders'][':id'][
+        'delivery-document'
+      ].$post({
+        param: { id },
+        json: {
+          technicianSignatureData: technicianSignature,
+          clientSignatureData: clientSignature,
+        },
+      })
+      if (!response.ok) throw new Error('Erro ao gerar comprovante de entrega')
+    },
+    onSuccess: () => {
+      toast.success('Comprovante de entrega enviado para geração')
+      queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao gerar comprovante de entrega',
+      )
+    },
+  })
+
+  const openDeliveryDocument = useMutation({
+    mutationFn: async () => {
+      const response = await api.api['service-orders'][':id'][
+        'delivery-document.pdf'
       ].$get({
         param: { id },
       })
@@ -680,7 +1023,9 @@ function ServiceOrderDetailPage() {
     },
     onError: (error) => {
       toast.error(
-        error instanceof Error ? error.message : 'Não foi possível abrir a etiqueta',
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível abrir o comprovante de entrega',
       )
     },
   })
@@ -798,7 +1143,9 @@ function ServiceOrderDetailPage() {
               <div className="mt-2 space-y-1 text-sm">
                 <p>
                   v{latestQuote.version} · {latestQuote.status} ·{' '}
-                  <span className="tabular-nums">{money(latestQuote.totalCents)}</span>
+                  <span className="tabular-nums">
+                    {money(latestQuote.totalCents)}
+                  </span>
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Prazo: {latestQuote.deliveryEstimate || 'Não informado'}
@@ -846,11 +1193,13 @@ function ServiceOrderDetailPage() {
                       )
                     }
                   >
-                    {Object.entries(recommendedActionLabels).map(([value, label]) => (
-                      <NativeSelectOption key={value} value={value}>
-                        {label}
-                      </NativeSelectOption>
-                    ))}
+                    {Object.entries(recommendedActionLabels).map(
+                      ([value, label]) => (
+                        <NativeSelectOption key={value} value={value}>
+                          {label}
+                        </NativeSelectOption>
+                      ),
+                    )}
                   </NativeSelect>
                 </div>
               </div>
@@ -869,7 +1218,9 @@ function ServiceOrderDetailPage() {
                   <Textarea
                     className="min-h-24 resize-y"
                     value={evaluationClientNotes}
-                    onChange={(event) => setEvaluationClientNotes(event.target.value)}
+                    onChange={(event) =>
+                      setEvaluationClientNotes(event.target.value)
+                    }
                     placeholder="Resumo objetivo que pode aparecer na comunicação com o cliente."
                   />
                 </div>
@@ -878,7 +1229,9 @@ function ServiceOrderDetailPage() {
                 <label className="flex min-h-10 items-center gap-3 text-sm">
                   <Checkbox
                     checked={requiresQuote}
-                    onCheckedChange={(checked) => setRequiresQuote(Boolean(checked))}
+                    onCheckedChange={(checked) =>
+                      setRequiresQuote(Boolean(checked))
+                    }
                   />
                   Requer orçamento
                 </label>
@@ -907,8 +1260,13 @@ function ServiceOrderDetailPage() {
                   onClick={() => saveEvaluation.mutate()}
                   disabled={saveEvaluation.isPending}
                 >
-                  <HugeiconsIcon icon={CheckmarkCircle02Icon} className="mr-2 size-4" />
-                  {latestEvaluation ? 'Salvar avaliação' : 'Registrar avaliação'}
+                  <HugeiconsIcon
+                    icon={CheckmarkCircle02Icon}
+                    className="mr-2 size-4"
+                  />
+                  {latestEvaluation
+                    ? 'Salvar avaliação'
+                    : 'Registrar avaliação'}
                 </Button>
               </div>
             </CardContent>
@@ -939,11 +1297,13 @@ function ServiceOrderDetailPage() {
                           })
                         }
                       >
-                        {Object.entries(itemTypeLabels).map(([value, label]) => (
-                          <NativeSelectOption key={value} value={value}>
-                            {label}
-                          </NativeSelectOption>
-                        ))}
+                        {Object.entries(itemTypeLabels).map(
+                          ([value, label]) => (
+                            <NativeSelectOption key={value} value={value}>
+                              {label}
+                            </NativeSelectOption>
+                          ),
+                        )}
                       </NativeSelect>
                     </div>
                     <div className="space-y-2">
@@ -955,7 +1315,9 @@ function ServiceOrderDetailPage() {
                             description: event.target.value,
                           })
                         }
-                        placeholder={index === 0 ? 'Serviço executado' : 'Peça utilizada'}
+                        placeholder={
+                          index === 0 ? 'Serviço executado' : 'Peça utilizada'
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -964,7 +1326,9 @@ function ServiceOrderDetailPage() {
                         className="tabular-nums"
                         value={item.quantity}
                         onChange={(event) =>
-                          updateQuoteItem(item.id, { quantity: event.target.value })
+                          updateQuoteItem(item.id, {
+                            quantity: event.target.value,
+                          })
                         }
                       />
                     </div>
@@ -1009,7 +1373,9 @@ function ServiceOrderDetailPage() {
                 <Button
                   variant="outline"
                   className="active:scale-[0.96] transition-transform"
-                  onClick={() => setQuoteItems((items) => [...items, createEmptyQuoteItem()])}
+                  onClick={() =>
+                    setQuoteItems((items) => [...items, createEmptyQuoteItem()])
+                  }
                 >
                   <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
                   Adicionar item
@@ -1026,7 +1392,9 @@ function ServiceOrderDetailPage() {
                   <Label>Prazo do serviço</Label>
                   <Input
                     value={deliveryEstimate}
-                    onChange={(event) => setDeliveryEstimate(event.target.value)}
+                    onChange={(event) =>
+                      setDeliveryEstimate(event.target.value)
+                    }
                     placeholder="Ex.: 5 dias úteis após aprovação"
                   />
                 </div>
@@ -1042,7 +1410,9 @@ function ServiceOrderDetailPage() {
                   <Label>Mensagem ao cliente</Label>
                   <Input
                     value={quoteClientMessage}
-                    onChange={(event) => setQuoteClientMessage(event.target.value)}
+                    onChange={(event) =>
+                      setQuoteClientMessage(event.target.value)
+                    }
                     placeholder="Opcional"
                   />
                 </div>
@@ -1090,7 +1460,8 @@ function ServiceOrderDetailPage() {
                       <p className="text-muted-foreground">Resultado</p>
                       <p>
                         {execution.result
-                          ? executionResultLabels[execution.result] ?? execution.result
+                          ? (executionResultLabels[execution.result] ??
+                            execution.result)
                           : 'Em andamento'}
                       </p>
                     </div>
@@ -1111,7 +1482,10 @@ function ServiceOrderDetailPage() {
                     onClick={() => startExecution.mutate()}
                     disabled={startExecution.isPending}
                   >
-                    <HugeiconsIcon icon={Wrench01Icon} className="mr-2 size-4" />
+                    <HugeiconsIcon
+                      icon={Wrench01Icon}
+                      className="mr-2 size-4"
+                    />
                     Iniciar execução
                   </Button>
                 </div>
@@ -1121,7 +1495,11 @@ function ServiceOrderDetailPage() {
                   <Label>Serviço executado</Label>
                   <Textarea
                     className="min-h-28 resize-y"
-                    value={executionServicePerformed || execution?.servicePerformed || ''}
+                    value={
+                      executionServicePerformed ||
+                      execution?.servicePerformed ||
+                      ''
+                    }
                     onChange={(event) =>
                       setExecutionServicePerformed(event.target.value)
                     }
@@ -1132,7 +1510,11 @@ function ServiceOrderDetailPage() {
                   <Label>Peças utilizadas</Label>
                   <Textarea
                     className="min-h-28 resize-y"
-                    value={executionPartsUsedSummary || execution?.partsUsedSummary || ''}
+                    value={
+                      executionPartsUsedSummary ||
+                      execution?.partsUsedSummary ||
+                      ''
+                    }
                     onChange={(event) =>
                       setExecutionPartsUsedSummary(event.target.value)
                     }
@@ -1152,18 +1534,24 @@ function ServiceOrderDetailPage() {
                       )
                     }
                   >
-                    {Object.entries(executionResultLabels).map(([value, label]) => (
-                      <NativeSelectOption key={value} value={value}>
-                        {label}
-                      </NativeSelectOption>
-                    ))}
+                    {Object.entries(executionResultLabels).map(
+                      ([value, label]) => (
+                        <NativeSelectOption key={value} value={value}>
+                          {label}
+                        </NativeSelectOption>
+                      ),
+                    )}
                   </NativeSelect>
                 </div>
                 <div className="space-y-2">
                   <Label>Notas técnicas internas</Label>
                   <Input
-                    value={executionTechnicalNotes || execution?.technicalNotes || ''}
-                    onChange={(event) => setExecutionTechnicalNotes(event.target.value)}
+                    value={
+                      executionTechnicalNotes || execution?.technicalNotes || ''
+                    }
+                    onChange={(event) =>
+                      setExecutionTechnicalNotes(event.target.value)
+                    }
                     placeholder="Opcional"
                   />
                 </div>
@@ -1183,8 +1571,197 @@ function ServiceOrderDetailPage() {
                   onClick={() => finishExecution.mutate()}
                   disabled={!execution || finishExecution.isPending}
                 >
-                  <HugeiconsIcon icon={CheckmarkCircle02Icon} className="mr-2 size-4" />
+                  <HugeiconsIcon
+                    icon={CheckmarkCircle02Icon}
+                    className="mr-2 size-4"
+                  />
                   Finalizar execução
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <CardTitle>Entrega e selo Inmetro</CardTitle>
+                  <CardDescription>
+                    Gere as duas vias do comprovante com valores, assinaturas e
+                    selo de reparado.
+                  </CardDescription>
+                </div>
+                {latestDeliveryDocument ? (
+                  <Badge variant="outline" className="w-fit tabular-nums">
+                    {latestDeliveryDocument.documentNumber} v
+                    {latestDeliveryDocument.version}
+                  </Badge>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Forma de entrega</Label>
+                  <NativeSelect
+                    className="w-full"
+                    value={deliveryMethod}
+                    onChange={(event) =>
+                      setDeliveryMethod(
+                        event.target.value as keyof typeof deliveryMethodLabels,
+                      )
+                    }
+                  >
+                    {Object.entries(deliveryMethodLabels).map(
+                      ([value, label]) => (
+                        <NativeSelectOption key={value} value={value}>
+                          {label}
+                        </NativeSelectOption>
+                      ),
+                    )}
+                  </NativeSelect>
+                </div>
+                <div className="space-y-2">
+                  <Label>Recebedor</Label>
+                  <Input
+                    value={deliveredToName}
+                    onChange={(event) => setDeliveredToName(event.target.value)}
+                    placeholder="Nome do cliente ou retirante"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Documento do recebedor</Label>
+                  <Input
+                    value={deliveredToDocument}
+                    onChange={(event) =>
+                      setDeliveredToDocument(event.target.value)
+                    }
+                    placeholder="CPF, RG ou documento interno"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="space-y-2">
+                  <Label>Observações da entrega</Label>
+                  <Textarea
+                    className="min-h-24 resize-y"
+                    value={deliveryNotes}
+                    onChange={(event) => setDeliveryNotes(event.target.value)}
+                    placeholder="Conferência, acessórios devolvidos ou observações do cliente."
+                  />
+                </div>
+                <div className="rounded-lg bg-muted/40 p-4 text-sm">
+                  <p className="text-muted-foreground">Status da entrega</p>
+                  <p className="mt-1 font-medium">
+                    {order.deliveredAt
+                      ? `Entregue em ${formatDateTime(order.deliveredAt)}`
+                      : 'Ainda não entregue'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 rounded-lg bg-muted/40 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="space-y-2">
+                  <Label>Nº do selo de reparado Inmetro</Label>
+                  <Input
+                    className="tabular-nums"
+                    value={repairSealNumber}
+                    onChange={(event) =>
+                      setRepairSealNumber(event.target.value)
+                    }
+                    placeholder="Número digitado que irá na via do cliente"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Evidência do selo aplicado</Label>
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg,application/pdf"
+                    onChange={(event) =>
+                      setRepairSealEvidenceFile(event.target.files?.[0] ?? null)
+                    }
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Observações do selo</Label>
+                  <Input
+                    value={repairSealNotes}
+                    onChange={(event) => setRepairSealNotes(event.target.value)}
+                    placeholder="Ex.: selo físico será colado na via do laboratório após conferência."
+                  />
+                </div>
+                <label className="flex min-h-10 items-center gap-3 text-sm">
+                  <Checkbox
+                    checked={repairSealApplied}
+                    onCheckedChange={(checked) =>
+                      setRepairSealApplied(Boolean(checked))
+                    }
+                  />
+                  Selo físico aplicado / pronto para evidência
+                </label>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    className="active:scale-[0.96] transition-transform"
+                    onClick={() => updateRepairSeal.mutate()}
+                    disabled={updateRepairSeal.isPending}
+                  >
+                    Salvar selo
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="active:scale-[0.96] transition-transform"
+                    onClick={() => uploadRepairSealEvidence.mutate()}
+                    disabled={
+                      !repairSealEvidenceFile ||
+                      uploadRepairSealEvidence.isPending
+                    }
+                  >
+                    Enviar evidência
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <SignaturePad
+                  label="Assinatura do técnico"
+                  signerName={technicianSignerName}
+                  onSignerNameChange={setTechnicianSignerName}
+                  onDataUrlChange={setTechnicianSignatureDataUrl}
+                />
+                <SignaturePad
+                  label="Assinatura do cliente"
+                  signerName={clientSignerName}
+                  onSignerNameChange={setClientSignerName}
+                  onDataUrlChange={setClientSignatureDataUrl}
+                />
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  variant="outline"
+                  className="active:scale-[0.96] transition-transform"
+                  onClick={() => deliverOrder.mutate()}
+                  disabled={deliverOrder.isPending}
+                >
+                  Registrar entrega
+                </Button>
+                <Button
+                  className="active:scale-[0.96] transition-transform"
+                  onClick={() => issueDeliveryDocument.mutate()}
+                  disabled={issueDeliveryDocument.isPending}
+                >
+                  <HugeiconsIcon icon={File02Icon} className="mr-2 size-4" />
+                  Gerar comprovante de entrega
+                </Button>
+                <Button
+                  variant="outline"
+                  className="active:scale-[0.96] transition-transform"
+                  onClick={() => openDeliveryDocument.mutate()}
+                  disabled={openDeliveryDocument.isPending}
+                >
+                  Abrir comprovante
                 </Button>
               </div>
             </CardContent>
@@ -1202,8 +1779,12 @@ function ServiceOrderDetailPage() {
                   <div key={quote.id} className="rounded-lg bg-muted/40 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium">Versão {quote.version}</p>
-                        <p className="text-xs text-muted-foreground">{quote.status}</p>
+                        <p className="text-sm font-medium">
+                          Versão {quote.version}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {quote.status}
+                        </p>
                       </div>
                       <p className="text-sm font-medium tabular-nums">
                         {money(quote.totalCents)}

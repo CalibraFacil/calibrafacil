@@ -89,6 +89,40 @@ export type ServiceOrderQuoteData = ServiceOrderDocumentData & {
   };
 };
 
+export type ServiceOrderSignatureBlock = {
+  signerName: string;
+  signedAt?: Date | string | null;
+  dataUrl?: string | null;
+};
+
+export type ServiceOrderDeliveryReceiptData = ServiceOrderDocumentData & {
+  delivery: {
+    documentNumber: string;
+    version: number;
+    issuedAt?: Date | string | null;
+    deliveredAt?: Date | string | null;
+    deliveredToName?: string | null;
+    deliveredToDocument?: string | null;
+    deliveryMethod?: string | null;
+    deliveryNotes?: string | null;
+    inmetroRepairSealNumber?: string | null;
+    inmetroRepairSealIssuedAt?: Date | string | null;
+    technicianSignature?: ServiceOrderSignatureBlock | null;
+    clientSignature?: ServiceOrderSignatureBlock | null;
+  };
+  execution: {
+    servicePerformed?: string | null;
+    partsUsedSummary?: string | null;
+    technicalNotes?: string | null;
+    result?: string | null;
+    finishedAt?: Date | string | null;
+    items: ServiceOrderDocumentItem[];
+    subtotalServicesCents: number;
+    subtotalPartsCents: number;
+    totalCents: number;
+  };
+};
+
 const pageStyles = `
   @page { size: A4; margin: 6mm; }
   * { box-sizing: border-box; }
@@ -148,6 +182,12 @@ const pageStyles = `
   .tag { width: 90mm; min-height: 42mm; border: 1px solid #111827; padding: 6mm; display: grid; grid-template-columns: 1fr 24mm; gap: 5mm; }
   .tag-title { font-size: 18px; font-weight: 700; }
   .tag .qr { width: 24mm; height: 24mm; }
+  .receipt-page { font-size: 8.2pt; }
+  .receipt-page .section-title { margin-top: 1mm; }
+  .receipt-total { font-size: 11pt; font-weight: 700; }
+  .seal-box { border: 1px dashed #000; min-height: 26mm; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 7pt; font-weight: 700; text-transform: uppercase; }
+  .signature-img { display: block; max-width: 60mm; max-height: 12mm; object-fit: contain; margin: 0 auto 1mm; }
+  .signature-line { border-top: 1px solid #000; padding-top: 1mm; text-align: center; min-height: 8mm; }
 `;
 
 function formatDate(value: Date | string | null | undefined) {
@@ -217,17 +257,24 @@ function Header({ data }: { data: ServiceOrderDocumentData }) {
             <div className="header-info">
               <div className="header-info-line">{data.lab.name}</div>
               <div className="header-info-line">
-                {[data.lab.phone, data.lab.email].filter(Boolean).join(" | ") || "-"}
+                {[data.lab.phone, data.lab.email].filter(Boolean).join(" | ") ||
+                  "-"}
               </div>
-              <div className="header-info-line">CNPJ: {text(data.lab.cnpj)}</div>
+              <div className="header-info-line">
+                CNPJ: {text(data.lab.cnpj)}
+              </div>
               <div className="header-info-line">{text(data.lab.address)}</div>
             </div>
           </td>
           <td style={{ width: "36%" }}>
             <div className="meta-title">Número da OS</div>
             <div className="os-number">{data.serviceOrderNumber}</div>
-            <div className="meta-line">Abertura: {formatDate(data.openedAt)}</div>
-            <div className="meta-line">Entrada: {formatDate(data.openedAt)}</div>
+            <div className="meta-line">
+              Abertura: {formatDate(data.openedAt)}
+            </div>
+            <div className="meta-line">
+              Entrada: {formatDate(data.openedAt)}
+            </div>
             <div className="meta-line">Previsão: -</div>
             {data.qrCodeDataUrl ? (
               <div className="qr-cell">
@@ -239,6 +286,204 @@ function Header({ data }: { data: ServiceOrderDocumentData }) {
         </tr>
       </tbody>
     </table>
+  );
+}
+
+function SignatureCell({
+  label,
+  signature,
+}: {
+  label: string;
+  signature?: ServiceOrderSignatureBlock | null;
+}) {
+  return (
+    <td>
+      {signature?.dataUrl ? (
+        <img className="signature-img" src={signature.dataUrl} alt={label} />
+      ) : null}
+      <div className="signature-line">
+        <span className="cell-label">{label}</span>
+        <span className="cell-value">
+          {text(signature?.signerName)}
+          {signature?.signedAt ? ` - ${formatDate(signature.signedAt)}` : ""}
+        </span>
+      </div>
+    </td>
+  );
+}
+
+function DeliveryReceiptCopy({
+  data,
+  copy,
+}: {
+  data: ServiceOrderDeliveryReceiptData;
+  copy: "client" | "lab";
+}) {
+  const assetTag = data.asset.patrimonyNumber ?? data.asset.tag;
+  const sealNumber =
+    data.delivery.inmetroRepairSealNumber ??
+    data.intake.inmetroRepairSealNumber;
+  return (
+    <section className="page receipt-page">
+      <div className="copy-tag">
+        {copy === "client" ? "Via do cliente" : "Via do laboratório"}
+      </div>
+      <Header data={data} />
+
+      <div className="section-title">Comprovante de entrega</div>
+      <table className="form-table">
+        <tbody>
+          <tr>
+            <Cell
+              label="Documento"
+              value={`${data.delivery.documentNumber} v${data.delivery.version}`}
+            />
+            <Cell label="Emissão" value={formatDate(data.delivery.issuedAt)} />
+            <Cell
+              label="Entrega"
+              value={formatDate(data.delivery.deliveredAt)}
+            />
+          </tr>
+          <tr>
+            <Cell label="Recebedor" value={data.delivery.deliveredToName} />
+            <Cell
+              label="Documento recebedor"
+              value={data.delivery.deliveredToDocument}
+            />
+            <Cell
+              label="Forma de entrega"
+              value={data.delivery.deliveryMethod}
+            />
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="section-title">Equipamento entregue</div>
+      <table className="form-table">
+        <tbody>
+          <tr>
+            <Cell label="Cliente" value={data.customer.name} />
+            <Cell label="Equipamento" value={data.asset.name} />
+            <Cell
+              label="Série / Patrimônio"
+              value={data.asset.serialNumber ?? assetTag}
+            />
+          </tr>
+          <tr>
+            <Cell label="Fabricante" value={data.asset.manufacturer} />
+            <Cell label="Modelo" value={data.asset.model} />
+            <Cell
+              label="Identificação observada"
+              value={data.asset.observedIdentification}
+            />
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="section-title">Serviço executado</div>
+      <div className="notes-box">
+        {[data.execution.servicePerformed, data.execution.partsUsedSummary]
+          .filter(Boolean)
+          .join("\n")}
+      </div>
+
+      <div className="section-title">Itens cobrados / peças utilizadas</div>
+      <table className="form-table parts-table">
+        <thead>
+          <tr>
+            <th style={{ width: "46%" }}>Descrição</th>
+            <th style={{ width: "10%" }}>Qtd.</th>
+            <th style={{ width: "10%" }}>Un.</th>
+            <th style={{ width: "17%" }}>Valor unit.</th>
+            <th style={{ width: "17%" }}>Valor total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.execution.items.map((item, index) => (
+            <tr key={index}>
+              <td>{item.description}</td>
+              <td className="num">{item.quantity}</td>
+              <td>{item.unit}</td>
+              <td className="num">{money(item.unitPriceCents)}</td>
+              <td className="num">{money(item.totalPriceCents)}</td>
+            </tr>
+          ))}
+          {data.execution.items.length === 0 ? (
+            <tr>
+              <td colSpan={5}>Nenhum item financeiro registrado.</td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+
+      <table className="form-table">
+        <tbody>
+          <tr>
+            <Cell
+              label="Serviços"
+              value={money(data.execution.subtotalServicesCents)}
+            />
+            <Cell
+              label="Peças"
+              value={money(data.execution.subtotalPartsCents)}
+            />
+            <td>
+              <span className="cell-label">Total do reparo</span>
+              <span className="cell-value receipt-total">
+                {money(data.execution.totalCents)}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="section-title">Selo de reparado Inmetro</div>
+      <table className="form-table">
+        <tbody>
+          <tr>
+            <Cell label="Número digitado" value={sealNumber} />
+            <Cell
+              label="Data de emissão"
+              value={formatDate(data.delivery.inmetroRepairSealIssuedAt)}
+            />
+            <td rowSpan={2}>
+              {copy === "lab" ? (
+                <div className="seal-box">
+                  Colar selo físico de reparado aqui
+                </div>
+              ) : (
+                <>
+                  <span className="cell-label">Selo entregue ao cliente</span>
+                  <span className="cell-value">{text(sealNumber)}</span>
+                </>
+              )}
+            </td>
+          </tr>
+          <tr>
+            <Cell
+              label="Observações de entrega"
+              value={data.delivery.deliveryNotes}
+            />
+            <Cell label="Resultado" value={data.execution.result} />
+          </tr>
+        </tbody>
+      </table>
+
+      <table className="form-table signature-table">
+        <tbody>
+          <tr>
+            <SignatureCell
+              label="Assinatura do técnico"
+              signature={data.delivery.technicianSignature}
+            />
+            <SignatureCell
+              label="Assinatura do cliente / recebedor"
+              signature={data.delivery.clientSignature}
+            />
+          </tr>
+        </tbody>
+      </table>
+    </section>
   );
 }
 
@@ -296,10 +541,19 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           </tr>
           <tr>
             <Cell label="Lacre antigo" value={data.intake.oldSealNumber} />
-            <Cell label="Documento / NF" value={data.intake.invoiceRemittanceNumber ?? data.intake.invoiceRemittanceKey} />
+            <Cell
+              label="Documento / NF"
+              value={
+                data.intake.invoiceRemittanceNumber ??
+                data.intake.invoiceRemittanceKey
+              }
+            />
           </tr>
           <tr>
-            <Cell label="Nº selo reparado Inmetro" value={data.intake.inmetroRepairSealNumber} />
+            <Cell
+              label="Nº selo reparado Inmetro"
+              value={data.intake.inmetroRepairSealNumber}
+            />
             <Cell label="Lacre novo" value={data.intake.newSealNumber} />
           </tr>
         </tbody>
@@ -311,13 +565,34 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           <tbody>
             <tr>
               <td>
-                <CheckboxLine label="Calibração" checked={requested.has("Calibração")} />
-                <CheckboxLine label="Manutenção corretiva" checked={requested.has("Manutenção corretiva")} />
-                <CheckboxLine label="Manutenção preventiva" checked={requested.has("Manutenção preventiva")} />
-                <CheckboxLine label="Ajuste" checked={requested.has("Ajuste")} />
-                <CheckboxLine label="Orçamento" checked={requested.has("Orçamento")} />
-                <CheckboxLine label="Garantia" checked={requested.has("Garantia")} />
-                <CheckboxLine label="Outro: -" checked={requested.has("Outro")} />
+                <CheckboxLine
+                  label="Calibração"
+                  checked={requested.has("Calibração")}
+                />
+                <CheckboxLine
+                  label="Manutenção corretiva"
+                  checked={requested.has("Manutenção corretiva")}
+                />
+                <CheckboxLine
+                  label="Manutenção preventiva"
+                  checked={requested.has("Manutenção preventiva")}
+                />
+                <CheckboxLine
+                  label="Ajuste"
+                  checked={requested.has("Ajuste")}
+                />
+                <CheckboxLine
+                  label="Orçamento"
+                  checked={requested.has("Orçamento")}
+                />
+                <CheckboxLine
+                  label="Garantia"
+                  checked={requested.has("Garantia")}
+                />
+                <CheckboxLine
+                  label="Outro: -"
+                  checked={requested.has("Outro")}
+                />
               </td>
             </tr>
           </tbody>
@@ -344,12 +619,42 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
           </tr>
         </thead>
         <tbody>
-          <tr><td /><td /><td /><td /></tr>
-          <tr><td /><td /><td /><td /></tr>
-          <tr><td /><td /><td /><td /></tr>
-          <tr><td /><td /><td /><td /></tr>
-          <tr><td /><td /><td /><td /></tr>
-          <tr><td /><td /><td /><td /></tr>
+          <tr>
+            <td />
+            <td />
+            <td />
+            <td />
+          </tr>
+          <tr>
+            <td />
+            <td />
+            <td />
+            <td />
+          </tr>
+          <tr>
+            <td />
+            <td />
+            <td />
+            <td />
+          </tr>
+          <tr>
+            <td />
+            <td />
+            <td />
+            <td />
+          </tr>
+          <tr>
+            <td />
+            <td />
+            <td />
+            <td />
+          </tr>
+          <tr>
+            <td />
+            <td />
+            <td />
+            <td />
+          </tr>
         </tbody>
       </table>
 
@@ -434,11 +739,28 @@ function ClientCopy({ data }: { data: ServiceOrderDocumentData }) {
           <tr>
             <td className="fine-print">
               <ol className="compact-list">
-                <li>Guarde este comprovante e informe a OS {data.serviceOrderNumber} em qualquer contato com o laboratório.</li>
-                <li>Este documento identifica o equipamento entregue e a abertura do atendimento.</li>
-                <li>Reparos, substituição de peças, ajuste ou calibração poderão depender de aprovação de orçamento.</li>
-                <li>Na devolução, confira equipamento, acessórios e eventuais peças registradas na OS.</li>
-                <li>O prazo informado é uma previsão operacional e pode variar conforme aprovação, disponibilidade de peças e complexidade técnica.</li>
+                <li>
+                  Guarde este comprovante e informe a OS{" "}
+                  {data.serviceOrderNumber} em qualquer contato com o
+                  laboratório.
+                </li>
+                <li>
+                  Este documento identifica o equipamento entregue e a abertura
+                  do atendimento.
+                </li>
+                <li>
+                  Reparos, substituição de peças, ajuste ou calibração poderão
+                  depender de aprovação de orçamento.
+                </li>
+                <li>
+                  Na devolução, confira equipamento, acessórios e eventuais
+                  peças registradas na OS.
+                </li>
+                <li>
+                  O prazo informado é uma previsão operacional e pode variar
+                  conforme aprovação, disponibilidade de peças e complexidade
+                  técnica.
+                </li>
               </ol>
             </td>
           </tr>
@@ -448,8 +770,14 @@ function ClientCopy({ data }: { data: ServiceOrderDocumentData }) {
       <table className="form-table signature-table">
         <tbody>
           <tr>
-            <Cell label="Responsável pela entrada no laboratório" value={data.receiverName} />
-            <Cell label="Cliente / entregador" value={data.signatureDataUrl ? "Assinado digitalmente" : null} />
+            <Cell
+              label="Responsável pela entrada no laboratório"
+              value={data.receiverName}
+            />
+            <Cell
+              label="Cliente / entregador"
+              value={data.signatureDataUrl ? "Assinado digitalmente" : null}
+            />
           </tr>
         </tbody>
       </table>
@@ -493,22 +821,35 @@ export function ServiceOrderTagHtml({ tag }: { tag: ServiceOrderTagData }) {
             <div className="tag-title">{tag.serviceOrderNumber}</div>
             <Field label="Cliente" value={tag.customerName} />
             <Field label="Instrumento" value={tag.assetName} />
-            <Field label="Série/Patrimônio" value={tag.serialNumber ?? tag.patrimonyNumber} />
+            <Field
+              label="Série/Patrimônio"
+              value={tag.serialNumber ?? tag.patrimonyNumber}
+            />
             <Field label="Entrada" value={formatDate(tag.openedAt)} />
           </div>
-          <div>{tag.qrCodeDataUrl ? <img className="qr" src={tag.qrCodeDataUrl} alt="QR Code" /> : null}</div>
+          <div>
+            {tag.qrCodeDataUrl ? (
+              <img className="qr" src={tag.qrCodeDataUrl} alt="QR Code" />
+            ) : null}
+          </div>
         </div>
       </body>
     </html>
   );
 }
 
-export function ServiceOrderQuoteHtml({ data }: { data: ServiceOrderQuoteData }) {
+export function ServiceOrderQuoteHtml({
+  data,
+}: {
+  data: ServiceOrderQuoteData;
+}) {
   return (
     <html lang="pt-BR">
       <head>
         <meta charSet="UTF-8" />
-        <title>Orçamento - {data.quote.quoteNumber} v{data.quote.version}</title>
+        <title>
+          Orçamento - {data.quote.quoteNumber} v{data.quote.version}
+        </title>
         <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
       </head>
       <body>
@@ -517,10 +858,20 @@ export function ServiceOrderQuoteHtml({ data }: { data: ServiceOrderQuoteData })
             <div>
               <h1 className="title">Orçamento de Ordem de Serviço</h1>
               <Field label="OS" value={data.serviceOrderNumber} />
-              <Field label="Orçamento" value={`${data.quote.quoteNumber} v${data.quote.version}`} />
-              <Field label="Validade" value={formatDate(data.quote.validUntil)} />
+              <Field
+                label="Orçamento"
+                value={`${data.quote.quoteNumber} v${data.quote.version}`}
+              />
+              <Field
+                label="Validade"
+                value={formatDate(data.quote.validUntil)}
+              />
             </div>
-            <div>{data.qrCodeDataUrl ? <img className="qr" src={data.qrCodeDataUrl} alt="QR Code" /> : null}</div>
+            <div>
+              {data.qrCodeDataUrl ? (
+                <img className="qr" src={data.qrCodeDataUrl} alt="QR Code" />
+              ) : null}
+            </div>
           </div>
           <div className="grid">
             <div>
@@ -562,18 +913,55 @@ export function ServiceOrderQuoteHtml({ data }: { data: ServiceOrderQuoteData })
           </table>
           <div className="section grid">
             <div>
-              <Field label="Condições de pagamento" value={data.quote.paymentTerms} />
-              <Field label="Prazo de entrega" value={data.quote.deliveryEstimate} />
+              <Field
+                label="Condições de pagamento"
+                value={data.quote.paymentTerms}
+              />
+              <Field
+                label="Prazo de entrega"
+                value={data.quote.deliveryEstimate}
+              />
               <Field label="Garantia" value={data.quote.warrantyTerms} />
             </div>
             <div>
-              <Field label="Serviços" value={money(data.quote.subtotalServicesCents)} />
-              <Field label="Peças" value={money(data.quote.subtotalPartsCents)} />
+              <Field
+                label="Serviços"
+                value={money(data.quote.subtotalServicesCents)}
+              />
+              <Field
+                label="Peças"
+                value={money(data.quote.subtotalPartsCents)}
+              />
               <Field label="Frete" value={money(data.quote.freightCents)} />
-              <Field label="Descontos" value={money(data.quote.discountCents)} />
+              <Field
+                label="Descontos"
+                value={money(data.quote.discountCents)}
+              />
               <div className="total">Total: {money(data.quote.totalCents)}</div>
             </div>
           </div>
+        </main>
+      </body>
+    </html>
+  );
+}
+
+export function ServiceOrderDeliveryReceiptHtml({
+  data,
+}: {
+  data: ServiceOrderDeliveryReceiptData;
+}) {
+  return (
+    <html lang="pt-BR">
+      <head>
+        <meta charSet="UTF-8" />
+        <title>Comprovante de entrega - {data.serviceOrderNumber}</title>
+        <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
+      </head>
+      <body>
+        <main>
+          <DeliveryReceiptCopy data={data} copy="client" />
+          <DeliveryReceiptCopy data={data} copy="lab" />
         </main>
       </body>
     </html>

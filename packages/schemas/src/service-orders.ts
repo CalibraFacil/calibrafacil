@@ -138,7 +138,12 @@ export const CreateServiceOrderSchema = z
     clientContactSnapshot: z.record(z.string(), z.unknown()).optional(),
     assetId: z.coerce.number().int().positive(),
     intakeType: ServiceOrderIntakeTypeSchema.default("counter"),
-    sourceServiceOrderId: z.coerce.number().int().positive().optional().nullable(),
+    sourceServiceOrderId: z.coerce
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .nullable(),
     priority: ServiceOrderPrioritySchema.default("normal"),
     responsibleTechnicianId: z.string().trim().min(1).optional().nullable(),
     claimedDefect: z.string().trim().min(1).max(5000),
@@ -301,6 +306,20 @@ export const DeliverServiceOrderSchema = z.object({
   deliveredToName: z.string().trim().min(1).max(200),
   deliveredToDocument: z.string().trim().max(80).optional().nullable(),
   deliveryNotes: nullableText,
+  inmetroRepairSealNumber: z.string().trim().max(120).optional().nullable(),
+});
+
+export const UpdateServiceOrderRepairSealSchema = z.object({
+  inmetroRepairSealNumber: z.string().trim().max(120).optional().nullable(),
+  inmetroRepairSealIssuedAt: z.string().datetime().optional().nullable(),
+  inmetroRepairSealAppliedAt: z.string().datetime().optional().nullable(),
+  inmetroRepairSealNotes: nullableText,
+});
+
+export const IssueServiceOrderDeliveryDocumentSchema = z.object({
+  technicianSignatureData:
+    ServiceOrderSignatureDataSchema.optional().nullable(),
+  clientSignatureData: ServiceOrderSignatureDataSchema.optional().nullable(),
 });
 
 export const CloseServiceOrderSchema = z.object({
@@ -323,7 +342,12 @@ export const LinkServiceOrderCertificateSchema = z.object({
 });
 
 export const UpdateServiceOrderSettingsSchema = z.object({
-  numberingTemplate: z.string().trim().min(1).max(120).default("OS-{YYYY}-{SEQ}"),
+  numberingTemplate: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .default("OS-{YYYY}-{SEQ}"),
   numberingScope: z.enum(["organization", "unit"]).default("unit"),
   nextNumber: z.coerce.number().int().min(1).optional(),
   defaultIntakeTerms: nullableText,

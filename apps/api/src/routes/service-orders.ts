@@ -11,6 +11,7 @@ import {
   serviceOrder,
   serviceOrderAssetSnapshot,
   serviceOrderCertificateLink,
+  serviceOrderDeliveryDocument,
   serviceOrderEvaluation,
   serviceOrderEventLog,
   serviceOrderExecution,
@@ -34,6 +35,7 @@ import {
   CreateServiceOrderSchema,
   DeliverServiceOrderSchema,
   FinishServiceOrderExecutionSchema,
+  IssueServiceOrderDeliveryDocumentSchema,
   ListServiceOrdersQuerySchema,
   RejectServiceOrderQuoteManuallySchema,
   RejectServiceOrderQuotePortalSchema,
@@ -43,6 +45,7 @@ import {
   UpdateServiceOrderEvaluationSchema,
   UpdateServiceOrderExecutionSchema,
   UpdateServiceOrderQuoteDraftSchema,
+  UpdateServiceOrderRepairSealSchema,
   UpdateServiceOrderSchema,
   UpdateServiceOrderSettingsSchema,
 } from "@calibra-facil/schemas";
@@ -83,6 +86,7 @@ import {
 import {
   createR2Client,
   generatePresignedUrl,
+  uploadToR2,
   type R2Env,
 } from "../lib/storage";
 
@@ -99,8 +103,12 @@ const QuoteParamSchema = z.object({
 });
 const TokenParamSchema = z.object({ token: z.string().trim().min(16) });
 
-function requestIp(c: { req: { header: (name: string) => string | undefined } }) {
-  return c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for") ?? null;
+function requestIp(c: {
+  req: { header: (name: string) => string | undefined };
+}) {
+  return (
+    c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for") ?? null
+  );
 }
 
 function requestUserAgent(c: {
@@ -185,6 +193,13 @@ async function getServiceOrderDetail(
       newSealNumber: serviceOrder.newSealNumber,
       repairedSealNumber: serviceOrder.repairedSealNumber,
       inmetroRepairSealNumber: serviceOrder.inmetroRepairSealNumber,
+      inmetroRepairSealIssuedAt: serviceOrder.inmetroRepairSealIssuedAt,
+      inmetroRepairSealAppliedAt: serviceOrder.inmetroRepairSealAppliedAt,
+      inmetroRepairSealEvidenceR2Key:
+        serviceOrder.inmetroRepairSealEvidenceR2Key,
+      inmetroRepairSealEvidenceContentType:
+        serviceOrder.inmetroRepairSealEvidenceContentType,
+      inmetroRepairSealNotes: serviceOrder.inmetroRepairSealNotes,
       invoiceRemittanceNumber: serviceOrder.invoiceRemittanceNumber,
       invoiceRemittanceKey: serviceOrder.invoiceRemittanceKey,
       invoiceRemittanceIssuedAt: serviceOrder.invoiceRemittanceIssuedAt,
@@ -228,6 +243,7 @@ async function getServiceOrderDetail(
     snapshot,
     intakeDocuments,
     tags,
+    deliveryDocuments,
     evaluations,
     quotes,
     executionRows,
@@ -249,6 +265,11 @@ async function getServiceOrderDetail(
       .from(serviceOrderTag)
       .where(eq(serviceOrderTag.serviceOrderId, id))
       .orderBy(desc(serviceOrderTag.id)),
+    db
+      .select()
+      .from(serviceOrderDeliveryDocument)
+      .where(eq(serviceOrderDeliveryDocument.serviceOrderId, id))
+      .orderBy(desc(serviceOrderDeliveryDocument.version)),
     db
       .select()
       .from(serviceOrderEvaluation)
@@ -320,7 +341,10 @@ async function getServiceOrderDetail(
         .select()
         .from(serviceOrderExecutionItem)
         .where(eq(serviceOrderExecutionItem.executionId, execution.id))
-        .orderBy(serviceOrderExecutionItem.sortOrder, serviceOrderExecutionItem.id)
+        .orderBy(
+          serviceOrderExecutionItem.sortOrder,
+          serviceOrderExecutionItem.id,
+        )
     : [];
 
   return {
@@ -329,6 +353,7 @@ async function getServiceOrderDetail(
     assetSnapshot: snapshot[0] ?? null,
     intakeDocuments,
     tags,
+    deliveryDocuments,
     evaluations,
     quotes: quotes.map((quote) => ({
       ...quote,
@@ -387,7 +412,9 @@ function toClientVisibleServiceOrderDetail(
       evaluatedAt: evaluation.evaluatedAt,
     })),
     quotes: detail.quotes
-      .filter((quote) => ["sent", "approved", "rejected", "expired"].includes(quote.status))
+      .filter((quote) =>
+        ["sent", "approved", "rejected", "expired"].includes(quote.status),
+      )
       .map((quote) => ({
         id: quote.id,
         quoteNumber: quote.quoteNumber,
@@ -447,7 +474,8 @@ export const serviceOrdersRouter = new Hono<{
       if (query.status) conditions.push(eq(serviceOrder.status, query.status));
       if (query.customerId)
         conditions.push(eq(serviceOrder.customerId, query.customerId));
-      if (query.assetId) conditions.push(eq(serviceOrder.assetId, query.assetId));
+      if (query.assetId)
+        conditions.push(eq(serviceOrder.assetId, query.assetId));
       if (query.technicianId)
         conditions.push(
           eq(serviceOrder.responsibleTechnicianId, query.technicianId),
@@ -457,7 +485,8 @@ export const serviceOrdersRouter = new Hono<{
         conditions.push(eq(serviceOrder.status, "awaiting_quote_approval"));
       if (query.readyForPickup)
         conditions.push(eq(serviceOrder.status, "ready_for_pickup"));
-      if (query.warranty) conditions.push(eq(serviceOrder.priority, "warranty"));
+      if (query.warranty)
+        conditions.push(eq(serviceOrder.priority, "warranty"));
       if (query.dateFrom)
         conditions.push(gte(serviceOrder.openedAt, new Date(query.dateFrom)));
       if (query.dateTo)
@@ -500,7 +529,10 @@ export const serviceOrdersRouter = new Hono<{
         .from(serviceOrder)
         .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
         .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
-        .innerJoin(organizationUnit, eq(serviceOrder.unitId, organizationUnit.id))
+        .innerJoin(
+          organizationUnit,
+          eq(serviceOrder.unitId, organizationUnit.id),
+        )
         .leftJoin(user, eq(serviceOrder.responsibleTechnicianId, user.id))
         .where(whereCondition)
         .orderBy(desc(serviceOrder.openedAt))
@@ -666,7 +698,10 @@ export const serviceOrdersRouter = new Hono<{
         })
         .from(serviceOrder)
         .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
-        .innerJoin(organizationUnit, eq(serviceOrder.unitId, organizationUnit.id))
+        .innerJoin(
+          organizationUnit,
+          eq(serviceOrder.unitId, organizationUnit.id),
+        )
         .leftJoin(user, eq(serviceOrder.responsibleTechnicianId, user.id))
         .where(
           and(
@@ -676,7 +711,10 @@ export const serviceOrdersRouter = new Hono<{
         );
 
       const byStatus = new Map<string, number>();
-      const byUnit = new Map<string, { unitId: number; unitName: string; total: number }>();
+      const byUnit = new Map<
+        string,
+        { unitId: number; unitName: string; total: number }
+      >();
       const byTechnician = new Map<
         string,
         { technicianId: string | null; technicianName: string; total: number }
@@ -941,7 +979,8 @@ export const serviceOrdersRouter = new Hono<{
         .where(eq(serviceOrderIntakeDocument.serviceOrderId, id))
         .orderBy(desc(serviceOrderIntakeDocument.version))
         .limit(1);
-      if (!document?.pdfR2Key) return c.json({ error: "PDF indisponivel" }, 404);
+      if (!document?.pdfR2Key)
+        return c.json({ error: "PDF indisponivel" }, 404);
       const client = createR2Client(c.env);
       return c.json({
         url: await generatePresignedUrl(
@@ -967,8 +1006,225 @@ export const serviceOrdersRouter = new Hono<{
       if (!tag?.pdfR2Key) return c.json({ error: "PDF indisponivel" }, 404);
       const client = createR2Client(c.env);
       return c.json({
-        url: await generatePresignedUrl(client, c.env.R2_BUCKET_NAME, tag.pdfR2Key),
+        url: await generatePresignedUrl(
+          client,
+          c.env.R2_BUCKET_NAME,
+          tag.pdfR2Key,
+        ),
       });
+    },
+  )
+  .post(
+    "/:id/delivery-document",
+    ...withLabPermission({ service_order: ["deliver"] }),
+    zValidator("param", IdParamSchema),
+    zValidator("json", IssueServiceOrderDeliveryDocumentSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const { id } = c.req.valid("param");
+      const input = c.req.valid("json");
+      const detail = await getServiceOrderDetail(
+        id,
+        member.organizationId,
+        buildUnitScopeCondition(serviceOrder.unitId, member),
+      );
+      if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
+
+      const nextVersion = detail.deliveryDocuments.length + 1;
+      const [document] = await db
+        .insert(serviceOrderDeliveryDocument)
+        .values({
+          serviceOrderId: id,
+          documentNumber: `${detail.serviceOrderNumber}/ENT`,
+          version: nextVersion,
+          issuedAt: new Date(),
+          issuedByUserId: session.user.id,
+          technicianSignatureData: input.technicianSignatureData ?? null,
+          clientSignatureData: input.clientSignatureData ?? null,
+        })
+        .returning();
+
+      if (detail.execution) {
+        await db
+          .update(serviceOrderExecution)
+          .set({
+            technicianSignatureData:
+              input.technicianSignatureData ??
+              detail.execution.technicianSignatureData ??
+              null,
+            clientSignatureData:
+              input.clientSignatureData ??
+              detail.execution.clientSignatureData ??
+              null,
+            updatedAt: new Date(),
+          })
+          .where(eq(serviceOrderExecution.id, detail.execution.id));
+      }
+
+      await recordServiceOrderEvent({
+        organizationId: detail.organizationId,
+        unitId: detail.unitId,
+        serviceOrderId: id,
+        actorType: "lab_user",
+        actorId: session.user.id,
+        eventType: "service_order.delivery_document_issued",
+        metadata: { documentId: document?.id, version: nextVersion },
+      });
+      await enqueuePdf(c.env, {
+        type: "SERVICE_ORDER_DELIVERY_RECEIPT",
+        serviceOrderId: id,
+        documentId: document?.id,
+        userId: session.user.id,
+      });
+      return c.json({ data: document });
+    },
+  )
+  .get(
+    "/:id/delivery-document.pdf",
+    ...withLabPermission({ service_order: ["read"] }),
+    zValidator("param", IdParamSchema),
+    async (c) => {
+      const member = c.get("member");
+      const { id } = c.req.valid("param");
+      const detail = await getServiceOrderDetail(
+        id,
+        member.organizationId,
+        buildUnitScopeCondition(serviceOrder.unitId, member),
+      );
+      if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
+      const document = detail.deliveryDocuments[0];
+      if (!document?.pdfR2Key) {
+        return c.json({ error: "PDF indisponivel" }, 404);
+      }
+      const client = createR2Client(c.env);
+      return c.json({
+        url: await generatePresignedUrl(
+          client,
+          c.env.R2_BUCKET_NAME,
+          document.pdfR2Key,
+        ),
+      });
+    },
+  )
+  .patch(
+    "/:id/repair-seal",
+    ...withLabPermission({ service_order: ["deliver"] }),
+    zValidator("param", IdParamSchema),
+    zValidator("json", UpdateServiceOrderRepairSealSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const { id } = c.req.valid("param");
+      const input = c.req.valid("json");
+      const [updated] = await db
+        .update(serviceOrder)
+        .set({
+          inmetroRepairSealNumber: input.inmetroRepairSealNumber ?? null,
+          inmetroRepairSealIssuedAt: parseDate(input.inmetroRepairSealIssuedAt),
+          inmetroRepairSealAppliedAt: parseDate(
+            input.inmetroRepairSealAppliedAt,
+          ),
+          inmetroRepairSealAppliedByUserId: input.inmetroRepairSealAppliedAt
+            ? session.user.id
+            : null,
+          inmetroRepairSealNotes: input.inmetroRepairSealNotes ?? null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(serviceOrder.id, id),
+            eq(serviceOrder.organizationId, member.organizationId),
+            buildUnitScopeCondition(serviceOrder.unitId, member),
+          ),
+        )
+        .returning();
+      if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
+      await recordServiceOrderEvent({
+        organizationId: updated.organizationId,
+        unitId: updated.unitId,
+        serviceOrderId: id,
+        actorType: "lab_user",
+        actorId: session.user.id,
+        eventType: "service_order.repair_seal_updated",
+        metadata: { inmetroRepairSealNumber: input.inmetroRepairSealNumber },
+      });
+      return c.json({ data: updated });
+    },
+  )
+  .post(
+    "/:id/repair-seal/evidence",
+    ...withLabPermission({ service_order: ["deliver"] }),
+    zValidator("param", IdParamSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const { id } = c.req.valid("param");
+      const [order] = await db
+        .select()
+        .from(serviceOrder)
+        .where(
+          and(
+            eq(serviceOrder.id, id),
+            eq(serviceOrder.organizationId, member.organizationId),
+            buildUnitScopeCondition(serviceOrder.unitId, member),
+          ),
+        )
+        .limit(1);
+      if (!order) return c.json({ error: "OS nao encontrada" }, 404);
+
+      const form = await c.req.formData();
+      const evidence = form.get("evidence");
+      if (!(evidence instanceof File)) {
+        return c.json({ error: "Arquivo de evidencia obrigatorio" }, 400);
+      }
+      if (
+        !["image/png", "image/jpeg", "application/pdf"].includes(evidence.type)
+      ) {
+        return c.json({ error: "Formato de evidencia invalido" }, 400);
+      }
+      if (evidence.size > 8 * 1024 * 1024) {
+        return c.json({ error: "Evidencia deve ter no maximo 8 MB" }, 400);
+      }
+
+      const ext =
+        evidence.type === "application/pdf"
+          ? "pdf"
+          : evidence.type === "image/png"
+            ? "png"
+            : "jpg";
+      const key = `org/${encodeURIComponent(order.organizationId)}/${order.openedAt.getUTCFullYear()}/service-orders/${encodeURIComponent(order.serviceOrderNumber)}/repair-seal-evidence.${ext}`;
+      const client = createR2Client(c.env);
+      await uploadToR2(
+        client,
+        c.env.R2_BUCKET_NAME,
+        key,
+        await evidence.arrayBuffer(),
+        evidence.type,
+      );
+      const [updated] = await db
+        .update(serviceOrder)
+        .set({
+          inmetroRepairSealEvidenceR2Key: key,
+          inmetroRepairSealEvidenceContentType: evidence.type,
+          inmetroRepairSealAppliedAt:
+            order.inmetroRepairSealAppliedAt ?? new Date(),
+          inmetroRepairSealAppliedByUserId: session.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(serviceOrder.id, id))
+        .returning();
+      if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
+      await recordServiceOrderEvent({
+        organizationId: updated.organizationId,
+        unitId: updated.unitId,
+        serviceOrderId: id,
+        actorType: "lab_user",
+        actorId: session.user.id,
+        eventType: "service_order.repair_seal_updated",
+        metadata: { evidenceUploaded: true },
+      });
+      return c.json({ data: updated });
     },
   )
   .post(
@@ -1063,7 +1319,11 @@ export const serviceOrdersRouter = new Hono<{
           .returning();
         await tx
           .update(serviceOrder)
-          .set({ status: nextStatus, evaluatedAt: new Date(), updatedAt: new Date() })
+          .set({
+            status: nextStatus,
+            evaluatedAt: new Date(),
+            updatedAt: new Date(),
+          })
           .where(eq(serviceOrder.id, id));
         await recordServiceOrderEvent(
           {
@@ -1271,7 +1531,8 @@ export const serviceOrdersRouter = new Hono<{
           sentAt: new Date(),
           sentByUserId: session.user.id,
           portalAccessTokenHash: token.tokenHash,
-          clientMessage: c.req.valid("json").clientMessage ?? quote.clientMessage,
+          clientMessage:
+            c.req.valid("json").clientMessage ?? quote.clientMessage,
           updatedAt: new Date(),
         })
         .where(eq(serviceOrderQuote.id, quoteId))
@@ -1378,7 +1639,11 @@ export const serviceOrdersRouter = new Hono<{
       if (!quote || !canApproveServiceOrderQuote(quote.status)) {
         return c.json({ error: "Orcamento nao pode ser recusado" }, 409);
       }
-      const [order] = await db.select().from(serviceOrder).where(eq(serviceOrder.id, id)).limit(1);
+      const [order] = await db
+        .select()
+        .from(serviceOrder)
+        .where(eq(serviceOrder.id, id))
+        .limit(1);
       if (!order) return c.json({ error: "OS nao encontrada" }, 404);
       await db.transaction(async (tx) => {
         await tx
@@ -1439,7 +1704,11 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const session = c.get("session");
       const { id } = c.req.valid("param");
-      const [order] = await db.select().from(serviceOrder).where(eq(serviceOrder.id, id)).limit(1);
+      const [order] = await db
+        .select()
+        .from(serviceOrder)
+        .where(eq(serviceOrder.id, id))
+        .limit(1);
       if (!order) return c.json({ error: "OS nao encontrada" }, 404);
       const [execution] = await db
         .insert(serviceOrderExecution)
@@ -1480,7 +1749,10 @@ export const serviceOrdersRouter = new Hono<{
         .limit(1);
       if (!execution) return c.json({ error: "Execucao nao iniciada" }, 404);
       if (input.items) {
-        await replaceExecutionItems({ executionId: execution.id, items: input.items });
+        await replaceExecutionItems({
+          executionId: execution.id,
+          items: input.items,
+        });
       }
       const [updated] = await db
         .update(serviceOrderExecution)
@@ -1513,12 +1785,19 @@ export const serviceOrdersRouter = new Hono<{
         .limit(1);
       if (!execution) return c.json({ error: "Execucao nao iniciada" }, 404);
       if (input.items) {
-        await replaceExecutionItems({ executionId: execution.id, items: input.items });
+        await replaceExecutionItems({
+          executionId: execution.id,
+          items: input.items,
+        });
       }
       const nextStatus = input.calibrationRequiredAfterRepair
         ? "awaiting_calibration"
         : "awaiting_final_review";
-      const [order] = await db.select().from(serviceOrder).where(eq(serviceOrder.id, id)).limit(1);
+      const [order] = await db
+        .select()
+        .from(serviceOrder)
+        .where(eq(serviceOrder.id, id))
+        .limit(1);
       if (!order) return c.json({ error: "OS nao encontrada" }, 404);
       await db.transaction(async (tx) => {
         await tx
@@ -1564,6 +1843,7 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", IdParamSchema),
     zValidator("json", DeliverServiceOrderSchema),
     async (c) => {
+      const member = c.get("member");
       const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
@@ -1576,8 +1856,15 @@ export const serviceOrdersRouter = new Hono<{
           deliveredToName: input.deliveredToName,
           deliveredToDocument: input.deliveredToDocument ?? null,
           deliveryNotes: input.deliveryNotes ?? null,
+          inmetroRepairSealNumber: input.inmetroRepairSealNumber ?? undefined,
         })
-        .where(eq(serviceOrder.id, id))
+        .where(
+          and(
+            eq(serviceOrder.id, id),
+            eq(serviceOrder.organizationId, member.organizationId),
+            buildUnitScopeCondition(serviceOrder.unitId, member),
+          ),
+        )
         .returning();
       if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
       await recordServiceOrderEvent({
@@ -1681,7 +1968,11 @@ export const serviceOrdersRouter = new Hono<{
       const input = c.req.valid("json");
       const [updated] = await db
         .update(serviceOrder)
-        .set({ status: "awaiting_tech_evaluation", canceledAt: null, closedAt: null })
+        .set({
+          status: "awaiting_tech_evaluation",
+          canceledAt: null,
+          closedAt: null,
+        })
         .where(
           and(
             eq(serviceOrder.id, id),
@@ -1717,9 +2008,18 @@ export const serviceOrdersRouter = new Hono<{
       const session = c.get("session");
       const member = c.get("member");
       const { id, certificateJobId } = c.req.valid("param");
-      const [order] = await db.select().from(serviceOrder).where(eq(serviceOrder.id, id)).limit(1);
-      const [job] = await db.select().from(calibrationJob).where(eq(calibrationJob.id, certificateJobId)).limit(1);
-      if (!order || !job) return c.json({ error: "OS ou certificado nao encontrado" }, 404);
+      const [order] = await db
+        .select()
+        .from(serviceOrder)
+        .where(eq(serviceOrder.id, id))
+        .limit(1);
+      const [job] = await db
+        .select()
+        .from(calibrationJob)
+        .where(eq(calibrationJob.id, certificateJobId))
+        .limit(1);
+      if (!order || !job)
+        return c.json({ error: "OS ou certificado nao encontrado" }, 404);
       if (
         order.organizationId !== member.organizationId ||
         job.organizationId !== order.organizationId ||
@@ -1768,7 +2068,11 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const session = c.get("session");
       const { id, certificateJobId } = c.req.valid("param");
-      const [order] = await db.select().from(serviceOrder).where(eq(serviceOrder.id, id)).limit(1);
+      const [order] = await db
+        .select()
+        .from(serviceOrder)
+        .where(eq(serviceOrder.id, id))
+        .limit(1);
       await db
         .delete(serviceOrderCertificateLink)
         .where(
@@ -1803,7 +2107,11 @@ export const portalServiceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const linkedCustomer = await getPortalCustomer(member.organizationId);
-      if (!linkedCustomer) return c.json({ data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0 } });
+      if (!linkedCustomer)
+        return c.json({
+          data: [],
+          pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+        });
       const query = c.req.valid("query");
       const rows = await db
         .select({
@@ -1831,7 +2139,12 @@ export const portalServiceOrdersRouter = new Hono<{
           ...row,
           statusLabel: SERVICE_ORDER_STATUS_LABELS[row.status],
         })),
-        pagination: { page: query.page, limit: query.limit, total: rows.length, totalPages: 1 },
+        pagination: {
+          page: query.page,
+          limit: query.limit,
+          total: rows.length,
+          totalPages: 1,
+        },
       });
     },
   )
@@ -1866,17 +2179,53 @@ export const portalServiceOrdersRouter = new Hono<{
       const { id, quoteId } = c.req.valid("param");
       const linkedCustomer = await getPortalCustomer(member.organizationId);
       const quote = await getQuoteForAction(id, quoteId);
-      const [order] = await db.select().from(serviceOrder).where(eq(serviceOrder.id, id)).limit(1);
-      if (!linkedCustomer || !order || order.customerId !== linkedCustomer.id || !quote) {
+      const [order] = await db
+        .select()
+        .from(serviceOrder)
+        .where(eq(serviceOrder.id, id))
+        .limit(1);
+      if (
+        !linkedCustomer ||
+        !order ||
+        order.customerId !== linkedCustomer.id ||
+        !quote
+      ) {
         return c.json({ error: "Orcamento nao encontrado" }, 404);
       }
       if (!canApproveServiceOrderQuote(quote.status)) {
         return c.json({ error: "Orcamento nao pode ser aprovado" }, 409);
       }
       await db.transaction(async (tx) => {
-        await tx.update(serviceOrderQuote).set({ status: "approved", approvedAt: new Date(), approvedByPortalUserId: session.user.id }).where(eq(serviceOrderQuote.id, quoteId));
-        await tx.update(serviceOrder).set({ status: "quote_approved", approvedAt: new Date(), totalApprovedCents: quote.totalCents }).where(eq(serviceOrder.id, id));
-        await recordServiceOrderEvent({ organizationId: order.organizationId, unitId: order.unitId, serviceOrderId: id, actorType: "portal_user", actorId: session.user.id, eventType: "service_order.quote_approved_by_client", metadata: { quoteId }, ipAddress: requestIp(c), userAgent: requestUserAgent(c) }, tx);
+        await tx
+          .update(serviceOrderQuote)
+          .set({
+            status: "approved",
+            approvedAt: new Date(),
+            approvedByPortalUserId: session.user.id,
+          })
+          .where(eq(serviceOrderQuote.id, quoteId));
+        await tx
+          .update(serviceOrder)
+          .set({
+            status: "quote_approved",
+            approvedAt: new Date(),
+            totalApprovedCents: quote.totalCents,
+          })
+          .where(eq(serviceOrder.id, id));
+        await recordServiceOrderEvent(
+          {
+            organizationId: order.organizationId,
+            unitId: order.unitId,
+            serviceOrderId: id,
+            actorType: "portal_user",
+            actorId: session.user.id,
+            eventType: "service_order.quote_approved_by_client",
+            metadata: { quoteId },
+            ipAddress: requestIp(c),
+            userAgent: requestUserAgent(c),
+          },
+          tx,
+        );
       });
       return c.json({ ok: true });
     },
@@ -1894,14 +2243,46 @@ export const portalServiceOrdersRouter = new Hono<{
       const input = c.req.valid("json");
       const linkedCustomer = await getPortalCustomer(member.organizationId);
       const quote = await getQuoteForAction(id, quoteId);
-      const [order] = await db.select().from(serviceOrder).where(eq(serviceOrder.id, id)).limit(1);
-      if (!linkedCustomer || !order || order.customerId !== linkedCustomer.id || !quote) {
+      const [order] = await db
+        .select()
+        .from(serviceOrder)
+        .where(eq(serviceOrder.id, id))
+        .limit(1);
+      if (
+        !linkedCustomer ||
+        !order ||
+        order.customerId !== linkedCustomer.id ||
+        !quote
+      ) {
         return c.json({ error: "Orcamento nao encontrado" }, 404);
       }
       await db.transaction(async (tx) => {
-        await tx.update(serviceOrderQuote).set({ status: "rejected", rejectedAt: new Date(), rejectionReason: input.rejectionReason ?? null }).where(eq(serviceOrderQuote.id, quoteId));
-        await tx.update(serviceOrder).set({ status: "quote_rejected", rejectedAt: new Date() }).where(eq(serviceOrder.id, id));
-        await recordServiceOrderEvent({ organizationId: order.organizationId, unitId: order.unitId, serviceOrderId: id, actorType: "portal_user", actorId: session.user.id, eventType: "service_order.quote_rejected_by_client", metadata: { quoteId, reason: input.rejectionReason }, ipAddress: requestIp(c), userAgent: requestUserAgent(c) }, tx);
+        await tx
+          .update(serviceOrderQuote)
+          .set({
+            status: "rejected",
+            rejectedAt: new Date(),
+            rejectionReason: input.rejectionReason ?? null,
+          })
+          .where(eq(serviceOrderQuote.id, quoteId));
+        await tx
+          .update(serviceOrder)
+          .set({ status: "quote_rejected", rejectedAt: new Date() })
+          .where(eq(serviceOrder.id, id));
+        await recordServiceOrderEvent(
+          {
+            organizationId: order.organizationId,
+            unitId: order.unitId,
+            serviceOrderId: id,
+            actorType: "portal_user",
+            actorId: session.user.id,
+            eventType: "service_order.quote_rejected_by_client",
+            metadata: { quoteId, reason: input.rejectionReason },
+            ipAddress: requestIp(c),
+            userAgent: requestUserAgent(c),
+          },
+          tx,
+        );
       });
       return c.json({ ok: true });
     },
@@ -1910,9 +2291,45 @@ export const portalServiceOrdersRouter = new Hono<{
 export const publicServiceOrderAccessRouter = new Hono<{
   Variables: AuthVariables;
 }>()
-  .get(
-    "/:token",
+  .get("/:token", zValidator("param", TokenParamSchema), async (c) => {
+    const tokenHash = await hashServiceOrderToken(c.req.valid("param").token);
+    const [access] = await db
+      .select()
+      .from(serviceOrderPublicAccessToken)
+      .where(eq(serviceOrderPublicAccessToken.tokenHash, tokenHash))
+      .limit(1);
+    if (
+      !access ||
+      access.revokedAt ||
+      (access.expiresAt && access.expiresAt < new Date())
+    ) {
+      return c.json({ error: "Link invalido ou expirado" }, 404);
+    }
+    await db
+      .update(serviceOrderPublicAccessToken)
+      .set({ lastViewedAt: new Date() })
+      .where(eq(serviceOrderPublicAccessToken.id, access.id));
+    const detail = await getServiceOrderDetail(
+      access.serviceOrderId,
+      access.organizationId,
+    );
+    if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
+    await recordServiceOrderEvent({
+      organizationId: detail.organizationId,
+      unitId: detail.unitId,
+      serviceOrderId: detail.id,
+      actorType: "public_token",
+      actorId: String(access.id),
+      eventType: "service_order.public_link_viewed",
+      ipAddress: requestIp(c),
+      userAgent: requestUserAgent(c),
+    });
+    return c.json({ data: toClientVisibleServiceOrderDetail(detail) });
+  })
+  .post(
+    "/:token/approve-quote",
     zValidator("param", TokenParamSchema),
+    zValidator("json", ApproveServiceOrderQuotePortalSchema),
     async (c) => {
       const tokenHash = await hashServiceOrderToken(c.req.valid("param").token);
       const [access] = await db
@@ -1921,53 +2338,51 @@ export const publicServiceOrderAccessRouter = new Hono<{
         .where(eq(serviceOrderPublicAccessToken.tokenHash, tokenHash))
         .limit(1);
       if (
-        !access ||
+        !access?.quoteId ||
         access.revokedAt ||
         (access.expiresAt && access.expiresAt < new Date())
       ) {
         return c.json({ error: "Link invalido ou expirado" }, 404);
       }
-      await db
-        .update(serviceOrderPublicAccessToken)
-        .set({ lastViewedAt: new Date() })
-        .where(eq(serviceOrderPublicAccessToken.id, access.id));
-      const detail = await getServiceOrderDetail(
+      const quote = await getQuoteForAction(
         access.serviceOrderId,
-        access.organizationId,
+        access.quoteId,
       );
-      if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
-      await recordServiceOrderEvent({
-        organizationId: detail.organizationId,
-        unitId: detail.unitId,
-        serviceOrderId: detail.id,
-        actorType: "public_token",
-        actorId: String(access.id),
-        eventType: "service_order.public_link_viewed",
-        ipAddress: requestIp(c),
-        userAgent: requestUserAgent(c),
-      });
-      return c.json({ data: toClientVisibleServiceOrderDetail(detail) });
-    },
-  )
-  .post(
-    "/:token/approve-quote",
-    zValidator("param", TokenParamSchema),
-    zValidator("json", ApproveServiceOrderQuotePortalSchema),
-    async (c) => {
-      const tokenHash = await hashServiceOrderToken(c.req.valid("param").token);
-      const [access] = await db.select().from(serviceOrderPublicAccessToken).where(eq(serviceOrderPublicAccessToken.tokenHash, tokenHash)).limit(1);
-      if (!access?.quoteId || access.revokedAt || (access.expiresAt && access.expiresAt < new Date())) {
-        return c.json({ error: "Link invalido ou expirado" }, 404);
-      }
-      const quote = await getQuoteForAction(access.serviceOrderId, access.quoteId);
-      const [order] = await db.select().from(serviceOrder).where(eq(serviceOrder.id, access.serviceOrderId)).limit(1);
+      const [order] = await db
+        .select()
+        .from(serviceOrder)
+        .where(eq(serviceOrder.id, access.serviceOrderId))
+        .limit(1);
       if (!quote || !order || !canApproveServiceOrderQuote(quote.status)) {
         return c.json({ error: "Orcamento nao pode ser aprovado" }, 409);
       }
       await db.transaction(async (tx) => {
-        await tx.update(serviceOrderQuote).set({ status: "approved", approvedAt: new Date() }).where(eq(serviceOrderQuote.id, quote.id));
-        await tx.update(serviceOrder).set({ status: "quote_approved", approvedAt: new Date(), totalApprovedCents: quote.totalCents }).where(eq(serviceOrder.id, order.id));
-        await recordServiceOrderEvent({ organizationId: order.organizationId, unitId: order.unitId, serviceOrderId: order.id, actorType: "public_token", actorId: String(access.id), eventType: "service_order.quote_approved_by_client", metadata: { quoteId: quote.id }, ipAddress: requestIp(c), userAgent: requestUserAgent(c) }, tx);
+        await tx
+          .update(serviceOrderQuote)
+          .set({ status: "approved", approvedAt: new Date() })
+          .where(eq(serviceOrderQuote.id, quote.id));
+        await tx
+          .update(serviceOrder)
+          .set({
+            status: "quote_approved",
+            approvedAt: new Date(),
+            totalApprovedCents: quote.totalCents,
+          })
+          .where(eq(serviceOrder.id, order.id));
+        await recordServiceOrderEvent(
+          {
+            organizationId: order.organizationId,
+            unitId: order.unitId,
+            serviceOrderId: order.id,
+            actorType: "public_token",
+            actorId: String(access.id),
+            eventType: "service_order.quote_approved_by_client",
+            metadata: { quoteId: quote.id },
+            ipAddress: requestIp(c),
+            userAgent: requestUserAgent(c),
+          },
+          tx,
+        );
       });
       return c.json({ ok: true });
     },
@@ -1979,20 +2394,59 @@ export const publicServiceOrderAccessRouter = new Hono<{
     async (c) => {
       const tokenHash = await hashServiceOrderToken(c.req.valid("param").token);
       const input = c.req.valid("json");
-      const [access] = await db.select().from(serviceOrderPublicAccessToken).where(eq(serviceOrderPublicAccessToken.tokenHash, tokenHash)).limit(1);
-      if (!access?.quoteId || access.revokedAt || (access.expiresAt && access.expiresAt < new Date())) {
+      const [access] = await db
+        .select()
+        .from(serviceOrderPublicAccessToken)
+        .where(eq(serviceOrderPublicAccessToken.tokenHash, tokenHash))
+        .limit(1);
+      if (
+        !access?.quoteId ||
+        access.revokedAt ||
+        (access.expiresAt && access.expiresAt < new Date())
+      ) {
         return c.json({ error: "Link invalido ou expirado" }, 404);
       }
-      const quote = await getQuoteForAction(access.serviceOrderId, access.quoteId);
-      const [order] = await db.select().from(serviceOrder).where(eq(serviceOrder.id, access.serviceOrderId)).limit(1);
-      if (!quote || !order) return c.json({ error: "Orcamento nao encontrado" }, 404);
+      const quote = await getQuoteForAction(
+        access.serviceOrderId,
+        access.quoteId,
+      );
+      const [order] = await db
+        .select()
+        .from(serviceOrder)
+        .where(eq(serviceOrder.id, access.serviceOrderId))
+        .limit(1);
+      if (!quote || !order)
+        return c.json({ error: "Orcamento nao encontrado" }, 404);
       if (!canApproveServiceOrderQuote(quote.status)) {
         return c.json({ error: "Orcamento nao pode ser recusado" }, 409);
       }
       await db.transaction(async (tx) => {
-        await tx.update(serviceOrderQuote).set({ status: "rejected", rejectedAt: new Date(), rejectionReason: input.rejectionReason ?? null }).where(eq(serviceOrderQuote.id, quote.id));
-        await tx.update(serviceOrder).set({ status: "quote_rejected", rejectedAt: new Date() }).where(eq(serviceOrder.id, order.id));
-        await recordServiceOrderEvent({ organizationId: order.organizationId, unitId: order.unitId, serviceOrderId: order.id, actorType: "public_token", actorId: String(access.id), eventType: "service_order.quote_rejected_by_client", metadata: { quoteId: quote.id, reason: input.rejectionReason }, ipAddress: requestIp(c), userAgent: requestUserAgent(c) }, tx);
+        await tx
+          .update(serviceOrderQuote)
+          .set({
+            status: "rejected",
+            rejectedAt: new Date(),
+            rejectionReason: input.rejectionReason ?? null,
+          })
+          .where(eq(serviceOrderQuote.id, quote.id));
+        await tx
+          .update(serviceOrder)
+          .set({ status: "quote_rejected", rejectedAt: new Date() })
+          .where(eq(serviceOrder.id, order.id));
+        await recordServiceOrderEvent(
+          {
+            organizationId: order.organizationId,
+            unitId: order.unitId,
+            serviceOrderId: order.id,
+            actorType: "public_token",
+            actorId: String(access.id),
+            eventType: "service_order.quote_rejected_by_client",
+            metadata: { quoteId: quote.id, reason: input.rejectionReason },
+            ipAddress: requestIp(c),
+            userAgent: requestUserAgent(c),
+          },
+          tx,
+        );
       });
       return c.json({ ok: true });
     },

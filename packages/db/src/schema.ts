@@ -3091,7 +3091,7 @@ export type ServiceOrderNumberingScope = "organization" | "unit";
 
 export type ServiceOrderSignatureData = {
   signerName: string;
-  signedAt: string;
+  signedAt?: string;
   dataUrl: string;
 };
 
@@ -3158,6 +3158,16 @@ export const serviceOrder = pgTable(
     newSealNumber: text("new_seal_number"),
     repairedSealNumber: text("repaired_seal_number"),
     inmetroRepairSealNumber: text("inmetro_repair_seal_number"),
+    inmetroRepairSealIssuedAt: timestamp("inmetro_repair_seal_issued_at"),
+    inmetroRepairSealAppliedAt: timestamp("inmetro_repair_seal_applied_at"),
+    inmetroRepairSealAppliedByUserId: text(
+      "inmetro_repair_seal_applied_by_user_id",
+    ).references(() => user.id, { onDelete: "set null" }),
+    inmetroRepairSealEvidenceR2Key: text("inmetro_repair_seal_evidence_r2_key"),
+    inmetroRepairSealEvidenceContentType: text(
+      "inmetro_repair_seal_evidence_content_type",
+    ),
+    inmetroRepairSealNotes: text("inmetro_repair_seal_notes"),
     invoiceRemittanceNumber: text("invoice_remittance_number"),
     invoiceRemittanceKey: text("invoice_remittance_key"),
     invoiceRemittanceIssuedAt: timestamp("invoice_remittance_issued_at"),
@@ -3236,7 +3246,9 @@ export const serviceOrderAssetSnapshot = pgTable(
     specifications: jsonb("specifications").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [index("service_order_asset_snapshot_asset_idx").on(table.assetId)],
+  (table) => [
+    index("service_order_asset_snapshot_asset_idx").on(table.assetId),
+  ],
 );
 
 export const serviceOrderIntakeDocument = pgTable(
@@ -3289,6 +3301,37 @@ export const serviceOrderTag = pgTable(
   (table) => [
     index("service_order_tag_order_idx").on(table.serviceOrderId),
     uniqueIndex("service_order_tag_number_uidx").on(table.tagNumber),
+  ],
+);
+
+export const serviceOrderDeliveryDocument = pgTable(
+  "service_order_delivery_document",
+  {
+    id: serial("id").primaryKey(),
+    serviceOrderId: integer("service_order_id")
+      .notNull()
+      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    documentNumber: text("document_number").notNull(),
+    version: integer("version").default(1).notNull(),
+    pdfR2Key: text("pdf_r2_key"),
+    issuedAt: timestamp("issued_at"),
+    issuedByUserId: text("issued_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    technicianSignatureData: jsonb(
+      "technician_signature_data",
+    ).$type<ServiceOrderSignatureData>(),
+    clientSignatureData: jsonb(
+      "client_signature_data",
+    ).$type<ServiceOrderSignatureData>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("service_order_delivery_document_order_idx").on(table.serviceOrderId),
+    uniqueIndex("service_order_delivery_document_number_version_uidx").on(
+      table.documentNumber,
+      table.version,
+    ),
   ],
 );
 
@@ -3447,9 +3490,13 @@ export const serviceOrderExecution = pgTable(
     servicePerformed: text("service_performed"),
     partsUsedSummary: text("parts_used_summary"),
     technicalNotes: text("technical_notes"),
-    calibrationRequiredAfterRepair: boolean(
-      "calibration_required_after_repair",
-    )
+    technicianSignatureData: jsonb(
+      "technician_signature_data",
+    ).$type<ServiceOrderSignatureData>(),
+    clientSignatureData: jsonb(
+      "client_signature_data",
+    ).$type<ServiceOrderSignatureData>(),
+    calibrationRequiredAfterRepair: boolean("calibration_required_after_repair")
       .default(false)
       .notNull(),
     result: text("result").$type<ServiceOrderExecutionResult>(),
@@ -3459,7 +3506,9 @@ export const serviceOrderExecution = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("service_order_execution_order_idx").on(table.serviceOrderId)],
+  (table) => [
+    index("service_order_execution_order_idx").on(table.serviceOrderId),
+  ],
 );
 
 export const serviceOrderExecutionItem = pgTable(
@@ -3547,7 +3596,9 @@ export const serviceOrderAttachment = pgTable(
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [index("service_order_attachment_order_idx").on(table.serviceOrderId)],
+  (table) => [
+    index("service_order_attachment_order_idx").on(table.serviceOrderId),
+  ],
 );
 
 export const serviceOrderCertificateLink = pgTable(
@@ -3594,17 +3645,13 @@ export const serviceOrderSettings = pgTable(
     requirePhotoOnIntake: boolean("require_photo_on_intake")
       .default(false)
       .notNull(),
-    requireInvoiceOrJustification: boolean(
-      "require_invoice_or_justification",
-    )
+    requireInvoiceOrJustification: boolean("require_invoice_or_justification")
       .default(false)
       .notNull(),
     allowPublicQuoteApproval: boolean("allow_public_quote_approval")
       .default(true)
       .notNull(),
-    requirePortalLoginForApproval: boolean(
-      "require_portal_login_for_approval",
-    )
+    requirePortalLoginForApproval: boolean("require_portal_login_for_approval")
       .default(false)
       .notNull(),
     autoEmailOnOpen: boolean("auto_email_on_open").default(true).notNull(),
@@ -3681,7 +3728,9 @@ export const serviceOrderPublicAccessToken = pgTable(
     uniqueIndex("service_order_public_access_token_hash_uidx").on(
       table.tokenHash,
     ),
-    index("service_order_public_access_token_order_idx").on(table.serviceOrderId),
+    index("service_order_public_access_token_order_idx").on(
+      table.serviceOrderId,
+    ),
     index("service_order_public_access_token_quote_idx").on(table.quoteId),
   ],
 );
@@ -3924,6 +3973,7 @@ export const serviceOrderRelations = relations(
     assetSnapshot: one(serviceOrderAssetSnapshot),
     intakeDocuments: many(serviceOrderIntakeDocument),
     tags: many(serviceOrderTag),
+    deliveryDocuments: many(serviceOrderDeliveryDocument),
     evaluations: many(serviceOrderEvaluation),
     quotes: many(serviceOrderQuote),
     execution: one(serviceOrderExecution),
@@ -3943,6 +3993,20 @@ export const serviceOrderAssetSnapshotRelations = relations(
     asset: one(asset, {
       fields: [serviceOrderAssetSnapshot.assetId],
       references: [asset.id],
+    }),
+  }),
+);
+
+export const serviceOrderDeliveryDocumentRelations = relations(
+  serviceOrderDeliveryDocument,
+  ({ one }) => ({
+    serviceOrder: one(serviceOrder, {
+      fields: [serviceOrderDeliveryDocument.serviceOrderId],
+      references: [serviceOrder.id],
+    }),
+    issuedByUser: one(user, {
+      fields: [serviceOrderDeliveryDocument.issuedByUserId],
+      references: [user.id],
     }),
   }),
 );
