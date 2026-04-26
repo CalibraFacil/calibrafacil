@@ -1016,7 +1016,7 @@ function ServiceOrderDetailPage() {
           }
           className="min-w-0 gap-4"
         >
-          <div className="overflow-x-auto rounded-lg bg-muted/40 p-1 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]">
+          <div className="overflow-x-auto overflow-y-hidden rounded-lg bg-muted/40 p-1 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]">
             <TabsList className="grid h-auto min-w-[620px] grid-cols-4 bg-transparent p-0 md:min-w-0 md:w-full">
               {workflowTabs.map((tab) => (
                 <TabsTrigger
