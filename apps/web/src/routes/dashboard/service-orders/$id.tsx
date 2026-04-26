@@ -284,6 +284,16 @@ const itemTypeLabels: Record<ServiceOrderItemType, string> = {
   other: 'Outro',
 }
 
+const quoteStatusLabels: Record<string, string> = {
+  draft: 'Rascunho',
+  sent: 'Enviado',
+  approved: 'Aprovado',
+  rejected: 'Recusado',
+  expired: 'Expirado',
+  canceled: 'Cancelado',
+  superseded: 'Substituído',
+}
+
 const recommendedActionLabels: Record<ServiceOrderRecommendedAction, string> = {
   repair: 'Reparo',
   calibration_only: 'Somente calibração',
@@ -990,7 +1000,9 @@ function ServiceOrderDetailPage() {
             {latestQuote ? (
               <div className="mt-2 space-y-1 text-sm">
                 <p>
-                  v{latestQuote.version} · {latestQuote.status} ·{' '}
+                  v{latestQuote.version} ·{' '}
+                  {quoteStatusLabels[latestQuote.status] ?? latestQuote.status}{' '}
+                  ·{' '}
                   <span className="tabular-nums">
                     {money(latestQuote.totalCents)}
                   </span>
@@ -1340,7 +1352,7 @@ function ServiceOrderDetailPage() {
                             Versão {quote.version}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {quote.status}
+                            {quoteStatusLabels[quote.status] ?? quote.status}
                           </p>
                         </div>
                         <p className="text-sm font-medium tabular-nums">
