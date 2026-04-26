@@ -72,9 +72,14 @@ export function NavigationGroup() {
       to: '/dashboard/services' as const,
     },
     {
-      label: 'Ordens de Serviço',
+      label: 'Calibrações',
       icon: ClipboardIcon,
       to: '/dashboard/jobs' as const,
+    },
+    {
+      label: 'Ordens de Serviço',
+      icon: ClipboardIcon,
+      to: '/dashboard/service-orders' as const,
     },
     {
       label: 'Configurações',

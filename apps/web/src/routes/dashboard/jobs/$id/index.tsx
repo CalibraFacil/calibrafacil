@@ -422,7 +422,7 @@ function JobDetailPage() {
                     </CardHeader>
                     <CardContent className="space-y-2">
                         <p className="text-sm text-amber-700">
-                            Esta ordem de serviço é uma <strong>retificação</strong> (versão {job.amendmentNumber || 1}) que substituirá o certificado original após aprovação.
+                            Esta calibração é uma <strong>retificação</strong> (versão {job.amendmentNumber || 1}) que substituirá o certificado original após aprovação.
                         </p>
                         {job.amendmentReason && (
                             <div className="mt-3 p-3 bg-white/60 rounded-md border border-amber-200">
@@ -491,7 +491,7 @@ function JobDetailPage() {
                     <CardHeader>
                         <CardTitle>Contexto Financeiro</CardTitle>
                         <CardDescription>
-                            Visibilidade operacional da cobrança vinculada à OS.
+                            Visibilidade operacional da cobrança vinculada à calibração.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">

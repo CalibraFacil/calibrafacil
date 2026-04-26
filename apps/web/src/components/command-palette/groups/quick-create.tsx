@@ -28,8 +28,17 @@ export function QuickCreateGroup() {
         }}
       >
         <HugeiconsIcon icon={Add01Icon} className="text-blue-500" />
-        <span>Nova Ordem de Serviço</span>
+        <span>Nova Calibração</span>
         <CommandShortcut>⌘N</CommandShortcut>
+      </CommandItem>
+      <CommandItem
+        onSelect={() => {
+          setOpen(false)
+          navigate({ to: '/dashboard/service-orders/new' })
+        }}
+      >
+        <HugeiconsIcon icon={Add01Icon} className="text-blue-500" />
+        <span>Nova Ordem de Serviço</span>
       </CommandItem>
 
       <CommandItem

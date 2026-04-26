@@ -19,6 +19,7 @@
     "@calibra-facil/api": "workspace:^",
     "@calibra-facil/auth": "workspace:^",
     "@calibra-facil/db": "workspace:^",
+    "@calibra-facil/documents": "workspace:^",
     "@calibra-facil/math-engine": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",

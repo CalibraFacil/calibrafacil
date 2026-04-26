@@ -528,14 +528,14 @@ function ConsolidatedReportsPage() {
       <div className="grid gap-6 xl:grid-cols-3">
         <ExecutiveHighlightCard
           title="Maior volume"
-          description="Unidade com maior carga de OS no período."
+          description="Unidade com maior carga de calibrações no período."
           value={
             executiveQuery.data?.highlights.highestVolumeUnit?.unitName ??
             'Sem destaque'
           }
           supporting={
             executiveQuery.data?.highlights.highestVolumeUnit
-              ? `${executiveQuery.data.highlights.highestVolumeUnit.jobsCreatedInPeriod} OS no período`
+              ? `${executiveQuery.data.highlights.highestVolumeUnit.jobsCreatedInPeriod} calibrações no período`
               : 'Nenhuma unidade com volume registrado.'
           }
         />

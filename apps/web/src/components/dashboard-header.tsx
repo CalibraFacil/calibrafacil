@@ -72,10 +72,11 @@ const routeLabels: Record<string, string> = {
   '/dashboard/methods/$id': 'Método',
   '/dashboard/methods/$id/edit': 'Editar Método',
 
-  // Jobs (Ordens de Serviço)
-  '/dashboard/jobs': 'Ordens de Serviço',
-  '/dashboard/jobs/new': 'Nova OS',
-  '/dashboard/jobs/$id': 'Ordem de Serviço',
+  // Calibration jobs
+  '/dashboard/jobs': 'Calibrações',
+  '/dashboard/service-orders': 'Ordens de Serviço',
+  '/dashboard/jobs/new': 'Nova Calibração',
+  '/dashboard/jobs/$id': 'Calibração',
   '/dashboard/jobs/$id/execute': 'Executar',
 
   // Calibration Requests

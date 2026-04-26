@@ -2,14 +2,16 @@ import {
   AlertCircleIcon,
   Book02Icon,
   Building02Icon,
-  Certificate01Icon,
-  ClipboardIcon,
-  CreditCardIcon,
+  FileEditIcon,
+  RepairIcon,
+  Files01Icon,
+  Wallet03Icon,
   CustomerSupportIcon,
   Home01Icon,
   PieChartIcon,
   Settings05Icon,
-  TaskAdd01Icon,
+  TaskAdd02Icon,
+  DocumentValidationIcon,
   UserIcon,
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
@@ -66,22 +68,27 @@ const data = {
     {
       title: 'Serviços',
       url: '/dashboard/services',
-      icon: <HugeiconsIcon icon={TaskAdd01Icon} />,
+      icon: <HugeiconsIcon icon={TaskAdd02Icon} />,
+    },
+    {
+      title: 'Calibrações',
+      url: '/dashboard/jobs',
+      icon: <HugeiconsIcon icon={RepairIcon} />,
     },
     {
       title: 'Ordens de Serviço',
-      url: '/dashboard/jobs',
-      icon: <HugeiconsIcon icon={ClipboardIcon} />,
+      url: '/dashboard/service-orders',
+      icon: <HugeiconsIcon icon={Files01Icon} />,
     },
     {
       title: 'Editor de Certificados',
       url: '/dashboard/certificate-designer',
-      icon: <HugeiconsIcon icon={Certificate01Icon} />,
+      icon: <HugeiconsIcon icon={FileEditIcon} />,
     },
     {
       title: 'Solicitações',
       url: '/dashboard/requests',
-      icon: <HugeiconsIcon icon={TaskAdd01Icon} />,
+      icon: <HugeiconsIcon icon={DocumentValidationIcon} />,
     },
     {
       title: 'Qualidade',
@@ -121,7 +128,7 @@ export function AppSidebar() {
         {
           title: 'Financeiro',
           url: '#',
-          icon: <HugeiconsIcon icon={CreditCardIcon} />,
+          icon: <HugeiconsIcon icon={Wallet03Icon} />,
           items: [
             { title: 'Visão geral', url: '/dashboard/finance' },
             { title: 'Documentos', url: '/dashboard/finance/documents' },

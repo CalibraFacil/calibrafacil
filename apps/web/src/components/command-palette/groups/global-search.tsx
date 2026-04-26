@@ -396,7 +396,7 @@ export function GlobalSearchGroup({
       results.length === 0
 
     return (
-      <CommandGroup heading="Resultados - Ordens de Serviço">
+      <CommandGroup heading="Resultados - Calibrações">
         {showMinLengthHint && (
           <div className="py-6 text-center text-sm text-muted-foreground">
             Digite pelo menos 2 caracteres para buscar.
@@ -426,7 +426,7 @@ export function GlobalSearchGroup({
             >
               <HugeiconsIcon icon={ClipboardIcon} />
               <div className="flex flex-col">
-                <span>{job.jobId || `OS-${job.id}`}</span>
+                <span>{job.jobId || `CAL-${job.id}`}</span>
                 <span className="text-xs text-muted-foreground">
                   Status: {job.status}
                 </span>

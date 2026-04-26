@@ -202,7 +202,7 @@ function RequestsPage() {
               render={
                 <Link to="/dashboard/jobs/new">
                   <HugeiconsIcon icon={PlusSignIcon} className="mr-2 h-4 w-4" />
-                  Nova OS Manual
+                  Nova Calibração Manual
                 </Link>
               }
             ></Button>
@@ -279,7 +279,7 @@ function RequestsPage() {
                       icon={PlusSignIcon}
                       className="mr-2 size-4"
                     />
-                    Nova OS Manual
+                    Nova Calibração Manual
                   </Button>
                 )}
               </EmptyContent>

@@ -57,6 +57,11 @@ import { internalCustomerSuccessRouter } from "./routes/internal-customer-succes
 import { backofficeRouter } from "./routes/backoffice";
 import { profileMediaRouter } from "./routes/profile-media";
 import { publicCommercialCheckoutRouter } from "./routes/public-commercial-checkout";
+import {
+  publicServiceOrderAccessRouter,
+  portalServiceOrdersRouter,
+  serviceOrdersRouter,
+} from "./routes/service-orders";
 
 // Environment variables type for Cloudflare Workers
 interface Env {
@@ -107,7 +112,7 @@ app.use(
   cors({
     origin: (origin) => getCorsOrigin(origin),
     credentials: true,
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", "x-active-unit-id"],
   }),
 );
@@ -262,12 +267,14 @@ const routes = app
   .route("/api/invitations", invitationsRouter)
   .route("/api/portal", portalRouter)
   .route("/api/portal/requests", portalRequestsRouter)
+  .route("/api/portal/service-orders", portalServiceOrdersRouter)
   .route("/api/assets", assetsRouter)
   .route("/api/asset-types", assetTypesRouter)
   .route("/api/methods", methodsRouter)
   .route("/api/services", servicesRouter)
   .route("/api/standards", standardsRouter)
   .route("/api/jobs", jobsRouter)
+  .route("/api/service-orders", serviceOrdersRouter)
   .route("/api/calibration-requests", calibrationRequestsRouter)
   .route("/api/verify", verifyRouter)
   .route("/api/dashboard", dashboardRouter)
@@ -296,6 +303,7 @@ const routes = app
   .route("/api/internal/customer-success", internalCustomerSuccessRouter)
   .route("/api/profile-media", profileMediaRouter)
   .route("/api/public/commercial-checkout", publicCommercialCheckoutRouter)
+  .route("/api/public/service-order-access", publicServiceOrderAccessRouter)
   .route("/api/public/v1", publicApiRouter)
   .route("/api/public/v2", publicApiV2DocsRouter)
   .route("/api/public/v2", publicApiV2Router);

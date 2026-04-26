@@ -133,7 +133,7 @@ function getFinancialVariant(status: Job['financialStatus']) {
 export const jobsColumns: ColumnDef<Job>[] = [
   {
     accessorKey: 'jobId',
-    header: 'OS',
+    header: 'Calibração',
     cell: ({ row }) => (
       <Link
         to="/dashboard/jobs/$id"

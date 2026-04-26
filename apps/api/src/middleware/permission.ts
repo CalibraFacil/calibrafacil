@@ -237,6 +237,7 @@ const UNIT_SCOPED_RESOURCES = new Set([
   "report",
   "audit",
   "service",
+  "service_order",
   "non_conformance",
   "capa",
   "competence",

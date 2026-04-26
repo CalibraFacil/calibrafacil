@@ -125,7 +125,7 @@ function DashboardIndex() {
           </Button>
           <Button size="sm" render={<Link to="/dashboard/jobs/new" />}>
             <HugeiconsIcon icon={PlusSignIcon} className="size-4" />
-            <span className="hidden sm:inline">Nova OS</span>
+            <span className="hidden sm:inline">Nova Calibração</span>
           </Button>
         </div>
       </div>

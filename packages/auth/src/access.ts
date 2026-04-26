@@ -205,6 +205,30 @@ export const statements = {
   ],
 
   // ---------------------------------------------------------------------------
+  // SERVICE ORDER - Operational intake, quote, repair and delivery workflow
+  // ---------------------------------------------------------------------------
+  service_order: [
+    "read",
+    "create",
+    "update",
+    "cancel",
+    "close",
+    "reopen",
+    "assign_technician",
+    "evaluate",
+    "quote_create",
+    "quote_send",
+    "quote_approve_manually",
+    "quote_reject_manually",
+    "execute",
+    "deliver",
+    "print_intake_document",
+    "print_tag",
+    "view_financial_values",
+    "manage_settings",
+  ],
+
+  // ---------------------------------------------------------------------------
   // SERVICE - Commercial service catalog / product registry
   // ---------------------------------------------------------------------------
   /**
@@ -301,6 +325,13 @@ export const member = ac.newRole({
   settings: ["read"],
   // Read-only access to service catalog
   service: ["read"],
+  service_order: [
+    "read",
+    "create",
+    "update",
+    "print_intake_document",
+    "print_tag",
+  ],
   // Read-only access to non-conformances
   non_conformance: ["read"],
   // Read-only access to CAPAs
@@ -356,6 +387,13 @@ export const technician = ac.newRole({
 
   // Read-only access to service catalog (needs to see services to create jobs)
   service: ["read"],
+  service_order: [
+    "read",
+    "evaluate",
+    "execute",
+    "print_intake_document",
+    "print_tag",
+  ],
 
   // NC: can create and update (set disposition for rework/scrap), cannot approve use_as_is/concession
   non_conformance: ["create", "read", "update"],
@@ -431,6 +469,26 @@ export const admin = ac.newRole({
 
   // Full service catalog management
   service: ["create", "read", "update", "delete"],
+  service_order: [
+    "read",
+    "create",
+    "update",
+    "cancel",
+    "close",
+    "reopen",
+    "assign_technician",
+    "evaluate",
+    "quote_create",
+    "quote_send",
+    "quote_approve_manually",
+    "quote_reject_manually",
+    "execute",
+    "deliver",
+    "print_intake_document",
+    "print_tag",
+    "view_financial_values",
+    "manage_settings",
+  ],
 
   // Full NC management including disposition approval and CAPA escalation
   non_conformance: [
@@ -511,6 +569,26 @@ export const owner = ac.newRole({
 
   // Full service catalog management
   service: ["create", "read", "update", "delete"],
+  service_order: [
+    "read",
+    "create",
+    "update",
+    "cancel",
+    "close",
+    "reopen",
+    "assign_technician",
+    "evaluate",
+    "quote_create",
+    "quote_send",
+    "quote_approve_manually",
+    "quote_reject_manually",
+    "execute",
+    "deliver",
+    "print_intake_document",
+    "print_tag",
+    "view_financial_values",
+    "manage_settings",
+  ],
 
   // Full NC management
   non_conformance: [
@@ -556,6 +634,7 @@ export const client_user = ac.newRole({
 
   // Read-only access to service catalog (can see services for quote requests)
   service: ["read"],
+  service_order: ["read"],
 });
 
 // =============================================================================

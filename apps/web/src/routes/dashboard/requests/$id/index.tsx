@@ -361,7 +361,7 @@ function CalibrationRequestTriagePanel({
                   </p>
                   {item.convertedJobCode && (
                     <p className="text-sm text-muted-foreground">
-                      Convertido na OS {item.convertedJobCode}
+                      Convertido na calibração {item.convertedJobCode}
                       {item.convertedServiceName
                         ? ` · ${item.convertedServiceName}`
                         : ''}
@@ -544,7 +544,7 @@ function CalibrationRequestTriagePanel({
                 onClick={() => convertMutation.mutate()}
                 disabled={!canConvert || isSubmitting}
               >
-                Converter em OS
+                Converter em calibração
               </Button>
             )}
           </div>

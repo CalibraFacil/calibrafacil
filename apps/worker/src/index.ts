@@ -6,6 +6,12 @@ import {
   type JobData,
   LabelHtml,
   type LabelData,
+  ServiceOrderIntakeDocumentHtml,
+  ServiceOrderQuoteHtml,
+  ServiceOrderTagHtml,
+  type ServiceOrderDocumentData,
+  type ServiceOrderQuoteData,
+  type ServiceOrderTagData,
 } from "@calibra-facil/documents";
 import React from "react";
 import QRCode from "qrcode";
@@ -35,6 +41,17 @@ type QueueMessage =
   | {
       type?: "CERTIFICATE" | "LABEL";
       jobId: number;
+      userId: string;
+    }
+  | {
+      type:
+        | "SERVICE_ORDER_INTAKE_DOCUMENT"
+        | "SERVICE_ORDER_TAG"
+        | "SERVICE_ORDER_QUOTE";
+      serviceOrderId: number;
+      documentId?: number;
+      tagId?: number;
+      quoteId?: number;
       userId: string;
     }
   | IntegrationSyncQueueMessage;
@@ -92,6 +109,31 @@ function buildR2Key(params: {
   const jobId = encodeKeyPart("jobId", params.jobId);
   const filename = params.type === "CERTIFICATE" ? "cert.pdf" : "label.pdf";
   return `org/${orgId}/${params.year}/jobs/${jobId}/${filename}`;
+}
+
+function buildServiceOrderR2Key(params: {
+  orgId: string;
+  serviceOrderNumber: string;
+  year: number;
+  type: "INTAKE" | "TAG" | "QUOTE";
+  version?: number;
+  tagNumber?: string;
+  quoteNumber?: string;
+}) {
+  const orgId = encodeKeyPart("orgId", params.orgId);
+  const serviceOrderNumber = encodeKeyPart(
+    "serviceOrderNumber",
+    params.serviceOrderNumber,
+  );
+  if (params.type === "INTAKE") {
+    return `org/${orgId}/${params.year}/service-orders/${serviceOrderNumber}/intake-v${params.version ?? 1}.pdf`;
+  }
+  if (params.type === "TAG") {
+    const tag = encodeKeyPart("tagNumber", params.tagNumber ?? "tag");
+    return `org/${orgId}/${params.year}/service-orders/${serviceOrderNumber}/tag-${tag}.pdf`;
+  }
+  const quote = encodeKeyPart("quoteNumber", params.quoteNumber ?? "quote");
+  return `org/${orgId}/${params.year}/service-orders/${serviceOrderNumber}/quotes/${quote}-v${params.version ?? 1}.pdf`;
 }
 
 async function fetchJobData(
@@ -550,6 +592,354 @@ async function updateJobWithLabel(
   );
 }
 
+function formatAddress(parts: Record<string, unknown> | null | undefined) {
+  if (!parts || typeof parts !== "object") return null;
+  return [
+    parts.street,
+    parts.number,
+    parts.neighbourhood,
+    parts.city,
+    parts.state,
+    parts.cep,
+  ]
+    .filter((value) => typeof value === "string" && value.trim())
+    .join(", ");
+}
+
+async function fetchServiceOrderDocumentData(
+  client: Client,
+  serviceOrderId: number,
+): Promise<ServiceOrderDocumentData | null> {
+  const result = await client.query(
+    `
+    SELECT
+      so.id,
+      so.organization_id,
+      so.unit_id,
+      so.service_order_number,
+      so.priority,
+      so.opened_at,
+      so.claimed_defect,
+      so.intake_condition,
+      so.accessories,
+      so.invoice_remittance_number,
+      so.invoice_remittance_key,
+      so.carrier_name,
+      so.third_party_name,
+      so.old_seal_number,
+      so.new_seal_number,
+      so.inmetro_repair_seal_number,
+      so.client_visible_notes,
+      so.internal_notes,
+      o.name as lab_name,
+      o.cnpj as lab_cnpj,
+      o.phone as lab_phone,
+      o.email as lab_email,
+      ou.name as unit_name,
+      c.name as customer_name,
+      c.tax_id as customer_tax_id,
+      c.phone as customer_phone,
+      c.email as customer_email,
+      c.address as customer_address,
+      snap.asset_name,
+      snap.asset_type,
+      snap.manufacturer,
+      snap.model,
+      snap.serial_number,
+      snap.patrimony_number,
+      snap.capacity,
+      snap.resolution,
+      snap.observed_identification,
+      settings.default_intake_terms
+    FROM service_order so
+    LEFT JOIN organization o ON so.organization_id = o.id
+    LEFT JOIN organization_unit ou ON so.unit_id = ou.id
+    LEFT JOIN customer c ON so.customer_id = c.id
+    LEFT JOIN service_order_asset_snapshot snap ON snap.service_order_id = so.id
+    LEFT JOIN service_order_settings settings ON settings.organization_id = so.organization_id
+    WHERE so.id = $1
+    `,
+    [serviceOrderId],
+  );
+
+  const row = result.rows[0];
+  if (!row) return null;
+
+  const qrSvg = await QRCode.toString(
+    `https://portal.calibrafacil.com/service-orders/${row.id}`,
+    {
+      type: "svg",
+      width: 200,
+      margin: 1,
+      errorCorrectionLevel: "M",
+    },
+  );
+
+  return {
+    serviceOrderNumber: row.service_order_number,
+    openedAt: row.opened_at,
+    requestedServices:
+      row.priority === "warranty"
+        ? ["Garantia"]
+        : ["Orçamento", "Manutenção corretiva"],
+    lab: {
+      name: row.lab_name ?? "Laboratório",
+      cnpj: row.lab_cnpj,
+      phone: row.lab_phone,
+      email: row.lab_email,
+      address: null,
+    },
+    unit: { name: row.unit_name },
+    customer: {
+      name: row.customer_name ?? "Cliente",
+      taxId: row.customer_tax_id,
+      phone: row.customer_phone,
+      email: row.customer_email,
+      address: formatAddress(row.customer_address),
+    },
+    asset: {
+      name: row.asset_name ?? "Instrumento",
+      type: row.asset_type,
+      manufacturer: row.manufacturer,
+      model: row.model,
+      serialNumber: row.serial_number,
+      patrimonyNumber: row.patrimony_number,
+      capacity: row.capacity,
+      resolution: row.resolution,
+      observedIdentification: row.observed_identification,
+    },
+    intake: {
+      claimedDefect: row.claimed_defect,
+      intakeCondition: row.intake_condition,
+      accessories: row.accessories,
+      invoiceRemittanceNumber: row.invoice_remittance_number,
+      invoiceRemittanceKey: row.invoice_remittance_key,
+      carrierName: row.carrier_name,
+      thirdPartyName: row.third_party_name,
+      oldSealNumber: row.old_seal_number,
+      newSealNumber: row.new_seal_number,
+      inmetroRepairSealNumber: row.inmetro_repair_seal_number,
+      clientVisibleNotes: row.client_visible_notes,
+      internalNotes: row.internal_notes,
+      terms: row.default_intake_terms,
+    },
+    qrCodeDataUrl: `data:image/svg+xml;base64,${btoa(qrSvg)}`,
+    publicUrl: `https://portal.calibrafacil.com/service-orders/${row.id}`,
+  };
+}
+
+async function processServiceOrderIntakeDocument(
+  env: Env,
+  page: Page,
+  serviceOrderId: number,
+  documentId: number | undefined,
+  userId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const data = await withDbClient(env, (client) =>
+      fetchServiceOrderDocumentData(client, serviceOrderId),
+    );
+    if (!data) return { success: false, error: "Service order not found" };
+    const html = renderToString(
+      React.createElement(ServiceOrderIntakeDocumentHtml, { data }),
+    );
+    const pdfBuffer = await generatePdfFromHtml(page, html);
+    const year = getYearFromDateish(data.openedAt, "openedAt");
+    const key = buildServiceOrderR2Key({
+      orgId: (await withDbClient(env, async (client) => {
+        const result = await client.query(
+          `SELECT organization_id FROM service_order WHERE id = $1`,
+          [serviceOrderId],
+        );
+        return result.rows[0]?.organization_id;
+      })) as string,
+      serviceOrderNumber: data.serviceOrderNumber,
+      year,
+      type: "INTAKE",
+      version: 1,
+    });
+    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
+      httpMetadata: { contentType: "application/pdf" },
+    });
+    await withDbClient(env, async (client) => {
+      if (documentId) {
+        await client.query(
+          `UPDATE service_order_intake_document SET pdf_r2_key = $2, issued_at = COALESCE(issued_at, now()), issued_by_user_id = COALESCE(issued_by_user_id, $3) WHERE id = $1`,
+          [documentId, key, userId],
+        );
+      } else {
+        await client.query(
+          `INSERT INTO service_order_intake_document (service_order_id, document_number, version, type, pdf_r2_key, issued_at, issued_by_user_id)
+           VALUES ($1, $2, 1, 'combined', $3, now(), $4)
+           ON CONFLICT DO NOTHING`,
+          [serviceOrderId, `${data.serviceOrderNumber}/REC`, key, userId],
+        );
+      }
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function processServiceOrderTag(
+  env: Env,
+  page: Page,
+  serviceOrderId: number,
+  tagId: number | undefined,
+  userId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const data = await withDbClient(env, async (client) => {
+      const result = await client.query(
+        `
+        SELECT so.organization_id, so.service_order_number, so.opened_at,
+          c.name AS customer_name, snap.asset_name, snap.serial_number, snap.patrimony_number,
+          tag.id AS tag_id, tag.tag_number
+        FROM service_order so
+        LEFT JOIN customer c ON so.customer_id = c.id
+        LEFT JOIN service_order_asset_snapshot snap ON snap.service_order_id = so.id
+        LEFT JOIN service_order_tag tag ON tag.service_order_id = so.id
+        WHERE so.id = $1
+        ORDER BY tag.id DESC
+        LIMIT 1
+        `,
+        [serviceOrderId],
+      );
+      return result.rows[0];
+    });
+    if (!data) return { success: false, error: "Service order not found" };
+    const qrSvg = await QRCode.toString(
+      `https://calibrafacil.com/dashboard/service-orders/${serviceOrderId}`,
+      { type: "svg", width: 200, margin: 1, errorCorrectionLevel: "M" },
+    );
+    const tag: ServiceOrderTagData = {
+      serviceOrderNumber: data.service_order_number,
+      customerName: data.customer_name ?? "Cliente",
+      assetName: data.asset_name ?? "Instrumento",
+      serialNumber: data.serial_number,
+      patrimonyNumber: data.patrimony_number,
+      openedAt: data.opened_at,
+      qrCodeDataUrl: `data:image/svg+xml;base64,${btoa(qrSvg)}`,
+    };
+    const html = renderToString(React.createElement(ServiceOrderTagHtml, { tag }));
+    const pdfBuffer = await generatePdfFromHtml(page, html);
+    const year = getYearFromDateish(data.opened_at, "openedAt");
+    const tagNumber =
+      data.tag_number ?? `${data.service_order_number}-TAG-${serviceOrderId}`;
+    const key = buildServiceOrderR2Key({
+      orgId: data.organization_id,
+      serviceOrderNumber: data.service_order_number,
+      year,
+      type: "TAG",
+      tagNumber,
+    });
+    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
+      httpMetadata: { contentType: "application/pdf" },
+    });
+    await withDbClient(env, async (client) => {
+      if (tagId ?? data.tag_id) {
+        await client.query(
+          `UPDATE service_order_tag SET pdf_r2_key = $2, printed_at = COALESCE(printed_at, now()), printed_by_user_id = COALESCE(printed_by_user_id, $3) WHERE id = $1`,
+          [tagId ?? data.tag_id, key, userId],
+        );
+      } else {
+        await client.query(
+          `INSERT INTO service_order_tag (service_order_id, tag_number, pdf_r2_key, printed_at, printed_by_user_id)
+           VALUES ($1, $2, $3, now(), $4)`,
+          [serviceOrderId, tagNumber, key, userId],
+        );
+      }
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function processServiceOrderQuote(
+  env: Env,
+  page: Page,
+  serviceOrderId: number,
+  quoteId: number | undefined,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!quoteId) return { success: false, error: "Missing quoteId" };
+    const base = await withDbClient(env, (client) =>
+      fetchServiceOrderDocumentData(client, serviceOrderId),
+    );
+    if (!base) return { success: false, error: "Service order not found" };
+    const quote = await withDbClient(env, async (client) => {
+      const quoteResult = await client.query(
+        `SELECT * FROM service_order_quote WHERE id = $1`,
+        [quoteId],
+      );
+      const itemsResult = await client.query(
+        `SELECT description, quantity, unit, unit_price_cents, total_price_cents, type
+         FROM service_order_quote_item WHERE quote_id = $1 ORDER BY sort_order, id`,
+        [quoteId],
+      );
+      return { row: quoteResult.rows[0], items: itemsResult.rows };
+    });
+    if (!quote.row) return { success: false, error: "Quote not found" };
+    const data: ServiceOrderQuoteData = {
+      ...base,
+      quote: {
+        quoteNumber: quote.row.quote_number,
+        version: quote.row.version,
+        validUntil: quote.row.valid_until,
+        paymentTerms: quote.row.payment_terms,
+        deliveryEstimate: quote.row.delivery_estimate,
+        warrantyTerms: quote.row.warranty_terms,
+        clientMessage: quote.row.client_message,
+        items: quote.items.map((item) => ({
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPriceCents: item.unit_price_cents,
+          totalPriceCents: item.total_price_cents,
+          type: item.type,
+        })),
+        subtotalServicesCents: quote.row.subtotal_services_cents,
+        subtotalPartsCents: quote.row.subtotal_parts_cents,
+        discountCents: quote.row.discount_cents,
+        freightCents: quote.row.freight_cents,
+        totalCents: quote.row.total_cents,
+      },
+    };
+    const html = renderToString(React.createElement(ServiceOrderQuoteHtml, { data }));
+    const pdfBuffer = await generatePdfFromHtml(page, html);
+    const year = getYearFromDateish(base.openedAt, "openedAt");
+    const orgId = await withDbClient(env, async (client) => {
+      const result = await client.query(
+        `SELECT organization_id FROM service_order WHERE id = $1`,
+        [serviceOrderId],
+      );
+      return result.rows[0]?.organization_id as string;
+    });
+    const key = buildServiceOrderR2Key({
+      orgId,
+      serviceOrderNumber: base.serviceOrderNumber,
+      year,
+      type: "QUOTE",
+      quoteNumber: quote.row.quote_number,
+      version: quote.row.version,
+    });
+    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
+      httpMetadata: { contentType: "application/pdf" },
+    });
+    await withDbClient(env, (client) =>
+      client.query(`UPDATE service_order_quote SET pdf_r2_key = $2 WHERE id = $1`, [
+        quoteId,
+        key,
+      ]),
+    );
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 /**
  * Generates a small PDF for thermal printer labels
  */
@@ -939,7 +1329,45 @@ export default {
 
       try {
         for (const msg of documentMessages) {
-          const { jobId, userId, type } = msg.body as {
+          const body = msg.body;
+          if (
+            body.type === "SERVICE_ORDER_INTAKE_DOCUMENT" ||
+            body.type === "SERVICE_ORDER_TAG" ||
+            body.type === "SERVICE_ORDER_QUOTE"
+          ) {
+            let result: { success: boolean; error?: string };
+            if (body.type === "SERVICE_ORDER_INTAKE_DOCUMENT") {
+              result = await processServiceOrderIntakeDocument(
+                env,
+                page,
+                body.serviceOrderId,
+                body.documentId,
+                body.userId,
+              );
+            } else if (body.type === "SERVICE_ORDER_TAG") {
+              result = await processServiceOrderTag(
+                env,
+                page,
+                body.serviceOrderId,
+                body.tagId,
+                body.userId,
+              );
+            } else {
+              result = await processServiceOrderQuote(
+                env,
+                page,
+                body.serviceOrderId,
+                body.quoteId,
+              );
+            }
+            if (!result.success) {
+              console.error(`[${body.type} ${body.serviceOrderId}] Failed:`, result.error);
+            }
+            msg.ack();
+            continue;
+          }
+
+          const { jobId, userId, type } = body as {
             type?: "CERTIFICATE" | "LABEL";
             jobId: number;
             userId: string;
