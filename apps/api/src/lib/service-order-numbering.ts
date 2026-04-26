@@ -141,7 +141,8 @@ export async function generateServiceOrderNumber(
 
     const year = context.generatedAt.getFullYear();
     const sequenceKey = `year:${year}`;
-    const sequenceUnitId = context.unitId;
+    const sequenceUnitId =
+      settings.numberingScope === "unit" ? context.unitId : null;
 
     for (let attempt = 0; attempt < 25; attempt += 1) {
       const sequence = await reserveNextSequence({

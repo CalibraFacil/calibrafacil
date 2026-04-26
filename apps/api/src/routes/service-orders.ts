@@ -1675,13 +1675,20 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", IdParamSchema),
     zValidator("json", ReopenServiceOrderSchema),
     async (c) => {
+      const member = c.get("member");
       const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
       const [updated] = await db
         .update(serviceOrder)
         .set({ status: "awaiting_tech_evaluation", canceledAt: null, closedAt: null })
-        .where(eq(serviceOrder.id, id))
+        .where(
+          and(
+            eq(serviceOrder.id, id),
+            eq(serviceOrder.organizationId, member.organizationId),
+            buildUnitScopeCondition(serviceOrder.unitId, member),
+          ),
+        )
         .returning();
       if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
       await recordServiceOrderEvent({
@@ -1979,6 +1986,9 @@ export const publicServiceOrderAccessRouter = new Hono<{
       const quote = await getQuoteForAction(access.serviceOrderId, access.quoteId);
       const [order] = await db.select().from(serviceOrder).where(eq(serviceOrder.id, access.serviceOrderId)).limit(1);
       if (!quote || !order) return c.json({ error: "Orcamento nao encontrado" }, 404);
+      if (!canApproveServiceOrderQuote(quote.status)) {
+        return c.json({ error: "Orcamento nao pode ser recusado" }, 409);
+      }
       await db.transaction(async (tx) => {
         await tx.update(serviceOrderQuote).set({ status: "rejected", rejectedAt: new Date(), rejectionReason: input.rejectionReason ?? null }).where(eq(serviceOrderQuote.id, quote.id));
         await tx.update(serviceOrder).set({ status: "quote_rejected", rejectedAt: new Date() }).where(eq(serviceOrder.id, order.id));
