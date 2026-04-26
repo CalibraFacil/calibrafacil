@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -118,12 +118,6 @@ type ServiceOrderExecution = {
   calibrationRequiredAfterRepair: boolean
   result?: ServiceOrderExecutionResult | null
   items: ServiceOrderQuoteItem[]
-}
-
-type ServiceOrderSignatureData = {
-  signerName: string
-  signedAt?: string
-  dataUrl: string
 }
 
 type ServiceOrderDeliveryDocument = {
@@ -472,106 +466,6 @@ function openServiceOrderIntakePreview(order: ServiceOrderDetail) {
   }
 }
 
-function SignaturePad({
-  label,
-  signerName,
-  onSignerNameChange,
-  onDataUrlChange,
-}: {
-  label: string
-  signerName: string
-  onSignerNameChange: (value: string) => void
-  onDataUrlChange: (value: string) => void
-}) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const drawingRef = useRef(false)
-
-  function getContext() {
-    const canvas = canvasRef.current
-    if (!canvas) return null
-    const rect = canvas.getBoundingClientRect()
-    const ratio = window.devicePixelRatio || 1
-    if (canvas.width !== Math.round(rect.width * ratio)) {
-      canvas.width = Math.round(rect.width * ratio)
-      canvas.height = Math.round(rect.height * ratio)
-      const ctx = canvas.getContext('2d')
-      ctx?.scale(ratio, ratio)
-      if (ctx) {
-        ctx.lineWidth = 1.8
-        ctx.lineCap = 'round'
-        ctx.lineJoin = 'round'
-        ctx.strokeStyle = '#111827'
-      }
-    }
-    return canvas.getContext('2d')
-  }
-
-  function point(event: PointerEvent<HTMLCanvasElement>) {
-    const rect = event.currentTarget.getBoundingClientRect()
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top }
-  }
-
-  function finishSignature() {
-    drawingRef.current = false
-    const canvas = canvasRef.current
-    if (canvas) onDataUrlChange(canvas.toDataURL('image/png'))
-  }
-
-  function clearSignature() {
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext('2d')
-    if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height)
-    onDataUrlChange('')
-  }
-
-  return (
-    <div className="space-y-2 rounded-lg bg-muted/40 p-3">
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-        <div className="space-y-2">
-          <Label>{label}</Label>
-          <Input
-            value={signerName}
-            onChange={(event) => onSignerNameChange(event.target.value)}
-            placeholder="Nome de quem assina"
-          />
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="min-h-10 active:scale-[0.96] transition-transform"
-          onClick={clearSignature}
-        >
-          Limpar
-        </Button>
-      </div>
-      <canvas
-        ref={canvasRef}
-        className="h-28 w-full rounded-md bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)] touch-none"
-        onPointerDown={(event) => {
-          const ctx = getContext()
-          if (!ctx) return
-          drawingRef.current = true
-          event.currentTarget.setPointerCapture(event.pointerId)
-          const { x, y } = point(event)
-          ctx.beginPath()
-          ctx.moveTo(x, y)
-        }}
-        onPointerMove={(event) => {
-          if (!drawingRef.current) return
-          const ctx = getContext()
-          if (!ctx) return
-          const { x, y } = point(event)
-          ctx.lineTo(x, y)
-          ctx.stroke()
-        }}
-        onPointerUp={finishSignature}
-        onPointerCancel={finishSignature}
-      />
-    </div>
-  )
-}
-
 function ServiceOrderDetailPage() {
   const { id } = Route.useParams()
   const queryClient = useQueryClient()
@@ -599,17 +493,11 @@ function ServiceOrderDetailPage() {
     useState(false)
   const [deliveryMethod, setDeliveryMethod] =
     useState<keyof typeof deliveryMethodLabels>('pickup_at_lab')
-  const [deliveredToName, setDeliveredToName] = useState('')
   const [deliveredToDocument, setDeliveredToDocument] = useState('')
   const [deliveryNotes, setDeliveryNotes] = useState('')
   const [repairSealNumber, setRepairSealNumber] = useState('')
   const [repairSealNotes, setRepairSealNotes] = useState('')
   const [repairSealApplied, setRepairSealApplied] = useState(false)
-  const [technicianSignerName, setTechnicianSignerName] = useState('')
-  const [technicianSignatureDataUrl, setTechnicianSignatureDataUrl] =
-    useState('')
-  const [clientSignerName, setClientSignerName] = useState('')
-  const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState('')
 
   const orderQuery = useQuery({
     queryKey: ['service-order', id],
@@ -648,7 +536,6 @@ function ServiceOrderDetailPage() {
   useEffect(() => {
     if (!order) return
     setDeliveryMethod(order.deliveryMethod ?? 'pickup_at_lab')
-    setDeliveredToName(order.deliveredToName ?? '')
     setDeliveredToDocument(order.deliveredToDocument ?? '')
     setDeliveryNotes(order.deliveryNotes ?? '')
     setRepairSealNumber(order.inmetroRepairSealNumber ?? '')
@@ -895,12 +782,12 @@ function ServiceOrderDetailPage() {
 
   const deliverOrder = useMutation({
     mutationFn: async () => {
-      if (!deliveredToName.trim()) throw new Error('Informe o recebedor.')
+      if (!order?.customerName) throw new Error('Cliente da OS não encontrado.')
       const response = await api.api['service-orders'][':id'].deliver.$post({
         param: { id },
         json: {
           deliveryMethod,
-          deliveredToName,
+          deliveredToName: order.customerName,
           deliveredToDocument: deliveredToDocument || null,
           deliveryNotes: deliveryNotes || null,
           inmetroRepairSealNumber: repairSealNumber || null,
@@ -919,41 +806,15 @@ function ServiceOrderDetailPage() {
     },
   })
 
-  function buildSignature(
-    signerName: string,
-    dataUrl: string,
-  ): ServiceOrderSignatureData | null {
-    if (!signerName.trim() && !dataUrl) return null
-    if (!signerName.trim() || !dataUrl) {
-      throw new Error('Informe o nome e assine nos dois campos obrigatórios.')
-    }
-    return {
-      signerName: signerName.trim(),
-      signedAt: new Date().toISOString(),
-      dataUrl,
-    }
-  }
-
   const issueDeliveryDocument = useMutation({
     mutationFn: async () => {
-      const technicianSignature = buildSignature(
-        technicianSignerName,
-        technicianSignatureDataUrl,
-      )
-      const clientSignature = buildSignature(
-        clientSignerName,
-        clientSignatureDataUrl,
-      )
-      if (!technicianSignature || !clientSignature) {
-        throw new Error('Assinatura do técnico e do cliente são obrigatórias.')
-      }
       const response = await api.api['service-orders'][':id'][
         'delivery-document'
       ].$post({
         param: { id },
         json: {
-          technicianSignatureData: technicianSignature,
-          clientSignatureData: clientSignature,
+          technicianSignatureData: null,
+          clientSignatureData: null,
         },
       })
       if (!response.ok) throw new Error('Erro ao gerar comprovante de entrega')
@@ -1584,11 +1445,9 @@ function ServiceOrderDetailPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Recebedor</Label>
-                  <Input
-                    value={deliveredToName}
-                    onChange={(event) => setDeliveredToName(event.target.value)}
-                    placeholder="Nome do cliente ou retirante"
-                  />
+                  <div className="flex min-h-10 items-center rounded-md bg-muted/40 px-3 text-sm font-medium">
+                    {order.customerName}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Documento do recebedor</Label>
@@ -1669,21 +1528,6 @@ function ServiceOrderDetailPage() {
                     Salvar selo
                   </Button>
                 </div>
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <SignaturePad
-                  label="Assinatura do técnico"
-                  signerName={technicianSignerName}
-                  onSignerNameChange={setTechnicianSignerName}
-                  onDataUrlChange={setTechnicianSignatureDataUrl}
-                />
-                <SignaturePad
-                  label="Assinatura do cliente"
-                  signerName={clientSignerName}
-                  onSignerNameChange={setClientSignerName}
-                  onDataUrlChange={setClientSignatureDataUrl}
-                />
               </div>
 
               <div className="flex flex-wrap justify-end gap-2">
