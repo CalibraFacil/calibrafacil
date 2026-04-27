@@ -17,10 +17,8 @@ import {
   inArray,
   desc,
   count,
-  gte,
   isNull,
   ilike,
-  lt,
   or,
   sql,
 } from "drizzle-orm";
@@ -58,15 +56,6 @@ async function getPortalLabScope(c: {
   } catch {
     return null;
   }
-}
-
-function parseDateOnly(value: string | undefined) {
-  if (!value) return null;
-
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return null;
-
-  return new Date(year, month - 1, day);
 }
 
 /**
@@ -302,12 +291,6 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const customerIds = customers.map((cust) => cust.id);
-      const dateFromInclusive = parseDateOnly(dateFrom);
-      const dateToExclusive = parseDateOnly(dateTo);
-      if (dateToExclusive) {
-        dateToExclusive.setHours(0, 0, 0, 0);
-        dateToExclusive.setDate(dateToExclusive.getDate() + 1);
-      }
 
       const whereCondition = and(
         inArray(calibrationJob.customerId, customerIds),
@@ -323,11 +306,11 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
               ilike(service.name, `%${query}%`),
             )
           : undefined,
-        dateFromInclusive
-          ? gte(calibrationJob.approvedAt, dateFromInclusive)
+        dateFrom
+          ? sql`${calibrationJob.approvedAt}::date >= ${dateFrom}`
           : undefined,
-        dateToExclusive
-          ? lt(calibrationJob.approvedAt, dateToExclusive)
+        dateTo
+          ? sql`${calibrationJob.approvedAt}::date <= ${dateTo}`
           : undefined,
       );
 
