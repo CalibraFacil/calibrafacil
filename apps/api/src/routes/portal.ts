@@ -227,6 +227,130 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
+  // GET /assets/:id - Get single asset details for active portal organization
+  // =========================================================================
+  .get(
+    "/assets/:id",
+    ...requirePortalProtected,
+    requirePermission({ equipment: ["read"] }),
+    async (c) => {
+      const portalMember = c.get("member");
+      const portalLabScope = await getPortalLabScope(c);
+      const id = Number.parseInt(c.req.param("id"), 10);
+
+      if (Number.isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const [linkedCustomer] = await db
+          .select({
+            id: customer.id,
+            labOrganizationId: customer.labOrganizationId,
+          })
+          .from(customer)
+          .where(eq(customer.authOrganizationId, portalMember.organizationId))
+          .limit(1);
+
+        if (!linkedCustomer) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        if (
+          portalLabScope &&
+          linkedCustomer.labOrganizationId !== portalLabScope
+        ) {
+          return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+        }
+
+        const [assetDetails] = await db
+          .select({
+            id: asset.id,
+            customerId: asset.customerId,
+            customerName: customer.name,
+            assetTypeId: asset.assetTypeId,
+            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+            assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
+            assetTypeDefinition: assetType.definition,
+            name: asset.name,
+            manufacturer: asset.manufacturer,
+            model: asset.model,
+            serialNumber: asset.serialNumber,
+            tag: asset.tag,
+            status: asset.status,
+            baseMeasurementUnit: asset.baseMeasurementUnit,
+            specifications: asset.specifications,
+            lastCalibrationDate: asset.lastCalibrationDate,
+            nextCalibrationDate: asset.nextCalibrationDate,
+            comments: asset.comments,
+            createdAt: asset.createdAt,
+            updatedAt: asset.updatedAt,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+          .where(
+            and(
+              eq(asset.id, id),
+              eq(asset.customerId, linkedCustomer.id),
+              isNull(asset.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!assetDetails) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
+
+        const certificates = await db
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            certificateName: calibrationJob.certificateName,
+            status: calibrationJob.status,
+            performedAt: calibrationJob.performedAt,
+            approvedAt: calibrationJob.approvedAt,
+            certificateUrl: calibrationJob.certificateUrl,
+            verificationToken: calibrationJob.verificationToken,
+            serviceName: service.name,
+            labName: organization.name,
+          })
+          .from(calibrationJob)
+          .innerJoin(service, eq(calibrationJob.serviceId, service.id))
+          .innerJoin(
+            organization,
+            eq(calibrationJob.organizationId, organization.id),
+          )
+          .where(
+            and(
+              eq(calibrationJob.assetId, assetDetails.id),
+              eq(calibrationJob.customerId, linkedCustomer.id),
+              eq(calibrationJob.status, "APPROVED"),
+            ),
+          )
+          .orderBy(desc(calibrationJob.approvedAt))
+          .limit(5);
+
+        return c.json({
+          data: {
+            ...assetDetails,
+            specifications:
+              denormalizeAssetSpecificationsForResponse({
+                specifications: assetDetails.specifications,
+                definition: assetDetails.assetTypeDefinition,
+                baseMeasurementUnit: assetDetails.baseMeasurementUnit,
+              }) ?? null,
+            certificates,
+          },
+        });
+      } catch (error) {
+        console.error("Error fetching portal asset:", error);
+        return c.json({ error: "Erro ao buscar ativo" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
   // GET /certificates - List certificates for portal user
   // =========================================================================
   // Returns approved calibration jobs (certificates) for the authenticated

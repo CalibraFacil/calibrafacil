@@ -29,6 +29,7 @@ import { Route as AuthenticatedServiceOrdersIdRouteImport } from './routes/_auth
 import { Route as AuthenticatedRequestsNewRouteImport } from './routes/_authenticated/requests/new'
 import { Route as AuthenticatedRequestsIdRouteImport } from './routes/_authenticated/requests/$id'
 import { Route as AuthenticatedCertificatesIdRouteImport } from './routes/_authenticated/certificates/$id'
+import { Route as AuthenticatedAssetsIdRouteImport } from './routes/_authenticated/assets/$id'
 
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
@@ -142,6 +143,11 @@ const AuthenticatedCertificatesIdRoute =
     path: '/certificates/$id',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAssetsIdRoute = AuthenticatedAssetsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AuthenticatedAssetsRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/accept-invite': typeof AcceptInviteRoute
@@ -153,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/service-order-access/$token': typeof ServiceOrderAccessTokenRoute
   '/v/$token': typeof VTokenRoute
   '/': typeof AuthenticatedIndexRoute
+  '/assets/$id': typeof AuthenticatedAssetsIdRoute
   '/certificates/$id': typeof AuthenticatedCertificatesIdRoute
   '/requests/$id': typeof AuthenticatedRequestsIdRoute
   '/requests/new': typeof AuthenticatedRequestsNewRoute
@@ -170,6 +177,7 @@ export interface FileRoutesByTo {
   '/service-order-access/$token': typeof ServiceOrderAccessTokenRoute
   '/v/$token': typeof VTokenRoute
   '/': typeof AuthenticatedIndexRoute
+  '/assets/$id': typeof AuthenticatedAssetsIdRoute
   '/certificates/$id': typeof AuthenticatedCertificatesIdRoute
   '/requests/$id': typeof AuthenticatedRequestsIdRoute
   '/requests/new': typeof AuthenticatedRequestsNewRoute
@@ -193,6 +201,7 @@ export interface FileRoutesById {
   '/service-order-access/$token': typeof ServiceOrderAccessTokenRoute
   '/v/$token': typeof VTokenRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/assets/$id': typeof AuthenticatedAssetsIdRoute
   '/_authenticated/certificates/$id': typeof AuthenticatedCertificatesIdRoute
   '/_authenticated/requests/$id': typeof AuthenticatedRequestsIdRoute
   '/_authenticated/requests/new': typeof AuthenticatedRequestsNewRoute
@@ -216,6 +225,7 @@ export interface FileRouteTypes {
     | '/service-order-access/$token'
     | '/v/$token'
     | '/'
+    | '/assets/$id'
     | '/certificates/$id'
     | '/requests/$id'
     | '/requests/new'
@@ -233,6 +243,7 @@ export interface FileRouteTypes {
     | '/service-order-access/$token'
     | '/v/$token'
     | '/'
+    | '/assets/$id'
     | '/certificates/$id'
     | '/requests/$id'
     | '/requests/new'
@@ -255,6 +266,7 @@ export interface FileRouteTypes {
     | '/service-order-access/$token'
     | '/v/$token'
     | '/_authenticated/'
+    | '/_authenticated/assets/$id'
     | '/_authenticated/certificates/$id'
     | '/_authenticated/requests/$id'
     | '/_authenticated/requests/new'
@@ -417,15 +429,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCertificatesIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/assets/$id': {
+      id: '/_authenticated/assets/$id'
+      path: '/$id'
+      fullPath: '/assets/$id'
+      preLoaderRoute: typeof AuthenticatedAssetsIdRouteImport
+      parentRoute: typeof AuthenticatedAssetsRouteRoute
+    }
   }
 }
 
 interface AuthenticatedAssetsRouteRouteChildren {
+  AuthenticatedAssetsIdRoute: typeof AuthenticatedAssetsIdRoute
   AuthenticatedAssetsIndexRoute: typeof AuthenticatedAssetsIndexRoute
 }
 
 const AuthenticatedAssetsRouteRouteChildren: AuthenticatedAssetsRouteRouteChildren =
   {
+    AuthenticatedAssetsIdRoute: AuthenticatedAssetsIdRoute,
     AuthenticatedAssetsIndexRoute: AuthenticatedAssetsIndexRoute,
   }
 

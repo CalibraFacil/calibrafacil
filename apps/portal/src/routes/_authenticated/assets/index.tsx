@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -45,6 +45,7 @@ type AssetsResponse = {
 };
 
 function AssetsPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const limit = 20;
@@ -169,6 +170,12 @@ function AssetsPage() {
               data={data.data}
               pagination={data.pagination}
               onPageChange={setPage}
+              onRowClick={(asset) => {
+                void navigate({
+                  to: "/assets/$id",
+                  params: { id: String(asset.id) },
+                });
+              }}
               itemName="ativos"
             />
           )}
