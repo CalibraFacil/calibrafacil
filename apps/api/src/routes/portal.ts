@@ -244,6 +244,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         Math.max(1, parseInt(c.req.query("limit") || "20")),
       );
       const offset = (page - 1) * limit;
+      const query = c.req.query("query")?.trim();
 
       // Get user's CLIENT organization IDs
       const userOrgs = await db
@@ -288,17 +289,29 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const customerIds = customers.map((cust) => cust.id);
+      const whereCondition = and(
+        inArray(calibrationJob.customerId, customerIds),
+        eq(calibrationJob.status, "APPROVED"),
+        query
+          ? or(
+              ilike(calibrationJob.jobId, `%${query}%`),
+              ilike(calibrationJob.certificateName, `%${query}%`),
+              ilike(asset.name, `%${query}%`),
+              ilike(asset.tag, `%${query}%`),
+              ilike(asset.serialNumber, `%${query}%`),
+              ilike(asset.manufacturer, `%${query}%`),
+              ilike(service.name, `%${query}%`),
+            )
+          : undefined,
+      );
 
       // Count total certificates
       const [totalResult] = await db
         .select({ count: count() })
         .from(calibrationJob)
-        .where(
-          and(
-            inArray(calibrationJob.customerId, customerIds),
-            eq(calibrationJob.status, "APPROVED"),
-          ),
-        );
+        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+        .innerJoin(service, eq(calibrationJob.serviceId, service.id))
+        .where(whereCondition);
 
       const total = totalResult?.count ?? 0;
 
@@ -329,12 +342,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
           organization,
           eq(calibrationJob.organizationId, organization.id),
         )
-        .where(
-          and(
-            inArray(calibrationJob.customerId, customerIds),
-            eq(calibrationJob.status, "APPROVED"),
-          ),
-        )
+        .where(whereCondition)
         .orderBy(desc(calibrationJob.approvedAt))
         .limit(limit)
         .offset(offset);

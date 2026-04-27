@@ -2,49 +2,37 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
+  Cancel01Icon,
+  PlusSignIcon,
+  Search01Icon,
+  Wrench01Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+
+import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
 import { getApiBaseUrl } from "@/lib/utils";
+import { type Asset, assetsColumns } from "./-components/columns";
 
 export const Route = createFileRoute("/_authenticated/assets/")({
   component: AssetsPage,
 });
-
-type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
-
-const statusLabels: Record<AssetStatus, string> = {
-  ACTIVE: "Ativo",
-  INACTIVE: "Inativo",
-  MAINTENANCE: "Manutencao",
-  SCRAPPED: "Descartado",
-};
-
-type Asset = {
-  id: number;
-  customerId: number;
-  customerName: string;
-  assetTypeId: number;
-  assetTypeName: string;
-  assetTypeSlug: string;
-  name: string;
-  manufacturer: string | null;
-  model: string | null;
-  serialNumber: string;
-  tag: string;
-  status: AssetStatus;
-  specifications: Record<string, unknown> | null;
-  lastCalibrationDate: string | null;
-  nextCalibrationDate: string | null;
-  comments: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
 
 type AssetsResponse = {
   data: Array<Asset>;
@@ -56,21 +44,25 @@ type AssetsResponse = {
   };
 };
 
-function formatDate(date: string | null | undefined): string {
-  if (!date) return "-";
-  const d = new Date(date);
-  return d.toLocaleDateString("pt-BR");
-}
-
 function AssetsPage() {
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const limit = 20;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["portal-assets", page, limit],
+    queryKey: ["portal-assets", page, limit, search],
     queryFn: async (): Promise<AssetsResponse> => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+
+      if (search) {
+        params.set("query", search);
+      }
+
       const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/assets?page=${page}&limit=${limit}`,
+        `${getApiBaseUrl()}/api/portal/assets?${params.toString()}`,
         {
           credentials: "include",
         },
@@ -90,21 +82,48 @@ function AssetsPage() {
             <div>
               <CardTitle>Meus Ativos</CardTitle>
               <CardDescription>
-                Visualize os ativos e instrumentos da sua organizacao.
+                Visualize os ativos e instrumentos da sua organização.
               </CardDescription>
             </div>
             <Button render={<Link to="/requests/new" />}>
-              Solicitar Calibracao
+              <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+              Solicitar Calibração
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          {/* Loading state */}
-          {isLoading && (
-            <div className="flex items-center justify-center py-8">
-              <Spinner className="size-8" />
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
+            <div className="relative min-w-50 flex-1">
+              <HugeiconsIcon
+                icon={Search01Icon}
+                className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2"
+              />
+              <Input
+                placeholder="Buscar por nome, tag, série..."
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                className="pl-9"
+              />
             </div>
-          )}
+
+            {search && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setPage(1);
+                }}
+                className="h-9"
+              >
+                <HugeiconsIcon icon={Cancel01Icon} className="mr-2 size-4" />
+                Limpar filtros
+              </Button>
+            )}
+          </div>
 
           {/* Error state */}
           {error && (
@@ -115,110 +134,48 @@ function AssetsPage() {
 
           {/* Empty state */}
           {!isLoading && !error && data?.data?.length === 0 && (
-            <div className="py-8 text-center text-muted-foreground">
-              Nenhum ativo encontrado.
-            </div>
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={Wrench01Icon} />
+                </EmptyMedia>
+                <EmptyTitle>Nenhum ativo encontrado</EmptyTitle>
+                <EmptyDescription>
+                  {search
+                    ? "Nenhum ativo corresponde aos filtros aplicados."
+                    : "Quando houver ativos vinculados à sua organização, eles aparecerão aqui."}
+                </EmptyDescription>
+              </EmptyHeader>
+              {search && (
+                <EmptyContent>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearch("");
+                      setPage(1);
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                </EmptyContent>
+              )}
+            </Empty>
           )}
 
           {/* Data table */}
           {!isLoading && !error && data?.data && data.data.length > 0 && (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="px-4 py-3 text-left font-medium">Tag</th>
-                      <th className="px-4 py-3 text-left font-medium">Tipo</th>
-                      <th className="px-4 py-3 text-left font-medium">Nome</th>
-                      <th className="px-4 py-3 text-left font-medium">
-                        Fabricante
-                      </th>
-                      <th className="px-4 py-3 text-left font-medium">
-                        N. Série
-                      </th>
-                      <th className="px-4 py-3 text-left font-medium">
-                        Status
-                      </th>
-                      <th className="px-4 py-3 text-left font-medium">
-                        Prox. Calibração
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.data.map((asset) => (
-                      <tr key={asset.id} className="border-b hover:bg-muted/50">
-                        <td className="px-4 py-3 font-mono font-medium">
-                          {asset.tag}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center rounded-full bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
-                            {asset.assetTypeName}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">{asset.name}</td>
-                        <td className="px-4 py-3">
-                          {asset.manufacturer || "-"}
-                        </td>
-                        <td className="px-4 py-3 font-mono">
-                          {asset.serialNumber}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                              asset.status === "ACTIVE"
-                                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                                : asset.status === "INACTIVE"
-                                  ? "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
-                                  : asset.status === "MAINTENANCE"
-                                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                                    : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                            }`}
-                          >
-                            {statusLabels[asset.status]}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          {formatDate(asset.nextCalibrationDate)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <DataTable
+              columns={assetsColumns}
+              data={data.data}
+              pagination={data.pagination}
+              onPageChange={setPage}
+              itemName="ativos"
+            />
+          )}
 
-              {/* Pagination */}
-              {data.pagination.totalPages > 1 && (
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="text-muted-foreground text-sm">
-                    Pagina {data.pagination.page} de{" "}
-                    {data.pagination.totalPages} ({data.pagination.total}{" "}
-                    ativos)
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setPage((p) =>
-                          Math.min(data.pagination.totalPages, p + 1),
-                        )
-                      }
-                      disabled={page === data.pagination.totalPages}
-                    >
-                      Proximo
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
+          {/* Loading state when no data yet */}
+          {isLoading && !data && (
+            <DataTable columns={assetsColumns} data={[]} isLoading={true} />
           )}
         </CardContent>
       </Card>
