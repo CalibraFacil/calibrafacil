@@ -40,7 +40,7 @@ export function DataTablePagination({
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
         >
-          Proximo
+          Próximo
         </Button>
       </div>
     </div>

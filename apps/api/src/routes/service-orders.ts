@@ -2114,6 +2114,25 @@ export const portalServiceOrdersRouter = new Hono<{
           pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
         });
       const query = c.req.valid("query");
+      const searchTerm = query.query?.trim();
+      const whereCondition = and(
+        eq(serviceOrder.customerId, linkedCustomer.id),
+        query.status ? eq(serviceOrder.status, query.status) : undefined,
+        searchTerm
+          ? or(
+              ilike(serviceOrder.serviceOrderNumber, `%${searchTerm}%`),
+              ilike(asset.name, `%${searchTerm}%`),
+              ilike(asset.serialNumber, `%${searchTerm}%`),
+            )
+          : undefined,
+      );
+
+      const [countResult] = await db
+        .select({ total: count() })
+        .from(serviceOrder)
+        .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
+        .where(whereCondition);
+
       const rows = await db
         .select({
           id: serviceOrder.id,
@@ -2126,15 +2145,13 @@ export const portalServiceOrdersRouter = new Hono<{
         })
         .from(serviceOrder)
         .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
-        .where(
-          and(
-            eq(serviceOrder.customerId, linkedCustomer.id),
-            query.status ? eq(serviceOrder.status, query.status) : undefined,
-          ),
-        )
+        .where(whereCondition)
         .orderBy(desc(serviceOrder.openedAt))
         .limit(query.limit)
         .offset((query.page - 1) * query.limit);
+
+      const total = countResult?.total ?? 0;
+
       return c.json({
         data: rows.map((row) => ({
           ...row,
@@ -2143,8 +2160,8 @@ export const portalServiceOrdersRouter = new Hono<{
         pagination: {
           page: query.page,
           limit: query.limit,
-          total: rows.length,
-          totalPages: 1,
+          total,
+          totalPages: Math.ceil(total / query.limit),
         },
       });
     },

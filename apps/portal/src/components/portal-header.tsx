@@ -16,12 +16,23 @@ const routeLabels: Record<string, string> = {
   "/_authenticated": "Painel",
   "/_authenticated/assets": "Ativos",
   "/_authenticated/certificates": "Certificados",
+  "/_authenticated/certificates/$id": "Certificado",
   "/_authenticated/requests": "Solicitações",
   "/_authenticated/requests/new": "Nova Solicitação",
   "/_authenticated/requests/$id": "Solicitação",
+  "/_authenticated/service-orders": "Ordens de Serviço",
+  "/_authenticated/service-orders/$id": "Ordem de Serviço",
   "/_authenticated/settings": "Configurações",
   "/_authenticated/settings/appearance": "Aparência",
 };
+
+function formatRouteSegment(segment: string) {
+  return segment
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export function PortalHeader() {
   const matches = useMatches();
@@ -40,7 +51,7 @@ export function PortalHeader() {
           path: normalizedPath,
           label:
             routeLabels[normalizedRouteId] ??
-            normalizedPath.split("/").pop() ??
+            formatRouteSegment(normalizedPath.split("/").pop() ?? "") ??
             "",
         };
       })

@@ -1,16 +1,35 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  CheckmarkCircle02Icon,
+  Cancel01Icon,
   Download04Icon,
   File01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
+import type { DateRange } from "react-day-picker";
+
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DateRangePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { DataTable } from "@/components/ui/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
@@ -58,6 +77,14 @@ function formatDate(date: string | null | undefined): string {
   });
 }
 
+function toDateParam(date: Date | undefined): string {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function DownloadButton({ certificate }: { certificate: Certificate }) {
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -93,9 +120,7 @@ function DownloadButton({ certificate }: { certificate: Certificate }) {
   };
 
   if (!certificate.certificateUrl) {
-    return (
-      <span className="text-xs text-muted-foreground">Gerando...</span>
-    );
+    return <Badge variant="outline">Gerando</Badge>;
   }
 
   return (
@@ -120,13 +145,34 @@ function CertificatesPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const limit = 20;
+  const dateFrom = toDateParam(dateRange?.from);
+  const dateTo = toDateParam(dateRange?.to);
+  const hasFilters = Boolean(search || dateFrom || dateTo);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["portal-certificates", page, limit],
+    queryKey: ["portal-certificates", page, limit, search, dateFrom, dateTo],
     queryFn: async (): Promise<CertificatesResponse> => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+
+      if (search) {
+        params.set("query", search);
+      }
+
+      if (dateFrom) {
+        params.set("dateFrom", dateFrom);
+      }
+
+      if (dateTo) {
+        params.set("dateTo", dateTo);
+      }
+
       const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/certificates?page=${page}&limit=${limit}`,
+        `${getApiBaseUrl()}/api/portal/certificates?${params.toString()}`,
         {
           credentials: "include",
         },
@@ -137,21 +183,6 @@ function CertificatesPage() {
       return response.json();
     },
   });
-
-  const filteredData = useMemo(() => {
-    if (!data?.data || !search.trim()) return data?.data ?? [];
-
-    const searchLower = search.toLowerCase().trim();
-    return data.data.filter(
-      (cert) =>
-        cert.jobId.toLowerCase().includes(searchLower) ||
-        cert.assetName.toLowerCase().includes(searchLower) ||
-        cert.assetTag.toLowerCase().includes(searchLower) ||
-        cert.serviceName.toLowerCase().includes(searchLower) ||
-        (cert.assetManufacturer?.toLowerCase().includes(searchLower) ?? false) ||
-        cert.assetSerialNumber.toLowerCase().includes(searchLower),
-    );
-  }, [data?.data, search]);
 
   const columns: ColumnDef<Certificate>[] = useMemo(
     () => [
@@ -192,10 +223,12 @@ function CertificatesPage() {
       {
         accessorKey: "serviceName",
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Servico" />
+          <DataTableColumnHeader column={column} title="Serviço" />
         ),
         cell: ({ row }) => (
-          <span className="text-muted-foreground">{row.original.serviceName}</span>
+          <span className="text-muted-foreground">
+            {row.original.serviceName}
+          </span>
         ),
       },
       {
@@ -204,7 +237,7 @@ function CertificatesPage() {
           <DataTableColumnHeader column={column} title="Data" />
         ),
         cell: ({ row }) => (
-          <span className="text-muted-foreground">
+          <span className="text-muted-foreground tabular-nums">
             {formatDate(row.original.approvedAt)}
           </span>
         ),
@@ -213,10 +246,9 @@ function CertificatesPage() {
         accessorKey: "status",
         header: "Status",
         cell: () => (
-          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
-            <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3" />
+          <Badge variant="default">
             Aprovado
-          </span>
+          </Badge>
         ),
       },
       {
@@ -229,92 +261,121 @@ function CertificatesPage() {
   );
 
   const handleRowClick = (certificate: Certificate) => {
-    navigate({ to: "/certificates/$id", params: { id: String(certificate.id) } });
+    navigate({
+      to: "/certificates/$id",
+      params: { id: String(certificate.id) },
+    });
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Certificados</h1>
-          <p className="text-sm text-muted-foreground">
-            Acesse e baixe seus certificados de calibracao.
-          </p>
-        </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Certificados</CardTitle>
+          <CardDescription>
+            Acesse e baixe seus certificados de calibração.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
+            <div className="relative min-w-50 flex-1 sm:max-w-sm">
+              <HugeiconsIcon
+                icon={Search01Icon}
+                className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                placeholder="Buscar por certificado, instrumento ou serviço..."
+                aria-label="Buscar por certificado, instrumento ou serviço"
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                className="pl-9"
+              />
+            </div>
 
-        {/* Search */}
-        <div className="relative w-full sm:w-72">
-          <HugeiconsIcon
-            icon={Search01Icon}
-            className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            placeholder="Buscar certificados..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-      </div>
-
-      {/* Error state */}
-      {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center">
-          <p className="text-sm text-destructive">
-            Erro ao carregar certificados. Tente novamente.
-          </p>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!isLoading && !error && data?.data?.length === 0 && (
-        <div className="rounded-lg border border-dashed p-12 text-center">
-          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-muted">
-            <HugeiconsIcon
-              icon={File01Icon}
-              className="size-6 text-muted-foreground"
+            <DateRangePicker
+              value={dateRange}
+              onChange={(range) => {
+                setDateRange(range);
+                setPage(1);
+              }}
+              placeholder="Filtrar por período"
+              className="sm:w-64"
             />
+
+            {hasFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setDateRange(undefined);
+                  setPage(1);
+                }}
+                className="h-9"
+              >
+                <HugeiconsIcon icon={Cancel01Icon} className="mr-2 size-4" />
+                Limpar filtros
+              </Button>
+            )}
           </div>
-          <h3 className="text-lg font-medium">Nenhum certificado</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Seus certificados de calibracao aparecerao aqui.
-          </p>
-        </div>
-      )}
 
-      {/* Data table */}
-      {!error && (data?.data?.length ?? 0) > 0 && (
-        <DataTable
-          columns={columns}
-          data={filteredData}
-          isLoading={isLoading}
-          onRowClick={handleRowClick}
-          pagination={
-            !search.trim() && data?.pagination
-              ? data.pagination
-              : undefined
-          }
-          onPageChange={setPage}
-          itemName="certificados"
-        />
-      )}
+          {error && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
+              Erro ao carregar certificados. Tente novamente.
+            </div>
+          )}
 
-      {/* Search results count */}
-      {search.trim() && filteredData.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          {filteredData.length} resultado{filteredData.length !== 1 ? "s" : ""} encontrado{filteredData.length !== 1 ? "s" : ""}
-        </p>
-      )}
+          {!isLoading && !error && data?.data?.length === 0 && (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={File01Icon} />
+                </EmptyMedia>
+                <EmptyTitle>Nenhum certificado encontrado</EmptyTitle>
+                <EmptyDescription>
+                  {hasFilters
+                    ? "Nenhum certificado corresponde aos filtros aplicados."
+                    : "Seus certificados de calibração aparecerão aqui."}
+                </EmptyDescription>
+              </EmptyHeader>
+              {hasFilters && (
+                <EmptyContent>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearch("");
+                      setDateRange(undefined);
+                      setPage(1);
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                </EmptyContent>
+              )}
+            </Empty>
+          )}
 
-      {/* No search results */}
-      {search.trim() && filteredData.length === 0 && !isLoading && (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            Nenhum certificado encontrado para "{search}".
-          </p>
-        </div>
-      )}
+          {!error && (data?.data?.length ?? 0) > 0 && (
+            <DataTable
+              columns={columns}
+              data={data?.data ?? []}
+              isLoading={isLoading}
+              onRowClick={handleRowClick}
+              pagination={data?.pagination}
+              onPageChange={setPage}
+              itemName="certificados"
+            />
+          )}
+
+          {isLoading && !data && (
+            <DataTable columns={columns} data={[]} isLoading={true} />
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

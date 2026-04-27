@@ -14,13 +14,14 @@ import {
   Settings01Icon,
   Wrench01Icon,
 } from "@hugeicons/core-free-icons";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { getApiBaseUrl } from "@/lib/utils";
@@ -158,45 +159,38 @@ function CertificateDetailPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* Back link */}
       <Link
         to="/certificates"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted-foreground transition-[color] hover:text-foreground"
       >
         <HugeiconsIcon icon={ArrowLeft02Icon} className="size-4" />
         Certificados
       </Link>
 
-      {/* Hero section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/5 via-primary/10 to-primary/5 p-8">
-        <div className="relative z-10">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-4">
-              {/* Status badge */}
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-4" />
-                Certificado Aprovado
-              </span>
-
-              {/* Certificate ID */}
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight">
+      <Card>
+        <CardHeader className="gap-5">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 space-y-3">
+              <Badge className="gap-1.5">
+                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3" />
+                Certificado aprovado
+              </Badge>
+              <div className="space-y-1">
+                <CardTitle className="text-2xl text-balance tabular-nums">
                   {certificate.jobId}
-                </h1>
-                <p className="mt-1 text-muted-foreground">
-                  {certificate.serviceName}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground text-pretty">
+                  {certificate.serviceName} emitido por{" "}
+                  <span className="font-medium text-foreground">
+                    {certificate.labName}
+                  </span>
                 </p>
               </div>
-
-              {/* Lab info */}
-              <p className="text-sm text-muted-foreground">
-                Emitido por <span className="font-medium text-foreground">{certificate.labName}</span>
-              </p>
             </div>
 
-            {/* Actions */}
-            <div className="flex flex-col gap-2 sm:items-end">
+            <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
               <Button
                 size="lg"
                 onClick={handleDownload}
@@ -213,7 +207,7 @@ function CertificateDetailPage() {
 
               <Button
                 variant="outline"
-                size="sm"
+                size="lg"
                 onClick={handleCopyLink}
                 className="gap-2"
               >
@@ -221,146 +215,140 @@ function CertificateDetailPage() {
                   icon={copied ? CheckmarkCircle02Icon : Link01Icon}
                   className="size-4"
                 />
-                {copied ? "Link copiado!" : "Copiar link de verificacao"}
+                {copied ? "Link copiado" : "Copiar verificação"}
               </Button>
             </div>
           </div>
-        </div>
+        </CardHeader>
 
-        {/* Background decoration */}
-        <div className="absolute -right-20 -top-20 size-64 rounded-full bg-primary/5 blur-3xl" />
-        <div className="absolute -bottom-20 -left-20 size-64 rounded-full bg-primary/5 blur-3xl" />
-      </div>
+        <CardContent className="space-y-6">
+          <Separator />
 
-      {/* Details grid */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Asset information */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <HugeiconsIcon
-                  icon={Wrench01Icon}
-                  className="size-5 text-blue-600 dark:text-blue-400"
-                />
-              </div>
-              <div>
-                <CardTitle className="text-base">Instrumento</CardTitle>
-                <CardDescription>Detalhes do equipamento calibrado</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <dl className="space-y-4">
-              <DetailItem label="Nome" value={certificate.assetName} />
-              <DetailItem label="Tag" value={certificate.assetTag} mono />
-              {certificate.assetManufacturer && (
-                <DetailItem label="Fabricante" value={certificate.assetManufacturer} />
-              )}
-              {certificate.assetModel && (
-                <DetailItem label="Modelo" value={certificate.assetModel} />
-              )}
-              <DetailItem
-                label="Numero de Serie"
-                value={certificate.assetSerialNumber}
-                mono
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
+            <section className="space-y-4">
+              <SectionHeading
+                icon={Wrench01Icon}
+                title="Instrumento"
+                description="Equipamento calibrado"
               />
-            </dl>
-          </CardContent>
-        </Card>
-
-        {/* Calibration information */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                <HugeiconsIcon
-                  icon={Settings01Icon}
-                  className="size-5 text-purple-600 dark:text-purple-400"
-                />
-              </div>
-              <div>
-                <CardTitle className="text-base">Calibracao</CardTitle>
-                <CardDescription>Informacoes do servico</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <dl className="space-y-4">
-              <DetailItem label="Servico" value={certificate.serviceName} />
-              {certificate.methodSnapshot?.name && (
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <DetailItem label="Nome" value={certificate.assetName} />
+                <DetailItem label="Tag" value={certificate.assetTag} mono />
+                {certificate.assetManufacturer && (
+                  <DetailItem
+                    label="Fabricante"
+                    value={certificate.assetManufacturer}
+                  />
+                )}
+                {certificate.assetModel && (
+                  <DetailItem label="Modelo" value={certificate.assetModel} />
+                )}
                 <DetailItem
-                  label="Metodo"
-                  value={`${certificate.methodSnapshot.name}${certificate.methodSnapshot.version ? ` v${certificate.methodSnapshot.version}` : ""}`}
+                  label="Número de série"
+                  value={certificate.assetSerialNumber}
+                  mono
                 />
-              )}
-              <DetailItem label="Laboratorio" value={certificate.labName} />
+              </dl>
+            </section>
+
+            <section className="space-y-4">
+              <SectionHeading
+                icon={Settings01Icon}
+                title="Calibração"
+                description="Serviço e método"
+              />
+              <dl className="grid gap-3">
+                <DetailItem label="Serviço" value={certificate.serviceName} />
+                {certificate.methodSnapshot?.name && (
+                  <DetailItem
+                    label="Método"
+                    value={`${certificate.methodSnapshot.name}${
+                      certificate.methodSnapshot.version
+                        ? ` v${certificate.methodSnapshot.version}`
+                        : ""
+                    }`}
+                  />
+                )}
+                <DetailItem label="Laboratório" value={certificate.labName} />
+              </dl>
+            </section>
+          </div>
+
+          <Separator />
+
+          <section className="space-y-4">
+            <SectionHeading
+              icon={Calendar03Icon}
+              title="Datas"
+              description="Cronologia do certificado"
+            />
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <DetailItem
+                label="Data de execução"
+                value={formatDate(certificate.performedAt)}
+                className="text-base tabular-nums"
+              />
+              <DetailItem
+                label="Data de aprovação"
+                value={formatDate(certificate.approvedAt)}
+                className="text-base tabular-nums"
+              />
             </dl>
-          </CardContent>
-        </Card>
+          </section>
 
-        {/* Dates */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
+          <div className="rounded-lg bg-muted/60 p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-background shadow-xs">
                 <HugeiconsIcon
-                  icon={Calendar03Icon}
-                  className="size-5 text-amber-600 dark:text-amber-400"
+                  icon={CheckmarkCircle02Icon}
+                  className="size-5 text-muted-foreground"
                 />
               </div>
-              <div>
-                <CardTitle className="text-base">Datas</CardTitle>
-                <CardDescription>Cronologia da calibracao</CardDescription>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-medium">Verificação de autenticidade</h3>
+                <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
+                  Compartilhe o link público de verificação com auditores para
+                  comprovar a autenticidade deste certificado.
+                </p>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyLink}
+                className="gap-2"
+              >
+                <HugeiconsIcon
+                  icon={copied ? CheckmarkCircle02Icon : Copy01Icon}
+                  className="size-4"
+                />
+                {copied ? "Copiado" : "Copiar"}
+              </Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-6 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <dt className="text-sm text-muted-foreground">Data de Execucao</dt>
-                <dd className="text-lg font-medium">
-                  {formatDate(certificate.performedAt)}
-                </dd>
-              </div>
-              <div className="space-y-1.5">
-                <dt className="text-sm text-muted-foreground">Data de Aprovacao</dt>
-                <dd className="text-lg font-medium">
-                  {formatDate(certificate.approvedAt)}
-                </dd>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Verification info */}
-      <Card className="border-dashed">
-        <CardContent className="py-6">
-          <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
-            <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-              <HugeiconsIcon
-                icon={CheckmarkCircle02Icon}
-                className="size-6 text-muted-foreground"
-              />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-medium">Verificacao de Autenticidade</h3>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Este certificado pode ser verificado publicamente atraves do link de verificacao.
-                Compartilhe-o com auditores para comprovar a autenticidade.
-              </p>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleCopyLink} className="gap-2">
-              <HugeiconsIcon
-                icon={copied ? CheckmarkCircle02Icon : Copy01Icon}
-                className="size-4"
-              />
-              {copied ? "Copiado!" : "Copiar"}
-            </Button>
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function SectionHeading({
+  icon,
+  title,
+  description,
+}: {
+  icon: typeof Wrench01Icon;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
+        <HugeiconsIcon icon={icon} className="size-5 text-muted-foreground" />
+      </div>
+      <div className="min-w-0">
+        <h2 className="font-medium leading-none">{title}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      </div>
     </div>
   );
 }
@@ -369,15 +357,23 @@ function DetailItem({
   label,
   value,
   mono = false,
+  className,
 }: {
   label: string;
   value: string;
   mono?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-4">
+    <div className="min-w-0 rounded-md bg-muted/40 p-3">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className={cn("text-sm font-medium text-right", mono && "font-mono")}>
+      <dd
+        className={cn(
+          "mt-1 truncate text-sm font-medium",
+          mono && "font-mono tabular-nums",
+          className,
+        )}
+      >
         {value}
       </dd>
     </div>
