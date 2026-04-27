@@ -34,6 +34,14 @@ function formatRange(range: DateRange | undefined, placeholder: string) {
   return `${formatDate(range.from)} - ${formatDate(range.to)}`;
 }
 
+function isSameDay(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
 function DateRangePicker({
   value,
   onChange,
@@ -68,7 +76,7 @@ function DateRangePicker({
           selected={value}
           onSelect={(range) => {
             onChange?.(range);
-            if (range?.from && range.to) {
+            if (range?.from && range.to && !isSameDay(range.from, range.to)) {
               setOpen(false);
             }
           }}
