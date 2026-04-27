@@ -5,6 +5,7 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Cancel01Icon,
+  Calendar03Icon,
   Download04Icon,
   File01Icon,
   Search01Icon,
@@ -135,10 +136,13 @@ function CertificatesPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const limit = 20;
+  const hasFilters = Boolean(search || dateFrom || dateTo);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["portal-certificates", page, limit, search],
+    queryKey: ["portal-certificates", page, limit, search, dateFrom, dateTo],
     queryFn: async (): Promise<CertificatesResponse> => {
       const params = new URLSearchParams({
         page: String(page),
@@ -147,6 +151,14 @@ function CertificatesPage() {
 
       if (search) {
         params.set("query", search);
+      }
+
+      if (dateFrom) {
+        params.set("dateFrom", dateFrom);
+      }
+
+      if (dateTo) {
+        params.set("dateTo", dateTo);
       }
 
       const response = await fetch(
@@ -274,12 +286,53 @@ function CertificatesPage() {
               />
             </div>
 
-            {search && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="relative">
+                <HugeiconsIcon
+                  icon={Calendar03Icon}
+                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  type="date"
+                  aria-label="Filtrar certificados aprovados a partir de"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(event) => {
+                    setDateFrom(event.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full pl-9 sm:w-42"
+                />
+              </div>
+              <div className="relative">
+                <HugeiconsIcon
+                  icon={Calendar03Icon}
+                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  type="date"
+                  aria-label="Filtrar certificados aprovados até"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(event) => {
+                    setDateTo(event.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full pl-9 sm:w-42"
+                />
+              </div>
+            </div>
+
+            {hasFilters && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
                   setSearch("");
+                  setDateFrom("");
+                  setDateTo("");
                   setPage(1);
                 }}
                 className="h-9"
@@ -304,17 +357,19 @@ function CertificatesPage() {
                 </EmptyMedia>
                 <EmptyTitle>Nenhum certificado encontrado</EmptyTitle>
                 <EmptyDescription>
-                  {search
+                  {hasFilters
                     ? "Nenhum certificado corresponde aos filtros aplicados."
                     : "Seus certificados de calibração aparecerão aqui."}
                 </EmptyDescription>
               </EmptyHeader>
-              {search && (
+              {hasFilters && (
                 <EmptyContent>
                   <Button
                     variant="outline"
                     onClick={() => {
                       setSearch("");
+                      setDateFrom("");
+                      setDateTo("");
                       setPage(1);
                     }}
                   >

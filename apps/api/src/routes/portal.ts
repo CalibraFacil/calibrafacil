@@ -17,8 +17,10 @@ import {
   inArray,
   desc,
   count,
+  gte,
   isNull,
   ilike,
+  lt,
   or,
   sql,
 } from "drizzle-orm";
@@ -245,6 +247,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       );
       const offset = (page - 1) * limit;
       const query = c.req.query("query")?.trim();
+      const dateFrom = c.req.query("dateFrom");
+      const dateTo = c.req.query("dateTo");
 
       // Get user's CLIENT organization IDs
       const userOrgs = await db
@@ -289,6 +293,12 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const customerIds = customers.map((cust) => cust.id);
+      const dateToExclusive = dateTo ? new Date(dateTo) : null;
+      if (dateToExclusive) {
+        dateToExclusive.setHours(0, 0, 0, 0);
+        dateToExclusive.setDate(dateToExclusive.getDate() + 1);
+      }
+
       const whereCondition = and(
         inArray(calibrationJob.customerId, customerIds),
         eq(calibrationJob.status, "APPROVED"),
@@ -302,6 +312,12 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
               ilike(asset.manufacturer, `%${query}%`),
               ilike(service.name, `%${query}%`),
             )
+          : undefined,
+        dateFrom
+          ? gte(calibrationJob.approvedAt, new Date(dateFrom))
+          : undefined,
+        dateToExclusive
+          ? lt(calibrationJob.approvedAt, dateToExclusive)
           : undefined,
       );
 
