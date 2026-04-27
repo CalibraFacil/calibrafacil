@@ -60,6 +60,15 @@ async function getPortalLabScope(c: {
   }
 }
 
+function parseDateOnly(value: string | undefined) {
+  if (!value) return null;
+
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+
+  return new Date(year, month - 1, day);
+}
+
 /**
  * Portal routes - endpoints specific to the client portal.
  * These routes handle client-facing functionality.
@@ -293,7 +302,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const customerIds = customers.map((cust) => cust.id);
-      const dateToExclusive = dateTo ? new Date(dateTo) : null;
+      const dateFromInclusive = parseDateOnly(dateFrom);
+      const dateToExclusive = parseDateOnly(dateTo);
       if (dateToExclusive) {
         dateToExclusive.setHours(0, 0, 0, 0);
         dateToExclusive.setDate(dateToExclusive.getDate() + 1);
@@ -313,8 +323,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
               ilike(service.name, `%${query}%`),
             )
           : undefined,
-        dateFrom
-          ? gte(calibrationJob.approvedAt, new Date(dateFrom))
+        dateFromInclusive
+          ? gte(calibrationJob.approvedAt, dateFromInclusive)
           : undefined,
         dateToExclusive
           ? lt(calibrationJob.approvedAt, dateToExclusive)
