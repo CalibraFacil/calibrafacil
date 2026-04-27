@@ -5,11 +5,11 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Cancel01Icon,
-  Calendar03Icon,
   Download04Icon,
   File01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
+import type { DateRange } from "react-day-picker";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DateRangePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { DataTable } from "@/components/ui/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
@@ -74,6 +75,14 @@ function formatDate(date: string | null | undefined): string {
     month: "short",
     year: "numeric",
   });
+}
+
+function toDateParam(date: Date | undefined): string {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function DownloadButton({ certificate }: { certificate: Certificate }) {
@@ -136,9 +145,10 @@ function CertificatesPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const limit = 20;
+  const dateFrom = toDateParam(dateRange?.from);
+  const dateTo = toDateParam(dateRange?.to);
   const hasFilters = Boolean(search || dateFrom || dateTo);
 
   const { data, isLoading, error } = useQuery({
@@ -286,44 +296,15 @@ function CertificatesPage() {
               />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="relative">
-                <HugeiconsIcon
-                  icon={Calendar03Icon}
-                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <Input
-                  type="date"
-                  aria-label="Filtrar certificados aprovados a partir de"
-                  value={dateFrom}
-                  max={dateTo || undefined}
-                  onChange={(event) => {
-                    setDateFrom(event.target.value);
-                    setPage(1);
-                  }}
-                  className="w-full pl-9 sm:w-42"
-                />
-              </div>
-              <div className="relative">
-                <HugeiconsIcon
-                  icon={Calendar03Icon}
-                  className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <Input
-                  type="date"
-                  aria-label="Filtrar certificados aprovados até"
-                  value={dateTo}
-                  min={dateFrom || undefined}
-                  onChange={(event) => {
-                    setDateTo(event.target.value);
-                    setPage(1);
-                  }}
-                  className="w-full pl-9 sm:w-42"
-                />
-              </div>
-            </div>
+            <DateRangePicker
+              value={dateRange}
+              onChange={(range) => {
+                setDateRange(range);
+                setPage(1);
+              }}
+              placeholder="Filtrar por período"
+              className="sm:w-64"
+            />
 
             {hasFilters && (
               <Button
@@ -331,8 +312,7 @@ function CertificatesPage() {
                 size="sm"
                 onClick={() => {
                   setSearch("");
-                  setDateFrom("");
-                  setDateTo("");
+                  setDateRange(undefined);
                   setPage(1);
                 }}
                 className="h-9"
@@ -368,8 +348,7 @@ function CertificatesPage() {
                     variant="outline"
                     onClick={() => {
                       setSearch("");
-                      setDateFrom("");
-                      setDateTo("");
+                      setDateRange(undefined);
                       setPage(1);
                     }}
                   >
