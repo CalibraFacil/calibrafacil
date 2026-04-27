@@ -291,6 +291,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const customerIds = customers.map((cust) => cust.id);
+      const approvedAtPortalDate = sql`(${calibrationJob.approvedAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`;
 
       const whereCondition = and(
         inArray(calibrationJob.customerId, customerIds),
@@ -307,10 +308,10 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
             )
           : undefined,
         dateFrom
-          ? sql`${calibrationJob.approvedAt}::date >= ${dateFrom}`
+          ? sql`${approvedAtPortalDate} >= ${dateFrom}`
           : undefined,
         dateTo
-          ? sql`${calibrationJob.approvedAt}::date <= ${dateTo}`
+          ? sql`${approvedAtPortalDate} <= ${dateTo}`
           : undefined,
       );
 
