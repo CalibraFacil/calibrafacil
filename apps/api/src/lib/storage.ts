@@ -11,6 +11,20 @@ export interface R2Env {
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
   R2_BUCKET_NAME: string;
+  CERTIFICATES_BUCKET?: R2BucketLike;
+  NODE_ENV?: string;
+  API_URL?: string;
+}
+
+export interface R2ObjectBodyLike {
+  body: BodyInit | null;
+  httpMetadata?: {
+    contentType?: string;
+  };
+}
+
+export interface R2BucketLike {
+  get(key: string): Promise<R2ObjectBodyLike | null>;
 }
 
 export function createR2Client(env: R2Env): S3Client {
@@ -28,7 +42,7 @@ export async function generatePresignedUrl(
   client: S3Client,
   bucket: string,
   key: string,
-  expiresIn: number = 900 // 15 minutes
+  expiresIn: number = 900, // 15 minutes
 ): Promise<string> {
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
   return getSignedUrl(client, command, { expiresIn });
@@ -51,7 +65,7 @@ export async function uploadToR2(
   bucket: string,
   key: string,
   body: Buffer | Uint8Array | ArrayBuffer,
-  contentType: string
+  contentType: string,
 ): Promise<void> {
   const command = new PutObjectCommand({
     Bucket: bucket,
@@ -68,7 +82,7 @@ export async function uploadToR2(
 export async function deleteFromR2(
   client: S3Client,
   bucket: string,
-  key: string
+  key: string,
 ): Promise<void> {
   const command = new DeleteObjectCommand({
     Bucket: bucket,

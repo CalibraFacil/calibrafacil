@@ -72,6 +72,7 @@ import {
   generatePresignedUrl,
   extractKeyFromUrl,
   type R2Env,
+  type R2BucketLike,
 } from "../lib/storage";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { generateCertificateIdentity } from "../lib/certificate-numbering";
@@ -118,6 +119,24 @@ async function resolveJobRouteId(
     .limit(1);
 
   return job?.id ?? null;
+}
+
+function shouldUseLocalR2Download(env: R2Env): env is R2Env & {
+  CERTIFICATES_BUCKET: R2BucketLike;
+} {
+  return env.NODE_ENV === "development" && Boolean(env.CERTIFICATES_BUCKET);
+}
+
+function buildLocalJobFileUrl(
+  requestUrl: string,
+  routeId: string,
+  type: "certificate" | "label",
+  apiUrl?: string,
+) {
+  const origin = apiUrl ? new URL(apiUrl).origin : new URL(requestUrl).origin;
+  const encodedRouteId = encodeURIComponent(routeId);
+  const suffix = type === "certificate" ? "file" : "label-file";
+  return `${origin}/api/jobs/${encodedRouteId}/${suffix}`;
 }
 
 /**
@@ -359,6 +378,7 @@ async function buildStandardsSnapshot(
       id: s.id,
       name: s.name,
       certificateNumber: s.certificateNumber,
+      calibratedBy: s.calibratedBy,
       calibrationDate: s.calibrationDate,
       nextCalibrationDate: s.nextCalibrationDate,
       uncertainty: s.uncertainty,
@@ -2356,11 +2376,76 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const env = c.env as R2Env;
+      if (shouldUseLocalR2Download(env)) {
+        return c.json({
+          url: buildLocalJobFileUrl(
+            c.req.url,
+            c.req.param("id"),
+            "certificate",
+            env.API_URL,
+          ),
+        });
+      }
+
       const key = extractKeyFromUrl(job.certificateUrl);
       const client = createR2Client(env);
       const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
 
       return c.json({ url });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/file - Stream certificate from local R2 during Wrangler dev
+  // =========================================================================
+  .get(
+    "/:id/file",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const env = c.env as R2Env;
+      if (!shouldUseLocalR2Download(env)) {
+        return c.json(
+          { error: "Disponivel apenas em desenvolvimento local" },
+          404,
+        );
+      }
+
+      const memberData = c.get("member");
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      const [job] = await db
+        .select({ certificateUrl: calibrationJob.certificateUrl })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1);
+
+      if (!job?.certificateUrl) {
+        return c.json({ error: "Certificado ainda nao foi gerado" }, 400);
+      }
+
+      const key = extractKeyFromUrl(job.certificateUrl);
+      const object = await env.CERTIFICATES_BUCKET.get(key);
+
+      if (!object) {
+        return c.json({ error: "Arquivo nao encontrado no R2 local" }, 404);
+      }
+
+      return new Response(object.body, {
+        headers: {
+          "Content-Type": object.httpMetadata?.contentType ?? "application/pdf",
+          "Content-Disposition": 'inline; filename="certificado.pdf"',
+        },
+      });
     },
   )
 
@@ -2464,10 +2549,75 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const env = c.env as R2Env;
+      if (shouldUseLocalR2Download(env)) {
+        return c.json({
+          url: buildLocalJobFileUrl(
+            c.req.url,
+            c.req.param("id"),
+            "label",
+            env.API_URL,
+          ),
+        });
+      }
+
       const key = extractKeyFromUrl(job.labelUrl);
       const client = createR2Client(env);
       const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
 
       return c.json({ url });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/label-file - Stream label from local R2 during Wrangler dev
+  // =========================================================================
+  .get(
+    "/:id/label-file",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const env = c.env as R2Env;
+      if (!shouldUseLocalR2Download(env)) {
+        return c.json(
+          { error: "Disponivel apenas em desenvolvimento local" },
+          404,
+        );
+      }
+
+      const memberData = c.get("member");
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      const [job] = await db
+        .select({ labelUrl: calibrationJob.labelUrl })
+        .from(calibrationJob)
+        .where(
+          and(
+            eq(calibrationJob.id, id),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          ),
+        )
+        .limit(1);
+
+      if (!job?.labelUrl) {
+        return c.json({ error: "Etiqueta ainda nao foi gerada" }, 400);
+      }
+
+      const key = extractKeyFromUrl(job.labelUrl);
+      const object = await env.CERTIFICATES_BUCKET.get(key);
+
+      if (!object) {
+        return c.json({ error: "Arquivo nao encontrado no R2 local" }, 404);
+      }
+
+      return new Response(object.body, {
+        headers: {
+          "Content-Type": object.httpMetadata?.contentType ?? "application/pdf",
+          "Content-Disposition": 'inline; filename="etiqueta.pdf"',
+        },
+      });
     },
   );

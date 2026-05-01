@@ -217,6 +217,7 @@ export type StandardSnapshot = {
   id: number;
   name: string;
   certificateNumber: string;
+  calibratedBy?: string | null;
   calibrationDate: Date | string;
   nextCalibrationDate?: Date | string | null;
   uncertainty: number | null;
@@ -339,6 +340,9 @@ export type JobData = {
   methodSnapshot: MethodSnapshot;
   assetSnapshot?: AssetSnapshot | null;
   standardsSnapshot: StandardSnapshot[] | null;
+  serviceOrder?: {
+    inmetroRepairSealNumber?: string | null;
+  } | null;
   data: Record<string, unknown> | null;
   results: Record<string, unknown> | null;
   approverName: string | null;
@@ -858,6 +862,333 @@ const styles = `
       width: 100vw;
       height: 100vh;
     }
+  }
+`;
+
+const EXEMPLO_ORG_ID = "Kq3VvX9mZ2LdP8tN4rB7cY1wH6jF5sGe";
+const EXEMPLO_FOR51_REVISION = "04";
+const EXEMPLO_FOR51_REVISION_DATE = "15/01/2024";
+const EXEMPLO_LEGAL_NAME = "Laboratório Exemplo de Metrologia Ltda";
+const EXEMPLO_STATE_REGISTRATION = "024/0141636";
+
+const exemploFor51Styles = `
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: #fff;
+    color: #000;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 8.7pt;
+    line-height: 1.1;
+  }
+  .for51-page {
+    width: 210mm;
+    height: 297mm;
+    padding: 10mm 14mm 9mm;
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden;
+    background: #fff;
+    position: relative;
+  }
+  .for51-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .for51-frame {
+    width: 100%;
+  }
+  .for51-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .for51-table th,
+  .for51-table td {
+    border: 0.35mm solid #000;
+    padding: 0.8mm 1.1mm;
+    vertical-align: middle;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .for51-outer {
+    border: 0.6mm solid #000;
+  }
+  .for51-header {
+    display: grid;
+    grid-template-columns: 39mm 1fr 31mm;
+    border: 0.6mm solid #000;
+    margin-bottom: 4mm;
+    min-height: 17mm;
+  }
+  .for51-header > div {
+    border-right: 0.45mm solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1.5mm;
+  }
+  .for51-header > div:last-child {
+    border-right: 0;
+  }
+  .for51-logo {
+    max-width: 33mm;
+    max-height: 13mm;
+    object-fit: contain;
+  }
+  .for51-logo-text {
+    font-size: 13pt;
+    font-weight: 800;
+    letter-spacing: 0.4mm;
+    color: #0b315f;
+    line-height: 0.9;
+  }
+  .for51-logo-text small {
+    display: block;
+    font-size: 8pt;
+    letter-spacing: 0.65mm;
+    margin-top: 1mm;
+  }
+  .for51-title h1,
+  .for51-page2-title h1 {
+    font-size: 14pt;
+    letter-spacing: 0.6mm;
+    margin: 0 0 1.5mm;
+  }
+  .for51-title .number {
+    font-size: 12pt;
+    font-weight: 800;
+  }
+  .for51-form-id {
+    flex-direction: column;
+    gap: 1.7mm;
+    font-weight: 800;
+    font-size: 9.5pt;
+  }
+  .for51-lab {
+    margin-bottom: 4mm;
+  }
+  .for51-lab td {
+    font-size: 8.7pt;
+    padding: 0.9mm;
+  }
+  .for51-section-title {
+    text-align: center;
+    font-weight: 800;
+    font-size: 9pt;
+    padding: 0.75mm;
+    border: 0.45mm solid #000;
+    border-bottom: 0;
+  }
+  .for51-field-label {
+    width: 26mm;
+    font-weight: 400;
+  }
+  .for51-field-label-compact {
+    width: 22mm;
+    font-weight: 400;
+  }
+  .for51-section {
+    margin-bottom: 0;
+  }
+  .for51-section + .for51-section {
+    margin-top: -0.35mm;
+  }
+  .for51-method,
+  .for51-conventions,
+  .for51-info {
+    border: 0.45mm solid #000;
+    border-top: 0;
+    padding: 1mm;
+  }
+  .for51-method p,
+  .for51-conventions p,
+  .for51-info p {
+    margin: 0 0 1mm;
+    text-align: justify;
+  }
+  .for51-info p::before {
+    content: "- ";
+  }
+  .for51-footer-page {
+    position: absolute;
+    right: 20mm;
+    bottom: 5mm;
+    font-size: 9pt;
+  }
+  .for51-page2-shell {
+    border: 0.6mm solid #000;
+    height: 272mm;
+    position: relative;
+    padding: 0 8mm 8mm;
+  }
+  .for51-page2-heading {
+    display: grid;
+    grid-template-columns: 1fr 42mm;
+    align-items: center;
+    margin: 0 -8mm 2mm;
+    padding: 1.2mm 2mm 0;
+  }
+  .for51-page2-title {
+    text-align: center;
+  }
+  .for51-page2-number {
+    font-size: 10pt;
+    display: flex;
+    justify-content: space-between;
+    gap: 3mm;
+  }
+  .for51-results-label {
+    font-weight: 800;
+    font-size: 10.5pt;
+    margin: 0 0 1mm;
+  }
+  .for51-result-block {
+    margin-bottom: 4.5mm;
+  }
+  .for51-result-block .for51-section-title {
+    border-bottom: 0;
+  }
+  .for51-result-table th,
+  .for51-result-table td {
+    text-align: center;
+    font-size: 8.8pt;
+    padding: 1mm 1.1mm;
+  }
+  .for51-result-table th {
+    font-weight: 800;
+  }
+  .for51-blank-row td {
+    height: 4.2mm;
+  }
+  .for51-repeat td,
+  .for51-repeat th,
+  .for51-ecc td,
+  .for51-ecc th {
+    text-align: center;
+    font-size: 8.8pt;
+    padding: 1mm 1.1mm;
+  }
+  .for51-repeat .row-label {
+    text-align: left;
+    font-weight: 800;
+  }
+  .for51-ecc-wrap {
+    display: grid;
+    grid-template-columns: 1fr 50mm;
+    border: 0.45mm solid #000;
+    border-top: 0;
+  }
+  .for51-ecc-wrap .for51-ecc {
+    border: 0;
+  }
+  .for51-ecc-wrap .for51-ecc th,
+  .for51-ecc-wrap .for51-ecc td {
+    border-left: 0;
+  }
+  .for51-diagram-cell {
+    border-left: 0.45mm solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34mm;
+    padding-bottom: 4mm;
+  }
+  .for51-diagram {
+    position: relative;
+    width: 40mm;
+    height: 31mm;
+    font-size: 9pt;
+  }
+  .for51-diagram .circle {
+    position: absolute;
+    left: 12mm;
+    top: 7mm;
+    width: 18mm;
+    height: 18mm;
+    border: 0.45mm solid #000;
+    border-radius: 50%;
+  }
+  .for51-diagram .vline {
+    position: absolute;
+    left: 21mm;
+    top: 2mm;
+    width: 0.25mm;
+    height: 28mm;
+    background: #000;
+  }
+  .for51-diagram .hline {
+    position: absolute;
+    left: 5mm;
+    top: 16mm;
+    width: 31mm;
+    height: 0.25mm;
+    background: #000;
+  }
+  .for51-diagram .box {
+    position: absolute;
+    width: 4mm;
+    height: 4mm;
+    border: 0.3mm solid #777;
+    background: #fff;
+    text-align: center;
+    line-height: 3.4mm;
+    font-size: 7pt;
+  }
+  .for51-diagram .box.top { left: 19mm; top: 0; }
+  .for51-diagram .box.right { right: 0; top: 14mm; }
+  .for51-diagram .box.bottom { left: 19mm; bottom: 0; }
+  .for51-diagram .box.left { left: 0; top: 14mm; }
+  .for51-diagram .p {
+    position: absolute;
+    font-weight: 700;
+    background: #fff;
+    line-height: 1;
+  }
+  .for51-diagram .a { left: 20mm; top: 14mm; }
+  .for51-diagram .b { left: 15mm; top: 10mm; }
+  .for51-diagram .c { left: 24mm; top: 10mm; }
+  .for51-diagram .d { left: 23mm; top: 19mm; }
+  .for51-diagram .e { left: 15mm; top: 19mm; }
+  .for51-diagram-caption {
+    position: absolute;
+    left: 6mm;
+    bottom: -2mm;
+    white-space: nowrap;
+    font-size: 7.8pt;
+  }
+  .for51-observations {
+    margin-top: 4mm;
+    border: 0.45mm solid #000;
+    height: 21mm;
+  }
+  .for51-signature {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 6mm;
+    text-align: center;
+    font-size: 9pt;
+  }
+  .for51-signature img {
+    max-width: 55mm;
+    max-height: 14mm;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto -1mm;
+  }
+  .for51-signature-line {
+    width: 55mm;
+    border-top: 0.35mm solid #000;
+    margin: 0 auto 1mm;
+    padding-top: 1mm;
   }
 `;
 
@@ -2102,8 +2433,743 @@ function getV2UncertaintyRows(
     }));
 }
 
+function shouldRenderExemploFor51(job: JobData) {
+  const slug = job.certificateTemplateSnapshot?.slug ?? "";
+  return (
+    job.organizationId === EXEMPLO_ORG_ID &&
+    isBalanceLikeMethod(job.methodSnapshot) &&
+    (slug.includes("certificado-rastreavel-de-balancas") ||
+      job.methodSnapshot?.methodName?.includes("FOR 50/51"))
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value.replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function asString(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  return String(value);
+}
+
+function formatFor51Number(value: number | null, decimals = 1) {
+  if (value === null || !Number.isFinite(value)) return "";
+  return value.toLocaleString("pt-BR", {
+    useGrouping: false,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function formatFor51MassFromG(value: unknown, decimals = 1) {
+  const numeric = asNumber(value);
+  return formatFor51Number(numeric === null ? null : numeric / 1000, decimals);
+}
+
+function formatFor51IntegerMassFromG(value: unknown) {
+  const numeric = asNumber(value);
+  if (numeric === null) return "";
+  const kg = numeric / 1000;
+  return Number.isInteger(kg)
+    ? String(kg)
+    : formatFor51Number(kg, Math.abs(kg) < 10 ? 3 : 1);
+}
+
+function formatFor51Date(date: Date | null | string) {
+  const formatted = formatDate(date);
+  return formatted === "-" ? "" : formatted;
+}
+
+function getFor51DecimalPlaces(job: JobData) {
+  const value = asNumber(job.data?.casas_decimais);
+  return value === null ? 1 : Math.max(0, Math.min(6, Math.trunc(value)));
+}
+
+function getFor51Rows(job: JobData, key: string) {
+  const value = job.data?.[key];
+  return Array.isArray(value) ? value.map(asRecord) : [];
+}
+
+function getFor51ResultValue(job: JobData, key: string, index: number) {
+  const value = job.results?.[key];
+  return Array.isArray(value) ? value[index] : value;
+}
+
+function getFor51AssetSpec(job: JobData, key: string) {
+  return job.assetSnapshot?.specifications?.[key];
+}
+
+function formatFor51Capacity(job: JobData) {
+  return `${formatFor51IntegerMassFromG(getFor51AssetSpec(job, "capacity"))}kg`;
+}
+
+function formatFor51Resolution(job: JobData) {
+  return `${formatFor51MassFromG(getFor51AssetSpec(job, "resolution"), 1)}kg`;
+}
+
+function getFor51Portaria(job: JobData) {
+  return (
+    asString(getFor51AssetSpec(job, "portaria")) ||
+    asString(getFor51AssetSpec(job, "ordinance"))
+  );
+}
+
+function getFor51ModelPortaria(job: JobData) {
+  const model = job.asset.model || "";
+  const portaria = getFor51Portaria(job);
+  return [model, portaria].filter(Boolean).join(" / ");
+}
+
+function getFor51InmetroRepairSeal(job: JobData) {
+  return (
+    job.serviceOrder?.inmetroRepairSealNumber ||
+    asString(getFor51AssetSpec(job, "inmetroRepairSealNumber")) ||
+    asString(getFor51AssetSpec(job, "seloReparadoInmetro")) ||
+    "-"
+  );
+}
+
+function getFor51InstrumentName(job: JobData) {
+  const name = normalizeText(
+    job.assetSnapshot?.assetTypeName ?? job.asset.name,
+  );
+  return name.includes("balanca") ? "Balança" : job.asset.name;
+}
+
+function getFor51Website(job: JobData) {
+  return (job.lab.website || "www.laboratorio.example").replace(
+    /^https?:\/\//,
+    "",
+  );
+}
+
+function formatFor51LabAddress(job: JobData) {
+  const street = job.lab.street?.replace(/^Avenida\b/i, "Av.") || "";
+  return [
+    [street, job.lab.number].filter(Boolean).join(", "),
+    job.lab.neighbourhood ? `Bairro ${job.lab.neighbourhood}` : "",
+    job.lab.city,
+    job.lab.state,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function getFor51StandardIssuer(standard: StandardSnapshot) {
+  return (
+    standard.calibratedBy ||
+    standard.certificateNumber.split("-")[0] ||
+    "Conforme certificado"
+  );
+}
+
+function getFor51ReferenceStandards(job: JobData) {
+  const standards = job.methodSnapshot?.certificateContent?.referenceStandards;
+  return standards?.filter((item) => item.trim()).join(" e ") || "";
+}
+
+function getFor51RepeatabilityValues(
+  rows: Record<string, unknown>[],
+  kind: "antes" | "apos",
+  fallbackRows: Record<string, unknown>[],
+) {
+  const row = rows[0] ?? {};
+  const prefix = kind === "apos" ? "apos_" : "";
+  const explicit = [1, 2, 3, 4, 5].map((index) =>
+    asNumber(row[`${prefix}leitura_${index}`]),
+  );
+  if (explicit.every((value) => value !== null)) {
+    return explicit as number[];
+  }
+
+  if (kind === "antes") {
+    return [1, 2, 3, 4, 5]
+      .map((index) => asNumber(row[`leitura_${index}`]))
+      .filter((value): value is number => value !== null);
+  }
+
+  const middle = fallbackRows[Math.floor(fallbackRows.length / 2)] ?? {};
+  return [1, 2, 3, 4, 5]
+    .map(
+      (index) =>
+        asNumber(row[`apos_leitura_${index}`]) ??
+        asNumber(middle[`apos_leitura_${Math.min(index, 3)}`]),
+    )
+    .filter((value): value is number => value !== null);
+}
+
+function sampleStandardDeviation(values: number[]) {
+  if (values.length < 2) return 0;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance =
+    values.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
+    (values.length - 1);
+  return Math.sqrt(variance);
+}
+
+function formatFor51Veff(value: unknown) {
+  const raw = asString(value);
+  if (raw === "Infinity" || raw === "infinito") return "infinito";
+  const numeric = asNumber(value);
+  return numeric === null ? raw : formatFor51Number(numeric, 0);
+}
+
+function formatFor51K(value: unknown) {
+  const numeric = asNumber(value);
+  return numeric === null ? asString(value) : formatFor51Number(numeric, 2);
+}
+
+function renderFor51ResultRows(
+  job: JobData,
+  kind: "antes" | "apos",
+  decimals: number,
+) {
+  const pointRows = getFor51Rows(job, "pontos_indicacao");
+  const mediaKey =
+    kind === "antes" ? "media_indicacao_antes" : "media_indicacao_apos";
+  const errorKey =
+    kind === "antes" ? "erro_indicacao_antes" : "erro_indicacao_apos";
+  const uncertaintyKey =
+    kind === "antes" ? "incerteza_expandida_antes" : "incerteza_expandida_apos";
+  const kKey = kind === "antes" ? "fator_k_antes" : "fator_k_apos";
+  const veffKey = kind === "antes" ? "veff_antes" : "veff_apos";
+  const readingPrefix = kind === "antes" ? "antes" : "apos";
+
+  return (
+    <>
+      {pointRows.map((row, index) => (
+        <tr key={`${kind}-${index}`}>
+          <td>{formatFor51IntegerMassFromG(row.valor_padrao)}</td>
+          <td>kg</td>
+          <td>
+            {formatFor51MassFromG(row[`${readingPrefix}_leitura_1`], decimals)}
+          </td>
+          <td>
+            {formatFor51MassFromG(row[`${readingPrefix}_leitura_2`], decimals)}
+          </td>
+          <td>
+            {formatFor51MassFromG(row[`${readingPrefix}_leitura_3`], decimals)}
+          </td>
+          <td>
+            {formatFor51MassFromG(
+              getFor51ResultValue(job, mediaKey, index),
+              decimals,
+            )}
+          </td>
+          <td>
+            {formatFor51MassFromG(
+              getFor51ResultValue(job, errorKey, index),
+              decimals,
+            )}
+          </td>
+          <td>
+            {formatFor51MassFromG(
+              getFor51ResultValue(job, uncertaintyKey, index),
+              decimals,
+            )}
+          </td>
+          <td>{formatFor51K(getFor51ResultValue(job, kKey, index))}</td>
+          <td>{formatFor51Veff(getFor51ResultValue(job, veffKey, index))}</td>
+        </tr>
+      ))}
+      {Array.from({ length: Math.max(0, 5 - pointRows.length) }).map(
+        (_, index) => (
+          <tr className="for51-blank-row" key={`${kind}-blank-${index}`}>
+            <td />
+            <td />
+            <td />
+            <td />
+            <td />
+            <td />
+            <td />
+            <td />
+            <td />
+            <td />
+          </tr>
+        ),
+      )}
+    </>
+  );
+}
+
+function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
+  const decimals = getFor51DecimalPlaces(job);
+  const pointRows = getFor51Rows(job, "pontos_indicacao");
+  const repeatabilityRows = getFor51Rows(job, "repetibilidade");
+  const eccentricityRows = getFor51Rows(job, "excentricidade");
+  const repeatBefore = getFor51RepeatabilityValues(
+    repeatabilityRows,
+    "antes",
+    pointRows,
+  );
+  const repeatAfter = getFor51RepeatabilityValues(
+    repeatabilityRows,
+    "apos",
+    pointRows,
+  );
+  const observation = asString(job.data?.observacao);
+
+  return (
+    <html lang="pt-BR">
+      <head>
+        <meta charSet="UTF-8" />
+        <title>{job.certificateName || job.jobId}</title>
+        <style
+          dangerouslySetInnerHTML={{
+            __html: exemploFor51Styles,
+          }}
+        />
+      </head>
+      <body data-pdf-layout="full-page">
+        <section className="for51-page">
+          <div className="for51-frame">
+            <div className="for51-header">
+              <div>
+                <div className="for51-logo-text">
+                  EXEMPLO
+                  <small>BALANÇAS</small>
+                </div>
+              </div>
+              <div className="for51-title">
+                <div>
+                  <h1>CERTIFICADO DE CALIBRAÇÃO</h1>
+                  <div className="number">Nº.: {job.jobId}</div>
+                </div>
+              </div>
+              <div className="for51-form-id">
+                <div>FOR 51</div>
+                <div>REVISÃO: {EXEMPLO_FOR51_REVISION}</div>
+                <div>{EXEMPLO_FOR51_REVISION_DATE}</div>
+              </div>
+            </div>
+
+            <table className="for51-table for51-lab for51-outer">
+              <tbody>
+                <tr>
+                  <td>
+                    <div>{EXEMPLO_LEGAL_NAME}</div>
+                    <div>{formatFor51LabAddress(job)}</div>
+                    <div>
+                      CNPJ: {formatTaxId(job.lab.cnpj)} &nbsp;&nbsp;&nbsp;&nbsp;
+                      IE {EXEMPLO_STATE_REGISTRATION}
+                    </div>
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    <div>Fone: {job.lab.phone || "(51) 3000-0000"}</div>
+                    <div>
+                      Email: {job.lab.email || "contato@laboratorio.example"}
+                    </div>
+                    <div>Website: {getFor51Website(job)}</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div className="for51-section">
+              <div className="for51-section-title">DADOS DO CLIENTE</div>
+              <table className="for51-table for51-outer">
+                <tbody>
+                  <tr>
+                    <td className="for51-field-label">Cliente:</td>
+                    <td>{job.customer.name}</td>
+                    <td className="for51-field-label-compact">CNPJ:</td>
+                    <td>{formatTaxId(job.customer.taxId)}</td>
+                  </tr>
+                  <tr>
+                    <td className="for51-field-label">Endereço:</td>
+                    <td colSpan={3}>{formatAddress(job.customer.address)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="for51-section">
+              <div className="for51-section-title">
+                CARACTERÍSTICA DO EQUIPAMENTO
+              </div>
+              <table className="for51-table for51-outer">
+                <tbody>
+                  <tr>
+                    <td className="for51-field-label">Instrumento:</td>
+                    <td>{getFor51InstrumentName(job)}</td>
+                    <td className="for51-field-label-compact">Capacidade:</td>
+                    <td>{formatFor51Capacity(job)}</td>
+                  </tr>
+                  <tr>
+                    <td className="for51-field-label">Fabricante:</td>
+                    <td>{job.asset.manufacturer || ""}</td>
+                    <td className="for51-field-label-compact">Divisão:</td>
+                    <td>{formatFor51Resolution(job)}</td>
+                  </tr>
+                  <tr>
+                    <td className="for51-field-label">Modelo/Port.:</td>
+                    <td>{getFor51ModelPortaria(job)}</td>
+                    <td className="for51-field-label-compact">Código:</td>
+                    <td>{job.asset.tag || ""}</td>
+                  </tr>
+                  <tr>
+                    <td className="for51-field-label">Série:</td>
+                    <td>{job.asset.serialNumber}</td>
+                    <td className="for51-field-label-compact">Rep. INMETRO:</td>
+                    <td>{getFor51InmetroRepairSeal(job)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="for51-section">
+              <div className="for51-section-title">DADOS GERAIS</div>
+              <table className="for51-table for51-outer">
+                <tbody>
+                  <tr>
+                    <td className="for51-field-label">Data de Calibração:</td>
+                    <td>{formatFor51Date(job.performedAt)}</td>
+                    <td className="for51-field-label">Data de Emissão:</td>
+                    <td>{formatFor51Date(job.approvedAt)}</td>
+                  </tr>
+                  <tr>
+                    <td className="for51-field-label">Procedimento:</td>
+                    <td>
+                      {job.methodSnapshot?.certificateContent?.procedureCode ||
+                        ""}
+                    </td>
+                    <td className="for51-field-label">Norma de Ref.:</td>
+                    <td>{getFor51ReferenceStandards(job)}</td>
+                  </tr>
+                  <tr>
+                    <td className="for51-field-label">Local da Calibração:</td>
+                    <td colSpan={3}>{asString(job.data?.local_calibracao)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="for51-section">
+              <div className="for51-section-title">CONDIÇÕES AMBIENTAIS</div>
+              <table className="for51-table for51-outer">
+                <tbody>
+                  <tr>
+                    <td>Temperatura:</td>
+                    <td style={{ textAlign: "center" }}>
+                      {job.environmentalSnapshot?.temperature == null
+                        ? "x"
+                        : formatFor51Number(
+                            job.environmentalSnapshot.temperature,
+                            1,
+                          )}
+                    </td>
+                    <td>Umidade Relativa:</td>
+                    <td style={{ textAlign: "center" }}>
+                      {job.environmentalSnapshot?.humidity == null
+                        ? "x"
+                        : formatFor51Number(
+                            job.environmentalSnapshot.humidity,
+                            1,
+                          )}
+                    </td>
+                    <td>Pressão atm:</td>
+                    <td style={{ textAlign: "center" }}>
+                      {job.environmentalSnapshot?.pressure == null
+                        ? "x"
+                        : formatFor51Number(
+                            job.environmentalSnapshot.pressure,
+                            1,
+                          )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="for51-section">
+              <div className="for51-section-title">RASTREABILIDADE</div>
+              <table className="for51-table for51-outer">
+                <thead>
+                  <tr>
+                    <th>Identificação</th>
+                    <th>Número do Certificado</th>
+                    <th>Emitente</th>
+                    <th>Validade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(job.standardsSnapshot ?? []).map((standard) => (
+                    <tr key={standard.id}>
+                      <td style={{ textAlign: "center" }}>{standard.name}</td>
+                      <td style={{ textAlign: "center" }}>
+                        {standard.certificateNumber}
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        {getFor51StandardIssuer(standard)}
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        {formatFor51Date(
+                          standard.nextCalibrationDate ??
+                            standard.calibrationDate,
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {Array.from({
+                    length: Math.max(
+                      0,
+                      7 - (job.standardsSnapshot?.length ?? 0),
+                    ),
+                  }).map((_, index) => (
+                    <tr className="for51-blank-row" key={index}>
+                      <td />
+                      <td />
+                      <td />
+                      <td />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="for51-section">
+              <div className="for51-section-title">MÉTODO</div>
+              <div className="for51-method">
+                <p>
+                  A calibração é realizada por meio de comparação direta entre
+                  os valores dos pesos padrão e a indicação da balança.
+                </p>
+              </div>
+            </div>
+
+            <div className="for51-section">
+              <div className="for51-section-title">CONVENÇÕES</div>
+              <div className="for51-conventions">
+                <p>
+                  <strong>VC:</strong> Valor Convencional, valor correspondente
+                  ao padrão utilizado.
+                </p>
+                <p>
+                  <strong>EI:</strong> Erro de Indicação, (VI - VC) .
+                </p>
+                <p>
+                  <strong>U:</strong> Incerteza expandida.
+                </p>
+              </div>
+            </div>
+
+            <div className="for51-section">
+              <div className="for51-section-title">INFORMAÇÕES</div>
+              <div className="for51-info">
+                <p>
+                  A Incerteza expandida de medição relatada é declarada como a
+                  incerteza padrão de medição multiplicada pelo fator de
+                  abrangência k, o qual para uma distribuição t-Student, com
+                  Veff graus de liberdade efetivos corresponde a uma
+                  probabilidade de abrangência de aproximadamente 95%. A
+                  incerteza padrão de medição foi determinada de acordo com a
+                  publicação EA-4/02. Os valores de k e Veff são apresentados na
+                  tabela de resultados.
+                </p>
+                <p>
+                  Os resultados deste certificado referem-se exclusivamente ao
+                  instrumento submetido à calibração específica, não sendo
+                  extensivo a quaisquer lotes.
+                </p>
+                <p>
+                  Este certificado não tem valor para fins de metrologia legal.
+                </p>
+                <p>
+                  Os resultados são válidos somente para o estado do instrumento
+                  no momento da calibração.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="for51-footer-page">Página 1/2</div>
+        </section>
+
+        <section className="for51-page">
+          <div className="for51-page2-shell">
+            <div className="for51-page2-heading">
+              <div className="for51-page2-title">
+                <h1>CERTIFICADO DE CALIBRAÇÃO</h1>
+              </div>
+              <div className="for51-page2-number">
+                <strong>Nº:</strong>
+                <span>{job.jobId}</span>
+              </div>
+            </div>
+            <div className="for51-results-label">RESULTADOS:</div>
+
+            <div className="for51-result-block">
+              <div className="for51-section-title">
+                CALIBRAÇÃO ANTES DO AJUSTE
+              </div>
+              <table className="for51-table for51-result-table for51-outer">
+                <thead>
+                  <tr>
+                    <th>V C</th>
+                    <th>Unid</th>
+                    <th>Leitura 1</th>
+                    <th>Leitura 2</th>
+                    <th>Leitura 3</th>
+                    <th>Média</th>
+                    <th>EI</th>
+                    <th>U</th>
+                    <th>K</th>
+                    <th>Veff</th>
+                  </tr>
+                </thead>
+                <tbody>{renderFor51ResultRows(job, "antes", decimals)}</tbody>
+              </table>
+            </div>
+
+            <div className="for51-result-block">
+              <div className="for51-section-title">
+                CALIBRAÇÃO APÓS O AJUSTE
+              </div>
+              <table className="for51-table for51-result-table for51-outer">
+                <thead>
+                  <tr>
+                    <th>V C</th>
+                    <th>Unid</th>
+                    <th>Leitura 1</th>
+                    <th>Leitura 2</th>
+                    <th>Leitura 3</th>
+                    <th>Média</th>
+                    <th>EI</th>
+                    <th>U</th>
+                    <th>K</th>
+                    <th>Veff</th>
+                  </tr>
+                </thead>
+                <tbody>{renderFor51ResultRows(job, "apos", decimals)}</tbody>
+              </table>
+            </div>
+
+            <div className="for51-section">
+              <div className="for51-section-title">REPETIBILIDADE</div>
+              <table className="for51-table for51-repeat for51-outer">
+                <thead>
+                  <tr>
+                    <th />
+                    <th>Leitura 1</th>
+                    <th>Leitura 2</th>
+                    <th>Leitura 3</th>
+                    <th>Leitura 4</th>
+                    <th>Leitura 5</th>
+                    <th>Repetibilidade</th>
+                    <th>Unid</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["Antes do ajuste", repeatBefore],
+                    ["Depois do ajuste", repeatAfter],
+                  ].map(([label, values]) => {
+                    const readings = values as number[];
+                    return (
+                      <tr key={label as string}>
+                        <td className="row-label">{label as string}</td>
+                        {Array.from({ length: 5 }).map((_, index) => (
+                          <td key={index}>
+                            {formatFor51MassFromG(readings[index], decimals)}
+                          </td>
+                        ))}
+                        <td>
+                          {formatFor51Number(
+                            sampleStandardDeviation(readings) / 1000,
+                            decimals,
+                          )}
+                        </td>
+                        <td>kg</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="for51-section">
+              <div className="for51-section-title">EXCENTRICIDADE</div>
+              <div className="for51-ecc-wrap">
+                <table className="for51-table for51-ecc">
+                  <thead>
+                    <tr>
+                      <th>Posição</th>
+                      <th>Antes do ajuste</th>
+                      <th>Depois do ajuste</th>
+                      <th>Unid</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {eccentricityRows.map((row, index) => (
+                      <tr key={index}>
+                        <td>{asString(row.posicao)}</td>
+                        <td>{formatFor51MassFromG(row.antes, decimals)}</td>
+                        <td>{formatFor51MassFromG(row.apos, decimals)}</td>
+                        <td>kg</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="for51-diagram-cell">
+                  <div className="for51-diagram" aria-hidden="true">
+                    <div className="vline" />
+                    <div className="hline" />
+                    <div className="circle" />
+                    <div className="box top">✓</div>
+                    <div className="box right" />
+                    <div className="box bottom" />
+                    <div className="box left" />
+                    <div className="p a">A</div>
+                    <div className="p b">B</div>
+                    <div className="p c">C</div>
+                    <div className="p d">D</div>
+                    <div className="p e">E</div>
+                    <div className="for51-diagram-caption">
+                      Posição do indicador
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="for51-observations">
+              <div className="for51-section-title">OBSERVAÇÕES:</div>
+              <div style={{ padding: "2mm" }}>{observation}</div>
+            </div>
+
+            <div className="for51-signature">
+              {job.approverSignatureUrl && (
+                <img src={job.approverSignatureUrl} alt="Assinatura" />
+              )}
+              <div className="for51-signature-line">
+                {job.lab.technicalManagerName || job.approverName || ""}
+              </div>
+              <div>Signatário Autorizado</div>
+            </div>
+          </div>
+          <div className="for51-footer-page">Página 2/2</div>
+        </section>
+      </body>
+    </html>
+  );
+}
+
 export function CertificateHtml({ job }: { job: JobData }) {
   const templateSnapshot = job.certificateTemplateSnapshot ?? null;
+  if (shouldRenderExemploFor51(job)) {
+    return <ExemploFor51CertificateHtml job={job} />;
+  }
+
   const templateConfig = normalizeCertificateTemplateConfig(
     templateSnapshot?.config,
   );

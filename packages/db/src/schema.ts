@@ -2478,6 +2478,7 @@ export type StandardSnapshot = {
   id: number;
   name: string;
   certificateNumber: string;
+  calibratedBy?: string | null;
   calibrationDate: Date;
   nextCalibrationDate: Date | null;
   uncertainty: number | null;

@@ -60,7 +60,7 @@ import {
 } from '@/components/audit-timeline'
 import { api } from '@/utils/api'
 import { toast } from 'sonner'
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import {
   convertMassValue,
@@ -186,6 +186,9 @@ export function ApprovedJobRecord({
   const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)
   const [isDownloadingLabel, setIsDownloadingLabel] = useState(false)
   const [labelPending, setLabelPending] = useState(false)
+  const [certificatePreviewUrl, setCertificatePreviewUrl] = useState<
+    string | null
+  >(null)
   // Amendment state - ISO 17025 Clause 7.8.4.1
   const [isAmendDialogOpen, setIsAmendDialogOpen] = useState(false)
   const [amendmentReason, setAmendmentReason] = useState('')
@@ -211,18 +214,43 @@ export function ApprovedJobRecord({
     [assetBaseMeasurementUnit, methodSnapshot.formulas, results],
   )
 
+  const fetchCertificateDownloadUrl = useCallback(async () => {
+    const res = await api.api.jobs[':id'].download.$get({
+      param: { id: String(job.id) },
+    })
+    if (!res.ok) {
+      const error = (await res.json()) as { error?: string }
+      throw new Error(error.error || 'Falha ao gerar link')
+    }
+    const data = (await res.json()) as { url: string }
+    return data.url
+  }, [job.id])
+
+  useEffect(() => {
+    if (!job.certificateUrl) {
+      setCertificatePreviewUrl(null)
+      return
+    }
+
+    let ignore = false
+    void fetchCertificateDownloadUrl()
+      .then((url) => {
+        if (!ignore) setCertificatePreviewUrl(url)
+      })
+      .catch(() => {
+        if (!ignore) setCertificatePreviewUrl(job.certificateUrl ?? null)
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [fetchCertificateDownloadUrl, job.certificateUrl])
+
   const handleDownloadCertificate = async () => {
     setIsDownloading(true)
     try {
-      const res = await api.api.jobs[':id'].download.$get({
-        param: { id: String(job.id) },
-      })
-      if (!res.ok) {
-        const error = (await res.json()) as { error?: string }
-        throw new Error(error.error || 'Falha ao gerar link')
-      }
-      const data = (await res.json()) as { url: string }
-      window.open(data.url, '_blank')
+      const url = await fetchCertificateDownloadUrl()
+      window.open(url, '_blank')
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : 'Erro ao baixar certificado',
@@ -901,7 +929,7 @@ export function ApprovedJobRecord({
                     onClick={handleDownloadCertificate}
                   >
                     <iframe
-                      src={`${job.certificateUrl}#toolbar=0&navpanes=0`}
+                      src={`${certificatePreviewUrl ?? job.certificateUrl}#toolbar=0&navpanes=0`}
                       className="w-full h-full border-0 pointer-events-none"
                       title="Certificate Preview"
                     />
