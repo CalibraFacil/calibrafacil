@@ -216,6 +216,7 @@ export type CertifiedValue = {
 export type StandardSnapshot = {
   id: number;
   name: string;
+  type?: string | null;
   certificateNumber: string;
   calibratedBy?: string | null;
   calibrationDate: Date | string;

@@ -569,24 +569,30 @@ export function denormalizeMethodResultsForDisplay(
   );
   const nextResults: Record<string, unknown> = { ...results };
 
-  for (const [key, rawValue] of Object.entries(results)) {
-    const formula = formulaMap.get(key);
-    if (!formula || !isMassMethodFormula(formula)) {
-      continue;
+  const denormalizeResultValue = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+      return value.map((item) => denormalizeResultValue(item));
     }
 
-    const numericValue = parseNumericValue(rawValue);
+    const numericValue = parseNumericValue(value);
     if (numericValue == null) {
-      continue;
+      return value;
     }
 
     const displayValue = fromCanonicalMassValue(
       numericValue,
       baseMeasurementUnit,
     );
-    if (displayValue != null) {
-      nextResults[key] = displayValue;
+    return displayValue ?? value;
+  };
+
+  for (const [key, rawValue] of Object.entries(results)) {
+    const formula = formulaMap.get(key);
+    if (!formula || !isMassMethodFormula(formula)) {
+      continue;
     }
+
+    nextResults[key] = denormalizeResultValue(rawValue);
   }
 
   return nextResults;

@@ -1155,6 +1155,7 @@ export type AmendJobInput = z.infer<typeof AmendJobSchema>;
 export const StandardSnapshotSchema = z.object({
   id: z.number(),
   name: z.string(),
+  type: z.string().nullable().optional(),
   certificateNumber: z.string(),
   calibrationDate: z.string(),
   nextCalibrationDate: z.string().nullable().optional(),

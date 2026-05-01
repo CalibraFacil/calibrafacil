@@ -377,6 +377,7 @@ async function buildStandardsSnapshot(
     snapshot: standards.map((s) => ({
       id: s.id,
       name: s.name,
+      type: s.type,
       certificateNumber: s.certificateNumber,
       calibratedBy: s.calibratedBy,
       calibrationDate: s.calibrationDate,

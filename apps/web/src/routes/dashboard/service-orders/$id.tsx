@@ -397,7 +397,8 @@ function buildServiceOrderTimelineItems(
             : isDelivery
               ? PackageProcessIcon
               : CheckmarkCircle02Icon,
-      dotClassName: 'border-primary/20 bg-primary/10 text-primary',
+      dotClassName:
+        'border-primary/20 bg-background text-primary shadow-[inset_0_0_0_0.5rem_hsl(var(--primary)/0.12)]',
       status: 'completed' as const,
     }
   })
