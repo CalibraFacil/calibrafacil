@@ -87,6 +87,32 @@ const COMPOSITION_TOTAL_TARGETS: Array<
   ['buoyancy', 'buoyancy'],
 ]
 
+type TableColumn = NonNullable<MethodInputField['columns']>[number]
+type MeasurementColumnGroup = 'before' | 'after' | 'other'
+
+function normalizeColumnText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+function getMeasurementColumnGroup(
+  column: TableColumn,
+): MeasurementColumnGroup {
+  const text = normalizeColumnText(`${column.key} ${column.label}`)
+
+  if (text.includes('antes') && text.includes('leitura')) {
+    return 'before'
+  }
+
+  if (text.includes('apos') && text.includes('leitura')) {
+    return 'after'
+  }
+
+  return 'other'
+}
+
 function valuesMatch(current: unknown, expected: unknown): boolean {
   if (typeof current === 'number' && typeof expected === 'number') {
     return Math.abs(current - expected) < 1e-12
@@ -138,6 +164,19 @@ export function TableInputRenderer({
   const shouldUsePanelRows =
     columns.length > 5 ||
     columns.some((col) => col.role === 'mass_standard_composition')
+  const panelColumnGroups = {
+    primary: columns.filter(
+      (column) => getMeasurementColumnGroup(column) === 'other',
+    ),
+    before: columns.filter(
+      (column) => getMeasurementColumnGroup(column) === 'before',
+    ),
+    after: columns.filter(
+      (column) => getMeasurementColumnGroup(column) === 'after',
+    ),
+  }
+  const shouldGroupReadings =
+    panelColumnGroups.before.length > 0 && panelColumnGroups.after.length > 0
   const hasCertifiedValues = certifiedValueOptions.length > 0
   const weighingRangeResolver =
     field.weighingRangeResolver?.enabled !== false
@@ -347,7 +386,7 @@ export function TableInputRenderer({
   const renderCellInput = (
     row: Record<string, unknown>,
     rowIndex: number,
-    col: NonNullable<MethodInputField['columns']>[number],
+    col: TableColumn,
     calculatedTargets: Set<string>,
   ) => {
     const isCalculatedTarget = calculatedTargets.has(col.key)
@@ -438,6 +477,53 @@ export function TableInputRenderer({
     )
   }
 
+  const renderPanelColumn = (
+    row: Record<string, unknown>,
+    rowIndex: number,
+    col: TableColumn,
+    calculatedTargets: Set<string>,
+  ) => {
+    const isComposition = col.role === 'mass_standard_composition'
+
+    return (
+      <div
+        key={col.key}
+        className={
+          isComposition ? 'space-y-1 md:col-span-2 xl:col-span-1' : 'space-y-1'
+        }
+      >
+        <label className="text-xs font-medium text-muted-foreground">
+          {col.label}
+          {col.unit && <span className="font-normal"> ({col.unit})</span>}
+        </label>
+        {renderCellInput(row, rowIndex, col, calculatedTargets)}
+      </div>
+    )
+  }
+
+  const renderReadingGroup = (
+    title: string,
+    groupColumns: TableColumn[],
+    row: Record<string, unknown>,
+    rowIndex: number,
+    calculatedTargets: Set<string>,
+  ) => {
+    if (groupColumns.length === 0) return null
+
+    return (
+      <div className="rounded-xl bg-muted/30 p-3 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.05)]">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </p>
+        <div className="grid gap-3 md:grid-cols-3">
+          {groupColumns.map((col) =>
+            renderPanelColumn(row, rowIndex, col, calculatedTargets),
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (shouldUsePanelRows) {
     return (
       <div className="space-y-2">
@@ -451,10 +537,13 @@ export function TableInputRenderer({
               const calculatedTargets = getCalculatedTargets(row)
 
               return (
-                <div key={rowIndex} className="rounded-md border p-3">
+                <div
+                  key={rowIndex}
+                  className="rounded-xl bg-background p-4 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.09)]"
+                >
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <span className="grid h-7 w-7 place-items-center rounded-md bg-muted text-sm font-medium">
+                      <span className="grid h-8 w-8 place-items-center rounded-full bg-muted text-sm font-medium tabular-nums">
                         {rowIndex + 1}
                       </span>
                       <span className="text-sm font-medium">
@@ -466,41 +555,53 @@ export function TableInputRenderer({
                       size="icon"
                       onClick={() => removeRow(rowIndex)}
                       disabled={disabled}
-                      className="h-8 w-8"
+                      className="h-10 w-10 active:scale-[0.96]"
                     >
                       <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
                     </Button>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {columns.map((col) => {
-                      const isComposition =
-                        col.role === 'mass_standard_composition'
-                      return (
-                        <div
-                          key={col.key}
-                          className={
-                            isComposition
-                              ? 'space-y-1 md:col-span-2 xl:col-span-1'
-                              : 'space-y-1'
-                          }
-                        >
-                          <label className="text-xs font-medium text-muted-foreground">
-                            {col.label}
-                            {col.unit && (
-                              <span className="font-normal"> ({col.unit})</span>
-                            )}
-                          </label>
-                          {renderCellInput(
+                  {shouldGroupReadings ? (
+                    <div className="space-y-4">
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {panelColumnGroups.primary.map((col) =>
+                          renderPanelColumn(
                             row,
                             rowIndex,
                             col,
                             calculatedTargets,
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+                          ),
+                        )}
+                      </div>
+                      <div className="grid gap-3 xl:grid-cols-2">
+                        {renderReadingGroup(
+                          'Antes do ajuste',
+                          panelColumnGroups.before,
+                          row,
+                          rowIndex,
+                          calculatedTargets,
+                        )}
+                        {renderReadingGroup(
+                          'Após o ajuste',
+                          panelColumnGroups.after,
+                          row,
+                          rowIndex,
+                          calculatedTargets,
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {columns.map((col) =>
+                        renderPanelColumn(
+                          row,
+                          rowIndex,
+                          col,
+                          calculatedTargets,
+                        ),
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}
