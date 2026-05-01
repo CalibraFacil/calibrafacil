@@ -1655,7 +1655,7 @@ function JobDetailPage() {
               </p>
               <h2 className="mt-1 text-balance text-lg font-semibold">
                 {job.status === 'DRAFT'
-                  ? 'Iniciar a execução em campo'
+                  ? 'Iniciar execução'
                   : job.status === 'IN_PROGRESS'
                     ? 'Continuar a execução'
                     : 'Retomar a correção'}
@@ -1690,15 +1690,6 @@ function JobDetailPage() {
                     Atribuir técnico
                   </Button>
                 )}
-                {job.status === 'DRAFT' && (
-                  <Button
-                    variant="outline"
-                    className={`${reviewActionButtonClass} justify-start`}
-                  >
-                    <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
-                    Editar job
-                  </Button>
-                )}
                 {canCancel && !canApprove && (
                   <Button
                     variant="ghost"
@@ -1712,59 +1703,6 @@ function JobDetailPage() {
                     Cancelar job
                   </Button>
                 )}
-              </div>
-            </section>
-
-            <section className={`${reviewSurfaceClass} p-4`}>
-              <h2 className="mb-3 text-base font-semibold">
-                Checklist de prontidão
-              </h2>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">
-                    Técnico responsável
-                  </span>
-                  <Badge variant={job.technicianName ? 'outline' : 'secondary'}>
-                    {job.technicianName ? 'Definido' : 'Pendente'}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">
-                    Especificações do ativo
-                  </span>
-                  <Badge
-                    variant={
-                      equipmentSpecItems.length > 0 ? 'outline' : 'secondary'
-                    }
-                  >
-                    {equipmentSpecItems.length || 'Não'}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">
-                    Padrões vinculados
-                  </span>
-                  <Badge
-                    variant={
-                      reviewStandards.length > 0 ? 'outline' : 'secondary'
-                    }
-                  >
-                    {reviewStandards.length || 'Não'}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Financeiro</span>
-                  <Badge variant={getFinancialVariant(financialStatus)}>
-                    {getFinancialStatusLabel(
-                      financialStatus as
-                        | 'UNBILLED'
-                        | 'DRAFT'
-                        | 'ISSUED'
-                        | 'PAID'
-                        | 'OVERDUE',
-                    )}
-                  </Badge>
-                </div>
               </div>
             </section>
 
