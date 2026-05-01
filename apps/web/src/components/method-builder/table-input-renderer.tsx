@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
@@ -19,6 +19,7 @@ import {
 } from './mass-composition-utils'
 import {
   convertMassValue,
+  isMassUnit,
   resolveWeighingRange,
   type ResolvedWeighingRange,
   type WeighingRangeResolverTargetColumns,
@@ -150,6 +151,59 @@ function setRangeTargetValue(
   row[targetKey] = value
 }
 
+function parseNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value.replace(',', '.'))
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function getAssetResolutionFallback(
+  assetSpecifications: Record<string, unknown> | null | undefined,
+): Pick<ResolvedWeighingRange, 'resolution' | 'resolutionUnit'> | null {
+  const resolution = parseNumber(assetSpecifications?.resolution)
+  const resolutionUnit = assetSpecifications?.resolutionUnit ?? 'g'
+
+  if (resolution == null || !isMassUnit(resolutionUnit)) {
+    return null
+  }
+
+  return {
+    resolution,
+    resolutionUnit,
+  }
+}
+
+function valuesAreEqual(left: unknown, right: unknown): boolean {
+  if (typeof left === 'number' && typeof right === 'number') {
+    return Math.abs(left - right) < 1e-12
+  }
+
+  return left === right
+}
+
+function rowsAreEqual(
+  left: Array<Record<string, unknown>>,
+  right: Array<Record<string, unknown>>,
+) {
+  if (left.length !== right.length) return false
+
+  return left.every((leftRow, rowIndex) => {
+    const rightRow = right[rowIndex] ?? {}
+    const keys = new Set([...Object.keys(leftRow), ...Object.keys(rightRow)])
+
+    for (const key of keys) {
+      if (!valuesAreEqual(leftRow[key], rightRow[key])) {
+        return false
+      }
+    }
+
+    return true
+  })
+}
+
 export function TableInputRenderer({
   field,
   value,
@@ -206,59 +260,97 @@ export function TableInputRenderer({
   const applyWeighingRangeResolver = (row: Record<string, unknown>) => {
     const resolved = resolveRowWeighingRange(row)
     const targetColumns = weighingRangeResolver?.targetColumns ?? {}
-    if (!resolved || Object.keys(targetColumns).length === 0) {
+    const configuredRanges = weighingRangeResolver?.assetSpecKey
+      ? assetSpecifications?.[weighingRangeResolver.assetSpecKey]
+      : null
+    const hasConfiguredRanges =
+      Array.isArray(configuredRanges) && configuredRanges.length > 0
+    const resolutionSource =
+      resolved ??
+      (!hasConfiguredRanges
+        ? getAssetResolutionFallback(assetSpecifications)
+        : null)
+
+    if (Object.keys(targetColumns).length === 0) {
+      return row
+    }
+
+    if (!resolved && !resolutionSource && !hasConfiguredRanges) {
       return row
     }
 
     const nextRow = { ...row }
-    setRangeTargetValue(
-      nextRow,
-      columns,
-      targetColumns,
-      'rangeLabel',
-      resolved.label,
-    )
-    setRangeTargetValue(
-      nextRow,
-      columns,
-      targetColumns,
-      'rangeMin',
-      resolved.min,
-      resolved.rangeUnit,
-    )
-    setRangeTargetValue(
-      nextRow,
-      columns,
-      targetColumns,
-      'rangeMax',
-      resolved.max,
-      resolved.rangeUnit,
-    )
-    setRangeTargetValue(
-      nextRow,
-      columns,
-      targetColumns,
-      'rangeUnit',
-      resolved.rangeUnit,
-    )
+    if (resolved) {
+      setRangeTargetValue(
+        nextRow,
+        columns,
+        targetColumns,
+        'rangeLabel',
+        resolved.label,
+      )
+      setRangeTargetValue(
+        nextRow,
+        columns,
+        targetColumns,
+        'rangeMin',
+        resolved.min,
+        resolved.rangeUnit,
+      )
+      setRangeTargetValue(
+        nextRow,
+        columns,
+        targetColumns,
+        'rangeMax',
+        resolved.max,
+        resolved.rangeUnit,
+      )
+      setRangeTargetValue(
+        nextRow,
+        columns,
+        targetColumns,
+        'rangeUnit',
+        resolved.rangeUnit,
+      )
+    } else {
+      setRangeTargetValue(nextRow, columns, targetColumns, 'rangeLabel', '')
+      setRangeTargetValue(nextRow, columns, targetColumns, 'rangeMin', null)
+      setRangeTargetValue(nextRow, columns, targetColumns, 'rangeMax', null)
+      setRangeTargetValue(nextRow, columns, targetColumns, 'rangeUnit', '')
+    }
+
+    if (!resolutionSource) {
+      setRangeTargetValue(nextRow, columns, targetColumns, 'resolution', null)
+      setRangeTargetValue(nextRow, columns, targetColumns, 'resolutionUnit', '')
+      return nextRow
+    }
+
     setRangeTargetValue(
       nextRow,
       columns,
       targetColumns,
       'resolution',
-      resolved.resolution,
-      resolved.resolutionUnit,
+      resolutionSource?.resolution,
+      resolutionSource?.resolutionUnit,
     )
     setRangeTargetValue(
       nextRow,
       columns,
       targetColumns,
       'resolutionUnit',
-      resolved.resolutionUnit,
+      resolutionSource?.resolutionUnit,
     )
 
     return nextRow
   }
+
+  useEffect(() => {
+    if (!weighingRangeResolver || rows.length === 0) return
+
+    const resolvedRows = rows.map((row) => applyWeighingRangeResolver(row))
+    if (!rowsAreEqual(rows, resolvedRows)) {
+      onChange(resolvedRows)
+    }
+  }, [assetSpecifications, onChange, rows, weighingRangeResolver])
 
   const addRow = () => {
     const newRow: Record<string, unknown> = {}
@@ -365,9 +457,21 @@ export function TableInputRenderer({
     }
 
     const resolvedRange = resolveRowWeighingRange(row)
-    if (resolvedRange) {
+    const configuredRanges = weighingRangeResolver?.assetSpecKey
+      ? assetSpecifications?.[weighingRangeResolver.assetSpecKey]
+      : null
+    const hasConfiguredRanges =
+      Array.isArray(configuredRanges) && configuredRanges.length > 0
+    const resolutionFallback = !hasConfiguredRanges
+      ? getAssetResolutionFallback(assetSpecifications)
+      : null
+    if (resolvedRange || resolutionFallback) {
       const targetColumns = weighingRangeResolver?.targetColumns ?? {}
-      for (const targetKey of Object.values(targetColumns)) {
+      const targetKeys = resolvedRange
+        ? Object.values(targetColumns)
+        : [targetColumns.resolution, targetColumns.resolutionUnit]
+
+      for (const targetKey of targetKeys) {
         if (targetKey) targets.add(targetKey)
       }
     }
