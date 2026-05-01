@@ -203,13 +203,22 @@ async function fetchJobData(
       u.name as approver_name,
       -- Original job info (if this is an amendment)
       original.job_id as original_job_id,
-      original.approved_at as original_approved_at
+      original.approved_at as original_approved_at,
+      service_order_link.inmetro_repair_seal_number
     FROM calibration_job cj
     LEFT JOIN organization o ON cj.organization_id = o.id
     LEFT JOIN customer c ON cj.customer_id = c.id
     LEFT JOIN asset a ON cj.asset_id = a.id
     LEFT JOIN "user" u ON cj.approved_by = u.id
     LEFT JOIN calibration_job original ON cj.supersedes_id = original.id
+    LEFT JOIN LATERAL (
+      SELECT so.inmetro_repair_seal_number
+      FROM service_order_certificate_link socl
+      INNER JOIN service_order so ON so.id = socl.service_order_id
+      WHERE socl.certificate_job_id = cj.id
+      ORDER BY socl.linked_at DESC
+      LIMIT 1
+    ) service_order_link ON true
     WHERE cj.id = $1
     `,
     [jobId],
@@ -342,6 +351,9 @@ async function fetchJobData(
     methodSnapshot: row.method_snapshot,
     assetSnapshot: row.asset_snapshot,
     standardsSnapshot: row.standards_snapshot,
+    serviceOrder: {
+      inmetroRepairSealNumber: row.inmetro_repair_seal_number,
+    },
     environmentalSnapshot: row.environmental_snapshot,
     certificateTemplateSnapshot,
     data: row.data,
@@ -1281,9 +1293,20 @@ async function generatePdfFromHtml(
   html: string,
 ): Promise<Uint8Array> {
   const fullHtml = `<!DOCTYPE html>${html}`;
+  const isFullPageCertificate = html.includes('data-pdf-layout="full-page"');
 
   // Load HTML - use domcontentloaded, NOT networkidle0!
   await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
+
+  if (isFullPageCertificate) {
+    return await page.pdf({
+      format: "A4",
+      printBackground: true,
+      preferCSSPageSize: true,
+      displayHeaderFooter: false,
+      margin: { top: "0", bottom: "0", left: "0", right: "0" },
+    });
+  }
 
   return await page.pdf({
     format: "A4",

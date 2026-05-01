@@ -1,29 +1,29 @@
 {
-    "name": "@calibra-facil/worker",
-    "version": "1.0.0",
-    "type": "module",
-    "scripts": {
-        "dev": "wrangler dev --remote",
-        "deploy": "wrangler deploy"
-    },
-    "dependencies": {
-        "@calibra-facil/db": "workspace:^",
-        "@calibra-facil/documents": "workspace:^",
-        "@calibra-facil/shared": "workspace:^",
-        "@calibra-facil/signing": "workspace:^",
-        "@cloudflare/puppeteer": "^1.0.4",
-        "pg": "^8.16.3",
-        "qrcode": "^1.5.4",
-        "react": "^19.2.3",
-        "react-dom": "^19.2.3"
-    },
-    "devDependencies": {
-        "@cloudflare/workers-types": "^4.20251230.0",
-        "@repo/typescript-config": "workspace:^",
-        "@types/pg": "^8.16.0",
-        "@types/qrcode": "^1.5.5",
-        "@types/react": "^19.2.7",
-        "@types/react-dom": "^19.2.3",
-        "wrangler": "4.54.0"
-    }
+  "name": "@calibra-facil/worker",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local-protocol http",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@calibra-facil/db": "workspace:^",
+    "@calibra-facil/documents": "workspace:^",
+    "@calibra-facil/shared": "workspace:^",
+    "@calibra-facil/signing": "workspace:^",
+    "@cloudflare/puppeteer": "^1.0.4",
+    "pg": "^8.16.3",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251230.0",
+    "@repo/typescript-config": "workspace:^",
+    "@types/pg": "^8.16.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "wrangler": "4.54.0"
+  }
 }

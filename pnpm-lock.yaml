@@ -162,6 +162,8 @@ importers:
         specifier: ^4.54.0
         version: 4.54.0(@cloudflare/workers-types@4.20251230.0)
 
+  apps/pdf-dev: {}
+
   apps/portal:
     dependencies:
       '@base-ui/react':

@@ -1,0 +1,7 @@
+{
+  "name": "@calibra-facil/pdf-dev",
+  "private": true,
+  "scripts": {
+    "dev": "node ../../scripts/pdf-local-dev.mjs"
+  }
+}

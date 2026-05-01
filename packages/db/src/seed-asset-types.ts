@@ -41,6 +41,12 @@ const assetTypes: Array<{
         required: false,
       },
       {
+        key: "portaria",
+        label: "Portaria",
+        type: "text",
+        required: false,
+      },
+      {
         key: "linearity",
         label: "Linearidade",
         type: "number",

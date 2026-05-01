@@ -4,9 +4,10 @@
   "scripts": {
     "build": "turbo run build",
     "check:blocked-deps": "node -e \"const fs=require('fs'); const lock=fs.readFileSync('pnpm-lock.yaml','utf8'); const packagesSection=lock.includes('\\npackages:\\n')?lock.split('\\npackages:\\n')[1]:lock; const blocked=[['axios@1.14.1','Blocked due to compromised Axios release on 2026-03-31'],['axios@0.30.4','Blocked due to compromised Axios release on 2026-03-31'],['plain-crypto-js','Blocked due to malicious transitive package in Axios supply-chain attack']]; const hits=blocked.filter(([pattern])=>packagesSection.includes(pattern)); if(hits.length){console.error('Blocked dependencies detected in pnpm-lock.yaml:'); for(const [pattern,reason] of hits) console.error('- '+pattern+': '+reason); process.exit(1);} console.log('Blocked dependency check passed.');\"",
-    "dev": "turbo run dev --filter=!@calibra-facil/email",
+    "dev": "node scripts/dev.mjs",
     "dev:all": "turbo run dev",
     "dev:email": "pnpm --dir packages/email run dev",
+    "dev:pdf-local": "pnpm --filter @calibra-facil/pdf-dev dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"
