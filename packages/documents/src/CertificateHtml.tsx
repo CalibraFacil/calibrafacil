@@ -2478,6 +2478,30 @@ function formatFor51MassFromG(value: unknown, decimals = 1) {
   return formatFor51Number(numeric === null ? null : numeric / 1000, decimals);
 }
 
+function convertFor51MassToKg(value: unknown, unit: unknown = "g") {
+  const numeric = asNumber(value);
+  if (numeric === null) return null;
+
+  if (isMassMeasurementUnit(unit)) {
+    return convertMassValue(numeric, unit, "kg") ?? null;
+  }
+
+  return numeric / 1000;
+}
+
+function getDecimalPlacesForIncrement(value: number | null) {
+  if (value === null || !Number.isFinite(value) || value <= 0) return null;
+
+  for (let decimals = 0; decimals <= 6; decimals += 1) {
+    const factor = 10 ** decimals;
+    if (Math.abs(Math.round(value * factor) / factor - value) < 1e-12) {
+      return decimals;
+    }
+  }
+
+  return 6;
+}
+
 function formatFor51IntegerMassFromG(value: unknown) {
   const numeric = asNumber(value);
   if (numeric === null) return "";
@@ -2493,8 +2517,26 @@ function formatFor51Date(date: Date | null | string) {
 }
 
 function getFor51DecimalPlaces(job: JobData) {
-  const value = asNumber(job.data?.casas_decimais);
-  return value === null ? 1 : Math.max(0, Math.min(6, Math.trunc(value)));
+  const spec = job.assetSnapshot?.specifications ?? {};
+  const resolutionDecimals = getDecimalPlacesForIncrement(
+    convertFor51MassToKg(spec.resolution, spec.resolutionUnit),
+  );
+
+  if (resolutionDecimals !== null) {
+    return resolutionDecimals;
+  }
+
+  const ranges = Array.isArray(spec.weighingRanges) ? spec.weighingRanges : [];
+  const rangeDecimals = ranges
+    .map((range) => {
+      const item = asRecord(range);
+      return getDecimalPlacesForIncrement(
+        convertFor51MassToKg(item.resolution, item.resolutionUnit),
+      );
+    })
+    .filter((value): value is number => value !== null);
+
+  return rangeDecimals.length > 0 ? Math.max(...rangeDecimals) : 1;
 }
 
 function getFor51Rows(job: JobData, key: string) {
@@ -2507,6 +2549,19 @@ function getFor51ResultValue(job: JobData, key: string, index: number) {
   return Array.isArray(value) ? value[index] : value;
 }
 
+function getFor51RowDecimalPlaces(
+  row: Record<string, unknown>,
+  fallbackDecimals: number,
+) {
+  return (
+    getDecimalPlacesForIncrement(convertFor51MassToKg(row.divisao, "g")) ??
+    getDecimalPlacesForIncrement(
+      convertFor51MassToKg(row.resolution, row.resolutionUnit),
+    ) ??
+    fallbackDecimals
+  );
+}
+
 function getFor51AssetSpec(job: JobData, key: string) {
   return job.assetSnapshot?.specifications?.[key];
 }
@@ -2516,7 +2571,12 @@ function formatFor51Capacity(job: JobData) {
 }
 
 function formatFor51Resolution(job: JobData) {
-  return `${formatFor51MassFromG(getFor51AssetSpec(job, "resolution"), 1)}kg`;
+  const spec = job.assetSnapshot?.specifications ?? {};
+  const resolutionKg = convertFor51MassToKg(
+    spec.resolution,
+    spec.resolutionUnit,
+  );
+  return `${formatFor51Number(resolutionKg, getFor51DecimalPlaces(job))}kg`;
 }
 
 function getFor51Portaria(job: JobData) {
@@ -2649,41 +2709,54 @@ function renderFor51ResultRows(
 
   return (
     <>
-      {pointRows.map((row, index) => (
-        <tr key={`${kind}-${index}`}>
-          <td>{formatFor51IntegerMassFromG(row.valor_padrao)}</td>
-          <td>kg</td>
-          <td>
-            {formatFor51MassFromG(row[`${readingPrefix}_leitura_1`], decimals)}
-          </td>
-          <td>
-            {formatFor51MassFromG(row[`${readingPrefix}_leitura_2`], decimals)}
-          </td>
-          <td>
-            {formatFor51MassFromG(row[`${readingPrefix}_leitura_3`], decimals)}
-          </td>
-          <td>
-            {formatFor51MassFromG(
-              getFor51ResultValue(job, mediaKey, index),
-              decimals,
-            )}
-          </td>
-          <td>
-            {formatFor51MassFromG(
-              getFor51ResultValue(job, errorKey, index),
-              decimals,
-            )}
-          </td>
-          <td>
-            {formatFor51MassFromG(
-              getFor51ResultValue(job, uncertaintyKey, index),
-              decimals,
-            )}
-          </td>
-          <td>{formatFor51K(getFor51ResultValue(job, kKey, index))}</td>
-          <td>{formatFor51Veff(getFor51ResultValue(job, veffKey, index))}</td>
-        </tr>
-      ))}
+      {pointRows.map((row, index) => {
+        const rowDecimals = getFor51RowDecimalPlaces(row, decimals);
+
+        return (
+          <tr key={`${kind}-${index}`}>
+            <td>{formatFor51IntegerMassFromG(row.valor_padrao)}</td>
+            <td>kg</td>
+            <td>
+              {formatFor51MassFromG(
+                row[`${readingPrefix}_leitura_1`],
+                rowDecimals,
+              )}
+            </td>
+            <td>
+              {formatFor51MassFromG(
+                row[`${readingPrefix}_leitura_2`],
+                rowDecimals,
+              )}
+            </td>
+            <td>
+              {formatFor51MassFromG(
+                row[`${readingPrefix}_leitura_3`],
+                rowDecimals,
+              )}
+            </td>
+            <td>
+              {formatFor51MassFromG(
+                getFor51ResultValue(job, mediaKey, index),
+                rowDecimals,
+              )}
+            </td>
+            <td>
+              {formatFor51MassFromG(
+                getFor51ResultValue(job, errorKey, index),
+                rowDecimals,
+              )}
+            </td>
+            <td>
+              {formatFor51MassFromG(
+                getFor51ResultValue(job, uncertaintyKey, index),
+                rowDecimals,
+              )}
+            </td>
+            <td>{formatFor51K(getFor51ResultValue(job, kKey, index))}</td>
+            <td>{formatFor51Veff(getFor51ResultValue(job, veffKey, index))}</td>
+          </tr>
+        );
+      })}
       {Array.from({ length: Math.max(0, 5 - pointRows.length) }).map(
         (_, index) => (
           <tr className="for51-blank-row" key={`${kind}-blank-${index}`}>
