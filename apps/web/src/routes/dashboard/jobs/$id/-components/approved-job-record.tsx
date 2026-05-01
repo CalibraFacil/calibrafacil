@@ -36,13 +36,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import {
   Table,
@@ -52,6 +46,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -64,6 +64,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import {
   convertMassValue,
+  denormalizeAssetSpecificationsForDisplay,
   denormalizeMethodDataForDisplay,
   denormalizeMethodResultsForDisplay,
   formatCalibrationValue,
@@ -72,6 +73,11 @@ import {
 } from '@calibra-facil/shared'
 import { Spinner } from '@/components/ui/spinner'
 import { useMountEffect } from '@/hooks/use-mount-effect'
+import { isMassCompositionValue } from '@/components/method-builder/mass-composition-utils'
+import {
+  formatWeighingRangeSpec,
+  isWeighingRangeSpecArray,
+} from '@/components/method-builder/weighing-range-utils'
 
 interface MethodSnapshot {
   methodId: number
@@ -82,6 +88,12 @@ interface MethodSnapshot {
     label: string
     type: string
     unit?: string
+    source?: string | null
+    assetSpecKey?: string | null
+    weighingRangeResolver?: {
+      enabled?: boolean
+      assetSpecKey?: string
+    } | null
     columns?: Array<{ key: string; label: string; unit?: string }>
   }>
   formulas: Array<{
@@ -100,6 +112,7 @@ interface MethodSnapshot {
 interface StandardSnapshot {
   id: number
   name: string
+  type?: string | null
   certificateNumber: string
   calibrationDate: string
   uncertainty: number | null
@@ -110,6 +123,7 @@ interface StandardSnapshot {
 
 interface AssetSnapshot {
   baseMeasurementUnit?: MassUnit | null
+  specifications?: Record<string, unknown> | null
 }
 
 interface ApprovedJob {
@@ -169,9 +183,16 @@ function formatDateTime(dateString: string | null | undefined): string {
 
 function formatValue(value: unknown, unit?: string): string {
   if (value === null || value === undefined || value === '') return '-'
+  if (isMassCompositionValue(value)) return value.label
   const formatted = formatCalibrationValue(value)
   return unit ? `${formatted} ${unit}` : formatted
 }
+
+const actionButtonClass =
+  'min-h-10 active:scale-[0.96] transition-[background-color,color,box-shadow,border-color,transform]'
+
+const subtleSurfaceClass =
+  'min-w-0 rounded-lg bg-card shadow-[0_1px_2px_rgba(15,23,42,0.06),0_8px_24px_rgba(15,23,42,0.04)] ring-1 ring-black/5'
 
 export function ApprovedJobRecord({
   job,
@@ -213,6 +234,105 @@ export function ApprovedJobRecord({
       ) ?? results,
     [assetBaseMeasurementUnit, methodSnapshot.formulas, results],
   )
+  const assetSpecDefinitions = [
+    ...methodSnapshot.dataFields
+      .filter((field) => field.source === 'asset_spec' && field.assetSpecKey)
+      .map((field) => ({
+        key: field.assetSpecKey!,
+        label: field.label,
+        type: field.type as 'text' | 'number' | 'select' | 'weighing_ranges',
+        unit: field.unit ?? undefined,
+      })),
+    ...methodSnapshot.dataFields
+      .filter((field) => field.weighingRangeResolver?.assetSpecKey)
+      .map((field) => ({
+        key: field.weighingRangeResolver!.assetSpecKey!,
+        label: 'Faixas de pesagem e resolução',
+        type: 'weighing_ranges' as const,
+      })),
+  ]
+  const displayAssetSpecs =
+    denormalizeAssetSpecificationsForDisplay(
+      job.assetSnapshot?.specifications,
+      assetSpecDefinitions,
+      assetBaseMeasurementUnit,
+    ) ?? job.assetSnapshot?.specifications
+  const equipmentSpecItems = assetSpecDefinitions
+    .map((definition) => {
+      const value = displayAssetSpecs?.[definition.key]
+      if (value === null || value === undefined || value === '') return null
+
+      const displayValue =
+        definition.type === 'weighing_ranges' && isWeighingRangeSpecArray(value)
+          ? value.map(formatWeighingRangeSpec).join(' | ')
+          : definition.type === 'number'
+            ? formatValue(value, displayUnitFor(definition.unit))
+            : String(value)
+
+      return {
+        key: definition.key,
+        label: definition.label,
+        value: displayValue,
+      }
+    })
+    .filter((item): item is { key: string; label: string; value: string } =>
+      Boolean(item),
+    )
+  const priorityMeasurementFieldKeys = [
+    'pontos_indicacao',
+    'excentricidade',
+    'repetibilidade',
+  ]
+  const nonAssetDataFields = methodSnapshot.dataFields.filter(
+    (field) => field.source !== 'asset_spec',
+  )
+  const supportContextItems = nonAssetDataFields
+    .filter((field) => !priorityMeasurementFieldKeys.includes(field.key))
+    .map((field) => {
+      const value = displayData?.[field.key]
+      if (
+        value === null ||
+        value === undefined ||
+        value === '' ||
+        field.type === 'table'
+      ) {
+        return null
+      }
+
+      return {
+        key: field.key,
+        label: field.label,
+        value: formatValue(value, displayUnitFor(field.unit)),
+      }
+    })
+    .filter((item): item is { key: string; label: string; value: string } =>
+      Boolean(item),
+    )
+  const timelineContextItems = [
+    { key: 'createdAt', label: 'Criado', value: formatDateTime(job.createdAt) },
+    {
+      key: 'performedAt',
+      label: 'Executado',
+      value: formatDateTime(job.performedAt),
+    },
+    {
+      key: 'approvedAt',
+      label: 'Aprovado',
+      value: formatDateTime(job.approvedAt),
+    },
+  ]
+  const approvedContextItems = [
+    ...equipmentSpecItems,
+    ...supportContextItems,
+    ...timelineContextItems,
+  ]
+  const priorityMeasurementFields = nonAssetDataFields.filter((field) =>
+    priorityMeasurementFieldKeys.includes(field.key),
+  )
+  const measurementFields =
+    priorityMeasurementFields.length > 0
+      ? priorityMeasurementFields
+      : nonAssetDataFields
 
   const fetchCertificateDownloadUrl = useCallback(async () => {
     const res = await api.api.jobs[':id'].download.$get({
@@ -351,38 +471,54 @@ export function ApprovedJobRecord({
 
     if (field.type === 'table' && field.columns && Array.isArray(value)) {
       return (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {field.columns.map((col) => (
-                <TableHead key={col.key}>
-                  {col.label}
-                  {displayUnitFor(col.unit) && (
-                    <span className="text-xs text-muted-foreground ml-1">
-                      ({displayUnitFor(col.unit)})
-                    </span>
-                  )}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(value as Record<string, unknown>[]).map((row, idx) => (
-              <TableRow key={idx}>
-                {field.columns!.map((col) => (
-                  <TableCell key={col.key} className="font-mono">
-                    {formatValue(row[col.key], displayUnitFor(col.unit))}
-                  </TableCell>
+        <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+          <Table className="min-w-max text-[13px]">
+            <TableHeader className="bg-muted/50">
+              <TableRow>
+                {field.columns.map((col) => (
+                  <TableHead
+                    key={col.key}
+                    className="h-11 whitespace-nowrap px-3 text-xs"
+                  >
+                    {col.label}
+                    {displayUnitFor(col.unit) && (
+                      <span className="text-xs text-muted-foreground ml-1">
+                        ({displayUnitFor(col.unit)})
+                      </span>
+                    )}
+                  </TableHead>
                 ))}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {(value as Record<string, unknown>[]).map((row, idx) => (
+                <TableRow key={idx} className="hover:bg-muted/30">
+                  {field.columns!.map((col) => {
+                    const cellValue = row[col.key]
+                    const isComposition = isMassCompositionValue(cellValue)
+                    return (
+                      <TableCell
+                        key={col.key}
+                        className={
+                          isComposition
+                            ? 'min-w-44 max-w-64 whitespace-normal px-3 font-sans text-sm leading-snug'
+                            : 'whitespace-nowrap px-3 font-mono tabular-nums'
+                        }
+                      >
+                        {formatValue(cellValue, displayUnitFor(col.unit))}
+                      </TableCell>
+                    )
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )
     }
 
     return (
-      <span className="font-mono">
+      <span className="font-mono tabular-nums">
         {formatValue(value, displayUnitFor(field.unit))}
       </span>
     )
@@ -398,9 +534,9 @@ export function ApprovedJobRecord({
     const isPassed = value !== undefined && value !== null
 
     return (
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 bg-muted/50 rounded-lg">
+      <div className="flex flex-col gap-3 rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] transition-[background-color,box-shadow] hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <span className="font-medium">
+          <span className="text-sm font-medium">
             {formula.label || formula.outputKey}
           </span>
           {displayUnitFor(formula.unit) && (
@@ -410,7 +546,7 @@ export function ApprovedJobRecord({
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-mono text-base sm:text-lg break-all">
+          <span className="break-all font-mono text-base tabular-nums sm:text-lg">
             {formatValue(value, displayUnitFor(formula.unit))}
           </span>
           {validation && isPassed && (
@@ -440,159 +576,103 @@ export function ApprovedJobRecord({
       {labelPending && !job.labelUrl ? (
         <PendingLabelPoller onRefresh={onRefresh} />
       ) : null}
-      {/* Header - Status & Actions */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-            className="shrink-0"
-          >
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
-            Voltar
-          </Button>
-          <div className="min-w-0">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-xl md:text-2xl font-bold font-mono truncate">
-                {job.jobId}
-              </h1>
-              <Badge
-                variant={job.status === 'SUPERSEDED' ? 'outline' : 'default'}
-                className={
-                  job.status === 'SUPERSEDED'
-                    ? 'border-amber-500 text-amber-700 bg-amber-50 text-sm px-3 py-1 shrink-0'
-                    : 'bg-green-600 text-white text-sm px-3 py-1 shrink-0'
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          className={`${actionButtonClass} w-fit shrink-0`}
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
+          Voltar
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={(props) => (
+              <Button
+                variant="outline"
+                size="icon"
+                className={`${actionButtonClass} size-10 shadow-[0_1px_2px_rgba(15,23,42,0.08)]`}
+                {...props}
+              >
+                <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
+              </Button>
+            )}
+          />
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Distribuição</DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={
+                  job.labelUrl ? handleDownloadLabel : handleGenerateLabel
+                }
+                disabled={
+                  isGeneratingLabel || isDownloadingLabel || labelPending
                 }
               >
-                <HugeiconsIcon
-                  icon={CheckmarkCircle02Icon}
-                  className="h-4 w-4 mr-1"
-                />
-                {job.status === 'SUPERSEDED' ? 'RETIFICADO' : 'APROVADO'}
-              </Badge>
-            </div>
-            <p className="text-muted-foreground text-sm md:text-base truncate">
-              {job.assetName}
-              {job.assetTag && (
-                <span className="font-mono ml-1">({job.assetTag})</span>
-              )}
-            </p>
-          </div>
-        </div>
-
-        {/* Desktop Actions - Hidden on mobile */}
-        <div className="hidden md:flex items-center gap-2 shrink-0">
-          <Button
-            className="bg-primary"
-            onClick={handleDownloadCertificate}
-            disabled={!job.certificateUrl || isDownloading}
-          >
-            {isDownloading ? (
-              <Spinner className="mr-2 h-4 w-4" />
-            ) : (
-              <HugeiconsIcon icon={FileDownloadIcon} className="mr-2 h-4 w-4" />
+                <HugeiconsIcon icon={PrinterIcon} className="h-4 w-4" />
+                {labelPending
+                  ? 'Gerando...'
+                  : job.labelUrl
+                    ? 'Baixar Etiqueta'
+                    : 'Gerar Etiqueta QR'}
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <HugeiconsIcon icon={Mail01Icon} className="h-4 w-4" />
+                Enviar por Email
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            {job.status !== 'SUPERSEDED' && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Mais opções</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    className="text-muted-foreground"
+                    onClick={() => setIsAmendDialogOpen(true)}
+                  >
+                    <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
+                    Retificar Certificado
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </>
             )}
-            Baixar Certificado
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={job.labelUrl ? handleDownloadLabel : handleGenerateLabel}
-            disabled={isGeneratingLabel || isDownloadingLabel || labelPending}
-          >
-            {isGeneratingLabel || isDownloadingLabel || labelPending ? (
-              <Spinner className="mr-2 h-4 w-4" />
-            ) : (
-              <HugeiconsIcon icon={PrinterIcon} className="mr-2 h-4 w-4" />
-            )}
-            {labelPending
-              ? 'Gerando...'
-              : job.labelUrl
-                ? 'Baixar Etiqueta'
-                : 'Gerar Etiqueta QR'}
-          </Button>
-          <Button variant="outline">
-            <HugeiconsIcon icon={Mail01Icon} className="mr-2 h-4 w-4" />
-            Enviar por Email
-          </Button>
-          {job.status !== 'SUPERSEDED' && (
-            <Button
-              variant="ghost"
-              className="text-muted-foreground"
-              onClick={() => setIsAmendDialogOpen(true)}
-            >
-              <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
-              Retificar Certificado
-            </Button>
-          )}
-        </div>
-
-        {/* Mobile Actions - DropdownMenu */}
-        <div className="flex md:hidden gap-2">
-          <Button
-            className="bg-primary flex-1"
-            onClick={handleDownloadCertificate}
-            disabled={!job.certificateUrl || isDownloading}
-          >
-            {isDownloading ? (
-              <Spinner className="mr-2 h-4 w-4" />
-            ) : (
-              <HugeiconsIcon icon={FileDownloadIcon} className="mr-2 h-4 w-4" />
-            )}
-            Baixar Certificado
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={(props) => (
-                <Button variant="outline" size="icon" {...props}>
-                  <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
-                </Button>
-              )}
-            />
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Distribuição</DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={
-                    job.labelUrl ? handleDownloadLabel : handleGenerateLabel
-                  }
-                  disabled={
-                    isGeneratingLabel || isDownloadingLabel || labelPending
-                  }
-                >
-                  <HugeiconsIcon icon={PrinterIcon} className="h-4 w-4" />
-                  {labelPending
-                    ? 'Gerando...'
-                    : job.labelUrl
-                      ? 'Baixar Etiqueta'
-                      : 'Gerar Etiqueta QR'}
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <HugeiconsIcon icon={Mail01Icon} className="h-4 w-4" />
-                  Enviar por Email
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              {job.status !== 'SUPERSEDED' && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>Mais opções</DropdownMenuLabel>
-                    <DropdownMenuItem
-                      className="text-muted-foreground"
-                      onClick={() => setIsAmendDialogOpen(true)}
-                    >
-                      <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
-                      Retificar Certificado
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      <section className="flex flex-col gap-3 border-b border-black/5 px-1 pb-5 sm:flex-row sm:items-end sm:justify-between dark:border-white/10">
+        <div className="min-w-0">
+          <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight">
+            {job.jobId}
+          </h1>
+          <p className="mt-1 text-pretty text-sm text-muted-foreground">
+            {job.serviceName}
+            {methodSnapshot.methodName && (
+              <span className="ml-2 text-xs">
+                ({methodSnapshot.methodName} v{methodSnapshot.methodVersion})
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <Badge
+            variant={job.status === 'SUPERSEDED' ? 'outline' : 'default'}
+            className={
+              job.status === 'SUPERSEDED'
+                ? 'shrink-0 border-amber-500 bg-amber-50 text-amber-700'
+                : 'shrink-0 bg-green-600 text-white'
+            }
+          >
+            <HugeiconsIcon
+              icon={CheckmarkCircle02Icon}
+              className="mr-1 h-3 w-3"
+            />
+            {job.status === 'SUPERSEDED' ? 'Retificado' : 'Aprovado'}
+          </Badge>
+        </div>
+      </section>
 
       {/* Amendment Dialog - ISO 17025 Clause 7.8.4.1 */}
       <Dialog open={isAmendDialogOpen} onOpenChange={setIsAmendDialogOpen}>
@@ -726,76 +806,152 @@ export function ApprovedJobRecord({
         </Card>
       )}
 
-      {/* Two-Column Layout */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left Column: The Evidence (2/3 width) */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Standards Used */}
+      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <main className="min-w-0 space-y-6">
+          <section className={`${subtleSurfaceClass} p-4`}>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Registro aprovado
+                </p>
+                <h2 className="text-balance text-lg font-semibold">
+                  Revisão técnica pronta para distribuição
+                </h2>
+              </div>
+              <Badge variant="outline" className="w-fit">
+                ISO 17025
+              </Badge>
+            </div>
+            <div className="grid gap-px overflow-hidden rounded-lg bg-black/5 md:grid-cols-4">
+              <div className="bg-background p-3">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Cliente
+                </Label>
+                <p className="mt-1 text-sm font-medium">
+                  {job.customerName || '-'}
+                </p>
+              </div>
+              <div className="bg-background p-3">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Ativo
+                </Label>
+                <p className="mt-1 text-sm">
+                  {job.assetName || '-'}
+                  {job.assetTag && (
+                    <span className="ml-1 font-mono text-muted-foreground">
+                      ({job.assetTag})
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div className="bg-background p-3">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Serviço
+                </Label>
+                <p className="mt-1 text-sm">{job.serviceName || '-'}</p>
+              </div>
+              <div className="bg-background p-3">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Método
+                </Label>
+                <p className="mt-1 text-sm">
+                  {methodSnapshot.methodName} v{methodSnapshot.methodVersion}
+                </p>
+              </div>
+            </div>
+            {approvedContextItems.length > 0 && (
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {approvedContextItems.map((item) => (
+                  <div
+                    key={item.key}
+                    className={`min-w-0 rounded-md bg-muted/20 px-3 py-3 ${
+                      item.key.toLowerCase().includes('observ') ||
+                      item.key.toLowerCase().includes('local')
+                        ? 'md:col-span-2 xl:col-span-3'
+                        : ''
+                    }`}
+                  >
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {item.label}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap break-words font-mono text-sm leading-snug tabular-nums">
+                      {item.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
           {standardsSnapshot && standardsSnapshot.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
+            <section className={`${subtleSurfaceClass} p-4`}>
+              <div className="mb-4">
+                <h2 className="text-balance text-base font-semibold">
                   Padrões de Referência Utilizados
-                </CardTitle>
-                <CardDescription>
+                </h2>
+                <p className="text-sm text-muted-foreground">
                   Rastreabilidade metrológica conforme ISO 17025
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {standardsSnapshot.map((std) => (
-                    <div
-                      key={std.id}
-                      className="p-3 bg-muted/30 rounded-lg border border-muted"
-                    >
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <span className="font-medium break-words">
-                            {std.name}
-                          </span>
-                          <p className="text-sm text-muted-foreground break-all">
-                            Certificado: {std.certificateNumber}
+                </p>
+              </div>
+              <div className="grid gap-2">
+                {standardsSnapshot.map((std) => (
+                  <div
+                    key={std.id}
+                    className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] transition-[background-color,box-shadow] hover:bg-muted/20"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <span className="font-medium break-words">
+                          {std.name}
+                        </span>
+                        {std.type && (
+                          <p className="text-xs text-muted-foreground">
+                            {std.type}
                           </p>
-                        </div>
-                        <div className="text-left sm:text-right text-sm shrink-0">
-                          <p>Calibrado em: {formatDate(std.calibrationDate)}</p>
-                          {std.uncertainty != null && (
-                            <p className="font-mono text-muted-foreground">
-                              U ={' '}
-                              {formatCalibrationValue(
-                                assetBaseMeasurementUnit && std.uncertaintyUnit
-                                  ? (convertMassValue(
-                                      std.uncertainty,
-                                      std.uncertaintyUnit,
-                                      assetBaseMeasurementUnit,
-                                    ) ?? std.uncertainty)
-                                  : std.uncertainty,
-                              )}{' '}
-                              {displayUnitFor(std.uncertaintyUnit) || ''} (k=
-                              {std.coverageFactor})
-                            </p>
-                          )}
-                        </div>
+                        )}
+                        <p className="text-sm text-muted-foreground break-all">
+                          Certificado: {std.certificateNumber}
+                        </p>
+                      </div>
+                      <div className="text-left sm:text-right text-sm shrink-0">
+                        <p>Calibrado em: {formatDate(std.calibrationDate)}</p>
+                        {std.uncertainty != null && (
+                          <p className="font-mono tabular-nums text-muted-foreground">
+                            U ={' '}
+                            {formatCalibrationValue(
+                              assetBaseMeasurementUnit && std.uncertaintyUnit
+                                ? (convertMassValue(
+                                    std.uncertainty,
+                                    std.uncertaintyUnit,
+                                    assetBaseMeasurementUnit,
+                                  ) ?? std.uncertainty)
+                                : std.uncertainty,
+                            )}{' '}
+                            {displayUnitFor(std.uncertaintyUnit) || ''} (k=
+                            {std.coverageFactor})
+                          </p>
+                        )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
-          {/* Measurement Data */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Dados de Medição</CardTitle>
-              <CardDescription>
+          <section className={`${subtleSurfaceClass} p-4`}>
+            <div className="mb-4">
+              <h2 className="text-balance text-base font-semibold">
+                Dados de Medição
+              </h2>
+              <p className="text-sm text-muted-foreground">
                 Valores registrados durante a calibração
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {methodSnapshot.dataFields.map((field) => (
+              </p>
+            </div>
+            <div className="space-y-5">
+              {measurementFields.map((field) => (
                 <div key={field.key}>
-                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">
+                  <Label className="mb-2 block text-sm font-medium text-muted-foreground">
                     {field.label}
                     {displayUnitFor(field.unit) && (
                       <span className="text-xs ml-1">
@@ -803,129 +959,54 @@ export function ApprovedJobRecord({
                       </span>
                     )}
                   </Label>
-                  <div className="bg-muted/30 rounded-lg p-3 border border-muted">
+                  <div className="min-w-0 rounded-lg bg-muted/20 p-2">
                     {renderFieldValue(field)}
                   </div>
                 </div>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
-          {/* Results */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Resultados Calculados</CardTitle>
-              <CardDescription>
-                Valores armazenados no momento da aprovação
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {methodSnapshot.formulas.map((formula) => (
-                <div key={formula.outputKey}>{renderResult(formula)}</div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+          <section className={`${subtleSurfaceClass} p-4`}>
+            <Accordion>
+              <AccordionItem value="approved-calculated-results">
+                <AccordionTrigger className="min-h-10 py-0 hover:no-underline">
+                  <div className="min-w-0">
+                    <h2 className="text-balance text-base font-semibold">
+                      Resultados Calculados
+                    </h2>
+                    <p className="text-pretty text-sm font-normal text-muted-foreground">
+                      Valores armazenados no momento da aprovação.
+                    </p>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pt-4">
+                  <div className="space-y-3">
+                    {methodSnapshot.formulas.map((formula) => (
+                      <div key={formula.outputKey}>{renderResult(formula)}</div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </section>
+        </main>
 
-        {/* Right Column: The Context (1/3 width) */}
-        <div className="space-y-6">
-          {/* Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Resumo</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Cliente
-                </Label>
-                <p className="text-sm font-medium">{job.customerName || '-'}</p>
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Serviço
-                </Label>
-                <p className="text-sm">{job.serviceName || '-'}</p>
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Método
-                </Label>
-                <p className="text-sm">
-                  {methodSnapshot.methodName} v{methodSnapshot.methodVersion}
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Técnico Executor
-                </Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="h-8 w-8 bg-muted rounded-full flex items-center justify-center text-xs font-medium">
-                    {job.technicianName?.charAt(0).toUpperCase() || '?'}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">
-                      {job.technicianName || 'Não informado'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDateTime(job.performedAt)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Aprovador
-                </Label>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="h-8 w-8 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs font-medium">
-                    <HugeiconsIcon
-                      icon={CheckmarkCircle02Icon}
-                      className="h-4 w-4"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">
-                      {job.approverName || 'Sistema'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDateTime(job.approvedAt)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Certificate Preview */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-base">Certificado</CardTitle>
-              {job.certificateUrl && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleDownloadCertificate}
-                  disabled={isDownloading}
-                >
-                  {isDownloading ? (
-                    <Spinner className="mr-2 h-3 w-3" />
-                  ) : (
-                    <HugeiconsIcon
-                      icon={FileDownloadIcon}
-                      className="mr-2 h-3 w-3"
-                    />
-                  )}
-                  Download
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent>
+        <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
+          <section className={`${subtleSurfaceClass} overflow-hidden`}>
+            <div className="border-b border-black/5 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Próxima ação
+              </p>
+              <h2 className="text-balance text-base font-semibold">
+                Distribuir certificado
+              </h2>
+            </div>
+            <div className="space-y-3 p-4">
               {job.certificateUrl ? (
                 <div className="space-y-3">
                   <div
-                    className="aspect-[3/4] bg-muted rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                    className="aspect-[3/4] cursor-pointer overflow-hidden rounded-lg bg-muted shadow-[0_1px_2px_rgba(15,23,42,0.08),0_16px_40px_rgba(15,23,42,0.08)] outline outline-1 outline-black/10 transition-[opacity,transform] hover:opacity-95 active:scale-[0.96] dark:outline-white/10"
                     onClick={handleDownloadCertificate}
                   >
                     <iframe
@@ -934,19 +1015,19 @@ export function ApprovedJobRecord({
                       title="Certificate Preview"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground text-center">
+                  <p className="text-center text-xs text-muted-foreground">
                     Clique para abrir em nova aba
                   </p>
                 </div>
               ) : job.status === 'GENERATING_PDF' ? (
-                <div className="aspect-[3/4] bg-muted/50 rounded-lg flex flex-col items-center justify-center gap-3">
+                <div className="flex aspect-[3/4] flex-col items-center justify-center gap-3 rounded-lg bg-muted/50">
                   <Spinner className="h-8 w-8 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
                     Gerando certificado...
                   </p>
                 </div>
               ) : (
-                <div className="aspect-[3/4] bg-muted/50 rounded-lg border-2 border-dashed border-muted flex flex-col items-center justify-center gap-2">
+                <div className="flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted bg-muted/50">
                   <HugeiconsIcon
                     icon={FileDownloadIcon}
                     className="h-8 w-8 text-muted-foreground"
@@ -956,12 +1037,105 @@ export function ApprovedJobRecord({
                   </p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+              <div className="grid gap-2">
+                <Button
+                  className={`${actionButtonClass} w-full justify-start bg-primary`}
+                  onClick={handleDownloadCertificate}
+                  disabled={!job.certificateUrl || isDownloading}
+                >
+                  {isDownloading ? (
+                    <Spinner className="mr-2 h-4 w-4" />
+                  ) : (
+                    <HugeiconsIcon
+                      icon={FileDownloadIcon}
+                      className="mr-2 h-4 w-4"
+                    />
+                  )}
+                  Baixar Certificado
+                </Button>
+                <Button
+                  variant="outline"
+                  className={`${actionButtonClass} w-full justify-start`}
+                  onClick={
+                    job.labelUrl ? handleDownloadLabel : handleGenerateLabel
+                  }
+                  disabled={
+                    isGeneratingLabel || isDownloadingLabel || labelPending
+                  }
+                >
+                  {isGeneratingLabel || isDownloadingLabel || labelPending ? (
+                    <Spinner className="mr-2 h-4 w-4" />
+                  ) : (
+                    <HugeiconsIcon
+                      icon={PrinterIcon}
+                      className="mr-2 h-4 w-4"
+                    />
+                  )}
+                  {labelPending
+                    ? 'Gerando etiqueta...'
+                    : job.labelUrl
+                      ? 'Baixar Etiqueta QR'
+                      : 'Gerar Etiqueta QR'}
+                </Button>
+                <Button
+                  variant="outline"
+                  className={`${actionButtonClass} w-full justify-start`}
+                >
+                  <HugeiconsIcon icon={Mail01Icon} className="mr-2 h-4 w-4" />
+                  Enviar por Email
+                </Button>
+                {job.status !== 'SUPERSEDED' && (
+                  <Button
+                    variant="ghost"
+                    className={`${actionButtonClass} w-full justify-start text-muted-foreground`}
+                    onClick={() => setIsAmendDialogOpen(true)}
+                  >
+                    <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
+                    Retificar Certificado
+                  </Button>
+                )}
+              </div>
+            </div>
+          </section>
 
-          {/* Audit Timeline */}
+          <section className={`${subtleSurfaceClass} p-4`}>
+            <h2 className="mb-3 text-base font-semibold">Responsáveis</h2>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-sm font-medium">
+                  {job.technicianName?.charAt(0).toUpperCase() || '?'}
+                </div>
+                <div className="min-w-0">
+                  <Label className="text-xs font-medium text-muted-foreground">
+                    Técnico Executor
+                  </Label>
+                  <p className="truncate text-sm font-medium">
+                    {job.technicianName || 'Não informado'}
+                  </p>
+                </div>
+              </div>
+              <Separator />
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-700">
+                  <HugeiconsIcon
+                    icon={CheckmarkCircle02Icon}
+                    className="h-4 w-4"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <Label className="text-xs font-medium text-muted-foreground">
+                    Aprovador
+                  </Label>
+                  <p className="truncate text-sm font-medium">
+                    {job.approverName || 'Sistema'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <AuditTimeline events={buildJobTimelineEvents(job)} />
-        </div>
+        </aside>
       </div>
     </div>
   )

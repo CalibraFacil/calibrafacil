@@ -115,6 +115,7 @@ interface ReferenceStandard {
 interface StandardSnapshotItem {
   id: number
   name: string
+  type?: string | null
   certificateNumber: string
   calibrationDate: string
   uncertainty: number | null
