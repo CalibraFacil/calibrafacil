@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 
 interface MassCompositionCellProps {
   value: unknown
@@ -30,6 +31,7 @@ interface MassCompositionCellProps {
   options: MassCompositionOption[]
   config?: MassCompositionConfig
   disabled?: boolean
+  presentation?: 'cell' | 'field'
 }
 
 function optionKey(option: MassCompositionOption): string {
@@ -47,6 +49,7 @@ export function MassCompositionCell({
   options,
   config,
   disabled = false,
+  presentation = 'cell',
 }: MassCompositionCellProps) {
   const [open, setOpen] = useState(false)
   const [selectedKey, setSelectedKey] = useState(() =>
@@ -55,6 +58,7 @@ export function MassCompositionCell({
   const [quantity, setQuantity] = useState('1')
 
   const composition = isMassCompositionValue(value) ? value : null
+  const isFieldPresentation = presentation === 'field'
   const targetUnit = config?.targetUnit ?? composition?.targetUnit ?? 'g'
   const optionSource = config?.optionSource ?? 'certified_values'
   const visibleOptions = useMemo(
@@ -110,9 +114,14 @@ export function MassCompositionCell({
     <>
       <Button
         type="button"
-        variant={composition ? 'outline' : 'ghost'}
-        size="sm"
-        className="h-8 max-w-64 justify-start overflow-hidden px-2"
+        variant={composition || isFieldPresentation ? 'outline' : 'ghost'}
+        size={isFieldPresentation ? 'default' : 'sm'}
+        className={cn(
+          'min-w-0 justify-start overflow-hidden text-left active:scale-[0.96]',
+          isFieldPresentation
+            ? 'h-8 w-full max-w-none px-2.5 font-normal'
+            : 'h-8 max-w-64 px-2',
+        )}
         disabled={disabled}
         onClick={() => {
           if (!selectedOption && visibleOptions[0]) {
@@ -122,7 +131,14 @@ export function MassCompositionCell({
         }}
         title={composition?.label || 'Compor pesos'}
       >
-        <span className="truncate">{composition?.label || 'Compor pesos'}</span>
+        <span
+          className={cn(
+            'min-w-0 truncate',
+            !composition && isFieldPresentation && 'text-muted-foreground',
+          )}
+        >
+          {composition?.label || 'Compor pesos'}
+        </span>
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>

@@ -508,6 +508,7 @@ export function TableInputRenderer({
           options={massCompositionOptions}
           config={col.massComposition}
           disabled={disabled}
+          presentation={shouldUsePanelRows ? 'field' : 'cell'}
         />
       )
     }
@@ -593,7 +594,9 @@ export function TableInputRenderer({
       <div
         key={col.key}
         className={
-          isComposition ? 'space-y-1 md:col-span-2 xl:col-span-1' : 'space-y-1'
+          isComposition
+            ? 'min-w-0 space-y-1 md:col-span-2 xl:col-span-1'
+            : 'min-w-0 space-y-1'
         }
       >
         <label className="text-xs font-medium text-muted-foreground">
