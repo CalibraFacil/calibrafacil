@@ -40,7 +40,7 @@ const UpdateAssignmentsSchema = z.object({
 });
 
 const UpdateMemberRoleSchema = z.object({
-  role: z.enum(["member", "technician", "admin"]),
+  role: z.enum(["member", "operator", "technician", "admin"]),
 });
 
 function slugify(name: string) {
@@ -701,7 +701,6 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
     "/admin/members/:memberId/role",
     ...requireLabProtected,
     requireOrgType("LAB"),
-    requireFeature("multi_unit"),
     zValidator("json", UpdateMemberRoleSchema),
     async (c) => {
       const { memberData, viewer } = getViewerAccess(c);

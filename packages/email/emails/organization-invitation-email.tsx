@@ -15,6 +15,7 @@ const getRoleLabel = (role: string): string => {
     owner: "Proprietario",
     admin: "Administrador",
     member: "Membro",
+    operator: "Operador",
     technician: "Tecnico",
   };
   return roleLabels[role] || role;

@@ -13,6 +13,7 @@ describe("Portal role boundaries", () => {
     expect(PORTAL_ACCESS_ROLES).toContain("client_user");
     expect(PORTAL_ACCESS_ROLES).not.toContain("owner");
     expect(PORTAL_ACCESS_ROLES).not.toContain("admin");
+    expect(PORTAL_ACCESS_ROLES).not.toContain("operator");
     expect(PORTAL_ACCESS_ROLES).not.toContain("technician");
     expect(PORTAL_ACCESS_ROLES).not.toContain("member");
   });
@@ -33,6 +34,7 @@ describe("Portal role boundaries", () => {
     expect(isPortalManageableMemberRole("client_user")).toBe(true);
 
     expect(isPortalAccessRole("owner")).toBe(false);
+    expect(isPortalAccessRole("operator")).toBe(false);
     expect(isPortalVisibleMemberRole("admin")).toBe(false);
     expect(isPortalManageableMemberRole("technician")).toBe(false);
   });
