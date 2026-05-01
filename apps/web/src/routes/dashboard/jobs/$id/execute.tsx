@@ -10,10 +10,9 @@ import {
   Alert02Icon,
   Download01Icon,
   SentIcon,
-  ThermometerIcon,
   DropletIcon,
-  CompassIcon,
 } from '@hugeicons/core-free-icons'
+import { GaugeIcon, ThermometerIcon } from '@phosphor-icons/react'
 import { createEngine, flattenForExecution } from '@calibra-facil/math-engine'
 import type { FormulaContext } from '@calibra-facil/math-engine'
 
@@ -500,7 +499,6 @@ function ExecuteJobForm({
   const [sectionsOpen, setSectionsOpen] = useState({
     standards: true,
     environment: true,
-    assetSpecs: true,
     data: true,
     results: true,
     validations: true,
@@ -1253,67 +1251,187 @@ function ExecuteJobForm({
   }, [job, manualFields, formData, missingAssetSpecFields, validationResults])
 
   const isEditable = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
+  const requiredFields = manualFields.filter((field) => field.required)
+  const completedRequiredFields = requiredFields.filter((field) => {
+    const value = formData[field.key]
+    return value !== undefined && value !== ''
+  })
+  const formulaIssueCount = Object.values(formulaResults).filter(
+    (result) => result.error,
+  ).length
+  const acceptanceIssueCount = validationResults.filter(
+    (result) =>
+      result.error || (result.severity === 'error' && result.passed === false),
+  ).length
+  const totalIssueCount =
+    formulaIssueCount + acceptanceIssueCount + envWarnings.length
+  const environmentStatus =
+    envWarnings.length > 0
+      ? 'Fora do limite'
+      : environment.temperature != null ||
+          environment.humidity != null ||
+          environment.pressure != null
+        ? 'Registrado'
+        : 'Pendente'
+  const assetSpecSummaryItems = displayAssetSpecFields.map((field) => {
+    const rawValue = field.assetSpecKey
+      ? job.assetSnapshot?.specifications?.[field.assetSpecKey]
+      : undefined
+    const value = convertCanonicalValueToDisplayUnit(rawValue, field.unit)
+
+    return {
+      key: field.key,
+      label: field.label,
+      unit: field.unit,
+      value:
+        value !== null && value !== undefined && value !== ''
+          ? formatCalibrationValue(value)
+          : '-',
+    }
+  })
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-[1500px] space-y-6 pb-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="space-y-5">
+        <div className="flex items-center">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => navigate({ to: '/dashboard/jobs' })}
+            className="-ml-2 min-h-10 transition-[background-color,color,transform] active:scale-[0.96]"
           >
             <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
             Voltar
           </Button>
-          <div>
-            <h1 className="text-xl font-bold">{job.jobId}</h1>
-            <p className="text-sm text-muted-foreground">
-              {job.customerName} • {job.assetName} ({job.assetTag})
-            </p>
-          </div>
-          <Badge>{statusLabels[job.status]}</Badge>
         </div>
 
-        {isEditable && (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => saveMutation.mutate()}
-              disabled={
-                saveMutation.isPending || missingAssetSpecFields.length > 0
-              }
-            >
-              <HugeiconsIcon icon={Download01Icon} className="mr-2 h-4 w-4" />
-              {saveMutation.isPending ? 'Salvando...' : 'Salvar Rascunho'}
-            </Button>
-            <Button
-              onClick={() => submitMutation.mutate()}
-              disabled={submitMutation.isPending || !canSubmit}
-            >
-              <HugeiconsIcon icon={SentIcon} className="mr-2 h-4 w-4" />
-              {submitMutation.isPending ? 'Enviando...' : 'Enviar para Revisão'}
-            </Button>
+        <section className="flex flex-col gap-5 border-b border-black/5 px-1 pb-6 xl:flex-row xl:items-start xl:justify-between dark:border-white/10">
+          <div className="min-w-0 space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-balance font-mono text-2xl font-semibold tracking-tight text-foreground">
+                {job.jobId}
+              </h1>
+              <Badge className="shadow-[0_8px_18px_rgba(37,99,235,0.18)]">
+                {statusLabels[job.status]}
+              </Badge>
+            </div>
+            <p className="max-w-3xl text-pretty text-sm text-muted-foreground">
+              {job.customerName} · {job.assetName} ({job.assetTag})
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="h-7 rounded-lg px-2.5">
+                <span className="text-muted-foreground">Padrões</span>
+                <span className="tabular-nums">
+                  {selectedStandardIds.length} selecionado(s)
+                </span>
+              </Badge>
+              <Badge variant="secondary" className="h-7 rounded-lg px-2.5">
+                <span className="text-muted-foreground">Ambiente</span>
+                {environmentStatus}
+              </Badge>
+              <Badge variant="secondary" className="h-7 rounded-lg px-2.5">
+                <span className="text-muted-foreground">Obrigatórios</span>
+                <span className="tabular-nums">
+                  {completedRequiredFields.length}/{requiredFields.length}
+                </span>
+              </Badge>
+              <Badge
+                variant={totalIssueCount > 0 ? 'destructive' : 'secondary'}
+                className={`h-7 rounded-lg px-2.5 ${
+                  totalIssueCount === 0
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+                    : ''
+                }`}
+              >
+                <span className="opacity-70">Alertas</span>
+                <span className="tabular-nums">{totalIssueCount}</span>
+              </Badge>
+            </div>
+
+            {assetSpecSummaryItems.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Características do instrumento
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {assetSpecSummaryItems.map((item) => (
+                    <span
+                      key={item.key}
+                      className="inline-flex min-h-8 items-center gap-2 rounded-lg bg-muted/50 px-2.5 text-sm shadow-[inset_0_0_0_1px_rgba(0,0,0,0.04)]"
+                    >
+                      <span className="text-muted-foreground">
+                        {item.label}
+                      </span>
+                      <span className="font-mono tabular-nums">
+                        {item.value}
+                        {item.unit && (
+                          <span className="ml-1 font-sans text-xs text-muted-foreground">
+                            {item.unit}
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+                {missingAssetSpecFields.length > 0 && (
+                  <div className="space-y-1">
+                    {missingAssetSpecFields.map((field) => (
+                      <p key={field.key} className="text-sm text-red-600">
+                        O ativo não possui a especificação obrigatória "
+                        {field.label}".
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
+
+          {isEditable && (
+            <div className="flex flex-col gap-2 sm:flex-row xl:pt-10">
+              <Button
+                variant="outline"
+                onClick={() => saveMutation.mutate()}
+                disabled={
+                  saveMutation.isPending || missingAssetSpecFields.length > 0
+                }
+                className="h-10 justify-center px-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)] active:scale-[0.96]"
+              >
+                <HugeiconsIcon icon={Download01Icon} className="mr-2 h-4 w-4" />
+                {saveMutation.isPending ? 'Salvando...' : 'Salvar Rascunho'}
+              </Button>
+              <Button
+                onClick={() => submitMutation.mutate()}
+                disabled={submitMutation.isPending || !canSubmit}
+                className="h-10 justify-center px-3 shadow-[0_12px_28px_rgba(37,99,235,0.22)] active:scale-[0.96]"
+              >
+                <HugeiconsIcon icon={SentIcon} className="mr-2 h-4 w-4" />
+                {submitMutation.isPending
+                  ? 'Enviando...'
+                  : 'Enviar para Revisão'}
+              </Button>
+            </div>
+          )}
+        </section>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         {/* Left Column: Data Entry */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="min-w-0 space-y-5">
           {/* Reference Standards */}
-          <Card>
+          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
             <Collapsible
               open={sectionsOpen.standards}
               onOpenChange={(open) =>
                 setSectionsOpen((s) => ({ ...s, standards: open }))
               }
             >
-              <CollapsibleTrigger className="w-full">
-                <CardHeader className="cursor-pointer">
+              <CollapsibleTrigger className="group w-full text-left outline-none">
+                <CardHeader className="min-h-16 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">
+                    <CardTitle className="text-balance text-base">
                       Padrões de Referência
                       {selectedStandardIds.length > 0 && (
                         <Badge variant="secondary" className="ml-2">
@@ -1323,10 +1441,10 @@ function ExecuteJobForm({
                     </CardTitle>
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
-                      className={`h-4 w-4 transition-transform ${sectionsOpen.standards ? 'rotate-180' : ''}`}
+                      className={`h-4 w-4 transition-transform duration-200 ${sectionsOpen.standards ? 'rotate-180' : ''}`}
                     />
                   </div>
-                  <CardDescription>
+                  <CardDescription className="max-w-3xl text-pretty">
                     {hasMassCompositionColumns
                       ? 'Selecione padrões usados fora da composição de pesos, como estação meteorológica, termohigrômetro ou barômetro. Pesos escolhidos em Composição dos pesos entram automaticamente no certificado.'
                       : 'Selecione os padrões usados nesta calibração'}
@@ -1334,22 +1452,26 @@ function ExecuteJobForm({
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="pt-0">
-                  <div className="grid gap-2">
+                <CardContent className="px-5 pb-5 pt-0">
+                  <div className="grid gap-2 lg:grid-cols-2">
                     {standardsData.map((std) => (
-                      <div
+                      <button
+                        type="button"
                         key={std.id}
-                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                        disabled={std.isExpired}
+                        className={`min-h-16 rounded-xl px-4 py-3 text-left shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07)] transition-[background-color,box-shadow,transform,opacity] active:scale-[0.96] ${
                           selectedStandardIds.includes(std.id)
-                            ? 'border-primary bg-primary/5'
-                            : 'hover:bg-muted/50'
-                        } ${std.isExpired ? 'opacity-50' : ''}`}
+                            ? 'bg-primary/5 ring-1 ring-primary shadow-[0_12px_30px_rgba(37,99,235,0.10)]'
+                            : 'bg-background hover:bg-muted/40 hover:shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08),0_10px_28px_rgba(15,23,42,0.05)]'
+                        } ${std.isExpired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                         onClick={() => !std.isExpired && toggleStandard(std.id)}
                       >
                         <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-medium">{std.name}</span>
-                            <p className="text-xs text-muted-foreground">
+                          <div className="min-w-0">
+                            <span className="block truncate font-medium">
+                              {std.name}
+                            </span>
+                            <p className="mt-1 truncate text-xs text-muted-foreground tabular-nums">
                               Cert: {std.certificateNumber}
                               {std.uncertainty != null &&
                                 ` | U: ${formatCalibrationValue(
@@ -1379,7 +1501,7 @@ function ExecuteJobForm({
                             )}
                           </div>
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </CardContent>
@@ -1388,17 +1510,17 @@ function ExecuteJobForm({
           </Card>
 
           {/* Environmental Conditions */}
-          <Card>
+          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
             <Collapsible
               open={sectionsOpen.environment}
               onOpenChange={(open) =>
                 setSectionsOpen((s) => ({ ...s, environment: open }))
               }
             >
-              <CollapsibleTrigger className="w-full">
-                <CardHeader className="cursor-pointer">
+              <CollapsibleTrigger className="group w-full text-left outline-none">
+                <CardHeader className="min-h-16 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">
+                    <CardTitle className="text-balance text-base">
                       Condições Ambientais
                       {envWarnings.length > 0 && (
                         <Badge variant="destructive" className="ml-2">
@@ -1408,18 +1530,18 @@ function ExecuteJobForm({
                     </CardTitle>
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
-                      className={`h-4 w-4 transition-transform ${sectionsOpen.environment ? 'rotate-180' : ''}`}
+                      className={`h-4 w-4 transition-transform duration-200 ${sectionsOpen.environment ? 'rotate-180' : ''}`}
                     />
                   </div>
-                  <CardDescription>
+                  <CardDescription className="text-pretty">
                     Registre temperatura, umidade e pressão do ambiente
                   </CardDescription>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="pt-0 space-y-4">
+                <CardContent className="space-y-4 px-5 pb-5 pt-0">
                   {envWarnings.length > 0 && (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
+                    <div className="rounded-xl bg-amber-50 p-3 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)] dark:bg-amber-950">
                       {envWarnings.map((w, i) => (
                         <div
                           key={i}
@@ -1434,12 +1556,12 @@ function ExecuteJobForm({
                       ))}
                     </div>
                   )}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <Field>
                       <FieldLabel className="flex items-center gap-1.5">
-                        <HugeiconsIcon
-                          icon={ThermometerIcon}
-                          className="h-3.5 w-3.5 text-orange-500"
+                        <ThermometerIcon
+                          size={14}
+                          className="text-orange-500"
                         />
                         Temperatura
                       </FieldLabel>
@@ -1541,10 +1663,7 @@ function ExecuteJobForm({
                     </Field>
                     <Field>
                       <FieldLabel className="flex items-center gap-1.5">
-                        <HugeiconsIcon
-                          icon={CompassIcon}
-                          className="h-3.5 w-3.5 text-purple-500"
-                        />
+                        <GaugeIcon size={14} className="text-purple-500" />
                         Pressão
                       </FieldLabel>
                       <div className="flex">
@@ -1597,115 +1716,33 @@ function ExecuteJobForm({
             </Collapsible>
           </Card>
 
-          {assetSpecFields.length > 0 && (
-            <Card>
-              <Collapsible
-                open={sectionsOpen.assetSpecs}
-                onOpenChange={(open) =>
-                  setSectionsOpen((s) => ({ ...s, assetSpecs: open }))
-                }
-              >
-                <CollapsibleTrigger className="w-full">
-                  <CardHeader className="cursor-pointer">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">
-                        Características do instrumento usadas no cálculo
-                        {missingAssetSpecFields.length > 0 && (
-                          <Badge variant="destructive" className="ml-2">
-                            Incompleto
-                          </Badge>
-                        )}
-                      </CardTitle>
-                      <HugeiconsIcon
-                        icon={ArrowDown01Icon}
-                        className={`h-4 w-4 transition-transform ${sectionsOpen.assetSpecs ? 'rotate-180' : ''}`}
-                      />
-                    </div>
-                    <CardDescription>
-                      Dados carregados do cadastro do ativo e congelados no job.
-                    </CardDescription>
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="pt-0 space-y-3">
-                    {missingAssetSpecFields.map((field) => (
-                      <div
-                        key={field.key}
-                        className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
-                      >
-                        O ativo não possui a especificação obrigatória "
-                        {field.label}". Atualize o cadastro do ativo antes de
-                        executar a calibração.
-                      </div>
-                    ))}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {displayAssetSpecFields.map((field) => {
-                        const rawValue = field.assetSpecKey
-                          ? job.assetSnapshot?.specifications?.[
-                              field.assetSpecKey
-                            ]
-                          : undefined
-                        const value = convertCanonicalValueToDisplayUnit(
-                          rawValue,
-                          field.unit,
-                        )
-                        return (
-                          <div
-                            key={field.key}
-                            className="rounded-md border p-3"
-                          >
-                            <p className="text-xs text-muted-foreground">
-                              {field.label}
-                            </p>
-                            <p className="font-mono text-sm">
-                              {value !== null &&
-                              value !== undefined &&
-                              value !== ''
-                                ? formatCalibrationValue(value)
-                                : '-'}
-                              {field.unit && (
-                                <span className="text-xs text-muted-foreground ml-1">
-                                  {field.unit}
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </CardContent>
-                </CollapsibleContent>
-              </Collapsible>
-            </Card>
-          )}
-
           {/* Data Entry Form */}
-          <Card>
+          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
             <Collapsible
               open={sectionsOpen.data}
               onOpenChange={(open) =>
                 setSectionsOpen((s) => ({ ...s, data: open }))
               }
             >
-              <CollapsibleTrigger className="w-full">
-                <CardHeader className="cursor-pointer">
+              <CollapsibleTrigger className="group w-full text-left outline-none">
+                <CardHeader className="min-h-16 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">
+                    <CardTitle className="text-balance text-base">
                       Dados de Medição ({manualFields.length})
                     </CardTitle>
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
-                      className={`h-4 w-4 transition-transform ${sectionsOpen.data ? 'rotate-180' : ''}`}
+                      className={`h-4 w-4 transition-transform duration-200 ${sectionsOpen.data ? 'rotate-180' : ''}`}
                     />
                   </div>
-                  <CardDescription>
+                  <CardDescription className="text-pretty">
                     {job.methodSnapshot.methodName} v
                     {job.methodSnapshot.methodVersion}
                   </CardDescription>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="pt-0 space-y-4">
+                <CardContent className="space-y-5 px-5 pb-5 pt-0">
                   {showEccentricityIndicator &&
                     eccentricityFields.length === 0 && (
                       <EccentricityIndicator
@@ -1723,45 +1760,56 @@ function ExecuteJobForm({
         </div>
 
         {/* Right Column: Results & Validations */}
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start">
           {/* Formula Results */}
-          <Card>
+          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
             <Collapsible
               open={sectionsOpen.results}
               onOpenChange={(open) =>
                 setSectionsOpen((s) => ({ ...s, results: open }))
               }
             >
-              <CollapsibleTrigger className="w-full">
-                <CardHeader className="cursor-pointer">
+              <CollapsibleTrigger className="group w-full text-left outline-none">
+                <CardHeader className="min-h-14 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">
+                    <CardTitle className="text-balance text-base">
                       Resultados ({job.methodSnapshot.formulas.length})
                     </CardTitle>
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
-                      className={`h-4 w-4 transition-transform ${sectionsOpen.results ? 'rotate-180' : ''}`}
+                      className={`h-4 w-4 transition-transform duration-200 ${sectionsOpen.results ? 'rotate-180' : ''}`}
                     />
                   </div>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="pt-0 space-y-2">
+                <CardContent className="max-h-[560px] space-y-2 overflow-auto px-5 pb-5 pt-0">
                   {job.methodSnapshot.formulas.map((formula) => {
                     const result = formulaResults[formula.outputKey]
                     return (
                       <div
                         key={formula.outputKey}
-                        className="p-2 border rounded"
+                        className={`rounded-xl px-3 py-2.5 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] transition-[background-color,box-shadow] ${
+                          result?.error
+                            ? 'bg-red-50 text-red-900 dark:bg-red-950/30 dark:text-red-200'
+                            : 'bg-muted/40 hover:bg-background hover:shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07),0_8px_24px_rgba(15,23,42,0.05)]'
+                        }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-sm">
-                            {formula.label || formula.outputKey}
-                          </span>
+                        <div className="grid min-w-0 gap-1.5">
+                          <div className="flex min-w-0 items-start justify-between gap-3">
+                            <span className="min-w-0 text-pretty text-sm font-medium leading-snug">
+                              {formula.label || formula.outputKey}
+                            </span>
+                            {result?.error && (
+                              <Badge variant="destructive">Erro</Badge>
+                            )}
+                          </div>
                           {result?.error ? (
-                            <Badge variant="destructive">Erro</Badge>
+                            <p className="text-pretty text-xs text-red-600 dark:text-red-300">
+                              {result.error}
+                            </p>
                           ) : result?.value !== undefined ? (
-                            <span className="font-mono text-sm">
+                            <span className="block max-w-full overflow-hidden rounded-lg bg-background/80 px-2 py-1 font-mono text-sm leading-relaxed tabular-nums [overflow-wrap:anywhere]">
                               {result.displayValue}
                               {displayUnitFor(formula.unit) && (
                                 <span className="text-xs text-muted-foreground ml-1">
@@ -1770,14 +1818,11 @@ function ExecuteJobForm({
                               )}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground">-</span>
+                            <span className="text-sm text-muted-foreground">
+                              -
+                            </span>
                           )}
                         </div>
-                        {result?.error && (
-                          <p className="text-xs text-red-500 mt-1">
-                            {result.error}
-                          </p>
-                        )}
                       </div>
                     )
                   })}
@@ -1787,40 +1832,40 @@ function ExecuteJobForm({
           </Card>
 
           {/* Validations */}
-          <Card>
+          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
             <Collapsible
               open={sectionsOpen.validations}
               onOpenChange={(open) =>
                 setSectionsOpen((s) => ({ ...s, validations: open }))
               }
             >
-              <CollapsibleTrigger className="w-full">
-                <CardHeader className="cursor-pointer">
+              <CollapsibleTrigger className="group w-full text-left outline-none">
+                <CardHeader className="min-h-14 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">
+                    <CardTitle className="text-balance text-base">
                       Critérios de Aceitação (
                       {job.methodSnapshot.validations.length})
                     </CardTitle>
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
-                      className={`h-4 w-4 transition-transform ${sectionsOpen.validations ? 'rotate-180' : ''}`}
+                      className={`h-4 w-4 transition-transform duration-200 ${sectionsOpen.validations ? 'rotate-180' : ''}`}
                     />
                   </div>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="pt-0 space-y-2">
+                <CardContent className="space-y-2 px-5 pb-5 pt-0">
                   {validationResults.map((result, idx) => (
                     <div
                       key={idx}
-                      className={`p-2 border rounded ${
+                      className={`rounded-xl px-3 py-2.5 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] ${
                         result.error
-                          ? 'bg-amber-50 border-amber-200'
+                          ? 'bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200'
                           : result.passed
-                            ? 'bg-green-50 border-green-200'
+                            ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200'
                             : result.severity === 'error'
-                              ? 'bg-red-50 border-red-200'
-                              : 'bg-amber-50 border-amber-200'
+                              ? 'bg-red-50 text-red-900 dark:bg-red-950/30 dark:text-red-200'
+                              : 'bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200'
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -1837,7 +1882,9 @@ function ExecuteJobForm({
                             className={`h-4 w-4 ${result.severity === 'error' ? 'text-red-600' : 'text-amber-600'}`}
                           />
                         )}
-                        <span className="text-sm">{result.message}</span>
+                        <span className="text-pretty text-sm">
+                          {result.message}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -1847,29 +1894,29 @@ function ExecuteJobForm({
           </Card>
 
           {/* Debug Context */}
-          <Card>
+          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
             <Collapsible
               open={sectionsOpen.debug}
               onOpenChange={(open) =>
                 setSectionsOpen((s) => ({ ...s, debug: open }))
               }
             >
-              <CollapsibleTrigger className="w-full">
-                <CardHeader className="cursor-pointer">
+              <CollapsibleTrigger className="group w-full text-left outline-none">
+                <CardHeader className="min-h-14 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base text-muted-foreground">
                       Debug: Contexto
                     </CardTitle>
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
-                      className={`h-4 w-4 text-muted-foreground transition-transform ${sectionsOpen.debug ? 'rotate-180' : ''}`}
+                      className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${sectionsOpen.debug ? 'rotate-180' : ''}`}
                     />
                   </div>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <CardContent className="pt-0">
-                  <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-48">
+                <CardContent className="px-5 pb-5 pt-0">
+                  <pre className="max-h-48 overflow-auto rounded-xl bg-muted p-3 text-xs">
                     {JSON.stringify(context, null, 2)}
                   </pre>
                 </CardContent>
