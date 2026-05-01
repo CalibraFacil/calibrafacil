@@ -112,7 +112,7 @@ interface OrganizationUnit {
 
 type UnitAssignmentRole = 'member' | 'technician' | 'unit_admin'
 type EditableUnitAssignmentRole = UnitAssignmentRole | 'none'
-const GLOBAL_MEMBER_ROLES = ['member', 'technician', 'admin'] as const
+const GLOBAL_MEMBER_ROLES = ['member', 'operator', 'technician', 'admin'] as const
 type GlobalMemberRole = (typeof GLOBAL_MEMBER_ROLES)[number]
 const GLOBAL_MEMBER_ROLE_SET = new Set<string>(GLOBAL_MEMBER_ROLES)
 
@@ -293,6 +293,7 @@ function OrganizationSettingsPage({
 
   const availableRoles = [
     { value: 'member', label: 'Membro' },
+    { value: 'operator', label: 'Operador' },
     { value: 'technician', label: 'Técnico' },
     { value: 'admin', label: 'Administrador' },
   ] as const satisfies ReadonlyArray<{
@@ -610,7 +611,7 @@ function OrganizationSettingsPage({
       role,
     }: {
       memberId: string
-      role: 'member' | 'technician' | 'admin'
+      role: GlobalMemberRole
     }) => {
       const response = await api.api.units.admin.members[':memberId'].role.$patch({
         param: { memberId },
@@ -727,7 +728,7 @@ function OrganizationSettingsPage({
     try {
       const result = await authClient.organization.inviteMember({
         email: inviteEmail.trim(),
-        role: inviteRole as 'member' | 'admin' | 'technician',
+        role: inviteRole as GlobalMemberRole,
         organizationId: activeOrg.id,
       })
       if (result.error) {
@@ -846,6 +847,7 @@ function OrganizationSettingsPage({
       owner: 'Proprietário',
       admin: 'Administrador',
       member: 'Membro',
+      operator: 'Operador',
       technician: 'Técnico',
       client_user: 'Cliente',
     }

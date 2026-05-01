@@ -100,6 +100,7 @@ function AcceptInvitationPage() {
   const roleLabels: Record<string, string> = {
     owner: "Proprietário",
     admin: "Administrador",
+    operator: "Operador",
     technician: "Técnico",
     member: "Membro",
   };

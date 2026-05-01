@@ -25,8 +25,9 @@ import {
  * 1. owner       - Full administrative control, can delete organization
  * 2. admin       - Full operational control (Manager role in workflows)
  * 3. technician  - Execute calibrations, submit for review
- * 4. member      - Basic read-only access (default role for new members)
- * 5. client_user - External client portal access
+ * 4. operator    - Transcribe/submit calibration data on behalf of technicians
+ * 5. member      - Basic read-only access (default role for new members)
+ * 6. client_user - External client portal access
  *
  * WORKFLOW PERMISSIONS (ISO 17025 Separation of Duties):
  * - Draft state: technician can edit, submit
@@ -60,8 +61,10 @@ export const statements = {
    * Actions:
    * - create: Start a new calibration job
    * - read: View calibration details
-   * - update: Modify calibration data (in draft/review)
+   * - update: Modify calibration metadata (in draft/review)
    * - delete: Remove a calibration (only in draft)
+   * - assign_technician: Assign a competent technician to the calibration
+   * - execute: Enter execution data and move a draft into progress
    * - submit: Transition from Draft -> Review
    * - approve: Transition from Review -> Approved (creates Deep Freeze snapshot)
    * - reject: Transition from Review -> Draft
@@ -71,6 +74,8 @@ export const statements = {
     "read",
     "update",
     "delete",
+    "assign_technician",
+    "execute",
     "submit",
     "approve",
     "reject",
@@ -341,6 +346,39 @@ export const member = ac.newRole({
 });
 
 /**
+ * OPERATOR ROLE
+ * - Create calibration jobs, assign qualified technicians, transcribe worksheet data,
+ *   and submit work for review
+ * - Cannot approve/reject, delete jobs, or manage technical master data
+ */
+export const operator = ac.newRole({
+  // Inherit default member permissions for organization management
+  ...memberAc.statements,
+
+  calibration: ["create", "read", "assign_technician", "execute", "submit"],
+  request: ["read"],
+  template: ["read"],
+  standard: ["read"],
+  equipment: ["read"],
+  client: ["read"],
+  certificate: ["read", "download", "verify"],
+  report: ["read"],
+  audit: ["read"],
+  settings: ["read"],
+  service: ["read"],
+  service_order: [
+    "read",
+    "create",
+    "update",
+    "print_intake_document",
+    "print_tag",
+  ],
+  non_conformance: ["read"],
+  capa: ["read"],
+  competence: ["read"],
+});
+
+/**
  * TECHNICIAN ROLE
  * - Execute calibrations: create, edit drafts, submit for review
  * - Cannot approve or reject (manager responsibility - ISO 17025 separation of duties)
@@ -358,7 +396,15 @@ export const technician = ac.newRole({
   // - Can delete calibrations in Draft state (enforced at application level)
   // - Can submit for review (Draft -> Review)
   // - CANNOT approve or reject (manager only - ISO 17025 clause 6.2.4)
-  calibration: ["create", "read", "update", "delete", "submit"],
+  calibration: [
+    "create",
+    "read",
+    "update",
+    "delete",
+    "assign_technician",
+    "execute",
+    "submit",
+  ],
   request: ["read", "update", "convert"],
 
   // Read-only access to templates (cannot modify calculation logic)
@@ -423,6 +469,8 @@ export const admin = ac.newRole({
     "read",
     "update",
     "delete",
+    "assign_technician",
+    "execute",
     "submit",
     "approve",
     "reject",
@@ -523,6 +571,8 @@ export const owner = ac.newRole({
     "read",
     "update",
     "delete",
+    "assign_technician",
+    "execute",
     "submit",
     "approve",
     "reject",
@@ -649,6 +699,7 @@ export const roles = {
   owner,
   admin,
   technician,
+  operator,
   member,
   client_user,
 } as const;
@@ -672,6 +723,7 @@ export const DEFAULT_ROLE: RoleName = "member";
 export const ROLE_HIERARCHY: RoleName[] = [
   "client_user",
   "member",
+  "operator",
   "technician",
   "admin",
   "owner",
@@ -682,6 +734,7 @@ export const ROLE_HIERARCHY: RoleName[] = [
  */
 export const INTERNAL_ROLES: RoleName[] = [
   "member",
+  "operator",
   "technician",
   "admin",
   "owner",
@@ -737,6 +790,7 @@ export function isPortalManageableMemberRole(
  */
 export const roleLabels: Record<RoleName, string> = {
   member: "Membro",
+  operator: "Operador",
   technician: "Tecnico",
   admin: "Administrador",
   owner: "Proprietario",
@@ -748,6 +802,8 @@ export const roleLabels: Record<RoleName, string> = {
  */
 export const roleDescriptions: Record<RoleName, string> = {
   member: "Acesso somente leitura aos dados do laboratório",
+  operator:
+    "Cria jobs, atribui técnicos e lança dados de calibração para revisão",
   technician: "Executa calibrações e gerencia ativos e clientes",
   admin: "Controle operacional completo, aprova e rejeita calibrações",
   owner: "Controle total incluindo faturamento e exclusão da organização",
@@ -828,9 +884,9 @@ export const calibrationWorkflowPermissions: Record<
   Record<`can${Capitalize<CalibrationAction>}`, RoleName[]>
 > = {
   draft: {
-    canEdit: ["technician", "admin", "owner"],
+    canEdit: ["operator", "technician", "admin", "owner"],
     canDelete: ["technician", "admin", "owner"],
-    canSubmit: ["technician", "admin", "owner"],
+    canSubmit: ["operator", "technician", "admin", "owner"],
     canApprove: [],
     canReject: [],
   },
@@ -857,9 +913,9 @@ export const calibrationWorkflowPermissions: Record<
     canReject: [],
   },
   rejected: {
-    canEdit: ["technician", "admin", "owner"], // Can revise after rejection
+    canEdit: ["operator", "technician", "admin", "owner"], // Can revise after rejection
     canDelete: ["technician", "admin", "owner"],
-    canSubmit: ["technician", "admin", "owner"],
+    canSubmit: ["operator", "technician", "admin", "owner"],
     canApprove: [],
     canReject: [],
   },

@@ -490,10 +490,11 @@ async function buildEnvironmentalSnapshot(
  * Permissions:
  * - GET /: calibration:read (all roles)
  * - GET /:id: calibration:read (all roles)
- * - POST /: calibration:create (LAB only - technician, admin, owner)
+ * - POST /: calibration:create (LAB only - operator, technician, admin, owner)
  * - PUT /:id: calibration:update (LAB only)
  * - DELETE /:id: calibration:delete (LAB only) - sets status to CANCELED
- * - POST /:id/assign: calibration:update (LAB only)
+ * - POST /:id/assign: calibration:assign_technician (LAB only)
+ * - POST /:id/execute: calibration:execute (LAB only)
  * - POST /:id/submit: calibration:submit (LAB only)
  * - POST /:id/approve: calibration:approve (admin, owner only)
  * - POST /:id/reject: calibration:reject (admin, owner only)
@@ -1104,7 +1105,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .post(
     "/:id/assign",
-    ...withLabPermission({ calibration: ["update"] }),
+    ...withLabPermission({ calibration: ["assign_technician"] }),
     withInvalidation("jobs"),
     zValidator("json", AssignTechnicianSchema),
     async (c) => {
@@ -1440,7 +1441,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .post(
     "/:id/execute",
-    ...withLabPermission({ calibration: ["update"] }),
+    ...withLabPermission({ calibration: ["execute"] }),
     withInvalidation("jobs"),
     zValidator("json", ExecuteJobSchema),
     async (c) => {
