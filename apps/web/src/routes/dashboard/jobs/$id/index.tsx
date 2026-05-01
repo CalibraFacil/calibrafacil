@@ -20,13 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { Spinner } from '@/components/ui/spinner'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -862,59 +856,16 @@ function JobDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate({ to: '/dashboard/jobs' })}
-          >
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
-            Voltar
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Execute button */}
-          {canExecute && (
-            <Button
-              render={<Link to="/dashboard/jobs/$id/execute" params={{ id }} />}
-            >
-              <HugeiconsIcon icon={Calendar03Icon} className="mr-2 h-4 w-4" />
-              {job.status === 'DRAFT'
-                ? 'Iniciar Execução'
-                : 'Continuar Execução'}
-            </Button>
-          )}
-
-          {/* Assign technician */}
-          {canAssign && (
-            <Button variant="outline" onClick={() => setAssignDialogOpen(true)}>
-              <HugeiconsIcon icon={UserAdd01Icon} className="mr-2 h-4 w-4" />
-              Atribuir Técnico
-            </Button>
-          )}
-
-          {/* Edit button */}
-          {job.status === 'DRAFT' && (
-            <Button variant="outline">
-              <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
-              Editar
-            </Button>
-          )}
-
-          {/* Cancel button */}
-          {canCancel && !canApprove && (
-            <Button
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setCancelDialogOpen(true)}
-            >
-              <HugeiconsIcon icon={Cancel01Icon} className="mr-2 h-4 w-4" />
-              Cancelar
-            </Button>
-          )}
-        </div>
+      <div className="flex items-center">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate({ to: '/dashboard/jobs' })}
+          className="min-h-10 active:scale-[0.96] transition-[background-color,color,transform]"
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
+          Voltar
+        </Button>
       </div>
 
       {/* Amendment Info Banner - ISO 17025 Clause 7.8.4.1 */}
@@ -1490,205 +1441,378 @@ function JobDetailPage() {
           </div>
         </>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Contexto Financeiro</CardTitle>
-              <CardDescription>
-                Visibilidade operacional da cobrança vinculada à calibração.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">
-                  Status financeiro
-                </label>
-                <p className="text-sm">
-                  {getFinancialStatusLabel(
-                    financialStatus as
-                      | 'UNBILLED'
-                      | 'DRAFT'
-                      | 'ISSUED'
-                      | 'PAID'
-                      | 'OVERDUE',
-                  )}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">
-                  Elegível para cobrança
-                </label>
-                <p className="text-sm">
-                  {job.invoiceEligibility ? 'Sim' : 'Não'}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">
-                  Documento vinculado
-                </label>
-                <p className="text-sm">
-                  {job.invoiceDocumentNumber || 'Ainda não faturada'}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Customer & Asset */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Cliente e Ativo</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">
-                  Cliente
-                </label>
-                <p className="text-sm">{job.customerName || '-'}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">
-                  Ativo
-                </label>
-                <p className="text-sm">
-                  {job.assetName}
-                  {job.assetTag && (
-                    <span className="font-mono text-muted-foreground ml-2">
-                      ({job.assetTag})
-                    </span>
-                  )}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Dates & Assignment */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Datas e Atribuição</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">
-                  Técnico Responsável
-                </label>
-                <p className="text-sm">
-                  {job.technicianName || (
-                    <span className="text-muted-foreground italic">
-                      Não atribuído
-                    </span>
-                  )}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">
-                  Prazo
-                </label>
-                <p className="text-sm">
-                  {formatDate(job.dueDate)}
-                  {job.daysUntilDue !== null && job.daysUntilDue > 0 && (
-                    <Badge variant="outline" className="ml-2 text-xs">
-                      {job.daysUntilDue} dias
-                    </Badge>
-                  )}
-                </p>
-              </div>
-              {job.performedAt && (
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Executado em
-                  </label>
-                  <p className="text-sm">{formatDateTime(job.performedAt)}</p>
-                </div>
-              )}
-              {job.approvedAt && (
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Aprovado em
-                  </label>
-                  <p className="text-sm">{formatDateTime(job.approvedAt)}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Method Configuration Preview */}
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>Configuração do Método</CardTitle>
-              <CardDescription>
-                Snapshot do método capturado no momento da criação do job
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Campos de Entrada
-                  </label>
-                  <p className="text-2xl font-bold">
-                    {(job.methodSnapshot as { dataFields?: unknown[] })
-                      ?.dataFields?.length || 0}
+        <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <main className="min-w-0 space-y-6">
+            <section className={`${reviewSurfaceClass} p-4`}>
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Preparação da execução
+                  </p>
+                  <h2 className="text-balance text-lg font-semibold">
+                    Confirme o job antes de iniciar a calibração
+                  </h2>
+                  <p className="mt-1 text-pretty text-sm text-muted-foreground">
+                    Cliente, ativo, técnico, prazo e especificações ficam juntos
+                    para comparar com a ficha física antes da primeira leitura.
                   </p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
+                <Badge variant={job.technicianName ? 'outline' : 'secondary'}>
+                  {job.technicianName ? 'Atribuído' : 'Sem técnico'}
+                </Badge>
+              </div>
+
+              <div className="grid gap-px overflow-hidden rounded-lg bg-black/5 md:grid-cols-4">
+                <div className="bg-background p-3">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Cliente
+                  </label>
+                  <p className="mt-1 text-sm font-medium">
+                    {job.customerName || '-'}
+                  </p>
+                </div>
+                <div className="bg-background p-3 md:col-span-2">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Ativo
+                  </label>
+                  <p className="mt-1 text-sm">
+                    {job.assetName || '-'}
+                    {job.assetTag && (
+                      <span className="ml-1 font-mono text-muted-foreground">
+                        ({job.assetTag})
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="bg-background p-3">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Prazo
+                  </label>
+                  <p className="mt-1 font-mono text-sm tabular-nums">
+                    {formatDate(job.dueDate)}
+                    {job.daysUntilDue !== null && job.daysUntilDue > 0 && (
+                      <Badge variant="outline" className="ml-2 text-xs">
+                        {job.daysUntilDue} dias
+                      </Badge>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {reviewContextItems.length > 0 ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {reviewContextItems.map((item) => (
+                    <div
+                      key={item.key}
+                      className="min-w-0 rounded-md bg-muted/20 px-3 py-3"
+                    >
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {item.label}
+                      </p>
+                      <p className="mt-1 whitespace-pre-wrap break-words font-mono text-sm leading-snug tabular-nums">
+                        {item.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Nenhuma especificação técnica congelada no job.
+                </p>
+              )}
+            </section>
+
+            <section className={`${reviewSurfaceClass} p-4`}>
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Método congelado
+                  </p>
+                  <h2 className="text-balance text-base font-semibold">
+                    {job.methodSnapshot.methodName || 'Método de calibração'}
+                  </h2>
+                  <p className="text-pretty text-sm text-muted-foreground">
+                    Snapshot usado para executar o job, emitir o certificado e
+                    auditar os cálculos depois.
+                  </p>
+                </div>
+                {job.methodSnapshot.methodVersion && (
+                  <Badge variant="outline">
+                    v{job.methodSnapshot.methodVersion}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Campos de entrada
+                  </p>
+                  <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">
+                    {reviewDataFields.length}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Fórmulas
-                  </label>
-                  <p className="text-2xl font-bold">
-                    {(job.methodSnapshot as { formulas?: unknown[] })?.formulas
-                      ?.length || 0}
+                  </p>
+                  <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">
+                    {reviewFormulas.length}
                   </p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    Critérios de Aceitação
-                  </label>
-                  <p className="text-2xl font-bold">
-                    {(job.methodSnapshot as { validations?: unknown[] })
-                      ?.validations?.length || 0}
+                <div className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Critérios de aceitação
+                  </p>
+                  <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">
+                    {reviewValidations.length}
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Rejection Info */}
-          {job.status === 'REJECTED' && job.rejectionReason && (
-            <Card className="md:col-span-2 border-destructive">
-              <CardHeader>
-                <CardTitle className="text-destructive">
-                  Motivo da Rejeição
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm">{job.rejectionReason}</p>
+              {reviewValidations.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <h3 className="text-sm font-medium">Critérios principais</h3>
+                  {reviewValidations.map((validation, index) => (
+                    <div
+                      key={`${validation.expression}-${index}`}
+                      className="rounded-lg bg-muted/20 px-3 py-2 text-sm text-pretty"
+                    >
+                      {validation.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {reviewStandards.length > 0 && (
+              <section className={`${reviewSurfaceClass} p-4`}>
+                <div className="mb-4">
+                  <h2 className="text-balance text-base font-semibold">
+                    Padrões vinculados
+                  </h2>
+                  <p className="text-pretty text-sm text-muted-foreground">
+                    Rastreabilidade prevista antes da execução.
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  {reviewStandards.map((standard) => (
+                    <div
+                      key={standard.id}
+                      className="rounded-lg bg-background p-3 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] transition-[background-color,box-shadow] hover:bg-muted/20"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-balance">
+                            {standard.name}
+                          </p>
+                          <p className="break-all text-sm text-muted-foreground">
+                            Certificado: {standard.certificateNumber}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-left text-sm sm:text-right">
+                          <p className="font-mono tabular-nums">
+                            {formatDate(standard.calibrationDate)}
+                          </p>
+                          {standard.uncertainty != null && (
+                            <p className="font-mono tabular-nums text-muted-foreground">
+                              U = {formatCalibrationValue(standard.uncertainty)}{' '}
+                              {standard.uncertaintyUnit || ''} (k=
+                              {standard.coverageFactor})
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {job.status === 'REJECTED' && job.rejectionReason && (
+              <section
+                className={`${reviewSurfaceClass} border border-destructive/30 p-4`}
+              >
+                <h2 className="text-base font-semibold text-destructive">
+                  Motivo da rejeição
+                </h2>
+                <p className="mt-2 text-pretty text-sm">
+                  {job.rejectionReason}
+                </p>
                 {job.rejectedAt && (
-                  <p className="text-xs text-muted-foreground mt-2">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Rejeitado em {formatDateTime(job.rejectedAt)}
                   </p>
                 )}
-              </CardContent>
-            </Card>
-          )}
+              </section>
+            )}
+          </main>
 
-          {/* Metadata */}
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle>Metadados</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-8 text-sm text-muted-foreground">
-                <div>
-                  <span className="font-medium">Criado em:</span>{' '}
-                  {formatDateTime(job.createdAt)}
+          <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
+            <section className={`${reviewSurfaceClass} p-4`}>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Próxima ação
+              </p>
+              <h2 className="mt-1 text-balance text-lg font-semibold">
+                {job.status === 'DRAFT'
+                  ? 'Iniciar a execução em campo'
+                  : job.status === 'IN_PROGRESS'
+                    ? 'Continuar a execução'
+                    : 'Retomar a correção'}
+              </h2>
+              <div className="mt-4 grid gap-2">
+                {canExecute && (
+                  <Button
+                    className={`${reviewActionButtonClass} justify-start`}
+                    render={
+                      <Link to="/dashboard/jobs/$id/execute" params={{ id }} />
+                    }
+                  >
+                    <HugeiconsIcon
+                      icon={Calendar03Icon}
+                      className="mr-2 h-4 w-4"
+                    />
+                    {job.status === 'DRAFT'
+                      ? 'Iniciar execução'
+                      : 'Continuar execução'}
+                  </Button>
+                )}
+                {canAssign && (
+                  <Button
+                    variant="outline"
+                    className={`${reviewActionButtonClass} justify-start`}
+                    onClick={() => setAssignDialogOpen(true)}
+                  >
+                    <HugeiconsIcon
+                      icon={UserAdd01Icon}
+                      className="mr-2 h-4 w-4"
+                    />
+                    Atribuir técnico
+                  </Button>
+                )}
+                {job.status === 'DRAFT' && (
+                  <Button
+                    variant="outline"
+                    className={`${reviewActionButtonClass} justify-start`}
+                  >
+                    <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
+                    Editar job
+                  </Button>
+                )}
+                {canCancel && !canApprove && (
+                  <Button
+                    variant="ghost"
+                    className={`${reviewActionButtonClass} justify-start text-destructive hover:bg-destructive/10 hover:text-destructive`}
+                    onClick={() => setCancelDialogOpen(true)}
+                  >
+                    <HugeiconsIcon
+                      icon={Cancel01Icon}
+                      className="mr-2 h-4 w-4"
+                    />
+                    Cancelar job
+                  </Button>
+                )}
+              </div>
+            </section>
+
+            <section className={`${reviewSurfaceClass} p-4`}>
+              <h2 className="mb-3 text-base font-semibold">
+                Checklist de prontidão
+              </h2>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    Técnico responsável
+                  </span>
+                  <Badge variant={job.technicianName ? 'outline' : 'secondary'}>
+                    {job.technicianName ? 'Definido' : 'Pendente'}
+                  </Badge>
                 </div>
-                <div>
-                  <span className="font-medium">Atualizado em:</span>{' '}
-                  {formatDateTime(job.updatedAt)}
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    Especificações do ativo
+                  </span>
+                  <Badge
+                    variant={
+                      equipmentSpecItems.length > 0 ? 'outline' : 'secondary'
+                    }
+                  >
+                    {equipmentSpecItems.length || 'Não'}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    Padrões vinculados
+                  </span>
+                  <Badge
+                    variant={
+                      reviewStandards.length > 0 ? 'outline' : 'secondary'
+                    }
+                  >
+                    {reviewStandards.length || 'Não'}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Financeiro</span>
+                  <Badge variant={getFinancialVariant(financialStatus)}>
+                    {getFinancialStatusLabel(
+                      financialStatus as
+                        | 'UNBILLED'
+                        | 'DRAFT'
+                        | 'ISSUED'
+                        | 'PAID'
+                        | 'OVERDUE',
+                    )}
+                  </Badge>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </section>
+
+            <section className={`${reviewSurfaceClass} p-4`}>
+              <h2 className="mb-3 text-base font-semibold">
+                Contexto operacional
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Técnico responsável
+                  </label>
+                  <p className="text-sm">
+                    {job.technicianName || 'Não atribuído'}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Criado em
+                  </label>
+                  <p className="font-mono text-sm tabular-nums">
+                    {formatDateTime(job.createdAt)}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Atualizado em
+                  </label>
+                  <p className="font-mono text-sm tabular-nums">
+                    {formatDateTime(job.updatedAt)}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Cobrança
+                  </label>
+                  <p className="text-sm">
+                    {job.invoiceEligibility
+                      ? 'Elegível para cobrança'
+                      : 'Não elegível para cobrança'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {job.invoiceDocumentNumber || 'Ainda não faturada'}
+                  </p>
+                </div>
+              </div>
+            </section>
+          </aside>
         </div>
       )}
 
