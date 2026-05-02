@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 export type ServiceOrderDocumentItem = {
   description: string;
   quantity: number;

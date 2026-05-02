@@ -1,4 +1,4 @@
-import puppeteer, { type Browser, type Page } from "puppeteer";
+import type { Browser, Page } from "puppeteer-core";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
 import {
@@ -46,6 +46,7 @@ export interface Env {
   };
   HYPERDRIVE: { connectionString: string };
   CHROME_EXECUTABLE_PATH?: string;
+  CHROMIUM_PACK_URL?: string;
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
   INTEGRATIONS_MASTER_KEY?: string;
 }
@@ -1279,15 +1280,29 @@ async function configurePage(page: Page): Promise<void> {
 }
 
 async function launchBrowser(env: Env): Promise<Browser> {
+  const puppeteerCore = await import("puppeteer-core");
+
+  if (env.CHROME_EXECUTABLE_PATH) {
+    return puppeteerCore.default.launch({
+      executablePath: env.CHROME_EXECUTABLE_PATH,
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    }) as Promise<Browser>;
+  }
+
   if (process.env.VERCEL) {
-    const chromium = await import("@sparticuz/chromium");
-    const puppeteerCore = await import("puppeteer-core");
-    const executablePath =
-      env.CHROME_EXECUTABLE_PATH ?? (await chromium.default.executablePath());
+    if (!env.CHROMIUM_PACK_URL) {
+      throw new Error("CHROMIUM_PACK_URL is required for Vercel PDF generation");
+    }
+
+    const chromium = await import("@sparticuz/chromium-min");
+    const executablePath = await chromium.default.executablePath(
+      env.CHROMIUM_PACK_URL,
+    );
 
     return puppeteerCore.default.launch({
       executablePath,
-      headless: true,
+      headless: "shell",
       args: [
         ...chromium.default.args,
         "--no-sandbox",
@@ -1296,11 +1311,9 @@ async function launchBrowser(env: Env): Promise<Browser> {
     }) as Promise<Browser>;
   }
 
-  return puppeteer.launch({
-    executablePath: env.CHROME_EXECUTABLE_PATH,
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  throw new Error(
+    "CHROME_EXECUTABLE_PATH is required for local PDF generation",
+  );
 }
 
 /**

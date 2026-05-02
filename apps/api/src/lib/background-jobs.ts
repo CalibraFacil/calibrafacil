@@ -1,7 +1,6 @@
 import { send } from "@vercel/queue";
 import type { BackgroundJobMessage } from "@calibra-facil/shared";
 import { createWorkerRuntimeEnv } from "./runtime-env";
-import { importWorkerModule } from "./worker-modules";
 
 export const BACKGROUND_JOBS_TOPIC =
   process.env.BACKGROUND_JOBS_TOPIC ?? "calibra-facil-background-jobs";
@@ -17,9 +16,15 @@ function getBackgroundJobsMode() {
   );
 }
 
+async function importLocalWorkerModule() {
+  const modulePath = "./worker-modules";
+  const { importWorkerModule } = await import(modulePath);
+  return importWorkerModule();
+}
+
 function runLocalBackgroundJob(message: BackgroundJobMessage) {
   queueMicrotask(() => {
-    importWorkerModule()
+    importLocalWorkerModule()
       .then(({ processBackgroundJob }) =>
         processBackgroundJob(createWorkerRuntimeEnv(), message),
       )
@@ -41,7 +46,7 @@ export async function enqueueBackgroundJob(
   }
 
   if (mode === "inline") {
-    const { processBackgroundJob } = await importWorkerModule();
+    const { processBackgroundJob } = await importLocalWorkerModule();
     await processBackgroundJob(createWorkerRuntimeEnv(), message);
     return { messageId: `inline-${Date.now()}` };
   }

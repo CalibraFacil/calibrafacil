@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 // Types for label generation (standalone, does not depend on @calibra-facil/db)
 
 export type LabelData = {

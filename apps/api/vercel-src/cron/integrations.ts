@@ -1,6 +1,6 @@
 import { enqueueBackgroundJob } from "../../src/lib/background-jobs";
+import { processScheduledIntegrationSyncs } from "@calibra-facil/worker/integrations";
 import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
-import { importWorkerIntegrationsModule } from "../../src/lib/worker-modules";
 
 function isAuthorized(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -17,8 +17,6 @@ export async function GET(request: Request) {
   }
 
   const env = createWorkerRuntimeEnv();
-  const { processScheduledIntegrationSyncs } =
-    await importWorkerIntegrationsModule();
   const result = await processScheduledIntegrationSyncs(env, {
     dispatch: async (message) => {
       await enqueueBackgroundJob(message, {
