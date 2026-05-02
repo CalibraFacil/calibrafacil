@@ -35,5 +35,5 @@
 - Include screenshots or recordings for UI changes in `apps/web` or `apps/portal`.
 
 ## Configuration & Environment
-- Local secrets live in `.dev.vars` files under `apps/api` and `apps/worker`.
-- Cloudflare bindings (Hyperdrive, R2, Queues, Browser API) are used by API/Worker; keep secrets out of git.
+- Local secrets live in `.env` files under `apps/api` and `apps/worker`.
+- API and worker run locally with Bun; keep secrets out of git.

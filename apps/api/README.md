@@ -1,6 +1,6 @@
 # @calibra-facil/api
 
-REST API backend for Calibra Fácil, built with Hono and deployed on Cloudflare Workers.
+REST API backend for Calibra Fácil, built with Hono and deployed on Fly.io.
 
 ## Overview
 
@@ -41,7 +41,7 @@ The API runs at `http://localhost:3000`.
 
 ## Environment Variables
 
-Create `.dev.vars` from `.dev.vars.example`:
+Create `.env` from `.env.example`:
 
 ```env
 BETTER_AUTH_SECRET=     # Auth secret key
@@ -50,16 +50,12 @@ RESEND_FROM_EMAIL=      # Sender email address
 API_URL=                # API base URL
 APP_URL=                # Web app URL
 NODE_ENV=               # development/production
-AWS_ACCESS_KEY_ID=      # R2 access (S3-compatible)
-AWS_SECRET_ACCESS_KEY=  # R2 secret
-S3_BUCKET=              # R2 bucket name
-S3_REGION=              # R2 region
+DATABASE_URL=           # Postgres connection string
+R2_ACCOUNT_ID=          # R2 account id
+R2_ACCESS_KEY_ID=       # R2 access key
+R2_SECRET_ACCESS_KEY=   # R2 secret
+R2_BUCKET_NAME=         # R2 bucket name
 ```
-
-Cloudflare bindings (configured in `wrangler.jsonc`):
-- `HYPERDRIVE` - Database connection via Hyperdrive
-- `CERTIFICATES_BUCKET` - R2 bucket for certificate storage
-- `PDF_QUEUE` - Queue for PDF generation jobs
 
 ## Testing
 
@@ -72,7 +68,7 @@ pnpm test:coverage
 ## Deployment
 
 ```bash
-pnpm exec wrangler deploy
+pnpm deploy
 ```
 
 Or via CI/CD on push to main branch.

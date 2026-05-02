@@ -2379,7 +2379,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
-  // GET /:id/file - Stream certificate from local R2 during Wrangler dev
+  // GET /:id/file - Stream certificate from R2 during local dev
   // =========================================================================
   .get(
     "/:id/file",
@@ -2543,7 +2543,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
-  // GET /:id/label-file - Stream label from local R2 during Wrangler dev
+  // GET /:id/label-file - Stream label from R2 during local dev
   // =========================================================================
   .get(
     "/:id/label-file",

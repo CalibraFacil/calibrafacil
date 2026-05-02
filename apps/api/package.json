@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "bun --watch src/bun.ts",
     "dev:bun": "bun --watch src/bun.ts",
-    "dev:wrangler": "wrangler dev --port 3000 --local-protocol http",
     "build": "echo 'API build handled by Docker/Fly'",
     "typecheck": "tsgo --noEmit",
     "start": "bun src/bun.ts",
@@ -39,7 +38,6 @@
     "@repo/typescript-config": "workspace:^",
     "@vitest/coverage-v8": "^4.0.17",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17",
-    "wrangler": "^4.54.0"
+    "vitest": "^4.0.17"
   }
 }
