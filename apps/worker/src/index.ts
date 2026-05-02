@@ -1279,6 +1279,39 @@ async function configurePage(page: Page): Promise<void> {
   await page.emulateMediaType("print");
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function retryChromiumPackDownload<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  const retryDelaysMs = [1_000, 3_000, 7_000];
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+
+      const retryDelay = retryDelaysMs[attempt];
+      if (retryDelay === undefined) break;
+
+      console.warn(
+        `[JOB] Chromium pack download failed (attempt ${attempt + 1}/${retryDelaysMs.length + 1}); retrying in ${retryDelay}ms: ${getErrorMessage(error)}`,
+      );
+      await delay(retryDelay);
+    }
+  }
+
+  throw lastError;
+}
+
 async function launchBrowser(env: Env): Promise<Browser> {
   const puppeteerCore = await import("puppeteer-core");
 
@@ -1296,8 +1329,8 @@ async function launchBrowser(env: Env): Promise<Browser> {
     }
 
     const chromium = await import("@sparticuz/chromium-min");
-    const executablePath = await chromium.default.executablePath(
-      env.CHROMIUM_PACK_URL,
+    const executablePath = await retryChromiumPackDownload(() =>
+      chromium.default.executablePath(env.CHROMIUM_PACK_URL),
     );
 
     return puppeteerCore.default.launch({
@@ -1513,17 +1546,74 @@ function isDocumentMessage(
   );
 }
 
+function isServiceOrderDocumentMessage(
+  message: DocumentBackgroundJobMessage,
+): message is Extract<
+  DocumentBackgroundJobMessage,
+  {
+    type:
+      | "SERVICE_ORDER_INTAKE_DOCUMENT"
+      | "SERVICE_ORDER_TAG"
+      | "SERVICE_ORDER_QUOTE"
+      | "SERVICE_ORDER_DELIVERY_RECEIPT";
+  }
+> {
+  return (
+    message.type === "SERVICE_ORDER_INTAKE_DOCUMENT" ||
+    message.type === "SERVICE_ORDER_TAG" ||
+    message.type === "SERVICE_ORDER_QUOTE" ||
+    message.type === "SERVICE_ORDER_DELIVERY_RECEIPT"
+  );
+}
+
+function isCalibrationCertificateMessage(
+  message: BackgroundJobMessage,
+): message is DocumentBackgroundJobMessage & {
+  type?: "CERTIFICATE";
+  jobId: number;
+  userId: string;
+} {
+  if (!isDocumentMessage(message)) return false;
+  if (isServiceOrderDocumentMessage(message)) return false;
+
+  const calibrationMessage = message as {
+    type?: string;
+    jobId?: unknown;
+    userId?: unknown;
+  };
+
+  return (
+    (calibrationMessage.type === undefined ||
+      calibrationMessage.type === "CERTIFICATE") &&
+    typeof calibrationMessage.jobId === "number" &&
+    typeof calibrationMessage.userId === "string"
+  );
+}
+
+async function recordCertificateInfrastructureError(
+  env: Env,
+  message: BackgroundJobMessage,
+  error: unknown,
+) {
+  if (!isCalibrationCertificateMessage(message)) return;
+
+  const errorMessage = getErrorMessage(error);
+  await withDbClient(env, (client) =>
+    setJobError(client, message.jobId, errorMessage, message.userId),
+  ).catch((dbError) => {
+    console.error(
+      `[JOB ${message.jobId}] Failed to record infrastructure error:`,
+      dbError,
+    );
+  });
+}
+
 async function processDocumentMessage(
   env: Env,
   page: Page,
   body: DocumentBackgroundJobMessage,
 ) {
-  if (
-    body.type === "SERVICE_ORDER_INTAKE_DOCUMENT" ||
-    body.type === "SERVICE_ORDER_TAG" ||
-    body.type === "SERVICE_ORDER_QUOTE" ||
-    body.type === "SERVICE_ORDER_DELIVERY_RECEIPT"
-  ) {
+  if (isServiceOrderDocumentMessage(body)) {
     let result: { success: boolean; error?: string };
     if (body.type === "SERVICE_ORDER_INTAKE_DOCUMENT") {
       result = await processServiceOrderIntakeDocument(
@@ -1621,23 +1711,34 @@ export async function processBackgroundJob(
   }
 
   const browserStart = performance.now();
-  const browser = await launchBrowser(env);
-  console.log(
-    `[JOB] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`,
-  );
+  let browser: Browser | undefined;
+  let documentProcessingStarted = false;
 
   try {
+    browser = await launchBrowser(env);
+    console.log(
+      `[JOB] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`,
+    );
+
     const pageStart = performance.now();
     const page = await browser.newPage();
     await configurePage(page);
     console.log(
       `[JOB] browser.newPage + configure: ${Math.round(performance.now() - pageStart)}ms`,
     );
+    documentProcessingStarted = true;
     await processDocumentMessage(env, page, message);
+  } catch (error) {
+    if (!documentProcessingStarted) {
+      await recordCertificateInfrastructureError(env, message, error);
+    }
+    throw error;
   } finally {
-    await browser.close().catch((e) => {
-      console.error("[JOB] browser.close failed:", e);
-    });
+    if (browser) {
+      await browser.close().catch((e) => {
+        console.error("[JOB] browser.close failed:", e);
+      });
+    }
   }
 }
 
@@ -1664,26 +1765,41 @@ export async function processBackgroundJobBatch(
   if (documentMessages.length === 0) return;
 
   const browserStart = performance.now();
-  const browser = await launchBrowser(env);
-  console.log(
-    `[BATCH] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`,
-  );
+  let browser: Browser | undefined;
+  let readyForDocumentMessages = false;
 
   try {
+    browser = await launchBrowser(env);
+    console.log(
+      `[BATCH] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`,
+    );
+
     const pageStart = performance.now();
     const page = await browser.newPage();
     await configurePage(page);
     console.log(
       `[BATCH] browser.newPage + configure: ${Math.round(performance.now() - pageStart)}ms`,
     );
+    readyForDocumentMessages = true;
 
     for (const message of documentMessages) {
       await processDocumentMessage(env, page, message);
     }
+  } catch (error) {
+    if (!readyForDocumentMessages) {
+      await Promise.all(
+        documentMessages.map((message) =>
+          recordCertificateInfrastructureError(env, message, error),
+        ),
+      );
+    }
+    throw error;
   } finally {
-    await browser.close().catch((e) => {
-      console.error("[BATCH] browser.close failed:", e);
-    });
+    if (browser) {
+      await browser.close().catch((e) => {
+        console.error("[BATCH] browser.close failed:", e);
+      });
+    }
   }
 }
 
