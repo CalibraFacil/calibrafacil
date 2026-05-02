@@ -1,17 +1,24 @@
 import {
+  Analytics01Icon,
   AlertCircleIcon,
   Book02Icon,
   Building02Icon,
+  ClipboardIcon,
+  CreditCardIcon,
   FileEditIcon,
+  File02Icon,
   RepairIcon,
   Files01Icon,
   Wallet03Icon,
   CustomerSupportIcon,
   Home01Icon,
+  Notebook01Icon,
   PieChartIcon,
+  RulerIcon,
   Settings05Icon,
   TaskAdd02Icon,
   DocumentValidationIcon,
+  UserGroupIcon,
   UserIcon,
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
@@ -23,6 +30,7 @@ import { OrganizationSwitcher } from './organization-switcher'
 import { NavMain } from './nav-main'
 import { NavUser } from './nav-user'
 import { SidebarSearch } from './sidebar-search'
+import { SidebarFlyoutProvider } from './sidebar-flyout-nav'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 
 import {
@@ -60,9 +68,21 @@ const data = {
       url: '#',
       icon: <HugeiconsIcon icon={Building02Icon} />,
       items: [
-        { title: 'Métodos de Calibração', url: '/dashboard/methods' },
-        { title: 'Padrões de Referência', url: '/dashboard/standards' },
-        { title: 'Competências do Pessoal', url: '/dashboard/personnel' },
+        {
+          title: 'Métodos de Calibração',
+          url: '/dashboard/methods',
+          icon: <HugeiconsIcon icon={Notebook01Icon} />,
+        },
+        {
+          title: 'Padrões de Referência',
+          url: '/dashboard/standards',
+          icon: <HugeiconsIcon icon={RulerIcon} />,
+        },
+        {
+          title: 'Competências do Pessoal',
+          url: '/dashboard/personnel',
+          icon: <HugeiconsIcon icon={UserGroupIcon} />,
+        },
       ],
     },
     {
@@ -95,8 +115,16 @@ const data = {
       url: '#',
       icon: <HugeiconsIcon icon={AlertCircleIcon} />,
       items: [
-        { title: 'Não Conformidades', url: '/dashboard/nc' },
-        { title: 'Ações Corretivas (CAPA)', url: '/dashboard/capa' },
+        {
+          title: 'Não Conformidades',
+          url: '/dashboard/nc',
+          icon: <HugeiconsIcon icon={AlertCircleIcon} />,
+        },
+        {
+          title: 'Ações Corretivas (CAPA)',
+          url: '/dashboard/capa',
+          icon: <HugeiconsIcon icon={TaskAdd02Icon} />,
+        },
       ],
     },
   ],
@@ -130,11 +158,31 @@ export function AppSidebar() {
           url: '#',
           icon: <HugeiconsIcon icon={Wallet03Icon} />,
           items: [
-            { title: 'Visão geral', url: '/dashboard/finance' },
-            { title: 'Documentos', url: '/dashboard/finance/documents' },
-            { title: 'Recebimentos', url: '/dashboard/finance/receipts' },
-            { title: 'Contratos', url: '/dashboard/finance/contracts' },
-            { title: 'ERP', url: '/dashboard/finance/erp' },
+            {
+              title: 'Visão geral',
+              url: '/dashboard/finance',
+              icon: <HugeiconsIcon icon={Analytics01Icon} />,
+            },
+            {
+              title: 'Documentos',
+              url: '/dashboard/finance/documents',
+              icon: <HugeiconsIcon icon={File02Icon} />,
+            },
+            {
+              title: 'Recebimentos',
+              url: '/dashboard/finance/receipts',
+              icon: <HugeiconsIcon icon={CreditCardIcon} />,
+            },
+            {
+              title: 'Contratos',
+              url: '/dashboard/finance/contracts',
+              icon: <HugeiconsIcon icon={ClipboardIcon} />,
+            },
+            {
+              title: 'ERP',
+              url: '/dashboard/finance/erp',
+              icon: <HugeiconsIcon icon={Settings05Icon} />,
+            },
           ],
         },
       ]
@@ -158,6 +206,7 @@ export function AppSidebar() {
         {
           title: 'Área do laboratório',
           url: '/dashboard/customer-success',
+          icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
         },
       ],
     },
@@ -175,8 +224,10 @@ export function AppSidebar() {
         <SidebarSearch />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navMain} />
-        <NavMain items={managementItems} label="Gestão" />
+        <SidebarFlyoutProvider>
+          <NavMain items={navMain} />
+          <NavMain items={managementItems} label="Gestão" />
+        </SidebarFlyoutProvider>
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>

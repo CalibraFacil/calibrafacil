@@ -1,6 +1,7 @@
 import {
   BriefcaseIcon,
   CustomerSupportIcon,
+  File02Icon,
   Home01Icon,
   Invoice02Icon,
   LeftToRightListDashIcon,
@@ -12,6 +13,7 @@ import { Link } from '@tanstack/react-router'
 
 import { NavMain } from './nav-main'
 import { NavUser } from './nav-user'
+import { SidebarFlyoutProvider } from './sidebar-flyout-nav'
 
 import {
   Sidebar,
@@ -55,8 +57,16 @@ const operationsItems = [
     url: '/backoffice/customer-success',
     icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
     items: [
-      { title: 'Contas', url: '/backoffice/customer-success' },
-      { title: 'Tickets', url: '/backoffice/customer-success/tickets' },
+      {
+        title: 'Contas',
+        url: '/backoffice/customer-success',
+        icon: <HugeiconsIcon icon={BriefcaseIcon} />,
+      },
+      {
+        title: 'Tickets',
+        url: '/backoffice/customer-success/tickets',
+        icon: <HugeiconsIcon icon={File02Icon} />,
+      },
     ],
   },
   {
@@ -78,8 +88,10 @@ export function BackofficeSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={platformItems} label="Plataforma" />
-        <NavMain items={operationsItems} label="Operação" />
+        <SidebarFlyoutProvider>
+          <NavMain items={platformItems} label="Plataforma" />
+          <NavMain items={operationsItems} label="Operação" />
+        </SidebarFlyoutProvider>
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>
