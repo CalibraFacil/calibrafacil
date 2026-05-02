@@ -1,5 +1,30 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "bunVersion": "1.x",
-  "buildCommand": "pnpm build:vercel-functions"
+  "buildCommand": "pnpm build:vercel-functions",
+  "regions": ["gru1"],
+  "crons": [
+    {
+      "path": "/api/cron/integrations",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/notifications",
+      "schedule": "0 8 * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/cron/integrations",
+      "destination": "/api/cron/integrations"
+    },
+    {
+      "source": "/api/cron/notifications",
+      "destination": "/api/cron/notifications"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    }
+  ]
 }
