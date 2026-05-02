@@ -55,7 +55,9 @@ R2_ACCOUNT_ID=          # R2 account id
 R2_ACCESS_KEY_ID=       # R2 access key
 R2_SECRET_ACCESS_KEY=   # R2 secret
 R2_BUCKET_NAME=         # R2 bucket name
-CHROMIUM_PACK_URL=      # R2/public URL for @sparticuz/chromium-min pack
+CHROMIUM_PACK_R2_BUCKET=# R2 bucket containing the @sparticuz/chromium-min pack tar
+CHROMIUM_PACK_R2_KEY=   # R2 object key for the @sparticuz/chromium-min pack tar
+CHROMIUM_PACK_URL=      # Optional public fallback URL for the Chromium pack
 ```
 
 ## Testing

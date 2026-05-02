@@ -44,8 +44,12 @@ export interface Env {
       options?: { httpMetadata?: { contentType?: string } },
     ): Promise<void>;
   };
+  RUNTIME_ASSETS_BUCKET?: {
+    get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+  };
   HYPERDRIVE: { connectionString: string };
   CHROME_EXECUTABLE_PATH?: string;
+  CHROMIUM_PACK_R2_KEY?: string;
   CHROMIUM_PACK_URL?: string;
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
   INTEGRATIONS_MASTER_KEY?: string;
@@ -1312,6 +1316,134 @@ async function retryChromiumPackDownload<T>(
   throw lastError;
 }
 
+function readTarString(bytes: Uint8Array, start: number, length: number) {
+  let end = start;
+  const maxEnd = start + length;
+  while (end < maxEnd && bytes[end] !== 0) end += 1;
+  return Buffer.from(bytes.subarray(start, end)).toString("utf8").trim();
+}
+
+function readTarSize(bytes: Uint8Array, start: number) {
+  const rawSize = readTarString(bytes, start, 12).replace(/\0/g, "").trim();
+  if (!rawSize) return 0;
+
+  const size = Number.parseInt(rawSize, 8);
+  if (!Number.isFinite(size) || size < 0) {
+    throw new Error(`Invalid Chromium pack tar entry size: ${rawSize}`);
+  }
+  return size;
+}
+
+function isEmptyTarBlock(bytes: Uint8Array, offset: number) {
+  for (let index = offset; index < offset + 512; index += 1) {
+    if (bytes[index] !== 0) return false;
+  }
+  return true;
+}
+
+async function extractTarToDirectory(
+  bytes: Uint8Array,
+  destinationDirectory: string,
+) {
+  const path = await import("node:path");
+  const { mkdir, writeFile } = await import("node:fs/promises");
+
+  let offset = 0;
+  while (offset + 512 <= bytes.byteLength) {
+    if (isEmptyTarBlock(bytes, offset)) break;
+
+    const name = readTarString(bytes, offset, 100);
+    const prefix = readTarString(bytes, offset + 345, 155);
+    const entryName = prefix ? `${prefix}/${name}` : name;
+    const size = readTarSize(bytes, offset + 124);
+    const type = String.fromCharCode(bytes[offset + 156] ?? 0);
+    const dataStart = offset + 512;
+    const dataEnd = dataStart + size;
+
+    if (!entryName) {
+      throw new Error("Invalid Chromium pack tar entry name");
+    }
+
+    const normalizedName = path.posix.normalize(entryName);
+    if (
+      normalizedName.startsWith("../") ||
+      normalizedName === ".." ||
+      path.posix.isAbsolute(normalizedName)
+    ) {
+      throw new Error(`Unsafe Chromium pack tar entry: ${entryName}`);
+    }
+
+    if (dataEnd > bytes.byteLength) {
+      throw new Error(`Invalid Chromium pack tar entry length: ${entryName}`);
+    }
+
+    const destinationPath = path.join(destinationDirectory, normalizedName);
+    if (type === "5") {
+      await mkdir(destinationPath, { recursive: true });
+    } else if (type === "0" || type === "\0") {
+      await mkdir(path.dirname(destinationPath), { recursive: true });
+      await writeFile(destinationPath, bytes.subarray(dataStart, dataEnd));
+    }
+
+    offset = dataStart + Math.ceil(size / 512) * 512;
+  }
+}
+
+async function downloadChromiumPackFromR2(env: Env): Promise<string> {
+  if (!env.CHROMIUM_PACK_R2_KEY) {
+    throw new Error(
+      "CHROMIUM_PACK_R2_KEY is required for authenticated Chromium pack download",
+    );
+  }
+  if (!env.RUNTIME_ASSETS_BUCKET) {
+    throw new Error(
+      "CHROMIUM_PACK_R2_BUCKET is required when CHROMIUM_PACK_R2_KEY is set",
+    );
+  }
+
+  const { existsSync } = await import("node:fs");
+  const { mkdir, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const packDirectory = path.join(tmpdir(), "chromium-pack-r2");
+
+  if (existsSync(path.join(packDirectory, "chromium.br"))) {
+    return packDirectory;
+  }
+
+  const object = await env.RUNTIME_ASSETS_BUCKET.get(env.CHROMIUM_PACK_R2_KEY);
+  if (!object) {
+    throw new Error(
+      `Chromium pack object not found in runtime R2 bucket: ${env.CHROMIUM_PACK_R2_KEY}`,
+    );
+  }
+
+  const arrayBuffer = await object.arrayBuffer();
+  await rm(packDirectory, { recursive: true, force: true });
+  await mkdir(packDirectory, { recursive: true });
+  await extractTarToDirectory(new Uint8Array(arrayBuffer), packDirectory);
+
+  if (!existsSync(path.join(packDirectory, "chromium.br"))) {
+    throw new Error("Chromium pack R2 object did not contain chromium.br");
+  }
+
+  return packDirectory;
+}
+
+async function getChromiumPackInput(env: Env): Promise<string> {
+  if (env.CHROMIUM_PACK_R2_KEY) {
+    return downloadChromiumPackFromR2(env);
+  }
+
+  if (env.CHROMIUM_PACK_URL) {
+    return env.CHROMIUM_PACK_URL;
+  }
+
+  throw new Error(
+    "CHROMIUM_PACK_R2_KEY with CHROMIUM_PACK_R2_BUCKET, or CHROMIUM_PACK_URL, is required for Vercel PDF generation",
+  );
+}
+
 async function launchBrowser(env: Env): Promise<Browser> {
   const puppeteerCore = await import("puppeteer-core");
 
@@ -1324,13 +1456,9 @@ async function launchBrowser(env: Env): Promise<Browser> {
   }
 
   if (process.env.VERCEL) {
-    if (!env.CHROMIUM_PACK_URL) {
-      throw new Error("CHROMIUM_PACK_URL is required for Vercel PDF generation");
-    }
-
     const chromium = await import("@sparticuz/chromium-min");
-    const executablePath = await retryChromiumPackDownload(() =>
-      chromium.default.executablePath(env.CHROMIUM_PACK_URL),
+    const executablePath = await retryChromiumPackDownload(async () =>
+      chromium.default.executablePath(await getChromiumPackInput(env)),
     );
 
     return puppeteerCore.default.launch({
