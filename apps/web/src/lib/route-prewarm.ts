@@ -49,6 +49,11 @@ async function jsonOrThrow(response: Response, message: string) {
   return response.json() as Promise<unknown>
 }
 
+async function dataOrThrow(response: Response, message: string) {
+  const result = (await jsonOrThrow(response, message)) as { data?: unknown }
+  return result.data
+}
+
 function prewarmQueries(
   queryClient: QueryClient,
   queries: Array<PrewarmQuery | null | undefined>,
@@ -370,7 +375,7 @@ function serviceOrderDetailQuery(id: string) {
   return query({
     queryKey: ['service-order', id],
     queryFn: async () =>
-      jsonOrThrow(
+      dataOrThrow(
         await api.api['service-orders'][':id'].$get({ param: { id } }),
         'Failed to load service order',
       ),
