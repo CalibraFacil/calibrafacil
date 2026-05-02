@@ -186,8 +186,9 @@ export function EccentricityIndicator({
             Posição do indicador da balança
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Informe onde o módulo de display/indicador está localizado no
-            instrumento.
+            {readOnly
+              ? 'Definido no cadastro do ativo; esta posição não é alterada durante a execução.'
+              : 'Informe onde o módulo de display/indicador está localizado no instrumento.'}
           </p>
         </div>
         <Badge variant={selectedOption ? 'default' : 'outline'}>
@@ -215,6 +216,7 @@ export function EccentricityIndicator({
                             aria-pressed={selected}
                             aria-label={`${formatPositionOptionLabel(option, variant)}. ${getPointDescription(option.value, variant)}`}
                             aria-disabled={!isInteractive}
+                            aria-readonly={readOnly || undefined}
                             title={`${formatPositionOptionLabel(option, variant)}: ${getPointDescription(option.value, variant)}`}
                             onClick={() => togglePosition(option.value)}
                             className={cn(
@@ -222,7 +224,8 @@ export function EccentricityIndicator({
                               'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none',
                               selected
                                 ? 'border-primary bg-primary text-primary-foreground'
-                                : 'border-border text-foreground hover:bg-muted',
+                                : 'border-border text-foreground',
+                              isInteractive && !selected && 'hover:bg-muted',
                               !isInteractive && 'cursor-default',
                             )}
                           />
@@ -288,6 +291,7 @@ export function EccentricityIndicator({
                           aria-pressed={selected}
                           aria-label={`${formatPositionOptionLabel(option, variant)}. ${getPointDescription(option.value, variant)}`}
                           aria-disabled={!isInteractive}
+                          aria-readonly={readOnly || undefined}
                           title={`${formatPositionOptionLabel(option, variant)}: ${getPointDescription(option.value, variant)}`}
                           onClick={() => togglePosition(option.value)}
                           className={cn(
@@ -295,7 +299,10 @@ export function EccentricityIndicator({
                             'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none',
                             selected
                               ? 'border-primary bg-primary shadow-md ring-4 ring-primary/15'
-                              : 'border-border bg-background hover:border-primary/50 hover:bg-muted',
+                              : 'border-border bg-background',
+                            isInteractive &&
+                              !selected &&
+                              'hover:border-primary/50 hover:bg-muted',
                             !isInteractive && 'cursor-default',
                             option.className,
                           )}

@@ -63,7 +63,6 @@ import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
   EccentricityIndicator,
   type EccentricityIndicatorVariant,
-  type EccentricityIndicatorPosition,
   isEccentricityIndicatorPosition,
 } from '@/components/eccentricity-indicator'
 import type {
@@ -259,18 +258,13 @@ function getCircularEccentricityLoadPositions(
   return positions.length > 0 ? positions : undefined
 }
 
-function getInitialIndicatorPosition(job: JobData) {
+function getAssetIndicatorPosition(job: JobData) {
   const variant =
     getEccentricityIndicatorVariant(
       job.methodSnapshot.dataFields.find(
         (field) => field.eccentricityIndicator?.enabled,
       ),
     ) ?? undefined
-
-  const savedValue = job.data?.[ECCENTRICITY_INDICATOR_SPEC_KEY]
-  if (isEccentricityIndicatorPosition(savedValue, variant)) {
-    return savedValue
-  }
 
   const assetValue =
     job.assetSnapshot?.specifications?.[ECCENTRICITY_INDICATOR_SPEC_KEY]
@@ -428,7 +422,7 @@ function ExecuteJobForm({
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const initialIndicatorPosition = getInitialIndicatorPosition(job)
+  const assetIndicatorPosition = getAssetIndicatorPosition(job)
   const assetBaseMeasurementUnit =
     job.assetSnapshot?.baseMeasurementUnit ?? null
   const displayUnitFor = useCallback(
@@ -465,19 +459,13 @@ function ExecuteJobForm({
 
   // Form state
   const [formData, setFormData] = useState<Record<string, unknown>>(() => {
-    const initialData =
+    return (
       denormalizeMethodDataForDisplay(
         job.data ?? {},
         job.methodSnapshot.dataFields,
         assetBaseMeasurementUnit,
       ) ?? {}
-
-    return initialIndicatorPosition
-      ? {
-          ...initialData,
-          [ECCENTRICITY_INDICATOR_SPEC_KEY]: initialIndicatorPosition,
-        }
-      : initialData
+    )
   })
   const [selectedStandardIds, setSelectedStandardIds] = useState<number[]>(
     () =>
@@ -558,10 +546,10 @@ function ExecuteJobForm({
   )
   const showEccentricityIndicator = eccentricityIndicatorVariant !== null
   const selectedIndicatorPosition = isEccentricityIndicatorPosition(
-    formData[ECCENTRICITY_INDICATOR_SPEC_KEY],
+    assetIndicatorPosition,
     eccentricityIndicatorVariant ?? undefined,
   )
-    ? formData[ECCENTRICITY_INDICATOR_SPEC_KEY]
+    ? assetIndicatorPosition
     : null
 
   // Normalize form data before building formula context or sending payloads.
@@ -570,23 +558,7 @@ function ExecuteJobForm({
       const normalized: Record<string, unknown> = {}
       const manualKeys = new Set(manualFields.map((field) => field.key))
       for (const [key, value] of Object.entries(data)) {
-        if (
-          !manualKeys.has(key) &&
-          !(
-            showEccentricityIndicator && key === ECCENTRICITY_INDICATOR_SPEC_KEY
-          )
-        ) {
-          continue
-        }
-        if (key === ECCENTRICITY_INDICATOR_SPEC_KEY) {
-          if (
-            isEccentricityIndicatorPosition(
-              value,
-              eccentricityIndicatorVariant ?? undefined,
-            )
-          ) {
-            normalized[key] = value
-          }
+        if (!manualKeys.has(key)) {
           continue
         }
         if (Array.isArray(value)) {
@@ -614,7 +586,7 @@ function ExecuteJobForm({
       }
       return normalized
     },
-    [manualFields, showEccentricityIndicator, eccentricityIndicatorVariant],
+    [manualFields],
   )
 
   const parsedFormData = useMemo(
@@ -939,23 +911,6 @@ function ExecuteJobForm({
     setFormData((prev) => ({ ...prev, [key]: value }))
   }, [])
 
-  const updateIndicatorPosition = useCallback(
-    (position: EccentricityIndicatorPosition | null) => {
-      setFormData((prev) => {
-        const next = { ...prev }
-
-        if (position) {
-          next[ECCENTRICITY_INDICATOR_SPEC_KEY] = position
-        } else {
-          delete next[ECCENTRICITY_INDICATOR_SPEC_KEY]
-        }
-
-        return next
-      })
-    },
-    [],
-  )
-
   // Build environment payload (only send if any value is set)
   const environmentPayload = useMemo(() => {
     if (
@@ -1120,7 +1075,6 @@ function ExecuteJobForm({
             {tableRenderer}
             <EccentricityIndicator
               value={selectedIndicatorPosition}
-              onChange={updateIndicatorPosition}
               variant={fieldEccentricityVariant}
               loadPositions={
                 fieldEccentricityVariant === 'circular_platform'
@@ -1130,7 +1084,7 @@ function ExecuteJobForm({
                     )
                   : undefined
               }
-              disabled={!isEditable}
+              readOnly
               className="max-w-4xl"
             />
           </div>
@@ -1747,9 +1701,8 @@ function ExecuteJobForm({
                     eccentricityFields.length === 0 && (
                       <EccentricityIndicator
                         value={selectedIndicatorPosition}
-                        onChange={updateIndicatorPosition}
                         variant={eccentricityIndicatorVariant}
-                        disabled={!isEditable}
+                        readOnly
                       />
                     )}
                   {displayManualFields.map(renderField)}

@@ -1672,15 +1672,15 @@ function getEccentricityIndicatorPosition(
   job: JobData,
   variant: EccentricityIndicatorVariant,
 ) {
-  const savedValue = job.data?.[ECCENTRICITY_INDICATOR_SPEC_KEY];
-  if (isEccentricityIndicatorPosition(savedValue, variant)) {
-    return savedValue;
-  }
-
   const assetValue =
     job.assetSnapshot?.specifications?.[ECCENTRICITY_INDICATOR_SPEC_KEY];
   if (isEccentricityIndicatorPosition(assetValue, variant)) {
     return assetValue;
+  }
+
+  const savedValue = job.data?.[ECCENTRICITY_INDICATOR_SPEC_KEY];
+  if (isEccentricityIndicatorPosition(savedValue, variant)) {
+    return savedValue;
   }
 
   return null;
