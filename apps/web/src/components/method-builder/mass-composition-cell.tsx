@@ -71,6 +71,8 @@ export function MassCompositionCell({
     options[0] ? optionKey(options[0]) : '',
   )
   const [quantity, setQuantity] = useState('1')
+  const [optionPickerOpen, setOptionPickerOpen] = useState(false)
+  const [optionSearch, setOptionSearch] = useState('')
 
   const composition = isMassCompositionValue(value) ? value : null
   const isFieldPresentation = presentation === 'field'
@@ -90,6 +92,7 @@ export function MassCompositionCell({
     () => visibleOptions.find((option) => optionKey(option) === selectedKey),
     [visibleOptions, selectedKey],
   )
+  const selectedOptionLabel = selectedOption?.optionLabel ?? ''
   const optionKeys = useMemo(
     () => visibleOptions.map((option) => optionKey(option)),
     [visibleOptions],
@@ -198,9 +201,22 @@ export function MassCompositionCell({
                     <Combobox
                       items={optionKeys}
                       value={selectedKey}
+                      inputValue={
+                        optionPickerOpen ? optionSearch : selectedOptionLabel
+                      }
                       onValueChange={(nextValue) => {
                         if (typeof nextValue === 'string') {
                           setSelectedKey(nextValue)
+                          setOptionSearch('')
+                        }
+                      }}
+                      onInputValueChange={(nextValue) =>
+                        setOptionSearch(nextValue)
+                      }
+                      onOpenChange={(nextOpen) => {
+                        setOptionPickerOpen(nextOpen)
+                        if (nextOpen) {
+                          setOptionSearch('')
                         }
                       }}
                       itemToStringLabel={(key) =>
