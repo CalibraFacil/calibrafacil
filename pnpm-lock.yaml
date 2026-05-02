@@ -200,6 +200,9 @@ importers:
       '@tanstack/router-plugin':
         specifier: ^1.132.0
         version: 1.141.7(@tanstack/react-router@1.141.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(vite@7.3.2(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2))
+      '@vercel/analytics':
+        specifier: ^2.0.1
+        version: 2.0.1(next@16.2.3(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

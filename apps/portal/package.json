@@ -23,6 +23,7 @@
     "@tanstack/react-router": "^1.132.0",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/router-plugin": "^1.132.0",
+    "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
