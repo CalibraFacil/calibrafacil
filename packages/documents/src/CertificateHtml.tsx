@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { Fragment, type ReactNode } from "react";
 import {
   type CertificateTemplateBlock,

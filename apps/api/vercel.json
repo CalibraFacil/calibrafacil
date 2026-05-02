@@ -10,7 +10,7 @@
       "maxDuration": 30
     },
     "api/queues/background.js": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "experimentalTriggers": [
         {
           "type": "queue/v2beta",

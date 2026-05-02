@@ -34,6 +34,7 @@ export type WorkerRuntimeEnv = {
     ): Promise<void>;
   };
   CHROME_EXECUTABLE_PATH?: string;
+  CHROMIUM_PACK_URL?: string;
   SIGNING_MASTER_KEY?: string;
   INTEGRATIONS_MASTER_KEY?: string;
 };
@@ -177,6 +178,7 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
     HYPERDRIVE: { connectionString: databaseUrl },
     CERTIFICATES_BUCKET: createR2Bucket(),
     CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH,
+    CHROMIUM_PACK_URL: process.env.CHROMIUM_PACK_URL,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
     INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
   };

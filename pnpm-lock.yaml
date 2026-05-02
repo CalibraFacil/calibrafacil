@@ -481,15 +481,12 @@ importers:
       '@calibra-facil/signing':
         specifier: workspace:^
         version: link:../../packages/signing
-      '@sparticuz/chromium':
+      '@sparticuz/chromium-min':
         specifier: ^148.0.0
         version: 148.0.0
       pg:
         specifier: ^8.16.3
         version: 8.16.3
-      puppeteer:
-        specifier: ^24.32.1
-        version: 24.42.0(typescript@5.9.3)
       puppeteer-core:
         specifier: ^24.42.0
         version: 24.42.0
@@ -2950,8 +2947,8 @@ packages:
     peerDependencies:
       solid-js: ^1.6.12
 
-  '@sparticuz/chromium@148.0.0':
-    resolution: {integrity: sha512-na5beDSZkrlcEWEMt+eHu4Xe+MLUgCtHBjHaXGsNaQu5tJWwXE+McxAcMtyumEM/JzXrxGpkO5vAPD9TWhil3g==}
+  '@sparticuz/chromium-min@148.0.0':
+    resolution: {integrity: sha512-3RW2gPJrOIutXdTtwLDuIFOZwKKq4YU2zwt73U75QmgYaDVSYfSC1xLksou71sAy1B/MgZhLSmU+wCZDLW4MFg==}
     engines: {node: '>=22.17.0'}
 
   '@speed-highlight/core@1.2.14':
@@ -6499,11 +6496,6 @@ packages:
   puppeteer-core@24.42.0:
     resolution: {integrity: sha512-T4zXokk/izH01fYPhyyev1A4piWiOKrYq7CUFpdoYQxmOnXoV6YjUabmfIjCYkNspSoAXIxRid3Tw+Vg0fthYg==}
     engines: {node: '>=18'}
-
-  puppeteer@24.42.0:
-    resolution: {integrity: sha512-94MoPfFp2eY3eYIMdINkez4IOP5TMHntlZbVx06fHlQTtiQiYgaY0L2Zzfod8PVUkPqP7m3Qlre2v8YS8cudPA==}
-    engines: {node: '>=18'}
-    hasBin: true
 
   qrcode@1.5.4:
     resolution: {integrity: sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg==}
@@ -10750,7 +10742,7 @@ snapshots:
     dependencies:
       solid-js: 1.9.10
 
-  '@sparticuz/chromium@148.0.0':
+  '@sparticuz/chromium-min@148.0.0':
     dependencies:
       tar-fs: 3.1.2
     transitivePeerDependencies:
@@ -14793,23 +14785,6 @@ snapshots:
       - bufferutil
       - react-native-b4a
       - supports-color
-      - utf-8-validate
-
-  puppeteer@24.42.0(typescript@5.9.3):
-    dependencies:
-      '@puppeteer/browsers': 2.13.0
-      chromium-bidi: 14.0.0(devtools-protocol@0.0.1595872)
-      cosmiconfig: 9.0.0(typescript@5.9.3)
-      devtools-protocol: 0.0.1595872
-      puppeteer-core: 24.42.0
-      typed-query-selector: 2.12.2
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bufferutil
-      - react-native-b4a
-      - supports-color
-      - typescript
       - utf-8-validate
 
   qrcode@1.5.4:
