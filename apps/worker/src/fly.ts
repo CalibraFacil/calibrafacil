@@ -16,10 +16,62 @@ import { processScheduledIntegrationSyncs } from "./integrations.js";
 
 type WorkerEnv = Parameters<typeof worker.queue>[1];
 
+type BunRuntime = {
+  env: Record<string, string | undefined>;
+  file(path: URL): {
+    exists(): Promise<boolean>;
+    text(): Promise<string>;
+  };
+};
+
+declare const Bun: BunRuntime;
+
 const workerId = `${process.env.FLY_APP_NAME ?? "worker"}-${process.env.FLY_ALLOC_ID ?? process.pid}`;
 const batchSize = Number(process.env.QUEUE_BATCH_SIZE ?? 10);
 const pollIntervalMs = Number(process.env.QUEUE_POLL_INTERVAL_MS ?? 2_000);
 const staleAfterMs = Number(process.env.QUEUE_STALE_AFTER_MS ?? 10 * 60_000);
+const workerDirectory = new URL("..", import.meta.url);
+const isProduction = process.env.NODE_ENV === "production";
+
+function parseLocalEnv(contents: string): Record<string, string> {
+  const env: Record<string, string> = {};
+
+  for (const line of contents.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex === -1) continue;
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    let value = trimmed.slice(separatorIndex + 1).trim();
+
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    env[key] = value;
+  }
+
+  return env;
+}
+
+async function loadLocalEnv() {
+  if (isProduction) return;
+
+  for (const filename of [".env", ".env.local"]) {
+    const file = Bun.file(new URL(filename, workerDirectory));
+    if (!(await file.exists())) continue;
+
+    const localEnv = parseLocalEnv(await file.text());
+    for (const [key, value] of Object.entries(localEnv)) {
+      process.env[key] ??= value;
+    }
+  }
+}
 
 function requiredEnv(name: string) {
   const value = process.env[name];
@@ -154,6 +206,8 @@ function scheduleDailyAt(hourUtc: number, task: () => Promise<void>) {
 
   scheduleNext();
 }
+
+await loadLocalEnv();
 
 const env = createEnv();
 

@@ -4,7 +4,6 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/fly.ts",
-    "dev:wrangler": "wrangler dev --local-protocol http",
     "start": "bun src/fly.ts",
     "deploy": "flyctl deploy -c ../../fly.worker.toml --ha=false"
   },
@@ -26,7 +25,6 @@
     "@types/pg": "^8.16.0",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "wrangler": "4.54.0"
+    "@types/react-dom": "^19.2.3"
   }
 }

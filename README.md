@@ -88,9 +88,9 @@ calibra-facil/
 
 2. Configure environment:
    ```bash
-   cp apps/api/.dev.vars.example apps/api/.dev.vars
-   cp apps/worker/.dev.vars.example apps/worker/.dev.vars
-   # Edit .dev.vars files with your credentials
+   cp apps/api/.env.example apps/api/.env
+   cp apps/worker/.env.example apps/worker/.env
+   # Edit .env files with your credentials
    ```
 
 3. Run database migrations:
@@ -108,6 +108,7 @@ calibra-facil/
    - Web: https://localhost:5173
    - Portal: https://localhost:5174
    - API: http://localhost:3000
+   - Worker: Postgres queue polling and scheduled jobs
 
 ## Development Commands
 

@@ -1,6 +1,6 @@
 # @calibra-facil/worker
 
-Background job processor for PDF generation and scheduled compliance checks, running on Cloudflare Workers.
+Background job processor for PDF generation and scheduled compliance checks, running on Fly.io.
 
 ## Overview
 
@@ -10,7 +10,7 @@ The worker handles asynchronous tasks that are too heavy for the main API, inclu
 
 ### Queue Processing
 
-Processes messages from `calibration-pdf-queue`:
+Processes messages from the Postgres-backed `app_queue_job` table:
 
 ```typescript
 interface QueueMessage {
@@ -23,7 +23,7 @@ interface QueueMessage {
 **Certificate Generation:**
 1. Fetches calibration job data from database
 2. Renders `CertificateHtml` component to HTML string
-3. Generates PDF using Cloudflare Puppeteer
+3. Generates PDF using Puppeteer/Chromium
 4. Uploads to R2 bucket using scoped keys (`org/{orgId}/{YYYY}/jobs/{jobId}/cert.pdf`)
 5. Updates job status to APPROVED with `certificate_url`
 6. Records audit log entry
@@ -37,7 +37,7 @@ interface QueueMessage {
 
 ### Scheduled Tasks
 
-Runs daily at 08:00 UTC via cron trigger:
+Runs daily at 08:00 UTC from the long-running worker process:
 
 - **Asset Recalibration Alerts:** Assets due within 7 days
 - **Standard Expiry Alerts:** Reference standards expiring within 30 days
@@ -52,27 +52,27 @@ Uses `scheduled_notification` table to prevent duplicate alerts.
 pnpm turbo dev --filter=@calibra-facil/worker
 
 # Or from this directory
-pnpm dev --remote  # Requires remote Puppeteer
+pnpm dev
 ```
 
 ## Environment Variables
 
-Create `.dev.vars` from `.dev.vars.example`:
+Create `.env` from `.env.example`:
 
 ```env
-# Database connection string (for local dev)
 DATABASE_URL=
+R2_ACCOUNT_ID=
+R2_BUCKET_NAME=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+SIGNING_MASTER_KEY=
+INTEGRATIONS_MASTER_KEY=
 ```
-
-Cloudflare bindings (configured in `wrangler.jsonc`):
-- `HYPERDRIVE` - Database connection via Hyperdrive
-- `CERTIFICATES_BUCKET` - R2 bucket for storage
-- `BROWSER` - Cloudflare Puppeteer service binding
 
 ## Deployment
 
 ```bash
-pnpm exec wrangler deploy
+pnpm deploy
 ```
 
 Or via CI/CD on push to main branch.
@@ -81,15 +81,9 @@ Or via CI/CD on push to main branch.
 
 ```
 src/
-├── index.ts           # Worker entry, queue and cron handlers
+├── fly.ts             # Bun process entrypoint
+├── index.ts           # Queue and scheduled job handlers
 ├── certificate.ts     # Certificate PDF generation
 ├── label.ts           # Label PDF generation
 └── scheduled.ts       # Cron job handlers
 ```
-
-## Cloudflare Resources
-
-- **Queue:** `calibration-pdf-queue` - Receives PDF generation requests
-- **R2 Bucket:** `calibrafacil-certificates` - Stores generated PDFs using `org/{orgId}/{YYYY}/jobs/{jobId}/...` keys
-- **Browser:** Puppeteer service for PDF rendering
-- **Hyperdrive:** Database connection proxy

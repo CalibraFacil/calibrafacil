@@ -47,7 +47,7 @@ const localUrlDefaults = {
   PORTAL_APP_URL: "http://localhost:5174",
 };
 
-function parseDevVars(contents: string): Record<string, string> {
+function parseLocalEnv(contents: string): Record<string, string> {
   const env: Record<string, string> = {};
 
   for (const line of contents.split(/\r?\n/)) {
@@ -73,13 +73,19 @@ function parseDevVars(contents: string): Record<string, string> {
   return env;
 }
 
-async function loadDevVars() {
+async function loadLocalEnv() {
   if (isProduction) return {};
 
-  const file = Bun.file(new URL(".dev.vars", appDirectory));
-  if (!(await file.exists())) return {};
+  const env: Record<string, string> = {};
 
-  return parseDevVars(await file.text());
+  for (const filename of [".env", ".env.local"]) {
+    const file = Bun.file(new URL(filename, appDirectory));
+    if (await file.exists()) {
+      Object.assign(env, parseLocalEnv(await file.text()));
+    }
+  }
+
+  return env;
 }
 
 function createLocalKv(): LocalKvNamespace {
@@ -112,7 +118,7 @@ function createLocalKv(): LocalKvNamespace {
 }
 
 async function createEnv(): Promise<BunApiEnv> {
-  const devVars = await loadDevVars();
+  const localEnv = await loadLocalEnv();
   const defaults = isProduction
     ? {
         NODE_ENV: "production",
@@ -127,7 +133,7 @@ async function createEnv(): Promise<BunApiEnv> {
 
   const env = {
     ...defaults,
-    ...devVars,
+    ...localEnv,
     ...Bun.env,
   } as Record<string, unknown>;
 
