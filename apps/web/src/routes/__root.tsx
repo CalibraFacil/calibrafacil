@@ -1,6 +1,7 @@
 import { Outlet, createRootRouteWithContext } from '@tanstack/react-router'
 import { NuqsAdapter } from 'nuqs/adapters/tanstack-router'
 import { QueryClientProvider } from '@tanstack/react-query'
+import { Analytics } from '@vercel/analytics/react'
 
 import type { QueryClient } from '@tanstack/react-query'
 
@@ -28,6 +29,7 @@ function RootComponent() {
         <NuqsAdapter>
           <Outlet />
         </NuqsAdapter>
+        <Analytics />
         <Toaster richColors position="top-center" />
       </ThemeProvider>
     </QueryClientProvider>
