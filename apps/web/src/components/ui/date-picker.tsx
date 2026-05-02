@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/popover'
 
 interface DatePickerProps {
+  id?: string
+  name?: string
   value?: Date
   onChange?: (date: Date | undefined) => void
   placeholder?: string
@@ -31,6 +33,8 @@ function defaultFormatDate(date: Date): string {
 }
 
 function DatePicker({
+  id,
+  name,
   value,
   onChange,
   placeholder = 'Selecione uma data',
@@ -47,6 +51,8 @@ function DatePicker({
         disabled={disabled}
         render={
           <Button
+            id={id}
+            name={name}
             variant="outline"
             disabled={disabled}
             data-empty={!value}

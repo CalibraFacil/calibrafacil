@@ -112,206 +112,218 @@ export function DynamicSpecsForm({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="border-t pt-4">
-        <h3 className="text-sm font-medium text-muted-foreground mb-4">
-          Especificações Técnicas
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {definition.map((field) => (
-            <Field
-              key={field.key}
-              className={
-                field.type === 'weighing_ranges' ? 'sm:col-span-2' : undefined
-              }
-            >
-              <FieldLabel htmlFor={`spec-${field.key}`}>
-                {field.label}
-                {field.required && ' *'}
-              </FieldLabel>
+    <div className="grid gap-5 sm:grid-cols-2">
+      {definition.map((field) => (
+        <Field
+          key={field.key}
+          className={
+            field.type === 'weighing_ranges' ? 'sm:col-span-2' : undefined
+          }
+        >
+          <FieldLabel htmlFor={`spec-${field.key}`}>
+            {field.label}
+            {field.required && ' *'}
+          </FieldLabel>
 
-              {field.type === 'weighing_ranges' ? (
-                <div className="space-y-3 rounded-md border p-3 sm:col-span-2">
-                  {(Array.isArray(value[field.key])
-                    ? (value[field.key] as WeighingRangeSpec[])
-                    : []
-                  ).map((range, index) => (
-                    <div
-                      key={index}
-                      className={`grid gap-2 rounded-md bg-muted/40 p-2 ${
-                        activeMassUnit
-                          ? 'md:grid-cols-[1fr_100px_100px_120px_auto]'
-                          : 'md:grid-cols-[1fr_90px_90px_80px_100px_80px_auto]'
-                      }`}
-                    >
-                      <Input
-                        value={range.label}
-                        onChange={(event) =>
-                          updateWeighingRange(field.key, index, {
-                            label: event.target.value,
-                          })
-                        }
-                        placeholder="Faixa 1"
-                        disabled={disabled}
-                      />
-                      <Input
-                        type="number"
-                        step="any"
-                        value={range.min ?? ''}
-                        onChange={(event) =>
-                          updateWeighingRange(field.key, index, {
-                            min:
-                              event.target.value === ''
-                                ? null
-                                : parseFloat(event.target.value),
-                          })
-                        }
-                        placeholder="Min"
-                        disabled={disabled}
-                      />
-                      <Input
-                        type="number"
-                        step="any"
-                        value={range.max ?? ''}
-                        onChange={(event) =>
-                          updateWeighingRange(field.key, index, {
-                            max:
-                              event.target.value === ''
-                                ? null
-                                : parseFloat(event.target.value),
-                          })
-                        }
-                        placeholder="Max"
-                        disabled={disabled}
-                      />
-                      {activeMassUnit ? (
-                        <div className="flex items-center rounded-md border bg-background px-3 text-sm text-muted-foreground">
-                          {activeMassUnit}
-                        </div>
-                      ) : (
-                        <Input
-                          value={range.rangeUnit}
-                          onChange={(event) =>
-                            updateWeighingRange(field.key, index, {
-                              rangeUnit: event.target.value,
-                            })
-                          }
-                          placeholder="kg"
-                          disabled={disabled}
-                        />
-                      )}
-                      <Input
-                        type="number"
-                        step="any"
-                        value={range.resolution ?? ''}
-                        onChange={(event) =>
-                          updateWeighingRange(field.key, index, {
-                            resolution:
-                              event.target.value === ''
-                                ? null
-                                : parseFloat(event.target.value),
-                          })
-                        }
-                        placeholder="Res."
-                        disabled={disabled}
-                      />
-                      {activeMassUnit ? (
-                        <div className="flex items-center rounded-md border bg-background px-3 text-sm text-muted-foreground">
-                          {activeMassUnit}
-                        </div>
-                      ) : (
-                        <Input
-                          value={range.resolutionUnit}
-                          onChange={(event) =>
-                            updateWeighingRange(field.key, index, {
-                              resolutionUnit: event.target.value,
-                            })
-                          }
-                          placeholder="g"
-                          disabled={disabled}
-                        />
-                      )}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="rounded-md border px-2 text-sm disabled:opacity-50"
-                        onClick={() => removeWeighingRange(field.key, index)}
-                        disabled={disabled}
-                      >
-                        Remover
-                      </Button>
+          {field.type === 'weighing_ranges' ? (
+            <div className="space-y-3 border-y py-3 sm:col-span-2">
+              {(Array.isArray(value[field.key])
+                ? (value[field.key] as WeighingRangeSpec[])
+                : []
+              ).map((range, index) => (
+                <div
+                  key={index}
+                  className={`grid gap-2 border-b pb-3 last:border-b-0 last:pb-0 ${
+                    activeMassUnit
+                      ? 'md:grid-cols-[1fr_100px_100px_120px_auto]'
+                      : 'md:grid-cols-[1fr_90px_90px_80px_100px_80px_auto]'
+                  }`}
+                >
+                  <Input
+                    value={range.label}
+                    onChange={(event) =>
+                      updateWeighingRange(field.key, index, {
+                        label: event.target.value,
+                      })
+                    }
+                    placeholder="Faixa 1…"
+                    disabled={disabled}
+                    aria-label={`${field.label}: nome da faixa ${index + 1}`}
+                    autoComplete="off"
+                  />
+                  <Input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    value={range.min ?? ''}
+                    onChange={(event) =>
+                      updateWeighingRange(field.key, index, {
+                        min:
+                          event.target.value === ''
+                            ? null
+                            : parseFloat(event.target.value),
+                      })
+                    }
+                    placeholder="Mín…"
+                    disabled={disabled}
+                    aria-label={`${field.label}: mínimo da faixa ${index + 1}`}
+                    autoComplete="off"
+                  />
+                  <Input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    value={range.max ?? ''}
+                    onChange={(event) =>
+                      updateWeighingRange(field.key, index, {
+                        max:
+                          event.target.value === ''
+                            ? null
+                            : parseFloat(event.target.value),
+                      })
+                    }
+                    placeholder="Máx…"
+                    disabled={disabled}
+                    aria-label={`${field.label}: máximo da faixa ${index + 1}`}
+                    autoComplete="off"
+                  />
+                  {activeMassUnit ? (
+                    <div className="flex h-9 items-center border-y border-r bg-muted/40 px-3 text-sm text-muted-foreground">
+                      {activeMassUnit}
                     </div>
-                  ))}
+                  ) : (
+                    <Input
+                      value={range.rangeUnit}
+                      onChange={(event) =>
+                        updateWeighingRange(field.key, index, {
+                          rangeUnit: event.target.value,
+                        })
+                      }
+                      placeholder="kg…"
+                      disabled={disabled}
+                      aria-label={`${field.label}: unidade da faixa ${
+                        index + 1
+                      }`}
+                      autoComplete="off"
+                    />
+                  )}
+                  <Input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    value={range.resolution ?? ''}
+                    onChange={(event) =>
+                      updateWeighingRange(field.key, index, {
+                        resolution:
+                          event.target.value === ''
+                            ? null
+                            : parseFloat(event.target.value),
+                      })
+                    }
+                    placeholder="Res…"
+                    disabled={disabled}
+                    aria-label={`${field.label}: resolução da faixa ${
+                      index + 1
+                    }`}
+                    autoComplete="off"
+                  />
+                  {activeMassUnit ? (
+                    <div className="flex h-9 items-center border-y border-r bg-muted/40 px-3 text-sm text-muted-foreground">
+                      {activeMassUnit}
+                    </div>
+                  ) : (
+                    <Input
+                      value={range.resolutionUnit}
+                      onChange={(event) =>
+                        updateWeighingRange(field.key, index, {
+                          resolutionUnit: event.target.value,
+                        })
+                      }
+                      placeholder="g…"
+                      disabled={disabled}
+                      aria-label={`${field.label}: unidade da resolução da faixa ${
+                        index + 1
+                      }`}
+                      autoComplete="off"
+                    />
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="rounded-md border px-3 py-2 text-sm disabled:opacity-50"
-                    onClick={() => addWeighingRange(field.key)}
+                    className="md:justify-self-end"
+                    onClick={() => removeWeighingRange(field.key, index)}
                     disabled={disabled}
                   >
-                    Adicionar faixa
+                    Remover
                   </Button>
                 </div>
-              ) : field.type === 'select' && field.options ? (
-                <Select
-                  value={(value[field.key] as string) || ''}
-                  onValueChange={(val) => updateField(field.key, val)}
-                  disabled={disabled}
-                >
-                  <SelectTrigger id={`spec-${field.key}`}>
-                    <span>
-                      {(value[field.key] as string) || 'Selecione...'}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {field.options.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : field.type === 'number' ? (
-                <div className="flex">
-                  <Input
-                    id={`spec-${field.key}`}
-                    type="number"
-                    step="any"
-                    value={(value[field.key] as string | number) ?? ''}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      updateField(field.key, val === '' ? '' : parseFloat(val))
-                    }}
-                    disabled={disabled}
-                    className={
-                      getDisplayUnit(field.unit) ? 'rounded-r-none' : ''
-                    }
-                  />
-                  {getDisplayUnit(field.unit) && (
-                    <span className="inline-flex items-center px-3 text-sm text-muted-foreground bg-muted border border-l-0 border-input rounded-r-md">
-                      {getDisplayUnit(field.unit)}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <Input
-                  id={`spec-${field.key}`}
-                  type="text"
-                  value={(value[field.key] as string) ?? ''}
-                  onChange={(e) => updateField(field.key, e.target.value)}
-                  disabled={disabled}
-                />
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addWeighingRange(field.key)}
+                disabled={disabled}
+              >
+                Adicionar faixa
+              </Button>
+            </div>
+          ) : field.type === 'select' && field.options ? (
+            <Select
+              value={(value[field.key] as string) || ''}
+              onValueChange={(val) => updateField(field.key, val)}
+              disabled={disabled}
+            >
+              <SelectTrigger id={`spec-${field.key}`}>
+                <span>{(value[field.key] as string) || 'Selecione…'}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {field.options.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : field.type === 'number' ? (
+            <div className="flex">
+              <Input
+                id={`spec-${field.key}`}
+                name={`spec-${field.key}`}
+                type="number"
+                step="any"
+                inputMode="decimal"
+                value={(value[field.key] as string | number) ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value
+                  updateField(field.key, val === '' ? '' : parseFloat(val))
+                }}
+                disabled={disabled}
+                autoComplete="off"
+                className={getDisplayUnit(field.unit) ? 'rounded-r-none' : ''}
+              />
+              {getDisplayUnit(field.unit) && (
+                <span className="inline-flex items-center rounded-r-md border border-l-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+                  {getDisplayUnit(field.unit)}
+                </span>
               )}
+            </div>
+          ) : (
+            <Input
+              id={`spec-${field.key}`}
+              name={`spec-${field.key}`}
+              type="text"
+              value={(value[field.key] as string) ?? ''}
+              onChange={(e) => updateField(field.key, e.target.value)}
+              disabled={disabled}
+              autoComplete="off"
+            />
+          )}
 
-              {errors[field.key] && (
-                <FieldError>{errors[field.key]}</FieldError>
-              )}
-            </Field>
-          ))}
-        </div>
-      </div>
+          {errors[field.key] && <FieldError>{errors[field.key]}</FieldError>}
+        </Field>
+      ))}
     </div>
   )
 }
