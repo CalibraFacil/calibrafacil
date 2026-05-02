@@ -5,34 +5,12 @@ import {
   type AppQueueJobStatus,
   type AppQueueJobType,
 } from "./schema.js";
+import type { BackgroundJobMessage } from "@calibra-facil/shared";
 
-export type QueueMessage =
-  | {
-      type?: "CERTIFICATE" | "LABEL";
-      jobId: number;
-      userId: string;
-    }
-  | {
-      type:
-        | "SERVICE_ORDER_INTAKE_DOCUMENT"
-        | "SERVICE_ORDER_TAG"
-        | "SERVICE_ORDER_QUOTE"
-        | "SERVICE_ORDER_DELIVERY_RECEIPT";
-      serviceOrderId: number;
-      documentId?: number;
-      tagId?: number;
-      quoteId?: number;
-      userId: string;
-    }
-  | {
-      type: "INTEGRATION_SYNC";
-      integrationId: string;
-      organizationId: string;
-      runId: string;
-      target: "customer" | "service_order" | "billing_document";
-      limit: number;
-      trigger: "manual" | "event" | "scheduled" | "retry";
-    };
+export type QueueMessage = Exclude<
+  BackgroundJobMessage,
+  { type: "SCHEDULED_NOTIFICATIONS" }
+>;
 
 export type ClaimedQueueJob = {
   id: number;

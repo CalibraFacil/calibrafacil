@@ -30,8 +30,12 @@ import {
   processScheduledIntegrationSyncs,
   type IntegrationSyncQueueMessage,
 } from "./integrations.js";
+import {
+  type BackgroundJobMessage,
+  type DocumentBackgroundJobMessage,
+} from "@calibra-facil/shared";
 
-interface Env {
+export interface Env {
   CERTIFICATES_BUCKET: {
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
     put(
@@ -46,27 +50,9 @@ interface Env {
   INTEGRATIONS_MASTER_KEY?: string;
 }
 
-type QueueMessage =
-  | {
-      type?: "CERTIFICATE" | "LABEL";
-      jobId: number;
-      userId: string;
-    }
-  | {
-      type:
-        | "SERVICE_ORDER_INTAKE_DOCUMENT"
-        | "SERVICE_ORDER_TAG"
-        | "SERVICE_ORDER_QUOTE"
-        | "SERVICE_ORDER_DELIVERY_RECEIPT";
-      serviceOrderId: number;
-      documentId?: number;
-      tagId?: number;
-      quoteId?: number;
-      userId: string;
-    }
-  | IntegrationSyncQueueMessage;
+export type QueueMessage = BackgroundJobMessage;
 
-interface MessageBatch<T> {
+export interface MessageBatch<T> {
   messages: {
     body: T;
     ack: () => void;
@@ -384,7 +370,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = "";
   for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+    binary += String.fromCharCode(bytes[i] ?? 0);
   }
   return btoa(binary);
 }
@@ -1293,6 +1279,23 @@ async function configurePage(page: Page): Promise<void> {
 }
 
 async function launchBrowser(env: Env): Promise<Browser> {
+  if (process.env.VERCEL) {
+    const chromium = await import("@sparticuz/chromium");
+    const puppeteerCore = await import("puppeteer-core");
+    const executablePath =
+      env.CHROME_EXECUTABLE_PATH ?? (await chromium.default.executablePath());
+
+    return puppeteerCore.default.launch({
+      executablePath,
+      headless: true,
+      args: [
+        ...chromium.default.args,
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+      ],
+    }) as Promise<Browser>;
+  }
+
   return puppeteer.launch({
     executablePath: env.CHROME_EXECUTABLE_PATH,
     headless: true,
@@ -1488,6 +1491,189 @@ async function processJob(
   }
 }
 
+function isDocumentMessage(
+  message: BackgroundJobMessage,
+): message is DocumentBackgroundJobMessage {
+  return (
+    message.type !== "INTEGRATION_SYNC" &&
+    message.type !== "SCHEDULED_NOTIFICATIONS"
+  );
+}
+
+async function processDocumentMessage(
+  env: Env,
+  page: Page,
+  body: DocumentBackgroundJobMessage,
+) {
+  if (
+    body.type === "SERVICE_ORDER_INTAKE_DOCUMENT" ||
+    body.type === "SERVICE_ORDER_TAG" ||
+    body.type === "SERVICE_ORDER_QUOTE" ||
+    body.type === "SERVICE_ORDER_DELIVERY_RECEIPT"
+  ) {
+    let result: { success: boolean; error?: string };
+    if (body.type === "SERVICE_ORDER_INTAKE_DOCUMENT") {
+      result = await processServiceOrderIntakeDocument(
+        env,
+        page,
+        body.serviceOrderId,
+        body.documentId,
+        body.userId,
+      );
+    } else if (body.type === "SERVICE_ORDER_TAG") {
+      result = await processServiceOrderTag(
+        env,
+        page,
+        body.serviceOrderId,
+        body.tagId,
+        body.userId,
+      );
+    } else if (body.type === "SERVICE_ORDER_QUOTE") {
+      result = await processServiceOrderQuote(
+        env,
+        page,
+        body.serviceOrderId,
+        body.quoteId,
+      );
+    } else {
+      result = await processServiceOrderDeliveryReceipt(
+        env,
+        page,
+        body.serviceOrderId,
+        body.documentId,
+        body.userId,
+      );
+    }
+
+    if (!result.success) {
+      throw new Error(result.error ?? `${body.type} failed`);
+    }
+    return;
+  }
+
+  const calibrationBody = body as {
+    type?: "CERTIFICATE" | "LABEL";
+    jobId: number;
+    userId: string;
+  };
+  const messageType = calibrationBody.type || "CERTIFICATE";
+  const result =
+    messageType === "LABEL"
+      ? await processLabelJob(
+          env,
+          page,
+          calibrationBody.jobId,
+          calibrationBody.userId,
+        )
+      : await processJob(
+          env,
+          page,
+          calibrationBody.jobId,
+          calibrationBody.userId,
+        );
+
+  if (!result.success && messageType !== "LABEL") {
+    await withDbClient(env, (client) =>
+      setJobError(
+        client,
+        calibrationBody.jobId,
+        result.error || "Unknown error",
+        calibrationBody.userId,
+      ),
+    ).catch((dbError) => {
+      console.error(
+        `[JOB ${calibrationBody.jobId}] Failed to record error:`,
+        dbError,
+      );
+    });
+  }
+
+  if (!result.success) {
+    throw new Error(result.error ?? `${messageType} generation failed`);
+  }
+}
+
+export async function processBackgroundJob(
+  env: Env,
+  message: BackgroundJobMessage,
+) {
+  if (message.type === "INTEGRATION_SYNC") {
+    await processIntegrationSync(env, message as IntegrationSyncQueueMessage);
+    return;
+  }
+
+  if (message.type === "SCHEDULED_NOTIFICATIONS") {
+    await processScheduledNotifications(env);
+    return;
+  }
+
+  const browserStart = performance.now();
+  const browser = await launchBrowser(env);
+  console.log(
+    `[JOB] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`,
+  );
+
+  try {
+    const pageStart = performance.now();
+    const page = await browser.newPage();
+    await configurePage(page);
+    console.log(
+      `[JOB] browser.newPage + configure: ${Math.round(performance.now() - pageStart)}ms`,
+    );
+    await processDocumentMessage(env, page, message);
+  } finally {
+    await browser.close().catch((e) => {
+      console.error("[JOB] browser.close failed:", e);
+    });
+  }
+}
+
+export async function processBackgroundJobBatch(
+  env: Env,
+  messages: BackgroundJobMessage[],
+) {
+  const integrationMessages = messages.filter(
+    (message) => message.type === "INTEGRATION_SYNC",
+  );
+  const scheduledNotificationMessages = messages.filter(
+    (message) => message.type === "SCHEDULED_NOTIFICATIONS",
+  );
+  const documentMessages = messages.filter(isDocumentMessage);
+
+  for (const message of integrationMessages) {
+    await processIntegrationSync(env, message as IntegrationSyncQueueMessage);
+  }
+
+  for (const _message of scheduledNotificationMessages) {
+    await processScheduledNotifications(env);
+  }
+
+  if (documentMessages.length === 0) return;
+
+  const browserStart = performance.now();
+  const browser = await launchBrowser(env);
+  console.log(
+    `[BATCH] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`,
+  );
+
+  try {
+    const pageStart = performance.now();
+    const page = await browser.newPage();
+    await configurePage(page);
+    console.log(
+      `[BATCH] browser.newPage + configure: ${Math.round(performance.now() - pageStart)}ms`,
+    );
+
+    for (const message of documentMessages) {
+      await processDocumentMessage(env, page, message);
+    }
+  } finally {
+    await browser.close().catch((e) => {
+      console.error("[BATCH] browser.close failed:", e);
+    });
+  }
+}
+
 export default {
   async queue(
     batch: MessageBatch<QueueMessage>,
@@ -1498,133 +1684,16 @@ export default {
     console.log(`[BATCH] Processing ${batchSize} job(s)`);
     const batchStart = performance.now();
 
-    const integrationMessages = batch.messages.filter(
-      (msg) => msg.body.type === "INTEGRATION_SYNC",
-    );
-    const documentMessages = batch.messages.filter(
-      (msg) => msg.body.type !== "INTEGRATION_SYNC",
-    );
-
-    for (const msg of integrationMessages) {
-      const body = msg.body as IntegrationSyncQueueMessage;
+    for (const msg of batch.messages) {
       try {
-        await processIntegrationSync(env, body);
+        await processBackgroundJob(env, msg.body);
         msg.ack();
       } catch (error) {
-        console.error("[INTEGRATION_SYNC] Failed to process message:", {
+        console.error("[BATCH] Failed to process message:", {
           error,
-          body,
+          body: msg.body,
         });
-      }
-    }
-
-    if (documentMessages.length > 0) {
-      // Launch browser ONCE for the entire document batch
-      const browserStart = performance.now();
-      const browser = await launchBrowser(env);
-      console.log(
-        `[BATCH] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`,
-      );
-
-      // Create page ONCE and reuse
-      const pageStart = performance.now();
-      const page = await browser.newPage();
-      await configurePage(page);
-      console.log(
-        `[BATCH] browser.newPage + configure: ${Math.round(performance.now() - pageStart)}ms`,
-      );
-
-      try {
-        for (const msg of documentMessages) {
-          const body = msg.body;
-          if (
-            body.type === "SERVICE_ORDER_INTAKE_DOCUMENT" ||
-            body.type === "SERVICE_ORDER_TAG" ||
-            body.type === "SERVICE_ORDER_QUOTE" ||
-            body.type === "SERVICE_ORDER_DELIVERY_RECEIPT"
-          ) {
-            let result: { success: boolean; error?: string };
-            if (body.type === "SERVICE_ORDER_INTAKE_DOCUMENT") {
-              result = await processServiceOrderIntakeDocument(
-                env,
-                page,
-                body.serviceOrderId,
-                body.documentId,
-                body.userId,
-              );
-            } else if (body.type === "SERVICE_ORDER_TAG") {
-              result = await processServiceOrderTag(
-                env,
-                page,
-                body.serviceOrderId,
-                body.tagId,
-                body.userId,
-              );
-            } else if (body.type === "SERVICE_ORDER_QUOTE") {
-              result = await processServiceOrderQuote(
-                env,
-                page,
-                body.serviceOrderId,
-                body.quoteId,
-              );
-            } else {
-              result = await processServiceOrderDeliveryReceipt(
-                env,
-                page,
-                body.serviceOrderId,
-                body.documentId,
-                body.userId,
-              );
-            }
-            if (!result.success) {
-              console.error(
-                `[${body.type} ${body.serviceOrderId}] Failed:`,
-                result.error,
-              );
-            }
-            msg.ack();
-            continue;
-          }
-
-          const { jobId, userId, type } = body as {
-            type?: "CERTIFICATE" | "LABEL";
-            jobId: number;
-            userId: string;
-          };
-          const messageType = type || "CERTIFICATE";
-
-          let result: { success: boolean; error?: string };
-
-          if (messageType === "LABEL") {
-            result = await processLabelJob(env, page, jobId, userId);
-            if (!result.success) {
-              console.error(`[LABEL ${jobId}] Failed:`, result.error);
-            }
-          } else {
-            result = await processJob(env, page, jobId, userId);
-            if (!result.success) {
-              await withDbClient(env, (client) =>
-                setJobError(
-                  client,
-                  jobId,
-                  result.error || "Unknown error",
-                  userId,
-                ),
-              ).catch((dbError) => {
-                console.error(
-                  `[JOB ${jobId}] Failed to record error:`,
-                  dbError,
-                );
-              });
-            }
-          }
-
-          msg.ack();
-        }
-      } finally {
-        await browser.close().catch((e) => {
-          console.error("[BATCH] browser.close failed:", e);
-        });
+        msg.retry();
       }
     }
 

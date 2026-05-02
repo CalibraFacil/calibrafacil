@@ -31,6 +31,10 @@ export interface IntegrationSyncQueueMessage {
   trigger: IntegrationSyncTrigger;
 }
 
+type ScheduledIntegrationSyncOptions = {
+  dispatch?: (message: IntegrationSyncQueueMessage) => Promise<void>;
+};
+
 interface IntegrationWorkerEnv {
   HYPERDRIVE: { connectionString: string };
   INTEGRATIONS_MASTER_KEY?: string;
@@ -780,6 +784,7 @@ type DueScheduledRun = {
 
 export async function processScheduledIntegrationSyncs(
   env: IntegrationWorkerEnv,
+  options: ScheduledIntegrationSyncOptions = {},
 ): Promise<{ scheduledRuns: number }> {
   return withDbClient(env, async (client) => {
     const integrations = await client.query(
@@ -871,16 +876,22 @@ export async function processScheduledIntegrationSyncs(
         requestedLimit: dueRun.limit,
       });
 
+      const message: IntegrationSyncQueueMessage = {
+        type: "INTEGRATION_SYNC",
+        integrationId: dueRun.integrationId,
+        organizationId: dueRun.organizationId,
+        runId,
+        target: dueRun.target,
+        limit: dueRun.limit,
+        trigger: dueRun.trigger,
+      };
+
       try {
-        await processIntegrationSync(env, {
-          type: "INTEGRATION_SYNC",
-          integrationId: dueRun.integrationId,
-          organizationId: dueRun.organizationId,
-          runId,
-          target: dueRun.target,
-          limit: dueRun.limit,
-          trigger: dueRun.trigger,
-        });
+        if (options.dispatch) {
+          await options.dispatch(message);
+        } else {
+          await processIntegrationSync(env, message);
+        }
       } catch (error) {
         console.error("[IntegrationScheduler] Failed scheduled run", {
           integrationId: dueRun.integrationId,

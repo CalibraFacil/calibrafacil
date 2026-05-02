@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
-import { enqueueQueueJob } from "@calibra-facil/db/queue";
+import { enqueueBackgroundJob } from "../lib/background-jobs";
 import {
   integrationEventLog,
   integrationSyncRun,
@@ -238,7 +238,7 @@ async function dispatchSyncRun(params: {
   trigger: "manual" | "event" | "scheduled" | "retry";
 }) {
   try {
-    await enqueueQueueJob({
+    await enqueueBackgroundJob({
       type: "INTEGRATION_SYNC",
       integrationId: params.integrationId,
       organizationId: params.organizationId,
