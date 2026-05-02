@@ -131,46 +131,42 @@ export const ServiceOrderAssetSnapshotInputSchema = z.object({
   photos: z.array(z.string().trim().min(1).max(2048)).default([]),
 });
 
-export const CreateServiceOrderSchema = z
-  .object({
-    customerId: z.coerce.number().int().positive(),
-    clientContactId: z.coerce.number().int().positive().optional().nullable(),
-    clientContactSnapshot: z.record(z.string(), z.unknown()).optional(),
-    assetId: z.coerce.number().int().positive(),
-    intakeType: ServiceOrderIntakeTypeSchema.default("counter"),
-    sourceServiceOrderId: z.coerce
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .nullable(),
-    priority: ServiceOrderPrioritySchema.default("normal"),
-    responsibleTechnicianId: z.string().trim().min(1).optional().nullable(),
-    claimedDefect: z.string().trim().min(1).max(5000),
-    intakeCondition: z.string().trim().min(1).max(5000),
-    accessories: z.string().trim().max(5000).optional().nullable(),
-    oldSealNumber: z.string().trim().max(120).optional().nullable(),
-    newSealNumber: z.string().trim().max(120).optional().nullable(),
-    repairedSealNumber: z.string().trim().max(120).optional().nullable(),
-    inmetroRepairSealNumber: z.string().trim().max(120).optional().nullable(),
-    invoiceRemittanceNumber: z.string().trim().max(120).optional().nullable(),
-    invoiceRemittanceKey: z.string().trim().max(80).optional().nullable(),
-    invoiceRemittanceIssuedAt: z.string().datetime().optional().nullable(),
-    carrierName: z.string().trim().max(200).optional().nullable(),
-    carrierDocument: z.string().trim().max(80).optional().nullable(),
-    thirdPartyName: z.string().trim().max(200).optional().nullable(),
-    thirdPartyDocument: z.string().trim().max(80).optional().nullable(),
-    thirdPartyPhone: z.string().trim().max(80).optional().nullable(),
-    deliveryMethod: ServiceOrderDeliveryMethodSchema.default("pickup_at_lab"),
-    internalNotes: nullableText,
-    clientVisibleNotes: nullableText,
-    evaluationFeeCents: moneyCents.default(0),
-    warrantyUntil: z.string().datetime().optional().nullable(),
-    warrantyTerms: nullableText,
-    assetSnapshot: ServiceOrderAssetSnapshotInputSchema.optional(),
-    signatureData: ServiceOrderSignatureDataSchema.optional().nullable(),
-  })
-  .superRefine((input, ctx) => {
+const ServiceOrderInputBaseSchema = z.object({
+  customerId: z.coerce.number().int().positive(),
+  clientContactId: z.coerce.number().int().positive().optional().nullable(),
+  clientContactSnapshot: z.record(z.string(), z.unknown()).optional(),
+  assetId: z.coerce.number().int().positive(),
+  intakeType: ServiceOrderIntakeTypeSchema.default("counter"),
+  sourceServiceOrderId: z.coerce.number().int().positive().optional().nullable(),
+  priority: ServiceOrderPrioritySchema.default("normal"),
+  responsibleTechnicianId: z.string().trim().min(1).optional().nullable(),
+  claimedDefect: z.string().trim().min(1).max(5000),
+  intakeCondition: z.string().trim().min(1).max(5000),
+  accessories: z.string().trim().max(5000).optional().nullable(),
+  oldSealNumber: z.string().trim().max(120).optional().nullable(),
+  newSealNumber: z.string().trim().max(120).optional().nullable(),
+  repairedSealNumber: z.string().trim().max(120).optional().nullable(),
+  inmetroRepairSealNumber: z.string().trim().max(120).optional().nullable(),
+  invoiceRemittanceNumber: z.string().trim().max(120).optional().nullable(),
+  invoiceRemittanceKey: z.string().trim().max(80).optional().nullable(),
+  invoiceRemittanceIssuedAt: z.string().datetime().optional().nullable(),
+  carrierName: z.string().trim().max(200).optional().nullable(),
+  carrierDocument: z.string().trim().max(80).optional().nullable(),
+  thirdPartyName: z.string().trim().max(200).optional().nullable(),
+  thirdPartyDocument: z.string().trim().max(80).optional().nullable(),
+  thirdPartyPhone: z.string().trim().max(80).optional().nullable(),
+  deliveryMethod: ServiceOrderDeliveryMethodSchema.default("pickup_at_lab"),
+  internalNotes: nullableText,
+  clientVisibleNotes: nullableText,
+  evaluationFeeCents: moneyCents.default(0),
+  warrantyUntil: z.string().datetime().optional().nullable(),
+  warrantyTerms: nullableText,
+  assetSnapshot: ServiceOrderAssetSnapshotInputSchema.optional(),
+  signatureData: ServiceOrderSignatureDataSchema.optional().nullable(),
+});
+
+export const CreateServiceOrderSchema = ServiceOrderInputBaseSchema.superRefine(
+  (input, ctx) => {
     if (input.intakeType === "warranty_return" && !input.sourceServiceOrderId) {
       ctx.addIssue({
         code: "custom",
@@ -178,9 +174,10 @@ export const CreateServiceOrderSchema = z
         message: "OS de garantia deve referenciar a OS de origem",
       });
     }
-  });
+  },
+);
 
-export const UpdateServiceOrderSchema = CreateServiceOrderSchema.omit({
+export const UpdateServiceOrderSchema = ServiceOrderInputBaseSchema.omit({
   customerId: true,
   assetId: true,
   assetSnapshot: true,
