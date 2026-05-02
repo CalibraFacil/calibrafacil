@@ -1,6 +1,7 @@
 import { ArrowRight01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link, useLocation } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
 
 import {
   Collapsible,
@@ -71,14 +72,45 @@ export function NavMain({ items, label = 'Dashboard' }: NavMainProps) {
             item.items?.some((sub) => matchesPath(sub.url))
 
           return (
-            <Collapsible
+            <NavMainCollapsible
               key={item.title}
-              defaultOpen={isActive}
-              render={<SidebarMenuItem />}
-            >
-              {item.items?.length ? (
-                <>
-                  <CollapsibleTrigger
+              isActive={Boolean(isActive)}
+              item={item}
+              matchesPath={matchesPath}
+            />
+          )
+        })}
+      </SidebarMenu>
+    </SidebarGroup>
+  )
+}
+
+function NavMainCollapsible({
+  item,
+  isActive,
+  matchesPath,
+}: {
+  item: NavMainItem
+  isActive: boolean
+  matchesPath: (targetUrl: string) => boolean
+}) {
+  const [open, setOpen] = useState(isActive)
+
+  useEffect(() => {
+    if (isActive) {
+      setOpen(true)
+    }
+  }, [isActive])
+
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      render={<SidebarMenuItem />}
+    >
+      {item.items?.length ? (
+        <>
+          <CollapsibleTrigger
                     render={
                       <SidebarMenuButton
                         isActive={isActive}
@@ -120,10 +152,6 @@ export function NavMain({ items, label = 'Dashboard' }: NavMainProps) {
                   <span>{item.title}</span>
                 </SidebarMenuButton>
               )}
-            </Collapsible>
-          )
-        })}
-      </SidebarMenu>
-    </SidebarGroup>
+    </Collapsible>
   )
 }

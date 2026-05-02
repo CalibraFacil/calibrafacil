@@ -48,12 +48,16 @@ const Button = React.forwardRef<
   React.ComponentRef<typeof ButtonPrimitive>,
   ButtonProps
 >(({ className, variant = 'default', size = 'default', ...props }, ref) => {
+  const nativeButton =
+    props.nativeButton ?? (props.render == null ? undefined : false)
+
   return (
     <ButtonPrimitive
       ref={ref}
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
+      nativeButton={nativeButton}
     />
   )
 })

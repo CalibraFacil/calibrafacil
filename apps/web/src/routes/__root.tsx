@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 
 import type { QueryClient } from '@tanstack/react-query'
 
+import { RouteIntentPrewarmer } from '@/components/route-intent-prewarmer'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -26,6 +27,7 @@ function RootComponent() {
         storageKey="theme"
       >
         <NuqsAdapter>
+          <RouteIntentPrewarmer />
           <Outlet />
         </NuqsAdapter>
         <Toaster richColors position="top-center" />
@@ -33,4 +35,3 @@ function RootComponent() {
     </QueryClientProvider>
   )
 }
-

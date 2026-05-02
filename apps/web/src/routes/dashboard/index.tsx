@@ -1,5 +1,4 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Alert02Icon,
@@ -13,7 +12,6 @@ import {
   UserIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
 import {
   Card,
   CardAction,
@@ -29,61 +27,18 @@ import { cn } from '@/lib/utils'
 import { jobRouteId } from '@/lib/route-identifiers'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useMountEffect } from '@/hooks/use-mount-effect'
+import {
+  loadDashboardIndexData,
+  useDashboardIndexData,
+  type DashboardStats,
+} from './-index.data'
 import { SectionCards } from './-components/section-cards'
 import { ChartCalibrations } from './-components/chart-calibrations'
 import { RecentJobsTable } from './-components/recent-jobs-table'
 
 const DASHBOARD_INDEX_MOUNT_MARK = 'dashboard:index:mount'
-const DASHBOARD_INDEX_FETCH_START_MARK = 'dashboard:index:fetch:start'
-const DASHBOARD_INDEX_FETCH_END_MARK = 'dashboard:index:fetch:end'
 const DASHBOARD_INDEX_DATA_READY_MARK = 'dashboard:index:data:ready'
 const DASHBOARD_INDEX_FIRST_CONTENT_MARK = 'dashboard:index:first-content'
-
-type JobStatus =
-  | 'DRAFT'
-  | 'IN_PROGRESS'
-  | 'REVIEW'
-  | 'GENERATING_PDF'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'CANCELED'
-  | 'SUPERSEDED'
-
-type DashboardJob = {
-  id: number
-  jobId: string
-  customerName: string | null
-  assetName: string | null
-  serviceName: string | null
-  technicianName: string | null
-  status: JobStatus
-  dueDate: string | null
-  isOverdue: boolean | null
-  createdAt: string
-}
-
-type DashboardStats = {
-  pendingCalibrations: number
-  approvedThisMonth: number
-  rejectedThisMonth: number
-  approvalRate: number
-  expiringStandards: number
-  overdueJobs: number
-  dueToday: number
-  dueNextSevenDays: number
-  statusBreakdown: Array<{ status: JobStatus; count: number }>
-  reviewQueue: DashboardJob[]
-  standardsWatchlist: Array<{
-    id: number
-    name: string
-    serialNumber: string
-    certificateNumber: string
-    nextCalibrationDate: string
-    status: string
-  }>
-  calibrationTrend: Array<{ date: string; approved: number; rejected: number }>
-  recentJobs: DashboardJob[]
-}
 
 function mark(name: string) {
   if (typeof window === 'undefined' || !window.performance) return
@@ -101,6 +56,7 @@ function measure(name: string, startMark: string, endMark: string) {
 }
 
 export const Route = createFileRoute('/dashboard/')({
+  loader: ({ context }) => loadDashboardIndexData(context.queryClient),
   head: () => ({
     meta: [
       {
@@ -117,27 +73,11 @@ function DashboardIndex() {
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
 
-  const { data, isPending, isFetching, refetch, isRefetching } = useQuery({
-    queryKey: ['dashboard', 'stats', activeOrganizationId ?? 'no-org'],
-    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
-    queryFn: async () => {
-      mark(DASHBOARD_INDEX_FETCH_START_MARK)
-      const res = await api.api.dashboard.stats.$get()
-      if (!res.ok) {
-        throw new Error('Falha ao carregar estatísticas')
-      }
-      const payload = (await res.json()) as DashboardStats
-      mark(DASHBOARD_INDEX_FETCH_END_MARK)
-      measure(
-        'dashboard:index:stats-fetch',
-        DASHBOARD_INDEX_FETCH_START_MARK,
-        DASHBOARD_INDEX_FETCH_END_MARK,
-      )
-      return payload
-    },
-    refetchInterval: 60000,
-    staleTime: 30000,
-  })
+  const { data, isPending, isFetching, refetch, isRefetching } =
+    useDashboardIndexData({
+      activeOrganizationId,
+      enabled: !isContextSwitching,
+    })
 
   const isLoading = !data && (isPending || isFetching)
 

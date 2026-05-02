@@ -291,12 +291,11 @@ function JobDetailPage() {
 
   // Fetch technicians for assign dialog
   const { data: techniciansData } = useQuery({
-    queryKey: ['technicians'],
+    queryKey: ['jobs', 'technicians'],
     queryFn: async () => {
       const res = await api.api.jobs['technicians'].list.$get()
       if (!res.ok) throw new Error('Falha ao carregar técnicos')
-      const data = await res.json()
-      return data.data as Technician[]
+      return res.json() as Promise<{ data: Technician[] }>
     },
     enabled: assignDialogOpen,
   })
@@ -1934,13 +1933,14 @@ function JobDetailPage() {
               <SelectTrigger>
                 <span>
                   {selectedTechnician
-                    ? techniciansData?.find((t) => t.id === selectedTechnician)
-                        ?.name
+                    ? techniciansData?.data.find(
+                        (t) => t.id === selectedTechnician,
+                      )?.name
                     : 'Selecione um técnico...'}
                 </span>
               </SelectTrigger>
               <SelectContent>
-                {techniciansData?.map((tech) => (
+                {techniciansData?.data.map((tech) => (
                   <SelectItem key={tech.id} value={tech.id}>
                     {tech.name}
                   </SelectItem>
