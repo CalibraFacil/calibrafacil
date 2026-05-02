@@ -88,6 +88,10 @@ const COMPOSITION_TOTAL_TARGETS: Array<
   ['buoyancy', 'buoyancy'],
 ]
 
+const PANEL_HIDDEN_COMPOSITION_TARGETS: Array<
+  keyof MassCompositionTargetColumns
+> = ['expandedUncertainty', 'maxError', 'drift', 'buoyancy']
+
 type TableColumn = NonNullable<MethodInputField['columns']>[number]
 type MeasurementColumnGroup = 'before' | 'after' | 'other'
 
@@ -231,6 +235,20 @@ export function TableInputRenderer({
   }
   const shouldGroupReadings =
     panelColumnGroups.before.length > 0 && panelColumnGroups.after.length > 0
+  const panelHiddenColumnKeys = new Set<string>()
+  for (const column of columns) {
+    if (column.role !== 'mass_standard_composition') continue
+
+    const targetColumns = column.massComposition?.targetColumns ?? {}
+    for (const targetName of PANEL_HIDDEN_COMPOSITION_TARGETS) {
+      const targetKey = targetColumns[targetName]
+      if (targetKey) {
+        panelHiddenColumnKeys.add(targetKey)
+      }
+    }
+  }
+  const isPanelVisibleColumn = (column: TableColumn) =>
+    !panelHiddenColumnKeys.has(column.key)
   const hasCertifiedValues = certifiedValueOptions.length > 0
   const weighingRangeResolver =
     field.weighingRangeResolver?.enabled !== false
@@ -672,12 +690,14 @@ export function TableInputRenderer({
                     <div className="space-y-4">
                       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {panelColumnGroups.primary.map((col) =>
-                          renderPanelColumn(
-                            row,
-                            rowIndex,
-                            col,
-                            calculatedTargets,
-                          ),
+                          isPanelVisibleColumn(col)
+                            ? renderPanelColumn(
+                                row,
+                                rowIndex,
+                                col,
+                                calculatedTargets,
+                              )
+                            : null,
                         )}
                       </div>
                       <div className="grid gap-3 xl:grid-cols-2">
@@ -700,12 +720,14 @@ export function TableInputRenderer({
                   ) : (
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {columns.map((col) =>
-                        renderPanelColumn(
-                          row,
-                          rowIndex,
-                          col,
-                          calculatedTargets,
-                        ),
+                        isPanelVisibleColumn(col)
+                          ? renderPanelColumn(
+                              row,
+                              rowIndex,
+                              col,
+                              calculatedTargets,
+                            )
+                          : null,
                       )}
                     </div>
                   )}
