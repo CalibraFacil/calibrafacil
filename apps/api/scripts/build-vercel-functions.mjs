@@ -16,7 +16,7 @@ const entries = [
   },
   {
     source: "vercel-src/index.ts",
-    functionPath: "api/index.func",
+    functionPath: "api.func",
     maxDuration: 30,
   },
   {
