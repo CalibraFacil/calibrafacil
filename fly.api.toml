@@ -1,0 +1,34 @@
+app = "calibra-facil-api"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile.api"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  API_URL = "https://api.calibrafacil.com"
+  APP_URL = "https://calibrafacil.com"
+  PORTAL_APP_URL = "https://portal.calibrafacil.com"
+  R2_BUCKET_NAME = "calibrafacil-certificates"
+  RESEND_FROM_EMAIL = "no-reply@calibrafacil.com"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "3s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/hello"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"

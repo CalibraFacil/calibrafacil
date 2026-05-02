@@ -19,8 +19,7 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true,
-      "passThroughEnv": ["PDF_LOCAL_PORT"]
+      "persistent": true
     }
   }
 }

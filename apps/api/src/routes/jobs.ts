@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
+import { enqueueQueueJob } from "@calibra-facil/db/queue";
 import {
   calibrationJob,
   jobAuditLog,
@@ -1703,21 +1704,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         reason: input.reason || "Aprovado - Gerando PDF",
       });
 
-      // Enqueue certificate generation (Cloudflare Queue)
-      // The PDF_QUEUE binding is available via c.env in Cloudflare Workers
-      type CloudflareQueue = { send: (body: unknown) => Promise<void> };
-      const env = c.env as { PDF_QUEUE?: CloudflareQueue };
-      if (env.PDF_QUEUE) {
-        await env.PDF_QUEUE.send({
-          jobId: id,
-          userId: session.user.id,
-        });
-      } else {
-        // Fallback for local dev: log a warning
-        console.warn(
-          `PDF_QUEUE not available. Job ${id} needs manual certificate generation.`,
-        );
-      }
+      await enqueueQueueJob({
+        jobId: id,
+        userId: session.user.id,
+      });
 
       // Send notification to technician (fire and forget)
       notifyJobApproved(id, session.user.id).catch((err) => {
@@ -2015,19 +2005,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .where(eq(calibrationJob.id, originalJob.id));
 
-      // Queue original job for PDF regeneration with CANCELADO watermark
-      type CloudflareQueue = { send: (body: unknown) => Promise<void> };
-      const env = c.env as { PDF_QUEUE?: CloudflareQueue };
-      if (env.PDF_QUEUE) {
-        await env.PDF_QUEUE.send({
-          jobId: originalJob.id,
-          userId: session.user.id,
-        });
-      } else {
-        console.warn(
-          `[Jobs] PDF_QUEUE not available. Superseded job ${originalJob.id} needs manual PDF regeneration.`,
-        );
-      }
+      await enqueueQueueJob({
+        jobId: originalJob.id,
+        userId: session.user.id,
+      });
 
       // Audit log for original job (superseded)
       await db.insert(jobAuditLog).values({
@@ -2494,20 +2475,11 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      // Enqueue label generation
-      type CloudflareQueue = { send: (body: unknown) => Promise<void> };
-      const env = c.env as { PDF_QUEUE?: CloudflareQueue };
-
-      if (env.PDF_QUEUE) {
-        await env.PDF_QUEUE.send({
-          type: "LABEL",
-          jobId: id,
-          userId: session.user.id,
-        });
-      } else {
-        console.warn(`PDF_QUEUE not available for label generation`);
-        return c.json({ error: "Servico de geracao indisponivel" }, 503);
-      }
+      await enqueueQueueJob({
+        type: "LABEL",
+        jobId: id,
+        userId: session.user.id,
+      });
 
       return c.json({
         message: "Gerando etiqueta...",

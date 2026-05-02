@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev --port 4321 --host",
+    "dev:bun": "bun node_modules/astro/astro.js dev --port 4321 --host",
     "build": "astro build",
     "preview": "astro preview",
-    "check-types": "astro check"
+    "check-types": "astro check",
+    "deploy": "wrangler pages deploy dist --project-name=calibra-facil-docs"
   },
   "dependencies": {
     "astro": "^5.17.1",

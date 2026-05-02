@@ -1,0 +1,34 @@
+FROM node:24-bookworm-slim AS build
+
+ARG APP_NAME
+ARG VITE_API_URL=https://api.calibrafacil.com
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm install -g pnpm@9 \
+  && curl -fsSL https://bun.sh/install | bash
+
+ENV PATH="/root/.bun/bin:${PATH}"
+ENV VITE_API_URL=${VITE_API_URL}
+WORKDIR /app
+
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm turbo build --filter=@calibra-facil/${APP_NAME}
+
+FROM oven/bun:1
+
+ARG APP_NAME
+ARG SPA_FALLBACK=false
+
+WORKDIR /app
+ENV PORT=8080
+ENV STATIC_DIR=/app/dist
+ENV SPA_FALLBACK=${SPA_FALLBACK}
+
+COPY --from=build /app/scripts/static-server.ts /app/scripts/static-server.ts
+COPY --from=build /app/apps/${APP_NAME}/dist /app/dist
+
+EXPOSE 8080
+CMD ["bun", "scripts/static-server.ts"]

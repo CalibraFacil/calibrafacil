@@ -4,12 +4,14 @@
   "version": "1.0.0",
   "exports": {
     ".": "./src/db.ts",
+    "./queue": "./src/queue.ts",
     "./schema": "./src/schema.ts"
   },
   "description": "",
   "main": "index.js",
   "scripts": {
     "build": "tsgo",
+    "test": "vitest run --exclude=dist/**",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio --port 4000",
@@ -34,6 +36,7 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^22.10.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
   }
 }

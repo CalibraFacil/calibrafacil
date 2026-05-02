@@ -5145,6 +5145,54 @@ export const scheduledNotificationRelations = relations(
 );
 
 // =============================================================================
+// APP QUEUE JOBS - Postgres-backed background queue for Fly workers
+// =============================================================================
+
+export type AppQueueJobType =
+  | "CERTIFICATE"
+  | "LABEL"
+  | "SERVICE_ORDER_INTAKE_DOCUMENT"
+  | "SERVICE_ORDER_TAG"
+  | "SERVICE_ORDER_QUOTE"
+  | "SERVICE_ORDER_DELIVERY_RECEIPT"
+  | "INTEGRATION_SYNC";
+
+export type AppQueueJobStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "FAILED";
+
+export const appQueueJob = pgTable(
+  "app_queue_job",
+  {
+    id: serial("id").primaryKey(),
+    type: text("type").$type<AppQueueJobType>().notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    status: text("status")
+      .$type<AppQueueJobStatus>()
+      .default("PENDING")
+      .notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(3).notNull(),
+    availableAt: timestamp("available_at").defaultNow().notNull(),
+    lockedBy: text("locked_by"),
+    lockedAt: timestamp("locked_at"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("app_queue_job_status_available_idx").on(
+      table.status,
+      table.availableAt,
+    ),
+    index("app_queue_job_locked_at_idx").on(table.lockedAt),
+    index("app_queue_job_type_idx").on(table.type),
+  ],
+);
+
+// =============================================================================
 // ORGANIZATION SIGNING CERTIFICATE - ICP-Brasil Digital Signature (ISO 7.8.2.1)
 // =============================================================================
 

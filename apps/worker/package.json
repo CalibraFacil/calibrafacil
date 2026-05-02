@@ -3,16 +3,19 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --local-protocol http",
-    "deploy": "wrangler deploy"
+    "dev": "bun --watch src/fly.ts",
+    "dev:wrangler": "wrangler dev --local-protocol http",
+    "start": "bun src/fly.ts",
+    "deploy": "flyctl deploy -c ../../fly.worker.toml --ha=false"
   },
   "dependencies": {
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/documents": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@calibra-facil/signing": "workspace:^",
-    "@cloudflare/puppeteer": "^1.0.4",
+    "@aws-sdk/client-s3": "^3.990.0",
     "pg": "^8.16.3",
+    "puppeteer": "^24.32.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
