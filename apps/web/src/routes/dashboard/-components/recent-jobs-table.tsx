@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   AlertCircleIcon,
@@ -26,6 +27,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { jobRouteId } from '@/lib/route-identifiers'
+import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 
 type JobStatus =
   | 'DRAFT'
@@ -83,6 +85,37 @@ const statusVariants: Record<
 function formatDate(dateString: string | null): string {
   if (!dateString) return '-'
   return new Date(dateString).toLocaleDateString('pt-BR')
+}
+
+function jobPath(job: RecentJob) {
+  return `/dashboard/jobs/${encodeURIComponent(jobRouteId(job))}`
+}
+
+function RecentJobLink({
+  job,
+  className,
+  children,
+  ...linkProps
+}: {
+  job: RecentJob
+  className?: string
+  children?: ReactNode
+} & Omit<ComponentPropsWithoutRef<'a'>, 'href'>) {
+  const routeId = jobRouteId(job)
+  const prewarmIntentHandlers = usePathPrewarmIntent(jobPath(job))
+
+  return (
+    <Link
+      {...linkProps}
+      to="/dashboard/jobs/$id"
+      params={{ id: routeId }}
+      className={className}
+      preload="intent"
+      {...prewarmIntentHandlers}
+    >
+      {children}
+    </Link>
+  )
 }
 
 export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
@@ -144,13 +177,12 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
               {jobs.map((job) => (
                 <TableRow key={job.id} className="group">
                   <TableCell className="font-mono font-medium tabular-nums">
-                    <Link
-                      to="/dashboard/jobs/$id"
-                      params={{ id: jobRouteId(job) }}
+                    <RecentJobLink
+                      job={job}
                       className="rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {job.jobId}
-                    </Link>
+                    </RecentJobLink>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
                     {job.customerName || '-'}
@@ -187,6 +219,7 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
                         <Link
                           to="/dashboard/jobs/$id"
                           params={{ id: jobRouteId(job) }}
+                          preload="intent"
                         />
                       }
                     >

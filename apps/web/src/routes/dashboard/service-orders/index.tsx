@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { parseAsInteger, useQueryState } from 'nuqs'
 import { type ColumnDef } from '@tanstack/react-table'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -44,6 +45,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 
 export const Route = createFileRoute('/dashboard/service-orders/')({
   head: () => ({ meta: [{ title: 'Ordens de Serviço | CalibraFácil' }] }),
@@ -135,18 +137,48 @@ function money(cents: number) {
   }).format(cents / 100)
 }
 
+function serviceOrderPath(order: ServiceOrderListItem) {
+  return `/dashboard/service-orders/${order.id}`
+}
+
+function ServiceOrderDetailLink({
+  order,
+  className,
+  linkProps,
+  children,
+}: {
+  order: ServiceOrderListItem
+  className?: string
+  linkProps?: ComponentPropsWithoutRef<'a'>
+  children: ReactNode
+}) {
+  const prewarmIntentHandlers = usePathPrewarmIntent(serviceOrderPath(order))
+
+  return (
+    <Link
+      {...linkProps}
+      to="/dashboard/service-orders/$id"
+      params={{ id: String(order.id) }}
+      className={className}
+      preload="intent"
+      {...prewarmIntentHandlers}
+    >
+      {children}
+    </Link>
+  )
+}
+
 const serviceOrderColumns: ColumnDef<ServiceOrderListItem>[] = [
   {
     accessorKey: 'serviceOrderNumber',
     header: 'OS',
     cell: ({ row }) => (
-      <Link
-        to="/dashboard/service-orders/$id"
-        params={{ id: String(row.original.id) }}
+      <ServiceOrderDetailLink
+        order={row.original}
         className="font-mono font-medium hover:underline"
       >
         {row.original.serviceOrderNumber}
-      </Link>
+      </ServiceOrderDetailLink>
     ),
   },
   {
@@ -214,15 +246,14 @@ const serviceOrderColumns: ColumnDef<ServiceOrderListItem>[] = [
         <DropdownMenuContent align="end">
           <DropdownMenuItem
             render={(props) => (
-              <Link
-                {...props}
-                to="/dashboard/service-orders/$id"
-                params={{ id: String(row.original.id) }}
+              <ServiceOrderDetailLink
+                order={row.original}
+                linkProps={props}
                 className={cn(props.className, 'w-full flex items-center')}
               >
                 <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
                 Ver detalhes
-              </Link>
+              </ServiceOrderDetailLink>
             )}
           />
         </DropdownMenuContent>
@@ -359,7 +390,10 @@ function ServiceOrdersPage() {
                   </Button>
                 ) : (
                   <Button render={<Link to="/dashboard/service-orders/new" />}>
-                    <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+                    <HugeiconsIcon
+                      icon={PlusSignIcon}
+                      className="mr-2 size-4"
+                    />
                     Nova OS
                   </Button>
                 )}

@@ -27,10 +27,12 @@ import { cn } from '@/lib/utils'
 import { jobRouteId } from '@/lib/route-identifiers'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useMountEffect } from '@/hooks/use-mount-effect'
+import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 import {
   loadDashboardIndexData,
   useDashboardIndexData,
   type DashboardStats,
+  type DashboardJob,
 } from './-index.data'
 import { SectionCards } from './-components/section-cards'
 import { ChartCalibrations } from './-components/chart-calibrations'
@@ -321,35 +323,7 @@ function LabOperationsBoard({
           ) : data?.reviewQueue.length ? (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               {data.reviewQueue.map((job) => (
-                <Link
-                  key={job.id}
-                  to="/dashboard/jobs/$id"
-                  params={{ id: jobRouteId(job) }}
-                  className="group min-h-28 rounded-xl p-3 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)] transition-colors hover:bg-muted/60 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-sm font-semibold tabular-nums">
-                      {job.jobId}
-                    </span>
-                    {job.isOverdue ? (
-                      <Badge variant="destructive">Atrasada</Badge>
-                    ) : (
-                      <Badge variant="outline">Revisar</Badge>
-                    )}
-                  </div>
-                  <p className="mt-3 truncate text-sm font-medium">
-                    {job.customerName ?? 'Cliente não informado'}
-                  </p>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">
-                    {job.assetName ?? job.serviceName ?? 'Ativo não informado'}
-                  </p>
-                  <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                    <HugeiconsIcon icon={UserIcon} className="size-3.5" />
-                    <span className="truncate">
-                      {job.technicianName ?? 'Sem técnico'}
-                    </span>
-                  </div>
-                </Link>
+                <ReviewJobCard key={job.id} job={job} />
               ))}
             </div>
           ) : (
@@ -362,6 +336,44 @@ function LabOperationsBoard({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function ReviewJobCard({ job }: { job: DashboardJob }) {
+  const routeId = jobRouteId(job)
+  const prewarmIntentHandlers = usePathPrewarmIntent(
+    `/dashboard/jobs/${encodeURIComponent(routeId)}`,
+  )
+
+  return (
+    <Link
+      to="/dashboard/jobs/$id"
+      params={{ id: routeId }}
+      className="group min-h-28 rounded-xl p-3 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)] transition-colors hover:bg-muted/60 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
+      preload="intent"
+      {...prewarmIntentHandlers}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-sm font-semibold tabular-nums">
+          {job.jobId}
+        </span>
+        {job.isOverdue ? (
+          <Badge variant="destructive">Atrasada</Badge>
+        ) : (
+          <Badge variant="outline">Revisar</Badge>
+        )}
+      </div>
+      <p className="mt-3 truncate text-sm font-medium">
+        {job.customerName ?? 'Cliente não informado'}
+      </p>
+      <p className="mt-1 truncate text-xs text-muted-foreground">
+        {job.assetName ?? job.serviceName ?? 'Ativo não informado'}
+      </p>
+      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+        <HugeiconsIcon icon={UserIcon} className="size-3.5" />
+        <span className="truncate">{job.technicianName ?? 'Sem técnico'}</span>
+      </div>
+    </Link>
   )
 }
 

@@ -11,7 +11,8 @@ import {
 import { apiRouteParam } from '@/lib/route-identifiers'
 import { api } from '@/utils/api'
 
-const PREWARM_COOLDOWN_MS = 15_000
+const PREWARM_COOLDOWN_MS = 3_000
+const DEFAULT_PREWARM_STALE_TIME_MS = 15_000
 const DEFAULT_LIST_LIMIT = 20
 
 type PrewarmQuery = {
@@ -34,7 +35,10 @@ type RoutePrewarmSpec = {
 }
 
 function query(options: PrewarmQuery) {
-  return options
+  return {
+    staleTime: DEFAULT_PREWARM_STALE_TIME_MS,
+    ...options,
+  }
 }
 
 function apiQuery<T extends Record<string, unknown>>(value: T) {
