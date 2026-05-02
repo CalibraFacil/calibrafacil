@@ -1,5 +1,6 @@
 import { type ColumnDef } from '@tanstack/react-table'
 import { Link } from '@tanstack/react-router'
+import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   AlertCircleIcon,
@@ -19,6 +20,7 @@ import {
 import { cn } from '@/lib/utils'
 import { getFinancialStatusLabel } from '@calibra-facil/shared'
 import { jobRouteId } from '@/lib/route-identifiers'
+import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 
 // Animated dots for loading states
 function LoadingDots() {
@@ -130,19 +132,68 @@ function getFinancialVariant(status: Job['financialStatus']) {
   }
 }
 
+function jobDetailPath(job: Job) {
+  return `/dashboard/jobs/${encodeURIComponent(jobRouteId(job))}`
+}
+
+function jobExecutePath(job: Job) {
+  return `${jobDetailPath(job)}/execute`
+}
+
+function JobDetailLink({ job }: { job: Job }) {
+  const routeId = jobRouteId(job)
+  const prewarmIntentHandlers = usePathPrewarmIntent(jobDetailPath(job))
+
+  return (
+    <Link
+      to="/dashboard/jobs/$id"
+      params={{ id: routeId }}
+      className="font-mono font-medium hover:underline"
+      preload="intent"
+      {...prewarmIntentHandlers}
+    >
+      {job.jobId}
+    </Link>
+  )
+}
+
+function JobDropdownLink({
+  job,
+  to,
+  linkProps,
+  className,
+  children,
+}: {
+  job: Job
+  to: '/dashboard/jobs/$id' | '/dashboard/jobs/$id/execute'
+  linkProps?: ComponentPropsWithoutRef<'a'>
+  className?: string
+  children: ReactNode
+}) {
+  const routeId = jobRouteId(job)
+  const prewarmIntentHandlers = usePathPrewarmIntent(
+    to.endsWith('/execute') ? jobExecutePath(job) : jobDetailPath(job),
+  )
+
+  return (
+    <Link
+      {...linkProps}
+      to={to}
+      params={{ id: routeId }}
+      className={className}
+      preload="intent"
+      {...prewarmIntentHandlers}
+    >
+      {children}
+    </Link>
+  )
+}
+
 export const jobsColumns: ColumnDef<Job>[] = [
   {
     accessorKey: 'jobId',
     header: 'Calibração',
-    cell: ({ row }) => (
-      <Link
-        to="/dashboard/jobs/$id"
-        params={{ id: jobRouteId(row.original) }}
-        className="font-mono font-medium hover:underline"
-      >
-        {row.original.jobId}
-      </Link>
-    ),
+    cell: ({ row }) => <JobDetailLink job={row.original} />,
   },
   {
     accessorKey: 'customerName',
@@ -274,24 +325,24 @@ export const jobsColumns: ColumnDef<Job>[] = [
         <DropdownMenuContent align="end">
           <DropdownMenuItem
             render={(props) => (
-              <Link
-                {...props}
+              <JobDropdownLink
                 to="/dashboard/jobs/$id"
-                params={{ id: jobRouteId(row.original) }}
+                job={row.original}
+                linkProps={props}
                 className={cn(props.className, 'w-full flex items-center')}
               >
                 <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
                 Ver Detalhes
-              </Link>
+              </JobDropdownLink>
             )}
           />
           {row.original.status === 'DRAFT' && (
             <DropdownMenuItem
               render={(props) => (
-                <Link
-                  {...props}
+                <JobDropdownLink
                   to="/dashboard/jobs/$id/execute"
-                  params={{ id: jobRouteId(row.original) }}
+                  job={row.original}
+                  linkProps={props}
                   className={cn(props.className, 'w-full flex items-center')}
                 >
                   <HugeiconsIcon
@@ -299,7 +350,7 @@ export const jobsColumns: ColumnDef<Job>[] = [
                     className="mr-2 h-4 w-4"
                   />
                   Iniciar Execução
-                </Link>
+                </JobDropdownLink>
               )}
             />
           )}
@@ -307,10 +358,10 @@ export const jobsColumns: ColumnDef<Job>[] = [
             row.original.status === 'REJECTED') && (
             <DropdownMenuItem
               render={(props) => (
-                <Link
-                  {...props}
+                <JobDropdownLink
                   to="/dashboard/jobs/$id/execute"
-                  params={{ id: jobRouteId(row.original) }}
+                  job={row.original}
+                  linkProps={props}
                   className={cn(props.className, 'w-full flex items-center')}
                 >
                   <HugeiconsIcon
@@ -318,7 +369,7 @@ export const jobsColumns: ColumnDef<Job>[] = [
                     className="mr-2 h-4 w-4"
                   />
                   Continuar Execução
-                </Link>
+                </JobDropdownLink>
               )}
             />
           )}

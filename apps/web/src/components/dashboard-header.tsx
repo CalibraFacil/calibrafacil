@@ -15,6 +15,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import { api } from '@/utils/api'
 import { apiRouteParam } from '@/lib/route-identifiers'
+import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 
 const routeLabels: Record<string, string> = {
   // Dashboard
@@ -253,6 +254,25 @@ function extractEntityIds(pathname: string): {
 
 type DashboardHeaderProps = {
   suspendEntityQueries?: boolean
+}
+
+function DashboardBreadcrumbLink({
+  path,
+  label,
+}: {
+  path: string
+  label: string
+}) {
+  const prewarmIntentHandlers = usePathPrewarmIntent(path)
+
+  return (
+    <BreadcrumbLink
+      render={<Link preload="intent" to={path} />}
+      {...prewarmIntentHandlers}
+    >
+      {label}
+    </BreadcrumbLink>
+  )
 }
 
 export function DashboardHeader({
@@ -691,9 +711,10 @@ export function DashboardHeader({
                     {isLast ? (
                       <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
                     ) : (
-                      <BreadcrumbLink render={<Link to={crumb.path} />}>
-                        {crumb.label}
-                      </BreadcrumbLink>
+                      <DashboardBreadcrumbLink
+                        label={crumb.label}
+                        path={crumb.path}
+                      />
                     )}
                   </BreadcrumbItem>
                   {!isLast && <BreadcrumbSeparator />}

@@ -1,5 +1,4 @@
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import {
   Building02Icon,
   PlusSignIcon,
@@ -8,7 +7,6 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { useState } from 'react'
 
-import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -27,10 +25,16 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { DataTable } from '@/components/ui/data-table'
+import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { type Client, clientsColumns } from './-components/columns'
 import { clientRouteId } from '@/lib/route-identifiers'
+import {
+  loadClientsIndexData,
+  useClientsListData,
+} from './-index.data'
 
 export const Route = createFileRoute('/dashboard/clients/')({
+  loader: ({ context }) => loadClientsIndexData(context.queryClient),
   head: () => ({
     meta: [{ title: 'Clientes | CalibraFácil' }],
   }),
@@ -39,35 +43,18 @@ export const Route = createFileRoute('/dashboard/clients/')({
 
 function ClientsPage() {
   const navigate = useNavigate()
+  const { activeOrganizationId, isContextSwitching } =
+    useDashboardContextState()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const limit = 20
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['customers', page, limit, search],
-    queryFn: async () => {
-      const res = await api.api.customers.$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          query: search || undefined,
-        },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar clientes')
-      }
-
-      return res.json() as Promise<{
-        data: Client[]
-        pagination: {
-          page: number
-          limit: number
-          total: number
-          totalPages: number
-        }
-      }>
-    },
+  const { data, isLoading, error } = useClientsListData({
+    activeOrganizationId,
+    enabled: !isContextSwitching,
+    page,
+    limit,
+    search,
   })
 
   const handleRowClick = (client: Client) => {

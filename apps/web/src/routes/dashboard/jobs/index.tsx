@@ -1,11 +1,9 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { parseAsInteger, useQueryState } from 'nuqs'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ClipboardIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -31,25 +29,19 @@ import {
 } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
-import { type Job, jobsColumns } from './-components/columns'
+import { jobsColumns } from './-components/columns'
+import { loadJobsIndexData, type JobsListStatus } from './-index.data'
+import { useJobsListData } from './-index.db'
 
 export const Route = createFileRoute('/dashboard/jobs/')({
+  loader: ({ context }) => loadJobsIndexData(context.queryClient),
   head: () => ({
     meta: [{ title: 'Calibrações | CalibraFacil' }],
   }),
   component: JobsListPage,
 })
 
-type JobStatus =
-  | 'DRAFT'
-  | 'IN_PROGRESS'
-  | 'REVIEW'
-  | 'GENERATING_PDF'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'CANCELED'
-
-const statusLabels: Record<JobStatus, string> = {
+const statusLabels: Record<JobsListStatus, string> = {
   DRAFT: 'Rascunho',
   IN_PROGRESS: 'Em Execução',
   REVIEW: 'Em Revisão',
@@ -64,46 +56,14 @@ function JobsListPage() {
     useDashboardContextState()
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('')
+  const [statusFilter, setStatusFilter] = useState<JobsListStatus | ''>('')
 
-  const limit = 20
-
-  const { data, isLoading, error } = useQuery({
-    // The authenticated lab session determines the active org server-side.
-    // Keep the org id in the query key for cache scoping, but don't block the
-    // request on the hook alone because it can lag behind the actual session.
-    queryKey: [
-      'jobs',
-      activeOrganizationId ?? 'session-active',
-      page,
-      search,
-      statusFilter,
-    ],
+  const { data, isLoading, error } = useJobsListData({
+    activeOrganizationId,
     enabled: !isContextSwitching,
-    queryFn: async () => {
-      const res = await api.api.jobs.$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          query: search || undefined,
-          status: statusFilter || undefined,
-        },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar calibrações')
-      }
-
-      return res.json() as Promise<{
-        data: Array<Job>
-        pagination: {
-          page: number
-          limit: number
-          total: number
-          totalPages: number
-        }
-      }>
-    },
+    page,
+    search,
+    statusFilter,
   })
 
   const handleSearch = (e: React.FormEvent) => {
@@ -166,7 +126,7 @@ function JobsListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(v as JobStatus | '')
+                setStatusFilter(v as JobsListStatus | '')
                 setPage(1)
               }}
             >

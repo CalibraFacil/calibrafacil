@@ -26,12 +26,15 @@ export function jobRouteId(job: { jobId: string }): string {
 
 export function apiRouteParam(value: string | number): string {
   const stringValue = String(value)
+  let decodedValue = stringValue
 
   try {
-    return encodeURIComponent(decodeURIComponent(stringValue))
+    decodedValue = decodeURIComponent(stringValue)
   } catch {
-    return encodeURIComponent(stringValue)
+    decodedValue = stringValue
   }
+
+  return encodeURIComponent(encodeURIComponent(decodedValue))
 }
 
 export function assetRouteId(asset: { tag: string }): string {

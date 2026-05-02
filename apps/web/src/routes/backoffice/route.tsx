@@ -26,7 +26,9 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { api } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice')({
-  beforeLoad: async ({ location }) => {
+  beforeLoad: async ({ location, preload }) => {
+    if (preload) return
+
     if (location.pathname === '/backoffice/sign-in') {
       return
     }
@@ -94,7 +96,10 @@ function BackofficeLayout() {
             <Button onClick={() => navigate({ to: '/dashboard' })}>
               Voltar ao dashboard
             </Button>
-            <Button variant="outline" onClick={() => navigate({ to: '/backoffice/sign-in' })}>
+            <Button
+              variant="outline"
+              onClick={() => navigate({ to: '/backoffice/sign-in' })}
+            >
               Entrar com outra conta
             </Button>
           </CardContent>

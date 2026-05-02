@@ -10,7 +10,6 @@ import {
   assetType,
   customer,
   service,
-  calibrationMethod,
   referenceStandard,
   user,
   member,
@@ -96,11 +95,20 @@ const CommandPaletteJobSearchQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(10).default(5),
 });
 
+function decodeRouteIdentifier(identifier: string) {
+  try {
+    return decodeURIComponent(identifier);
+  } catch {
+    return identifier;
+  }
+}
+
 async function resolveJobRouteId(
   identifier: string,
   memberData: AuthVariables["member"],
 ): Promise<number | null> {
-  const legacyId = parseLegacyNumericIdentifier(identifier);
+  const routeIdentifier = decodeRouteIdentifier(identifier);
+  const legacyId = parseLegacyNumericIdentifier(routeIdentifier);
 
   const [job] = await db
     .select({ id: calibrationJob.id })
@@ -110,9 +118,9 @@ async function resolveJobRouteId(
         legacyId
           ? or(
               eq(calibrationJob.id, legacyId),
-              eq(calibrationJob.jobId, identifier),
+              eq(calibrationJob.jobId, routeIdentifier),
             )
-          : eq(calibrationJob.jobId, identifier),
+          : eq(calibrationJob.jobId, routeIdentifier),
         eq(calibrationJob.organizationId, memberData.organizationId),
         buildUnitScopeCondition(calibrationJob.unitId, memberData),
       ),

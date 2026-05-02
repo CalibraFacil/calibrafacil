@@ -40,6 +40,16 @@ const DASHBOARD_LAYOUT_MOUNT_MARK = 'dashboard:layout:mount'
 const DASHBOARD_LAYOUT_READY_MARK = 'dashboard:layout:ready'
 const DASHBOARD_CONTEXT_START_MARK = 'dashboard:context:start'
 const DASHBOARD_CONTEXT_END_MARK = 'dashboard:context:end'
+const DASHBOARD_SESSION_CACHE_MS = 30_000
+
+type DashboardSessionResult = Awaited<ReturnType<typeof authClient.getSession>>
+
+let dashboardSessionPromise: ReturnType<typeof authClient.getSession> | null =
+  null
+let dashboardSessionCache:
+  | { expiresAt: number; result: DashboardSessionResult }
+  | null = null
+const activeOrganizationSwitches = new Set<string>()
 
 function mark(name: string) {
   if (typeof window === 'undefined' || !window.performance) return
@@ -57,8 +67,10 @@ function measure(name: string, startMark: string, endMark: string) {
 }
 
 export const Route = createFileRoute('/dashboard')({
-  beforeLoad: async ({ location }) => {
-    const { data: session } = await authClient.getSession()
+  beforeLoad: async ({ location, preload }) => {
+    if (preload) return
+
+    const { data: session } = await getDashboardSession()
 
     if (!session) {
       throw redirect({
@@ -76,6 +88,30 @@ export const Route = createFileRoute('/dashboard')({
   },
   component: DashboardLayout,
 })
+
+async function getDashboardSession() {
+  if (
+    dashboardSessionCache &&
+    dashboardSessionCache.expiresAt > Date.now()
+  ) {
+    return dashboardSessionCache.result
+  }
+
+  dashboardSessionPromise ??= authClient
+    .getSession()
+    .then((result) => {
+      dashboardSessionCache = {
+        expiresAt: Date.now() + DASHBOARD_SESSION_CACHE_MS,
+        result,
+      }
+      return result
+    })
+    .finally(() => {
+      dashboardSessionPromise = null
+    })
+
+  return dashboardSessionPromise
+}
 
 function DashboardLayout() {
   const navigate = useNavigate()
@@ -187,13 +223,13 @@ function DashboardLayout() {
       <DashboardLayoutMountMarker />
       {preferredDashboardOrg ? (
         <PersistDashboardOrgSelection
-          key={preferredDashboardOrg.id}
+          key={`persist-${preferredDashboardOrg.id}`}
           organizationId={preferredDashboardOrg.id}
         />
       ) : null}
       {needsDashboardOrgSwitch && preferredDashboardOrg ? (
         <DashboardOrgSwitcher
-          key={preferredDashboardOrg.id}
+          key={`switch-${preferredDashboardOrg.id}`}
           organizationId={preferredDashboardOrg.id}
         />
       ) : null}
@@ -232,8 +268,12 @@ function DashboardLayoutMountMarker() {
 
 function DashboardOrgSwitcher({ organizationId }: { organizationId: string }) {
   useMountEffect(() => {
+    if (activeOrganizationSwitches.has(organizationId)) return
+
+    activeOrganizationSwitches.add(organizationId)
     mark(DASHBOARD_CONTEXT_START_MARK)
     void organization.setActive({ organizationId }).finally(() => {
+      activeOrganizationSwitches.delete(organizationId)
       localStorage.setItem(DASHBOARD_ORG_KEY, organizationId)
       mark(DASHBOARD_CONTEXT_END_MARK)
       measure(
