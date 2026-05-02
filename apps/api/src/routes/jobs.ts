@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
-import { enqueueQueueJob } from "@calibra-facil/db/queue";
+import { enqueueBackgroundJob } from "../lib/background-jobs";
 import {
   calibrationJob,
   jobAuditLog,
@@ -1712,7 +1712,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         reason: input.reason || "Aprovado - Gerando PDF",
       });
 
-      await enqueueQueueJob({
+      await enqueueBackgroundJob({
         jobId: id,
         userId: session.user.id,
       });
@@ -2013,7 +2013,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         })
         .where(eq(calibrationJob.id, originalJob.id));
 
-      await enqueueQueueJob({
+      await enqueueBackgroundJob({
         jobId: originalJob.id,
         userId: session.user.id,
       });
@@ -2483,7 +2483,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      await enqueueQueueJob({
+      await enqueueBackgroundJob({
         type: "LABEL",
         jobId: id,
         userId: session.user.id,

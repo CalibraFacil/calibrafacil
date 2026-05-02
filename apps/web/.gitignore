@@ -27,3 +27,4 @@ Thumbs.db
 
 # You might see other generated files based on your specific setup (e.g., if you use a specific build tool or ORM),
 # but the above covers the general boilerplate.
+.vercel

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
-import { enqueueQueueJob, type QueueMessage } from "@calibra-facil/db/queue";
+import type { BackgroundJobMessage } from "@calibra-facil/shared";
 import {
   asset,
   calibrationJob,
@@ -89,6 +89,7 @@ import {
   generatePresignedUrl,
   type R2Env,
 } from "../lib/storage";
+import { enqueueBackgroundJob } from "../lib/background-jobs";
 
 type ServiceOrderEnv = R2Env & {
   PORTAL_APP_URL?: string;
@@ -123,8 +124,11 @@ function buildPortalBaseUrl(env: ServiceOrderEnv) {
   return env.PORTAL_APP_URL ?? "https://portal.calibrafacil.com";
 }
 
-async function enqueuePdf(_env: ServiceOrderEnv, message: QueueMessage) {
-  await enqueueQueueJob(message);
+async function enqueuePdf(
+  _env: ServiceOrderEnv,
+  message: BackgroundJobMessage,
+) {
+  await enqueueBackgroundJob(message);
   return true;
 }
 

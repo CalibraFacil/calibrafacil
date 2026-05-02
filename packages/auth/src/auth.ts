@@ -39,6 +39,13 @@ function resolveApiBaseUrl(fallback: string): string {
   return readEnv("API_URL") ?? fallback;
 }
 
+function isProductionRuntime(): boolean {
+  return (
+    process.env.VERCEL_ENV === "production" ||
+    process.env.VERCEL === "1"
+  );
+}
+
 function getCookieDomainFromApiUrl(apiUrl: string | undefined): string | null {
   if (!apiUrl) return null;
 
@@ -380,7 +387,7 @@ async function sendPortalMagicLink(
   }
 
   if (!apiKey) {
-    if (process.env.NODE_ENV === "production") {
+    if (isProductionRuntime()) {
       throw new Error("RESEND_API_KEY is required to send portal magic links");
     }
 
@@ -547,7 +554,7 @@ function createOrganizationPlugin() {
 
 // Shared configuration factory - reads env at call time, not module load time
 function createSharedConfig() {
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = isProductionRuntime();
   const configuredApiUrl = readEnv("API_URL");
   const crossSubDomainCookieDomain =
     getCookieDomainFromApiUrl(configuredApiUrl);
@@ -688,7 +695,7 @@ async function findDefaultActiveOrganizationId(
 export function createLabAuth() {
   const sharedConfig = createSharedConfig();
   const baseURL =
-    process.env.NODE_ENV === "production"
+    isProductionRuntime()
       ? getRequiredEnv("API_URL")
       : resolveApiBaseUrl("http://localhost:3000");
 
@@ -759,7 +766,7 @@ export function createLabAuth() {
 export function createBackofficeAuth() {
   const sharedConfig = createSharedConfig();
   const baseURL =
-    process.env.NODE_ENV === "production"
+    isProductionRuntime()
       ? getRequiredEnv("API_URL")
       : resolveApiBaseUrl("https://localhost:3000");
 
@@ -793,7 +800,7 @@ export function createBackofficeAuth() {
 export function createPortalAuth() {
   const sharedConfig = createSharedConfig();
   const baseURL =
-    process.env.NODE_ENV === "production"
+    isProductionRuntime()
       ? getRequiredEnv("API_URL")
       : resolveApiBaseUrl("http://localhost:3000");
 

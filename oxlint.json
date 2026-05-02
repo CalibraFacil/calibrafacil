@@ -24,6 +24,7 @@
     "out",
     "build",
     "coverage",
+    "apps/api/api/**/*.js",
     "*.config.js",
     "*.config.ts",
     "*.config.mjs",

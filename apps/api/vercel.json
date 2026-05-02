@@ -1,0 +1,48 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["gru1"],
+  "functions": {
+    "api/[...route].ts": {
+      "maxDuration": 30
+    },
+    "api/index.ts": {
+      "maxDuration": 30
+    },
+    "api/queues/background.ts": {
+      "maxDuration": 60,
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "calibra-facil-background-jobs"
+        }
+      ]
+    },
+    "api/cron/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/integrations",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/notifications",
+      "schedule": "0 8 * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/cron/integrations",
+      "destination": "/api/cron/integrations"
+    },
+    {
+      "source": "/api/cron/notifications",
+      "destination": "/api/cron/notifications"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    }
+  ]
+}

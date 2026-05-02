@@ -8,6 +8,6 @@
     "noEmit": true,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "api/**/*.ts", "vercel-src/**/*"],
   "exclude": ["node_modules"]
 }

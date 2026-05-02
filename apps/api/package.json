@@ -1,15 +1,17 @@
 {
   "name": "@calibra-facil/api",
   "version": "0.0.0",
+  "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
     "dev": "bun --watch src/bun.ts",
     "dev:bun": "bun --watch src/bun.ts",
-    "build": "echo 'API build handled by Docker/Fly'",
+    "build": "tsgo --noEmit",
     "typecheck": "tsgo --noEmit",
     "start": "bun src/bun.ts",
-    "deploy": "flyctl deploy -c ../../fly.api.toml --ha=false",
+    "deploy": "pnpm dlx vercel deploy --prod",
+    "deploy:fly": "flyctl deploy -c ../../fly.api.toml --ha=false",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage"
@@ -23,6 +25,7 @@
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@calibra-facil/signing": "workspace:^",
+    "@calibra-facil/worker": "workspace:^",
     "@hono/standard-validator": "^0.2.2",
     "@hono/zod-validator": "^0.7.6",
     "@scalar/hono-api-reference": "^0.10.5",
@@ -31,6 +34,7 @@
     "hono-openapi": "^1.3.0",
     "kysely": "^0.28.14",
     "resend": "^6.6.0",
+    "@vercel/queue": "^0.1.6",
     "zod": "^4.2.1"
   },
   "devDependencies": {
