@@ -33,7 +33,11 @@ export type WorkerRuntimeEnv = {
       options?: { httpMetadata?: { contentType?: string } },
     ): Promise<void>;
   };
+  RUNTIME_ASSETS_BUCKET?: {
+    get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+  };
   CHROME_EXECUTABLE_PATH?: string;
+  CHROMIUM_PACK_R2_KEY?: string;
   CHROMIUM_PACK_URL?: string;
   SIGNING_MASTER_KEY?: string;
   INTEGRATIONS_MASTER_KEY?: string;
@@ -93,9 +97,8 @@ function createLocalKv(): LocalKvNamespace {
   };
 }
 
-function createR2Bucket() {
+function createR2Bucket(bucketName = requiredEnv("R2_BUCKET_NAME")) {
   const accountId = requiredEnv("R2_ACCOUNT_ID");
-  const bucket = requiredEnv("R2_BUCKET_NAME");
   const client = new S3Client({
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
@@ -108,7 +111,7 @@ function createR2Bucket() {
   return {
     async get(key: string) {
       const response = await client.send(
-        new GetObjectCommand({ Bucket: bucket, Key: key }),
+        new GetObjectCommand({ Bucket: bucketName, Key: key }),
       );
       if (!response.Body) return null;
       const bytes = await response.Body.transformToByteArray();
@@ -127,7 +130,7 @@ function createR2Bucket() {
     ) {
       await client.send(
         new PutObjectCommand({
-          Bucket: bucket,
+          Bucket: bucketName,
           Key: key,
           Body: body instanceof ArrayBuffer ? new Uint8Array(body) : body,
           ContentType: options?.httpMetadata?.contentType,
@@ -177,7 +180,11 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
   return {
     HYPERDRIVE: { connectionString: databaseUrl },
     CERTIFICATES_BUCKET: createR2Bucket(),
+    RUNTIME_ASSETS_BUCKET: process.env.CHROMIUM_PACK_R2_BUCKET
+      ? createR2Bucket(process.env.CHROMIUM_PACK_R2_BUCKET)
+      : undefined,
     CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH,
+    CHROMIUM_PACK_R2_KEY: process.env.CHROMIUM_PACK_R2_KEY,
     CHROMIUM_PACK_URL: process.env.CHROMIUM_PACK_URL,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
     INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),

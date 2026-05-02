@@ -79,9 +79,8 @@ function requiredEnv(name: string) {
   return value;
 }
 
-function createR2Bucket() {
+function createR2Bucket(bucket = requiredEnv("R2_BUCKET_NAME")) {
   const accountId = requiredEnv("R2_ACCOUNT_ID");
-  const bucket = requiredEnv("R2_BUCKET_NAME");
   const client = new S3Client({
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
@@ -131,7 +130,11 @@ function createEnv(): WorkerEnv {
   return {
     HYPERDRIVE: { connectionString: databaseUrl },
     CERTIFICATES_BUCKET: createR2Bucket(),
+    RUNTIME_ASSETS_BUCKET: process.env.CHROMIUM_PACK_R2_BUCKET
+      ? createR2Bucket(process.env.CHROMIUM_PACK_R2_BUCKET)
+      : undefined,
     CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH,
+    CHROMIUM_PACK_R2_KEY: process.env.CHROMIUM_PACK_R2_KEY,
     CHROMIUM_PACK_URL: process.env.CHROMIUM_PACK_URL,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
     INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
