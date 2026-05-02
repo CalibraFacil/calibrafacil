@@ -4,11 +4,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev --port 5174 --host",
+    "dev:bun": "bun node_modules/vite/bin/vite.js dev --port 5174 --host",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "oxlint",
     "check-types": "tsgo --noEmit",
-    "deploy": "wrangler pages deploy dist --project-name=calibra-facil-portal"
+    "deploy": "flyctl deploy -c ../../fly.portal.toml --ha=false"
   },
   "dependencies": {
     "@base-ui/react": "^1.0.0",

@@ -1,0 +1,169 @@
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import {
+  claimQueueJobs,
+  completeQueueJob,
+  failQueueJob,
+  releaseStaleQueueJobs,
+  type ClaimedQueueJob,
+} from "@calibra-facil/db/queue";
+import worker from "./index.js";
+import { processScheduledNotifications } from "./scheduled.js";
+import { processScheduledIntegrationSyncs } from "./integrations.js";
+
+type WorkerEnv = Parameters<typeof worker.queue>[1];
+
+const workerId = `${process.env.FLY_APP_NAME ?? "worker"}-${process.env.FLY_ALLOC_ID ?? process.pid}`;
+const batchSize = Number(process.env.QUEUE_BATCH_SIZE ?? 10);
+const pollIntervalMs = Number(process.env.QUEUE_POLL_INTERVAL_MS ?? 2_000);
+const staleAfterMs = Number(process.env.QUEUE_STALE_AFTER_MS ?? 10 * 60_000);
+
+function requiredEnv(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required`);
+  return value;
+}
+
+function createR2Bucket() {
+  const accountId = requiredEnv("R2_ACCOUNT_ID");
+  const bucket = requiredEnv("R2_BUCKET_NAME");
+  const client = new S3Client({
+    region: "auto",
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
+      secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),
+    },
+  });
+
+  return {
+    async get(key: string) {
+      const response = await client.send(
+        new GetObjectCommand({ Bucket: bucket, Key: key }),
+      );
+      if (!response.Body) return null;
+      const bytes = await response.Body.transformToByteArray();
+      return {
+        async arrayBuffer() {
+          return bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength,
+          );
+        },
+      };
+    },
+    async put(
+      key: string,
+      body: Buffer | Uint8Array | ArrayBuffer,
+      options?: { httpMetadata?: { contentType?: string } },
+    ) {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: body instanceof ArrayBuffer ? new Uint8Array(body) : body,
+          ContentType: options?.httpMetadata?.contentType,
+        }),
+      );
+    },
+  };
+}
+
+function createEnv(): WorkerEnv {
+  const databaseUrl = requiredEnv("DATABASE_URL");
+  process.env.NODE_ENV ??= "production";
+
+  return {
+    HYPERDRIVE: { connectionString: databaseUrl },
+    CERTIFICATES_BUCKET: createR2Bucket(),
+    CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH,
+    SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
+    INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
+  } as WorkerEnv;
+}
+
+function createBatch(jobs: ClaimedQueueJob[]) {
+  const states = new Map<number, "acked" | "retry">();
+
+  return {
+    batch: {
+      messages: jobs.map((job) => ({
+        body: job.payload,
+        ack: () => states.set(job.id, "acked"),
+        retry: () => states.set(job.id, "retry"),
+      })),
+    },
+    states,
+  };
+}
+
+async function processQueueBatch(env: WorkerEnv) {
+  await releaseStaleQueueJobs(staleAfterMs);
+  const jobs = await claimQueueJobs(workerId, batchSize);
+  if (jobs.length === 0) return;
+
+  console.log(`[FlyWorker] Claimed ${jobs.length} queue job(s)`);
+  const { batch, states } = createBatch(jobs);
+
+  try {
+    await worker.queue(batch, env, {} as never);
+  } catch (error) {
+    await Promise.all(jobs.map((job) => failQueueJob(job.id, error)));
+    return;
+  }
+
+  await Promise.all(
+    jobs.map((job) =>
+      states.get(job.id) === "acked"
+        ? completeQueueJob(job.id)
+        : failQueueJob(job.id, "Job was not acknowledged by worker"),
+    ),
+  );
+}
+
+function scheduleEvery(
+  label: string,
+  intervalMs: number,
+  task: () => Promise<void>,
+) {
+  setInterval(() => {
+    task().catch((error) => {
+      console.error(`[FlyWorker] ${label} failed`, error);
+    });
+  }, intervalMs);
+}
+
+function scheduleDailyAt(hourUtc: number, task: () => Promise<void>) {
+  const scheduleNext = () => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCHours(hourUtc, 0, 0, 0);
+    if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+
+    setTimeout(() => {
+      task()
+        .catch((error) => {
+          console.error("[FlyWorker] daily scheduled task failed", error);
+        })
+        .finally(scheduleNext);
+    }, next.getTime() - now.getTime());
+  };
+
+  scheduleNext();
+}
+
+const env = createEnv();
+
+console.log(`[FlyWorker] Starting ${workerId}`);
+scheduleEvery("queue poll", pollIntervalMs, () => processQueueBatch(env));
+scheduleEvery("integration scheduler", 30 * 60_000, () =>
+  processScheduledIntegrationSyncs(env).then(() => undefined),
+);
+scheduleDailyAt(8, () =>
+  processScheduledNotifications(env).then(() => undefined),
+);
+
+await processQueueBatch(env);

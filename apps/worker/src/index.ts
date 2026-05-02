@@ -1,4 +1,4 @@
-import puppeteer, { type Browser, type Page } from "@cloudflare/puppeteer";
+import puppeteer, { type Browser, type Page } from "puppeteer";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
 import {
@@ -32,9 +32,16 @@ import {
 } from "./integrations.js";
 
 interface Env {
-  BROWSER: Fetcher;
-  CERTIFICATES_BUCKET: R2Bucket;
-  HYPERDRIVE: Hyperdrive;
+  CERTIFICATES_BUCKET: {
+    get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+    put(
+      key: string,
+      body: Buffer | Uint8Array | ArrayBuffer,
+      options?: { httpMetadata?: { contentType?: string } },
+    ): Promise<void>;
+  };
+  HYPERDRIVE: { connectionString: string };
+  CHROME_EXECUTABLE_PATH?: string;
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
   INTEGRATIONS_MASTER_KEY?: string;
 }
@@ -1285,6 +1292,14 @@ async function configurePage(page: Page): Promise<void> {
   await page.emulateMediaType("print");
 }
 
+async function launchBrowser(env: Env): Promise<Browser> {
+  return puppeteer.launch({
+    executablePath: env.CHROME_EXECUTABLE_PATH,
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+}
+
 /**
  * Generates a PDF from HTML content using an existing page
  */
@@ -1506,7 +1521,7 @@ export default {
     if (documentMessages.length > 0) {
       // Launch browser ONCE for the entire document batch
       const browserStart = performance.now();
-      const browser = await puppeteer.launch(env.BROWSER);
+      const browser = await launchBrowser(env);
       console.log(
         `[BATCH] puppeteer.launch: ${Math.round(performance.now() - browserStart)}ms`,
       );

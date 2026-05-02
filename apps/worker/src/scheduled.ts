@@ -11,7 +11,7 @@
 import { Client } from "pg";
 
 interface ScheduledEnv {
-  HYPERDRIVE: Hyperdrive;
+  HYPERDRIVE: { connectionString: string };
 }
 
 // Types for database rows
@@ -486,9 +486,15 @@ export async function processScheduledNotifications(
     let assetBatch: AssetDueRow[];
 
     do {
-      assetBatch = await checkAssetsDueForRecalibration(client, assetOffset, BATCH_SIZE);
+      assetBatch = await checkAssetsDueForRecalibration(
+        client,
+        assetOffset,
+        BATCH_SIZE,
+      );
       if (assetBatch.length > 0) {
-        console.log(`[Scheduled] Processing ${assetBatch.length} assets (offset ${assetOffset})`);
+        console.log(
+          `[Scheduled] Processing ${assetBatch.length} assets (offset ${assetOffset})`,
+        );
       }
 
       for (const asset of assetBatch) {
@@ -522,7 +528,10 @@ export async function processScheduledNotifications(
 
           assetsProcessed++;
         } catch (error) {
-          console.error(`[Scheduled] Error processing asset ${asset.id}:`, error);
+          console.error(
+            `[Scheduled] Error processing asset ${asset.id}:`,
+            error,
+          );
         }
       }
 
@@ -534,9 +543,15 @@ export async function processScheduledNotifications(
     let standardBatch: StandardExpiringRow[];
 
     do {
-      standardBatch = await checkStandardsExpiring(client, standardOffset, BATCH_SIZE);
+      standardBatch = await checkStandardsExpiring(
+        client,
+        standardOffset,
+        BATCH_SIZE,
+      );
       if (standardBatch.length > 0) {
-        console.log(`[Scheduled] Processing ${standardBatch.length} standards (offset ${standardOffset})`);
+        console.log(
+          `[Scheduled] Processing ${standardBatch.length} standards (offset ${standardOffset})`,
+        );
       }
 
       for (const standard of standardBatch) {
@@ -585,9 +600,15 @@ export async function processScheduledNotifications(
     let expiredBatch: StandardExpiredRow[];
 
     do {
-      expiredBatch = await checkStandardsExpired(client, expiredOffset, BATCH_SIZE);
+      expiredBatch = await checkStandardsExpired(
+        client,
+        expiredOffset,
+        BATCH_SIZE,
+      );
       if (expiredBatch.length > 0) {
-        console.log(`[Scheduled] Processing ${expiredBatch.length} expired standards (offset ${expiredOffset})`);
+        console.log(
+          `[Scheduled] Processing ${expiredBatch.length} expired standards (offset ${expiredOffset})`,
+        );
       }
 
       for (const standard of expiredBatch) {
@@ -638,7 +659,9 @@ export async function processScheduledNotifications(
     do {
       jobBatch = await checkOverdueJobs(client, jobOffset, BATCH_SIZE);
       if (jobBatch.length > 0) {
-        console.log(`[Scheduled] Processing ${jobBatch.length} overdue jobs (offset ${jobOffset})`);
+        console.log(
+          `[Scheduled] Processing ${jobBatch.length} overdue jobs (offset ${jobOffset})`,
+        );
       }
 
       for (const job of jobBatch) {
@@ -705,9 +728,15 @@ export async function processScheduledNotifications(
     let compExpiringBatch: CompetenceExpiringRow[];
 
     do {
-      compExpiringBatch = await checkCompetencesExpiring(client, compExpiringOffset, BATCH_SIZE);
+      compExpiringBatch = await checkCompetencesExpiring(
+        client,
+        compExpiringOffset,
+        BATCH_SIZE,
+      );
       if (compExpiringBatch.length > 0) {
-        console.log(`[Scheduled] Processing ${compExpiringBatch.length} expiring competences (offset ${compExpiringOffset})`);
+        console.log(
+          `[Scheduled] Processing ${compExpiringBatch.length} expiring competences (offset ${compExpiringOffset})`,
+        );
       }
 
       for (const comp of compExpiringBatch) {
@@ -741,7 +770,10 @@ export async function processScheduledNotifications(
 
           competencesExpiringProcessed++;
         } catch (error) {
-          console.error(`[Scheduled] Error processing expiring competence ${comp.id}:`, error);
+          console.error(
+            `[Scheduled] Error processing expiring competence ${comp.id}:`,
+            error,
+          );
         }
       }
 
@@ -753,9 +785,15 @@ export async function processScheduledNotifications(
     let compExpiredBatch: CompetenceExpiredRow[];
 
     do {
-      compExpiredBatch = await checkCompetencesExpired(client, compExpiredOffset, BATCH_SIZE);
+      compExpiredBatch = await checkCompetencesExpired(
+        client,
+        compExpiredOffset,
+        BATCH_SIZE,
+      );
       if (compExpiredBatch.length > 0) {
-        console.log(`[Scheduled] Processing ${compExpiredBatch.length} expired competences (offset ${compExpiredOffset})`);
+        console.log(
+          `[Scheduled] Processing ${compExpiredBatch.length} expired competences (offset ${compExpiredOffset})`,
+        );
       }
 
       for (const comp of compExpiredBatch) {
@@ -770,7 +808,13 @@ export async function processScheduledNotifications(
           await client.query(
             `INSERT INTO personnel_competence_audit_log (competence_id, action, changes, performed_by)
              VALUES ($1, 'expire', $2, 'system')`,
-            [comp.id, JSON.stringify({ status: { old: "ACTIVE", new: "EXPIRED" }, autoExpired: true })],
+            [
+              comp.id,
+              JSON.stringify({
+                status: { old: "ACTIVE", new: "EXPIRED" },
+                autoExpired: true,
+              }),
+            ],
           );
 
           const admins = await getOrgAdmins(client, comp.organization_id);
@@ -802,7 +846,10 @@ export async function processScheduledNotifications(
 
           competencesExpiredProcessed++;
         } catch (error) {
-          console.error(`[Scheduled] Error processing expired competence ${comp.id}:`, error);
+          console.error(
+            `[Scheduled] Error processing expired competence ${comp.id}:`,
+            error,
+          );
         }
       }
 

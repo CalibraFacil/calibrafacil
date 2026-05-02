@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
+import { enqueueQueueJob } from "@calibra-facil/db/queue";
 import {
   integrationEventLog,
   integrationSyncRun,
@@ -27,7 +28,6 @@ import {
   updateTargetScheduleConfig,
   listOrganizationIntegrations,
   previewIntegrationSync,
-  runIntegrationSync,
   validateGenericConnection,
   writeIntegrationEvent,
   writeOrganizationIntegrationEvent,
@@ -42,17 +42,21 @@ import {
 } from "../middleware/permission";
 import { requireFeature } from "../middleware/tier-guard";
 
-const BaseUrlSchema = z.string().trim().url().transform((value, ctx) => {
-  try {
-    return normalizeIntegrationBaseUrl(value);
-  } catch (error) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: error instanceof Error ? error.message : "Base URL inválida",
-    });
-    return z.NEVER;
-  }
-});
+const BaseUrlSchema = z
+  .string()
+  .trim()
+  .url()
+  .transform((value, ctx) => {
+    try {
+      return normalizeIntegrationBaseUrl(value);
+    } catch (error) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: error instanceof Error ? error.message : "Base URL inválida",
+      });
+      return z.NEVER;
+    }
+  });
 
 const MappingRuleSchema = z.object({
   id: z.string().trim().min(1),
@@ -144,21 +148,7 @@ const ScheduleSchema = z.object({
   frequency: z.enum(["daily", "weekly"]).optional(),
 });
 
-type QueueMessage = {
-  type: "INTEGRATION_SYNC";
-  integrationId: string;
-  organizationId: string;
-  runId: string;
-  target: "customer" | "service_order" | "billing_document";
-  limit: number;
-  trigger: "manual" | "event" | "scheduled" | "retry";
-};
-
-type IntegrationsBindings = IntegrationsEnv & {
-  PDF_QUEUE?: {
-    send: (body: QueueMessage) => Promise<void>;
-  };
-};
+type IntegrationsBindings = IntegrationsEnv;
 
 async function buildListPayload(organizationId: string) {
   const billing = await getOrganizationPlanAccess(organizationId);
@@ -230,7 +220,9 @@ async function buildListPayload(organizationId: string) {
       planId: billing.planId,
       planName: billing.planName,
       status: billing.status,
-      hasCustomIntegrations: billing.entitlements.includes("custom_integrations"),
+      hasCustomIntegrations: billing.entitlements.includes(
+        "custom_integrations",
+      ),
     },
     data,
   };
@@ -245,51 +237,38 @@ async function dispatchSyncRun(params: {
   limit: number;
   trigger: "manual" | "event" | "scheduled" | "retry";
 }) {
-  if (params.env.PDF_QUEUE) {
-    try {
-      await params.env.PDF_QUEUE.send({
-        type: "INTEGRATION_SYNC",
-        integrationId: params.integrationId,
-        organizationId: params.organizationId,
-        runId: params.runId,
-        target: params.target,
-        limit: params.limit,
+  try {
+    await enqueueQueueJob({
+      type: "INTEGRATION_SYNC",
+      integrationId: params.integrationId,
+      organizationId: params.organizationId,
+      runId: params.runId,
+      target: params.target,
+      limit: params.limit,
+      trigger: params.trigger,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Falha ao enfileirar sincronização";
+
+    await failIntegrationSyncRun({
+      integrationId: params.integrationId,
+      organizationId: params.organizationId,
+      runId: params.runId,
+      target: params.target,
+      message,
+      details: {
+        phase: "queue_send",
         trigger: params.trigger,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Falha ao enfileirar sincronização";
+      },
+    });
 
-      await failIntegrationSyncRun({
-        integrationId: params.integrationId,
-        organizationId: params.organizationId,
-        runId: params.runId,
-        target: params.target,
-        message,
-        details: {
-          phase: "queue_send",
-          trigger: params.trigger,
-        },
-      });
-
-      throw new Error(message);
-    }
-
-    return { queued: true as const, status: "PENDING" as const };
+    throw new Error(message);
   }
 
-  const result = await runIntegrationSync({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    runId: params.runId,
-    target: params.target,
-    limit: params.limit,
-    env: params.env,
-  });
-
-  return { queued: false as const, status: result.status };
+  return { queued: true as const, status: "PENDING" as const };
 }
 
 export const integrationsRouter = new Hono<{
@@ -886,9 +865,14 @@ export const integrationsRouter = new Hono<{
         return c.json({ error: "Execução não encontrada" }, 404);
       }
 
-      if (originalRun.status === "PENDING" || originalRun.status === "RUNNING") {
+      if (
+        originalRun.status === "PENDING" ||
+        originalRun.status === "RUNNING"
+      ) {
         return c.json(
-          { error: "Não é possível reprocessar uma execução ainda em andamento" },
+          {
+            error: "Não é possível reprocessar uma execução ainda em andamento",
+          },
           409,
         );
       }

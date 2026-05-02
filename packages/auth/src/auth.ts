@@ -552,7 +552,7 @@ function createSharedConfig() {
   const crossSubDomainCookieDomain =
     getCookieDomainFromApiUrl(configuredApiUrl);
   const useCrossSubDomainCookies =
-    isProduction || Boolean(crossSubDomainCookieDomain);
+    isProduction && Boolean(crossSubDomainCookieDomain);
   const useSecureCookies =
     isProduction || configuredApiUrl?.startsWith("https://") === true;
   const authSecret = resolveAuthSecret(isProduction);

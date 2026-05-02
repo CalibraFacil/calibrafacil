@@ -1,0 +1,16 @@
+app = "calibra-facil-worker"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile.worker"
+
+[env]
+  NODE_ENV = "production"
+  R2_BUCKET_NAME = "calibrafacil-certificates"
+  QUEUE_BATCH_SIZE = "10"
+  QUEUE_POLL_INTERVAL_MS = "2000"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"

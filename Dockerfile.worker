@@ -1,0 +1,19 @@
+FROM node:24-bookworm-slim
+
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV CHROME_EXECUTABLE_PATH=/usr/bin/chromium
+ENV NODE_ENV=production
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl unzip chromium fonts-liberation \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm install -g pnpm@9 \
+  && curl -fsSL https://bun.sh/install | bash
+
+ENV PATH="/root/.bun/bin:${PATH}"
+WORKDIR /app
+
+COPY . .
+RUN pnpm install --frozen-lockfile
+
+CMD ["bun", "apps/worker/src/fly.ts"]

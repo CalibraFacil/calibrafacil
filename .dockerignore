@@ -1,0 +1,16 @@
+.git
+.github
+.turbo
+**/.turbo
+**/.wrangler
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+**/coverage
+.env
+.env.*
+.dev.vars
+*.log
+.DS_Store

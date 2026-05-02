@@ -4,11 +4,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5173 --host",
+    "dev:bun": "bun node_modules/vite/bin/vite.js --port 5173 --host",
     "build": "vite build",
     "build:ci": "vite build && node ./scripts/check-bundle-size.mjs",
     "check:bundle": "node ./scripts/check-bundle-size.mjs",
     "render:og": "node ./scripts/render-og.mjs",
     "preview": "vite preview",
+    "deploy": "flyctl deploy -c ../../fly.web.toml --ha=false",
     "test": "vitest run --passWithNoTests",
     "lint": "oxlint",
     "format": "prettier",
