@@ -1,37 +1,42 @@
 import { mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const entries = [
-  ["vercel-src/[...route].ts", "api/[...route].js"],
-  ["vercel-src/index.ts", "api/index.js"],
-  ["vercel-src/queues/background.ts", "api/queues/background.js"],
-  ["vercel-src/cron/integrations.ts", "api/cron/integrations.js"],
-  ["vercel-src/cron/notifications.ts", "api/cron/notifications.js"],
+  ["vercel-src/[...route].ts", "vercel-functions/[...route].js"],
+  ["vercel-src/index.ts", "vercel-functions/index.js"],
+  ["vercel-src/queues/background.ts", "vercel-functions/queues/background.js"],
+  ["vercel-src/cron/integrations.ts", "vercel-functions/cron/integrations.js"],
+  ["vercel-src/cron/notifications.ts", "vercel-functions/cron/notifications.js"],
 ];
 
-await rm(join(appRoot, "api"), { recursive: true, force: true });
-
 for (const [, outfile] of entries) {
-  await mkdir(dirname(join(appRoot, outfile)), { recursive: true });
+  const outputPath = join(appRoot, outfile);
+  await rm(outputPath, { force: true });
+  await mkdir(dirname(outputPath), { recursive: true });
 }
 
-const build = await Bun.build({
-  entrypoints: entries.map(([entry]) => join(appRoot, entry)),
-  outdir: join(appRoot, "api"),
-  root: join(appRoot, "vercel-src"),
-  target: "node",
+await build({
+  entryPoints: Object.fromEntries(
+    entries.map(([entry, outfile]) => [
+      outfile.replace(/^vercel-functions\//, "").replace(/\.js$/, ""),
+      join(appRoot, entry),
+    ]),
+  ),
+  outdir: join(appRoot, "vercel-functions"),
+  bundle: true,
+  platform: "node",
+  target: "node22",
   format: "esm",
   splitting: false,
-  sourcemap: "none",
+  sourcemap: false,
   minify: true,
+  banner: {
+    js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);',
+  },
+  outExtension: { ".js": ".js" },
+  logLevel: "info",
 });
-
-if (!build.success) {
-  for (const log of build.logs) {
-    console.error(log);
-  }
-  process.exit(1);
-}

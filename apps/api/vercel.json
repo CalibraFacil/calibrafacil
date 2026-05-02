@@ -1,14 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm build:vercel-functions",
   "regions": ["gru1"],
   "functions": {
-    "api/[...route].ts": {
+    "api/[...route].js": {
       "maxDuration": 30
     },
-    "api/index.ts": {
+    "api/index.js": {
       "maxDuration": 30
     },
-    "api/queues/background.ts": {
+    "api/queues/background.js": {
       "maxDuration": 60,
       "experimentalTriggers": [
         {
@@ -17,7 +18,7 @@
         }
       ]
     },
-    "api/cron/*.ts": {
+    "api/cron/*.js": {
       "maxDuration": 30
     }
   },
