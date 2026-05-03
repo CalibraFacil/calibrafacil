@@ -157,7 +157,7 @@ function getViaCepStatusMessage(status: ViaCepLookupStatus) {
     case 'loading':
       return 'Consultando CEP...'
     case 'success':
-      return 'Endereço encontrado pelo CEP.'
+      return null
     case 'not-found':
       return 'CEP não encontrado.'
     case 'error':
