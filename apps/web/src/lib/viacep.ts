@@ -59,6 +59,7 @@ export function mapViaCepResponse(
 export function mergeViaCepAddress<TAddress extends EditableAddress>(
   currentAddress: TAddress,
   viaCepAddress: ViaCepAddress,
+  previousViaCepAddress?: ViaCepAddress | null,
 ): TAddress {
   const fillEmpty = <TKey extends keyof EditableAddress>(
     field: TKey,
@@ -66,6 +67,11 @@ export function mergeViaCepAddress<TAddress extends EditableAddress>(
   ) => {
     const currentValue = currentAddress[field]
     if (typeof currentValue === 'string' && currentValue.trim() !== '') {
+      const previousValue = previousViaCepAddress?.[field]
+      if (previousValue && currentValue.trim() === previousValue.trim()) {
+        return value || currentValue
+      }
+
       return currentValue
     }
     return value || currentValue

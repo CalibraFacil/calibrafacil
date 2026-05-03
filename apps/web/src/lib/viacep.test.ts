@@ -61,4 +61,81 @@ describe('ViaCEP helpers', () => {
       state: 'SP',
     })
   })
+
+  it('replaces fields that came from the previous CEP lookup', () => {
+    const firstLookup = {
+      cep: '92025-340',
+      street: 'Rua Um',
+      complement: '',
+      neighbourhood: 'Bairro Um',
+      city: 'Canoas',
+      state: 'RS',
+    }
+
+    const secondLookup = {
+      cep: '92200-000',
+      street: 'Rua Dois',
+      complement: '',
+      neighbourhood: 'Bairro Dois',
+      city: 'Canoas',
+      state: 'RS',
+    }
+
+    expect(
+      mergeViaCepAddress(
+        {
+          cep: '92200000',
+          street: 'Rua Um',
+          complement: '',
+          neighbourhood: 'Bairro Um',
+          city: 'Canoas',
+          state: 'RS',
+        },
+        secondLookup,
+        firstLookup,
+      ),
+    ).toEqual({
+      cep: '92200-000',
+      street: 'Rua Dois',
+      complement: '',
+      neighbourhood: 'Bairro Dois',
+      city: 'Canoas',
+      state: 'RS',
+    })
+  })
+
+  it('preserves fields manually changed after the previous CEP lookup', () => {
+    const firstLookup = {
+      cep: '92025-340',
+      street: 'Rua Um',
+      complement: '',
+      neighbourhood: 'Bairro Um',
+      city: 'Canoas',
+      state: 'RS',
+    }
+
+    const secondLookup = {
+      cep: '92200-000',
+      street: 'Rua Dois',
+      complement: '',
+      neighbourhood: 'Bairro Dois',
+      city: 'Canoas',
+      state: 'RS',
+    }
+
+    expect(
+      mergeViaCepAddress(
+        {
+          cep: '92200000',
+          street: 'Rua manual',
+          complement: '',
+          neighbourhood: 'Bairro Um',
+          city: 'Canoas',
+          state: 'RS',
+        },
+        secondLookup,
+        firstLookup,
+      ).street,
+    ).toBe('Rua manual')
+  })
 })

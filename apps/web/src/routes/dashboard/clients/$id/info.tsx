@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -130,6 +130,7 @@ function ClientInfoForm({
   const [address, setAddress] = useState<CustomerAddress>(
     customer.address || {},
   )
+  const lastViaCepAddressRef = useRef<ViaCepAddress | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
 
   const updateMutation = useMutation({
@@ -195,7 +196,10 @@ function ClientInfoForm({
   }
 
   const handleViaCepResolved = useCallback((lookupAddress: ViaCepAddress) => {
-    setAddress((prev) => mergeViaCepAddress(prev, lookupAddress))
+    setAddress((prev) =>
+      mergeViaCepAddress(prev, lookupAddress, lastViaCepAddressRef.current),
+    )
+    lastViaCepAddressRef.current = lookupAddress
   }, [])
 
   const cepLookup = useViaCepLookup({

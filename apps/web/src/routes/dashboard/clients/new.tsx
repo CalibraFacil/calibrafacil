@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { type ReactNode, useCallback, useState } from 'react'
+import { type ReactNode, useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Copy01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -101,6 +101,7 @@ function NewClientPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
     {},
   )
+  const lastViaCepAddressRef = useRef<ViaCepAddress | null>(null)
 
   // Invitation dialog state
   const [showInviteDialog, setShowInviteDialog] = useState(false)
@@ -225,8 +226,13 @@ function NewClientPage() {
   const handleViaCepResolved = useCallback((address: ViaCepAddress) => {
     setFormData((prev) => ({
       ...prev,
-      address: mergeViaCepAddress(prev.address, address),
+      address: mergeViaCepAddress(
+        prev.address,
+        address,
+        lastViaCepAddressRef.current,
+      ),
     }))
+    lastViaCepAddressRef.current = address
   }, [])
 
   const cepLookup = useViaCepLookup({
