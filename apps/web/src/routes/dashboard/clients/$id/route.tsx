@@ -84,96 +84,121 @@ function ClientDetailLayout() {
     tabs.find((t) => location.pathname.startsWith(t.href(id)))?.value ?? 'info'
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          render={<Link to="/dashboard/clients" />}
-          className="mt-0.5"
-        >
-          <HugeiconsIcon icon={ArrowLeft02Icon} className="size-5" />
-        </Button>
+    <div className="space-y-7">
+      <section className="space-y-5">
+        <div className="px-1">
+          <div className="flex items-start gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              render={<Link to="/dashboard/clients" />}
+              className="mt-0.5 active:scale-[0.96] transition-[background-color,color,box-shadow,border-color,transform]"
+              aria-label="Voltar para Clientes"
+            >
+              <HugeiconsIcon
+                icon={ArrowLeft02Icon}
+                className="size-5"
+                aria-hidden="true"
+              />
+            </Button>
 
-        <div className="flex-1 min-w-0">
-          {isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-7 w-48" />
-              <Skeleton className="h-4 w-32" />
+            <div className="min-w-0 flex-1">
+              {isLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-7 w-48" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              ) : customer ? (
+                <>
+                  <h1 className="truncate text-2xl font-semibold tracking-tight text-balance">
+                    {customer.name}
+                  </h1>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                    {customer.taxId && (
+                      <span className="tabular-nums">{customer.taxId}</span>
+                    )}
+                    {customer.compliance?.qualificationStatus && (
+                      <Badge
+                        variant={
+                          customer.compliance.qualificationStatus ===
+                          'qualified'
+                            ? 'default'
+                            : customer.compliance.qualificationStatus ===
+                                'pending'
+                              ? 'secondary'
+                              : 'destructive'
+                        }
+                      >
+                        {customer.compliance.qualificationStatus === 'qualified'
+                          ? 'Qualificado'
+                          : customer.compliance.qualificationStatus ===
+                              'pending'
+                            ? 'Pendente'
+                            : customer.compliance.qualificationStatus ===
+                                'suspended'
+                              ? 'Suspenso'
+                              : 'Expirado'}
+                      </Badge>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <h1 className="text-2xl font-semibold text-destructive">
+                  Cliente não encontrado
+                </h1>
+              )}
             </div>
-          ) : customer ? (
-            <>
-              <h1 className="text-2xl font-semibold tracking-tight truncate">
-                {customer.name}
-              </h1>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {customer.taxId && <span>{customer.taxId}</span>}
-                {customer.compliance?.qualificationStatus && (
-                  <Badge
-                    variant={
-                      customer.compliance.qualificationStatus === 'qualified'
-                        ? 'default'
-                        : customer.compliance.qualificationStatus === 'pending'
-                          ? 'secondary'
-                          : 'destructive'
-                    }
-                  >
-                    {customer.compliance.qualificationStatus === 'qualified'
-                      ? 'Qualificado'
-                      : customer.compliance.qualificationStatus === 'pending'
-                        ? 'Pendente'
-                        : customer.compliance.qualificationStatus ===
-                            'suspended'
-                          ? 'Suspenso'
-                          : 'Expirado'}
-                  </Badge>
-                )}
-              </div>
-            </>
+          </div>
+        </div>
+
+        <div className="px-1">
+          {isMobile ? (
+            <NativeSelect
+              value={activeTab}
+              onChange={(e) => {
+                const tab = tabs.find((t) => t.value === e.target.value)
+                if (tab) navigate({ to: tab.href(id) })
+              }}
+              aria-label="Seção do cliente"
+            >
+              {tabs.map((tab) => (
+                <NativeSelectOption key={tab.value} value={tab.value}>
+                  {tab.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
           ) : (
-            <h1 className="text-2xl font-semibold text-destructive">
-              Cliente não encontrado
-            </h1>
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => {
+                const tab = tabs.find((t) => t.value === value)
+                if (tab) navigate({ to: tab.href(id) })
+              }}
+            >
+              <TabsList
+                variant="default"
+                className="h-10 max-w-full overflow-x-auto rounded-xl bg-muted/60 p-1 shadow-inner shadow-foreground/5 ring-1 ring-foreground/10"
+              >
+                {tabs.map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className="rounded-lg px-3 text-muted-foreground hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm active:scale-[0.96]"
+                  >
+                    <HugeiconsIcon
+                      icon={tab.icon}
+                      aria-hidden="true"
+                      className="size-4"
+                    />
+                    <span>{tab.label}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* Tabs */}
-      {isMobile ? (
-        <NativeSelect
-          value={activeTab}
-          onChange={(e) => {
-            const tab = tabs.find((t) => t.value === e.target.value)
-            if (tab) navigate({ to: tab.href(id) })
-          }}
-        >
-          {tabs.map((tab) => (
-            <NativeSelectOption key={tab.value} value={tab.value}>
-              {tab.label}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
-      ) : (
-        <Tabs
-          value={activeTab}
-          onValueChange={(value) => {
-            const tab = tabs.find((t) => t.value === value)
-            if (tab) navigate({ to: tab.href(id) })
-          }}
-        >
-          <TabsList variant="line">
-            {tabs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value}>
-                <HugeiconsIcon icon={tab.icon} />
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-      )}
-
-      {/* Route content */}
       <div className="min-w-0">
         <Outlet />
       </div>

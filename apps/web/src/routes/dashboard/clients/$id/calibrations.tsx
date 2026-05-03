@@ -12,13 +12,6 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { api } from '@/utils/api'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -45,6 +38,11 @@ import {
 import { DataTable } from '@/components/ui/data-table'
 import { cn } from '@/lib/utils'
 import { jobRouteId } from '@/lib/route-identifiers'
+import {
+  ClientPanel,
+  ClientPanelBody,
+  Toolbar,
+} from './-components/client-detail-ui'
 
 export const Route = createFileRoute('/dashboard/clients/$id/calibrations')({
   component: ClientCalibrationsTab,
@@ -323,7 +321,7 @@ function ClientCalibrationsTab() {
       })
 
       if (!res.ok) {
-        throw new Error('Falha ao carregar calibracoes')
+        throw new Error('Falha ao carregar calibrações')
       }
 
       return res.json() as Promise<{
@@ -345,62 +343,65 @@ function ClientCalibrationsTab() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Calibrações</CardTitle>
-        <CardDescription>
-          Histórico de calibrações deste cliente.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSearch} className="flex gap-4 mb-6">
-          <div className="relative max-w-sm flex-1">
-            <HugeiconsIcon
-              icon={Search01Icon}
-              className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2"
-            />
-            <Input
-              placeholder="Buscar por número da calibração..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              setStatusFilter(value as JobStatus | '')
-              setPage(1)
-            }}
-          >
-            <SelectTrigger className="w-44">
-              <span>{statusFilter ? statusLabels[statusFilter] : 'Todos'}</span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">Todos</SelectItem>
-              <SelectItem value="DRAFT">Rascunho</SelectItem>
-              <SelectItem value="IN_PROGRESS">Em Execução</SelectItem>
-              <SelectItem value="REVIEW">Em Revisão</SelectItem>
-              <SelectItem value="GENERATING_PDF">Gerando PDF</SelectItem>
-              <SelectItem value="APPROVED">Aprovado</SelectItem>
-              <SelectItem value="REJECTED">Rejeitado</SelectItem>
-              <SelectItem value="CANCELED">Cancelado</SelectItem>
-              <SelectItem value="SUPERSEDED">Retificado</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button type="submit" variant="secondary">
-            Buscar
-          </Button>
+    <ClientPanel
+      eyebrow="Calibrações"
+      title="Histórico de Calibrações"
+      description="Acompanhe ordens, certificados e execuções vinculadas a este cliente."
+      icon={<HugeiconsIcon icon={Certificate01Icon} className="size-5" />}
+    >
+      <ClientPanelBody>
+        <form onSubmit={handleSearch}>
+          <Toolbar>
+            <div className="relative max-w-sm flex-1">
+              <HugeiconsIcon
+                icon={Search01Icon}
+                className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2"
+              />
+              <Input
+                placeholder="Buscar por número da calibração…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value as JobStatus | '')
+                setPage(1)
+              }}
+            >
+              <SelectTrigger className="w-44">
+                <span>
+                  {statusFilter ? statusLabels[statusFilter] : 'Todos'}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Todos</SelectItem>
+                <SelectItem value="DRAFT">Rascunho</SelectItem>
+                <SelectItem value="IN_PROGRESS">Em Execução</SelectItem>
+                <SelectItem value="REVIEW">Em Revisão</SelectItem>
+                <SelectItem value="GENERATING_PDF">Gerando PDF</SelectItem>
+                <SelectItem value="APPROVED">Aprovado</SelectItem>
+                <SelectItem value="REJECTED">Rejeitado</SelectItem>
+                <SelectItem value="CANCELED">Cancelado</SelectItem>
+                <SelectItem value="SUPERSEDED">Retificado</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button type="submit" variant="secondary">
+              Buscar
+            </Button>
+          </Toolbar>
         </form>
 
         {error && (
-          <div className="text-destructive py-8 text-center">
-            Erro ao carregar calibracoes. Tente novamente.
+          <div className="py-8 text-center text-sm text-destructive">
+            Erro ao carregar calibrações. Tente novamente.
           </div>
         )}
 
         {!isLoading && !error && data?.data.length === 0 ? (
-          <Empty className="border">
+          <Empty className="rounded-none border-x-0 border-y border-solid border-border/70 py-10">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <HugeiconsIcon icon={Certificate01Icon} />
@@ -425,7 +426,7 @@ function ClientCalibrationsTab() {
             />
           )
         )}
-      </CardContent>
-    </Card>
+      </ClientPanelBody>
+    </ClientPanel>
   )
 }

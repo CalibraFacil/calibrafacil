@@ -17,13 +17,6 @@ import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import {
   Table,
   TableBody,
   TableCell,
@@ -42,6 +35,12 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { assetRouteId } from '@/lib/route-identifiers'
+import {
+  ClientPanel,
+  ClientPanelBody,
+  TableFrame,
+  Toolbar,
+} from './-components/client-detail-ui'
 
 export const Route = createFileRoute('/dashboard/clients/$id/assets')({
   component: ClientEquipmentTab,
@@ -117,29 +116,31 @@ function ClientEquipmentTab() {
   })
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Ativos</CardTitle>
-            <CardDescription>Ativos cadastrados deste cliente.</CardDescription>
-          </div>
-          <Button
-            render={
-              <Link
-                to="/dashboard/assets/new"
-                search={customerId ? { customerId } : {}}
-              />
-            }
-          >
-            <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
-            Novo Ativo
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {/* Search */}
-        <div className="mb-6">
+    <ClientPanel
+      eyebrow="Ativos"
+      title="Instrumentos do Cliente"
+      description="Consulte os instrumentos vinculados, seus identificadores e o próximo ciclo de calibração."
+      icon={<HugeiconsIcon icon={Wrench01Icon} className="size-5" />}
+      action={
+        <Button
+          render={
+            <Link
+              to="/dashboard/assets/new"
+              search={customerId ? { customerId } : {}}
+            />
+          }
+        >
+          <HugeiconsIcon
+            icon={PlusSignIcon}
+            className="mr-2 size-4"
+            aria-hidden="true"
+          />
+          Novo Ativo
+        </Button>
+      }
+    >
+      <ClientPanelBody>
+        <Toolbar>
           <div className="relative max-w-sm">
             <HugeiconsIcon
               icon={Search01Icon}
@@ -155,21 +156,18 @@ function ClientEquipmentTab() {
               className="pl-9"
             />
           </div>
-        </div>
+        </Toolbar>
 
-        {/* Loading state */}
         {(customerLoading || isLoading) && <EquipmentTableSkeleton />}
 
-        {/* Error state */}
         {error && (
-          <div className="text-destructive py-8 text-center">
+          <div className="py-8 text-center text-sm text-destructive">
             Erro ao carregar ativos. Tente novamente.
           </div>
         )}
 
-        {/* Empty state */}
         {!isLoading && !error && data?.data?.length === 0 && (
-          <Empty className="border">
+          <Empty className="rounded-none border-x-0 border-y border-solid border-border/70 py-10">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <HugeiconsIcon icon={Wrench01Icon} />
@@ -199,10 +197,9 @@ function ClientEquipmentTab() {
           </Empty>
         )}
 
-        {/* Data table */}
         {!isLoading && !error && data?.data && data.data.length > 0 && (
           <>
-            <div className="rounded-md border">
+            <TableFrame>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -248,13 +245,12 @@ function ClientEquipmentTab() {
                   ))}
                 </TableBody>
               </Table>
-            </div>
+            </TableFrame>
 
-            {/* Pagination */}
             {data.pagination.totalPages > 1 && (
               <div className="mt-4 flex items-center justify-between">
                 <div className="text-muted-foreground text-sm">
-                  Pagina {data.pagination.page} de {data.pagination.totalPages}{' '}
+                  Página {data.pagination.page} de {data.pagination.totalPages}{' '}
                   ({data.pagination.total} ativos)
                 </div>
                 <div className="flex gap-2">
@@ -276,21 +272,21 @@ function ClientEquipmentTab() {
                     }
                     disabled={page === data.pagination.totalPages}
                   >
-                    Proximo
+                    Próximo
                   </Button>
                 </div>
               </div>
             )}
           </>
         )}
-      </CardContent>
-    </Card>
+      </ClientPanelBody>
+    </ClientPanel>
   )
 }
 
 function EquipmentTableSkeleton() {
   return (
-    <div className="rounded-md border">
+    <TableFrame>
       <Table>
         <TableHeader>
           <TableRow>
@@ -327,6 +323,6 @@ function EquipmentTableSkeleton() {
           ))}
         </TableBody>
       </Table>
-    </div>
+    </TableFrame>
   )
 }
