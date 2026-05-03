@@ -5,11 +5,9 @@ import {
   ArrowLeft01Icon,
   Edit02Icon,
   RefreshIcon,
-  Calendar01Icon,
-  CertificateIcon,
-  TestTube02Icon,
   AlertCircleIcon,
 } from '@hugeicons/core-free-icons'
+import type { ReactNode } from 'react'
 
 import { api } from '@/utils/api'
 import {
@@ -20,14 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/dashboard/standards/$id/')({
   component: StandardDetailPage,
@@ -171,46 +162,67 @@ function StandardDetailPage() {
       <div className="space-y-4">
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={() => navigate({ to: '/dashboard/standards' })}
+          className="active:scale-[0.96]"
         >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
-          Voltar
+          <HugeiconsIcon icon={ArrowLeft01Icon} className="size-5" />
         </Button>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-destructive">
-              Erro ao carregar padrão: {error.message}
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-lg bg-destructive/5 px-6 py-8 text-center text-sm text-destructive shadow-[inset_0_0_0_1px_rgba(220,38,38,0.18)]">
+          Erro ao carregar padrão: {error.message}
+        </div>
       </div>
     )
   }
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-24" />
-          <Skeleton className="h-10 w-32" />
-        </div>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-4 w-48" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-6 w-32" />
-                </div>
-              ))}
+      <div className="space-y-8">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <Skeleton className="size-9 rounded-md" />
+            <div className="space-y-3">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-4 w-48" />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <Skeleton className="h-9 w-32" />
+        </div>
+        <div className="grid overflow-hidden rounded-lg bg-muted/35 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] sm:grid-cols-2 xl:grid-cols-4 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="space-y-3 px-5 py-4">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-6 w-36" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="space-y-8">
+            {Array.from({ length: 2 }).map((_, sectionIndex) => (
+              <div key={sectionIndex} className="space-y-4">
+                <Skeleton className="h-5 w-40" />
+                <div className="grid gap-x-8 border-t sm:grid-cols-2">
+                  {Array.from({ length: 6 }).map((_, rowIndex) => (
+                    <div key={rowIndex} className="space-y-2 border-b py-4">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-5 w-40" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-8 lg:border-l lg:pl-8">
+            <Skeleton className="h-5 w-32" />
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="space-y-2 border-b py-4">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-6 w-32" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
@@ -220,19 +232,15 @@ function StandardDetailPage() {
       <div className="space-y-4">
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={() => navigate({ to: '/dashboard/standards' })}
+          className="active:scale-[0.96]"
         >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
-          Voltar
+          <HugeiconsIcon icon={ArrowLeft01Icon} className="size-5" />
         </Button>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground">
-              Padrão de referência não encontrado.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-lg bg-muted/35 px-6 py-8 text-center text-sm text-muted-foreground shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+          Padrão de referência não encontrado.
+        </div>
       </div>
     )
   }
@@ -251,298 +259,469 @@ function StandardDetailPage() {
       cv.buoyancy != null ||
       cv.coverageFactor != null,
   )
+  const certifiedValues = standard.certifiedValues ?? []
+  const uncertaintyUnit = standard.uncertaintyUnit
+    ? ` ${standard.uncertaintyUnit}`
+    : ''
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate({ to: '/dashboard/standards' })}
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
-
-        <div className="flex items-center gap-2">
+    <div className="space-y-10">
+      <div className="space-y-4 sm:flex sm:items-start sm:justify-between sm:gap-4 sm:space-y-0">
+        <div className="flex items-start gap-3 sm:gap-4">
           <Button
-            variant="outline"
-            render={
-              <Link
-                to="/dashboard/standards/$id/edit"
-                params={{ id }}
-                search={{ renew: true }}
-              />
-            }
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate({ to: '/dashboard/standards' })}
+            className="mt-0.5 active:scale-[0.96]"
           >
-            <HugeiconsIcon icon={RefreshIcon} className="mr-2 h-4 w-4" />
-            Renovar
+            <HugeiconsIcon icon={ArrowLeft01Icon} className="size-5" />
+            <span className="sr-only">Voltar</span>
           </Button>
-          <Button
-            render={<Link to="/dashboard/standards/$id/edit" params={{ id }} />}
-          >
-            <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
-            Editar
-          </Button>
-        </div>
-      </div>
-
-      {/* Main Info Card */}
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <CardTitle className="text-2xl">{standard.name}</CardTitle>
-              <CardDescription className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="space-y-3">
+              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <h1 className="text-balance text-2xl font-semibold tracking-tight">
+                  {standard.name}
+                </h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+                  <Badge
+                    variant={calibrationBadge.variant}
+                    className={calibrationBadge.className}
+                  >
+                    {calibrationBadge.label}
+                  </Badge>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                 {standard.type && (
                   <>
                     <span>{standard.type}</span>
-                    <span className="text-muted-foreground/50">|</span>
+                    <span>-</span>
                   </>
                 )}
-                <span className="font-mono">{standard.serialNumber}</span>
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
-              <Badge
-                variant={calibrationBadge.variant}
-                className={calibrationBadge.className}
-              >
-                {calibrationBadge.label}
-              </Badge>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Identification Section */}
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-              <HugeiconsIcon icon={TestTube02Icon} className="h-4 w-4" />
-              Identificação
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground">Fabricante</p>
-                <p className="font-medium">{standard.manufacturer || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Modelo</p>
-                <p className="font-medium">{standard.model || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">N° Série</p>
-                <p className="font-medium font-mono">{standard.serialNumber}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Tipo</p>
-                <p className="font-medium">{standard.type || '-'}</p>
+                <span className="font-mono tabular-nums">
+                  {standard.serialNumber}
+                </span>
               </div>
             </div>
           </div>
+        </div>
 
-          <Separator />
+        <StandardActions id={id} className="hidden sm:flex sm:shrink-0" />
+      </div>
 
-          {/* Certificate Section */}
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-              <HugeiconsIcon icon={CertificateIcon} className="h-4 w-4" />
-              Certificado de Calibração
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground">N° Certificado</p>
-                <p className="font-medium font-mono">
-                  {standard.certificateNumber}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Calibrado por</p>
-                <p className="font-medium">{standard.calibratedBy || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Data de Calibração
-                </p>
-                <p className="font-medium">
-                  {formatDate(standard.calibrationDate)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Próxima Calibração
-                </p>
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">
-                    {formatDate(standard.nextCalibrationDate)}
-                  </p>
+      <StandardActions id={id} mobile className="sm:hidden" />
+
+      <dl className="grid overflow-hidden rounded-lg bg-muted/35 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] sm:grid-cols-2 xl:grid-cols-4 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+        <SummaryItem
+          label="Certificado"
+          value={standard.certificateNumber}
+          detail={standard.calibratedBy || 'Laboratório não informado'}
+          mono
+          className="border-b border-border/70 sm:border-r xl:border-b-0"
+        />
+        <SummaryItem
+          label="Próxima calibração"
+          value={
+            <span className="inline-flex items-center gap-2">
+              {formatDate(standard.nextCalibrationDate)}
+              {standard.isExpired && (
+                <HugeiconsIcon
+                  icon={AlertCircleIcon}
+                  className="size-4 text-destructive"
+                />
+              )}
+            </span>
+          }
+          detail="Prazo de rastreabilidade"
+          mono
+          className="border-b border-border/70 xl:border-r xl:border-b-0"
+        />
+        <SummaryItem
+          label={hasCertifiedValues ? 'Valores certificados' : 'Valor nominal'}
+          value={
+            hasCertifiedValues
+              ? certifiedValues.length
+              : `${standard.referenceValue ?? '-'}${uncertaintyUnit}`
+          }
+          detail={hasCertifiedValues ? 'Pontos cadastrados' : 'Referência base'}
+          mono
+          className="border-b border-border/70 sm:border-r sm:border-b-0"
+        />
+        <SummaryItem
+          label="Incerteza"
+          value={
+            standard.uncertainty != null
+              ? `+/-${standard.uncertainty}${uncertaintyUnit}`
+              : `k=${standard.coverageFactor}`
+          }
+          detail={`Distribuição ${standard.distribution === 'normal' ? 'normal' : 'retangular'}`}
+          mono
+        />
+      </dl>
+
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="space-y-10">
+          <DetailSection
+            title="Identificação"
+            description="Dados usados para reconhecer o padrão no laboratório e nos certificados."
+          >
+            <dl className="grid gap-x-8 border-t border-border/70 sm:grid-cols-2">
+              <DetailItem label="Nome" value={standard.name} />
+              <DetailItem label="Tipo" value={standard.type || '-'} />
+              <DetailItem
+                label="Número de série"
+                value={standard.serialNumber}
+                mono
+              />
+              <DetailItem
+                label="Fabricante"
+                value={standard.manufacturer || '-'}
+              />
+              <DetailItem label="Modelo" value={standard.model || '-'} />
+              <DetailItem label="Status">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+                  <Badge
+                    variant={calibrationBadge.variant}
+                    className={calibrationBadge.className}
+                  >
+                    {calibrationBadge.label}
+                  </Badge>
+                </div>
+              </DetailItem>
+            </dl>
+          </DetailSection>
+
+          <DetailSection
+            title="Dados metrológicos"
+            description="Valores certificados, incerteza e parâmetros usados nos cálculos."
+          >
+            {hasCertifiedValues ? (
+              <CertifiedValuesTable
+                values={certifiedValues}
+                showAdvanced={hasAdvancedCertifiedValues}
+              />
+            ) : (
+              <dl className="grid gap-x-8 border-t border-border/70 sm:grid-cols-3">
+                <DetailItem
+                  label="Valor de referência"
+                  value={`${standard.referenceValue ?? '-'}${uncertaintyUnit}`}
+                  mono
+                />
+                <DetailItem
+                  label="Incerteza (U)"
+                  value={
+                    standard.uncertainty != null
+                      ? `+/-${standard.uncertainty}${uncertaintyUnit}`
+                      : '-'
+                  }
+                  mono
+                />
+                <DetailItem
+                  label="Fator de cobertura (k)"
+                  value={standard.coverageFactor}
+                  mono
+                />
+              </dl>
+            )}
+
+            <dl className="mt-6 grid gap-x-8 border-t border-border/70 sm:grid-cols-3">
+              <DetailItem
+                label="Fator de cobertura (k)"
+                value={standard.coverageFactor}
+                mono
+              />
+              <DetailItem
+                label="Distribuição"
+                value={
+                  standard.distribution === 'normal' ? 'Normal' : 'Retangular'
+                }
+              />
+              <DetailItem
+                label="Drift"
+                value={standard.drift != null ? standard.drift : '-'}
+                mono
+              />
+            </dl>
+          </DetailSection>
+        </div>
+
+        <aside className="space-y-10 lg:border-l lg:border-border/70 lg:pl-8">
+          <DetailSection
+            title="Certificado"
+            description="Rastreabilidade e ciclo de calibração."
+          >
+            <dl className="border-t border-border/70">
+              <DetailItem
+                label="Número do certificado"
+                value={standard.certificateNumber}
+                mono
+              />
+              <DetailItem
+                label="Calibrado por"
+                value={standard.calibratedBy || '-'}
+              />
+              <DetailItem
+                label="Data de calibração"
+                value={formatDate(standard.calibrationDate)}
+                mono
+              />
+              <DetailItem label="Próxima calibração" mono>
+                <span className="inline-flex items-center gap-2">
+                  {formatDate(standard.nextCalibrationDate)}
                   {standard.isExpired && (
                     <HugeiconsIcon
                       icon={AlertCircleIcon}
-                      className="h-4 w-4 text-destructive"
+                      className="size-4 text-destructive"
                     />
                   )}
-                </div>
-              </div>
-            </div>
-          </div>
+                </span>
+              </DetailItem>
+            </dl>
+          </DetailSection>
 
-          <Separator />
+          <DetailSection title="Metadados">
+            <dl className="border-t border-border/70">
+              <DetailItem
+                label="Criado em"
+                value={formatDateTime(standard.createdAt)}
+                mono
+              />
+              <DetailItem
+                label="Atualizado em"
+                value={formatDateTime(standard.updatedAt)}
+                mono
+              />
+            </dl>
+          </DetailSection>
+        </aside>
+      </div>
 
-          {/* Metrological Data Section */}
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-              <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
-              Dados Metrológicos
-            </h3>
-
-            {hasCertifiedValues ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Conjunto de valores certificados
-                </p>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">
-                          Nominal
-                        </th>
-                        <th className="text-right py-2 px-3 font-medium text-muted-foreground">
-                          Valor Certificado
-                        </th>
-                        <th className="text-right py-2 px-3 font-medium text-muted-foreground">
-                          Incerteza (U)
-                        </th>
-                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">
-                          Unidade
-                        </th>
-                        {hasAdvancedCertifiedValues && (
-                          <>
-                            <th className="text-right py-2 px-3 font-medium text-muted-foreground">
-                              Erro máximo
-                            </th>
-                            <th className="text-right py-2 px-3 font-medium text-muted-foreground">
-                              Deriva
-                            </th>
-                            <th className="text-right py-2 px-3 font-medium text-muted-foreground">
-                              Empuxo
-                            </th>
-                            <th className="text-right py-2 px-3 font-medium text-muted-foreground">
-                              k
-                            </th>
-                          </>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {standard.certifiedValues!.map((cv, idx) => (
-                        <tr
-                          key={idx}
-                          className="border-b last:border-0 hover:bg-muted/50"
-                        >
-                          <td className="py-2 px-3 font-mono">{cv.nominal}</td>
-                          <td className="py-2 px-3 text-right font-mono">
-                            {cv.value}
-                          </td>
-                          <td className="py-2 px-3 text-right font-mono">
-                            ±{cv.uncertainty}
-                          </td>
-                          <td className="py-2 px-3">{cv.unit}</td>
-                          {hasAdvancedCertifiedValues && (
-                            <>
-                              <td className="py-2 px-3 text-right font-mono">
-                                {cv.maxError ?? '-'}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono">
-                                {cv.drift ?? '-'}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono">
-                                {cv.buoyancy ?? '-'}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono">
-                                {cv.coverageFactor ?? '-'}
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">
-                    Valor de Referência
-                  </p>
-                  <p className="font-medium font-mono">
-                    {standard.referenceValue ?? '-'}
-                    {standard.uncertaintyUnit && ` ${standard.uncertaintyUnit}`}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Incerteza (U)</p>
-                  <p className="font-medium font-mono">
-                    {standard.uncertainty != null
-                      ? `±${standard.uncertainty} ${standard.uncertaintyUnit || ''}`
-                      : '-'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">
-                    Fator de Cobertura (k)
-                  </p>
-                  <p className="font-medium font-mono">
-                    {standard.coverageFactor}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4 pt-4 border-t">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Fator de Cobertura (k)
-                </p>
-                <p className="font-medium font-mono">
-                  {standard.coverageFactor}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Distribuição</p>
-                <p className="font-medium">
-                  {standard.distribution === 'normal' ? 'Normal' : 'Retangular'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Drift</p>
-                <p className="font-medium font-mono">
-                  {standard.drift != null ? standard.drift : '-'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Metadata Section */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Criado em {formatDateTime(standard.createdAt)}</span>
-            <span>Atualizado em {formatDateTime(standard.updatedAt)}</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Audit Log */}
       {auditLogData?.data && auditLogData.data.length > 0 && (
-        <AuditTimeline
-          events={buildAuditTimelineEvents(auditLogData.data)}
-          title="Histórico de Alterações (ISO 17025)"
-        />
+        <DetailSection
+          title="Histórico de alterações"
+          description="Registros de controle para rastreabilidade ISO 17025."
+        >
+          <div className="border-t border-border/70 pt-4">
+            <AuditTimeline
+              events={buildAuditTimelineEvents(auditLogData.data)}
+              title="Histórico de Alterações (ISO 17025)"
+              showCard={false}
+            />
+          </div>
+        </DetailSection>
       )}
+    </div>
+  )
+}
+
+function StandardActions({
+  id,
+  mobile = false,
+  className,
+}: {
+  id: string
+  mobile?: boolean
+  className?: string
+}) {
+  return (
+    <div className={cn(mobile ? 'grid gap-2' : 'gap-2', className)}>
+      <Button
+        variant="outline"
+        render={
+          <Link
+            to="/dashboard/standards/$id/edit"
+            params={{ id }}
+            search={{ renew: true }}
+          />
+        }
+        className={cn(
+          'active:scale-[0.96]',
+          mobile && 'h-10 w-full justify-center rounded-md',
+        )}
+      >
+        <HugeiconsIcon icon={RefreshIcon} className="mr-2 size-4" />
+        Renovar
+      </Button>
+      <Button
+        render={<Link to="/dashboard/standards/$id/edit" params={{ id }} />}
+        className={cn(
+          'active:scale-[0.96]',
+          mobile && 'h-10 w-full justify-center rounded-md',
+        )}
+      >
+        <HugeiconsIcon icon={Edit02Icon} className="mr-2 size-4" />
+        Editar
+      </Button>
+    </div>
+  )
+}
+
+function SummaryItem({
+  label,
+  value,
+  detail,
+  mono = false,
+  className,
+}: {
+  label: string
+  value: ReactNode
+  detail?: string
+  mono?: boolean
+  className?: string
+}) {
+  return (
+    <div className={cn('min-w-0 px-5 py-4', className)}>
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          'mt-2 truncate text-base font-medium tabular-nums',
+          mono && 'font-mono',
+        )}
+      >
+        {value}
+      </dd>
+      {detail ? (
+        <dd className="mt-1 text-pretty text-xs text-muted-foreground">
+          {detail}
+        </dd>
+      ) : null}
+    </div>
+  )
+}
+
+function DetailSection({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <section className={cn('space-y-4', className)}>
+      <div className="max-w-2xl">
+        <h2 className="text-balance text-base font-medium">{title}</h2>
+        {description ? (
+          <p className="mt-1 text-pretty text-sm text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function DetailItem({
+  label,
+  value,
+  mono = false,
+  children,
+}: {
+  label: string
+  value?: ReactNode
+  mono?: boolean
+  children?: ReactNode
+}) {
+  return (
+    <div className="min-w-0 border-b border-border/70 py-4">
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          'mt-1 min-w-0 text-sm text-foreground',
+          mono && 'font-mono tabular-nums',
+        )}
+      >
+        {children ?? value ?? '-'}
+      </dd>
+    </div>
+  )
+}
+
+function CertifiedValuesTable({
+  values,
+  showAdvanced,
+}: {
+  values: CertifiedValue[]
+  showAdvanced: boolean
+}) {
+  return (
+    <div className="overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+      <table className="w-full min-w-[44rem] text-sm">
+        <thead>
+          <tr className="border-b border-border/70 bg-muted/35">
+            <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
+              Nominal
+            </th>
+            <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+              Valor certificado
+            </th>
+            <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+              Incerteza (U)
+            </th>
+            <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
+              Unidade
+            </th>
+            {showAdvanced && (
+              <>
+                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                  Erro máximo
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                  Deriva
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                  Empuxo
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                  k
+                </th>
+              </>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {values.map((cv, index) => (
+            <tr
+              key={`${cv.nominal}-${index}`}
+              className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/35"
+            >
+              <td className="px-3 py-2.5 font-mono tabular-nums">
+                {cv.nominal}
+              </td>
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                {cv.value}
+              </td>
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                +/-{cv.uncertainty}
+              </td>
+              <td className="px-3 py-2.5">{cv.unit}</td>
+              {showAdvanced && (
+                <>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                    {cv.maxError ?? '-'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                    {cv.drift ?? '-'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                    {cv.buoyancy ?? '-'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                    {cv.coverageFactor ?? '-'}
+                  </td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
