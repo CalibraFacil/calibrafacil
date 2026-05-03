@@ -1290,25 +1290,29 @@ export const publicApiV2Router = new Hono<{
   };
 }>();
 
+const requirePublicApiDocsAccess = [
+  ...requireLabProtected,
+  requireOrgType("LAB"),
+  requireRole(["admin", "owner"]),
+  requireFeature("api"),
+] as const;
+
 export const publicApiV2DocsRouter = new Hono<{
   Variables: AuthVariables;
   Bindings: R2Env & {
     PUBLIC_API_MASTER_KEY?: string;
     INTEGRATIONS_MASTER_KEY?: string;
   };
-}>()
-  .use("*", ...requireLabProtected)
-  .use("*", requireOrgType("LAB"))
-  .use("*", requireRole(["admin", "owner"]))
-  .use("*", requireFeature("api"));
+}>();
 
-publicApiV2DocsRouter.get("/openapi", (c) => {
+publicApiV2DocsRouter.get("/openapi", ...requirePublicApiDocsAccess, (c) => {
   const origin = new URL(c.req.url).origin;
   return c.json(buildPublicApiV2OpenApiDocument(origin));
 });
 
 publicApiV2DocsRouter.get(
   "/reference",
+  ...requirePublicApiDocsAccess,
   Scalar({
     url: "/api/public/v2/openapi",
     pageTitle: "CalibraFácil Public API",

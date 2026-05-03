@@ -262,6 +262,18 @@ app.on(["GET", "POST"], "/api/auth/portal/*", async (c) => {
  * API ROUTES
  */
 const routes = app
+  .get("/", (c) =>
+    c.json({
+      name: "CalibraFácil API",
+      status: "ok",
+    }),
+  )
+  .get("/api", (c) =>
+    c.json({
+      name: "CalibraFácil API",
+      status: "ok",
+    }),
+  )
   .get("/hello", (c) => c.json({ message: "Hello!" }))
   .route("/api/customers", customersRouter)
   .route("/api/invitations", invitationsRouter)
