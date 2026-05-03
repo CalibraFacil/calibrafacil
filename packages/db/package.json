@@ -28,14 +28,17 @@
     "@neondatabase/serverless": "^1.0.2",
     "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.8",
-    "drizzle-orm": "^0.45.1",
     "drizzle-zod": "^0.8.3",
     "kysely": "^0.28.14",
     "postgres": "^3.4.7"
   },
+  "peerDependencies": {
+    "drizzle-orm": "^0.45.2"
+  },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^22.10.2",
+    "drizzle-orm": "^0.45.2",
     "typescript": "^5.9.3",
     "vitest": "^4.0.17"
   }

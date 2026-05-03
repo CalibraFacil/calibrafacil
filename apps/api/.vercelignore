@@ -1,0 +1,6 @@
+.wrangler
+test
+vercel-functions
+src/**/__tests__
+src/**/*.spec.ts
+src/**/*.test.ts

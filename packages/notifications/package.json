@@ -19,15 +19,20 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@calibra-facil/db": "workspace:*",
     "@calibra-facil/email": "workspace:*",
     "@react-email/components": "^1.0.2",
-    "drizzle-orm": "^0.45.1",
+    "@react-email/render": "^2.0.0",
     "resend": "^4.5.0"
   },
+  "peerDependencies": {
+    "@calibra-facil/db": "^1.0.0",
+    "drizzle-orm": "^0.45.2"
+  },
   "devDependencies": {
+    "@calibra-facil/db": "workspace:*",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^22.10.2",
+    "drizzle-orm": "^0.45.2",
     "typescript": "^5.9.3"
   }
 }

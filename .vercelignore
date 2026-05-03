@@ -1,0 +1,6 @@
+apps/api/.wrangler
+apps/api/test
+apps/api/vercel-functions
+apps/api/src/**/__tests__
+apps/api/src/**/*.spec.ts
+apps/api/src/**/*.test.ts

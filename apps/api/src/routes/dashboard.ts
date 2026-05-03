@@ -347,10 +347,12 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             : 100; // Default to 100% if no decisions made
         const dueToday = dueTodayResult[0]?.count ?? 0;
         const dueNextSevenDays = dueNextSevenDaysResult[0]?.count ?? 0;
-        const statusBreakdown = statusBreakdownResult.map((row) => ({
-          status: row.status,
-          count: row.count,
-        }));
+        const statusBreakdown = statusBreakdownResult.map(
+          (row: { status: string; count: number }) => ({
+            status: row.status,
+            count: row.count,
+          }),
+        );
 
         // Format trend data
         // db.execute returns array directly for postgres driver

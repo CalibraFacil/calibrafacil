@@ -18,7 +18,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { Resend } from "resend";
-import { render } from "@react-email/components";
+import { render } from "@react-email/render";
 import {
   NotificationEmail,
   JobNotificationEmail,
