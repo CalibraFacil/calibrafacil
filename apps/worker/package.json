@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/fly.ts",
-    "start": "bun src/fly.ts",
-    "deploy:fly": "flyctl deploy -c ../../fly.worker.toml --ha=false"
+    "dev": "bun --watch src/bun.ts",
+    "start": "bun src/bun.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

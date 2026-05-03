@@ -16,4 +16,4 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
 
-CMD ["bun", "apps/worker/src/fly.ts"]
+CMD ["bun", "apps/worker/src/bun.ts"]

@@ -12,7 +12,6 @@
     "typecheck": "tsgo --noEmit",
     "start": "bun src/bun.ts",
     "deploy": "pnpm dlx vercel deploy --prod",
-    "deploy:fly": "flyctl deploy -c ../../fly.api.toml --ha=false",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage"

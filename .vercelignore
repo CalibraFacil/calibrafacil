@@ -1,4 +1,3 @@
-apps/api/.wrangler
 apps/api/test
 apps/api/vercel-functions
 apps/api/src/**/__tests__

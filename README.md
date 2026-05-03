@@ -10,32 +10,28 @@ Calibra Fácil helps calibration laboratories manage their operations with full 
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Cloudflare                              │
-├─────────────┬─────────────┬─────────────┬─────────────┬────────┤
-│  Web App    │  Portal     │    API      │   Worker    │   R2   │
-│  (Pages)    │  (Pages)    │  (Workers)  │  (Workers)  │(Storage│
-│  :5173      │  :5174      │   :3000     │  (Queue)    │        │
-└──────┬──────┴──────┬──────┴──────┬──────┴──────┬──────┴────────┘
-       │             │             │             │
-       └─────────────┴──────┬──────┴─────────────┘
-                            │
-                     ┌──────┴──────┐
-                     │  Hyperdrive │
-                     └──────┬──────┘
-                            │
-                     ┌──────┴──────┐
-                     │    Neon     │
-                     │ PostgreSQL  │
-                     └─────────────┘
+│                           Vercel                                │
+├─────────────┬─────────────┬─────────────┬───────────────────────┤
+│  Web App    │  Portal     │    API      │   Queue + Cron        │
+│  :5173      │  :5174      │   :3000     │   background jobs     │
+└──────┬──────┴──────┬──────┴──────┬──────┴──────────┬────────────┘
+       │             │             │                 │
+       └─────────────┴──────┬──────┴────────┬────────┘
+                            │               │
+                     ┌──────┴──────┐ ┌──────┴──────┐
+                     │    Neon     │ │ Cloudflare  │
+                     │ PostgreSQL  │ │  R2 Storage │
+                     └─────────────┘ └─────────────┘
 ```
 
 | Component | Description | Platform |
 |-----------|-------------|----------|
-| **Web** | Lab dashboard for technicians and administrators | Cloudflare Pages |
-| **Portal** | Client-facing portal for certificate access | Cloudflare Pages |
-| **API** | REST API backend | Cloudflare Workers |
-| **Worker** | Background jobs (PDF generation, compliance checks) | Cloudflare Workers |
-| **Database** | PostgreSQL with Drizzle ORM | Neon (via Hyperdrive) |
+| **Web** | Lab dashboard for technicians and administrators | Vercel |
+| **Portal** | Client-facing portal for certificate access | Vercel |
+| **API** | REST API backend | Vercel Functions |
+| **Background jobs** | PDF generation, compliance checks, and integration syncs | Vercel Queue and Cron |
+| **Database** | PostgreSQL with Drizzle ORM | Neon |
+| **Object storage** | Certificate PDFs and runtime assets | Cloudflare R2 |
 
 ## Monorepo Structure
 
@@ -62,10 +58,10 @@ calibra-facil/
 ## Tech Stack
 
 - **Frontend:** React 19, Vite, TanStack Router/Query, Tailwind CSS 4
-- **Backend:** Hono, Cloudflare Workers
+- **Backend:** Hono, Vercel Functions
 - **Database:** PostgreSQL (Neon), Drizzle ORM
 - **Auth:** Better-Auth with organization support
-- **PDF Generation:** Cloudflare Puppeteer
+- **PDF Generation:** Puppeteer/Chromium
 - **Email:** Resend + React Email
 - **Monorepo:** Turborepo + pnpm
 

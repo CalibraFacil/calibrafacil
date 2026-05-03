@@ -26,7 +26,7 @@ type BunRuntime = {
 
 declare const Bun: BunRuntime;
 
-const workerId = `${process.env.FLY_APP_NAME ?? "worker"}-${process.env.FLY_ALLOC_ID ?? process.pid}`;
+const workerId = process.env.WORKER_ID ?? `worker-${process.pid}`;
 const batchSize = Number(process.env.QUEUE_BATCH_SIZE ?? 10);
 const pollIntervalMs = Number(process.env.QUEUE_POLL_INTERVAL_MS ?? 2_000);
 const staleAfterMs = Number(process.env.QUEUE_STALE_AFTER_MS ?? 10 * 60_000);
@@ -161,7 +161,7 @@ async function processQueueBatch(env: WorkerEnv) {
   const jobs = await claimQueueJobs(workerId, batchSize);
   if (jobs.length === 0) return;
 
-  console.log(`[FlyWorker] Claimed ${jobs.length} queue job(s)`);
+  console.log(`[Worker] Claimed ${jobs.length} queue job(s)`);
   const { batch, states } = createBatch(jobs);
 
   try {
@@ -187,7 +187,7 @@ function scheduleEvery(
 ) {
   setInterval(() => {
     task().catch((error) => {
-      console.error(`[FlyWorker] ${label} failed`, error);
+      console.error(`[Worker] ${label} failed`, error);
     });
   }, intervalMs);
 }
@@ -202,7 +202,7 @@ function scheduleDailyAt(hourUtc: number, task: () => Promise<void>) {
     setTimeout(() => {
       task()
         .catch((error) => {
-          console.error("[FlyWorker] daily scheduled task failed", error);
+          console.error("[Worker] daily scheduled task failed", error);
         })
         .finally(scheduleNext);
     }, next.getTime() - now.getTime());
@@ -215,7 +215,7 @@ await loadLocalEnv();
 
 const env = createEnv();
 
-console.log(`[FlyWorker] Starting ${workerId}`);
+console.log(`[Worker] Starting ${workerId}`);
 scheduleEvery("queue poll", pollIntervalMs, () => processQueueBatch(env));
 scheduleEvery("integration scheduler", 30 * 60_000, () =>
   processScheduledIntegrationSyncs(env).then(() => undefined),
