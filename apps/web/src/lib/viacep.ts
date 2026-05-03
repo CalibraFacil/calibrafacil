@@ -59,40 +59,15 @@ export function mapViaCepResponse(
 export function mergeViaCepAddress<TAddress extends EditableAddress>(
   currentAddress: TAddress,
   viaCepAddress: ViaCepAddress,
-  previousViaCepAddress?: ViaCepAddress | null,
 ): TAddress {
-  const isDifferentCep =
-    previousViaCepAddress &&
-    getCepDigits(previousViaCepAddress.cep) !== getCepDigits(viaCepAddress.cep)
-
-  const fillEmpty = <TKey extends keyof EditableAddress>(
-    field: TKey,
-    value: string,
-  ) => {
-    const currentValue = currentAddress[field]
-    if (isDifferentCep) {
-      return value
-    }
-
-    if (typeof currentValue === 'string' && currentValue.trim() !== '') {
-      const previousValue = previousViaCepAddress?.[field]
-      if (previousValue && currentValue.trim() === previousValue.trim()) {
-        return value || currentValue
-      }
-
-      return currentValue
-    }
-    return value || currentValue
-  }
-
   return {
     ...currentAddress,
     cep: viaCepAddress.cep || currentAddress.cep,
-    street: fillEmpty('street', viaCepAddress.street),
-    complement: fillEmpty('complement', viaCepAddress.complement),
-    neighbourhood: fillEmpty('neighbourhood', viaCepAddress.neighbourhood),
-    city: fillEmpty('city', viaCepAddress.city),
-    state: fillEmpty('state', viaCepAddress.state),
+    street: viaCepAddress.street,
+    complement: viaCepAddress.complement,
+    neighbourhood: viaCepAddress.neighbourhood,
+    city: viaCepAddress.city,
+    state: viaCepAddress.state,
   } as TAddress
 }
 
