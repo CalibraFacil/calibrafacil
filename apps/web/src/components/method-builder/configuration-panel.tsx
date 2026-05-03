@@ -178,32 +178,35 @@ export function ConfigurationPanel({
   )
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="space-y-0 divide-y">
       {/* Basic Info Section */}
       <Collapsible
         open={sectionsOpen.basic}
         onOpenChange={(open) => setSectionsOpen((s) => ({ ...s, basic: open }))}
       >
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
-          <span className="font-medium">Informações Básicas</span>
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-3 py-3 text-left hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 transition-[color]">
+          <span className="font-medium text-balance">Informações Básicas</span>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={`h-4 w-4 transition-transform ${sectionsOpen.basic ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${sectionsOpen.basic ? 'rotate-180' : ''}`}
           />
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
-          <FieldGroup>
+        <CollapsibleContent className="pb-5">
+          <FieldGroup className="gap-5">
             <Field>
               <FieldLabel htmlFor="name">Nome do Método *</FieldLabel>
               <Input
                 id="name"
+                name="name"
                 value={method.name}
                 onChange={(e) => onChange({ name: e.target.value })}
-                placeholder="Ex: Calibração de Micrômetro 0-25mm"
+                placeholder="Ex.: Calibração de Micrômetro 0-25 mm…"
                 disabled={disabled}
+                autoComplete="off"
               />
               <FieldDescription>
-                Nome descritivo para identificar o método
+                Nome descritivo para identificar o método.
               </FieldDescription>
             </Field>
 
@@ -211,11 +214,13 @@ export function ConfigurationPanel({
               <FieldLabel htmlFor="description">Descrição</FieldLabel>
               <Textarea
                 id="description"
+                name="description"
                 value={method.description || ''}
                 onChange={(e) => onChange({ description: e.target.value })}
-                placeholder="Descreva o procedimento de calibração..."
+                placeholder="Descreva o procedimento de calibração…"
                 disabled={disabled}
                 rows={3}
+                autoComplete="off"
               />
             </Field>
 
@@ -228,13 +233,13 @@ export function ConfigurationPanel({
                 }
                 disabled={disabled}
               >
-                <SelectTrigger>
+                <SelectTrigger id="assetType">
                   <span>
                     {method.assetTypeId
                       ? assetTypesData?.data?.find(
                           (t) => t.id === method.assetTypeId,
-                        )?.name || 'Selecione...'
-                      : 'Selecione (opcional)...'}
+                        )?.name || 'Selecione…'
+                      : 'Selecione (opcional)…'}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -246,7 +251,7 @@ export function ConfigurationPanel({
                 </SelectContent>
               </Select>
               <FieldDescription>
-                Vincule este método a um tipo de instrumento específico
+                Vincule este método a um tipo de instrumento específico.
               </FieldDescription>
             </Field>
           </FieldGroup>
@@ -260,14 +265,17 @@ export function ConfigurationPanel({
           setSectionsOpen((s) => ({ ...s, certificate: open }))
         }
       >
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
-          <span className="font-medium">Conteúdo do Certificado</span>
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-3 py-3 text-left hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 transition-[color]">
+          <span className="font-medium text-balance">
+            Conteúdo do Certificado
+          </span>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={`h-4 w-4 transition-transform ${sectionsOpen.certificate ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${sectionsOpen.certificate ? 'rotate-180' : ''}`}
           />
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
+        <CollapsibleContent className="pb-5">
           <CertificateContentPanel
             content={method.certificateContent}
             onChange={(certificateContent) => onChange({ certificateContent })}
@@ -283,62 +291,77 @@ export function ConfigurationPanel({
           setSectionsOpen((s) => ({ ...s, inputs: open }))
         }
       >
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
-          <span className="font-medium">
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-3 py-3 text-left hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 transition-[color]">
+          <span className="font-medium text-balance">
             Campos de Entrada ({method.dataFields.length})
           </span>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={`h-4 w-4 transition-transform ${sectionsOpen.inputs ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${sectionsOpen.inputs ? 'rotate-180' : ''}`}
           />
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2 space-y-2">
+        <CollapsibleContent className="space-y-3 pb-5">
           {method.dataFields.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-2">
+            <p className="py-2 text-sm text-muted-foreground text-pretty">
               Nenhum campo de entrada definido. Adicione campos para coletar
               dados durante a calibração.
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y">
               {method.dataFields.map((field, index) => (
                 <div
                   key={field.key}
-                  className="flex items-center justify-between p-2 border rounded bg-muted/30"
+                  className="flex min-w-0 items-center justify-between gap-3 py-3"
                 >
-                  <div>
-                    <span className="font-medium">{field.label}</span>
-                    <span className="text-xs text-muted-foreground ml-2">
+                  <div className="min-w-0">
+                    <span className="block truncate font-medium">
+                      {field.label}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
                       ({field.key}: {field.type}
                       {field.unit && ` [${field.unit}]`})
                     </span>
                     {field.required && (
-                      <span className="text-xs text-red-500 ml-1">*</span>
+                      <span className="text-xs font-medium text-red-500">
+                        obrigatório
+                      </span>
                     )}
                     {field.source === 'asset_spec' && (
-                      <span className="text-xs text-muted-foreground ml-2">
+                      <span className="ml-2 text-xs text-muted-foreground">
                         · Ativo: {field.assetSpecKey}
                       </span>
                     )}
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex shrink-0 gap-1">
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Editar campo ${field.label}`}
                       onClick={() => {
                         setEditingInputIndex(index)
                         setInputDialogOpen(true)
                       }}
                       disabled={disabled}
                     >
-                      <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
+                      <HugeiconsIcon
+                        icon={Edit02Icon}
+                        aria-hidden="true"
+                        className="size-4"
+                      />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Remover campo ${field.label}`}
                       onClick={() => handleDeleteInput(index)}
                       disabled={disabled}
                     >
-                      <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
+                      <HugeiconsIcon
+                        icon={Delete02Icon}
+                        aria-hidden="true"
+                        className="size-4"
+                      />
                     </Button>
                   </div>
                 </div>
@@ -353,8 +376,13 @@ export function ConfigurationPanel({
               setInputDialogOpen(true)
             }}
             disabled={disabled}
+            className="active:scale-[0.96] transition-transform"
           >
-            <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+            <HugeiconsIcon
+              icon={Add01Icon}
+              aria-hidden="true"
+              className="mr-2 size-4"
+            />
             Adicionar Campo
           </Button>
         </CollapsibleContent>
@@ -367,60 +395,71 @@ export function ConfigurationPanel({
           setSectionsOpen((s) => ({ ...s, formulas: open }))
         }
       >
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
-          <span className="font-medium">
-            Formulas ({method.formulas.length})
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-3 py-3 text-left hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 transition-[color]">
+          <span className="font-medium text-balance">
+            Fórmulas ({method.formulas.length})
           </span>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={`h-4 w-4 transition-transform ${sectionsOpen.formulas ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${sectionsOpen.formulas ? 'rotate-180' : ''}`}
           />
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2 space-y-2">
+        <CollapsibleContent className="space-y-3 pb-5">
           {method.formulas.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-2">
-              Nenhuma fórmula definida. Adicione formulas para calcular
+            <p className="py-2 text-sm text-muted-foreground text-pretty">
+              Nenhuma fórmula definida. Adicione fórmulas para calcular
               resultados.
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y">
               {method.formulas.map((formula, index) => (
                 <div
                   key={formula.outputKey}
-                  className="flex items-center justify-between p-2 border rounded bg-muted/30"
+                  className="flex min-w-0 items-center justify-between gap-3 py-3"
                 >
                   <div className="flex-1 min-w-0">
-                    <span className="font-medium">
+                    <span className="block truncate font-medium">
                       {formula.label || formula.outputKey}
                     </span>
-                    <code className="text-xs text-muted-foreground ml-2 bg-muted px-1 rounded">
+                    <code className="mt-1 block truncate rounded-md bg-muted/50 px-2 py-1 font-mono text-xs text-muted-foreground">
                       {formula.expression}
                     </code>
                     {formula.reporting?.group && (
-                      <span className="text-xs text-muted-foreground ml-2">
+                      <span className="text-xs text-muted-foreground">
                         · Certificado: {formula.reporting.group}
                       </span>
                     )}
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex shrink-0 gap-1">
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Editar fórmula ${formula.label || formula.outputKey}`}
                       onClick={() => {
                         setEditingFormulaIndex(index)
                         setFormulaDialogOpen(true)
                       }}
                       disabled={disabled}
                     >
-                      <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
+                      <HugeiconsIcon
+                        icon={Edit02Icon}
+                        aria-hidden="true"
+                        className="size-4"
+                      />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Remover fórmula ${formula.label || formula.outputKey}`}
                       onClick={() => handleDeleteFormula(index)}
                       disabled={disabled}
                     >
-                      <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
+                      <HugeiconsIcon
+                        icon={Delete02Icon}
+                        aria-hidden="true"
+                        className="size-4"
+                      />
                     </Button>
                   </div>
                 </div>
@@ -435,8 +474,13 @@ export function ConfigurationPanel({
               setFormulaDialogOpen(true)
             }}
             disabled={disabled}
+            className="active:scale-[0.96] transition-transform"
           >
-            <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+            <HugeiconsIcon
+              icon={Add01Icon}
+              aria-hidden="true"
+              className="mr-2 size-4"
+            />
             Adicionar Fórmula
           </Button>
         </CollapsibleContent>
@@ -449,60 +493,71 @@ export function ConfigurationPanel({
           setSectionsOpen((s) => ({ ...s, validations: open }))
         }
       >
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
-          <span className="font-medium">
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-3 py-3 text-left hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 transition-[color]">
+          <span className="font-medium text-balance">
             Critérios de Aceitação ({method.validations.length})
           </span>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={`h-4 w-4 transition-transform ${sectionsOpen.validations ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${sectionsOpen.validations ? 'rotate-180' : ''}`}
           />
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2 space-y-2">
+        <CollapsibleContent className="space-y-3 pb-5">
           {method.validations.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-2">
+            <p className="py-2 text-sm text-muted-foreground text-pretty">
               Nenhum critério definido. Adicione critérios de
               aprovação/reprovação.
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y">
               {method.validations.map((validation, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-2 border rounded bg-muted/30"
+                  className="flex min-w-0 items-center justify-between gap-3 py-3"
                 >
                   <div className="flex-1 min-w-0">
                     <span
-                      className={`text-xs px-1 rounded ${validation.severity === 'error' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}
+                      className={`rounded px-1.5 py-0.5 text-xs font-medium ${validation.severity === 'error' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}
                     >
                       {validation.severity === 'error' ? 'Erro' : 'Aviso'}
                     </span>
-                    <code className="text-xs text-muted-foreground ml-2 bg-muted px-1 rounded">
+                    <code className="mt-2 block truncate rounded-md bg-muted/50 px-2 py-1 font-mono text-xs text-muted-foreground">
                       {validation.expression}
                     </code>
-                    <p className="text-sm text-muted-foreground truncate">
+                    <p className="mt-1 truncate text-sm text-muted-foreground">
                       {validation.message}
                     </p>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex shrink-0 gap-1">
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Editar critério ${validation.message}`}
                       onClick={() => {
                         setEditingValidationIndex(index)
                         setValidationDialogOpen(true)
                       }}
                       disabled={disabled}
                     >
-                      <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
+                      <HugeiconsIcon
+                        icon={Edit02Icon}
+                        aria-hidden="true"
+                        className="size-4"
+                      />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Remover critério ${validation.message}`}
                       onClick={() => handleDeleteValidation(index)}
                       disabled={disabled}
                     >
-                      <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
+                      <HugeiconsIcon
+                        icon={Delete02Icon}
+                        aria-hidden="true"
+                        className="size-4"
+                      />
                     </Button>
                   </div>
                 </div>
@@ -517,8 +572,13 @@ export function ConfigurationPanel({
               setValidationDialogOpen(true)
             }}
             disabled={disabled}
+            className="active:scale-[0.96] transition-transform"
           >
-            <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+            <HugeiconsIcon
+              icon={Add01Icon}
+              aria-hidden="true"
+              className="mr-2 size-4"
+            />
             Adicionar Critério
           </Button>
         </CollapsibleContent>

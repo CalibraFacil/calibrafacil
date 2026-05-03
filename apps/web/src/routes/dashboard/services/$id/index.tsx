@@ -1,12 +1,10 @@
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
   Edit02Icon,
-  ClockIcon,
-  MoneyReceive01Icon,
-  TestTube02Icon,
   InformationCircleIcon,
 } from '@hugeicons/core-free-icons'
 
@@ -19,15 +17,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { methodRouteId } from '@/lib/route-identifiers'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/dashboard/services/$id/')({
   component: ServiceDetailPage,
@@ -79,6 +70,34 @@ function formatDateTime(dateString: string): string {
   })
 }
 
+function getMethodRouteParam(service: Service): string {
+  if (service.methodId && service.methodName && service.methodVersion) {
+    return methodRouteId({
+      name: service.methodName,
+      version: service.methodVersion,
+    })
+  }
+
+  return String(service.methodId)
+}
+
+function formatMethodStatus(status: string | null): string {
+  if (status === 'PUBLISHED') return 'Publicado'
+  if (status === 'DRAFT') return 'Rascunho'
+  if (status === 'PENDING_APPROVAL') return 'Em aprovação'
+  if (status === 'TECHNICAL_REVIEWED') return 'Revisão técnica'
+  if (status === 'ARCHIVED') return 'Arquivado'
+  return status || 'Sem status'
+}
+
+function getMethodStatusVariant(
+  status: string | null,
+): 'default' | 'secondary' | 'outline' {
+  if (status === 'PUBLISHED') return 'default'
+  if (status === 'DRAFT') return 'secondary'
+  return 'outline'
+}
+
 function ServiceDetailPage() {
   const { id } = Route.useParams()
   const navigate = useNavigate()
@@ -124,17 +143,14 @@ function ServiceDetailPage() {
           variant="ghost"
           size="sm"
           onClick={() => navigate({ to: '/dashboard/services' })}
+          className="-ml-2 active:scale-[0.96] transition-transform"
         >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
+          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
           Voltar
         </Button>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-destructive">
-              Erro ao carregar serviço: {error.message}
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-lg bg-destructive/5 px-6 py-8 text-center text-sm text-destructive shadow-[inset_0_0_0_1px_rgba(220,38,38,0.18)]">
+          Erro ao carregar serviço: {error.message}
+        </div>
       </div>
     )
   }
@@ -142,26 +158,46 @@ function ServiceDetailPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-24" />
-          <Skeleton className="h-10 w-24" />
-        </div>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-4 w-96" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-6 w-32" />
-                </div>
-              ))}
+        <div className="space-y-4 sm:flex sm:items-start sm:justify-between sm:gap-4 sm:space-y-0">
+          <div className="flex items-start gap-4">
+            <Skeleton className="size-9 rounded-md" />
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-64" />
+              <Skeleton className="h-4 w-80" />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <Skeleton className="h-9 w-24" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="space-y-3 py-3">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-6 w-36" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="space-y-8">
+            {Array.from({ length: 2 }).map((_, sectionIndex) => (
+              <div key={sectionIndex} className="space-y-4">
+                <Skeleton className="h-5 w-40" />
+                <div className="grid gap-x-8 border-t sm:grid-cols-2">
+                  {Array.from({ length: 4 }).map((_, rowIndex) => (
+                    <div key={rowIndex} className="space-y-2 border-b py-4">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-5 w-40" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-8 lg:border-l lg:pl-8">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        </div>
       </div>
     )
   }
@@ -173,208 +209,355 @@ function ServiceDetailPage() {
           variant="ghost"
           size="sm"
           onClick={() => navigate({ to: '/dashboard/services' })}
+          className="-ml-2 active:scale-[0.96] transition-transform"
         >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
+          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
           Voltar
         </Button>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground">Serviço não encontrado.</p>
-          </CardContent>
-        </Card>
+        <div className="rounded-lg bg-muted/35 px-6 py-8 text-center text-sm text-muted-foreground shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+          Serviço não encontrado.
+        </div>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="space-y-4 sm:flex sm:items-start sm:justify-between sm:gap-4 sm:space-y-0">
+        <div className="flex items-start gap-3 sm:gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate({ to: '/dashboard/services' })}
+            className="mt-0.5 active:scale-[0.96]"
+            aria-label="Voltar para serviços"
+          >
+            <HugeiconsIcon icon={ArrowLeft01Icon} className="size-5" />
+          </Button>
+          <div className="min-w-0 flex-1">
+            <div className="space-y-3">
+              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <h1 className="text-balance text-2xl font-semibold tracking-tight">
+                  {service.name}
+                </h1>
+                <Badge variant={service.isActive ? 'default' : 'secondary'}>
+                  {service.isActive ? 'Ativo' : 'Inativo'}
+                </Badge>
+              </div>
+              {service.description ? (
+                <p className="max-w-3xl text-pretty text-sm leading-6 text-muted-foreground">
+                  {service.description}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
         <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate({ to: '/dashboard/services' })}
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
-
-        <Button
+          variant="outline"
           render={<Link to="/dashboard/services/$id/edit" params={{ id }} />}
+          className="hidden active:scale-[0.96] sm:inline-flex"
         >
-          <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
+          <HugeiconsIcon icon={Edit02Icon} className="mr-2 size-4" />
           Editar
         </Button>
       </div>
 
-      {/* Main Card */}
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1 flex-1">
-              <CardTitle className="text-2xl">{service.name}</CardTitle>
-              {service.description && (
-                <CardDescription className="text-base">
-                  {service.description}
-                </CardDescription>
-              )}
-            </div>
-            <Badge variant={service.isActive ? 'default' : 'secondary'}>
-              {service.isActive ? 'Ativo' : 'Inativo'}
-            </Badge>
-          </div>
-        </CardHeader>
+      <Button
+        variant="outline"
+        render={<Link to="/dashboard/services/$id/edit" params={{ id }} />}
+        className="w-full active:scale-[0.96] sm:hidden"
+      >
+        <HugeiconsIcon icon={Edit02Icon} className="mr-2 size-4" />
+        Editar serviço
+      </Button>
 
-        <CardContent className="space-y-6">
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <HugeiconsIcon
-                  icon={MoneyReceive01Icon}
-                  className="h-5 w-5 text-primary"
-                />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Preço</p>
-                <p className="text-lg font-semibold">
-                  {formatPrice(service.price, service.currency)}
-                </p>
-              </div>
-            </div>
+      <dl className="grid overflow-hidden rounded-lg bg-muted/35 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] sm:grid-cols-2 xl:grid-cols-4 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+        <SummaryItem
+          label="Preço"
+          value={formatPrice(service.price, service.currency)}
+          detail="Valor de referência"
+          className="border-b border-border/70 sm:border-r xl:border-b-0"
+          numeric={service.price !== null}
+        />
+        <SummaryItem
+          label="Prazo"
+          value={formatTat(service.tat)}
+          detail="Tempo operacional"
+          className="border-b border-border/70 xl:border-r xl:border-b-0"
+        />
+        <SummaryItem
+          label="Método"
+          value={
+            service.methodId && service.methodName ? (
+              <Link
+                to="/dashboard/methods/$id"
+                params={{ id: getMethodRouteParam(service) }}
+                className="truncate hover:underline"
+              >
+                {service.methodName}
+              </Link>
+            ) : (
+              'Sem vínculo'
+            )
+          }
+          detail={
+            service.methodVersion
+              ? `Versão ${service.methodVersion}`
+              : undefined
+          }
+          className="border-b border-border/70 sm:border-r sm:border-b-0"
+        />
+        <SummaryItem
+          label="Tipo de instrumento"
+          value={service.assetTypeName || 'Qualquer instrumento'}
+          detail="Filtro em ordens"
+        />
+      </dl>
 
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <HugeiconsIcon
-                  icon={ClockIcon}
-                  className="h-5 w-5 text-primary"
-                />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Prazo</p>
-                <p className="text-lg font-semibold">
-                  {formatTat(service.tat)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Technical Configuration */}
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
-              <HugeiconsIcon icon={TestTube02Icon} className="h-4 w-4" />
-              Configuração Técnica
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Method */}
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Método de Calibração
-                </p>
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="space-y-10">
+          <DetailSection
+            title="Configuração técnica"
+            description="Vínculos que definem cálculo, rastreabilidade e aplicação do serviço."
+          >
+            <dl className="grid gap-x-8 border-t border-border/70 sm:grid-cols-2">
+              <DetailItem label="Método de calibração">
                 {service.methodId && service.methodName ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <Link
                       to="/dashboard/methods/$id"
-                      params={{
-                        id: service.methodVersion
-                          ? methodRouteId({
-                              name: service.methodName,
-                              version: service.methodVersion,
-                            })
-                          : String(service.methodId),
-                      }}
-                      className="text-primary hover:underline font-medium"
+                      params={{ id: getMethodRouteParam(service) }}
+                      className="min-w-0 truncate font-medium text-primary hover:underline"
                     >
                       {service.methodName}
                     </Link>
-                    {service.methodStatus && (
+                    {service.methodStatus ? (
                       <Badge
-                        variant={
-                          service.methodStatus === 'PUBLISHED'
-                            ? 'default'
-                            : service.methodStatus === 'DRAFT'
-                              ? 'secondary'
-                              : 'outline'
-                        }
+                        variant={getMethodStatusVariant(service.methodStatus)}
                         className="text-xs"
                       >
-                        {service.methodStatus === 'PUBLISHED'
-                          ? 'Publicado'
-                          : service.methodStatus === 'DRAFT'
-                            ? 'Rascunho'
-                            : service.methodStatus === 'PENDING_APPROVAL'
-                              ? 'Em aprovação'
-                              : service.methodStatus === 'TECHNICAL_REVIEWED'
-                                ? 'Revisão técnica'
-                                : 'Arquivado'}
+                        {formatMethodStatus(service.methodStatus)}
                       </Badge>
-                    )}
+                    ) : null}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">
+                  <span className="text-muted-foreground">
                     Nenhum método vinculado
-                  </p>
+                  </span>
                 )}
-              </div>
-
-              {/* Asset Type */}
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                  Tipo de Instrumento
-                </p>
-                <p className="font-medium">
+              </DetailItem>
+              <DetailItem
+                label="Versão do método"
+                value={
+                  service.methodVersion
+                    ? `v${service.methodVersion}`
+                    : 'Não definida'
+                }
+                mono
+              />
+              <DetailItem label="Tipo de instrumento">
+                <span className="font-medium">
                   {service.assetTypeName || (
                     <span className="text-muted-foreground">
                       Qualquer instrumento
                     </span>
                   )}
+                </span>
+              </DetailItem>
+              <DetailItem label="Status do método">
+                <Badge variant={getMethodStatusVariant(service.methodStatus)}>
+                  {formatMethodStatus(service.methodStatus)}
+                </Badge>
+              </DetailItem>
+            </dl>
+          </DetailSection>
+
+          <DetailSection
+            title="Condições comerciais"
+            description="Valores exibidos para orçamento e planejamento de ordens de serviço."
+          >
+            <dl className="grid gap-x-8 border-t border-border/70 sm:grid-cols-2">
+              <DetailItem
+                label="Preço"
+                value={formatPrice(service.price, service.currency)}
+                numeric={service.price !== null}
+              />
+              <DetailItem label="Prazo" value={formatTat(service.tat)} />
+              <DetailItem
+                label="Moeda"
+                value={service.currency || 'BRL'}
+                mono
+              />
+              <DetailItem label="Disponibilidade">
+                <Badge variant={service.isActive ? 'default' : 'secondary'}>
+                  {service.isActive ? 'Ativo no catálogo' : 'Fora do catálogo'}
+                </Badge>
+              </DetailItem>
+            </dl>
+          </DetailSection>
+
+          {!service.methodId && (
+            <div className="flex items-start gap-3 rounded-lg bg-amber-50 p-4 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)] dark:bg-amber-950/30">
+              <HugeiconsIcon
+                icon={InformationCircleIcon}
+                className="mt-0.5 size-5 text-amber-600 dark:text-amber-400"
+              />
+              <div className="space-y-1">
+                <p className="font-medium text-amber-800 dark:text-amber-200">
+                  Serviço sem método vinculado
+                </p>
+                <p className="text-pretty text-sm leading-6 text-amber-700 dark:text-amber-300">
+                  Vincular um método permite usar cálculo automatizado de
+                  incerteza e gerar certificados padronizados.
                 </p>
               </div>
             </div>
-          </div>
-
-          {!service.methodId && (
-            <>
-              <Separator />
-              <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-                <HugeiconsIcon
-                  icon={InformationCircleIcon}
-                  className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5"
-                />
-                <div className="space-y-1">
-                  <p className="font-medium text-amber-800 dark:text-amber-200">
-                    Serviço sem método vinculado
-                  </p>
-                  <p className="text-sm text-amber-700 dark:text-amber-300">
-                    Este serviço não possui um método de calibração vinculado.
-                    Vincular um método permite utilizar o cálculo automatizado
-                    de incerteza e gerar certificados padronizados.
-                  </p>
-                </div>
-              </div>
-            </>
           )}
+        </div>
 
-          <Separator />
+        <aside className="space-y-10 lg:border-l lg:border-border/70 lg:pl-8">
+          <DetailSection title="Metadados">
+            <dl className="border-t border-border/70">
+              <DetailItem
+                label="Criado em"
+                value={formatDateTime(service.createdAt)}
+                mono
+              />
+              <DetailItem
+                label="Atualizado em"
+                value={formatDateTime(service.updatedAt)}
+                mono
+              />
+              <DetailItem label="Identificador" value={service.id} mono />
+            </dl>
+          </DetailSection>
 
-          {/* Metadata */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Criado em {formatDateTime(service.createdAt)}</span>
-            <span>Atualizado em {formatDateTime(service.updatedAt)}</span>
-          </div>
-        </CardContent>
-      </Card>
+          <DetailSection
+            title="Governança"
+            description="Rastreabilidade mínima para uso operacional."
+          >
+            <dl className="border-t border-border/70">
+              <DetailItem label="Catálogo">
+                <Badge variant={service.isActive ? 'default' : 'secondary'}>
+                  {service.isActive ? 'Publicado' : 'Inativo'}
+                </Badge>
+              </DetailItem>
+              <DetailItem label="Método">
+                {service.methodId ? (
+                  <Badge variant={getMethodStatusVariant(service.methodStatus)}>
+                    {formatMethodStatus(service.methodStatus)}
+                  </Badge>
+                ) : (
+                  <span className="text-muted-foreground">Pendente</span>
+                )}
+              </DetailItem>
+            </dl>
+          </DetailSection>
+        </aside>
+      </div>
 
-      {/* Audit Log */}
       {auditLogData?.data && auditLogData.data.length > 0 && (
-        <AuditTimeline
-          events={buildAuditTimelineEvents(auditLogData.data)}
-          title="Histórico de Alterações (ISO 17025)"
-        />
+        <DetailSection
+          title="Histórico de alterações"
+          description="Registros de controle para rastreabilidade ISO 17025."
+        >
+          <div className="border-t border-border/70 pt-4">
+            <AuditTimeline
+              events={buildAuditTimelineEvents(auditLogData.data)}
+              title="Histórico de Alterações (ISO 17025)"
+              showCard={false}
+            />
+          </div>
+        </DetailSection>
       )}
+    </div>
+  )
+}
+
+function SummaryItem({
+  label,
+  value,
+  detail,
+  className,
+  numeric = false,
+}: {
+  label: string
+  value: ReactNode
+  detail?: string
+  className?: string
+  numeric?: boolean
+}) {
+  return (
+    <div className={cn('min-w-0 px-5 py-4', className)}>
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          'mt-2 min-w-0 truncate text-base font-medium',
+          numeric && 'tabular-nums',
+        )}
+      >
+        {value}
+      </dd>
+      {detail ? (
+        <dd className="mt-1 text-pretty text-xs text-muted-foreground">
+          {detail}
+        </dd>
+      ) : null}
+    </div>
+  )
+}
+
+function DetailSection({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <section className={cn('space-y-4', className)}>
+      <div className="max-w-2xl">
+        <h2 className="text-balance text-base font-medium">{title}</h2>
+        {description ? (
+          <p className="mt-1 text-pretty text-sm text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function DetailItem({
+  label,
+  value,
+  mono = false,
+  numeric = false,
+  children,
+}: {
+  label: string
+  value?: ReactNode
+  mono?: boolean
+  numeric?: boolean
+  children?: ReactNode
+}) {
+  return (
+    <div className="min-w-0 border-b border-border/70 py-4">
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          'mt-1 min-w-0 text-sm text-foreground',
+          mono && 'font-mono tabular-nums',
+          numeric && 'tabular-nums',
+        )}
+      >
+        {children ?? value ?? '-'}
+      </dd>
     </div>
   )
 }

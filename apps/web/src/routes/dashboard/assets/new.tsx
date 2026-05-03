@@ -2,8 +2,6 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
-import { HugeiconsIcon } from '@hugeicons/react'
 import { parseAsInteger, useQueryState } from 'nuqs'
 
 import {
@@ -402,27 +400,16 @@ function NewAssetPage() {
   ]
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="space-y-6">
       <header className="border-b pb-5">
-        <div className="min-w-0 space-y-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate({ to: '/dashboard/assets' })}
-            className="-ml-2"
-          >
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
-            Voltar
-          </Button>
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-balance">
-              Novo Ativo
-            </h1>
-            <p className="max-w-2xl text-sm text-muted-foreground text-pretty">
-              Cadastre o instrumento, vincule ao cliente e registre as
-              especificações necessárias para calibração.
-            </p>
-          </div>
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-balance">
+            Novo Ativo
+          </h1>
+          <p className="max-w-2xl text-sm text-muted-foreground text-pretty">
+            Cadastre o instrumento, vincule ao cliente e registre as
+            especificações necessárias para calibração.
+          </p>
         </div>
       </header>
 
@@ -764,10 +751,15 @@ function NewAssetPage() {
                 variant="outline"
                 onClick={() => navigate({ to: '/dashboard/assets' })}
                 disabled={createMutation.isPending}
+                className="active:scale-[0.96] transition-transform"
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
+              <Button
+                type="submit"
+                disabled={createMutation.isPending}
+                className="active:scale-[0.96] transition-transform"
+              >
                 {createMutation.isPending ? 'Salvando…' : 'Criar Ativo'}
               </Button>
             </div>
