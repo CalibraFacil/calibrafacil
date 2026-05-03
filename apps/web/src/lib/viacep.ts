@@ -12,7 +12,6 @@ export type EditableAddress = {
 export type ViaCepAddress = {
   cep: string
   street: string
-  complement: string
   neighbourhood: string
   city: string
   state: string
@@ -49,7 +48,6 @@ export function mapViaCepResponse(
   return {
     cep: response.cep ?? '',
     street: response.logradouro ?? '',
-    complement: response.complemento ?? '',
     neighbourhood: response.bairro ?? '',
     city: response.localidade ?? '',
     state: response.uf ?? '',
@@ -64,7 +62,6 @@ export function mergeViaCepAddress<TAddress extends EditableAddress>(
     ...currentAddress,
     cep: viaCepAddress.cep || currentAddress.cep,
     street: viaCepAddress.street,
-    complement: viaCepAddress.complement,
     neighbourhood: viaCepAddress.neighbourhood,
     city: viaCepAddress.city,
     state: viaCepAddress.state,

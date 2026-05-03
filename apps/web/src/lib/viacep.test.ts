@@ -21,7 +21,6 @@ describe('ViaCEP helpers', () => {
     ).toEqual({
       cep: '01001-000',
       street: 'Praça da Sé',
-      complement: 'lado ímpar',
       neighbourhood: 'Sé',
       city: 'São Paulo',
       state: 'SP',
@@ -45,7 +44,6 @@ describe('ViaCEP helpers', () => {
       {
         cep: '01001-000',
         street: 'Praça da Sé',
-        complement: 'lado ímpar',
         neighbourhood: 'Sé',
         city: 'São Paulo',
         state: 'SP',
@@ -55,7 +53,7 @@ describe('ViaCEP helpers', () => {
     expect(merged).toEqual({
       cep: '01001-000',
       street: 'Praça da Sé',
-      complement: 'lado ímpar',
+      complement: '',
       neighbourhood: 'Sé',
       city: 'São Paulo',
       state: 'SP',
@@ -66,7 +64,6 @@ describe('ViaCEP helpers', () => {
     const firstLookup = {
       cep: '92025-340',
       street: 'Rua Um',
-      complement: '',
       neighbourhood: 'Bairro Um',
       city: 'Canoas',
       state: 'RS',
@@ -75,7 +72,6 @@ describe('ViaCEP helpers', () => {
     const secondLookup = {
       cep: '92200-000',
       street: 'Rua Dois',
-      complement: '',
       neighbourhood: 'Bairro Dois',
       city: 'Canoas',
       state: 'RS',
@@ -101,5 +97,27 @@ describe('ViaCEP helpers', () => {
       city: 'Canoas',
       state: 'RS',
     })
+  })
+
+  it('keeps the user complement when applying ViaCEP data', () => {
+    expect(
+      mergeViaCepAddress(
+        {
+          cep: '92200000',
+          street: '',
+          complement: 'Sala 101',
+          neighbourhood: '',
+          city: '',
+          state: '',
+        },
+        {
+          cep: '92200-000',
+          street: 'Rua Exemplo',
+          neighbourhood: 'Rio Branco',
+          city: 'Canoas',
+          state: 'RS',
+        },
+      ).complement,
+    ).toBe('Sala 101')
   })
 })
