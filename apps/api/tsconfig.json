@@ -6,6 +6,28 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "noEmit": true,
+    "paths": {
+      "@calibra-facil/auth": ["../../packages/auth/src/auth.ts"],
+      "@calibra-facil/auth/access": ["../../packages/auth/src/access.ts"],
+      "@calibra-facil/auth/client": [
+        "../../packages/auth/src/auth-client.ts"
+      ],
+      "@calibra-facil/db": ["../../packages/db/src/db.ts"],
+      "@calibra-facil/db/*": ["../../packages/db/src/*"],
+      "@calibra-facil/notifications": [
+        "../../packages/notifications/src/index.ts"
+      ],
+      "@calibra-facil/notifications/*": [
+        "../../packages/notifications/src/*"
+      ],
+      "@calibra-facil/worker": ["../worker/src/index.ts"],
+      "@calibra-facil/worker/integrations": [
+        "../worker/src/integrations.ts"
+      ],
+      "@calibra-facil/worker/scheduled": ["../worker/src/scheduled.ts"],
+      "drizzle-orm": ["./node_modules/drizzle-orm"],
+      "drizzle-orm/*": ["./node_modules/drizzle-orm/*"]
+    },
     "types": ["@cloudflare/workers-types"]
   },
   "include": ["src/**/*", "api/**/*.ts", "vercel-src/**/*"],

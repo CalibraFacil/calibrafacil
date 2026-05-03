@@ -99,6 +99,13 @@ function createLocalKv(): LocalKvNamespace {
 
 const apiRuntimeCache = createLocalKv();
 
+type LocalS3Client = S3Client & {
+  send(command: GetObjectCommand): Promise<{
+    Body?: { transformToByteArray(): Promise<Uint8Array> };
+  }>;
+  send(command: PutObjectCommand): Promise<unknown>;
+};
+
 function createR2Bucket(bucketName = requiredEnv("R2_BUCKET_NAME")) {
   const accountId = requiredEnv("R2_ACCOUNT_ID");
   const client = new S3Client({
@@ -108,7 +115,7 @@ function createR2Bucket(bucketName = requiredEnv("R2_BUCKET_NAME")) {
       accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
       secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),
     },
-  });
+  }) as LocalS3Client;
 
   return {
     async get(key: string) {

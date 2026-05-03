@@ -27,7 +27,12 @@ export interface R2BucketLike {
   get(key: string): Promise<R2ObjectBodyLike | null>;
 }
 
-export function createR2Client(env: R2Env): S3Client {
+type R2S3Client = S3Client & {
+  send(command: GetObjectCommand): Promise<unknown>;
+  send(command: PutObjectCommand | DeleteObjectCommand): Promise<unknown>;
+};
+
+export function createR2Client(env: R2Env): R2S3Client {
   return new S3Client({
     region: "auto",
     endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -35,11 +40,11 @@ export function createR2Client(env: R2Env): S3Client {
       accessKeyId: env.R2_ACCESS_KEY_ID,
       secretAccessKey: env.R2_SECRET_ACCESS_KEY,
     },
-  });
+  }) as R2S3Client;
 }
 
 export async function generatePresignedUrl(
-  client: S3Client,
+  client: R2S3Client,
   bucket: string,
   key: string,
   expiresIn: number = 900, // 15 minutes
@@ -61,7 +66,7 @@ export function extractKeyFromUrl(certificateUrl: string): string {
  * Upload a file to R2 bucket
  */
 export async function uploadToR2(
-  client: S3Client,
+  client: R2S3Client,
   bucket: string,
   key: string,
   body: Buffer | Uint8Array | ArrayBuffer,
@@ -80,7 +85,7 @@ export async function uploadToR2(
  * Delete a file from R2 bucket
  */
 export async function deleteFromR2(
-  client: S3Client,
+  client: R2S3Client,
   bucket: string,
   key: string,
 ): Promise<void> {

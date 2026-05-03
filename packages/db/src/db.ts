@@ -54,7 +54,10 @@ function createPostgresJsDatabase(connectionString: string) {
 }
 
 function createNeonServerlessDatabase(connectionString: string) {
-  const pool = new Pool({ connectionString });
+  const NeonPool = Pool as unknown as new (config: {
+    connectionString: string;
+  }) => Pool;
+  const pool = new NeonPool({ connectionString });
   return drizzleNeon(pool, { schema });
 }
 

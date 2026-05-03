@@ -706,7 +706,10 @@ export function createLabAuth() {
     databaseHooks: {
       session: {
         create: {
-          async before(session) {
+          async before(session: {
+            activeOrganizationId?: string | null;
+            userId: string;
+          }) {
             if (session.activeOrganizationId) {
               return;
             }
@@ -814,7 +817,10 @@ export function createPortalAuth() {
     databaseHooks: {
       session: {
         create: {
-          async before(session) {
+          async before(session: {
+            activeOrganizationId?: string | null;
+            userId: string;
+          }) {
             if (session.activeOrganizationId) {
               return;
             }
