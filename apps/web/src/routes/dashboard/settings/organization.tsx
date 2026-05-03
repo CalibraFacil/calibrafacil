@@ -30,6 +30,7 @@ import {
   FieldLabel,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { MaskedInput } from '@/components/ui/masked-input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -59,6 +60,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { brazilPhoneMask, cepMask, cnpjMask } from '@/lib/input-masks'
 
 export const Route = createFileRoute('/dashboard/settings/organization')({
   head: () => ({
@@ -112,7 +114,12 @@ interface OrganizationUnit {
 
 type UnitAssignmentRole = 'member' | 'technician' | 'unit_admin'
 type EditableUnitAssignmentRole = UnitAssignmentRole | 'none'
-const GLOBAL_MEMBER_ROLES = ['member', 'operator', 'technician', 'admin'] as const
+const GLOBAL_MEMBER_ROLES = [
+  'member',
+  'operator',
+  'technician',
+  'admin',
+] as const
 type GlobalMemberRole = (typeof GLOBAL_MEMBER_ROLES)[number]
 const GLOBAL_MEMBER_ROLE_SET = new Set<string>(GLOBAL_MEMBER_ROLES)
 
@@ -241,9 +248,7 @@ function OrganizationSettingsPage({
   )
   const [street, setStreet] = useState(activeOrg.street ?? '')
   const [number, setNumber] = useState(activeOrg.number ?? '')
-  const [complement, setComplement] = useState(
-    activeOrg.complement ?? '',
-  )
+  const [complement, setComplement] = useState(activeOrg.complement ?? '')
   const [neighbourhood, setNeighbourhood] = useState(
     activeOrg.neighbourhood ?? '',
   )
@@ -274,9 +279,9 @@ function OrganizationSettingsPage({
   const [isRemoving, setIsRemoving] = useState(false)
 
   const [updatingRoleFor, setUpdatingRoleFor] = useState<string | null>(null)
-  const [savingAssignmentsFor, setSavingAssignmentsFor] = useState<string | null>(
-    null,
-  )
+  const [savingAssignmentsFor, setSavingAssignmentsFor] = useState<
+    string | null
+  >(null)
   const [assignmentDraftOverrides, setAssignmentDraftOverrides] = useState<
     Record<string, Record<number, EditableUnitAssignmentRole>>
   >({})
@@ -412,7 +417,8 @@ function OrganizationSettingsPage({
   const governanceViewer =
     governanceMembersQuery.data?.viewer ?? unitsQuery.data?.viewer ?? null
   const canManageOrganizationUnits =
-    governanceViewer?.canManageOrganizationUnits ?? canManageOrganizationSettings
+    governanceViewer?.canManageOrganizationUnits ??
+    canManageOrganizationSettings
   const canManageAssignments = governanceViewer?.canManageAssignments ?? false
   const canManageGlobalRoles =
     governanceViewer?.canManageGlobalRoles ?? canManageOrganizationSettings
@@ -468,8 +474,9 @@ function OrganizationSettingsPage({
           Object.fromEntries(
             (unitsQuery.data?.data ?? []).map((unit) => [
               unit.id,
-              member.assignments.find((assignment) => assignment.unitId === unit.id)
-                ?.role ?? 'none',
+              member.assignments.find(
+                (assignment) => assignment.unitId === unit.id,
+              )?.role ?? 'none',
             ]),
           ),
         ]),
@@ -488,7 +495,9 @@ function OrganizationSettingsPage({
         | { error?: string }
 
       if (!response.ok || 'error' in data) {
-        throw new Error(('error' in data && data.error) || 'Erro ao criar unidade')
+        throw new Error(
+          ('error' in data && data.error) || 'Erro ao criar unidade',
+        )
       }
 
       return data
@@ -510,7 +519,9 @@ function OrganizationSettingsPage({
       toast.success('Unidade criada com sucesso')
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Erro ao criar unidade')
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao criar unidade',
+      )
     },
   })
 
@@ -527,7 +538,9 @@ function OrganizationSettingsPage({
         json: payload,
       })
 
-      const data = (await response.json()) as OrganizationUnit | { error?: string }
+      const data = (await response.json()) as
+        | OrganizationUnit
+        | { error?: string }
 
       if (!response.ok || 'error' in data) {
         throw new Error(
@@ -570,14 +583,17 @@ function OrganizationSettingsPage({
       memberId: string
       assignments: Array<{ unitId: number; role: UnitAssignmentRole }>
     }) => {
-      const response = await api.api.units.admin.members[':memberId'].assignments.$put(
-        {
-          param: { memberId },
-          json: { assignments },
-        },
-      )
+      const response = await api.api.units.admin.members[
+        ':memberId'
+      ].assignments.$put({
+        param: { memberId },
+        json: { assignments },
+      })
 
-      const data = (await response.json()) as { success?: boolean; error?: string }
+      const data = (await response.json()) as {
+        success?: boolean
+        error?: string
+      }
       if (!response.ok || data.error) {
         throw new Error(data.error || 'Erro ao atualizar atribuições')
       }
@@ -600,7 +616,9 @@ function OrganizationSettingsPage({
     onError: (error) => {
       setSavingAssignmentsFor(null)
       toast.error(
-        error instanceof Error ? error.message : 'Erro ao atualizar atribuições',
+        error instanceof Error
+          ? error.message
+          : 'Erro ao atualizar atribuições',
       )
     },
   })
@@ -613,12 +631,17 @@ function OrganizationSettingsPage({
       memberId: string
       role: GlobalMemberRole
     }) => {
-      const response = await api.api.units.admin.members[':memberId'].role.$patch({
+      const response = await api.api.units.admin.members[
+        ':memberId'
+      ].role.$patch({
         param: { memberId },
         json: { role },
       })
 
-      const data = (await response.json()) as { success?: boolean; error?: string }
+      const data = (await response.json()) as {
+        success?: boolean
+        error?: string
+      }
       if (!response.ok || data.error) {
         throw new Error(data.error || 'Erro ao atualizar papel global')
       }
@@ -703,7 +726,9 @@ function OrganizationSettingsPage({
         },
       })
       if (result.error) {
-        throw new Error(result.error.message ?? 'Falha ao atualizar informações')
+        throw new Error(
+          result.error.message ?? 'Falha ao atualizar informações',
+        )
       }
       toast.success('Informações ISO 17025 atualizadas com sucesso!')
     } catch (err) {
@@ -945,7 +970,9 @@ function OrganizationSettingsPage({
 
     return Object.entries(draft)
       .filter(([unitId]) =>
-        (unitsQuery.data?.data ?? []).some((unit) => unit.id === Number(unitId)),
+        (unitsQuery.data?.data ?? []).some(
+          (unit) => unit.id === Number(unitId),
+        ),
       )
       .filter(([, role]) => role && role !== 'none')
       .map(([unitId, role]) => ({
@@ -1084,7 +1111,8 @@ function OrganizationSettingsPage({
               <div className="rounded-xl border p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary">
-                    {unitContextQuery.data?.scopeSummary.label ?? 'Escopo ativo'}
+                    {unitContextQuery.data?.scopeSummary.label ??
+                      'Escopo ativo'}
                   </Badge>
                   <Badge variant="outline">
                     {unitContextQuery.data?.scopeSummary.effectiveRoleLabel ??
@@ -1097,11 +1125,14 @@ function OrganizationSettingsPage({
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Badge variant="outline">
-                    {unitContextQuery.data?.scopeSummary.accessibleUnitsCount ?? 0}{' '}
+                    {unitContextQuery.data?.scopeSummary.accessibleUnitsCount ??
+                      0}{' '}
                     unidade(s) acessível(eis)
                   </Badge>
                   {governanceViewer?.canAccessConsolidatedView ? (
-                    <Badge variant="outline">Pode abrir consolidado global</Badge>
+                    <Badge variant="outline">
+                      Pode abrir consolidado global
+                    </Badge>
                   ) : null}
                 </div>
               </div>
@@ -1117,8 +1148,8 @@ function OrganizationSettingsPage({
                         : 'Você está em um escopo operacional sem poderes de governança.'}
                   </p>
                   <p>
-                    {governanceViewer?.managedUnitIds.length ?? 0} unidade(s) sob
-                    gestão
+                    {governanceViewer?.managedUnitIds.length ?? 0} unidade(s)
+                    sob gestão
                   </p>
                 </div>
               </div>
@@ -1200,214 +1231,227 @@ function OrganizationSettingsPage({
             <CardHeader>
               <CardTitle>Informações ISO 17025</CardTitle>
               <CardDescription>
-                Dados do laboratório para certificados de calibração conforme ISO/IEC
-                17025 e RBC/Inmetro.
+                Dados do laboratório para certificados de calibração conforme
+                ISO/IEC 17025 e RBC/Inmetro.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleUpdateIso17025}>
                 <FieldGroup>
-              {/* Identification */}
-              <Field>
-                <FieldLabel htmlFor="org-cnpj">CNPJ</FieldLabel>
-                <Input
-                  id="org-cnpj"
-                  value={cnpj}
-                  onChange={(e) => setCnpj(e.target.value)}
-                  disabled={isUpdatingIso}
-                  placeholder="00.000.000/0000-00"
-                />
-              </Field>
+                  {/* Identification */}
+                  <Field>
+                    <FieldLabel htmlFor="org-cnpj">CNPJ</FieldLabel>
+                    <MaskedInput
+                      id="org-cnpj"
+                      maskOptions={cnpjMask}
+                      value={cnpj}
+                      onInput={(e) => setCnpj(e.currentTarget.value)}
+                      disabled={isUpdatingIso}
+                      placeholder="00.000.000/0000-00"
+                    />
+                  </Field>
 
-              {/* Accreditation */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="org-accreditation-number">
-                    Número de Acreditação
-                  </FieldLabel>
-                  <Input
-                    id="org-accreditation-number"
-                    value={accreditationNumber}
-                    onChange={(e) => setAccreditationNumber(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="RBC 0123"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="org-accreditation-body">
-                    Órgão Acreditador
-                  </FieldLabel>
-                  <Input
-                    id="org-accreditation-body"
-                    value={accreditationBody}
-                    onChange={(e) => setAccreditationBody(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="CGCRE/Inmetro"
-                  />
-                </Field>
-              </div>
+                  {/* Accreditation */}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="org-accreditation-number">
+                        Número de Acreditação
+                      </FieldLabel>
+                      <Input
+                        id="org-accreditation-number"
+                        value={accreditationNumber}
+                        onChange={(e) => setAccreditationNumber(e.target.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="RBC 0123"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="org-accreditation-body">
+                        Órgão Acreditador
+                      </FieldLabel>
+                      <Input
+                        id="org-accreditation-body"
+                        value={accreditationBody}
+                        onChange={(e) => setAccreditationBody(e.target.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="CGCRE/Inmetro"
+                      />
+                    </Field>
+                  </div>
 
-              <Separator />
+                  <Separator />
 
-              {/* Address */}
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field className="sm:col-span-2">
-                  <FieldLabel htmlFor="org-street">Rua</FieldLabel>
-                  <Input
-                    id="org-street"
-                    value={street}
-                    onChange={(e) => setStreet(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="Rua das Calibrações"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="org-number">Número</FieldLabel>
-                  <Input
-                    id="org-number"
-                    value={number}
-                    onChange={(e) => setNumber(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="123"
-                  />
-                </Field>
-              </div>
+                  {/* Address */}
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <Field className="sm:col-span-2">
+                      <FieldLabel htmlFor="org-street">Rua</FieldLabel>
+                      <Input
+                        id="org-street"
+                        value={street}
+                        onChange={(e) => setStreet(e.target.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="Rua das Calibrações"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="org-number">Número</FieldLabel>
+                      <Input
+                        id="org-number"
+                        value={number}
+                        onChange={(e) => setNumber(e.target.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="123"
+                      />
+                    </Field>
+                  </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="org-complement">Complemento</FieldLabel>
-                  <Input
-                    id="org-complement"
-                    value={complement}
-                    onChange={(e) => setComplement(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="Sala 101"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="org-neighbourhood">Bairro</FieldLabel>
-                  <Input
-                    id="org-neighbourhood"
-                    value={neighbourhood}
-                    onChange={(e) => setNeighbourhood(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="Centro"
-                  />
-                </Field>
-              </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="org-complement">
+                        Complemento
+                      </FieldLabel>
+                      <Input
+                        id="org-complement"
+                        value={complement}
+                        onChange={(e) => setComplement(e.target.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="Sala 101"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="org-neighbourhood">
+                        Bairro
+                      </FieldLabel>
+                      <Input
+                        id="org-neighbourhood"
+                        value={neighbourhood}
+                        onChange={(e) => setNeighbourhood(e.target.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="Centro"
+                      />
+                    </Field>
+                  </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field>
-                  <FieldLabel htmlFor="org-city">Cidade</FieldLabel>
-                  <Input
-                    id="org-city"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="São Paulo"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="org-state">Estado</FieldLabel>
-                  <Input
-                    id="org-state"
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="SP"
-                    maxLength={2}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="org-cep">CEP</FieldLabel>
-                  <Input
-                    id="org-cep"
-                    value={cep}
-                    onChange={(e) => setCep(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="00000-000"
-                  />
-                </Field>
-              </div>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <Field>
+                      <FieldLabel htmlFor="org-city">Cidade</FieldLabel>
+                      <Input
+                        id="org-city"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="São Paulo"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="org-state">Estado</FieldLabel>
+                      <Input
+                        id="org-state"
+                        value={state}
+                        onChange={(e) => setState(e.target.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="SP"
+                        maxLength={2}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="org-cep">CEP</FieldLabel>
+                      <MaskedInput
+                        id="org-cep"
+                        maskOptions={cepMask}
+                        value={cep}
+                        onInput={(e) => setCep(e.currentTarget.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="00000-000"
+                      />
+                    </Field>
+                  </div>
 
-              <Separator />
+                  <Separator />
 
-              {/* Contact */}
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field>
-                  <FieldLabel htmlFor="org-phone">Telefone</FieldLabel>
-                  <Input
-                    id="org-phone"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="(11) 99999-9999"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="org-email">Email</FieldLabel>
-                  <Input
-                    id="org-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="contato@lab.com.br"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="org-website">Website</FieldLabel>
-                  <Input
-                    id="org-website"
-                    value={website}
-                    onChange={(e) => setWebsite(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="https://lab.com.br"
-                  />
-                </Field>
-              </div>
+                  {/* Contact */}
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <Field>
+                      <FieldLabel htmlFor="org-phone">Telefone</FieldLabel>
+                      <MaskedInput
+                        id="org-phone"
+                        type="tel"
+                        inputMode="tel"
+                        maskOptions={brazilPhoneMask}
+                        value={phone}
+                        onInput={(e) => setPhone(e.currentTarget.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="(11) 99999-9999"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="org-email">Email</FieldLabel>
+                      <Input
+                        id="org-email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="contato@lab.com.br"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="org-website">Website</FieldLabel>
+                      <Input
+                        id="org-website"
+                        value={website}
+                        onChange={(e) => setWebsite(e.target.value)}
+                        disabled={isUpdatingIso}
+                        placeholder="https://lab.com.br"
+                      />
+                    </Field>
+                  </div>
 
-              <Separator />
+                  <Separator />
 
-              {/* Technical Manager */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="org-technical-manager-name">
-                    Responsável Técnico
-                  </FieldLabel>
-                  <Input
-                    id="org-technical-manager-name"
-                    value={technicalManagerName}
-                    onChange={(e) => setTechnicalManagerName(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="Dr. João Silva"
-                  />
-                  <FieldDescription>
-                    Nome que aparecerá nos certificados de calibração.
-                  </FieldDescription>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="org-technical-manager-title">
-                    Cargo/Título
-                  </FieldLabel>
-                  <Input
-                    id="org-technical-manager-title"
-                    value={technicalManagerTitle}
-                    onChange={(e) => setTechnicalManagerTitle(e.target.value)}
-                    disabled={isUpdatingIso}
-                    placeholder="Responsável Técnico"
-                  />
-                </Field>
-              </div>
+                  {/* Technical Manager */}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="org-technical-manager-name">
+                        Responsável Técnico
+                      </FieldLabel>
+                      <Input
+                        id="org-technical-manager-name"
+                        value={technicalManagerName}
+                        onChange={(e) =>
+                          setTechnicalManagerName(e.target.value)
+                        }
+                        disabled={isUpdatingIso}
+                        placeholder="Dr. João Silva"
+                      />
+                      <FieldDescription>
+                        Nome que aparecerá nos certificados de calibração.
+                      </FieldDescription>
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="org-technical-manager-title">
+                        Cargo/Título
+                      </FieldLabel>
+                      <Input
+                        id="org-technical-manager-title"
+                        value={technicalManagerTitle}
+                        onChange={(e) =>
+                          setTechnicalManagerTitle(e.target.value)
+                        }
+                        disabled={isUpdatingIso}
+                        placeholder="Responsável Técnico"
+                      />
+                    </Field>
+                  </div>
 
-              <div className="flex justify-end">
-                <Button type="submit" disabled={isUpdatingIso}>
-                  {isUpdatingIso ? 'Salvando...' : 'Salvar informações'}
-                </Button>
-              </div>
-            </FieldGroup>
-          </form>
-        </CardContent>
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={isUpdatingIso}>
+                      {isUpdatingIso ? 'Salvando...' : 'Salvar informações'}
+                    </Button>
+                  </div>
+                </FieldGroup>
+              </form>
+            </CardContent>
           </Card>
 
           <Card>
@@ -1421,7 +1465,9 @@ function OrganizationSettingsPage({
             </CardHeader>
             <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-1">
-                <p className="font-medium">Gerencie hostname e readiness no lugar certo</p>
+                <p className="font-medium">
+                  Gerencie hostname e readiness no lugar certo
+                </p>
                 <p className="text-sm text-muted-foreground">
                   Esta página continua focada em identidade jurídica e estrutura
                   multiunidade. A operação do portal segue em Configurações →
@@ -1469,17 +1515,14 @@ function OrganizationSettingsPage({
           ) : (
             <div className="space-y-3">
               {(unitsQuery.data?.data ?? []).map((unit) => (
-                <div
-                  key={unit.id}
-                  className="rounded-lg border p-4"
-                >
+                <div key={unit.id} className="rounded-lg border p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-2">
                       {editingUnitId === unit.id ? (
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                            <Input
-                              value={unitNameDrafts[unit.id] ?? unit.name}
-                              onChange={(event) =>
+                          <Input
+                            value={unitNameDrafts[unit.id] ?? unit.name}
+                            onChange={(event) =>
                               setUnitNameDraftOverrides((current) => ({
                                 ...current,
                                 [unit.id]: event.target.value,
@@ -1565,7 +1608,9 @@ function OrganizationSettingsPage({
                               }
                               onClick={() => handleToggleUnitStatus(unit)}
                             >
-                              {unit.status === 'ACTIVE' ? 'Arquivar' : 'Reativar'}
+                              {unit.status === 'ACTIVE'
+                                ? 'Arquivar'
+                                : 'Reativar'}
                             </Button>
                           )}
                         </>
@@ -1666,8 +1711,12 @@ function OrganizationSettingsPage({
                                 </div>
                                 <Select
                                   value={
-                                    assignmentDraftOverrides[member.id]?.[unit.id] ??
-                                    baseAssignmentDrafts[member.id]?.[unit.id] ??
+                                    assignmentDraftOverrides[member.id]?.[
+                                      unit.id
+                                    ] ??
+                                    baseAssignmentDrafts[member.id]?.[
+                                      unit.id
+                                    ] ??
                                     'none'
                                   }
                                   onValueChange={(value) =>
@@ -1685,8 +1734,12 @@ function OrganizationSettingsPage({
                                   <SelectTrigger className="w-full md:w-52">
                                     <SelectValue>
                                       {getUnitRoleLabel(
-                                        assignmentDraftOverrides[member.id]?.[unit.id] ??
-                                          baseAssignmentDrafts[member.id]?.[unit.id] ??
+                                        assignmentDraftOverrides[member.id]?.[
+                                          unit.id
+                                        ] ??
+                                          baseAssignmentDrafts[member.id]?.[
+                                            unit.id
+                                          ] ??
                                           'none',
                                       )}
                                     </SelectValue>
@@ -1817,322 +1870,329 @@ function OrganizationSettingsPage({
       {/* Members Card */}
       {canManageOrganizationSettings && (
         <Card>
-        <CardHeader>
-          <CardTitle>Membros</CardTitle>
-          <CardDescription>
-            Gerencie os membros da sua organização.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {membersLoading ? (
-            <MembersSkeleton />
-          ) : (
-            <div className="space-y-4">
-              {members.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  Nenhum membro encontrado.
-                </p>
-              ) : (
-                members.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center justify-between p-4 border rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                        <HugeiconsIcon icon={UserIcon} className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{member.user.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {member.user.email}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {member.role === 'owner' ? (
-                        <Badge variant="secondary">
-                          {getRoleLabel(member.role)}
-                        </Badge>
-                      ) : (
-                        <Select
-                          value={member.role}
-                          onValueChange={(value) =>
-                            value && handleUpdateMemberRole(member.id, value)
-                          }
-                          disabled={updatingRoleFor === member.id}
-                        >
-                          <SelectTrigger size="sm" className="w-35">
-                            <SelectValue>
-                              {updatingRoleFor === member.id
-                                ? 'Atualizando...'
-                                : getRoleLabel(member.role)}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableRoles.map((role) => (
-                              <SelectItem key={role.value} value={role.value}>
-                                {role.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                      {member.role !== 'owner' && (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setMemberToRemove(member)}
-                        >
-                          <HugeiconsIcon
-                            icon={Delete02Icon}
-                            className="h-4 w-4 text-destructive"
-                          />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-
-              <Separator className="my-4" />
-
-              {/* Invite Member Form */}
-              <form onSubmit={handleInviteMember}>
-                <FieldGroup>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <Input
-                        type="email"
-                        value={inviteEmail}
-                        onChange={(e) => {
-                          setInviteEmail(e.target.value)
-                          setInviteError(null)
-                        }}
-                        disabled={isInviting}
-                        placeholder="email@exemplo.com"
-                      />
-                    </div>
-                    <Select
-                      value={inviteRole}
-                      onValueChange={(value) => value && setInviteRole(value)}
-                      disabled={isInviting}
-                    >
-                      <SelectTrigger className="w-35">
-                        <SelectValue>
-                          {availableRoles.find((r) => r.value === inviteRole)
-                            ?.label || 'Membro'}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableRoles.map((role) => (
-                          <SelectItem key={role.value} value={role.value}>
-                            {role.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button type="submit" disabled={isInviting}>
-                      <HugeiconsIcon icon={Mail01Icon} />
-                      {isInviting ? 'Enviando...' : 'Convidar'}
-                    </Button>
-                  </div>
-                  {inviteError && <FieldError>{inviteError}</FieldError>}
-                </FieldGroup>
-              </form>
-            </div>
-          )}
-        </CardContent>
-        </Card>
-      )}
-
-      {/* Invitations Card */}
-      {canManageOrganizationSettings && (invitations.length > 0 || invitationsLoading) && (
-        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HugeiconsIcon icon={SentIcon} className="h-5 w-5" />
-              Convites
-            </CardTitle>
+            <CardTitle>Membros</CardTitle>
             <CardDescription>
-              Histórico de convites enviados para a organização.
+              Gerencie os membros da sua organização.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {invitationsLoading ? (
-              <InvitationsSkeleton />
+            {membersLoading ? (
+              <MembersSkeleton />
             ) : (
-              <div className="space-y-3">
-                {invitations.map((invitation) => {
-                  const isPending = invitation.status === 'pending'
-                  const isExpired =
-                    isPending && invitation.expiresAt < new Date()
-                  return (
+              <div className="space-y-4">
+                {members.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    Nenhum membro encontrado.
+                  </p>
+                ) : (
+                  members.map((member) => (
                     <div
-                      key={invitation.id}
+                      key={member.id}
                       className="flex items-center justify-between p-4 border rounded-lg"
                     >
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                          <HugeiconsIcon
-                            icon={Mail01Icon}
-                            className="h-5 w-5"
-                          />
+                          <HugeiconsIcon icon={UserIcon} className="h-5 w-5" />
                         </div>
                         <div>
-                          <p className="font-medium">{invitation.email}</p>
+                          <p className="font-medium">{member.user.name}</p>
                           <p className="text-sm text-muted-foreground">
-                            {getRoleLabel(invitation.role)}
-                            {getInviterName(invitation.inviterId) && (
-                              <span className="ml-1">
-                                · Convidado por{' '}
-                                {getInviterName(invitation.inviterId)}
-                              </span>
-                            )}
-                            {isPending && !isExpired && (
-                              <span className="ml-1">
-                                · Expira em{' '}
-                                {formatTimeRemaining(invitation.expiresAt)}
-                              </span>
-                            )}
-                            {isExpired && (
-                              <span className="text-destructive ml-1">
-                                · Expirado
-                              </span>
-                            )}
+                            {member.user.email}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={getStatusVariant(invitation.status)}>
-                          {getStatusLabel(invitation.status)}
-                        </Badge>
-                        {isPending && !isExpired && (
+                        {member.role === 'owner' ? (
+                          <Badge variant="secondary">
+                            {getRoleLabel(member.role)}
+                          </Badge>
+                        ) : (
+                          <Select
+                            value={member.role}
+                            onValueChange={(value) =>
+                              value && handleUpdateMemberRole(member.id, value)
+                            }
+                            disabled={updatingRoleFor === member.id}
+                          >
+                            <SelectTrigger size="sm" className="w-35">
+                              <SelectValue>
+                                {updatingRoleFor === member.id
+                                  ? 'Atualizando...'
+                                  : getRoleLabel(member.role)}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableRoles.map((role) => (
+                                <SelectItem key={role.value} value={role.value}>
+                                  {role.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {member.role !== 'owner' && (
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            onClick={() =>
-                              handleCancelInvitation(invitation.id)
-                            }
-                            disabled={cancellingInvitation === invitation.id}
+                            onClick={() => setMemberToRemove(member)}
                           >
                             <HugeiconsIcon
-                              icon={Cancel01Icon}
-                              className="h-4 w-4 text-muted-foreground"
+                              icon={Delete02Icon}
+                              className="h-4 w-4 text-destructive"
                             />
                           </Button>
                         )}
                       </div>
                     </div>
-                  )
-                })}
+                  ))
+                )}
+
+                <Separator className="my-4" />
+
+                {/* Invite Member Form */}
+                <form onSubmit={handleInviteMember}>
+                  <FieldGroup>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Input
+                          type="email"
+                          value={inviteEmail}
+                          onChange={(e) => {
+                            setInviteEmail(e.target.value)
+                            setInviteError(null)
+                          }}
+                          disabled={isInviting}
+                          placeholder="email@exemplo.com"
+                        />
+                      </div>
+                      <Select
+                        value={inviteRole}
+                        onValueChange={(value) => value && setInviteRole(value)}
+                        disabled={isInviting}
+                      >
+                        <SelectTrigger className="w-35">
+                          <SelectValue>
+                            {availableRoles.find((r) => r.value === inviteRole)
+                              ?.label || 'Membro'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableRoles.map((role) => (
+                            <SelectItem key={role.value} value={role.value}>
+                              {role.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button type="submit" disabled={isInviting}>
+                        <HugeiconsIcon icon={Mail01Icon} />
+                        {isInviting ? 'Enviando...' : 'Convidar'}
+                      </Button>
+                    </div>
+                    {inviteError && <FieldError>{inviteError}</FieldError>}
+                  </FieldGroup>
+                </form>
               </div>
             )}
           </CardContent>
         </Card>
       )}
 
+      {/* Invitations Card */}
+      {canManageOrganizationSettings &&
+        (invitations.length > 0 || invitationsLoading) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <HugeiconsIcon icon={SentIcon} className="h-5 w-5" />
+                Convites
+              </CardTitle>
+              <CardDescription>
+                Histórico de convites enviados para a organização.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {invitationsLoading ? (
+                <InvitationsSkeleton />
+              ) : (
+                <div className="space-y-3">
+                  {invitations.map((invitation) => {
+                    const isPending = invitation.status === 'pending'
+                    const isExpired =
+                      isPending && invitation.expiresAt < new Date()
+                    return (
+                      <div
+                        key={invitation.id}
+                        className="flex items-center justify-between p-4 border rounded-lg"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                            <HugeiconsIcon
+                              icon={Mail01Icon}
+                              className="h-5 w-5"
+                            />
+                          </div>
+                          <div>
+                            <p className="font-medium">{invitation.email}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {getRoleLabel(invitation.role)}
+                              {getInviterName(invitation.inviterId) && (
+                                <span className="ml-1">
+                                  · Convidado por{' '}
+                                  {getInviterName(invitation.inviterId)}
+                                </span>
+                              )}
+                              {isPending && !isExpired && (
+                                <span className="ml-1">
+                                  · Expira em{' '}
+                                  {formatTimeRemaining(invitation.expiresAt)}
+                                </span>
+                              )}
+                              {isExpired && (
+                                <span className="text-destructive ml-1">
+                                  · Expirado
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={getStatusVariant(invitation.status)}>
+                            {getStatusLabel(invitation.status)}
+                          </Badge>
+                          {isPending && !isExpired && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() =>
+                                handleCancelInvitation(invitation.id)
+                              }
+                              disabled={cancellingInvitation === invitation.id}
+                            >
+                              <HugeiconsIcon
+                                icon={Cancel01Icon}
+                                className="h-4 w-4 text-muted-foreground"
+                              />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
       {/* Remove Member Confirmation Dialog */}
-      {canManageOrganizationSettings && <AlertDialog
-        open={!!memberToRemove}
-        onOpenChange={(open) => {
-          if (!open) setMemberToRemove(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remover membro?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você está prestes a remover{' '}
-              <strong>{memberToRemove?.user.name}</strong> (
-              {memberToRemove?.user.email}) da organização. Esta ação pode ser
-              desfeita convidando o membro novamente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isRemoving}>
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRemoveMember}
-              disabled={isRemoving}
-              variant="destructive"
-            >
-              {isRemoving ? 'Removendo...' : 'Remover membro'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>}
+      {canManageOrganizationSettings && (
+        <AlertDialog
+          open={!!memberToRemove}
+          onOpenChange={(open) => {
+            if (!open) setMemberToRemove(null)
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remover membro?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Você está prestes a remover{' '}
+                <strong>{memberToRemove?.user.name}</strong> (
+                {memberToRemove?.user.email}) da organização. Esta ação pode ser
+                desfeita convidando o membro novamente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isRemoving}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleRemoveMember}
+                disabled={isRemoving}
+                variant="destructive"
+              >
+                {isRemoving ? 'Removendo...' : 'Remover membro'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       {/* Danger Zone */}
-      {canManageOrganizationSettings && <Card className="border-destructive/50">
-        <CardHeader>
-          <CardTitle className="text-destructive">
-            Excluir Organização
-          </CardTitle>
-          <CardDescription>
-            Exclua permanentemente esta organização e todos os seus dados.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AlertDialog
-            open={deleteDialogOpen}
-            onOpenChange={(open) => {
-              if (!open) {
-                setDeleteConfirmName('')
-              }
-              setDeleteDialogOpen(open)
-            }}
-          >
-            <AlertDialogTrigger
-              render={
-                <Button variant="destructive">
-                  <HugeiconsIcon icon={Delete02Icon} />
-                  Excluir organização
-                </Button>
-              }
-            />
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  Excluir organização permanentemente?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta ação é irreversível. Todos os dados da organização serão
-                  excluídos permanentemente, incluindo membros, calibrações e
-                  certificados.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="py-4">
-                <Field>
-                  <FieldLabel htmlFor="delete-confirm-name">
-                    Digite <strong>{activeOrg.name}</strong> para confirmar
-                  </FieldLabel>
-                  <Input
-                    id="delete-confirm-name"
-                    value={deleteConfirmName}
-                    onChange={(e) => setDeleteConfirmName(e.target.value)}
-                    placeholder={activeOrg.name}
-                    disabled={isDeleting}
-                  />
-                </Field>
-              </div>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={isDeleting}>
-                  Cancelar
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteOrganization}
-                  disabled={isDeleting || deleteConfirmName !== activeOrg.name}
-                  variant="destructive"
-                >
-                  {isDeleting ? 'Excluindo...' : 'Excluir permanentemente'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </CardContent>
-      </Card>}
+      {canManageOrganizationSettings && (
+        <Card className="border-destructive/50">
+          <CardHeader>
+            <CardTitle className="text-destructive">
+              Excluir Organização
+            </CardTitle>
+            <CardDescription>
+              Exclua permanentemente esta organização e todos os seus dados.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog
+              open={deleteDialogOpen}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setDeleteConfirmName('')
+                }
+                setDeleteDialogOpen(open)
+              }}
+            >
+              <AlertDialogTrigger
+                render={
+                  <Button variant="destructive">
+                    <HugeiconsIcon icon={Delete02Icon} />
+                    Excluir organização
+                  </Button>
+                }
+              />
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Excluir organização permanentemente?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação é irreversível. Todos os dados da organização
+                    serão excluídos permanentemente, incluindo membros,
+                    calibrações e certificados.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="py-4">
+                  <Field>
+                    <FieldLabel htmlFor="delete-confirm-name">
+                      Digite <strong>{activeOrg.name}</strong> para confirmar
+                    </FieldLabel>
+                    <Input
+                      id="delete-confirm-name"
+                      value={deleteConfirmName}
+                      onChange={(e) => setDeleteConfirmName(e.target.value)}
+                      placeholder={activeOrg.name}
+                      disabled={isDeleting}
+                    />
+                  </Field>
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDeleting}>
+                    Cancelar
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteOrganization}
+                    disabled={
+                      isDeleting || deleteConfirmName !== activeOrg.name
+                    }
+                    variant="destructive"
+                  >
+                    {isDeleting ? 'Excluindo...' : 'Excluir permanentemente'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

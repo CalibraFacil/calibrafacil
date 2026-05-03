@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -22,14 +22,22 @@ import {
   FieldLabel,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { MaskedInput } from '@/components/ui/masked-input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { clientRouteId } from '@/lib/route-identifiers'
+import { brazilPhoneMask, cepMask, cpfCnpjMask } from '@/lib/input-masks'
+import {
+  mergeViaCepAddress,
+  type ViaCepAddress,
+  useViaCepLookup,
+} from '@/lib/viacep'
 
 export const Route = createFileRoute('/dashboard/clients/$id/info')({
   component: ClientInfoTab,
@@ -39,6 +47,7 @@ type CustomerAddress = {
   cep?: string
   number?: string
   street?: string
+  complement?: string
   neighbourhood?: string
   city?: string
   state?: string
@@ -185,6 +194,16 @@ function ClientInfoForm({
     setAddress((prev) => ({ ...prev, [field]: value }))
   }
 
+  const handleViaCepResolved = useCallback((lookupAddress: ViaCepAddress) => {
+    setAddress((prev) => mergeViaCepAddress(prev, lookupAddress))
+  }, [])
+
+  const cepLookup = useViaCepLookup({
+    cep: address.cep || '',
+    disabled: updateMutation.isPending || !addressOpen,
+    onResolved: handleViaCepResolved,
+  })
+
   return (
     <div className="space-y-6">
       <Card>
@@ -248,10 +267,11 @@ function ClientInfoForm({
 
               <Field>
                 <FieldLabel htmlFor="taxId">CNPJ / CPF</FieldLabel>
-                <Input
+                <MaskedInput
                   id="taxId"
+                  maskOptions={cpfCnpjMask}
                   value={taxId}
-                  onChange={(e) => setTaxId(e.target.value)}
+                  onInput={(e) => setTaxId(e.currentTarget.value)}
                   disabled={updateMutation.isPending}
                   placeholder="00.000.000/0000-00"
                 />
@@ -275,10 +295,13 @@ function ClientInfoForm({
 
                 <Field>
                   <FieldLabel htmlFor="phone">Telefone</FieldLabel>
-                  <Input
+                  <MaskedInput
                     id="phone"
+                    type="tel"
+                    inputMode="tel"
+                    maskOptions={brazilPhoneMask}
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onInput={(e) => setPhone(e.currentTarget.value)}
                     disabled={updateMutation.isPending}
                     placeholder="(11) 99999-9999"
                   />
@@ -305,13 +328,38 @@ function ClientInfoForm({
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field>
                       <FieldLabel htmlFor="cep">CEP</FieldLabel>
-                      <Input
+                      <MaskedInput
                         id="cep"
+                        maskOptions={cepMask}
                         value={address.cep || ''}
-                        onChange={(e) => updateAddress('cep', e.target.value)}
+                        onInput={(e) =>
+                          updateAddress('cep', e.currentTarget.value)
+                        }
                         disabled={updateMutation.isPending}
                         placeholder="00000-000"
+                        aria-describedby={
+                          cepLookup.message
+                            ? 'client-info-cep-lookup-description'
+                            : undefined
+                        }
                       />
+                      {cepLookup.message && (
+                        <FieldDescription
+                          id="client-info-cep-lookup-description"
+                          aria-live="polite"
+                          className={
+                            cepLookup.status === 'not-found' ||
+                            cepLookup.status === 'error'
+                              ? 'text-destructive'
+                              : undefined
+                          }
+                        >
+                          {cepLookup.isLoading && (
+                            <Spinner className="mr-1.5 inline size-3" />
+                          )}
+                          {cepLookup.message}
+                        </FieldDescription>
+                      )}
                     </Field>
 
                     <Field>
@@ -324,6 +372,19 @@ function ClientInfoForm({
                         }
                         disabled={updateMutation.isPending}
                         placeholder="123"
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="complement">Complemento</FieldLabel>
+                      <Input
+                        id="complement"
+                        value={address.complement || ''}
+                        onChange={(e) =>
+                          updateAddress('complement', e.target.value)
+                        }
+                        disabled={updateMutation.isPending}
+                        placeholder="Sala 4, bloco B"
                       />
                     </Field>
                   </div>

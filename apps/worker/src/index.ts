@@ -613,6 +613,7 @@ function formatAddress(parts: Record<string, unknown> | null | undefined) {
   return [
     parts.street,
     parts.number,
+    parts.complement,
     parts.neighbourhood,
     parts.city,
     parts.state,

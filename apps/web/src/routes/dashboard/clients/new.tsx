@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { Copy01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -8,6 +8,8 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MaskedInput } from '@/components/ui/masked-input'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Field,
   FieldDescription,
@@ -23,6 +25,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { brazilPhoneMask, cepMask, cpfCnpjMask } from '@/lib/input-masks'
+import {
+  mergeViaCepAddress,
+  type ViaCepAddress,
+  useViaCepLookup,
+} from '@/lib/viacep'
 
 export const Route = createFileRoute('/dashboard/clients/new')({
   head: () => ({
@@ -40,6 +48,7 @@ interface FormData {
     cep: string
     street: string
     number: string
+    complement: string
     neighbourhood: string
     city: string
     state: string
@@ -55,6 +64,7 @@ const initialFormData: FormData = {
     cep: '',
     street: '',
     number: '',
+    complement: '',
     neighbourhood: '',
     city: '',
     state: '',
@@ -124,17 +134,17 @@ function NewClientPage() {
           taxId: data.taxId || undefined,
           email: data.email || undefined,
           phone: data.phone || undefined,
-          address:
-            data.address.cep || data.address.street || data.address.city
-              ? {
-                  cep: data.address.cep || undefined,
-                  street: data.address.street || undefined,
-                  number: data.address.number || undefined,
-                  neighbourhood: data.address.neighbourhood || undefined,
-                  city: data.address.city || undefined,
-                  state: data.address.state || undefined,
-                }
-              : undefined,
+          address: Object.values(data.address).some(Boolean)
+            ? {
+                cep: data.address.cep || undefined,
+                street: data.address.street || undefined,
+                number: data.address.number || undefined,
+                complement: data.address.complement || undefined,
+                neighbourhood: data.address.neighbourhood || undefined,
+                city: data.address.city || undefined,
+                state: data.address.state || undefined,
+              }
+            : undefined,
         },
       })
 
@@ -212,6 +222,19 @@ function NewClientPage() {
     }))
   }
 
+  const handleViaCepResolved = useCallback((address: ViaCepAddress) => {
+    setFormData((prev) => ({
+      ...prev,
+      address: mergeViaCepAddress(prev.address, address),
+    }))
+  }, [])
+
+  const cepLookup = useViaCepLookup({
+    cep: formData.address.cep,
+    disabled: createMutation.isPending,
+    onResolved: handleViaCepResolved,
+  })
+
   const hasAddress = Object.values(formData.address).some(Boolean)
   const registrationSummary = [
     {
@@ -277,11 +300,12 @@ function NewClientPage() {
 
                 <Field>
                   <FieldLabel htmlFor="taxId">CNPJ / CPF</FieldLabel>
-                  <Input
+                  <MaskedInput
                     id="taxId"
                     name="taxId"
+                    maskOptions={cpfCnpjMask}
                     value={formData.taxId}
-                    onChange={(e) => updateField('taxId', e.target.value)}
+                    onInput={(e) => updateField('taxId', e.currentTarget.value)}
                     placeholder="Ex.: 00.000.000/0000-00…"
                     disabled={createMutation.isPending}
                     autoComplete="off"
@@ -323,13 +347,14 @@ function NewClientPage() {
 
                 <Field>
                   <FieldLabel htmlFor="phone">Telefone</FieldLabel>
-                  <Input
+                  <MaskedInput
                     id="phone"
                     name="phone"
                     type="tel"
                     inputMode="tel"
+                    maskOptions={brazilPhoneMask}
                     value={formData.phone}
-                    onChange={(e) => updateField('phone', e.target.value)}
+                    onInput={(e) => updateField('phone', e.currentTarget.value)}
                     placeholder="Ex.: (11) 99999-9999…"
                     disabled={createMutation.isPending}
                     autoComplete="tel"
@@ -345,16 +370,39 @@ function NewClientPage() {
               <div className="grid gap-5 md:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="cep">CEP</FieldLabel>
-                  <Input
+                  <MaskedInput
                     id="cep"
                     name="postalCode"
+                    maskOptions={cepMask}
                     value={formData.address.cep}
-                    onChange={(e) => updateAddressField('cep', e.target.value)}
+                    onInput={(e) =>
+                      updateAddressField('cep', e.currentTarget.value)
+                    }
                     placeholder="Ex.: 00000-000…"
                     disabled={createMutation.isPending}
                     autoComplete="postal-code"
                     spellCheck={false}
+                    aria-describedby={
+                      cepLookup.message ? 'cep-lookup-description' : undefined
+                    }
                   />
+                  {cepLookup.message && (
+                    <FieldDescription
+                      id="cep-lookup-description"
+                      aria-live="polite"
+                      className={
+                        cepLookup.status === 'not-found' ||
+                        cepLookup.status === 'error'
+                          ? 'text-destructive'
+                          : undefined
+                      }
+                    >
+                      {cepLookup.isLoading && (
+                        <Spinner className="mr-1.5 inline size-3" />
+                      )}
+                      {cepLookup.message}
+                    </FieldDescription>
+                  )}
                 </Field>
 
                 <Field>
@@ -401,7 +449,7 @@ function NewClientPage() {
                   />
                 </Field>
 
-                <Field>
+                <Field className="md:col-span-2">
                   <FieldLabel htmlFor="street">Rua</FieldLabel>
                   <Input
                     id="street"
@@ -426,6 +474,21 @@ function NewClientPage() {
                       updateAddressField('number', e.target.value)
                     }
                     placeholder="Ex.: 123…"
+                    disabled={createMutation.isPending}
+                    autoComplete="address-line2"
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="complement">Complemento</FieldLabel>
+                  <Input
+                    id="complement"
+                    name="addressComplement"
+                    value={formData.address.complement}
+                    onChange={(e) =>
+                      updateAddressField('complement', e.target.value)
+                    }
+                    placeholder="Ex.: Sala 4, bloco B…"
                     disabled={createMutation.isPending}
                     autoComplete="address-line2"
                   />

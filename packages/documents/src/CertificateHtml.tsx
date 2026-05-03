@@ -89,6 +89,7 @@ export type CustomerAddress = {
   cep?: string;
   number?: string;
   street?: string;
+  complement?: string;
   neighbourhood?: string;
   city?: string;
   state?: string;
@@ -1236,6 +1237,7 @@ function formatAddress(address: CustomerAddress | null): string {
   const parts = [
     address.street,
     address.number,
+    address.complement,
     address.neighbourhood,
     address.city,
     address.state,

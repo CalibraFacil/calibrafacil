@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { MaskedInput } from '@/components/ui/masked-input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -25,6 +26,7 @@ import {
 import { CommercialOfferSummaryCard } from '@/components/backoffice/commercial/summary-card'
 import { CommercialOfferHistoryTable } from '@/components/backoffice/commercial/history-table'
 import { CommercialStatusBadge } from '@/components/backoffice/commercial/status-badge'
+import { brazilPhoneMask } from '@/lib/input-masks'
 
 type OfferKind = 'SETUP_FEE' | 'PLAN_UPFRONT' | 'PLAN_RECURRING'
 type PaymentMethod = 'PIX' | 'BOLETO' | 'CREDIT_CARD'
@@ -74,10 +76,12 @@ function BackofficeCommercialCheckoutsPage() {
   const queryClient = useQueryClient()
   const search = Route.useSearch() as { organizationId?: string } | undefined
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(
-    search?.organizationId ?? null,
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<
+    string | null
+  >(search?.organizationId ?? null)
+  const [billingContactId, setBillingContactId] = useState<number | undefined>(
+    undefined,
   )
-  const [billingContactId, setBillingContactId] = useState<number | undefined>(undefined)
   const [form, setForm] = useState(DEFAULT_FORM)
   const [preview, setPreview] = useState<CommercialOfferPreview | null>(null)
   const [issuedOffer, setIssuedOffer] = useState<IssuedOffer | null>(null)
@@ -97,7 +101,12 @@ function BackofficeCommercialCheckoutsPage() {
       })
       if (!res.ok) throw new Error('Falha ao buscar organizações')
       return res.json() as Promise<{
-        data: Array<{ id: string; name: string; slug: string; cnpj: string | null }>
+        data: Array<{
+          id: string
+          name: string
+          slug: string
+          cnpj: string | null
+        }>
       }>
     },
   })
@@ -105,11 +114,11 @@ function BackofficeCommercialCheckoutsPage() {
   const contextQuery = useQuery({
     queryKey: ['backoffice', 'commercial', 'context', selectedOrganizationId],
     queryFn: async () => {
-      const res = await api.api.backoffice.commercial.organizations[':organizationId'].context.$get(
-        {
-          param: { organizationId: selectedOrganizationId! },
-        },
-      )
+      const res = await api.api.backoffice.commercial.organizations[
+        ':organizationId'
+      ].context.$get({
+        param: { organizationId: selectedOrganizationId! },
+      })
       if (!res.ok) throw new Error('Falha ao carregar contexto comercial')
       return res.json() as Promise<{
         organization: {
@@ -151,8 +160,8 @@ function BackofficeCommercialCheckoutsPage() {
     },
     enabled: !!selectedOrganizationId,
   })
-  const primaryBillingContact = contextQuery.data?.billingContacts.find((contact) =>
-    contact.isPrimary,
+  const primaryBillingContact = contextQuery.data?.billingContacts.find(
+    (contact) => contact.isPrimary,
   )
   const resolvedBillingContactId = billingContactId ?? primaryBillingContact?.id
 
@@ -161,7 +170,9 @@ function BackofficeCommercialCheckoutsPage() {
       const org = contextQuery.data?.organization
       if (!org) throw new Error('Selecione uma organização primeiro')
 
-      const res = await api.api.backoffice.commercial['billing-customer'].sync.$post({
+      const res = await api.api.backoffice.commercial[
+        'billing-customer'
+      ].sync.$post({
         json: {
           organizationId: org.id,
           name: org.name,
@@ -173,7 +184,10 @@ function BackofficeCommercialCheckoutsPage() {
 
       if (!res.ok) {
         const payload = await res.json().catch(() => null)
-        throw new Error((payload as { error?: string } | null)?.error || 'Falha ao sincronizar cliente')
+        throw new Error(
+          (payload as { error?: string } | null)?.error ||
+            'Falha ao sincronizar cliente',
+        )
       }
 
       return res.json()
@@ -181,11 +195,18 @@ function BackofficeCommercialCheckoutsPage() {
     onSuccess: () => {
       toast.success('Cliente de cobrança sincronizado')
       void queryClient.invalidateQueries({
-        queryKey: ['backoffice', 'commercial', 'context', selectedOrganizationId],
+        queryKey: [
+          'backoffice',
+          'commercial',
+          'context',
+          selectedOrganizationId,
+        ],
       })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao sincronizar cliente')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao sincronizar cliente',
+      )
     },
   })
 
@@ -193,16 +214,21 @@ function BackofficeCommercialCheckoutsPage() {
     mutationFn: async () => {
       if (!selectedOrganizationId) throw new Error('Selecione uma organização')
 
-      const res = await api.api.backoffice.commercial['billing-contacts'].$post({
-        json: {
-          organizationId: selectedOrganizationId,
-          ...newContact,
-          isPrimary: contextQuery.data?.billingContacts.length === 0,
+      const res = await api.api.backoffice.commercial['billing-contacts'].$post(
+        {
+          json: {
+            organizationId: selectedOrganizationId,
+            ...newContact,
+            isPrimary: contextQuery.data?.billingContacts.length === 0,
+          },
         },
-      })
+      )
       if (!res.ok) {
         const payload = await res.json().catch(() => null)
-        throw new Error((payload as { error?: string } | null)?.error || 'Falha ao criar contato')
+        throw new Error(
+          (payload as { error?: string } | null)?.error ||
+            'Falha ao criar contato',
+        )
       }
       return res.json() as Promise<{ contact: { id: number } }>
     },
@@ -211,11 +237,18 @@ function BackofficeCommercialCheckoutsPage() {
       setNewContact({ name: '', email: '', phone: '', role: '', notes: '' })
       toast.success('Contato de cobrança criado')
       void queryClient.invalidateQueries({
-        queryKey: ['backoffice', 'commercial', 'context', selectedOrganizationId],
+        queryKey: [
+          'backoffice',
+          'commercial',
+          'context',
+          selectedOrganizationId,
+        ],
       })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao criar contato')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao criar contato',
+      )
     },
   })
 
@@ -223,14 +256,22 @@ function BackofficeCommercialCheckoutsPage() {
     mutationFn: async () => {
       if (!selectedOrganizationId) throw new Error('Selecione uma organização')
       const res = await api.api.backoffice.commercial.offers.preview.$post({
-        json: buildOfferPayload(selectedOrganizationId, resolvedBillingContactId, form),
+        json: buildOfferPayload(
+          selectedOrganizationId,
+          resolvedBillingContactId,
+          form,
+        ),
       })
       if (!res.ok) throw new Error('Falha ao gerar prévia')
       return res.json()
     },
     onSuccess: (data) => setPreview(data),
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao pré-visualizar oferta')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'Falha ao pré-visualizar oferta',
+      )
     },
   })
 
@@ -240,13 +281,20 @@ function BackofficeCommercialCheckoutsPage() {
 
       const res = await api.api.backoffice.commercial.offers.$post({
         json: {
-          ...buildOfferPayload(selectedOrganizationId, resolvedBillingContactId, form),
+          ...buildOfferPayload(
+            selectedOrganizationId,
+            resolvedBillingContactId,
+            form,
+          ),
           idempotencyKey: crypto.randomUUID(),
         },
       })
       const payload = await res.json().catch(() => null)
       if (!res.ok) {
-        throw new Error((payload as { error?: string } | null)?.error || 'Falha ao emitir oferta')
+        throw new Error(
+          (payload as { error?: string } | null)?.error ||
+            'Falha ao emitir oferta',
+        )
       }
       return payload as { offer: IssuedOffer }
     },
@@ -254,17 +302,26 @@ function BackofficeCommercialCheckoutsPage() {
       setIssuedOffer(data.offer)
       toast.success('Oferta comercial emitida')
       void queryClient.invalidateQueries({
-        queryKey: ['backoffice', 'commercial', 'context', selectedOrganizationId],
+        queryKey: [
+          'backoffice',
+          'commercial',
+          'context',
+          selectedOrganizationId,
+        ],
       })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao emitir oferta')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao emitir oferta',
+      )
     },
   })
 
   const cancelMutation = useMutation({
     mutationFn: async (offerId: string) => {
-      const res = await api.api.backoffice.commercial.offers[':offerId'].cancel.$post({
+      const res = await api.api.backoffice.commercial.offers[
+        ':offerId'
+      ].cancel.$post({
         param: { offerId },
         json: { reason: 'Cancelada pelo operador comercial' },
       })
@@ -274,21 +331,34 @@ function BackofficeCommercialCheckoutsPage() {
     onSuccess: () => {
       toast.success('Oferta cancelada')
       void queryClient.invalidateQueries({
-        queryKey: ['backoffice', 'commercial', 'context', selectedOrganizationId],
+        queryKey: [
+          'backoffice',
+          'commercial',
+          'context',
+          selectedOrganizationId,
+        ],
       })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao cancelar oferta')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao cancelar oferta',
+      )
     },
   })
 
   const reissueMutation = useMutation({
     mutationFn: async (offerId: string) => {
-      const res = await api.api.backoffice.commercial.offers[':offerId'].reissue.$post({
+      const res = await api.api.backoffice.commercial.offers[
+        ':offerId'
+      ].reissue.$post({
         param: { offerId },
         json: {
           idempotencyKey: crypto.randomUUID(),
-          overrides: buildOfferPayload(selectedOrganizationId!, resolvedBillingContactId, form),
+          overrides: buildOfferPayload(
+            selectedOrganizationId!,
+            resolvedBillingContactId,
+            form,
+          ),
         },
       })
       if (!res.ok) throw new Error('Falha ao reemitir oferta')
@@ -298,11 +368,18 @@ function BackofficeCommercialCheckoutsPage() {
       setIssuedOffer(data.offer)
       toast.success('Oferta reemitida')
       void queryClient.invalidateQueries({
-        queryKey: ['backoffice', 'commercial', 'context', selectedOrganizationId],
+        queryKey: [
+          'backoffice',
+          'commercial',
+          'context',
+          selectedOrganizationId,
+        ],
       })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao reemitir oferta')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao reemitir oferta',
+      )
     },
   })
 
@@ -329,7 +406,9 @@ function BackofficeCommercialCheckoutsPage() {
 
   const selectedOrg = contextQuery.data?.organization
 
-  const copyLink = async (offer?: { customerCheckoutUrl?: string | null } | null) => {
+  const copyLink = async (
+    offer?: { customerCheckoutUrl?: string | null } | null,
+  ) => {
     if (!offer?.customerCheckoutUrl) return
     try {
       await navigator.clipboard.writeText(offer.customerCheckoutUrl)
@@ -344,7 +423,8 @@ function BackofficeCommercialCheckoutsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Checkout Comercial</h1>
         <p className="text-sm text-muted-foreground">
-          Emissão interna de propostas e links de pagamento personalizados via Asaas.
+          Emissão interna de propostas e links de pagamento personalizados via
+          Asaas.
         </p>
       </div>
 
@@ -353,7 +433,9 @@ function BackofficeCommercialCheckoutsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Organização</CardTitle>
-              <CardDescription>Pesquise e selecione a conta alvo.</CardDescription>
+              <CardDescription>
+                Pesquise e selecione a conta alvo.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <Input
@@ -366,7 +448,9 @@ function BackofficeCommercialCheckoutsPage() {
                   <button
                     key={org.id}
                     className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${
-                      selectedOrganizationId === org.id ? 'border-primary bg-primary/5' : ''
+                      selectedOrganizationId === org.id
+                        ? 'border-primary bg-primary/5'
+                        : ''
                     }`}
                     onClick={() => {
                       setSelectedOrganizationId(org.id)
@@ -400,11 +484,14 @@ function BackofficeCommercialCheckoutsPage() {
                       {selectedOrg.cnpj || 'CNPJ não informado'}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <CommercialStatusBadge status={contextQuery.data?.subscription?.status} />
+                      <CommercialStatusBadge
+                        status={contextQuery.data?.subscription?.status}
+                      />
                       {contextQuery.data?.subscription && (
                         <span className="text-muted-foreground">
                           {contextQuery.data.subscription.planId} ·{' '}
-                          {contextQuery.data.subscription.billingCycle || 'Sem ciclo'}
+                          {contextQuery.data.subscription.billingCycle ||
+                            'Sem ciclo'}
                         </span>
                       )}
                     </div>
@@ -415,8 +502,10 @@ function BackofficeCommercialCheckoutsPage() {
                       <p className="font-medium">Cliente Asaas sincronizado</p>
                       <p>{contextQuery.data.billingCustomer.name}</p>
                       <p className="text-muted-foreground">
-                        {contextQuery.data.billingCustomer.email || 'Sem email'} ·{' '}
-                        {contextQuery.data.billingCustomer.phone || 'Sem telefone'}
+                        {contextQuery.data.billingCustomer.email || 'Sem email'}{' '}
+                        ·{' '}
+                        {contextQuery.data.billingCustomer.phone ||
+                          'Sem telefone'}
                       </p>
                     </div>
                   ) : (
@@ -436,16 +525,27 @@ function BackofficeCommercialCheckoutsPage() {
                     <p className="text-sm font-medium">Contato de cobrança</p>
                     <NativeSelect
                       className="w-full"
-                      value={resolvedBillingContactId ? String(resolvedBillingContactId) : ''}
+                      value={
+                        resolvedBillingContactId
+                          ? String(resolvedBillingContactId)
+                          : ''
+                      }
                       onChange={(event) =>
                         setBillingContactId(
-                          event.target.value ? Number(event.target.value) : undefined,
+                          event.target.value
+                            ? Number(event.target.value)
+                            : undefined,
                         )
                       }
                     >
-                      <NativeSelectOption value="">Selecione um contato</NativeSelectOption>
+                      <NativeSelectOption value="">
+                        Selecione um contato
+                      </NativeSelectOption>
                       {contextQuery.data?.billingContacts.map((contact) => (
-                        <NativeSelectOption key={contact.id} value={String(contact.id)}>
+                        <NativeSelectOption
+                          key={contact.id}
+                          value={String(contact.id)}
+                        >
                           {contact.name} · {contact.email}
                         </NativeSelectOption>
                       ))}
@@ -456,35 +556,53 @@ function BackofficeCommercialCheckoutsPage() {
                     <Input
                       value={newContact.name}
                       onChange={(event) =>
-                        setNewContact((current) => ({ ...current, name: event.target.value }))
+                        setNewContact((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
                       }
                       placeholder="Nome do contato"
                     />
                     <Input
                       value={newContact.email}
                       onChange={(event) =>
-                        setNewContact((current) => ({ ...current, email: event.target.value }))
+                        setNewContact((current) => ({
+                          ...current,
+                          email: event.target.value,
+                        }))
                       }
                       placeholder="Email"
                     />
-                    <Input
+                    <MaskedInput
                       value={newContact.phone}
-                      onChange={(event) =>
-                        setNewContact((current) => ({ ...current, phone: event.target.value }))
+                      type="tel"
+                      inputMode="tel"
+                      maskOptions={brazilPhoneMask}
+                      onInput={(event) =>
+                        setNewContact((current) => ({
+                          ...current,
+                          phone: event.currentTarget.value,
+                        }))
                       }
                       placeholder="Telefone"
                     />
                     <Input
                       value={newContact.role}
                       onChange={(event) =>
-                        setNewContact((current) => ({ ...current, role: event.target.value }))
+                        setNewContact((current) => ({
+                          ...current,
+                          role: event.target.value,
+                        }))
                       }
                       placeholder="Cargo/função"
                     />
                     <Textarea
                       value={newContact.notes}
                       onChange={(event) =>
-                        setNewContact((current) => ({ ...current, notes: event.target.value }))
+                        setNewContact((current) => ({
+                          ...current,
+                          notes: event.target.value,
+                        }))
                       }
                       placeholder="Observações internas do contato"
                     />
@@ -536,9 +654,15 @@ function BackofficeCommercialCheckoutsPage() {
                     }))
                   }
                 >
-                  <NativeSelectOption value="PLAN_RECURRING">Plano recorrente</NativeSelectOption>
-                  <NativeSelectOption value="PLAN_UPFRONT">Plano à vista</NativeSelectOption>
-                  <NativeSelectOption value="SETUP_FEE">Taxa de implantação</NativeSelectOption>
+                  <NativeSelectOption value="PLAN_RECURRING">
+                    Plano recorrente
+                  </NativeSelectOption>
+                  <NativeSelectOption value="PLAN_UPFRONT">
+                    Plano à vista
+                  </NativeSelectOption>
+                  <NativeSelectOption value="SETUP_FEE">
+                    Taxa de implantação
+                  </NativeSelectOption>
                 </NativeSelect>
                 <p className="text-xs text-muted-foreground">
                   {KIND_DESCRIPTIONS[form.kind]}
@@ -557,13 +681,20 @@ function BackofficeCommercialCheckoutsPage() {
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      basePlanId: event.target.value as typeof current.basePlanId,
+                      basePlanId: event.target
+                        .value as typeof current.basePlanId,
                     }))
                   }
                 >
-                  <NativeSelectOption value="STANDARD">Standard</NativeSelectOption>
-                  <NativeSelectOption value="PROFESSIONAL">Professional</NativeSelectOption>
-                  <NativeSelectOption value="ENTERPRISE">Enterprise</NativeSelectOption>
+                  <NativeSelectOption value="STANDARD">
+                    Standard
+                  </NativeSelectOption>
+                  <NativeSelectOption value="PROFESSIONAL">
+                    Professional
+                  </NativeSelectOption>
+                  <NativeSelectOption value="ENTERPRISE">
+                    Enterprise
+                  </NativeSelectOption>
                 </NativeSelect>
                 {isSetupFee && (
                   <p className="text-xs text-muted-foreground">
@@ -589,13 +720,21 @@ function BackofficeCommercialCheckoutsPage() {
                   }
                 >
                   {isSetupFee ? (
-                    <NativeSelectOption value="NONE">Não se aplica</NativeSelectOption>
+                    <NativeSelectOption value="NONE">
+                      Não se aplica
+                    </NativeSelectOption>
                   ) : isUpfrontPlan ? (
-                    <NativeSelectOption value="YEARLY">Anual</NativeSelectOption>
+                    <NativeSelectOption value="YEARLY">
+                      Anual
+                    </NativeSelectOption>
                   ) : (
                     <>
-                      <NativeSelectOption value="MONTHLY">Mensal</NativeSelectOption>
-                      <NativeSelectOption value="YEARLY">Anual</NativeSelectOption>
+                      <NativeSelectOption value="MONTHLY">
+                        Mensal
+                      </NativeSelectOption>
+                      <NativeSelectOption value="YEARLY">
+                        Anual
+                      </NativeSelectOption>
                     </>
                   )}
                 </NativeSelect>
@@ -660,13 +799,18 @@ function BackofficeCommercialCheckoutsPage() {
                   type="date"
                   value={form.dueDate}
                   onChange={(event) =>
-                    setForm((current) => ({ ...current, dueDate: event.target.value }))
+                    setForm((current) => ({
+                      ...current,
+                      dueDate: event.target.value,
+                    }))
                   }
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Expiração da oferta</label>
+                <label className="text-sm font-medium">
+                  Expiração da oferta
+                </label>
                 <Input
                   type="date"
                   value={form.offerExpiresAt}
@@ -692,11 +836,13 @@ function BackofficeCommercialCheckoutsPage() {
                   }))
                 }
               >
-                {(['PIX', 'BOLETO', 'CREDIT_CARD'] as PaymentMethod[]).map((method) => (
-                  <NativeSelectOption key={method} value={method}>
-                    {PAYMENT_METHOD_LABELS[method]}
-                  </NativeSelectOption>
-                ))}
+                {(['PIX', 'BOLETO', 'CREDIT_CARD'] as PaymentMethod[]).map(
+                  (method) => (
+                    <NativeSelectOption key={method} value={method}>
+                      {PAYMENT_METHOD_LABELS[method]}
+                    </NativeSelectOption>
+                  ),
+                )}
               </NativeSelect>
               <p className="text-xs text-muted-foreground">
                 Cada oferta comercial usa um único método de pagamento.
@@ -704,7 +850,9 @@ function BackofficeCommercialCheckoutsPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Descrição para o cliente</label>
+              <label className="text-sm font-medium">
+                Descrição para o cliente
+              </label>
               <Textarea
                 value={form.customerVisibleDescription}
                 onChange={(event) =>
@@ -722,14 +870,20 @@ function BackofficeCommercialCheckoutsPage() {
               <Textarea
                 value={form.internalNotes}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, internalNotes: event.target.value }))
+                  setForm((current) => ({
+                    ...current,
+                    internalNotes: event.target.value,
+                  }))
                 }
                 placeholder="Contexto interno da negociação"
               />
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Button onClick={() => previewMutation.mutate()} disabled={!selectedOrganizationId}>
+              <Button
+                onClick={() => previewMutation.mutate()}
+                disabled={!selectedOrganizationId}
+              >
                 Pré-visualizar
               </Button>
               <Button
