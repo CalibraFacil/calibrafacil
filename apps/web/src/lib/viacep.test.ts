@@ -62,7 +62,7 @@ describe('ViaCEP helpers', () => {
     })
   })
 
-  it('replaces fields that came from the previous CEP lookup', () => {
+  it('replaces address fields when the CEP changes', () => {
     const firstLookup = {
       cep: '92025-340',
       street: 'Rua Um',
@@ -104,7 +104,7 @@ describe('ViaCEP helpers', () => {
     })
   })
 
-  it('preserves fields manually changed after the previous CEP lookup', () => {
+  it('preserves manually changed fields when refreshing the same CEP', () => {
     const firstLookup = {
       cep: '92025-340',
       street: 'Rua Um',
@@ -115,7 +115,7 @@ describe('ViaCEP helpers', () => {
     }
 
     const secondLookup = {
-      cep: '92200-000',
+      cep: '92025-340',
       street: 'Rua Dois',
       complement: '',
       neighbourhood: 'Bairro Dois',

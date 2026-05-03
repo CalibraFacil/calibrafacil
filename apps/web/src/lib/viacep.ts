@@ -61,11 +61,19 @@ export function mergeViaCepAddress<TAddress extends EditableAddress>(
   viaCepAddress: ViaCepAddress,
   previousViaCepAddress?: ViaCepAddress | null,
 ): TAddress {
+  const isDifferentCep =
+    previousViaCepAddress &&
+    getCepDigits(previousViaCepAddress.cep) !== getCepDigits(viaCepAddress.cep)
+
   const fillEmpty = <TKey extends keyof EditableAddress>(
     field: TKey,
     value: string,
   ) => {
     const currentValue = currentAddress[field]
+    if (isDifferentCep) {
+      return value
+    }
+
     if (typeof currentValue === 'string' && currentValue.trim() !== '') {
       const previousValue = previousViaCepAddress?.[field]
       if (previousValue && currentValue.trim() === previousValue.trim()) {
