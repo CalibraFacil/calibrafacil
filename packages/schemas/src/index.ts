@@ -25,6 +25,7 @@ export const AddressSchema = z.object({
   cep: z.string().optional(),
   number: z.string().optional(),
   street: z.string().optional(),
+  complement: z.string().optional(),
   neighbourhood: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),

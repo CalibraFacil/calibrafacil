@@ -90,6 +90,7 @@ function formatCustomerAddress(
   const parts = [
     address.street,
     address.number,
+    address.complement,
     address.neighbourhood,
     address.city,
     address.state,

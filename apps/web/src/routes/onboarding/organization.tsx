@@ -1,4 +1,9 @@
-import { Navigate, createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
+import {
+  Navigate,
+  createFileRoute,
+  redirect,
+  useNavigate,
+} from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import {
   authClient,
@@ -22,6 +27,8 @@ import {
   FieldLabel,
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { MaskedInput } from '@/components/ui/masked-input'
+import { brazilPhoneMask, cnpjMask } from '@/lib/input-masks'
 
 type OnboardingSearch = {
   redirect?: string
@@ -156,7 +163,9 @@ function OrganizationOnboardingPage() {
                   ) : null}
 
                   <Field>
-                    <FieldLabel htmlFor="org-name">Nome do laboratório</FieldLabel>
+                    <FieldLabel htmlFor="org-name">
+                      Nome do laboratório
+                    </FieldLabel>
                     <Input
                       id="org-name"
                       value={name}
@@ -175,7 +184,9 @@ function OrganizationOnboardingPage() {
                     <Input
                       id="org-slug"
                       value={slug}
-                      onChange={(event) => setSlug(generateSlug(event.target.value))}
+                      onChange={(event) =>
+                        setSlug(generateSlug(event.target.value))
+                      }
                       placeholder="laboratorio-exemplo"
                       required
                     />
@@ -185,7 +196,9 @@ function OrganizationOnboardingPage() {
                   </Field>
 
                   <Field>
-                    <FieldLabel htmlFor="org-email">Email do laboratório</FieldLabel>
+                    <FieldLabel htmlFor="org-email">
+                      Email do laboratório
+                    </FieldLabel>
                     <Input
                       id="org-email"
                       type="email"
@@ -197,29 +210,37 @@ function OrganizationOnboardingPage() {
 
                   <Field>
                     <FieldLabel htmlFor="org-phone">Telefone</FieldLabel>
-                    <Input
+                    <MaskedInput
                       id="org-phone"
+                      type="tel"
+                      inputMode="tel"
+                      maskOptions={brazilPhoneMask}
                       value={phone}
-                      onChange={(event) => setPhone(event.target.value)}
+                      onInput={(event) => setPhone(event.currentTarget.value)}
                       placeholder="(11) 99999-9999"
                     />
                   </Field>
 
                   <Field>
                     <FieldLabel htmlFor="org-cnpj">CNPJ</FieldLabel>
-                    <Input
+                    <MaskedInput
                       id="org-cnpj"
+                      maskOptions={cnpjMask}
                       value={cnpj}
-                      onChange={(event) => setCnpj(event.target.value)}
+                      onInput={(event) => setCnpj(event.currentTarget.value)}
                       placeholder="00.000.000/0001-00"
                     />
                     <FieldDescription>
-                      Pode ser preenchido depois nas configurações da organização.
+                      Pode ser preenchido depois nas configurações da
+                      organização.
                     </FieldDescription>
                   </Field>
 
                   <Field>
-                    <Button type="submit" disabled={isSubmitting || !name.trim()}>
+                    <Button
+                      type="submit"
+                      disabled={isSubmitting || !name.trim()}
+                    >
                       {isSubmitting
                         ? 'Criando laboratório...'
                         : 'Concluir onboarding'}
