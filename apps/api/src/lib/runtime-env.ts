@@ -97,6 +97,8 @@ function createLocalKv(): LocalKvNamespace {
   };
 }
 
+const apiRuntimeCache = createLocalKv();
+
 function createR2Bucket(bucketName = requiredEnv("R2_BUCKET_NAME")) {
   const accountId = requiredEnv("R2_ACCOUNT_ID");
   const client = new S3Client({
@@ -160,7 +162,7 @@ export function createApiRuntimeEnv(): ApiRuntimeEnv {
     APP_URL: process.env.APP_URL,
     PORTAL_APP_URL: process.env.PORTAL_APP_URL,
     ...process.env,
-    CACHE: createLocalKv(),
+    CACHE: apiRuntimeCache,
   } as ApiRuntimeEnv;
 
   if (databaseUrl) {

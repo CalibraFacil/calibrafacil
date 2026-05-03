@@ -34,6 +34,10 @@
   ],
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/api"
+    },
+    {
       "source": "/api/cron/integrations",
       "destination": "/api/cron/integrations"
     },
