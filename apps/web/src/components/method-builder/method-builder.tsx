@@ -12,6 +12,7 @@ interface MethodBuilderProps {
   initialData?: MethodData
   onSave: (data: MethodData) => void
   onPublish?: (data: MethodData) => void
+  onCancel?: () => void
   isSaving?: boolean
   isPublishing?: boolean
   isNew?: boolean
@@ -41,6 +42,7 @@ export function MethodBuilder({
   initialData,
   onSave,
   onPublish,
+  onCancel,
   isSaving = false,
   isPublishing = false,
   isNew = false,
@@ -81,69 +83,125 @@ export function MethodBuilder({
     return method.name.trim().length >= 2 && method.dataFields.length > 0
   }, [method])
 
+  const methodSummary = [
+    {
+      label: 'Campos',
+      value: method.dataFields.length,
+      helper: 'Entradas',
+    },
+    {
+      label: 'Fórmulas',
+      value: method.formulas.length,
+      helper: 'Cálculos',
+    },
+    {
+      label: 'Critérios',
+      value: method.validations.length,
+      helper: 'Aceitação',
+    },
+  ]
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between mb-4 p-4 border rounded-lg bg-card">
-        <div className="flex items-center gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">
-              {isNew ? 'Novo Método' : method.name || 'Sem nome'}
-            </h2>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="flex h-full min-h-0 flex-col space-y-6">
+      <header className="border-b pb-5">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant={statusVariants[method.status]}>
                 {statusLabels[method.status]}
               </Badge>
-              {!isNew && <span>Versão {method.version}</span>}
+              {!isNew && (
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  Versão {method.version}
+                </span>
+              )}
               {isDirty && (
-                <span className="text-amber-600">Alterações não salvas</span>
+                <span className="text-sm font-medium text-amber-600">
+                  Alterações não salvas
+                </span>
               )}
             </div>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-semibold tracking-tight text-balance">
+                {isNew ? 'Novo Método' : method.name || 'Método sem nome'}
+              </h1>
+              <p className="max-w-3xl text-sm text-muted-foreground text-pretty">
+                Configure entradas, fórmulas e critérios de aceitação mantendo a
+                pré-visualização ativa para validar o método antes da revisão.
+              </p>
+            </div>
           </div>
+
+          <dl className="grid gap-4 text-sm sm:grid-cols-3 xl:w-[360px]">
+            {methodSummary.map((item) => (
+              <div key={item.label} className="min-w-0">
+                <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {item.label}
+                </dt>
+                <dd className="mt-1 flex items-baseline gap-2">
+                  <span className="text-lg font-semibold tabular-nums">
+                    {item.value}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {item.helper}
+                  </span>
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           {!isReadOnly && (
             <>
+              {onCancel && (
+                <Button
+                  variant="outline"
+                  onClick={onCancel}
+                  disabled={isSaving || isPublishing}
+                  className="active:scale-[0.96] transition-transform"
+                >
+                  Cancelar
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={handleSave}
                 disabled={isSaving || !canSave}
+                className="active:scale-[0.96] transition-transform"
               >
-                {isSaving ? 'Salvando...' : 'Salvar Rascunho'}
+                {isSaving ? 'Salvando…' : 'Salvar Rascunho'}
               </Button>
               {onPublish && method.status === 'DRAFT' && (
                 <Button
                   onClick={handlePublish}
                   disabled={isPublishing || !canPublish}
+                  className="active:scale-[0.96] transition-transform"
                 >
-                  {isPublishing ? 'Enviando...' : 'Solicitar aprovação'}
+                  {isPublishing ? 'Enviando…' : 'Solicitar Aprovação'}
                 </Button>
               )}
             </>
           )}
         </div>
-      </div>
+      </header>
 
-      {/* Two-pane layout */}
-      <div className="flex flex-1 gap-4 min-h-0">
-        {/* Left Pane: Configuration */}
-        <div className="w-1/2 overflow-y-auto border rounded-lg bg-card">
+      <div className="grid min-h-0 flex-1 gap-8 xl:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.05fr)]">
+        <section className="min-h-0 overflow-y-auto pr-1">
           <ConfigurationPanel
             method={method}
             onChange={updateMethod}
             disabled={isReadOnly}
           />
-        </div>
+        </section>
 
-        {/* Right Pane: Live Preview */}
-        <div className="w-1/2 overflow-y-auto border rounded-lg bg-card">
+        <section className="min-h-0 overflow-y-auto border-l pl-6">
           <PreviewPanel
             method={method}
             previewData={previewData}
             onPreviewDataChange={setPreviewData}
           />
-        </div>
+        </section>
       </div>
     </div>
   )

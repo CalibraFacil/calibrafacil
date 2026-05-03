@@ -219,7 +219,7 @@ export function PreviewPanel({
             onValueChange={(v) => updateField(field.key, v)}
           >
             <SelectTrigger>
-              <span>{(value as string) || 'Selecione...'}</span>
+              <span>{(value as string) || 'Selecione…'}</span>
             </SelectTrigger>
             <SelectContent>
               {field.options.map((option) => (
@@ -242,7 +242,9 @@ export function PreviewPanel({
           </FieldLabel>
           <div className="flex">
             <Input
+              name={field.key}
               type="number"
+              inputMode="decimal"
               step="any"
               value={(value as number) ?? ''}
               onChange={(e) => {
@@ -255,6 +257,7 @@ export function PreviewPanel({
                 }
               }}
               className={field.unit ? 'rounded-r-none' : ''}
+              autoComplete="off"
             />
             {field.unit && (
               <span className="inline-flex items-center px-3 text-sm text-muted-foreground bg-muted border border-l-0 border-input rounded-r-md">
@@ -274,9 +277,11 @@ export function PreviewPanel({
           {field.required && <span className="text-red-500 ml-1">*</span>}
         </FieldLabel>
         <Input
+          name={field.key}
           type="text"
           value={(value as string) ?? ''}
           onChange={(e) => updateField(field.key, e.target.value)}
+          autoComplete="off"
         />
       </Field>
     )
@@ -285,11 +290,13 @@ export function PreviewPanel({
   const hasAnyData = Object.keys(previewData).length > 0
 
   return (
-    <div className="p-4 space-y-4">
-      <h3 className="font-semibold text-lg">Pré-visualização</h3>
-      <p className="text-sm text-muted-foreground">
-        Digite valores de teste para ver os cálculos em tempo real.
-      </p>
+    <div className="space-y-0 divide-y">
+      <div className="pb-5">
+        <h2 className="text-sm font-medium text-balance">Pré-visualização</h2>
+        <p className="mt-1 text-sm text-muted-foreground text-pretty">
+          Digite valores de teste para ver os cálculos em tempo real.
+        </p>
+      </div>
 
       {/* Form Preview */}
       {assetSpecFields.length > 0 && (
@@ -299,19 +306,18 @@ export function PreviewPanel({
             setSectionsOpen((s) => ({ ...s, assetValues: open }))
           }
         >
-          <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
-            <span className="font-medium">
+          <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-3 py-3 text-left hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 transition-[color]">
+            <span className="font-medium text-balance">
               Valores simulados do ativo ({assetSpecFields.length})
             </span>
             <HugeiconsIcon
               icon={ArrowDown01Icon}
-              className={`h-4 w-4 transition-transform ${sectionsOpen.assetValues ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+              className={`size-4 shrink-0 text-muted-foreground transition-transform ${sectionsOpen.assetValues ? 'rotate-180' : ''}`}
             />
           </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2">
-            <div className="space-y-4">
-              {assetSpecFields.map(renderField)}
-            </div>
+          <CollapsibleContent className="pb-5">
+            <div className="space-y-4">{assetSpecFields.map(renderField)}</div>
           </CollapsibleContent>
         </Collapsible>
       )}
@@ -320,24 +326,23 @@ export function PreviewPanel({
         open={sectionsOpen.form}
         onOpenChange={(open) => setSectionsOpen((s) => ({ ...s, form: open }))}
       >
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
-          <span className="font-medium">
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-3 py-3 text-left hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 transition-[color]">
+          <span className="font-medium text-balance">
             Formulário ({manualFields.length} campos)
           </span>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={`h-4 w-4 transition-transform ${sectionsOpen.form ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${sectionsOpen.form ? 'rotate-180' : ''}`}
           />
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
+        <CollapsibleContent className="pb-5">
           {manualFields.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-2">
+            <p className="py-2 text-sm text-muted-foreground text-pretty">
               Adicione campos de entrada para visualizar o formulário.
             </p>
           ) : (
-            <div className="space-y-4">
-              {manualFields.map(renderField)}
-            </div>
+            <div className="space-y-4">{manualFields.map(renderField)}</div>
           )}
         </CollapsibleContent>
       </Collapsible>
@@ -349,41 +354,39 @@ export function PreviewPanel({
           setSectionsOpen((s) => ({ ...s, results: open }))
         }
       >
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
-          <span className="font-medium">
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-3 py-3 text-left hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 transition-[color]">
+          <span className="font-medium text-balance">
             Resultados ({method.formulas.length} fórmulas)
           </span>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={`h-4 w-4 transition-transform ${sectionsOpen.results ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${sectionsOpen.results ? 'rotate-180' : ''}`}
           />
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
+        <CollapsibleContent className="pb-5">
           {method.formulas.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-2">
+            <p className="py-2 text-sm text-muted-foreground text-pretty">
               Adicione fórmulas para ver os cálculos.
             </p>
           ) : !hasAnyData ? (
-            <p className="text-sm text-muted-foreground p-2">
+            <p className="py-2 text-sm text-muted-foreground text-pretty">
               Digite valores no formulário para ver os resultados.
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="divide-y">
               {method.formulas.map((formula) => {
                 const result = formulaResults[formula.outputKey]
                 return (
-                  <div
-                    key={formula.outputKey}
-                    className="p-2 border rounded bg-muted/30"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">
+                  <div key={formula.outputKey} className="py-3">
+                    <div className="flex min-w-0 items-center justify-between gap-3">
+                      <span className="truncate font-medium">
                         {formula.label || formula.outputKey}
                       </span>
                       {result?.error ? (
                         <Badge variant="destructive">Erro</Badge>
                       ) : result?.value !== undefined ? (
-                        <span className="font-mono text-lg">
+                        <span className="shrink-0 font-mono text-lg tabular-nums">
                           {result.displayValue}
                           {formula.unit && (
                             <span className="text-sm text-muted-foreground ml-1">
@@ -400,7 +403,7 @@ export function PreviewPanel({
                         {result.error}
                       </p>
                     )}
-                    <code className="text-xs text-muted-foreground block mt-1">
+                    <code className="mt-1 block truncate rounded-md bg-muted/50 px-2 py-1 font-mono text-xs text-muted-foreground">
                       {formula.expression}
                     </code>
                   </div>
@@ -418,22 +421,23 @@ export function PreviewPanel({
           setSectionsOpen((s) => ({ ...s, validations: open }))
         }
       >
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
-          <span className="font-medium">
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-3 py-3 text-left hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 transition-[color]">
+          <span className="font-medium text-balance">
             Validações ({method.validations.length})
           </span>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={`h-4 w-4 transition-transform ${sectionsOpen.validations ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${sectionsOpen.validations ? 'rotate-180' : ''}`}
           />
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
+        <CollapsibleContent className="pb-5">
           {method.validations.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-2">
+            <p className="py-2 text-sm text-muted-foreground text-pretty">
               Adicione critérios de aceitação para validar os resultados.
             </p>
           ) : !hasAnyData ? (
-            <p className="text-sm text-muted-foreground p-2">
+            <p className="py-2 text-sm text-muted-foreground text-pretty">
               Digite valores no formulário para ver as validações.
             </p>
           ) : (
@@ -494,17 +498,18 @@ export function PreviewPanel({
           setSectionsOpen((s) => ({ ...s, context: open }))
         }
       >
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted/50 rounded">
+        <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-3 py-3 text-left hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 transition-[color]">
           <span className="font-medium text-muted-foreground">
             Debug: Contexto
           </span>
           <HugeiconsIcon
             icon={ArrowDown01Icon}
-            className={`h-4 w-4 transition-transform ${sectionsOpen.context ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${sectionsOpen.context ? 'rotate-180' : ''}`}
           />
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
-          <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-48">
+        <CollapsibleContent className="pb-5">
+          <pre className="max-h-48 overflow-auto rounded-md bg-muted/50 p-2 text-xs">
             {JSON.stringify(context, null, 2)}
           </pre>
         </CollapsibleContent>

@@ -2,11 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  ArrowLeft01Icon,
-  Copy01Icon,
-  Tick02Icon,
-} from '@hugeicons/core-free-icons'
+import { Copy01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { api } from '@/utils/api'
@@ -236,27 +232,16 @@ function NewClientPage() {
   ]
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <header className="border-b pb-5">
-        <div className="min-w-0 space-y-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate({ to: '/dashboard/clients' })}
-            className="-ml-2"
-          >
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 size-4" />
-            Voltar
-          </Button>
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-balance">
-              Novo Cliente
-            </h1>
-            <p className="max-w-2xl text-sm text-muted-foreground text-pretty">
-              Cadastre os dados essenciais do cliente. Quando um email é
-              informado, o convite para o portal é enviado automaticamente.
-            </p>
-          </div>
+        <div className="min-w-0 space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-balance">
+            Novo Cliente
+          </h1>
+          <p className="max-w-2xl text-sm text-muted-foreground text-pretty">
+            Cadastre os dados do cliente. Quando um email é informado, o convite
+            para o portal é enviado automaticamente.
+          </p>
         </div>
       </header>
 

@@ -149,12 +149,14 @@ export function CertificateContentPanel({
         <FieldLabel htmlFor="certificate-procedure">Procedimento</FieldLabel>
         <Input
           id="certificate-procedure"
+          name="certificateProcedure"
           value={current.procedureCode}
           onChange={(event) =>
             update({ procedureCode: event.target.value.trim() || undefined })
           }
-          placeholder="PBT09"
+          placeholder="PBT09…"
           disabled={disabled}
+          autoComplete="off"
         />
         <FieldDescription>
           Código fixo exibido no certificado, sem exigir preenchimento do
@@ -173,6 +175,8 @@ export function CertificateContentPanel({
             current.referenceStandards.map((reference, index) => (
               <div key={index} className="flex gap-2">
                 <Input
+                  name={`referenceStandard-${index}`}
+                  aria-label={`Norma de referência ${index + 1}`}
                   value={reference}
                   onChange={(event) =>
                     update({
@@ -184,11 +188,13 @@ export function CertificateContentPanel({
                   }
                   placeholder="UKAS LAB 14"
                   disabled={disabled}
+                  autoComplete="off"
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
+                  aria-label={`Remover norma ${reference || index + 1}`}
                   onClick={() =>
                     update({
                       referenceStandards: current.referenceStandards.filter(
@@ -198,7 +204,11 @@ export function CertificateContentPanel({
                   }
                   disabled={disabled}
                 >
-                  <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
+                  <HugeiconsIcon
+                    icon={Delete02Icon}
+                    aria-hidden="true"
+                    className="size-4"
+                  />
                 </Button>
               </div>
             ))
@@ -208,7 +218,7 @@ export function CertificateContentPanel({
           type="button"
           variant="outline"
           size="sm"
-          className="mt-2"
+          className="mt-2 active:scale-[0.96] transition-transform"
           onClick={() =>
             update({
               referenceStandards: [...current.referenceStandards, ''],
@@ -216,7 +226,11 @@ export function CertificateContentPanel({
           }
           disabled={disabled}
         >
-          <HugeiconsIcon icon={Add01Icon} className="mr-2 h-4 w-4" />
+          <HugeiconsIcon
+            icon={Add01Icon}
+            aria-hidden="true"
+            className="mr-2 size-4"
+          />
           Adicionar norma
         </Button>
       </Field>
@@ -342,8 +356,13 @@ export function CertificateContentPanel({
                     })
                   }
                   disabled={disabled}
+                  className="active:scale-[0.96] transition-transform"
                 >
-                  <HugeiconsIcon icon={Add01Icon} className="mr-2 h-4 w-4" />
+                  <HugeiconsIcon
+                    icon={Add01Icon}
+                    aria-hidden="true"
+                    className="mr-2 size-4"
+                  />
                   {sectionKindLabels[kind]}
                 </Button>
               ),
@@ -360,7 +379,11 @@ export function CertificateContentPanel({
             {current.sections.map((section, index) => (
               <div key={index} className="rounded-lg border p-3">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <HugeiconsIcon icon={File01Icon} className="h-4 w-4" />
+                  <HugeiconsIcon
+                    icon={File01Icon}
+                    aria-hidden="true"
+                    className="size-4"
+                  />
                   <Select
                     value={section.kind}
                     onValueChange={(kind) =>
@@ -391,10 +414,15 @@ export function CertificateContentPanel({
                     variant="ghost"
                     size="icon"
                     className="ml-auto"
+                    aria-label={`Remover seção ${index + 1}`}
                     onClick={() => removeSection(index)}
                     disabled={disabled}
                   >
-                    <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
+                    <HugeiconsIcon
+                      icon={Delete02Icon}
+                      aria-hidden="true"
+                      className="size-4"
+                    />
                   </Button>
                 </div>
 
@@ -421,12 +449,15 @@ function renderSectionEditor(
     return (
       <div className="space-y-3">
         <Input
+          name="definitionSectionTitle"
+          aria-label="Título da seção de definições"
           value={section.title}
           onChange={(event) =>
             onChange({ ...section, title: event.target.value })
           }
-          placeholder="CONVENÇÕES"
+          placeholder="CONVENÇÕES…"
           disabled={disabled}
+          autoComplete="off"
         />
         <div className="space-y-2">
           {section.items.map((item, index) => (
@@ -435,6 +466,8 @@ function renderSectionEditor(
               className="grid gap-2 md:grid-cols-[120px_1fr_auto]"
             >
               <Input
+                name={`definitionTerm-${index}`}
+                aria-label={`Termo da definição ${index + 1}`}
                 value={item.term}
                 onChange={(event) =>
                   onChange({
@@ -448,8 +481,11 @@ function renderSectionEditor(
                 }
                 placeholder="VC"
                 disabled={disabled}
+                autoComplete="off"
               />
               <Input
+                name={`definitionValue-${index}`}
+                aria-label={`Texto da definição ${index + 1}`}
                 value={item.definition}
                 onChange={(event) =>
                   onChange({
@@ -461,13 +497,15 @@ function renderSectionEditor(
                     ),
                   })
                 }
-                placeholder="Valor Convencional..."
+                placeholder="Valor Convencional…"
                 disabled={disabled}
+                autoComplete="off"
               />
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
+                aria-label={`Remover definição ${index + 1}`}
                 onClick={() =>
                   onChange({
                     ...section,
@@ -478,7 +516,11 @@ function renderSectionEditor(
                 }
                 disabled={disabled}
               >
-                <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
+                <HugeiconsIcon
+                  icon={Delete02Icon}
+                  aria-hidden="true"
+                  className="size-4"
+                />
               </Button>
             </div>
           ))}
@@ -494,8 +536,13 @@ function renderSectionEditor(
             })
           }
           disabled={disabled}
+          className="active:scale-[0.96] transition-transform"
         >
-          <HugeiconsIcon icon={Add01Icon} className="mr-2 h-4 w-4" />
+          <HugeiconsIcon
+            icon={Add01Icon}
+            aria-hidden="true"
+            className="mr-2 size-4"
+          />
           Adicionar definição
         </Button>
       </div>
@@ -506,21 +553,27 @@ function renderSectionEditor(
     return (
       <div className="space-y-3">
         <Input
+          name="bulletSectionTitle"
+          aria-label="Título da lista"
           value={section.title ?? ''}
           onChange={(event) =>
             onChange({ ...section, title: event.target.value || undefined })
           }
-          placeholder="Título opcional"
+          placeholder="Título opcional…"
           disabled={disabled}
+          autoComplete="off"
         />
         <Textarea
+          name="bulletSectionItems"
+          aria-label="Itens da lista"
           value={section.items.join('\n')}
           onChange={(event) =>
             onChange({ ...section, items: splitLines(event.target.value) })
           }
-          placeholder="Uma nota por linha"
+          placeholder="Uma nota por linha…"
           rows={5}
           disabled={disabled}
+          autoComplete="off"
         />
       </div>
     )
@@ -529,14 +582,19 @@ function renderSectionEditor(
   return (
     <div className="space-y-3">
       <Input
+        name="paragraphSectionTitle"
+        aria-label="Título da seção de texto"
         value={section.title}
         onChange={(event) =>
           onChange({ ...section, title: event.target.value })
         }
-        placeholder="MÉTODO"
+        placeholder="MÉTODO…"
         disabled={disabled}
+        autoComplete="off"
       />
       <Textarea
+        name="paragraphSectionContent"
+        aria-label="Texto da seção"
         value={section.paragraphs.join('\n\n')}
         onChange={(event) =>
           onChange({
@@ -544,9 +602,10 @@ function renderSectionEditor(
             paragraphs: splitParagraphs(event.target.value),
           })
         }
-        placeholder="Separe parágrafos com uma linha em branco."
+        placeholder="Separe parágrafos com uma linha em branco…"
         rows={6}
         disabled={disabled}
+        autoComplete="off"
       />
     </div>
   )

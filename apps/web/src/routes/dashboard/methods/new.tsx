@@ -1,13 +1,10 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 
 import type { MethodData } from '@/components/method-builder'
 
 import { api } from '@/utils/api'
-import { Button } from '@/components/ui/button'
 import { MethodBuilder } from '@/components/method-builder'
 import { methodRouteId } from '@/lib/route-identifiers'
 
@@ -64,21 +61,11 @@ function NewMethodPage() {
   })
 
   return (
-    <div className="space-y-4 h-full flex flex-col">
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate({ to: '/dashboard/methods' })}
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
-      </div>
-
+    <div className="flex h-full flex-col">
       <div className="flex-1 min-h-0">
         <MethodBuilder
           onSave={(data) => createMutation.mutate(data)}
+          onCancel={() => navigate({ to: '/dashboard/methods' })}
           isSaving={createMutation.isPending}
           isNew
         />
