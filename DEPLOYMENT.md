@@ -6,63 +6,79 @@ This document describes how to deploy CalibraFacil to production.
 
 | App | Platform | URL |
 |-----|----------|-----|
-| API | Cloudflare Workers | api.calibrafacil.com |
-| Web | Cloudflare Pages | calibrafacil.com |
-| Portal | Cloudflare Pages | portal.calibrafacil.com |
-| Worker | Cloudflare Workers | (background jobs) |
-| Database | Neon PostgreSQL | (via Hyperdrive) |
+| API | Vercel Functions | api.calibrafacil.com |
+| Web | Vercel | calibrafacil.com |
+| Portal | Vercel | portal.calibrafacil.com |
+| Background jobs | Vercel Queue and Cron | (API project) |
+| Docs | Cloudflare Pages | docs.calibrafacil.com |
+| Database | Neon PostgreSQL | (direct connection) |
+| Object storage | Cloudflare R2 | (certificate assets) |
 
 ## Prerequisites
 
-- [Cloudflare account](https://dash.cloudflare.com)
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) installed
+- Vercel project access for the API, web, and portal apps
+- Cloudflare account access for the docs site and R2 storage
 - GitHub repository access
 
 ## Initial Setup
 
-### 1. Configure GitHub Secrets
+### 1. Configure Vercel Projects
 
-Go to your GitHub repository Settings > Secrets and variables > Actions, and add:
+The API, web, and portal apps deploy through Vercel. Each project should point at
+the matching app directory:
 
-| Secret Name | Description |
-|-------------|-------------|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token with Workers/Pages edit permissions |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID |
-| `DATABASE_URL` | PostgreSQL connection string (for migrations) |
+| Project | Root Directory | Build |
+|---------|----------------|-------|
+| API | `apps/api` | `pnpm build:vercel-functions` |
+| Web | `apps/web` | `pnpm build` |
+| Portal | `apps/portal` | `pnpm build` |
 
-Optional (for Turbo Remote Cache):
-| Secret Name | Description |
-|-------------|-------------|
+Vercel-specific routing, cron, queue, and output settings live in each app's
+`vercel.json`.
+
+### 2. Configure Production Environment Variables
+
+Set production secrets in Vercel for the API project:
+
+| Variable | Description |
+|----------|-------------|
+| `BETTER_AUTH_SECRET` | Auth secret key |
+| `DATABASE_URL` | Neon PostgreSQL connection string |
+| `RESEND_API_KEY` | Resend email API key |
+| `RESEND_FROM_EMAIL` | Sender email address |
+| `APP_URL` | Web app URL |
+| `API_URL` | API base URL |
+| `PORTAL_URL` | Portal URL |
+| `R2_ACCOUNT_ID` | Cloudflare R2 account id |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 access key |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret |
+| `R2_BUCKET_NAME` | Certificate bucket name |
+| `CHROMIUM_PACK_R2_BUCKET` | Optional R2 bucket for Chromium pack |
+| `CHROMIUM_PACK_R2_KEY` | Optional R2 key for Chromium pack |
+| `CHROMIUM_PACK_URL` | Optional public fallback URL for Chromium pack |
+| `SIGNING_MASTER_KEY` | Certificate signing master key |
+| `INTEGRATIONS_MASTER_KEY` | Integration credential encryption key |
+
+Set app-specific public variables, such as `VITE_API_URL`, on the web and portal
+Vercel projects.
+
+Optional Turbo Remote Cache settings can remain in GitHub Actions:
+
+| Secret or Variable | Description |
+|--------------------|-------------|
 | `TURBO_TOKEN` | Vercel Turbo remote cache token |
-| `TURBO_TEAM` | Vercel team name (set as repository variable) |
+| `TURBO_TEAM` | Vercel team name, usually configured as a repository variable |
 
-### 2. Configure Cloudflare Secrets
+### 3. Configure Docs Deployment
 
-Secrets must be set via the Wrangler CLI (they cannot be in wrangler.jsonc for security):
+Docs remain on Cloudflare Pages. Keep the Cloudflare secrets in GitHub Actions:
 
-```bash
-# For the API worker
-cd apps/api
-wrangler secret put BETTER_AUTH_SECRET
-wrangler secret put RESEND_API_KEY
-wrangler secret put R2_SECRET_ACCESS_KEY
+| Secret Name | Description |
+|-------------|-------------|
+| `CLOUDFLARE_API_TOKEN` | Token with Pages edit permissions |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id |
 
-# Enter each secret value when prompted
-```
-
-### 3. Cloudflare Pages Projects
-
-The following Pages projects should already exist:
-- `dashboard-calibra-facil` - Web app (calibrafacil.com)
-- `calibra-facil-portal` - Portal app
-
-### 4. Set Up Cloudflare Resources
-
-Ensure these resources exist in your Cloudflare account:
-- **Hyperdrive**: Connection to Neon PostgreSQL (ID: `<hyperdrive-id>`)
-- **Queue**: `calibration-pdf-queue` for PDF generation
-- **R2 Bucket**: `calibrafacil-certificates` for certificate storage
-- **Custom Domain**: `api.calibrafacil.com` configured in DNS
+The docs deployment command is defined in `apps/docs/package.json`.
 
 ## CI/CD Workflows
 
@@ -77,11 +93,9 @@ Runs on every PR to `main`:
 
 Runs on push to `main`:
 1. Quality checks (lint, typecheck, test)
-2. Parallel deployment of all apps:
-   - API to Cloudflare Workers
-   - Worker to Cloudflare Workers
-   - Web to Cloudflare Pages
-   - Portal to Cloudflare Pages
+2. Docs deployment when `apps/docs` changes
+
+The API, web, and portal projects deploy through Vercel's Git integration.
 
 ### Database Migration Workflow (`.github/workflows/db-migrate.yml`)
 
@@ -97,12 +111,12 @@ Runs on push to `main`:
 
 1. Copy environment files:
    ```bash
-   cp apps/api/.dev.vars.example apps/api/.dev.vars
-   cp apps/worker/.dev.vars.example apps/worker/.dev.vars
+   cp apps/api/.env.example apps/api/.env
+   cp apps/worker/.env.example apps/worker/.env
    cp .env.example .env  # if exists
    ```
 
-2. Fill in the secret values in `.dev.vars` files
+2. Fill in the secret values in `.env` files.
 
 3. Start development:
    ```bash
@@ -117,24 +131,23 @@ pnpm turbo dev --filter=@calibra-facil/api
 
 # Web only
 pnpm turbo dev --filter=@calibra-facil/web
+
+# Portal only
+pnpm turbo dev --filter=@calibra-facil/portal
+
+# Local background worker only
+pnpm dev:worker
 ```
 
 ## Manual Deployment
 
-If you need to deploy manually (not recommended for production):
+Manual deploys should go through the package scripts:
 
 ```bash
-# API
-cd apps/api && wrangler deploy
-
-# Worker
-cd apps/worker && wrangler deploy
-
-# Web (build first)
-cd apps/web && pnpm build && wrangler pages deploy dist --project-name=calibra-facil-web
-
-# Portal (build first)
-cd apps/portal && pnpm build && wrangler pages deploy dist --project-name=calibra-facil-portal
+pnpm deploy:api
+pnpm deploy:web
+pnpm deploy:portal
+pnpm deploy:docs
 ```
 
 ## Database Migrations
@@ -167,13 +180,13 @@ DATABASE_URL=<production-url> cd packages/db && pnpm db:migrate
 
 ## Rollback
 
-### Workers/Pages
+### Vercel Apps
 
-Cloudflare keeps deployment history. To rollback:
-1. Go to Cloudflare Dashboard > Workers/Pages
-2. Select the app
-3. Go to Deployments
-4. Click "Rollback" on a previous deployment
+Use the Vercel dashboard deployment history for the API, web, and portal apps.
+
+### Docs
+
+Use the Cloudflare Pages deployment history for docs.
 
 ### Database
 
@@ -184,35 +197,24 @@ Database migrations are forward-only. For rollback:
 
 ## Monitoring
 
-- **Cloudflare Analytics**: Workers and Pages analytics in Cloudflare dashboard
-- **Observability**: Enabled in wrangler.jsonc for all workers
-- **Logs**: View real-time logs with `wrangler tail`
-
-```bash
-# API logs
-cd apps/api && wrangler tail
-
-# Worker logs
-cd apps/worker && wrangler tail
-```
+- **Vercel Observability**: Runtime logs, function metrics, cron activity, and queue activity in Vercel
+- **Cloudflare Analytics**: Docs and R2 analytics in the Cloudflare dashboard
+- **Application logs**: Use each provider dashboard for production logs
 
 ## Troubleshooting
 
-### Deployment fails with "secret not found"
+### Deployment fails with "environment variable not found"
 
-Ensure all required secrets are set:
-```bash
-cd apps/api
-wrangler secret list
-```
+Confirm the missing variable is set on the correct Vercel project and
+environment. API-only secrets should be configured on the API project.
 
-### Hyperdrive connection issues
+### Queue or cron jobs are not running
 
-Check that the Hyperdrive ID matches in wrangler.jsonc and that the Hyperdrive
-is properly configured in the Cloudflare dashboard.
+Check `apps/api/vercel.json` and the API project's Vercel deployment logs. Queue
+handlers and cron routes are part of the API project.
 
 ### Build fails in CI
 
 1. Check that `pnpm-lock.yaml` is up to date
-2. Ensure all environment variables are set in GitHub Secrets
+2. Ensure all required environment variables are set in GitHub or Vercel
 3. Review the workflow logs for specific errors

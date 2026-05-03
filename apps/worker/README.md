@@ -1,6 +1,6 @@
 # @calibra-facil/worker
 
-Background job processor for PDF generation and scheduled compliance checks, running on Fly.io.
+Background job processor for PDF generation and scheduled compliance checks.
 
 ## Overview
 
@@ -84,7 +84,7 @@ Or via CI/CD on push to main branch.
 
 ```
 src/
-├── fly.ts             # Bun process entrypoint
+├── bun.ts             # Bun process entrypoint
 ├── index.ts           # Queue and scheduled job handlers
 ├── certificate.ts     # Certificate PDF generation
 ├── label.ts           # Label PDF generation

@@ -5145,7 +5145,7 @@ export const scheduledNotificationRelations = relations(
 );
 
 // =============================================================================
-// APP QUEUE JOBS - Postgres-backed background queue for Fly workers
+// APP QUEUE JOBS - Postgres-backed background queue
 // =============================================================================
 
 export type AppQueueJobType =

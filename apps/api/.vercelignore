@@ -1,4 +1,3 @@
-.wrangler
 test
 vercel-functions
 src/**/__tests__

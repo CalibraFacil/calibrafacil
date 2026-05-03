@@ -11,7 +11,6 @@
     "render:og": "node ./scripts/render-og.mjs",
     "preview": "vite preview",
     "deploy": "pnpm dlx vercel deploy --prod",
-    "deploy:fly": "flyctl deploy -c ../../fly.web.toml --ha=false",
     "test": "vitest run --passWithNoTests",
     "lint": "oxlint",
     "format": "prettier",
@@ -85,7 +84,6 @@
     "typescript": "^5.7.2",
     "vite": "^7.1.7",
     "vitest": "^3.0.5",
-    "web-vitals": "^5.1.0",
-    "wrangler": "^4.54.0"
+    "web-vitals": "^5.1.0"
   }
 }

@@ -1,6 +1,6 @@
 # @calibra-facil/api
 
-REST API backend for Calibra Fácil, built with Hono and deployed on Fly.io.
+REST API backend for Calibra Fácil, built with Hono and deployed on Vercel.
 
 ## Overview
 
