@@ -190,6 +190,16 @@ function normalizeDynamicTrustedOrigin(
   }
 }
 
+
+function isVercelPreviewOrigin(origin: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+}
+
 function createTrustedOrigins(
   isProduction: boolean,
 ): string[] | ((request?: Request) => Promise<string[]>) {
@@ -212,7 +222,11 @@ function createTrustedOrigins(
       origins.add(issuerOrigin);
     }
 
-    if (requestOrigin && (await isActivePortalCustomOrigin(requestOrigin))) {
+    if (
+      requestOrigin &&
+      (isVercelPreviewOrigin(requestOrigin) ||
+        (await isActivePortalCustomOrigin(requestOrigin)))
+    ) {
       origins.add(requestOrigin);
     }
 
@@ -228,7 +242,8 @@ function createTrustedOrigins(
 
       if (
         callbackOrigin &&
-        (await isActivePortalCustomOrigin(callbackOrigin))
+        (isVercelPreviewOrigin(callbackOrigin) ||
+          (await isActivePortalCustomOrigin(callbackOrigin)))
       ) {
         origins.add(callbackOrigin);
       }
