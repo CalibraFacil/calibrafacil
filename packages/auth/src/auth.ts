@@ -40,10 +40,23 @@ function resolveApiBaseUrl(fallback: string): string {
 }
 
 function isProductionRuntime(): boolean {
-  return (
-    process.env.VERCEL_ENV === "production" ||
-    process.env.VERCEL === "1"
-  );
+  return process.env.VERCEL_ENV === "production";
+}
+
+
+function createBaseUrlConfig(isProduction: boolean): string {
+  if (isProduction) {
+    return getRequiredEnv("API_URL");
+  }
+
+  const vercelPreviewUrl = readEnv("VERCEL_URL");
+  if (vercelPreviewUrl) {
+    // Vercel preview deployments use dynamic *.vercel.app hostnames.
+    // Resolve Better Auth base URL from VERCEL_URL so preview builds don't require a fixed BETTER_AUTH_URL.
+    return `https://${vercelPreviewUrl}`;
+  }
+
+  return resolveApiBaseUrl("http://localhost:3000");
 }
 
 function getCookieDomainFromApiUrl(apiUrl: string | undefined): string | null {
@@ -102,9 +115,12 @@ const DEV_TRUSTED_ORIGINS = [
   "https://192.168.0.10:5174",
 ];
 
+// Include wildcard preview hosts because Vercel preview domains are intentionally dynamic.
 const PROD_TRUSTED_ORIGINS = [
   "https://calibrafacil.com",
+  "https://www.calibrafacil.com",
   "https://portal.calibrafacil.com",
+  "https://*.vercel.app",
 ];
 
 function isIpv4Address(hostname: string): boolean {
@@ -694,10 +710,8 @@ async function findDefaultActiveOrganizationId(
  */
 export function createLabAuth() {
   const sharedConfig = createSharedConfig();
-  const baseURL =
-    isProductionRuntime()
-      ? getRequiredEnv("API_URL")
-      : resolveApiBaseUrl("http://localhost:3000");
+  const isProduction = isProductionRuntime();
+  const baseURL = createBaseUrlConfig(isProduction);
 
   return betterAuth({
     ...sharedConfig,
@@ -768,10 +782,8 @@ export function createLabAuth() {
  */
 export function createBackofficeAuth() {
   const sharedConfig = createSharedConfig();
-  const baseURL =
-    isProductionRuntime()
-      ? getRequiredEnv("API_URL")
-      : resolveApiBaseUrl("https://localhost:3000");
+  const isProduction = isProductionRuntime();
+  const baseURL = createBaseUrlConfig(isProduction);
 
   return betterAuth({
     ...sharedConfig,
@@ -802,10 +814,8 @@ export function createBackofficeAuth() {
  */
 export function createPortalAuth() {
   const sharedConfig = createSharedConfig();
-  const baseURL =
-    isProductionRuntime()
-      ? getRequiredEnv("API_URL")
-      : resolveApiBaseUrl("http://localhost:3000");
+  const isProduction = isProductionRuntime();
+  const baseURL = createBaseUrlConfig(isProduction);
 
   return betterAuth({
     ...sharedConfig,
