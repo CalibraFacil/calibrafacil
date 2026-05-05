@@ -349,18 +349,19 @@ export const member = ac.newRole({
  * OPERATOR ROLE
  * - Create calibration jobs, assign qualified technicians, transcribe worksheet data,
  *   and submit work for review
- * - Cannot approve/reject, delete jobs, or manage technical master data
+ * - Can triage intake requests, open/operate service orders, and manage clients/assets
+ * - Cannot approve/reject calibrations, delete jobs, or manage technical master data
  */
 export const operator = ac.newRole({
   // Inherit default member permissions for organization management
   ...memberAc.statements,
 
   calibration: ["create", "read", "assign_technician", "execute", "submit"],
-  request: ["read"],
+  request: ["read", "update", "convert"],
   template: ["read"],
   standard: ["read"],
-  equipment: ["read"],
-  client: ["read"],
+  equipment: ["create", "read", "update", "delete"],
+  client: ["create", "read", "update", "delete", "manage_portal"],
   certificate: ["read", "download", "verify"],
   report: ["read"],
   audit: ["read"],
@@ -370,6 +371,8 @@ export const operator = ac.newRole({
     "read",
     "create",
     "update",
+    "evaluate",
+    "execute",
     "print_intake_document",
     "print_tag",
   ],
