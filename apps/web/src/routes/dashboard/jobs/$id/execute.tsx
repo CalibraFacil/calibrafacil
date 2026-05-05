@@ -72,6 +72,13 @@ import type {
   ValidationResult,
 } from '@/components/method-builder/types'
 
+const BACKDATE_REASON_THRESHOLD_DAYS = 7
+const MS_PER_DAY = 1000 * 60 * 60 * 24
+
+function formatDateForInput(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
 export const Route = createFileRoute('/dashboard/jobs/$id/execute')({
   head: () => ({
     meta: [{ title: 'Executar Calibração | CalibraFacil' }],
@@ -484,6 +491,10 @@ function ExecuteJobForm({
     humidity: job.environmentalSnapshot?.humidity ?? null,
     pressure: job.environmentalSnapshot?.pressure ?? null,
   }))
+  const [performedAt, setPerformedAt] = useState<string>(
+    formatDateForInput(new Date()),
+  )
+  const [backdateReason, setBackdateReason] = useState('')
   const [sectionsOpen, setSectionsOpen] = useState({
     standards: true,
     environment: true,
@@ -990,6 +1001,8 @@ function ExecuteJobForm({
               .map(([k, r]) => [k, r.value]),
           ),
           environment: environmentPayload,
+          performedAt: new Date(`${performedAt}T12:00:00`).toISOString(),
+          backdateReason: backdateReason.trim() || undefined,
         },
       })
       if (!res.ok) {
@@ -1201,10 +1214,34 @@ function ExecuteJobForm({
     const hasNoErrors = validationResults.every(
       (v) => v.severity !== 'error' || v.passed === true,
     )
-    return hasRequiredFields && hasRequiredAssetSpecs && hasNoErrors
-  }, [job, manualFields, formData, missingAssetSpecFields, validationResults])
+    const performedDate = performedAt ? new Date(`${performedAt}T00:00:00`) : null
+    if (!performedDate || Number.isNaN(performedDate.getTime())) return false
+    if (performedDate.getTime() > Date.now()) return false
+    const diffDays = Math.floor((Date.now() - performedDate.getTime()) / MS_PER_DAY)
+    const requiresReason = diffDays > BACKDATE_REASON_THRESHOLD_DAYS
+    return (
+      hasRequiredFields &&
+      hasRequiredAssetSpecs &&
+      hasNoErrors &&
+      (!requiresReason || backdateReason.trim().length > 0)
+    )
+  }, [
+    job,
+    manualFields,
+    formData,
+    missingAssetSpecFields,
+    validationResults,
+    performedAt,
+    backdateReason,
+  ])
 
   const isEditable = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
+  const performedDate = performedAt ? new Date(`${performedAt}T00:00:00`) : null
+  const backdateDays =
+    performedDate && !Number.isNaN(performedDate.getTime())
+      ? Math.floor((Date.now() - performedDate.getTime()) / MS_PER_DAY)
+      : 0
+  const requiresBackdateReason = backdateDays > BACKDATE_REASON_THRESHOLD_DAYS
   const requiredFields = manualFields.filter((field) => field.required)
   const completedRequiredFields = requiredFields.filter((field) => {
     const value = formData[field.key]
@@ -1374,6 +1411,59 @@ function ExecuteJobForm({
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         {/* Left Column: Data Entry */}
         <div className="min-w-0 space-y-5">
+          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+            <CardHeader className="px-5 py-4">
+              <CardTitle className="text-base">Data da calibração</CardTitle>
+              <CardDescription>
+                Informe a data real de execução da calibração.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 px-5 pb-5">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPerformedAt(formatDateForInput(new Date()))}
+                >
+                  Hoje
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setPerformedAt(formatDateForInput(new Date(Date.now() - MS_PER_DAY)))
+                  }
+                >
+                  Ontem
+                </Button>
+              </div>
+              <Field>
+                <FieldLabel>Data realizada</FieldLabel>
+                <Input
+                  type="date"
+                  value={performedAt}
+                  onChange={(e) => setPerformedAt(e.target.value)}
+                  max={formatDateForInput(new Date())}
+                />
+              </Field>
+              {requiresBackdateReason && (
+                <Field>
+                  <FieldLabel>
+                    Motivo do registro retroativo ({backdateDays} dias)
+                  </FieldLabel>
+                  <Input
+                    type="text"
+                    value={backdateReason}
+                    onChange={(e) => setBackdateReason(e.target.value)}
+                    placeholder="Descreva o motivo do lançamento retroativo"
+                  />
+                </Field>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Reference Standards */}
           <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
             <Collapsible

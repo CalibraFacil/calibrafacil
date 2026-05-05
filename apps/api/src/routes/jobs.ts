@@ -1298,6 +1298,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     withInvalidation("jobs"),
     zValidator("json", SubmitForReviewSchema),
     async (c) => {
+      const BACKDATE_REASON_THRESHOLD_DAYS = 7;
       const memberData = c.get("member");
       const session = c.get("session");
       const id = await resolveJobRouteId(c.req.param("id"), memberData);
@@ -1377,6 +1378,25 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         normalizedData.data,
         existing.methodSnapshot,
       );
+      const performedAt = input.performedAt ? new Date(input.performedAt) : new Date();
+      if (Number.isNaN(performedAt.getTime())) {
+        return c.json({ error: "Data de execução inválida" }, 400);
+      }
+      const now = new Date();
+      if (performedAt.getTime() > now.getTime()) {
+        return c.json({ error: "A data de execução não pode estar no futuro" }, 400);
+      }
+      const diffMs = now.getTime() - performedAt.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const normalizedBackdateReason = input.backdateReason?.trim();
+      if (diffDays > BACKDATE_REASON_THRESHOLD_DAYS && !normalizedBackdateReason) {
+        return c.json(
+          {
+            error: `Motivo obrigatório para lançamentos com mais de ${BACKDATE_REASON_THRESHOLD_DAYS} dias`,
+          },
+          400,
+        );
+      }
 
       // Update job with execution data and set status to REVIEW
       const [updated] = await db
@@ -1388,7 +1408,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
           status: "REVIEW",
-          performedAt: new Date(),
+          performedAt,
         })
         .where(eq(calibrationJob.id, id))
         .returning();
@@ -1427,10 +1447,16 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         },
         performedBy: session.user.id,
         ipAddress: c.req.header("x-forwarded-for") || null,
-        reason:
+        reason: [
           nextEnvironmentalSnapshot && !nextEnvironmentalSnapshot.withinLimits
             ? "Submetido com condições ambientais fora dos limites"
-            : undefined,
+            : null,
+          diffDays > BACKDATE_REASON_THRESHOLD_DAYS
+            ? `Registro retroativo (${diffDays} dias): ${normalizedBackdateReason}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" | ") || undefined,
       });
 
       // Send notifications to admins/owners (fire and forget)
