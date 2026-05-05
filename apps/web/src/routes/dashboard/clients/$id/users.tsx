@@ -18,13 +18,6 @@ import {
 
 import { api } from '@/utils/api'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import {
   Table,
   TableBody,
   TableCell,
@@ -70,6 +63,14 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
+import {
+  ClientMetric,
+  ClientMetricStrip,
+  ClientPanel,
+  ClientPanelBody,
+  ClientSection,
+  TableFrame,
+} from './-components/client-detail-ui'
 
 export const Route = createFileRoute('/dashboard/clients/$id/users')({
   component: ClientUsersTab,
@@ -219,12 +220,12 @@ function ClientUsersTab() {
     setInviteError(null)
 
     if (!inviteEmail.trim()) {
-      setInviteError('Email é obrigatório')
+      setInviteError('Email é obrigatório.')
       return
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail)) {
-      setInviteError('Email invalido')
+      setInviteError('Email inválido.')
       return
     }
 
@@ -257,69 +258,96 @@ function ClientUsersTab() {
   const visibleMembers = members.filter((member) =>
     isPortalVisibleMemberRole(member.role),
   )
+  const pendingInvitations = invitations.filter(
+    (invitation) =>
+      invitation.status === 'pending' &&
+      new Date(invitation.expiresAt) >= new Date(),
+  )
 
   return (
-    <div className="space-y-6">
-      {/* Portal Users Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle>Usuários do Portal</CardTitle>
-              <CardDescription>
-                Usuários com acesso ao portal do cliente.
-              </CardDescription>
-            </div>
-            <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-              <DialogTrigger render={<Button />}>
-                <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
-                Convidar Usuário
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Convidar Usuário</DialogTitle>
-                  <DialogDescription>
-                    Envie um convite por email para um novo usuário do portal.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleInvite}>
-                  <FieldGroup>
-                    <Field>
-                      <FieldLabel htmlFor="invite-email">Email</FieldLabel>
-                      <Input
-                        id="invite-email"
-                        type="email"
-                        value={inviteEmail}
-                        onChange={(e) => {
-                          setInviteEmail(e.target.value)
-                          setInviteError(null)
-                        }}
-                        placeholder="usuario@empresa.com"
-                        disabled={inviteMutation.isPending}
-                      />
-                      {inviteError && <FieldError>{inviteError}</FieldError>}
-                    </Field>
-                  </FieldGroup>
-                  <DialogFooter className="mt-6">
-                    <DialogClose render={<Button variant="outline" />}>
-                      Cancelar
-                    </DialogClose>
-                    <Button type="submit" disabled={inviteMutation.isPending}>
-                      {inviteMutation.isPending
-                        ? 'Enviando...'
-                        : 'Enviar Convite'}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-        <CardContent>
+    <ClientPanel
+      eyebrow="Portal"
+      title="Acesso do Cliente"
+      description="Gerencie quem entra no portal, acompanhe convites enviados e mantenha o acesso do cliente enxuto."
+      icon={<HugeiconsIcon icon={UserMultipleIcon} className="size-5" />}
+      action={
+        <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+          <DialogTrigger render={<Button />}>
+            <HugeiconsIcon
+              icon={PlusSignIcon}
+              className="mr-2 size-4"
+              aria-hidden="true"
+            />
+            Convidar Usuário
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Convidar Usuário</DialogTitle>
+              <DialogDescription>
+                Envie um convite por email para um novo usuário do portal.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleInvite}>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="invite-email">Email</FieldLabel>
+                  <Input
+                    id="invite-email"
+                    name="invite-email"
+                    type="email"
+                    autoComplete="email"
+                    value={inviteEmail}
+                    onChange={(e) => {
+                      setInviteEmail(e.target.value)
+                      setInviteError(null)
+                    }}
+                    placeholder="usuario@empresa.com"
+                    disabled={inviteMutation.isPending}
+                    aria-invalid={inviteError ? true : undefined}
+                  />
+                  {inviteError && <FieldError>{inviteError}</FieldError>}
+                </Field>
+              </FieldGroup>
+              <DialogFooter className="mt-6">
+                <DialogClose render={<Button variant="outline" />}>
+                  Cancelar
+                </DialogClose>
+                <Button type="submit" disabled={inviteMutation.isPending}>
+                  {inviteMutation.isPending ? 'Enviando…' : 'Enviar Convite'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      }
+    >
+      <ClientMetricStrip className="xl:grid-cols-3">
+        <ClientMetric
+          icon={<HugeiconsIcon icon={UserMultipleIcon} className="size-4" />}
+          label="Usuários Ativos"
+          value={String(visibleMembers.length)}
+        />
+        <ClientMetric
+          icon={<HugeiconsIcon icon={Mail01Icon} className="size-4" />}
+          label="Convites Enviados"
+          value={String(invitations.length)}
+        />
+        <ClientMetric
+          icon={<HugeiconsIcon icon={SentIcon} className="size-4" />}
+          label="Convites Pendentes"
+          value={String(pendingInvitations.length)}
+        />
+      </ClientMetricStrip>
+      <ClientPanelBody className="space-y-8">
+        <ClientSection
+          icon={<HugeiconsIcon icon={UserMultipleIcon} className="size-4" />}
+          title="Usuários"
+          description="Pessoas com acesso ativo ao portal do cliente."
+        >
           {membersLoading ? (
             <MembersTableSkeleton />
           ) : visibleMembers.length === 0 ? (
-            <Empty className="py-8">
+            <Empty className="rounded-none border-x-0 border-y border-solid border-border/70 py-10">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <HugeiconsIcon icon={UserMultipleIcon} />
@@ -331,7 +359,7 @@ function ClientUsersTab() {
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="rounded-md border">
+            <TableFrame>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -360,6 +388,7 @@ function ClientUsersTab() {
                           <AlertDialog>
                             <AlertDialogTrigger
                               render={<Button variant="ghost" size="icon-sm" />}
+                              aria-label={`Remover ${m.userName}`}
                             >
                               <HugeiconsIcon
                                 icon={Delete02Icon}
@@ -396,24 +425,19 @@ function ClientUsersTab() {
                   ))}
                 </TableBody>
               </Table>
-            </div>
+            </TableFrame>
           )}
-        </CardContent>
-      </Card>
+        </ClientSection>
 
-      {/* Invitations Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Convites</CardTitle>
-          <CardDescription>
-            Convites enviados para acesso ao portal.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <ClientSection
+          icon={<HugeiconsIcon icon={Mail01Icon} className="size-4" />}
+          title="Convites"
+          description="Histórico de convites enviados para novos usuários."
+        >
           {invitationsLoading ? (
             <InvitationsTableSkeleton />
           ) : invitations.length === 0 ? (
-            <Empty className="py-8">
+            <Empty className="rounded-none border-x-0 border-y border-solid border-border/70 py-10">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <HugeiconsIcon icon={Mail01Icon} />
@@ -425,7 +449,7 @@ function ClientUsersTab() {
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="rounded-md border">
+            <TableFrame>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -457,7 +481,7 @@ function ClientUsersTab() {
                                 size="icon-sm"
                                 onClick={() => resendMutation.mutate(inv.id)}
                                 disabled={resendMutation.isPending}
-                                title="Reenviar"
+                                aria-label={`Reenviar convite para ${inv.email}`}
                               >
                                 <HugeiconsIcon
                                   icon={SentIcon}
@@ -469,6 +493,7 @@ function ClientUsersTab() {
                                   render={
                                     <Button variant="ghost" size="icon-sm" />
                                   }
+                                  aria-label={`Cancelar convite para ${inv.email}`}
                                 >
                                   <HugeiconsIcon
                                     icon={Delete02Icon}
@@ -511,17 +536,17 @@ function ClientUsersTab() {
                   })}
                 </TableBody>
               </Table>
-            </div>
+            </TableFrame>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </ClientSection>
+      </ClientPanelBody>
+    </ClientPanel>
   )
 }
 
 function MembersTableSkeleton() {
   return (
-    <div className="rounded-md border">
+    <TableFrame>
       <Table>
         <TableHeader>
           <TableRow>
@@ -550,13 +575,13 @@ function MembersTableSkeleton() {
           ))}
         </TableBody>
       </Table>
-    </div>
+    </TableFrame>
   )
 }
 
 function InvitationsTableSkeleton() {
   return (
-    <div className="rounded-md border">
+    <TableFrame>
       <Table>
         <TableHeader>
           <TableRow>
@@ -585,6 +610,6 @@ function InvitationsTableSkeleton() {
           ))}
         </TableBody>
       </Table>
-    </div>
+    </TableFrame>
   )
 }

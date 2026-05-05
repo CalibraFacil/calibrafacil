@@ -3,17 +3,18 @@ import { useCallback, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
+import {
+  ArrowDown01Icon,
+  Building02Icon,
+  DollarCircleIcon,
+  Invoice01Icon,
+  Location01Icon,
+  Mail01Icon,
+  UserAccountIcon,
+} from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 import { formatMoney } from '@calibra-facil/shared'
 import { api } from '@/utils/api'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import {
   Field,
   FieldDescription,
@@ -38,6 +39,13 @@ import {
   type ViaCepAddress,
   useViaCepLookup,
 } from '@/lib/viacep'
+import {
+  ClientMetric,
+  ClientMetricStrip,
+  ClientPanel,
+  ClientPanelBody,
+  ClientSection,
+} from './-components/client-detail-ui'
 
 export const Route = createFileRoute('/dashboard/clients/$id/info')({
   component: ClientInfoTab,
@@ -91,11 +99,9 @@ function ClientInfoTab() {
 
   if (!customer) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          Cliente não encontrado
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl bg-card px-6 py-10 text-center text-sm text-muted-foreground shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-foreground/10 dark:shadow-none">
+        Cliente não encontrado
+      </div>
     )
   }
 
@@ -173,7 +179,7 @@ function ClientInfoForm({
     setFormError(null)
 
     if (!name.trim()) {
-      setFormError('Nome e obrigatorio')
+      setFormError('Informe o nome ou razão social do cliente.')
       return
     }
 
@@ -204,63 +210,76 @@ function ClientInfoForm({
     onResolved: handleViaCepResolved,
   })
 
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Resumo financeiro</CardTitle>
-          <CardDescription>
-            Contexto operacional de aberto e vencido para atendimento e gestão
-            comercial.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryItem
-            label="Documentos em aberto"
-            value={String(customer.financialSummary?.openDocumentsCount ?? 0)}
-          />
-          <SummaryItem
-            label="Documentos vencidos"
-            value={String(
-              customer.financialSummary?.overdueDocumentsCount ?? 0,
-            )}
-          />
-          <SummaryItem
-            label="Saldo em aberto"
-            value={formatMoney(
-              customer.financialSummary?.openBalanceCents ?? 0,
-            )}
-          />
-          <SummaryItem
-            label="Saldo vencido"
-            value={formatMoney(
-              customer.financialSummary?.overdueBalanceCents ?? 0,
-            )}
-          />
-        </CardContent>
-      </Card>
+  const financialSummary = customer.financialSummary
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Informações do Cliente</CardTitle>
-          <CardDescription>
-            Dados cadastrais e informações de contato.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit}>
-            <FieldGroup>
+  return (
+    <ClientPanel
+      eyebrow="Cadastro"
+      title="Informações do Cliente"
+      description="Dados cadastrais, contato principal e endereço usados no atendimento, nas ordens de serviço e nos documentos financeiros."
+      icon={<HugeiconsIcon icon={UserAccountIcon} className="size-5" />}
+      action={
+        <Button
+          type="submit"
+          form="client-info-form"
+          disabled={updateMutation.isPending}
+          className="w-full active:scale-[0.96] transition-[background-color,color,box-shadow,border-color,transform] sm:w-auto"
+        >
+          {updateMutation.isPending ? 'Salvando…' : 'Salvar Alterações'}
+        </Button>
+      }
+    >
+      <ClientMetricStrip>
+        <ClientMetric
+          icon={<HugeiconsIcon icon={Invoice01Icon} className="size-4" />}
+          label="Documentos em Aberto"
+          value={String(financialSummary?.openDocumentsCount ?? 0)}
+        />
+        <ClientMetric
+          icon={<HugeiconsIcon icon={Invoice01Icon} className="size-4" />}
+          label="Documentos Vencidos"
+          tone={
+            (financialSummary?.overdueDocumentsCount ?? 0) > 0
+              ? 'danger'
+              : 'default'
+          }
+          value={String(financialSummary?.overdueDocumentsCount ?? 0)}
+        />
+        <ClientMetric
+          icon={<HugeiconsIcon icon={DollarCircleIcon} className="size-4" />}
+          label="Saldo em Aberto"
+          value={formatMoney(financialSummary?.openBalanceCents ?? 0)}
+        />
+        <ClientMetric
+          icon={<HugeiconsIcon icon={DollarCircleIcon} className="size-4" />}
+          label="Saldo Vencido"
+          tone={financialSummary?.overdueBalanceFlag ? 'danger' : 'default'}
+          value={formatMoney(financialSummary?.overdueBalanceCents ?? 0)}
+        />
+      </ClientMetricStrip>
+
+      <form id="client-info-form" onSubmit={handleSubmit}>
+        <ClientPanelBody className="space-y-8">
+          <ClientSection
+            icon={<HugeiconsIcon icon={Building02Icon} className="size-4" />}
+            title="Identificação"
+            description="Dados que identificam o cliente em propostas, ordens e certificados."
+          >
+            <FieldGroup className="gap-5">
               <Field>
                 <FieldLabel htmlFor="name">Nome / Razão Social</FieldLabel>
                 <Input
                   id="name"
+                  name="name"
+                  autoComplete="organization"
                   value={name}
                   onChange={(e) => {
                     setName(e.target.value)
                     setFormError(null)
                   }}
                   disabled={updateMutation.isPending}
-                  placeholder="Nome da empresa ou pessoa"
+                  placeholder="Ex.: Empresa Modelo Ltda.…"
+                  aria-invalid={formError ? true : undefined}
                 />
                 {formError && <FieldError>{formError}</FieldError>}
               </Field>
@@ -269,233 +288,282 @@ function ClientInfoForm({
                 <FieldLabel htmlFor="taxId">CNPJ / CPF</FieldLabel>
                 <MaskedInput
                   id="taxId"
+                  name="tax-id"
+                  autoComplete="off"
+                  inputMode="numeric"
                   maskOptions={cpfCnpjMask}
                   value={taxId}
                   onInput={(e) => setTaxId(e.currentTarget.value)}
                   disabled={updateMutation.isPending}
-                  placeholder="00.000.000/0000-00"
+                  placeholder="Ex.: 00.000.000/0000-00…"
+                  spellCheck={false}
                 />
                 <FieldDescription>
                   Documento de identificação fiscal.
                 </FieldDescription>
               </Field>
+            </FieldGroup>
+          </ClientSection>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="email">Email</FieldLabel>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={updateMutation.isPending}
-                    placeholder="contato@empresa.com"
+          <ClientSection
+            icon={<HugeiconsIcon icon={Mail01Icon} className="size-4" />}
+            title="Contato"
+            description="Canal principal para atendimento e acesso ao portal do cliente."
+          >
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={updateMutation.isPending}
+                  placeholder="Ex.: contato@empresa.com…"
+                  spellCheck={false}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="phone">Telefone</FieldLabel>
+                <MaskedInput
+                  id="phone"
+                  name="tel"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  maskOptions={brazilPhoneMask}
+                  value={phone}
+                  onInput={(e) => setPhone(e.currentTarget.value)}
+                  disabled={updateMutation.isPending}
+                  placeholder="Ex.: (11) 99999-9999…"
+                />
+              </Field>
+            </div>
+          </ClientSection>
+
+          <Collapsible open={addressOpen} onOpenChange={setAddressOpen}>
+            <div className="border-t border-border/70 pt-6">
+              <CollapsibleTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    className="min-h-10 w-full justify-between gap-4 px-0 text-left hover:bg-transparent active:scale-[0.96] transition-[color,transform]"
                   />
-                </Field>
+                }
+              >
+                <span className="flex min-w-0 items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground ring-1 ring-foreground/10"
+                  >
+                    <HugeiconsIcon icon={Location01Icon} className="size-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">Endereço</span>
+                    <span className="mt-0.5 block text-sm font-normal text-muted-foreground text-pretty">
+                      CEP, logradouro e localização para coleta, entrega e
+                      emissão de documentos.
+                    </span>
+                  </span>
+                </span>
+                <HugeiconsIcon
+                  icon={ArrowDown01Icon}
+                  aria-hidden="true"
+                  className={`size-4 shrink-0 text-muted-foreground transition-transform ${addressOpen ? 'rotate-180' : ''}`}
+                />
+              </CollapsibleTrigger>
 
-                <Field>
-                  <FieldLabel htmlFor="phone">Telefone</FieldLabel>
-                  <MaskedInput
-                    id="phone"
-                    type="tel"
-                    inputMode="tel"
-                    maskOptions={brazilPhoneMask}
-                    value={phone}
-                    onInput={(e) => setPhone(e.currentTarget.value)}
-                    disabled={updateMutation.isPending}
-                    placeholder="(11) 99999-9999"
-                  />
-                </Field>
-              </div>
-
-              <Collapsible open={addressOpen} onOpenChange={setAddressOpen}>
-                <CollapsibleTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      type="button"
-                      className="flex w-full items-center justify-between px-0 hover:bg-transparent"
+              <CollapsibleContent className="space-y-5 pt-5">
+                <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1fr)]">
+                  <Field>
+                    <FieldLabel htmlFor="cep">CEP</FieldLabel>
+                    <MaskedInput
+                      id="cep"
+                      name="postal-code"
+                      autoComplete="postal-code"
+                      inputMode="numeric"
+                      maskOptions={cepMask}
+                      value={address.cep || ''}
+                      onInput={(e) =>
+                        updateAddress('cep', e.currentTarget.value)
+                      }
+                      disabled={updateMutation.isPending}
+                      placeholder="Ex.: 00000-000…"
+                      aria-describedby={
+                        cepLookup.message
+                          ? 'client-info-cep-lookup-description'
+                          : undefined
+                      }
                     />
-                  }
-                >
-                  <span className="text-sm font-medium">Endereço</span>
-                  <HugeiconsIcon
-                    icon={ArrowDown01Icon}
-                    className={`size-4 transition-transform ${addressOpen ? 'rotate-180' : ''}`}
-                  />
-                </CollapsibleTrigger>
-                <CollapsibleContent className="space-y-4 pt-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="cep">CEP</FieldLabel>
-                      <MaskedInput
-                        id="cep"
-                        maskOptions={cepMask}
-                        value={address.cep || ''}
-                        onInput={(e) =>
-                          updateAddress('cep', e.currentTarget.value)
-                        }
-                        disabled={updateMutation.isPending}
-                        placeholder="00000-000"
-                        aria-describedby={
-                          cepLookup.message
-                            ? 'client-info-cep-lookup-description'
+                    {cepLookup.message && (
+                      <FieldDescription
+                        id="client-info-cep-lookup-description"
+                        aria-live="polite"
+                        className={
+                          cepLookup.status === 'not-found' ||
+                          cepLookup.status === 'error'
+                            ? 'text-destructive'
                             : undefined
                         }
-                      />
-                      {cepLookup.message && (
-                        <FieldDescription
-                          id="client-info-cep-lookup-description"
-                          aria-live="polite"
-                          className={
-                            cepLookup.status === 'not-found' ||
-                            cepLookup.status === 'error'
-                              ? 'text-destructive'
-                              : undefined
-                          }
-                        >
-                          {cepLookup.isLoading && (
-                            <Spinner className="mr-1.5 inline size-3" />
-                          )}
-                          {cepLookup.message}
-                        </FieldDescription>
-                      )}
-                    </Field>
-
-                    <Field>
-                      <FieldLabel htmlFor="number">Número</FieldLabel>
-                      <Input
-                        id="number"
-                        value={address.number || ''}
-                        onChange={(e) =>
-                          updateAddress('number', e.target.value)
-                        }
-                        disabled={updateMutation.isPending}
-                        placeholder="123"
-                      />
-                    </Field>
-
-                    <Field>
-                      <FieldLabel htmlFor="complement">Complemento</FieldLabel>
-                      <Input
-                        id="complement"
-                        value={address.complement || ''}
-                        onChange={(e) =>
-                          updateAddress('complement', e.target.value)
-                        }
-                        disabled={updateMutation.isPending}
-                        placeholder="Sala 4, bloco B"
-                      />
-                    </Field>
-                  </div>
+                      >
+                        {cepLookup.isLoading && (
+                          <Spinner className="mr-1.5 inline size-3" />
+                        )}
+                        {cepLookup.message}
+                      </FieldDescription>
+                    )}
+                  </Field>
 
                   <Field>
-                    <FieldLabel htmlFor="street">Rua</FieldLabel>
+                    <FieldLabel htmlFor="number">Número</FieldLabel>
                     <Input
-                      id="street"
-                      value={address.street || ''}
-                      onChange={(e) => updateAddress('street', e.target.value)}
+                      id="number"
+                      name="address-line2"
+                      autoComplete="address-line2"
+                      value={address.number || ''}
+                      onChange={(e) => updateAddress('number', e.target.value)}
                       disabled={updateMutation.isPending}
-                      placeholder="Nome da rua"
+                      placeholder="Ex.: 123…"
                     />
                   </Field>
 
                   <Field>
+                    <FieldLabel htmlFor="complement">Complemento</FieldLabel>
+                    <Input
+                      id="complement"
+                      name="address-complement"
+                      autoComplete="off"
+                      value={address.complement || ''}
+                      onChange={(e) =>
+                        updateAddress('complement', e.target.value)
+                      }
+                      disabled={updateMutation.isPending}
+                      placeholder="Ex.: Sala 4, bloco B…"
+                    />
+                  </Field>
+                </div>
+
+                <Field>
+                  <FieldLabel htmlFor="street">Rua</FieldLabel>
+                  <Input
+                    id="street"
+                    name="street-address"
+                    autoComplete="street-address"
+                    value={address.street || ''}
+                    onChange={(e) => updateAddress('street', e.target.value)}
+                    disabled={updateMutation.isPending}
+                    placeholder="Ex.: Rua das Calibrações…"
+                  />
+                </Field>
+
+                <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6rem]">
+                  <Field>
                     <FieldLabel htmlFor="neighbourhood">Bairro</FieldLabel>
                     <Input
                       id="neighbourhood"
+                      name="address-level3"
+                      autoComplete="address-level3"
                       value={address.neighbourhood || ''}
                       onChange={(e) =>
                         updateAddress('neighbourhood', e.target.value)
                       }
                       disabled={updateMutation.isPending}
-                      placeholder="Nome do bairro"
+                      placeholder="Ex.: Centro…"
                     />
                   </Field>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="city">Cidade</FieldLabel>
-                      <Input
-                        id="city"
-                        value={address.city || ''}
-                        onChange={(e) => updateAddress('city', e.target.value)}
-                        disabled={updateMutation.isPending}
-                        placeholder="São Paulo"
-                      />
-                    </Field>
+                  <Field>
+                    <FieldLabel htmlFor="city">Cidade</FieldLabel>
+                    <Input
+                      id="city"
+                      name="address-level2"
+                      autoComplete="address-level2"
+                      value={address.city || ''}
+                      onChange={(e) => updateAddress('city', e.target.value)}
+                      disabled={updateMutation.isPending}
+                      placeholder="Ex.: São Paulo…"
+                    />
+                  </Field>
 
-                    <Field>
-                      <FieldLabel htmlFor="state">Estado</FieldLabel>
-                      <Input
-                        id="state"
-                        value={address.state || ''}
-                        onChange={(e) => updateAddress('state', e.target.value)}
-                        disabled={updateMutation.isPending}
-                        placeholder="SP"
-                        maxLength={2}
-                      />
-                    </Field>
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-
-              <div className="flex justify-end pt-4">
-                <Button type="submit" disabled={updateMutation.isPending}>
-                  {updateMutation.isPending
-                    ? 'Salvando...'
-                    : 'Salvar alterações'}
-                </Button>
-              </div>
-            </FieldGroup>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function SummaryItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border p-4">
-      <div className="text-muted-foreground text-xs uppercase tracking-wide">
-        {label}
-      </div>
-      <div className="mt-2 font-medium">{value}</div>
-    </div>
+                  <Field>
+                    <FieldLabel htmlFor="state">Estado</FieldLabel>
+                    <Input
+                      id="state"
+                      name="address-level1"
+                      autoComplete="address-level1"
+                      value={address.state || ''}
+                      onChange={(e) =>
+                        updateAddress('state', e.target.value.toUpperCase())
+                      }
+                      disabled={updateMutation.isPending}
+                      placeholder="Ex.: SP…"
+                      maxLength={2}
+                    />
+                  </Field>
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+        </ClientPanelBody>
+      </form>
+    </ClientPanel>
   )
 }
 
 function InfoSkeleton() {
   return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-4 w-64 mt-2" />
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-9 w-full" />
+    <div className="overflow-hidden rounded-2xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.05),0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-foreground/10 dark:shadow-none">
+      <div className="border-b border-border/70 px-5 py-5 sm:px-6">
+        <div className="flex items-start gap-3">
+          <Skeleton className="size-11 rounded-xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-6 w-56" />
+            <Skeleton className="h-4 w-80 max-w-full" />
+          </div>
         </div>
+      </div>
+      <div className="grid divide-y divide-border/70 border-b border-border/70 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="px-5 py-4 sm:px-6">
+            <Skeleton className="h-4 w-36" />
+            <Skeleton className="mt-3 h-6 w-20" />
+          </div>
+        ))}
+      </div>
+      <div className="space-y-8 px-5 py-6 sm:px-6 sm:py-7">
+        <SkeletonFormSection />
+        <SkeletonFormSection />
+        <Skeleton className="h-28 rounded-xl" />
+      </div>
+    </div>
+  )
+}
+
+function SkeletonFormSection() {
+  return (
+    <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
+      <div className="flex gap-3">
+        <Skeleton className="size-9 rounded-lg" />
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+      </div>
+      <div className="grid gap-5 sm:grid-cols-2">
         <div className="space-y-2">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-9 w-full" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-9 w-full" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-9 w-full" />
-          </div>
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-9 w-full" />
         </div>
-        <div className="flex justify-end">
-          <Skeleton className="h-9 w-32" />
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

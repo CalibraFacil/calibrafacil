@@ -3,16 +3,14 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Clock01Icon } from '@hugeicons/core-free-icons'
+import {
+  CheckmarkBadge01Icon,
+  Clock01Icon,
+  LegalDocument01Icon,
+  Shield01Icon,
+} from '@hugeicons/core-free-icons'
 
 import { api } from '@/utils/api'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -59,6 +57,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  ClientMetric,
+  ClientMetricStrip,
+  ClientPanel,
+  ClientPanelBody,
+  ClientSection,
+  TableFrame,
+} from './-components/client-detail-ui'
 
 export const Route = createFileRoute('/dashboard/clients/$id/compliance')({
   component: ClientComplianceTab,
@@ -151,11 +157,11 @@ function ClientComplianceTab() {
 
   const formatAction = (action: string) => {
     const actions: Record<string, string> = {
-      create: 'Criacao',
-      update: 'Atualizacao',
-      compliance_change: 'Alteracao de conformidade',
-      user_invited: 'Usuario convidado',
-      user_removed: 'Usuario removido',
+      create: 'Criação',
+      update: 'Atualização',
+      compliance_change: 'Alteração de conformidade',
+      user_invited: 'Usuário convidado',
+      user_removed: 'Usuário removido',
       invitation_canceled: 'Convite cancelado',
       delete: 'Exclusao',
     }
@@ -178,11 +184,9 @@ function ClientComplianceTab() {
 
   if (!customer) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          Cliente não encontrado
-        </CardContent>
-      </Card>
+      <div className="py-8 text-center text-sm text-muted-foreground">
+        Cliente não encontrado
+      </div>
     )
   }
 
@@ -272,7 +276,9 @@ function ClientComplianceForm({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer', customerId] })
-      queryClient.invalidateQueries({ queryKey: ['customer-audit-log', customerId] })
+      queryClient.invalidateQueries({
+        queryKey: ['customer-audit-log', customerId],
+      })
       toast.success('Conformidade atualizada!')
       setSaveDialogOpen(false)
       setReason('')
@@ -286,7 +292,7 @@ function ClientComplianceForm({
     setReasonError(null)
 
     if (!reason.trim()) {
-      setReasonError('Motivo e obrigatorio para alteracoes de conformidade')
+      setReasonError('Motivo é obrigatório para alterações de conformidade.')
       return
     }
 
@@ -306,16 +312,46 @@ function ClientComplianceForm({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Qualification Status Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Status de Qualificação</CardTitle>
-          <CardDescription>
-            Gerenciamento do status de qualificação conforme ISO 17025:2017.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <ClientPanel
+      eyebrow="Conformidade"
+      title="Qualificação e Auditoria"
+      description="Controle a qualificação ISO 17025, o reconhecimento comercial e o histórico de alterações do cliente."
+      icon={<HugeiconsIcon icon={Shield01Icon} className="size-5" />}
+    >
+      <ClientMetricStrip className="xl:grid-cols-3">
+        <ClientMetric
+          icon={
+            <HugeiconsIcon icon={CheckmarkBadge01Icon} className="size-4" />
+          }
+          label="Status"
+          value={getStatusLabel(qualificationStatus)}
+          tone={
+            qualificationStatus === 'suspended' ||
+            qualificationStatus === 'expired'
+              ? 'danger'
+              : 'default'
+          }
+        />
+        <ClientMetric
+          icon={<HugeiconsIcon icon={LegalDocument01Icon} className="size-4" />}
+          label="Contrato Ativo"
+          value={activeCommercialAgreement ? 'Sim' : 'Não'}
+        />
+        <ClientMetric
+          icon={<HugeiconsIcon icon={Clock01Icon} className="size-4" />}
+          label="Registros"
+          value={String(auditLogData?.data.length ?? 0)}
+        />
+      </ClientMetricStrip>
+
+      <ClientPanelBody className="space-y-8">
+        <ClientSection
+          icon={
+            <HugeiconsIcon icon={CheckmarkBadge01Icon} className="size-4" />
+          }
+          title="Status de Qualificação"
+          description="Gerenciamento do status de qualificação conforme ISO 17025:2017."
+        >
           <FieldGroup>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Field>
@@ -365,24 +401,18 @@ function ClientComplianceForm({
               </Field>
             </div>
           </FieldGroup>
-        </CardContent>
-      </Card>
+        </ClientSection>
 
-      {/* Contract Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Contrato e Acordos</CardTitle>
-          <CardDescription>
-            O contrato comercial ativo vem do módulo Financeiro; aqui ficam o
-            reconhecimento do cliente e o controle de qualificação.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <ClientSection
+          icon={<HugeiconsIcon icon={LegalDocument01Icon} className="size-4" />}
+          title="Contrato e Acordos"
+          description="O contrato comercial ativo vem do módulo Financeiro; aqui ficam o reconhecimento do cliente e o controle de qualificação."
+        >
           <FieldGroup>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Field>
                 <FieldLabel>Contrato ativo</FieldLabel>
-                <div className="rounded-md border px-3 py-2 text-sm">
+                <div className="rounded-md bg-muted/30 px-3 py-2 text-sm ring-1 ring-foreground/10">
                   {activeCommercialAgreement ? (
                     <div className="space-y-1">
                       <div className="font-medium">
@@ -414,7 +444,7 @@ function ClientComplianceForm({
 
               <Field>
                 <FieldLabel>Vigência contratual</FieldLabel>
-                <div className="rounded-md border px-3 py-2 text-sm">
+                <div className="rounded-md bg-muted/30 px-3 py-2 text-sm ring-1 ring-foreground/10">
                   {activeCommercialAgreement ? (
                     <div className="space-y-1">
                       <div>
@@ -431,8 +461,8 @@ function ClientComplianceForm({
                     </div>
                   ) : (
                     <span className="text-muted-foreground">
-                      Defina e ative um contrato no Financeiro para refletir
-                      a vigência aqui.
+                      Defina e ative um contrato no Financeiro para refletir a
+                      vigência aqui.
                     </span>
                   )}
                 </div>
@@ -449,8 +479,8 @@ function ClientComplianceForm({
                   onChange={(e) => setContractSignedAt(e.target.value)}
                 />
                 <FieldDescription>
-                  Data em que o cliente reconheceu formalmente os requisitos
-                  de qualidade do contrato ativo.
+                  Data em que o cliente reconheceu formalmente os requisitos de
+                  qualidade do contrato ativo.
                 </FieldDescription>
               </Field>
             </div>
@@ -528,7 +558,7 @@ function ClientComplianceForm({
                       disabled={updateComplianceMutation.isPending}
                     >
                       {updateComplianceMutation.isPending
-                        ? 'Salvando...'
+                        ? 'Salvando…'
                         : 'Confirmar'}
                     </Button>
                   </DialogFooter>
@@ -536,22 +566,17 @@ function ClientComplianceForm({
               </Dialog>
             </div>
           </FieldGroup>
-        </CardContent>
-      </Card>
+        </ClientSection>
 
-      {/* Audit Log Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Historico de Alterações</CardTitle>
-          <CardDescription>
-            Registro de auditoria conforme ISO 17025:2017 (Cláusula 8.4).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <ClientSection
+          icon={<HugeiconsIcon icon={Clock01Icon} className="size-4" />}
+          title="Histórico de Alterações"
+          description="Registro de auditoria conforme ISO 17025:2017 (cláusula 8.4)."
+        >
           {auditLoading ? (
             <AuditLogSkeleton />
           ) : !auditLogData?.data.length ? (
-            <Empty className="py-8">
+            <Empty className="rounded-none border-x-0 border-y border-solid border-border/70 py-10">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <HugeiconsIcon icon={Clock01Icon} />
@@ -563,7 +588,7 @@ function ClientComplianceForm({
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="rounded-md border">
+            <TableFrame>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -601,56 +626,48 @@ function ClientComplianceForm({
                   ))}
                 </TableBody>
               </Table>
-            </div>
+            </TableFrame>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </ClientSection>
+      </ClientPanelBody>
+    </ClientPanel>
   )
 }
 
 function ComplianceSkeleton() {
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="h-4 w-64 mt-2" />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-9 w-full" />
-              </div>
-            ))}
+      <div className="px-1">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="mt-2 h-4 w-64" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-9 w-full" />
           </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-6 w-40" />
-          <Skeleton className="h-4 w-56 mt-2" />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-9 w-full" />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+        ))}
+      </div>
+      <div className="border-t border-border/70 pt-6">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="mt-2 h-4 w-56" />
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
 
 function AuditLogSkeleton() {
   return (
-    <div className="rounded-md border">
+    <TableFrame>
       <Table>
         <TableHeader>
           <TableRow>
@@ -682,6 +699,6 @@ function AuditLogSkeleton() {
           ))}
         </TableBody>
       </Table>
-    </div>
+    </TableFrame>
   )
 }
