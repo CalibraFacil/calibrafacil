@@ -735,11 +735,6 @@ importers:
 
 packages:
 
-  git+git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549:
-    resolution: {commit: d01b4c04fda3f5cbc95f6ceb70b1a4124ff16557, repo: git@github.com:CalibraFacil/math-engine.git, type: git}
-    version: 0.2.0-rc.4
-    engines: {node: '>=20'}
-
   '@acemir/cssom@0.9.29':
     resolution: {integrity: sha512-G90x0VW+9nW4dFajtjCoT+NM0scAfH9Mb08IcjgFHYbfiL/lU04dTF9JuVOi3/OH+DJCQdcIseSXkdCB9Ky6JA==}
 
@@ -5104,6 +5099,12 @@ packages:
     resolution: {integrity: sha512-b1O07XYq8eRuVzBNgJLstU6FYc1tS6wnMtF1I1D9lE8LxZSOGZ7LhxN54yPP6mGw5f2CkXY2BQUL9Fx41qvcIg==}
     engines: {node: '>= 14'}
 
+  git+git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549:
+    resolution: {commit: d01b4c04fda3f5cbc95f6ceb70b1a4124ff16557, repo: git@github.com:CalibraFacil/math-engine.git, type: git}
+    name: '@calibra-facil/math-engine'
+    version: 0.2.0-rc.4
+    engines: {node: '>=20'}
+
   github-slugger@2.0.0:
     resolution: {integrity: sha512-IaOQ9puYtjrkq7Y0Ygl9KDZnrf/aiUJYUpVf89y8kyaxbRG7Y1SrX/jaumrv81vc61+kiMempujsM3Yw7w5qcw==}
 
@@ -7999,8 +8000,6 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
 snapshots:
-
-  git+git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549: {}
 
   '@acemir/cssom@0.9.29': {}
 
@@ -12836,6 +12835,8 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
+
+  git+git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549: {}
 
   github-slugger@2.0.0: {}
 
