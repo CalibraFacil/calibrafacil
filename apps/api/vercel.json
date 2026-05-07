@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "node ../../scripts/setup-private-git-ssh.mjs --required && pnpm install --frozen-lockfile",
   "buildCommand": "pnpm build:vercel-functions",
   "regions": ["gru1"],
   "functions": {
