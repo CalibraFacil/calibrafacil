@@ -1910,11 +1910,44 @@ export type MethodFormula = {
  * Validation rule for pass/fail criteria.
  * Defines acceptance criteria per ISO 17025.
  */
+export type MethodValidationOperator = "<" | "<=" | ">" | ">=" | "==" | "!=";
+
 export type MethodValidation = {
-  expression: string; // Boolean expression, e.g., "abs(error) < tolerance"
+  leftExpression: string;
+  operator: MethodValidationOperator;
+  rightExpression: string;
   message: string; // Message shown on failure
   severity: "error" | "warning";
 };
+
+export type MethodVariableBinding =
+  | {
+      key: string;
+      label?: string;
+      source: "data_field";
+      fieldKey: string;
+    }
+  | {
+      key: string;
+      label?: string;
+      source: "table_statistic";
+      fieldKey: string;
+      columnKey: string;
+      statistic: "mean" | "sample_stddev" | "count" | "min" | "max";
+    }
+  | {
+      key: string;
+      label?: string;
+      source: "environment";
+      field: "temperature" | "humidity" | "pressure";
+    }
+  | {
+      key: string;
+      label?: string;
+      source: "standard";
+      standardId?: number;
+      valueKey: string;
+    };
 
 /**
  * Default Type B uncertainty component for the method.
@@ -1979,6 +2012,10 @@ export const calibrationMethod = pgTable(
     status: text("status").$type<MethodStatus>().default("DRAFT").notNull(),
     // JSONB fields for method definition
     dataFields: jsonb("data_fields").$type<MethodInputField[]>().notNull(),
+    variableBindings: jsonb("variable_bindings")
+      .$type<MethodVariableBinding[]>()
+      .default([])
+      .notNull(),
     formulas: jsonb("formulas").$type<MethodFormula[]>().default([]).notNull(),
     validations: jsonb("validations")
       .$type<MethodValidation[]>()
@@ -2448,6 +2485,7 @@ export type MethodSnapshot = {
   methodName: string;
   methodVersion: number;
   dataFields: MethodInputField[];
+  variableBindings: MethodVariableBinding[];
   formulas: MethodFormula[];
   validations: MethodValidation[];
   uncertaintyParams: MethodTypeBComponent[];

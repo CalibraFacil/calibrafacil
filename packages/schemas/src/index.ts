@@ -672,13 +672,84 @@ export type MethodFormula = z.infer<typeof MethodFormulaSchema>;
 /**
  * Validation rule for pass/fail criteria
  */
+export const MethodValidationOperatorSchema = z.enum([
+  "<",
+  "<=",
+  ">",
+  ">=",
+  "==",
+  "!=",
+]);
+export type MethodValidationOperator = z.infer<
+  typeof MethodValidationOperatorSchema
+>;
+
 export const MethodValidationSchema = z.object({
-  expression: z.string().min(1, "Expressão é obrigatória"),
+  leftExpression: z.string().min(1, "Expressão esquerda é obrigatória"),
+  operator: MethodValidationOperatorSchema,
+  rightExpression: z.string().min(1, "Expressão direita é obrigatória"),
   message: z.string().min(1, "Mensagem é obrigatória"),
   severity: z.enum(["error", "warning"]),
 });
 
 export type MethodValidation = z.infer<typeof MethodValidationSchema>;
+
+export const MethodVariableBindingSchema = z.discriminatedUnion("source", [
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("data_field"),
+    fieldKey: z.string().min(1, "Campo é obrigatório"),
+  }),
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("table_statistic"),
+    fieldKey: z.string().min(1, "Tabela é obrigatória"),
+    columnKey: z.string().min(1, "Coluna é obrigatória"),
+    statistic: z.enum(["mean", "sample_stddev", "count", "min", "max"]),
+  }),
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("environment"),
+    field: z.enum(["temperature", "humidity", "pressure"]),
+  }),
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("standard"),
+    standardId: z.number().int().positive().optional(),
+    valueKey: z.string().min(1, "Valor do padrão é obrigatório"),
+  }),
+]);
+export type MethodVariableBinding = z.infer<
+  typeof MethodVariableBindingSchema
+>;
 
 /**
  * Type B uncertainty component for method defaults
@@ -745,6 +816,7 @@ export const CreateMethodSchema = z.object({
   dataFields: z
     .array(MethodInputFieldSchema)
     .min(1, "Defina pelo menos um campo de entrada"),
+  variableBindings: z.array(MethodVariableBindingSchema).default([]),
   formulas: z.array(MethodFormulaSchema).default([]),
   validations: z.array(MethodValidationSchema).default([]),
   uncertaintyParams: z.array(MethodTypeBComponentSchema).default([]),
@@ -1033,6 +1105,7 @@ export const MethodSnapshotSchema = z.object({
   methodName: z.string(),
   methodVersion: z.number(),
   dataFields: z.array(MethodInputFieldSchema),
+  variableBindings: z.array(MethodVariableBindingSchema).default([]),
   formulas: z.array(MethodFormulaSchema),
   validations: z.array(MethodValidationSchema),
   uncertaintyParams: z.array(MethodTypeBComponentSchema),

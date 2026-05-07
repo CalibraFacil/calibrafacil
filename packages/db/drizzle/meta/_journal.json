@@ -106,6 +106,13 @@
       "when": 1777683600000,
       "tag": "0014_app_queue_job",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1778112000000,
+      "tag": "0015_method_variable_bindings",
+      "breakpoints": true
     }
   ]
 }

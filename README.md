@@ -46,7 +46,6 @@ calibra-facil/
 │   ├── db/           # Drizzle ORM + schema
 │   ├── auth/         # Better-Auth integration
 │   ├── schemas/      # Zod validation schemas
-│   ├── math-engine/  # GUM uncertainty calculations
 │   ├── email/        # React Email templates
 │   ├── notifications/# Notification service
 │   ├── documents/    # Certificate/label templates

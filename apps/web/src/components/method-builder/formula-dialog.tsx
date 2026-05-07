@@ -205,7 +205,8 @@ function FormulaDialogBody({
           />
           <FieldDescription>
             Use variáveis definidas nos campos de entrada. Funções disponíveis:
-            abs(), sqrt(), mean(), std(), min(), max(), round()
+            abs(), sqrt(), min(), max(), floor(), ceil(), round(), log(),
+            log10(), exp().
           </FieldDescription>
           {errors.expression && <FieldError>{errors.expression}</FieldError>}
         </Field>

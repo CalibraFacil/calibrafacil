@@ -47,7 +47,7 @@ export function ValidationDialog({
   initialData,
   availableVariables,
 }: ValidationDialogProps) {
-  const dialogKey = `${open ? 'open' : 'closed'}-${initialData?.expression ?? 'new'}`
+  const dialogKey = `${open ? 'open' : 'closed'}-${initialData?.leftExpression ?? 'new'}`
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -74,7 +74,9 @@ function ValidationDialogBody({
     initialData
       ? { ...initialData }
       : {
-          expression: '',
+          leftExpression: '',
+          operator: '<=',
+          rightExpression: '',
           message: '',
           severity: 'error',
         },
@@ -84,8 +86,12 @@ function ValidationDialogBody({
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {}
 
-    if (!validation.expression.trim()) {
-      newErrors.expression = 'Expressão é obrigatória'
+    if (!validation.leftExpression.trim()) {
+      newErrors.leftExpression = 'Expressão esquerda é obrigatória'
+    }
+
+    if (!validation.rightExpression.trim()) {
+      newErrors.rightExpression = 'Expressão direita é obrigatória'
     }
 
     if (!validation.message.trim()) {
@@ -101,14 +107,17 @@ function ValidationDialogBody({
     onSave(validation)
   }
 
-  const insertVariable = (varKey: string) => {
+  const insertVariable = (
+    side: 'leftExpression' | 'rightExpression',
+    varKey: string,
+  ) => {
     setValidation((v) => {
-      const expr = v.expression
+      const expr = v[side]
       // Add a space before the variable if expression doesn't end with space, operator, or opening paren
-      const needsSpace = expr.length > 0 && !/[\s+\-*/%^(,<>=!&|]$/.test(expr)
+      const needsSpace = expr.length > 0 && !/[\s+\-*/^(,]$/.test(expr)
       return {
         ...v,
-        expression: expr + (needsSpace ? ' ' : '') + varKey,
+        [side]: expr + (needsSpace ? ' ' : '') + varKey,
       }
     })
   }
@@ -127,44 +136,109 @@ function ValidationDialogBody({
 
         <div className="space-y-4 py-4">
           <Field>
-            <FieldLabel htmlFor="expression">Expressão Booleana *</FieldLabel>
+            <FieldLabel htmlFor="leftExpression">
+              Expressão esquerda *
+            </FieldLabel>
             <Textarea
-              id="expression"
-              value={validation.expression}
+              id="leftExpression"
+              value={validation.leftExpression}
               onChange={(e) =>
-                setValidation((v) => ({ ...v, expression: e.target.value }))
+                setValidation((v) => ({
+                  ...v,
+                  leftExpression: e.target.value,
+                }))
               }
-              placeholder="Ex: abs(erro) < 0.01"
+              placeholder="Ex: abs(erro)"
               rows={2}
               className="font-mono"
             />
             <FieldDescription>
-              A expressão deve retornar verdadeiro (aprovado) ou falso
-              (reprovado). Operadores: {'<'}, {'>'}, {'<='}, {'>='}, ==, !=, &&,
-              ||
+              Expressão escalar avaliada pelo motor matemático.
             </FieldDescription>
-            {errors.expression && <FieldError>{errors.expression}</FieldError>}
+            {errors.leftExpression && (
+              <FieldError>{errors.leftExpression}</FieldError>
+            )}
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="operator">Operador</FieldLabel>
+            <Select
+              value={validation.operator}
+              onValueChange={(operator) =>
+                setValidation((v) => ({
+                  ...v,
+                  operator: operator as MethodValidation['operator'],
+                }))
+              }
+            >
+              <SelectTrigger>
+                <span>{validation.operator}</span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="<">{'<'}</SelectItem>
+                <SelectItem value="<=">{'<='}</SelectItem>
+                <SelectItem value=">">{'>'}</SelectItem>
+                <SelectItem value=">=">{'>='}</SelectItem>
+                <SelectItem value="==">==</SelectItem>
+                <SelectItem value="!=">!=</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="rightExpression">
+              Expressão direita *
+            </FieldLabel>
+            <Textarea
+              id="rightExpression"
+              value={validation.rightExpression}
+              onChange={(e) =>
+                setValidation((v) => ({
+                  ...v,
+                  rightExpression: e.target.value,
+                }))
+              }
+              placeholder="Ex: tolerancia_maxima"
+              rows={2}
+              className="font-mono"
+            />
+            <FieldDescription>
+              Expressão escalar usada como limite ou referência.
+            </FieldDescription>
+            {errors.rightExpression && (
+              <FieldError>{errors.rightExpression}</FieldError>
+            )}
           </Field>
 
           {availableVariables.length > 0 && (
             <Field>
               <FieldLabel>Variáveis Disponíveis</FieldLabel>
               <div className="flex flex-wrap gap-1">
-                {availableVariables.map((v) => (
+                {availableVariables.flatMap((v) => [
                   <Button
-                    key={v.key}
+                    key={`${v.key}-left`}
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => insertVariable(v.key)}
+                    onClick={() => insertVariable('leftExpression', v.key)}
                     className="text-xs"
                   >
                     {v.key}
                     <span className="text-muted-foreground ml-1">
                       ({v.type})
                     </span>
-                  </Button>
-                ))}
+                  </Button>,
+                  <Button
+                    key={`${v.key}-right`}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => insertVariable('rightExpression', v.key)}
+                    className="text-xs"
+                  >
+                    {v.key} direita
+                  </Button>,
+                ])}
               </div>
             </Field>
           )}

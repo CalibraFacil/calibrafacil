@@ -13,8 +13,6 @@ import {
   DropletIcon,
 } from '@hugeicons/core-free-icons'
 import { GaugeIcon, ThermometerIcon } from '@phosphor-icons/react'
-import { createEngine, flattenForExecution } from '@calibra-facil/math-engine'
-import type { FormulaContext } from '@calibra-facil/math-engine'
 
 import { api } from '@/utils/api'
 import { apiRouteParam } from '@/lib/route-identifiers'
@@ -68,9 +66,18 @@ import {
 import type {
   MethodInputField,
   MethodFormula,
+  MethodValidation,
+  MethodVariableBinding,
   FormulaResult,
   ValidationResult,
 } from '@/components/method-builder/types'
+import {
+  buildFormulaContext,
+  createMethodCalculationEngine,
+  evaluateFormulaScalar,
+  evaluateStructuredValidation,
+  type FormulaScalar,
+} from '@/components/method-builder/math-runtime'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/execute')({
   head: () => ({
@@ -191,12 +198,9 @@ interface JobData {
     methodName: string
     methodVersion: number
     dataFields: MethodInputField[]
+    variableBindings?: MethodVariableBinding[]
     formulas: MethodFormula[]
-    validations: Array<{
-      expression: string
-      message: string
-      severity: 'error' | 'warning'
-    }>
+    validations: MethodValidation[]
     uncertaintyParams: Array<unknown>
   }
   data: Record<string, unknown> | null
@@ -316,8 +320,7 @@ function resolveFieldForDisplay(
 function ExecuteJobPage() {
   const { id } = Route.useParams()
   const apiJobId = apiRouteParam(id)
-  // Math engine
-  const engine = useMemo(() => createEngine(), [])
+  const engine = useMemo(() => createMethodCalculationEngine(), [])
 
   // Fetch job data
   const {
@@ -417,7 +420,7 @@ function ExecuteJobForm({
   job: JobData
   standardsData: Array<ReferenceStandard>
   envLimits: EffectiveLimits | null
-  engine: ReturnType<typeof createEngine>
+  engine: ReturnType<typeof createMethodCalculationEngine>
   jobId: string
 }) {
   const navigate = useNavigate()
@@ -616,92 +619,68 @@ function ExecuteJobForm({
     [assetSpecFields, job.assetSnapshot],
   )
 
-  // Build context for math engine (including standard values)
+  // Build scalar context for the hardened math engine.
   const context = useMemo(() => {
     if (!job) return {}
 
-    const processedData: Record<string, unknown> = {}
+    const sourceData: Record<string, unknown> = {}
 
-    // Process form data fields
     for (const field of job.methodSnapshot.dataFields) {
       if (field.source === 'asset_spec') {
         const key = field.assetSpecKey
         const value = key ? job.assetSnapshot?.specifications?.[key] : undefined
         if (value !== undefined && value !== null && value !== '') {
-          processedData[field.key] = value
+          sourceData[field.key] = value
         }
         continue
       }
 
       const value = normalizedFormData[field.key]
-
-      if (field.type === 'table' && field.columns) {
-        const rows = Array.isArray(value) ? value : []
-        for (const col of field.columns) {
-          const columnValues = rows
-            .map((row: Record<string, unknown>) => {
-              const cellValue = row[col.key]
-              if (typeof cellValue === 'number') return cellValue
-              if (typeof cellValue === 'string' && cellValue.trim() !== '') {
-                const parsed = parseFloat(cellValue)
-                return isNaN(parsed) ? null : parsed
-              }
-              return null
-            })
-            .filter((v): v is number => v !== null)
-          processedData[`${field.key}_${col.key}`] = columnValues
-        }
-        processedData[field.key] = rows
-      } else if (value !== undefined && value !== '') {
-        processedData[field.key] = value
+      if (value !== undefined && value !== '') {
+        sourceData[field.key] = value
       }
     }
 
-    // Inject selected standard values into context
-    const selectedStandards = standardsData.filter((s) =>
-      selectedStandardIds.includes(s.id),
-    )
+    const selectedStandards = standardsData
+      .filter((standard) => selectedStandardIds.includes(standard.id))
+      .map((standard) => ({
+        id: standard.id,
+        uncertainty:
+          standard.uncertainty != null &&
+          isMassMeasurementUnit(standard.uncertaintyUnit)
+            ? convertMassValue(standard.uncertainty, standard.uncertaintyUnit, 'g')
+            : standard.uncertainty,
+        coverageFactor: standard.coverageFactor,
+        drift:
+          standard.drift != null && standard.certifiedValues?.[0]?.unit
+            ? (convertMassValue(
+                standard.drift,
+                standard.certifiedValues[0].unit,
+                'g',
+              ) ?? standard.drift)
+            : standard.drift,
+        certifiedValues:
+          standard.certifiedValues?.map((certifiedValue) => ({
+            nominal: certifiedValue.nominal,
+            value: isMassMeasurementUnit(certifiedValue.unit)
+              ? (convertMassValue(certifiedValue.value, certifiedValue.unit, 'g') ??
+                certifiedValue.value)
+              : certifiedValue.value,
+            uncertainty: isMassMeasurementUnit(certifiedValue.unit)
+              ? (convertMassValue(
+                  certifiedValue.uncertainty,
+                  certifiedValue.unit,
+                  'g',
+                ) ?? certifiedValue.uncertainty)
+              : certifiedValue.uncertainty,
+          })) ?? null,
+      }))
 
-    for (const std of selectedStandards) {
-      const prefix = `std_${std.id}`
-      processedData[`${prefix}_uncertainty`] =
-        std.uncertainty != null && isMassMeasurementUnit(std.uncertaintyUnit)
-          ? convertMassValue(std.uncertainty, std.uncertaintyUnit, 'g')
-          : std.uncertainty
-      processedData[`${prefix}_k`] = std.coverageFactor
-      processedData[`${prefix}_drift`] =
-        std.drift != null && std.certifiedValues?.[0]?.unit
-          ? (convertMassValue(std.drift, std.certifiedValues[0].unit, 'g') ??
-            std.drift)
-          : std.drift
-
-      // Flatten certified values for easy formula access
-      if (std.certifiedValues) {
-        for (const cv of std.certifiedValues) {
-          // Normalize nominal name (e.g., "100g" -> "100g")
-          const key = cv.nominal.replace(/\s+/g, '')
-          processedData[`${prefix}_${key}`] = isMassMeasurementUnit(cv.unit)
-            ? (convertMassValue(cv.value, cv.unit, 'g') ?? cv.value)
-            : cv.value
-          processedData[`${prefix}_${key}_u`] = isMassMeasurementUnit(cv.unit)
-            ? (convertMassValue(cv.uncertainty, cv.unit, 'g') ?? cv.uncertainty)
-            : cv.uncertainty
-        }
-      }
-    }
-
-    // Inject environment data for formula context
-    if (environment.temperature != null) {
-      processedData['env_temperature'] = environment.temperature
-    }
-    if (environment.humidity != null) {
-      processedData['env_humidity'] = environment.humidity
-    }
-    if (environment.pressure != null) {
-      processedData['env_pressure'] = environment.pressure
-    }
-
-    return flattenForExecution(processedData, { preserveArrays: true })
+    return buildFormulaContext(job.methodSnapshot, {
+      data: sourceData,
+      environment,
+      standards: selectedStandards,
+    })
   }, [normalizedFormData, job, standardsData, selectedStandardIds, environment])
 
   // Evaluate formulas
@@ -709,21 +688,25 @@ function ExecuteJobForm({
     if (!job) return {}
 
     const results: Record<string, FormulaResult> = {}
-    const runningContext: Record<string, unknown> = { ...context }
-    const rawResultValues: Record<string, unknown> = {}
+    const runningContext = { ...context }
+    const rawResultValues: Record<string, FormulaScalar> = {}
 
     for (const formula of job.methodSnapshot.formulas) {
-      const result = engine.evaluateFormula({
-        formula: formula.expression,
-        context: runningContext as FormulaContext,
-      })
+      const result = evaluateFormulaScalar(
+        engine,
+        formula.expression,
+        runningContext,
+      )
 
       if (result.success) {
-        const rawValue = result.data.result
+        const rawValue = result.value
         rawResultValues[formula.outputKey] = rawValue
         runningContext[formula.outputKey] = rawValue
       } else {
-        results[formula.outputKey] = { error: result.error.message }
+        results[formula.outputKey] = {
+          error: result.error,
+          errorCode: result.errorCode,
+        }
       }
     }
 
@@ -757,7 +740,7 @@ function ExecuteJobForm({
   const validationResults = useMemo((): ValidationResult[] => {
     if (!job) return []
 
-    const fullContext: Record<string, unknown> = { ...context }
+    const fullContext = { ...context }
     for (const [key, result] of Object.entries(formulaResults)) {
       if (result.value !== undefined) {
         fullContext[key] = result.value
@@ -765,25 +748,16 @@ function ExecuteJobForm({
     }
 
     return job.methodSnapshot.validations.map((validation) => {
-      const result = engine.evaluateFormula({
-        formula: validation.expression,
-        context: fullContext as FormulaContext,
-      })
-
-      if (result.success) {
-        const passed = Boolean(result.data.resultAsNumber)
-        return {
-          expression: validation.expression,
-          message: validation.message,
-          severity: validation.severity,
-          passed,
-        }
-      }
+      const result = evaluateStructuredValidation(engine, validation, fullContext)
       return {
-        expression: validation.expression,
+        leftExpression: validation.leftExpression,
+        operator: validation.operator,
+        rightExpression: validation.rightExpression,
         message: validation.message,
         severity: validation.severity,
-        error: result.error.message,
+        passed: result.passed,
+        error: result.error,
+        errorCode: result.errorCode,
       }
     })
   }, [engine, job, context, formulaResults])

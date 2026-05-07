@@ -1,13 +1,16 @@
 import { useCallback, useMemo, useState } from 'react'
-import { createEngine, flattenForExecution } from '@calibra-facil/math-engine'
 import { formatCalibrationValue } from '@calibra-facil/shared'
 
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { TableInputRenderer } from './table-input-renderer'
-
-import type { FormulaContext } from '@calibra-facil/math-engine'
+import {
+  buildFormulaContext,
+  createMethodCalculationEngine,
+  evaluateFormulaScalar,
+  evaluateStructuredValidation,
+} from './math-runtime'
 
 import type {
   FormulaResult,
@@ -56,83 +59,41 @@ export function PreviewPanel({
     (field) => field.source !== 'asset_spec',
   )
 
-  // Create engine instance
-  const engine = useMemo(() => createEngine(), [])
+  const engine = useMemo(() => createMethodCalculationEngine(), [])
 
-  // Flatten preview data with array preservation for vector math
   const context = useMemo(() => {
-    // For table inputs, we need to extract the column arrays
-    const processedData: Record<string, unknown> = {}
-
-    for (const field of method.dataFields) {
-      const value = previewData[field.key]
-
-      if (field.type === 'table' && field.columns) {
-        // Extract each column as an array for vector math (mean, std, etc.)
-        // Arrays are ALWAYS included, even if empty - variables must exist in scope
-        const rows = Array.isArray(value) ? value : []
-
-        for (const col of field.columns) {
-          const columnValues = rows
-            .map((row: Record<string, unknown>) => {
-              const cellValue = row[col.key]
-              // Handle numbers directly
-              if (typeof cellValue === 'number') return cellValue
-              // Parse numeric strings
-              if (typeof cellValue === 'string' && cellValue.trim() !== '') {
-                const parsed = parseFloat(cellValue)
-                return isNaN(parsed) ? null : parsed
-              }
-              return null
-            })
-            .filter((v): v is number => v !== null)
-
-          // Always include column - empty array [] is valid
-          processedData[`${field.key}_${col.key}`] = columnValues
-        }
-        // Also store the full array (even if empty)
-        processedData[field.key] = rows
-      } else if (value !== undefined && value !== '') {
-        processedData[field.key] = value
-      }
-    }
-
-    return flattenForExecution(processedData, { preserveArrays: true })
-  }, [previewData, method.dataFields])
+    return buildFormulaContext(method, { data: previewData })
+  }, [previewData, method])
 
   // Evaluate all formulas
   const formulaResults = useMemo(() => {
     const results: Record<string, FormulaResult> = {}
-    const runningContext: Record<string, unknown> = { ...context }
+    const runningContext = { ...context }
 
     for (const formula of method.formulas) {
-      const result = engine.evaluateFormula({
-        formula: formula.expression,
-        context: runningContext as FormulaContext,
-      })
+      const result = evaluateFormulaScalar(
+        engine,
+        formula.expression,
+        runningContext,
+      )
 
       if (result.success) {
-        // Store the RAW result (string/number/array) to preserve BigNumber precision
-        // This prevents "Cannot convert >15 significant digits to BigNumber" errors
-        const rawValue = result.data.result
-
-        // Format for display
+        const rawValue = result.value
         const displayValue = formatCalibrationValue(rawValue, {
           wrapArrays: true,
         })
 
         results[formula.outputKey] = {
-          value: rawValue, // Store raw value (fixes arrays showing "-")
+          value: rawValue,
+          valueText: result.valueText,
           displayValue,
         }
 
-        // CRITICAL: Inject RAW result back into context for subsequent formulas
-        // Passing string/array prevents BigNumber conversion errors with messy floats
-        // mathjs handles string-to-BigNumber conversion safely
         runningContext[formula.outputKey] = rawValue
       } else {
         results[formula.outputKey] = {
-          error: result.error.message,
+          error: result.error,
+          errorCode: result.errorCode,
         }
       }
     }
@@ -142,10 +103,7 @@ export function PreviewPanel({
 
   // Evaluate validations
   const validationResults = useMemo((): Array<ValidationResult> => {
-    // Build context with formula results
-    // Use Record<string, unknown> to allow mixed types (strings, numbers, arrays)
-    // mathjs handles string-to-BigNumber conversion safely at runtime
-    const fullContext: Record<string, unknown> = { ...context }
+    const fullContext = { ...context }
     for (const [key, result] of Object.entries(formulaResults)) {
       if (result.value !== undefined) {
         fullContext[key] = result.value
@@ -153,25 +111,16 @@ export function PreviewPanel({
     }
 
     return method.validations.map((validation) => {
-      const result = engine.evaluateFormula({
-        formula: validation.expression,
-        context: fullContext as FormulaContext,
-      })
-
-      if (result.success) {
-        const passed = Boolean(result.data.resultAsNumber)
-        return {
-          expression: validation.expression,
-          message: validation.message,
-          severity: validation.severity,
-          passed,
-        }
-      }
+      const result = evaluateStructuredValidation(engine, validation, fullContext)
       return {
-        expression: validation.expression,
+        leftExpression: validation.leftExpression,
+        operator: validation.operator,
+        rightExpression: validation.rightExpression,
         message: validation.message,
         severity: validation.severity,
-        error: result.error.message,
+        passed: result.passed,
+        error: result.error,
+        errorCode: result.errorCode,
       }
     })
   }, [engine, method.validations, context, formulaResults])
@@ -482,7 +431,8 @@ export function PreviewPanel({
                     </p>
                   )}
                   <code className="text-xs text-muted-foreground block mt-1">
-                    {result.expression}
+                    {result.leftExpression} {result.operator}{' '}
+                    {result.rightExpression}
                   </code>
                 </div>
               ))}

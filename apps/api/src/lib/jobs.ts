@@ -310,6 +310,7 @@ async function persistCalibrationJob(
     methodName: methodData.name,
     methodVersion: methodData.version,
     dataFields: methodData.dataFields,
+    variableBindings: methodData.variableBindings ?? [],
     formulas: methodData.formulas,
     validations: methodData.validations,
     uncertaintyParams: methodData.uncertaintyParams,

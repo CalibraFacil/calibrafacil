@@ -309,6 +309,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             version: 1,
             status: "DRAFT",
             dataFields: input.dataFields,
+            variableBindings: input.variableBindings,
             formulas: input.formulas,
             validations: input.validations,
             uncertaintyParams: input.uncertaintyParams,
@@ -431,6 +432,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           changes.dataFields = {
             old: existing.dataFields,
             new: input.dataFields,
+          };
+        }
+        if (input.variableBindings !== undefined) {
+          updateData.variableBindings = input.variableBindings;
+          changes.variableBindings = {
+            old: existing.variableBindings,
+            new: input.variableBindings,
           };
         }
         if (input.formulas !== undefined) {

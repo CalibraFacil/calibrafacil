@@ -496,12 +496,13 @@ function MethodDetailPage() {
               <div className="border-t border-border/70">
                 {method.validations.map((validation, index) => (
                   <DetailItem
-                    key={`${validation.expression}-${index}`}
+                    key={`${validation.leftExpression}-${validation.operator}-${validation.rightExpression}-${index}`}
                     label={validation.severity === 'error' ? 'Erro' : 'Aviso'}
                   >
                     <div className="space-y-2">
                       <code className="block max-w-full overflow-x-auto rounded-md bg-muted/45 px-2.5 py-2 font-mono text-xs leading-relaxed text-foreground shadow-[inset_0_0_0_1px_rgba(0,0,0,0.05)]">
-                        {validation.expression}
+                        {validation.leftExpression} {validation.operator}{' '}
+                        {validation.rightExpression}
                       </code>
                       <p className="text-pretty text-sm text-muted-foreground">
                         {validation.message}

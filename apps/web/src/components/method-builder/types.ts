@@ -91,10 +91,41 @@ export interface MethodFormula {
 }
 
 export interface MethodValidation {
-  expression: string
+  leftExpression: string
+  operator: '<' | '<=' | '>' | '>=' | '==' | '!='
+  rightExpression: string
   message: string
   severity: 'error' | 'warning'
 }
+
+export type MethodVariableBinding =
+  | {
+      key: string
+      label?: string
+      source: 'data_field'
+      fieldKey: string
+    }
+  | {
+      key: string
+      label?: string
+      source: 'table_statistic'
+      fieldKey: string
+      columnKey: string
+      statistic: 'mean' | 'sample_stddev' | 'count' | 'min' | 'max'
+    }
+  | {
+      key: string
+      label?: string
+      source: 'environment'
+      field: 'temperature' | 'humidity' | 'pressure'
+    }
+  | {
+      key: string
+      label?: string
+      source: 'standard'
+      standardId?: number
+      valueKey: string
+    }
 
 export interface MethodTypeBComponent {
   name: string
@@ -148,6 +179,7 @@ export interface MethodData {
   technicalReviewedBy?: string | null
   approvedBy?: string | null
   dataFields: Array<MethodInputField>
+  variableBindings?: Array<MethodVariableBinding>
   formulas: Array<MethodFormula>
   validations: Array<MethodValidation>
   uncertaintyParams: Array<MethodTypeBComponent>
@@ -155,19 +187,22 @@ export interface MethodData {
 }
 
 export interface FormulaResult {
-  // Value is stored as string or string[] to preserve BigNumber precision
-  // This prevents "Cannot convert >15 significant digits" errors when chaining
-  value?: string | Array<string>
+  value?: string | number
+  valueText?: string
   displayValue?: string
   error?: string
+  errorCode?: string
 }
 
 export interface ValidationResult {
-  expression: string
+  leftExpression: string
+  operator: MethodValidation['operator']
+  rightExpression: string
   message: string
   severity: 'error' | 'warning'
   passed?: boolean
   error?: string
+  errorCode?: string
 }
 
 // Default empty method for new methods
@@ -177,6 +212,7 @@ export const defaultMethodData: MethodData = {
   version: 1,
   status: 'DRAFT',
   dataFields: [],
+  variableBindings: [],
   formulas: [],
   validations: [],
   uncertaintyParams: [],
