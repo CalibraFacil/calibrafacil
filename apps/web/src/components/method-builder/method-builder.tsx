@@ -49,8 +49,8 @@ export function MethodBuilder({
   isNew = false,
   isReadOnly = false,
 }: MethodBuilderProps) {
-  const [method, setMethod] = useState<MethodData>(
-    initialData ?? defaultMethodData,
+  const [method, setMethod] = useState<MethodData>(() =>
+    normalizeMethodVariableBindings(initialData ?? defaultMethodData),
   )
   const [previewData, setPreviewData] = useState<Record<string, unknown>>({})
   const [isDirty, setIsDirty] = useState(false)

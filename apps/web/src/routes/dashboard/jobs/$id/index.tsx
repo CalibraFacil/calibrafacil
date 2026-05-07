@@ -67,6 +67,7 @@ import {
   isWeighingRangeSpecArray,
 } from '@/components/method-builder/weighing-range-utils'
 import type { MethodInputType } from '@/components/method-builder/types'
+import { normalizeMethodValidations } from '@/components/method-builder/math-runtime'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/')({
   head: () => ({
@@ -174,20 +175,12 @@ type ReviewFormula = {
   unit?: string | null
 }
 
-type ReviewValidation = {
-  leftExpression: string
-  operator: '<' | '<=' | '>' | '>=' | '==' | '!='
-  rightExpression: string
-  message: string
-  severity: 'error' | 'warning'
-}
-
 type ReviewMethodSnapshot = {
   methodName?: string | null
   methodVersion?: number | null
   dataFields?: ReviewMethodField[] | null
   formulas?: ReviewFormula[] | null
-  validations?: ReviewValidation[] | null
+  validations?: unknown[] | null
 }
 
 type ReviewStandardSnapshot = {
@@ -416,7 +409,9 @@ function JobDetailPage() {
     {}) as ReviewMethodSnapshot
   const reviewDataFields = methodSnapshotForReview.dataFields ?? []
   const reviewFormulas = methodSnapshotForReview.formulas ?? []
-  const reviewValidations = methodSnapshotForReview.validations ?? []
+  const reviewValidations = normalizeMethodValidations(
+    methodSnapshotForReview.validations ?? [],
+  )
   const reviewAssetBaseUnit =
     ((job as { assetSnapshot?: ReviewAssetSnapshot | null } | undefined)
       ?.assetSnapshot?.baseMeasurementUnit as MassUnit | null | undefined) ??

@@ -116,6 +116,13 @@ export type MethodVariableBinding =
   | {
       key: string
       label?: string
+      source: 'table_column'
+      fieldKey: string
+      columnKey: string
+    }
+  | {
+      key: string
+      label?: string
       source: 'environment'
       field: 'temperature' | 'humidity' | 'pressure'
     }

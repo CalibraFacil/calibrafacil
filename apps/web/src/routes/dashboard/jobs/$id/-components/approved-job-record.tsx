@@ -74,6 +74,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { isMassCompositionValue } from '@/components/method-builder/mass-composition-utils'
+import { normalizeMethodValidations } from '@/components/method-builder/math-runtime'
 import {
   formatWeighingRangeSpec,
   isWeighingRangeSpecArray,
@@ -108,13 +109,7 @@ interface MethodSnapshot {
     label?: string
     unit?: string
   }>
-  validations: Array<{
-    leftExpression: string
-    operator: '<' | '<=' | '>' | '>=' | '==' | '!='
-    rightExpression: string
-    message: string
-    severity: 'error' | 'warning'
-  }>
+  validations: Array<unknown>
 }
 
 interface StandardSnapshot {
@@ -208,6 +203,10 @@ export function ApprovedJobRecord({
   onRefresh,
 }: ApprovedJobRecordProps) {
   const { methodSnapshot, data, results, standardsSnapshot } = job
+  const validations = useMemo(
+    () => normalizeMethodValidations(methodSnapshot.validations),
+    [methodSnapshot.validations],
+  )
   const assetBaseMeasurementUnit =
     job.assetSnapshot?.baseMeasurementUnit ?? null
   const navigate = useNavigate()
@@ -535,7 +534,7 @@ export function ApprovedJobRecord({
   // Render formula result (from stored results, no recalculation)
   const renderResult = (formula: MethodSnapshot['formulas'][0]) => {
     const value = displayResults?.[formula.outputKey]
-    const validation = methodSnapshot.validations.find((v) =>
+    const validation = validations.find((v) =>
       `${v.leftExpression} ${v.rightExpression}`.includes(formula.outputKey),
     )
     // Check if value passes (simple heuristic - in real impl would store pass/fail)

@@ -16,6 +16,7 @@ import {
   type MethodSnapshot,
 } from "@calibra-facil/db/schema";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
+import { normalizeMethodValidationsInput } from "@calibra-facil/schemas";
 import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "./finance";
 import { generateCertificateIdentity } from "./certificate-numbering";
@@ -312,7 +313,7 @@ async function persistCalibrationJob(
     dataFields: methodData.dataFields,
     variableBindings: methodData.variableBindings ?? [],
     formulas: methodData.formulas,
-    validations: methodData.validations,
+    validations: normalizeMethodValidationsInput(methodData.validations),
     uncertaintyParams: methodData.uncertaintyParams,
     certificateContent: methodData.certificateContent ?? null,
   };

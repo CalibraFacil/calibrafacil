@@ -76,6 +76,8 @@ import {
   createMethodCalculationEngine,
   evaluateFormulaScalar,
   evaluateStructuredValidation,
+  normalizeMethodValidations,
+  type FormulaContext,
   type FormulaScalar,
 } from '@/components/method-builder/math-runtime'
 
@@ -620,7 +622,7 @@ function ExecuteJobForm({
   )
 
   // Build scalar context for the hardened math engine.
-  const context = useMemo(() => {
+  const context = useMemo<FormulaContext>(() => {
     if (!job) return {}
 
     const sourceData: Record<string, unknown> = {}
@@ -648,7 +650,11 @@ function ExecuteJobForm({
         uncertainty:
           standard.uncertainty != null &&
           isMassMeasurementUnit(standard.uncertaintyUnit)
-            ? convertMassValue(standard.uncertainty, standard.uncertaintyUnit, 'g')
+            ? convertMassValue(
+                standard.uncertainty,
+                standard.uncertaintyUnit,
+                'g',
+              )
             : standard.uncertainty,
         coverageFactor: standard.coverageFactor,
         drift:
@@ -663,8 +669,11 @@ function ExecuteJobForm({
           standard.certifiedValues?.map((certifiedValue) => ({
             nominal: certifiedValue.nominal,
             value: isMassMeasurementUnit(certifiedValue.unit)
-              ? (convertMassValue(certifiedValue.value, certifiedValue.unit, 'g') ??
-                certifiedValue.value)
+              ? (convertMassValue(
+                  certifiedValue.value,
+                  certifiedValue.unit,
+                  'g',
+                ) ?? certifiedValue.value)
               : certifiedValue.value,
             uncertainty: isMassMeasurementUnit(certifiedValue.unit)
               ? (convertMassValue(
@@ -688,7 +697,7 @@ function ExecuteJobForm({
     if (!job) return {}
 
     const results: Record<string, FormulaResult> = {}
-    const runningContext = { ...context }
+    const runningContext: FormulaContext = { ...context }
     const rawResultValues: Record<string, FormulaScalar> = {}
 
     for (const formula of job.methodSnapshot.formulas) {
@@ -747,8 +756,16 @@ function ExecuteJobForm({
       }
     }
 
-    return job.methodSnapshot.validations.map((validation) => {
-      const result = evaluateStructuredValidation(engine, validation, fullContext)
+    const validations = normalizeMethodValidations(
+      job.methodSnapshot.validations,
+    )
+
+    return validations.map((validation) => {
+      const result = evaluateStructuredValidation(
+        engine,
+        validation,
+        fullContext,
+      )
       return {
         leftExpression: validation.leftExpression,
         operator: validation.operator,
@@ -1770,8 +1787,7 @@ function ExecuteJobForm({
                 <CardHeader className="min-h-14 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-balance text-base">
-                      Critérios de Aceitação (
-                      {job.methodSnapshot.validations.length})
+                      Critérios de Aceitação ({validationResults.length})
                     </CardTitle>
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}

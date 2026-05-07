@@ -684,7 +684,7 @@ export type MethodValidationOperator = z.infer<
   typeof MethodValidationOperatorSchema
 >;
 
-export const MethodValidationSchema = z.object({
+const StructuredMethodValidationSchema = z.object({
   leftExpression: z.string().min(1, "Expressão esquerda é obrigatória"),
   operator: MethodValidationOperatorSchema,
   rightExpression: z.string().min(1, "Expressão direita é obrigatória"),
@@ -692,7 +692,22 @@ export const MethodValidationSchema = z.object({
   severity: z.enum(["error", "warning"]),
 });
 
-export type MethodValidation = z.infer<typeof MethodValidationSchema>;
+export type MethodValidation = z.infer<typeof StructuredMethodValidationSchema>;
+
+const LegacyMethodValidationSchema = z
+  .object({
+    expression: z.string().min(1, "Expressão é obrigatória"),
+    message: z.string().min(1, "Mensagem é obrigatória"),
+    severity: z.enum(["error", "warning"]),
+  })
+  .transform((validation) =>
+    normalizeLegacyMethodValidationExpression(validation),
+  );
+
+export const MethodValidationSchema = z.union([
+  StructuredMethodValidationSchema,
+  LegacyMethodValidationSchema,
+]);
 
 export const MethodVariableBindingSchema = z.discriminatedUnion("source", [
   z.object({
@@ -706,6 +721,19 @@ export const MethodVariableBindingSchema = z.discriminatedUnion("source", [
     label: z.string().optional(),
     source: z.literal("data_field"),
     fieldKey: z.string().min(1, "Campo é obrigatório"),
+  }),
+  z.object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().optional(),
+    source: z.literal("table_column"),
+    fieldKey: z.string().min(1, "Tabela é obrigatória"),
+    columnKey: z.string().min(1, "Coluna é obrigatória"),
   }),
   z.object({
     key: z
@@ -747,9 +775,40 @@ export const MethodVariableBindingSchema = z.discriminatedUnion("source", [
     valueKey: z.string().min(1, "Valor do padrão é obrigatório"),
   }),
 ]);
-export type MethodVariableBinding = z.infer<
-  typeof MethodVariableBindingSchema
->;
+export type MethodVariableBinding = z.infer<typeof MethodVariableBindingSchema>;
+
+export function normalizeMethodValidationInput(
+  validation: unknown,
+): MethodValidation {
+  return MethodValidationSchema.parse(validation);
+}
+
+export function normalizeMethodValidationsInput(
+  validations: unknown,
+): MethodValidation[] {
+  if (!Array.isArray(validations)) return [];
+  return validations.map((validation) =>
+    normalizeMethodValidationInput(validation),
+  );
+}
+
+function normalizeLegacyMethodValidationExpression(validation: {
+  expression: string;
+  message: string;
+  severity: "error" | "warning";
+}): MethodValidation {
+  const match = validation.expression.match(
+    /^\s*(.+?)\s*(<=|>=|==|!=|<|>)\s*(.+?)\s*$/,
+  );
+
+  return {
+    leftExpression: match?.[1]?.trim() || validation.expression,
+    operator: (match?.[2] ?? "!=") as MethodValidationOperator,
+    rightExpression: match?.[3]?.trim() || "0",
+    message: validation.message,
+    severity: validation.severity,
+  };
+}
 
 /**
  * Type B uncertainty component for method defaults
