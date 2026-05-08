@@ -51,6 +51,14 @@ const METHOD_ENGINE_OPTIONS = {
   maxSignificantDigits: 24,
 };
 
+type DefinitionTableColumn = Extract<
+  MethodDraft["inputs"][number],
+  { kind: "table" }
+>["columns"][number];
+type DefinitionMassComposition = NonNullable<
+  DefinitionTableColumn["massComposition"]
+>;
+
 function compileDraftWithEngine(
   draft: MethodDraft,
   options: {
@@ -285,6 +293,10 @@ function methodInputToDefinitionInput(
                   typeof tableColumn.unit === "string"
                     ? tableColumn.unit
                     : undefined,
+                role: methodTableColumnRoleToDefinitionRole(tableColumn.role),
+                massComposition: methodTableColumnMassCompositionToDefinition(
+                  tableColumn.massComposition,
+                ),
               };
             })
             .filter(
@@ -302,6 +314,80 @@ function methodInputToDefinitionInput(
     defaultValue:
       typeof record.defaultValue === "string" ? record.defaultValue : undefined,
   };
+}
+
+function methodTableColumnRoleToDefinitionRole(
+  role: unknown,
+): DefinitionTableColumn["role"] {
+  return role === "standard_value" || role === "mass_standard_composition"
+    ? role
+    : undefined;
+}
+
+function methodTableColumnMassCompositionToDefinition(
+  value: unknown,
+): DefinitionTableColumn["massComposition"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const targetColumns =
+    record.targetColumns &&
+    typeof record.targetColumns === "object" &&
+    !Array.isArray(record.targetColumns)
+      ? methodMassCompositionTargetColumnsToDefinition(record.targetColumns)
+      : undefined;
+  const normalized: DefinitionMassComposition = {
+    ...(isMassCompositionUnit(record.targetUnit)
+      ? { targetUnit: record.targetUnit }
+      : {}),
+    ...(isMassCompositionOptionSource(record.optionSource)
+      ? { optionSource: record.optionSource }
+      : {}),
+    ...(targetColumns ? { targetColumns } : {}),
+    ...(record.uncertaintyMode === "expanded_rss"
+      ? { uncertaintyMode: record.uncertaintyMode }
+      : {}),
+    ...(record.quantityMode === "linear_per_item_then_rss"
+      ? { quantityMode: record.quantityMode }
+      : {}),
+  };
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function methodMassCompositionTargetColumnsToDefinition(
+  value: object,
+): DefinitionMassComposition["targetColumns"] {
+  const record = value as Record<string, unknown>;
+  const normalized = {
+    ...(typeof record.certifiedValue === "string"
+      ? { certifiedValue: record.certifiedValue }
+      : {}),
+    ...(typeof record.compositionLabel === "string"
+      ? { compositionLabel: record.compositionLabel }
+      : {}),
+    ...(typeof record.expandedUncertainty === "string"
+      ? { expandedUncertainty: record.expandedUncertainty }
+      : {}),
+    ...(typeof record.maxError === "string"
+      ? { maxError: record.maxError }
+      : {}),
+    ...(typeof record.drift === "string" ? { drift: record.drift } : {}),
+    ...(typeof record.buoyancy === "string"
+      ? { buoyancy: record.buoyancy }
+      : {}),
+  };
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function isMassCompositionUnit(value: unknown): value is "mg" | "g" | "kg" {
+  return value === "mg" || value === "g" || value === "kg";
+}
+
+function isMassCompositionOptionSource(
+  value: unknown,
+): value is "certified_values" | "composition_profiles" {
+  return value === "certified_values" || value === "composition_profiles";
 }
 
 function methodFormulaToDefinitionFormula(formula: unknown) {
@@ -466,8 +552,23 @@ function methodVariableBindingToDefinitionInput(
     quantityKind: "other" as const,
     metadata: {
       source: "variable_binding",
+      bindingSource: safeMetadataString(record.source),
+      fieldKey: safeMetadataString(record.fieldKey),
+      columnKey: safeMetadataString(record.columnKey),
+      statistic: safeMetadataString(record.statistic),
+      field: safeMetadataString(record.field),
+      standardId:
+        typeof record.standardId === "number" &&
+        Number.isFinite(record.standardId)
+          ? record.standardId
+          : null,
+      valueKey: safeMetadataString(record.valueKey),
     },
   };
+}
+
+function safeMetadataString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function methodValidationToAcceptanceCriterion(

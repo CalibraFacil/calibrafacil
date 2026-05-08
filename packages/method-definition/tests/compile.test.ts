@@ -290,6 +290,176 @@ describe("compileMethodDraft", () => {
     ).toBe(true);
   });
 
+  it("rejects non-numeric method inputs referenced by acceptance criteria", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "select",
+            key: "selected_option",
+            label: "Option",
+            required: true,
+            options: ["A", "B"],
+          },
+        ],
+        formulas: [],
+        acceptanceCriteria: [
+          {
+            key: "bad_criterion",
+            label: "Bad criterion",
+            expression: "selected_option == 1",
+            severity: "blocking",
+            message: "Invalid option",
+          },
+        ],
+        previewScenarios: [],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "NON_NUMERIC_ACCEPTANCE_CRITERION_VARIABLE",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects invalid select values in publishable previews", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "select",
+            key: "selected_option",
+            label: "Option",
+            required: true,
+            options: ["A", "B"],
+          },
+        ],
+        formulas: [],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { selected_option: "C" },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some((item) => item.code === "PREVIEW_FAILED"),
+    ).toBe(true);
+  });
+
+  it("derives variable-binding preview values from source sample data", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            required: true,
+            columns: [{ key: "value", label: "Value", type: "number" }],
+          },
+          {
+            kind: "scalar",
+            key: "measurements_value_mean",
+            label: "Mean",
+            required: false,
+            metadata: {
+              source: "variable_binding",
+              bindingSource: "table_statistic",
+              fieldKey: "measurements",
+              columnKey: "value",
+              statistic: "mean",
+            },
+          },
+          {
+            kind: "scalar",
+            key: "reference",
+            label: "Reference",
+            required: true,
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            expression: "measurements_value_mean - reference",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              measurements: [{ value: 10 }, { value: 12 }],
+              reference: 10,
+            },
+            expected: { formulas: { error: 1 } },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.previewResults[0]?.formulaResults[0]?.value).toBe(1);
+  });
+
+  it("does not accept arbitrary synthetic variable-binding preview values", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "scalar",
+            key: "measurements_value_mean",
+            label: "Mean",
+            required: false,
+            metadata: {
+              source: "variable_binding",
+              bindingSource: "table_statistic",
+              fieldKey: "measurements",
+              columnKey: "value",
+              statistic: "mean",
+            },
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            expression: "measurements_value_mean",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { measurements_value_mean: 99 },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some((item) => item.code === "PREVIEW_FAILED"),
+    ).toBe(true);
+  });
+
   it("preserves formula labels, output kind, and reporting metadata", () => {
     const result = compileMethodDraft(
       validDraft({
@@ -322,6 +492,78 @@ describe("compileMethodDraft", () => {
         group: "calibration_result",
         role: "primary_result",
       },
+    });
+  });
+
+  it("preserves table column role and mass composition metadata", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "composition",
+            label: "Composition",
+            required: false,
+            columns: [
+              {
+                key: "standard",
+                label: "Standard",
+                type: "text",
+                role: "mass_standard_composition",
+                massComposition: {
+                  targetUnit: "g",
+                  optionSource: "composition_profiles",
+                  targetColumns: {
+                    compositionLabel: "standard",
+                    expandedUncertainty: "u",
+                  },
+                  uncertaintyMode: "expanded_rss",
+                  quantityMode: "linear_per_item_then_rss",
+                },
+              },
+              { key: "u", label: "U", type: "number" },
+            ],
+          },
+          {
+            kind: "scalar",
+            key: "reference",
+            label: "Reference",
+            required: true,
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            expression: "reference",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.method.inputs[0]).toMatchObject({
+      kind: "table",
+      columns: [
+        {
+          key: "standard",
+          role: "mass_standard_composition",
+          massComposition: {
+            targetUnit: "g",
+            optionSource: "composition_profiles",
+            targetColumns: {
+              compositionLabel: "standard",
+              expandedUncertainty: "u",
+            },
+          },
+        },
+        { key: "u" },
+      ],
     });
   });
 

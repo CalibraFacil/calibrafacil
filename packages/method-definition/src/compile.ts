@@ -502,6 +502,20 @@ function compileAcceptanceCriteria(
         allowedVariables,
         (value) => fingerprintJson(value, "acceptance-criterion"),
       );
+      const nonNumericInputVariables = compiled.variables.filter(
+        (variable) =>
+          context.inputKeys.has(variable) &&
+          !context.numericInputKeys.has(variable),
+      );
+      for (const variable of nonNumericInputVariables) {
+        context.diagnostics.push(
+          errorDiagnostic(
+            "NON_NUMERIC_ACCEPTANCE_CRITERION_VARIABLE",
+            `Acceptance criterion ${criterion.key} references non-numeric input ${variable}`,
+            `acceptanceCriteria.${criterion.key}`,
+          ),
+        );
+      }
       compiledCriteria.push({
         ...criterion,
         normalizedFormula: compiled.normalizedFormula,

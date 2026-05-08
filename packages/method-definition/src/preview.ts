@@ -169,6 +169,17 @@ function buildPreviewContext(
   const context: Record<string, NumericInput | readonly NumericInput[]> = {};
 
   for (const input of inputs) {
+    if (
+      input.kind === "scalar" &&
+      input.metadata?.source === "variable_binding"
+    ) {
+      const derivedValue = resolveVariableBindingPreviewValue(input, values);
+      if (derivedValue !== undefined) {
+        context[input.key] = derivedValue;
+      }
+      continue;
+    }
+
     const value = values[input.key] as PreviewInputValue | undefined;
     if (value === undefined || value === null || value === "") {
       if (input.required) {
@@ -242,6 +253,29 @@ function buildPreviewContext(
         continue;
       }
       context[input.key] = value;
+    }
+
+    if (input.kind === "select") {
+      if (typeof value !== "string") {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_SELECT_INPUT_NOT_TEXT",
+            `Preview input ${input.key} must be a text option`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
+      if (!input.options.includes(value)) {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_SELECT_INPUT_INVALID_OPTION",
+            `Preview input ${input.key} must be one of the configured options`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
     }
 
     if (input.kind === "repeated_observation") {
@@ -385,6 +419,174 @@ function buildPreviewContext(
   }
 
   return context;
+}
+
+function resolveVariableBindingPreviewValue(
+  input: MethodInput & { kind: "scalar" },
+  values: Record<string, unknown>,
+): NumericInput | readonly NumericInput[] | undefined {
+  const metadata = input.metadata ?? {};
+  switch (metadata.bindingSource) {
+    case "data_field":
+      return toNumericInput(values[String(metadata.fieldKey)]);
+    case "table_column":
+      return tableColumnNumbers(
+        String(metadata.fieldKey),
+        String(metadata.columnKey),
+        values,
+      );
+    case "table_statistic":
+      return tableStatistic(
+        String(metadata.fieldKey),
+        String(metadata.columnKey),
+        String(metadata.statistic),
+        values,
+      );
+    case "environment":
+      return environmentValue(String(metadata.field), values);
+    case "standard":
+      return standardValue(metadata, values);
+    default:
+      return undefined;
+  }
+}
+
+function tableStatistic(
+  fieldKey: string,
+  columnKey: string,
+  statistic: string,
+  values: Record<string, unknown>,
+): NumericInput | undefined {
+  const numbers = tableColumnNumbers(fieldKey, columnKey, values);
+  if (!numbers.length && statistic !== "count") return undefined;
+
+  switch (statistic) {
+    case "count":
+      return numbers.length;
+    case "mean":
+      return sum(numbers) / numbers.length;
+    case "sample_stddev":
+      return numbers.length >= 2 ? sampleStandardDeviation(numbers) : undefined;
+    case "min":
+      return Math.min(...numbers);
+    case "max":
+      return Math.max(...numbers);
+    default:
+      return undefined;
+  }
+}
+
+function tableColumnNumbers(
+  fieldKey: string,
+  columnKey: string,
+  values: Record<string, unknown>,
+): readonly number[] {
+  const rows = values[fieldKey];
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) =>
+      row && typeof row === "object" && !Array.isArray(row)
+        ? toFiniteNumber((row as Record<string, unknown>)[columnKey])
+        : null,
+    )
+    .filter((value): value is number => value !== null);
+}
+
+function environmentValue(
+  field: string,
+  values: Record<string, unknown>,
+): NumericInput | undefined {
+  const environment = values.environment;
+  if (
+    !environment ||
+    typeof environment !== "object" ||
+    Array.isArray(environment)
+  ) {
+    return undefined;
+  }
+  return toNumericInput((environment as Record<string, unknown>)[field]);
+}
+
+function standardValue(
+  metadata: Record<string, string | number | boolean | null>,
+  values: Record<string, unknown>,
+): NumericInput | undefined {
+  const standards = values.standards;
+  if (!Array.isArray(standards)) return undefined;
+
+  const standard =
+    typeof metadata.standardId === "number"
+      ? standards.find(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            !Array.isArray(item) &&
+            (item as Record<string, unknown>).id === metadata.standardId,
+        )
+      : standards[0];
+
+  if (!standard || typeof standard !== "object" || Array.isArray(standard)) {
+    return undefined;
+  }
+
+  const record = standard as Record<string, unknown>;
+  const valueKey =
+    typeof metadata.valueKey === "string" ? metadata.valueKey : "";
+  if (valueKey === "uncertainty") return toNumericInput(record.uncertainty);
+  if (valueKey === "coverageFactor" || valueKey === "k") {
+    return toNumericInput(record.coverageFactor);
+  }
+  if (valueKey === "drift") return toNumericInput(record.drift);
+
+  const certifiedValues = record.certifiedValues;
+  if (!Array.isArray(certifiedValues)) return undefined;
+  const certifiedValue = certifiedValues.find(
+    (item) =>
+      item &&
+      typeof item === "object" &&
+      !Array.isArray(item) &&
+      String((item as Record<string, unknown>).nominal).replace(/\s+/g, "") ===
+        valueKey,
+  );
+  if (certifiedValue && typeof certifiedValue === "object") {
+    return toNumericInput((certifiedValue as Record<string, unknown>).value);
+  }
+
+  const uncertaintyKey = valueKey.endsWith("_u") ? valueKey.slice(0, -2) : null;
+  if (!uncertaintyKey) return undefined;
+  const uncertaintyValue = certifiedValues.find(
+    (item) =>
+      item &&
+      typeof item === "object" &&
+      !Array.isArray(item) &&
+      String((item as Record<string, unknown>).nominal).replace(/\s+/g, "") ===
+        uncertaintyKey,
+  );
+  return uncertaintyValue && typeof uncertaintyValue === "object"
+    ? toNumericInput((uncertaintyValue as Record<string, unknown>).uncertainty)
+    : undefined;
+}
+
+function toNumericInput(value: unknown): NumericInput | undefined {
+  if (typeof value !== "string" && typeof value !== "number") return undefined;
+  return Number.isFinite(Number(value)) ? value : undefined;
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function sum(values: readonly number[]): number {
+  return values.reduce((acc, value) => acc + value, 0);
+}
+
+function sampleStandardDeviation(values: readonly number[]): number {
+  const mean = sum(values) / values.length;
+  const variance =
+    values.reduce((acc, value) => acc + (value - mean) ** 2, 0) /
+    (values.length - 1);
+  return Math.sqrt(variance);
 }
 
 function pickNumericContext(

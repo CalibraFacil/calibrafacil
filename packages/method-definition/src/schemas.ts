@@ -67,6 +67,29 @@ export const TableColumnSchema = z
     label: z.string().trim().min(1),
     type: z.enum(["text", "number"]),
     unit: z.string().trim().optional(),
+    role: z.enum(["standard_value", "mass_standard_composition"]).optional(),
+    massComposition: z
+      .object({
+        targetUnit: z.enum(["mg", "g", "kg"]).optional(),
+        optionSource: z
+          .enum(["certified_values", "composition_profiles"])
+          .optional(),
+        targetColumns: z
+          .object({
+            certifiedValue: SafeKeySchema.optional(),
+            compositionLabel: SafeKeySchema.optional(),
+            expandedUncertainty: SafeKeySchema.optional(),
+            maxError: SafeKeySchema.optional(),
+            drift: SafeKeySchema.optional(),
+            buoyancy: SafeKeySchema.optional(),
+          })
+          .strict()
+          .optional(),
+        uncertaintyMode: z.literal("expanded_rss").optional(),
+        quantityMode: z.literal("linear_per_item_then_rss").optional(),
+      })
+      .strict()
+      .optional(),
     required: z.boolean().optional(),
     metadata: SafeMetadataSchema.optional(),
   })

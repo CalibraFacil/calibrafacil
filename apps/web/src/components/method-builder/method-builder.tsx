@@ -259,7 +259,9 @@ export function MethodBuilder({
       required: input.required,
       options: input.options,
       defaultValue: input.defaultValue,
-      source: 'manual',
+      source: type === 'table' ? 'manual' : (input.source ?? 'manual'),
+      assetSpecKey: type === 'table' ? undefined : input.assetSpecKey,
+      allowOverride: type === 'table' ? undefined : input.allowOverride,
       columns:
         type === 'table'
           ? (input.columns ?? [
@@ -613,6 +615,78 @@ export function MethodBuilder({
                     <span className="text-sm text-muted-foreground">
                       Obrigatório
                     </span>
+                  </div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <Field label="Origem">
+                      <Select
+                        value={
+                          input.type === 'table'
+                            ? 'manual'
+                            : (input.source ?? 'manual')
+                        }
+                        onValueChange={(source) =>
+                          updateInput(
+                            index,
+                            source === 'asset_spec'
+                              ? {
+                                  source: 'asset_spec',
+                                  assetSpecKey: input.assetSpecKey ?? '',
+                                  allowOverride: Boolean(input.allowOverride),
+                                  columns: undefined,
+                                }
+                              : {
+                                  source: 'manual',
+                                  assetSpecKey: undefined,
+                                  allowOverride: undefined,
+                                },
+                          )
+                        }
+                      >
+                        <SelectTrigger>
+                          <span>
+                            {input.type === 'table'
+                              ? 'manual'
+                              : (input.source ?? 'manual')}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="manual">manual</SelectItem>
+                          {input.type !== 'table' && (
+                            <SelectItem value="asset_spec">
+                              asset_spec
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    {input.type !== 'table' &&
+                      input.source === 'asset_spec' && (
+                        <>
+                          <Field label="Especificação">
+                            <Input
+                              value={input.assetSpecKey ?? ''}
+                              onChange={(event) =>
+                                updateInput(index, {
+                                  assetSpecKey: event.target.value,
+                                })
+                              }
+                            />
+                          </Field>
+                          <div className="flex items-end gap-2 pb-2">
+                            <Checkbox
+                              checked={Boolean(input.allowOverride)}
+                              onCheckedChange={(checked) =>
+                                updateInput(index, {
+                                  allowOverride: checked === true,
+                                })
+                              }
+                            />
+                            <span className="text-sm text-muted-foreground">
+                              Permitir override
+                            </span>
+                          </div>
+                        </>
+                      )}
                   </div>
                   {input.type === 'select' && (
                     <Field label="Opções">

@@ -160,6 +160,21 @@ export type TableColumn = {
   label: string;
   type: "text" | "number";
   unit?: string;
+  role?: "standard_value" | "mass_standard_composition";
+  massComposition?: {
+    targetUnit?: "mg" | "g" | "kg";
+    optionSource?: "certified_values" | "composition_profiles";
+    targetColumns?: {
+      certifiedValue?: string;
+      compositionLabel?: string;
+      expandedUncertainty?: string;
+      maxError?: string;
+      drift?: string;
+      buoyancy?: string;
+    };
+    uncertaintyMode?: "expanded_rss";
+    quantityMode?: "linear_per_item_then_rss";
+  };
   required?: boolean;
   metadata?: SafeMetadata;
 };
