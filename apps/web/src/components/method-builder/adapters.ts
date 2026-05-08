@@ -5,7 +5,9 @@ import {
   type MethodDraftSavePayload,
 } from './types'
 
-export function methodDataToDraft(method?: MethodRecordData | null): MethodDraft {
+export function methodDataToDraft(
+  method?: MethodRecordData | null,
+): MethodDraft {
   if (!method) {
     return structuredClone(emptyMethodDraft)
   }
@@ -101,7 +103,9 @@ export function draftToEngineMethodDraft(draft: MethodDraft) {
         label: input.label,
         required: Boolean(input.required),
         defaultValue:
-          typeof input.defaultValue === 'string' ? input.defaultValue : undefined,
+          typeof input.defaultValue === 'string'
+            ? input.defaultValue
+            : undefined,
       }
     }),
     formulas: draft.formulas.map((formula) => ({
@@ -109,8 +113,10 @@ export function draftToEngineMethodDraft(draft: MethodDraft) {
       label: formula.label || formula.outputKey,
       expression: formula.expression,
       outputUnit: formula.unit || undefined,
-      outputKind: formula.reporting?.role === 'primary_result' ? 'display' : undefined,
+      outputKind:
+        formula.reporting?.role === 'primary_result' ? 'display' : undefined,
       required: true,
+      reporting: formula.reporting,
     })),
     measurementModels: [],
     acceptanceCriteria: draft.validations.map((validation, index) => ({

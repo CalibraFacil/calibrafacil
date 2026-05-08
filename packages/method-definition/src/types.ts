@@ -62,8 +62,12 @@ export type InputQuantityLike = {
 export type MeasurementModelInputLike = {
   formula: string;
   quantities: Readonly<Record<string, InputQuantityLike>>;
-  correlations?: readonly unknown[] | Record<string, Record<string, NumericInput>>;
-  covariances?: readonly unknown[] | Record<string, Record<string, NumericInput>>;
+  correlations?:
+    | readonly unknown[]
+    | Record<string, Record<string, NumericInput>>;
+  covariances?:
+    | readonly unknown[]
+    | Record<string, Record<string, NumericInput>>;
   coverageProbability?: number;
   coverageFactor?: NumericInput;
   allowNonSmoothWithExplicitSensitivities?: boolean;
@@ -220,6 +224,17 @@ export type MethodFormula = {
     | "intermediate";
   required: boolean;
   dependencies?: string[];
+  reporting?: {
+    includeInCertificate?: boolean;
+    role?:
+      | "primary_result"
+      | "expanded_uncertainty"
+      | "coverage_factor"
+      | "conformity_margin"
+      | "uncertainty_component"
+      | "auxiliary";
+    group?: "calibration_result" | "uncertainty_budget" | "raw_calculation";
+  };
   metadata?: SafeMetadata;
 };
 
@@ -349,11 +364,15 @@ export type NormalizedAcceptanceCriterion = MethodAcceptanceCriterion & {
 
 export type CompiledFormulaDefinition = {
   key: string;
+  label: string;
   expression: string;
   normalizedFormula: string;
   formulaFingerprint: string;
   variables: string[];
   outputUnit?: string;
+  outputKind?: MethodFormula["outputKind"];
+  reporting?: MethodFormula["reporting"];
+  metadata?: SafeMetadata;
 };
 
 export type CompiledMeasurementModelDefinition = {

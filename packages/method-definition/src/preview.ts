@@ -32,7 +32,11 @@ export function runMethodPreview(
     [];
 
   const engine = options.engine;
-  const context = buildPreviewContext(method.inputs, scenario.inputs, diagnostics);
+  const context = buildPreviewContext(
+    method.inputs,
+    scenario.inputs,
+    diagnostics,
+  );
 
   for (const formula of method.formulas) {
     try {
@@ -113,7 +117,10 @@ export function runMethodPreview(
         [...Object.keys(context)].sort(),
         (value) => fingerprintJson(value, "acceptance-criterion"),
       );
-      const passed = evaluateCompiledCriterion(compiled, pickNumericContext(context, compiled.variables));
+      const passed = evaluateCompiledCriterion(
+        compiled,
+        pickNumericContext(context, compiled.variables),
+      );
       acceptanceCriteriaResults.push({
         key: criterion.key,
         passed,
@@ -248,7 +255,132 @@ function buildPreviewContext(
         );
         continue;
       }
-      context[input.key] = value as readonly NumericInput[];
+      if (value.length < input.minCount) {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_OBSERVATION_COUNT_BELOW_MIN",
+            `Preview input ${input.key} must contain at least ${input.minCount} observations`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
+      if (input.maxCount !== undefined && value.length > input.maxCount) {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_OBSERVATION_COUNT_ABOVE_MAX",
+            `Preview input ${input.key} must contain at most ${input.maxCount} observations`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
+      const observations: NumericInput[] = [];
+      let invalid = false;
+      for (const [index, item] of value.entries()) {
+        if (typeof item !== "string" && typeof item !== "number") {
+          diagnostics.push(
+            errorDiagnostic(
+              "PREVIEW_OBSERVATION_NOT_NUMERIC",
+              `Preview observation ${input.key}[${index}] must be numeric`,
+              `inputs.${input.key}.${index}`,
+            ),
+          );
+          invalid = true;
+          continue;
+        }
+        if (!Number.isFinite(Number(item))) {
+          diagnostics.push(
+            errorDiagnostic(
+              "PREVIEW_OBSERVATION_NOT_FINITE",
+              `Preview observation ${input.key}[${index}] must be finite`,
+              `inputs.${input.key}.${index}`,
+            ),
+          );
+          invalid = true;
+          continue;
+        }
+        observations.push(item);
+      }
+      if (invalid) continue;
+      context[input.key] = observations;
+    }
+
+    if (input.kind === "table") {
+      if (!Array.isArray(value)) {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_TABLE_NOT_ARRAY",
+            `Preview input ${input.key} must be an array of rows`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
+      const minRows = Math.max(input.minRows ?? 0, input.required ? 1 : 0);
+      if (value.length < minRows) {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_TABLE_ROW_COUNT_BELOW_MIN",
+            `Preview table ${input.key} must contain at least ${minRows} rows`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
+      if (input.maxRows !== undefined && value.length > input.maxRows) {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_TABLE_ROW_COUNT_ABOVE_MAX",
+            `Preview table ${input.key} must contain at most ${input.maxRows} rows`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
+
+      for (const [rowIndex, row] of value.entries()) {
+        if (!row || typeof row !== "object" || Array.isArray(row)) {
+          diagnostics.push(
+            errorDiagnostic(
+              "PREVIEW_TABLE_ROW_INVALID",
+              `Preview table ${input.key} row ${rowIndex} must be an object`,
+              `inputs.${input.key}.${rowIndex}`,
+            ),
+          );
+          continue;
+        }
+        const record = row as Record<string, unknown>;
+        for (const column of input.columns) {
+          const cell = record[column.key];
+          if (cell === undefined || cell === null || cell === "") {
+            if (column.required) {
+              diagnostics.push(
+                errorDiagnostic(
+                  "PREVIEW_TABLE_CELL_MISSING",
+                  `Preview table ${input.key} row ${rowIndex} is missing required column ${column.key}`,
+                  `inputs.${input.key}.${rowIndex}.${column.key}`,
+                ),
+              );
+            }
+            continue;
+          }
+          if (column.type === "number") {
+            if (
+              (typeof cell !== "string" && typeof cell !== "number") ||
+              !Number.isFinite(Number(cell))
+            ) {
+              diagnostics.push(
+                errorDiagnostic(
+                  "PREVIEW_TABLE_CELL_NOT_NUMERIC",
+                  `Preview table ${input.key} row ${rowIndex} column ${column.key} must be numeric`,
+                  `inputs.${input.key}.${rowIndex}.${column.key}`,
+                ),
+              );
+            }
+          }
+        }
+      }
     }
   }
 
@@ -348,9 +480,7 @@ function toPreviewDiagnostic(
   );
 }
 
-function isCalculationEngineErrorLike(
-  error: unknown,
-): error is {
+function isCalculationEngineErrorLike(error: unknown): error is {
   code: string;
   message: string;
   details?: { path?: unknown };

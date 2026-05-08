@@ -60,8 +60,9 @@ function compileDraftWithEngine(
   } = {},
 ) {
   const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
-  const engine =
-    createCalculationEngine(normalizedOptions) as unknown as CalculationEngineLike;
+  const engine = createCalculationEngine(
+    normalizedOptions,
+  ) as unknown as CalculationEngineLike;
 
   return compileMethodDraft(draft, {
     engine,
@@ -134,7 +135,9 @@ function coerceMethodDraft(value: unknown): MethodDraft {
 
 function tryCoerceMethodDraft(
   value: unknown,
-): { ok: true; draft: MethodDraft } | { ok: false; diagnostics: MethodDiagnostic[] } {
+):
+  | { ok: true; draft: MethodDraft }
+  | { ok: false; diagnostics: MethodDiagnostic[] } {
   try {
     return { ok: true, draft: coerceMethodDraft(value) };
   } catch (error) {
@@ -172,11 +175,13 @@ function methodPayloadToDefinitionDraft(
     : Array.isArray(candidate.variables)
       ? candidate.variables
       : [];
+  const inferredVariableBindings = buildDefaultVariableBindings(rawInputs);
   const definitionInputs: MethodDraft["inputs"] = [];
   const seenInputKeys = new Set<string>();
   for (const input of [
     ...rawInputs.map(methodInputToDefinitionInput),
     ...rawVariableBindings.map(methodVariableBindingToDefinitionInput),
+    ...inferredVariableBindings.map(methodVariableBindingToDefinitionInput),
   ]) {
     if (!input || seenInputKeys.has(input.key)) continue;
     definitionInputs.push(input);
@@ -210,7 +215,9 @@ function methodPayloadToDefinitionDraft(
   });
 }
 
-function methodInputToDefinitionInput(input: unknown): MethodDraft["inputs"][number] {
+function methodInputToDefinitionInput(
+  input: unknown,
+): MethodDraft["inputs"][number] {
   const record = (input ?? {}) as Record<string, unknown>;
   const key = typeof record.key === "string" ? record.key : "input";
   const label = typeof record.label === "string" ? record.label : key;
@@ -239,10 +246,14 @@ function methodInputToDefinitionInput(input: unknown): MethodDraft["inputs"][num
       label,
       required,
       options: Array.isArray(record.options)
-        ? record.options.filter((item): item is string => typeof item === "string")
+        ? record.options.filter(
+            (item): item is string => typeof item === "string",
+          )
         : [],
       defaultValue:
-        typeof record.defaultValue === "string" ? record.defaultValue : undefined,
+        typeof record.defaultValue === "string"
+          ? record.defaultValue
+          : undefined,
     };
   }
 
@@ -266,14 +277,19 @@ function methodInputToDefinitionInput(input: unknown): MethodDraft["inputs"][num
               return {
                 key: tableColumn.key,
                 label: tableColumn.label,
-                type: tableColumn.type === "number" ? "number" as const : "text" as const,
+                type:
+                  tableColumn.type === "number"
+                    ? ("number" as const)
+                    : ("text" as const),
                 unit:
                   typeof tableColumn.unit === "string"
                     ? tableColumn.unit
                     : undefined,
               };
             })
-            .filter((column): column is NonNullable<typeof column> => column !== null)
+            .filter(
+              (column): column is NonNullable<typeof column> => column !== null,
+            )
         : [],
     };
   }
@@ -300,8 +316,7 @@ function methodFormulaToDefinitionFormula(formula: unknown) {
   return {
     key,
     label: typeof record.label === "string" ? record.label : key,
-    expression:
-      typeof record.expression === "string" ? record.expression : "0",
+    expression: typeof record.expression === "string" ? record.expression : "0",
     outputUnit:
       typeof record.unit === "string"
         ? record.unit
@@ -310,7 +325,128 @@ function methodFormulaToDefinitionFormula(formula: unknown) {
           : undefined,
     outputKind: "derived_quantity" as const,
     required: true,
+    reporting: methodFormulaReportingToDefinitionReporting(record.reporting),
   };
+}
+
+function buildDefaultVariableBindings(rawInputs: unknown[]): unknown[] {
+  const bindings: Array<Record<string, unknown>> = [];
+
+  for (const input of rawInputs) {
+    const record = (input ?? {}) as Record<string, unknown>;
+    if (typeof record.key !== "string") continue;
+    const label = typeof record.label === "string" ? record.label : record.key;
+
+    if (record.type === "number") {
+      bindings.push({
+        key: record.key,
+        label,
+        source: "data_field",
+        fieldKey: record.key,
+      });
+      continue;
+    }
+
+    if (record.type !== "table" || !Array.isArray(record.columns)) continue;
+
+    for (const column of record.columns) {
+      const tableColumn = (column ?? {}) as Record<string, unknown>;
+      if (
+        tableColumn.type !== "number" ||
+        typeof tableColumn.key !== "string"
+      ) {
+        continue;
+      }
+      const columnLabel =
+        typeof tableColumn.label === "string"
+          ? tableColumn.label
+          : tableColumn.key;
+
+      bindings.push({
+        key: `${record.key}_${tableColumn.key}`,
+        label: `${label} / ${columnLabel}`,
+        source: "table_column",
+        fieldKey: record.key,
+        columnKey: tableColumn.key,
+      });
+
+      for (const statistic of [
+        "mean",
+        "sample_stddev",
+        "count",
+        "min",
+        "max",
+      ] as const) {
+        bindings.push({
+          key: `${record.key}_${tableColumn.key}_${statistic}`,
+          label: `${label} / ${columnLabel} / ${statistic}`,
+          source: "table_statistic",
+          fieldKey: record.key,
+          columnKey: tableColumn.key,
+          statistic,
+        });
+      }
+    }
+  }
+
+  bindings.push(
+    {
+      key: "env_temperature",
+      label: "Temperatura ambiente",
+      source: "environment",
+      field: "temperature",
+    },
+    {
+      key: "env_humidity",
+      label: "Umidade ambiente",
+      source: "environment",
+      field: "humidity",
+    },
+    {
+      key: "env_pressure",
+      label: "Pressão ambiente",
+      source: "environment",
+      field: "pressure",
+    },
+  );
+
+  return bindings;
+}
+
+function methodFormulaReportingToDefinitionReporting(reporting: unknown) {
+  const record = (reporting ?? {}) as Record<string, unknown>;
+  if (!reporting || typeof reporting !== "object") return undefined;
+  const normalized = {
+    ...(typeof record.includeInCertificate === "boolean"
+      ? { includeInCertificate: record.includeInCertificate }
+      : {}),
+    ...(isFormulaReportingRole(record.role) ? { role: record.role } : {}),
+    ...(isFormulaReportingGroup(record.group) ? { group: record.group } : {}),
+  };
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function isFormulaReportingRole(
+  value: unknown,
+): value is NonNullable<MethodDraft["formulas"][number]["reporting"]>["role"] {
+  return (
+    value === "primary_result" ||
+    value === "expanded_uncertainty" ||
+    value === "coverage_factor" ||
+    value === "conformity_margin" ||
+    value === "uncertainty_component" ||
+    value === "auxiliary"
+  );
+}
+
+function isFormulaReportingGroup(
+  value: unknown,
+): value is NonNullable<MethodDraft["formulas"][number]["reporting"]>["group"] {
+  return (
+    value === "calibration_result" ||
+    value === "uncertainty_budget" ||
+    value === "raw_calculation"
+  );
 }
 
 function methodVariableBindingToDefinitionInput(
@@ -574,7 +710,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         draft?: unknown;
         method?: unknown;
       };
-      const draftResult = tryCoerceMethodDraft(body.draft ?? body.method ?? body);
+      const draftResult = tryCoerceMethodDraft(
+        body.draft ?? body.method ?? body,
+      );
       if (!draftResult.ok) {
         return c.json(
           {
@@ -607,7 +745,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         sampleData?: Record<string, unknown>;
         inputs?: Record<string, unknown>;
       };
-      const draftResult = tryCoerceMethodDraft(body.draft ?? body.method ?? body);
+      const draftResult = tryCoerceMethodDraft(
+        body.draft ?? body.method ?? body,
+      );
       if (!draftResult.ok) {
         return c.json(
           {
@@ -1056,7 +1196,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
 
-        const compileResult = compileDraftWithEngine(methodRecordToDraft(existing));
+        const compileResult = compileDraftWithEngine(
+          methodRecordToDraft(existing),
+        );
         if (!compileResult.ok) {
           return c.json(
             {
@@ -1250,8 +1392,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           reasonForChange?: string;
           sampleData?: Record<string, unknown>;
         };
-        const compileResult = compileDraftWithEngine(methodRecordToDraft(existing), {
-          requirePublishable: Boolean(body.sampleData),
+        const publishDraft = methodRecordToDraft({
+          ...existing,
+          status: "PUBLISHED",
+        });
+        const compileResult = compileDraftWithEngine(publishDraft, {
+          requirePublishable: true,
           previewScenarios: buildAdhocPreviewScenarios(body.sampleData),
           includePreviewScenariosInFingerprint: false,
         });
@@ -1462,9 +1608,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
 
-        if (
-          existing.technicalReviewedBy === session.user.id
-        ) {
+        if (existing.technicalReviewedBy === session.user.id) {
           return c.json(
             {
               error:
@@ -1486,7 +1630,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           reasonForChange?: string;
           sampleData?: Record<string, unknown>;
         };
-        const compileResult = compileDraftWithEngine(methodRecordToDraft(existing), {
+        const publishDraft = methodRecordToDraft({
+          ...existing,
+          status: "PUBLISHED",
+        });
+        const compileResult = compileDraftWithEngine(publishDraft, {
           requirePublishable: true,
           previewScenarios: buildAdhocPreviewScenarios(body.sampleData),
           includePreviewScenariosInFingerprint: false,

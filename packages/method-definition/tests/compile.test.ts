@@ -49,7 +49,8 @@ function evaluateTestExpression(
 ): number {
   const trimmed = expression.trim();
   const absMatch = trimmed.match(/^abs\(([^)]+)\)$/);
-  if (absMatch?.[1]) return Math.abs(evaluateTestExpression(absMatch[1], inputs));
+  if (absMatch?.[1])
+    return Math.abs(evaluateTestExpression(absMatch[1], inputs));
 
   for (const operator of ["-", "+"] as const) {
     const parts = trimmed.split(operator);
@@ -192,17 +193,21 @@ describe("compileMethodDraft", () => {
     );
 
     expect(result.ok).toBe(false);
-    expect(result.diagnostics.some((item) => item.code === "FORMULA_CYCLE")).toBe(true);
+    expect(
+      result.diagnostics.some((item) => item.code === "FORMULA_CYCLE"),
+    ).toBe(true);
   });
 
   it("rejects publishable methods without preview scenarios", () => {
-    const result = compileMethodDraft(
-      validDraft({ previewScenarios: [] }),
-      { engine: fakeEngine, requirePublishable: true },
-    );
+    const result = compileMethodDraft(validDraft({ previewScenarios: [] }), {
+      engine: fakeEngine,
+      requirePublishable: true,
+    });
 
     expect(result.ok).toBe(false);
-    expect(result.diagnostics.some((item) => item.code === "PREVIEW_REQUIRED")).toBe(true);
+    expect(
+      result.diagnostics.some((item) => item.code === "PREVIEW_REQUIRED"),
+    ).toBe(true);
   });
 
   it("lets expected-failure previews pass publication compilation", () => {
@@ -246,7 +251,166 @@ describe("compileMethodDraft", () => {
     );
 
     expect(result.ok).toBe(false);
-    expect(result.diagnostics.some((item) => item.code === "PREVIEW_FAILED")).toBe(true);
+    expect(
+      result.diagnostics.some((item) => item.code === "PREVIEW_FAILED"),
+    ).toBe(true);
+  });
+
+  it("rejects non-numeric method inputs referenced by formulas", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "select",
+            key: "selected_option",
+            label: "Option",
+            required: true,
+            options: ["A", "B"],
+          },
+        ],
+        formulas: [
+          {
+            key: "bad_formula",
+            label: "Bad formula",
+            expression: "selected_option + 1",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "NON_NUMERIC_FORMULA_VARIABLE",
+      ),
+    ).toBe(true);
+  });
+
+  it("preserves formula labels, output kind, and reporting metadata", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        formulas: [
+          {
+            key: "error",
+            label: "Erro de indicação",
+            expression: "indication - reference",
+            outputUnit: "g",
+            outputKind: "error",
+            required: true,
+            reporting: {
+              includeInCertificate: true,
+              group: "calibration_result",
+              role: "primary_result",
+            },
+          },
+        ],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.method.formulas[0]).toMatchObject({
+      label: "Erro de indicação",
+      outputKind: "error",
+      reporting: {
+        includeInCertificate: true,
+        group: "calibration_result",
+        role: "primary_result",
+      },
+    });
+  });
+
+  it("rejects publishable previews with too few repeated observations", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "repeated_observation",
+            key: "readings",
+            label: "Readings",
+            required: true,
+            minCount: 3,
+          },
+          {
+            kind: "scalar",
+            key: "reference",
+            label: "Reference",
+            required: true,
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            expression: "reference",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { readings: [1, 2], reference: 10 },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some((item) => item.code === "PREVIEW_FAILED"),
+    ).toBe(true);
+  });
+
+  it("rejects publishable previews with empty required tables", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            required: true,
+            columns: [{ key: "value", label: "Value", type: "number" }],
+          },
+          {
+            kind: "scalar",
+            key: "reference",
+            label: "Reference",
+            required: true,
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            expression: "reference",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { measurements: [], reference: 10 },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some((item) => item.code === "PREVIEW_FAILED"),
+    ).toBe(true);
   });
 
   it("rejects unknown acceptance criterion variables", () => {

@@ -121,10 +121,35 @@ export const MethodFormulaSchema = z
     expression: z.string().trim().min(1),
     outputUnit: z.string().trim().optional(),
     outputKind: z
-      .enum(["correction", "error", "derived_quantity", "display", "intermediate"])
+      .enum([
+        "correction",
+        "error",
+        "derived_quantity",
+        "display",
+        "intermediate",
+      ])
       .optional(),
     required: z.boolean().default(true),
     dependencies: z.array(SafeKeySchema).optional(),
+    reporting: z
+      .object({
+        includeInCertificate: z.boolean().optional(),
+        role: z
+          .enum([
+            "primary_result",
+            "expanded_uncertainty",
+            "coverage_factor",
+            "conformity_margin",
+            "uncertainty_component",
+            "auxiliary",
+          ])
+          .optional(),
+        group: z
+          .enum(["calibration_result", "uncertainty_budget", "raw_calculation"])
+          .optional(),
+      })
+      .strict()
+      .optional(),
     metadata: SafeMetadataSchema.optional(),
   })
   .strict();
@@ -164,7 +189,9 @@ const DirectStandardUncertaintySchema = z
   .object({
     kind: z.literal("direct_standard_uncertainty"),
     standardUncertainty: NumericValueSchema,
-    degreesOfFreedom: z.union([z.number().finite().positive(), z.literal("Infinity")]).optional(),
+    degreesOfFreedom: z
+      .union([z.number().finite().positive(), z.literal("Infinity")])
+      .optional(),
   })
   .strict();
 
@@ -174,7 +201,9 @@ export const MethodQuantitySchema = z
     source: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("input"), key: SafeKeySchema }).strict(),
       z.object({ kind: z.literal("formula"), key: SafeKeySchema }).strict(),
-      z.object({ kind: z.literal("constant"), value: NumericValueSchema }).strict(),
+      z
+        .object({ kind: z.literal("constant"), value: NumericValueSchema })
+        .strict(),
     ]),
     unit: z.string().trim().optional(),
     uncertainty: z.discriminatedUnion("kind", [
@@ -182,7 +211,9 @@ export const MethodQuantitySchema = z
       TypeBUncertaintySchema,
       DirectStandardUncertaintySchema,
     ]),
-    degreesOfFreedom: z.union([z.number().finite().positive(), z.literal("Infinity")]).optional(),
+    degreesOfFreedom: z
+      .union([z.number().finite().positive(), z.literal("Infinity")])
+      .optional(),
     sensitivity: NumericValueSchema.optional(),
     metadata: SafeMetadataSchema.optional(),
   })

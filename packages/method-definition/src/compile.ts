@@ -40,6 +40,7 @@ type CompileContext = {
   draft: MethodDraft;
   diagnostics: MethodDiagnostic[];
   inputKeys: Set<string>;
+  numericInputKeys: Set<string>;
   formulaKeys: Set<string>;
   modelKeys: Set<string>;
 };
@@ -80,6 +81,11 @@ export function compileMethodDraft(
     draft,
     diagnostics,
     inputKeys: new Set(draft.inputs.map((item) => item.key)),
+    numericInputKeys: new Set(
+      draft.inputs
+        .filter((item) => item.kind === "scalar")
+        .map((item) => item.key),
+    ),
     formulaKeys: new Set(draft.formulas.map((item) => item.key)),
     modelKeys: new Set(draft.measurementModels.map((item) => item.key)),
   };
@@ -87,8 +93,13 @@ export function compileMethodDraft(
   validateNamespace(context);
 
   const compiledFormulaEntries = compileFormulas(context);
-  const orderedFormulaEntries = orderFormulaEntries(compiledFormulaEntries, diagnostics);
-  const compiledFormulas = orderedFormulaEntries.map(toCompiledFormulaDefinition);
+  const orderedFormulaEntries = orderFormulaEntries(
+    compiledFormulaEntries,
+    diagnostics,
+  );
+  const compiledFormulas = orderedFormulaEntries.map(
+    toCompiledFormulaDefinition,
+  );
   const compiledModels = compileMeasurementModels(context);
   const compiledCriteria = compileAcceptanceCriteria(context);
   const previewScenarios = options.previewScenarios ?? draft.previewScenarios;
@@ -196,7 +207,8 @@ export function compileMethodDraft(
 
 function validateNamespace(context: CompileContext): void {
   const keys = new Map<string, string>();
-  for (const input of context.draft.inputs) addUnique(keys, input.key, "input", context);
+  for (const input of context.draft.inputs)
+    addUnique(keys, input.key, "input", context);
   for (const formula of context.draft.formulas) {
     addUnique(keys, formula.key, "formula", context);
   }
@@ -243,7 +255,10 @@ function addUnique(
 }
 
 function compileFormulas(context: CompileContext): FormulaCompileEntry[] {
-  const allowedVariables = [...context.inputKeys, ...context.formulaKeys].sort();
+  const allowedVariables = [
+    ...context.inputKeys,
+    ...context.formulaKeys,
+  ].sort();
   const entries: FormulaCompileEntry[] = [];
 
   for (const formula of context.draft.formulas) {
@@ -253,13 +268,28 @@ function compileFormulas(context: CompileContext): FormulaCompileEntry[] {
       });
       const unknownVariables = compiled.variables.filter(
         (variable) =>
-          !context.inputKeys.has(variable) && !context.formulaKeys.has(variable),
+          !context.inputKeys.has(variable) &&
+          !context.formulaKeys.has(variable),
+      );
+      const nonNumericInputVariables = compiled.variables.filter(
+        (variable) =>
+          context.inputKeys.has(variable) &&
+          !context.numericInputKeys.has(variable),
       );
       for (const variable of unknownVariables) {
         context.diagnostics.push(
           errorDiagnostic(
             "UNKNOWN_FORMULA_VARIABLE",
             `Formula ${formula.key} references unknown variable ${variable}`,
+            `formulas.${formula.key}`,
+          ),
+        );
+      }
+      for (const variable of nonNumericInputVariables) {
+        context.diagnostics.push(
+          errorDiagnostic(
+            "NON_NUMERIC_FORMULA_VARIABLE",
+            `Formula ${formula.key} references non-numeric input ${variable}`,
             `formulas.${formula.key}`,
           ),
         );
@@ -311,7 +341,8 @@ function orderFormulaEntries(
     if (!entry) return;
 
     visiting.add(key);
-    for (const dependency of entry.dependencies) visit(dependency, [...stack, key]);
+    for (const dependency of entry.dependencies)
+      visit(dependency, [...stack, key]);
     visiting.delete(key);
     visited.add(key);
     ordered.push(entry);
@@ -326,11 +357,19 @@ function toCompiledFormulaDefinition(
 ): CompiledFormulaDefinition {
   return {
     key: entry.formula.key,
+    label: entry.formula.label,
     expression: entry.formula.expression,
     normalizedFormula: entry.compiled.normalizedFormula,
     formulaFingerprint: entry.compiled.formulaFingerprint,
     variables: [...entry.compiled.variables].sort(),
-    ...(entry.formula.outputUnit ? { outputUnit: entry.formula.outputUnit } : {}),
+    ...(entry.formula.outputUnit
+      ? { outputUnit: entry.formula.outputUnit }
+      : {}),
+    ...(entry.formula.outputKind
+      ? { outputKind: entry.formula.outputKind }
+      : {}),
+    ...(entry.formula.reporting ? { reporting: entry.formula.reporting } : {}),
+    ...(entry.formula.metadata ? { metadata: entry.formula.metadata } : {}),
   };
 }
 
@@ -380,7 +419,9 @@ function compileMeasurementModels(
         ...(model.coverageProbability
           ? { coverageProbability: model.coverageProbability }
           : {}),
-        ...(model.coverageFactor ? { coverageFactor: model.coverageFactor } : {}),
+        ...(model.coverageFactor
+          ? { coverageFactor: model.coverageFactor }
+          : {}),
         ...(model.options ? { options: model.options } : {}),
       });
     } catch (error) {
@@ -408,14 +449,21 @@ function validateMeasurementModelSources(
       throw new Error(`Duplicate quantity symbol ${quantity.symbol}`);
     }
     quantitySymbols.add(quantity.symbol);
-    if (quantity.source.kind === "input" && !context.inputKeys.has(quantity.source.key)) {
-      throw new Error(`Quantity ${quantity.symbol} references unknown input ${quantity.source.key}`);
+    if (
+      quantity.source.kind === "input" &&
+      !context.inputKeys.has(quantity.source.key)
+    ) {
+      throw new Error(
+        `Quantity ${quantity.symbol} references unknown input ${quantity.source.key}`,
+      );
     }
     if (
       quantity.source.kind === "formula" &&
       !context.formulaKeys.has(quantity.source.key)
     ) {
-      throw new Error(`Quantity ${quantity.symbol} references unknown formula ${quantity.source.key}`);
+      throw new Error(
+        `Quantity ${quantity.symbol} references unknown formula ${quantity.source.key}`,
+      );
     }
     if (quantity.uncertainty.kind === "type_a") {
       const observationsInputKey = quantity.uncertainty.observationsInputKey;
@@ -610,9 +658,7 @@ function calculationErrorDiagnostic(
   );
 }
 
-function isCalculationEngineErrorLike(
-  error: unknown,
-): error is {
+function isCalculationEngineErrorLike(error: unknown): error is {
   code: string;
   message: string;
   details?: { path?: unknown };

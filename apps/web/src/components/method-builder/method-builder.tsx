@@ -85,8 +85,9 @@ const validationOperators: Array<MethodDraftValidation['operator']> = [
   '!=',
 ]
 
-const distributionOptions: Array<MethodDraftUncertaintyComponent['distribution']> =
-  ['normal', 'rectangular', 'triangular', 'u-shaped']
+const distributionOptions: Array<
+  MethodDraftUncertaintyComponent['distribution']
+> = ['normal', 'rectangular', 'triangular', 'u-shaped']
 
 const reportingGroups: Array<
   NonNullable<MethodDraftFormula['reporting']>['group']
@@ -117,12 +118,10 @@ export function MethodBuilder({
   const [sampleDataText, setSampleDataText] = useState(() =>
     JSON.stringify(buildInitialSampleData(initialDraft), null, 2),
   )
-  const [compileResult, setCompileResult] = useState<MethodCompileResult | null>(
-    null,
-  )
-  const [previewResult, setPreviewResult] = useState<MethodPreviewResult | null>(
-    null,
-  )
+  const [compileResult, setCompileResult] =
+    useState<MethodCompileResult | null>(null)
+  const [previewResult, setPreviewResult] =
+    useState<MethodPreviewResult | null>(null)
 
   const { data: assetTypesData } = useQuery({
     queryKey: ['asset-types'],
@@ -138,6 +137,7 @@ export function MethodBuilder({
     mutationFn: compileMethodDraft,
     onSuccess: (result) => {
       setCompileResult(result)
+      setPreviewResult(null)
       toast.success('Compilação concluída')
     },
     onError: (error) => {
@@ -220,6 +220,8 @@ export function MethodBuilder({
   )
 
   function updateDraft(patch: Partial<MethodDraft>) {
+    setCompileResult(null)
+    setPreviewResult(null)
     setDraft((current) => ({ ...current, ...patch }))
   }
 
@@ -241,6 +243,37 @@ export function MethodBuilder({
     updateDraft({
       inputs: draft.inputs.map((input, itemIndex) =>
         itemIndex === index ? { ...input, ...patch } : input,
+      ),
+    })
+  }
+
+  function updateInputType(index: number, type: MethodDraftInputType) {
+    const input = draft.inputs[index]
+    if (!input) return
+
+    const manualInput: MethodDraftInput = {
+      key: input.key,
+      label: input.label,
+      type,
+      unit: input.unit,
+      required: input.required,
+      options: input.options,
+      defaultValue: input.defaultValue,
+      source: 'manual',
+      columns:
+        type === 'table'
+          ? (input.columns ?? [
+              {
+                key: 'value',
+                label: 'Valor',
+                type: 'number',
+              },
+            ])
+          : undefined,
+    }
+    updateDraft({
+      inputs: draft.inputs.map((item, itemIndex) =>
+        itemIndex === index ? manualInput : item,
       ),
     })
   }
@@ -331,10 +364,7 @@ export function MethodBuilder({
     })
   }
 
-  function updateVariable(
-    index: number,
-    binding: MethodDraftVariableBinding,
-  ) {
+  function updateVariable(index: number, binding: MethodDraftVariableBinding) {
     updateDraft({
       variables: draft.variables.map((item, itemIndex) =>
         itemIndex === index ? binding : item,
@@ -342,9 +372,7 @@ export function MethodBuilder({
     })
   }
 
-  function updateCertificate(
-    patch: Partial<MethodDraftCertificateContent>,
-  ) {
+  function updateCertificate(patch: Partial<MethodDraftCertificateContent>) {
     updateDraft({
       certificate: {
         referenceStandards: [],
@@ -399,8 +427,8 @@ export function MethodBuilder({
             {isNew ? 'Novo método' : 'Editar método'}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Method Builder edita rascunhos, compila fórmulas e valida o
-            preview no servidor.
+            Method Builder edita rascunhos, compila fórmulas e valida o preview
+            no servidor.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -412,7 +440,10 @@ export function MethodBuilder({
             onClick={() => compileMutation.mutate(draft)}
             disabled={compileMutation.isPending}
           >
-            <HugeiconsIcon icon={CheckmarkCircle02Icon} className="mr-2 h-4 w-4" />
+            <HugeiconsIcon
+              icon={CheckmarkCircle02Icon}
+              className="mr-2 h-4 w-4"
+            />
             Compilar
           </Button>
           <Button
@@ -426,7 +457,9 @@ export function MethodBuilder({
           <Button
             variant="outline"
             onClick={() => publishMutation.mutate()}
-            disabled={!draft.id || publishMutation.isPending || hasCompileErrors}
+            disabled={
+              !draft.id || publishMutation.isPending || hasCompileErrors
+            }
           >
             {draft.status === 'DRAFT' ? 'Enviar para revisão' : 'Publicar'}
           </Button>
@@ -451,25 +484,30 @@ export function MethodBuilder({
                 <Field label="Nome">
                   <Input
                     value={draft.name}
-                    onChange={(event) => updateDraft({ name: event.target.value })}
+                    onChange={(event) =>
+                      updateDraft({ name: event.target.value })
+                    }
                     placeholder="Ex.: Calibração de balança"
                   />
                 </Field>
                 <Field label="Tipo de ativo">
                   <Select
-                    value={draft.assetTypeId ? String(draft.assetTypeId) : 'none'}
+                    value={
+                      draft.assetTypeId ? String(draft.assetTypeId) : 'none'
+                    }
                     onValueChange={(value) =>
                       updateDraft({
-                        assetTypeId: value === 'none' ? undefined : Number(value),
+                        assetTypeId:
+                          value === 'none' ? undefined : Number(value),
                       })
                     }
                   >
                     <SelectTrigger>
                       <span>
                         {draft.assetTypeId
-                          ? assetTypesData?.data.find(
+                          ? (assetTypesData?.data.find(
                               (type) => type.id === draft.assetTypeId,
-                            )?.name ?? 'Tipo selecionado'
+                            )?.name ?? 'Tipo selecionado')
                           : 'Sem vínculo'}
                       </span>
                     </SelectTrigger>
@@ -503,7 +541,10 @@ export function MethodBuilder({
               onAction={addInput}
             >
               {draft.inputs.map((input, index) => (
-                <div key={`${input.key}-${index}`} className="rounded-md border p-3">
+                <div
+                  key={`${input.key}-${index}`}
+                  className="rounded-md border p-3"
+                >
                   <div className="grid gap-3 md:grid-cols-[1fr_1fr_120px_100px_auto]">
                     <Field label="Chave">
                       <Input
@@ -525,19 +566,7 @@ export function MethodBuilder({
                       <Select
                         value={input.type}
                         onValueChange={(value) =>
-                          updateInput(index, {
-                            type: value as MethodDraftInputType,
-                            columns:
-                              value === 'table'
-                                ? input.columns ?? [
-                                    {
-                                      key: 'value',
-                                      label: 'Valor',
-                                      type: 'number',
-                                    },
-                                  ]
-                                : undefined,
-                          })
+                          updateInputType(index, value as MethodDraftInputType)
                         }
                       >
                         <SelectTrigger>
@@ -566,7 +595,9 @@ export function MethodBuilder({
                         icon={Delete02Icon}
                         onClick={() =>
                           updateDraft({
-                            inputs: draft.inputs.filter((_, itemIndex) => itemIndex !== index),
+                            inputs: draft.inputs.filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
                           })
                         }
                       />
@@ -639,13 +670,18 @@ export function MethodBuilder({
               onAction={addFormula}
             >
               {draft.formulas.map((formula, index) => (
-                <div key={`${formula.outputKey}-${index}`} className="rounded-md border p-3">
+                <div
+                  key={`${formula.outputKey}-${index}`}
+                  className="rounded-md border p-3"
+                >
                   <div className="grid gap-3 md:grid-cols-[1fr_1fr_100px_auto]">
                     <Field label="Saída">
                       <Input
                         value={formula.outputKey}
                         onChange={(event) =>
-                          updateFormula(index, { outputKey: event.target.value })
+                          updateFormula(index, {
+                            outputKey: event.target.value,
+                          })
                         }
                       />
                     </Field>
@@ -708,7 +744,9 @@ export function MethodBuilder({
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       <Field label="Grupo no certificado">
                         <Select
-                          value={formula.reporting.group ?? 'calibration_result'}
+                          value={
+                            formula.reporting.group ?? 'calibration_result'
+                          }
                           onValueChange={(value) =>
                             updateFormula(index, {
                               reporting: {
@@ -775,7 +813,10 @@ export function MethodBuilder({
               onAction={addValidation}
             >
               {draft.validations.map((validation, index) => (
-                <div key={`${validation.message}-${index}`} className="rounded-md border p-3">
+                <div
+                  key={`${validation.message}-${index}`}
+                  className="rounded-md border p-3"
+                >
                   <div className="grid gap-3 md:grid-cols-[1fr_90px_1fr_120px_auto]">
                     <Field label="Esquerda">
                       <Input
@@ -792,7 +833,8 @@ export function MethodBuilder({
                         value={validation.operator}
                         onValueChange={(value) =>
                           updateValidation(index, {
-                            operator: value as MethodDraftValidation['operator'],
+                            operator:
+                              value as MethodDraftValidation['operator'],
                           })
                         }
                       >
@@ -823,7 +865,8 @@ export function MethodBuilder({
                         value={validation.severity}
                         onValueChange={(value) =>
                           updateValidation(index, {
-                            severity: value as MethodDraftValidation['severity'],
+                            severity:
+                              value as MethodDraftValidation['severity'],
                           })
                         }
                       >
@@ -869,7 +912,10 @@ export function MethodBuilder({
               onAction={addUncertainty}
             >
               {draft.uncertainty.map((component, index) => (
-                <div key={`${component.name}-${index}`} className="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_120px_160px_120px_auto]">
+                <div
+                  key={`${component.name}-${index}`}
+                  className="grid gap-3 rounded-md border p-3 md:grid-cols-[1fr_120px_160px_120px_auto]"
+                >
                   <Field label="Nome">
                     <Input
                       value={component.name}
@@ -972,7 +1018,9 @@ export function MethodBuilder({
                   />
                   <CertificateDisplaySelect
                     label="Orçamento de incerteza"
-                    value={draft.certificate?.uncertaintyBudgetDisplay ?? 'full'}
+                    value={
+                      draft.certificate?.uncertaintyBudgetDisplay ?? 'full'
+                    }
                     onChange={(value) =>
                       updateCertificate({ uncertaintyBudgetDisplay: value })
                     }
@@ -980,7 +1028,9 @@ export function MethodBuilder({
                 </div>
                 <Field label="Padrões de referência">
                   <Textarea
-                    value={(draft.certificate?.referenceStandards ?? []).join('\n')}
+                    value={(draft.certificate?.referenceStandards ?? []).join(
+                      '\n',
+                    )}
                     onChange={(event) =>
                       updateCertificate({
                         referenceStandards: event.target.value
@@ -1033,7 +1083,10 @@ export function MethodBuilder({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <ResultLine label="Fingerprint" value={compileResult?.fingerprint} />
+                <ResultLine
+                  label="Fingerprint"
+                  value={compileResult?.fingerprint}
+                />
                 <DiagnosticsList diagnostics={diagnostics} />
                 <Separator />
                 <div className="space-y-2">
@@ -1045,7 +1098,9 @@ export function MethodBuilder({
                           key={formula.outputKey}
                           className="rounded-md bg-muted p-3 font-mono text-xs"
                         >
-                          <div className="font-semibold">{formula.outputKey}</div>
+                          <div className="font-semibold">
+                            {formula.outputKey}
+                          </div>
                           <div>{formula.normalizedExpression}</div>
                         </div>
                       ))}
@@ -1087,13 +1142,7 @@ export function MethodBuilder({
   )
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactNode
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
@@ -1142,7 +1191,13 @@ function IconButton({
   onClick: () => void
 }) {
   return (
-    <Button type="button" variant="ghost" size="icon" aria-label={label} onClick={onClick}>
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      aria-label={label}
+      onClick={onClick}
+    >
       <HugeiconsIcon icon={icon} className="h-4 w-4" />
     </Button>
   )
@@ -1179,13 +1234,18 @@ function TableColumnsEditor({
         </Button>
       </div>
       {columns.map((column, index) => (
-        <div key={`${column.key}-${index}`} className="grid gap-2 md:grid-cols-[1fr_1fr_110px_100px_auto]">
+        <div
+          key={`${column.key}-${index}`}
+          className="grid gap-2 md:grid-cols-[1fr_1fr_110px_100px_auto]"
+        >
           <Input
             value={column.key}
             onChange={(event) =>
               onChange(
                 columns.map((item, itemIndex) =>
-                  itemIndex === index ? { ...item, key: event.target.value } : item,
+                  itemIndex === index
+                    ? { ...item, key: event.target.value }
+                    : item,
                 ),
               )
             }
@@ -1325,7 +1385,9 @@ function VariableEditor({
         <Field label="Chave">
           <Input
             value={variable.key}
-            onChange={(event) => onChange({ ...variable, key: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...variable, key: event.target.value })
+            }
           />
         </Field>
         <Field label="Rótulo">
@@ -1356,7 +1418,11 @@ function VariableEditor({
           </Select>
         </Field>
         <div className="flex items-end justify-end">
-          <IconButton label="Remover variável" icon={Delete02Icon} onClick={onRemove} />
+          <IconButton
+            label="Remover variável"
+            icon={Delete02Icon}
+            onClick={onRemove}
+          />
         </div>
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -1411,11 +1477,10 @@ function VariableEditor({
               onValueChange={(statistic) =>
                 onChange({
                   ...variable,
-                  statistic:
-                    statistic as Extract<
-                      MethodDraftVariableBinding,
-                      { source: 'table_statistic' }
-                    >['statistic'],
+                  statistic: statistic as Extract<
+                    MethodDraftVariableBinding,
+                    { source: 'table_statistic' }
+                  >['statistic'],
                 })
               }
             >
@@ -1423,11 +1488,13 @@ function VariableEditor({
                 <span>{variable.statistic}</span>
               </SelectTrigger>
               <SelectContent>
-                {['mean', 'sample_stddev', 'count', 'min', 'max'].map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item}
-                  </SelectItem>
-                ))}
+                {['mean', 'sample_stddev', 'count', 'min', 'max'].map(
+                  (item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ),
+                )}
               </SelectContent>
             </Select>
           </Field>
@@ -1483,7 +1550,10 @@ function CertificateDisplaySelect({
 }) {
   return (
     <Field label={label}>
-      <Select value={value} onValueChange={(nextValue) => onChange(nextValue as 'full' | 'hidden')}>
+      <Select
+        value={value}
+        onValueChange={(nextValue) => onChange(nextValue as 'full' | 'hidden')}
+      >
         <SelectTrigger>
           <span>{value === 'full' ? 'Exibir' : 'Ocultar'}</span>
         </SelectTrigger>
@@ -1562,11 +1632,17 @@ function CertificateSectionEditor({
         <Field label="Título">
           <Input
             value={section.title ?? ''}
-            onChange={(event) => onChange({ ...section, title: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...section, title: event.target.value })
+            }
           />
         </Field>
         <div className="flex items-end justify-end">
-          <IconButton label="Remover seção" icon={Delete02Icon} onClick={onRemove} />
+          <IconButton
+            label="Remover seção"
+            icon={Delete02Icon}
+            onClick={onRemove}
+          />
         </div>
       </div>
       <Field label="Conteúdo">
@@ -1620,9 +1696,16 @@ function DiagnosticsList({
   return (
     <div className="space-y-2">
       {diagnostics.map((diagnostic, index) => (
-        <div key={`${diagnostic.message}-${index}`} className="rounded-md border p-3">
+        <div
+          key={`${diagnostic.message}-${index}`}
+          className="rounded-md border p-3"
+        >
           <div className="flex items-center gap-2">
-            <Badge variant={diagnostic.severity === 'error' ? 'destructive' : 'secondary'}>
+            <Badge
+              variant={
+                diagnostic.severity === 'error' ? 'destructive' : 'secondary'
+              }
+            >
               {diagnostic.severity}
             </Badge>
             {diagnostic.code && (
@@ -1643,13 +1726,7 @@ function DiagnosticsList({
   )
 }
 
-function ResultLine({
-  label,
-  value,
-}: {
-  label: string
-  value?: string
-}) {
+function ResultLine({ label, value }: { label: string; value?: string }) {
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
@@ -1691,12 +1768,12 @@ function buildInitialSampleData(draft: MethodDraft): Record<string, unknown> {
   return {
     ...Object.fromEntries(
       draft.inputs.map((input) => [
-      input.key,
-      input.type === 'number'
-        ? 0
-        : input.type === 'table'
-          ? []
-          : input.defaultValue ?? '',
+        input.key,
+        input.type === 'number'
+          ? 0
+          : input.type === 'table'
+            ? []
+            : (input.defaultValue ?? ''),
       ]),
     ),
     ...Object.fromEntries(draft.variables.map((variable) => [variable.key, 0])),
