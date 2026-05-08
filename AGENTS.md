@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 - `apps/`: deployable services. Key apps: `apps/api` (Hono REST API), `apps/web` (lab dashboard), `apps/portal` (client portal), `apps/worker` (background jobs), `apps/docs` (docs site).
-- `packages/`: shared libraries such as `db` (Drizzle schema), `schemas` (Zod), `auth`, `math-engine`, `documents`, `shared`.
+- `packages/`: shared libraries such as `db` (Drizzle schema), `schemas` (Zod), `auth`, `documents`, `shared`.
 - `docs/`: documentation assets.
 - Root config: `package.json`, `turbo.json`, `pnpm-workspace.yaml`, `oxlint.json`.
 

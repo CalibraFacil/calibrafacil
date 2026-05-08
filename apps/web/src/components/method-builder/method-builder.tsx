@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { PreviewPanel } from './preview-panel'
 import { ConfigurationPanel } from './configuration-panel'
 import { defaultMethodData } from './types'
+import { normalizeMethodVariableBindings } from './math-runtime'
 
 import type { MethodData } from './types'
 
@@ -48,8 +49,8 @@ export function MethodBuilder({
   isNew = false,
   isReadOnly = false,
 }: MethodBuilderProps) {
-  const [method, setMethod] = useState<MethodData>(
-    initialData ?? defaultMethodData,
+  const [method, setMethod] = useState<MethodData>(() =>
+    normalizeMethodVariableBindings(initialData ?? defaultMethodData),
   )
   const [previewData, setPreviewData] = useState<Record<string, unknown>>({})
   const [isDirty, setIsDirty] = useState(false)
@@ -60,13 +61,13 @@ export function MethodBuilder({
   }, [])
 
   const handleSave = useCallback(() => {
-    onSave(method)
+    onSave(normalizeMethodVariableBindings(method))
     setIsDirty(false)
   }, [method, onSave])
 
   const handlePublish = useCallback(() => {
     if (onPublish) {
-      onPublish(method)
+      onPublish(normalizeMethodVariableBindings(method))
     }
   }, [method, onPublish])
 

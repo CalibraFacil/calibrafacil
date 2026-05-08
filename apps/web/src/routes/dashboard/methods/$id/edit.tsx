@@ -51,6 +51,7 @@ function EditMethodPage() {
           description: data.description,
           assetTypeId: data.assetTypeId,
           dataFields: data.dataFields,
+          variableBindings: data.variableBindings ?? [],
           formulas: data.formulas,
           validations: data.validations,
           uncertaintyParams: data.uncertaintyParams,

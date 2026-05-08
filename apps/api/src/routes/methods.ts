@@ -12,6 +12,7 @@ import {
   UpdateMethodSchema,
   ListMethodsQuerySchema,
   ReturnMethodToDraftSchema,
+  normalizeMethodValidationsInput,
 } from "@calibra-facil/schemas";
 import { eq, and, ilike, or, count, desc, ne } from "drizzle-orm";
 import {
@@ -30,6 +31,18 @@ import {
 
 const technicalReviewerUser = alias(user, "technicalReviewerUser");
 const approverUser = alias(user, "approverUser");
+
+function normalizeMethodRecord<
+  T extends { validations?: unknown; variableBindings?: unknown },
+>(method: T) {
+  return {
+    ...method,
+    variableBindings: Array.isArray(method.variableBindings)
+      ? method.variableBindings
+      : [],
+    validations: normalizeMethodValidationsInput(method.validations),
+  };
+}
 
 async function resolveMethodRouteId(
   identifier: string,
@@ -128,6 +141,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             assetTypeId: calibrationMethod.assetTypeId,
             assetTypeName: assetType.name,
             dataFields: calibrationMethod.dataFields,
+            variableBindings: calibrationMethod.variableBindings,
             formulas: calibrationMethod.formulas,
             validations: calibrationMethod.validations,
             certificateContent: calibrationMethod.certificateContent,
@@ -143,7 +157,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           .offset(offset);
 
         return c.json({
-          data: methods,
+          data: methods.map(normalizeMethodRecord),
           pagination: {
             page,
             limit,
@@ -223,6 +237,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           assetTypeId: calibrationMethod.assetTypeId,
           assetTypeName: assetType.name,
           dataFields: calibrationMethod.dataFields,
+          variableBindings: calibrationMethod.variableBindings,
           formulas: calibrationMethod.formulas,
           validations: calibrationMethod.validations,
           uncertaintyParams: calibrationMethod.uncertaintyParams,
@@ -260,7 +275,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Método nao encontrado" }, 404);
       }
 
-      return c.json(method);
+      return c.json(normalizeMethodRecord(method));
     } catch (error) {
       console.error("Error getting method:", error);
       return c.json({ error: "Erro ao buscar método" }, 500);
@@ -309,6 +324,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             version: 1,
             status: "DRAFT",
             dataFields: input.dataFields,
+            variableBindings: input.variableBindings,
             formulas: input.formulas,
             validations: input.validations,
             uncertaintyParams: input.uncertaintyParams,
@@ -431,6 +447,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           changes.dataFields = {
             old: existing.dataFields,
             new: input.dataFields,
+          };
+        }
+        if (input.variableBindings !== undefined) {
+          updateData.variableBindings = input.variableBindings;
+          changes.variableBindings = {
+            old: existing.variableBindings,
+            new: input.variableBindings,
           };
         }
         if (input.formulas !== undefined) {
@@ -1105,8 +1128,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             version: newVersion,
             status: "DRAFT",
             dataFields: existing.dataFields,
+            variableBindings: existing.variableBindings ?? [],
             formulas: existing.formulas,
-            validations: existing.validations,
+            validations: normalizeMethodValidationsInput(existing.validations),
             uncertaintyParams: existing.uncertaintyParams,
             certificateContent: existing.certificateContent,
             parentId: existing.id,
@@ -1131,7 +1155,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
 
-        return c.json(newMethod, 201);
+        return c.json(normalizeMethodRecord(newMethod), 201);
       } catch (error) {
         console.error("Error creating new version:", error);
         return c.json({ error: "Erro ao criar nova versão" }, 500);

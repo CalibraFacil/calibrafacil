@@ -13,6 +13,7 @@ import { InputFieldDialog } from './input-field-dialog'
 import { FormulaDialog } from './formula-dialog'
 import { ValidationDialog } from './validation-dialog'
 import { CertificateContentPanel } from './certificate-content-panel'
+import { effectiveVariableBindings } from './math-runtime'
 
 import type {
   MethodData,
@@ -158,11 +159,10 @@ export function ConfigurationPanel({
     onChange({ validations: newValidations })
   }
 
-  // Get available variables for formula autocomplete
-  const availableVariables = method.dataFields.map((f) => ({
-    key: f.key,
-    label: f.label,
-    type: f.type,
+  const availableVariables = effectiveVariableBindings(method).map((binding) => ({
+    key: binding.key,
+    label: binding.label ?? binding.key,
+    type: binding.source,
   }))
 
   // Add formula outputs as variables too
@@ -523,7 +523,8 @@ export function ConfigurationPanel({
                       {validation.severity === 'error' ? 'Erro' : 'Aviso'}
                     </span>
                     <code className="mt-2 block truncate rounded-md bg-muted/50 px-2 py-1 font-mono text-xs text-muted-foreground">
-                      {validation.expression}
+                      {validation.leftExpression} {validation.operator}{' '}
+                      {validation.rightExpression}
                     </code>
                     <p className="mt-1 truncate text-sm text-muted-foreground">
                       {validation.message}

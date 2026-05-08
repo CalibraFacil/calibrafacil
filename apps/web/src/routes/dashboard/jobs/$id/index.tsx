@@ -66,6 +66,8 @@ import {
   formatWeighingRangeSpec,
   isWeighingRangeSpecArray,
 } from '@/components/method-builder/weighing-range-utils'
+import type { MethodInputType } from '@/components/method-builder/types'
+import { normalizeMethodValidations } from '@/components/method-builder/math-runtime'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/')({
   head: () => ({
@@ -148,14 +150,14 @@ function getFinancialVariant(status: string | null | undefined) {
 type ReviewMethodColumn = {
   key: string
   label: string
-  type?: string
+  type: 'text' | 'number'
   unit?: string | null
 }
 
 type ReviewMethodField = {
   key: string
   label: string
-  type: string
+  type: MethodInputType
   unit?: string | null
   source?: string | null
   assetSpecKey?: string | null
@@ -173,18 +175,12 @@ type ReviewFormula = {
   unit?: string | null
 }
 
-type ReviewValidation = {
-  expression: string
-  message: string
-  severity: 'error' | 'warning'
-}
-
 type ReviewMethodSnapshot = {
   methodName?: string | null
   methodVersion?: number | null
   dataFields?: ReviewMethodField[] | null
   formulas?: ReviewFormula[] | null
-  validations?: ReviewValidation[] | null
+  validations?: unknown[] | null
 }
 
 type ReviewStandardSnapshot = {
@@ -413,7 +409,9 @@ function JobDetailPage() {
     {}) as ReviewMethodSnapshot
   const reviewDataFields = methodSnapshotForReview.dataFields ?? []
   const reviewFormulas = methodSnapshotForReview.formulas ?? []
-  const reviewValidations = methodSnapshotForReview.validations ?? []
+  const reviewValidations = normalizeMethodValidations(
+    methodSnapshotForReview.validations ?? [],
+  )
   const reviewAssetBaseUnit =
     ((job as { assetSnapshot?: ReviewAssetSnapshot | null } | undefined)
       ?.assetSnapshot?.baseMeasurementUnit as MassUnit | null | undefined) ??
@@ -627,7 +625,7 @@ function JobDetailPage() {
     }
   })
   const acceptanceItems = reviewValidations.map((validation, index) => {
-    const expression = validation.expression
+    const expression = `${validation.leftExpression} ${validation.operator} ${validation.rightExpression}`
     let status: 'ok' | 'error' | 'warning' | 'unknown' = 'unknown'
 
     if (expression.includes('margem_conformidade_antes')) {
@@ -669,7 +667,7 @@ function JobDetailPage() {
     }
 
     return {
-      key: `${validation.expression}-${index}`,
+      key: `${expression}-${index}`,
       message: validation.message,
       severity: validation.severity,
       status,
@@ -752,7 +750,9 @@ function JobDetailPage() {
   const renderReviewResult = (formula: ReviewFormula) => {
     const value = displayReviewResults?.[formula.outputKey]
     const validation = reviewValidations.find((candidate) =>
-      candidate.expression.includes(formula.outputKey),
+      `${candidate.leftExpression} ${candidate.rightExpression}`.includes(
+        formula.outputKey,
+      ),
     )
     const hasValue = value !== undefined && value !== null
 
@@ -1574,7 +1574,7 @@ function JobDetailPage() {
                   <h3 className="text-sm font-medium">Critérios principais</h3>
                   {reviewValidations.map((validation, index) => (
                     <div
-                      key={`${validation.expression}-${index}`}
+                      key={`${validation.leftExpression}-${validation.operator}-${validation.rightExpression}-${index}`}
                       className="rounded-lg bg-muted/20 px-3 py-2 text-sm text-pretty"
                     >
                       {validation.message}
