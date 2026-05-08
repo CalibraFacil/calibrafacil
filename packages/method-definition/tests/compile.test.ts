@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   compileMethodDraft,
+  executeCompiledMethod,
   type CalculationEngineLike,
   type MethodDraft,
   type NumericInput,
@@ -142,6 +143,54 @@ describe("compileMethodDraft", () => {
     expect(result.method.formulas[0]?.normalizedFormula).toContain("-");
     expect(result.previewResults[0]?.passed).toBe(true);
     expect(Object.isFrozen(result.method)).toBe(true);
+  });
+
+  it("executes a compiled method as the official calculation artifact", () => {
+    const compileResult = compileMethodDraft(validDraft(), {
+      engine: fakeEngine,
+      requirePublishable: true,
+    });
+
+    expect(compileResult.ok).toBe(true);
+    if (!compileResult.ok) return;
+
+    const execution = executeCompiledMethod(
+      compileResult.method,
+      { inputs: { indication: "10.03", reference: "10" } },
+      { engine: fakeEngine },
+    );
+
+    expect(execution.ok).toBe(true);
+    expect(execution.outputs.error).toBeCloseTo(0.03);
+    expect(execution.methodFingerprint).toBe(
+      compileResult.method.methodFingerprint,
+    );
+    expect(execution.calculationFingerprint).toMatch(/^calculation:/);
+    expect(execution.resultFingerprint).toMatch(/^result:/);
+    expect(execution.canonicalResultJson).toContain("formulaResults");
+  });
+
+  it("rejects official execution when a blocking criterion fails", () => {
+    const compileResult = compileMethodDraft(validDraft(), {
+      engine: fakeEngine,
+      requirePublishable: true,
+    });
+
+    expect(compileResult.ok).toBe(true);
+    if (!compileResult.ok) return;
+
+    const execution = executeCompiledMethod(
+      compileResult.method,
+      { inputs: { indication: "11", reference: "10" } },
+      { engine: fakeEngine },
+    );
+
+    expect(execution.ok).toBe(false);
+    expect(
+      execution.diagnostics.some(
+        (item) => item.code === "BLOCKING_ACCEPTANCE_CRITERION_FAILED",
+      ),
+    ).toBe(true);
   });
 
   it("rejects unknown fields before compilation", () => {
@@ -655,6 +704,61 @@ describe("compileMethodDraft", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.previewResults[0]?.formulaResults[0]?.value).toBe(11);
+  });
+
+  it("rejects table statistics when bound cells are invalid", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            required: true,
+            columns: [{ key: "value", label: "Value", type: "number" }],
+          },
+          {
+            kind: "scalar",
+            key: "measurements_value_mean",
+            label: "Measurement mean",
+            required: false,
+            metadata: {
+              source: "variable_binding",
+              bindingSource: "table_statistic",
+              fieldKey: "measurements",
+              columnKey: "value",
+              statistic: "mean",
+            },
+          },
+        ],
+        formulas: [
+          {
+            key: "average",
+            label: "Average",
+            expression: "measurements_value_mean + 0",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { measurements: [{ value: 10 }, {}] },
+          },
+        ],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "PREVIEW_TABLE_BINDING_CELL_MISSING",
+      ),
+    ).toBe(true);
+    expect(result.previewResults[0]?.passed).toBe(false);
   });
 
   it("preserves formula labels, output kind, and reporting metadata", () => {

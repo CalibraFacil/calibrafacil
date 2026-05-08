@@ -171,6 +171,32 @@ function buildPublicationEvidence(params: {
   };
 }
 
+function unmodeledUncertaintyDiagnostics(params: {
+  uncertaintyParams: unknown;
+  compiledMethod: CompiledMethod;
+}): MethodDiagnostic[] {
+  if (
+    !Array.isArray(params.uncertaintyParams) ||
+    params.uncertaintyParams.length === 0 ||
+    params.compiledMethod.measurementModels.length > 0
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      code: "UNCERTAINTY_PARAMS_NOT_GUM_MODELED",
+      severity: "error",
+      path: "uncertaintyParams",
+      message:
+        "Parâmetros de incerteza Type B estão configurados, mas nenhum modelo GUM compilado foi definido para publicação.",
+      details: {
+        componentCount: params.uncertaintyParams.length,
+      },
+    },
+  ];
+}
+
 function coerceMethodDraft(value: unknown): MethodDraft {
   const candidate = (value ?? {}) as Record<string, unknown>;
 
@@ -1370,6 +1396,19 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             422,
           );
         }
+        const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
+          uncertaintyParams: existing.uncertaintyParams,
+          compiledMethod: compileResult.method,
+        });
+        if (uncertaintyDiagnostics.length > 0) {
+          return c.json(
+            {
+              error: diagnosticsMessage(uncertaintyDiagnostics),
+              diagnostics: uncertaintyDiagnostics,
+            },
+            422,
+          );
+        }
 
         const [updated] = await db
           .update(calibrationMethod)
@@ -1568,6 +1607,19 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             {
               error: diagnosticsMessage(compileResult.diagnostics),
               diagnostics: compileResult.diagnostics,
+            },
+            422,
+          );
+        }
+        const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
+          uncertaintyParams: existing.uncertaintyParams,
+          compiledMethod: compileResult.method,
+        });
+        if (uncertaintyDiagnostics.length > 0) {
+          return c.json(
+            {
+              error: diagnosticsMessage(uncertaintyDiagnostics),
+              diagnostics: uncertaintyDiagnostics,
             },
             422,
           );
@@ -1809,6 +1861,19 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             {
               error: diagnosticsMessage(compileResult.diagnostics),
               diagnostics: compileResult.diagnostics,
+            },
+            422,
+          );
+        }
+        const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
+          uncertaintyParams: existing.uncertaintyParams,
+          compiledMethod: compileResult.method,
+        });
+        if (uncertaintyDiagnostics.length > 0) {
+          return c.json(
+            {
+              error: diagnosticsMessage(uncertaintyDiagnostics),
+              diagnostics: uncertaintyDiagnostics,
             },
             422,
           );

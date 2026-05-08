@@ -85,10 +85,28 @@ import {
   getEffectiveCertificateTemplateSnapshot,
   serializeCertificateTemplateSnapshot,
 } from "../lib/certificate-template-snapshots";
+import {
+  executeCompiledMethod,
+  type CalculationEngineLike,
+  type CompiledMethod,
+  type CompiledMethodExecutionResult,
+  type MethodDiagnostic,
+} from "@calibra-facil/method-definition";
+import {
+  createCalculationEngine,
+  normalizeEngineOptions,
+} from "@calibra-facil/math-engine";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
+
+const METHOD_ENGINE_OPTIONS = {
+  numericMode: "decimal" as const,
+  rejectUnusedInputs: true,
+  maxExponentMagnitude: 12,
+  maxSignificantDigits: 24,
+};
 
 const CommandPaletteJobSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -231,6 +249,125 @@ function stripAssetSpecData(
   return Object.fromEntries(
     Object.entries(data).filter(([key]) => !assetSpecKeys.has(key)),
   );
+}
+
+function createMethodExecutionEngine(): CalculationEngineLike {
+  return createCalculationEngine(
+    normalizeEngineOptions(METHOD_ENGINE_OPTIONS),
+  ) as unknown as CalculationEngineLike;
+}
+
+function tryGetCompiledMethodSnapshot(
+  methodSnapshot: MethodSnapshot | null | undefined,
+): CompiledMethod | null {
+  const compiledMethod = methodSnapshot?.compiledMethod;
+  if (!compiledMethod || typeof compiledMethod !== "object") return null;
+
+  const candidate = compiledMethod as Partial<CompiledMethod>;
+  if (
+    candidate.status !== "compiled" ||
+    typeof candidate.methodFingerprint !== "string" ||
+    !candidate.engine ||
+    !Array.isArray(candidate.inputs) ||
+    !Array.isArray(candidate.formulas) ||
+    !Array.isArray(candidate.measurementModels) ||
+    !Array.isArray(candidate.acceptanceCriteria)
+  ) {
+    return null;
+  }
+
+  return compiledMethod as CompiledMethod;
+}
+
+function buildOfficialExecutionInputs(params: {
+  methodSnapshot: MethodSnapshot;
+  data: Record<string, unknown>;
+  assetSnapshot: AssetSnapshot;
+  standardsSnapshot: StandardSnapshot[] | null | undefined;
+  environmentalSnapshot: EnvironmentalSnapshot | null | undefined;
+}): Record<string, unknown> {
+  const inputs: Record<string, unknown> = { ...params.data };
+
+  for (const field of params.methodSnapshot.dataFields ?? []) {
+    if (field.source !== "asset_spec" || !field.assetSpecKey) continue;
+    const value = params.assetSnapshot.specifications?.[field.assetSpecKey];
+    if (value !== undefined) {
+      inputs[field.key] = value;
+    }
+  }
+
+  if (params.environmentalSnapshot) {
+    inputs.environment = {
+      temperature: params.environmentalSnapshot.temperature,
+      humidity: params.environmentalSnapshot.humidity,
+      pressure: params.environmentalSnapshot.pressure,
+    };
+  }
+
+  if (params.standardsSnapshot !== undefined) {
+    inputs.standards = params.standardsSnapshot ?? [];
+  }
+
+  return inputs;
+}
+
+function executeOfficialCompiledSnapshot(params: {
+  methodSnapshot: MethodSnapshot;
+  data: Record<string, unknown>;
+  assetSnapshot: AssetSnapshot;
+  standardsSnapshot: StandardSnapshot[] | null | undefined;
+  environmentalSnapshot: EnvironmentalSnapshot | null | undefined;
+  requireSuccess?: boolean;
+}):
+  | { ok: true; results: Record<string, unknown>; execution: null }
+  | {
+      ok: true;
+      results: Record<string, unknown>;
+      execution: CompiledMethodExecutionResult;
+    }
+  | { ok: false; diagnostics: MethodDiagnostic[]; message: string } {
+  const compiledMethod = tryGetCompiledMethodSnapshot(params.methodSnapshot);
+  if (!compiledMethod) {
+    return { ok: true, results: {}, execution: null };
+  }
+
+  const execution = executeCompiledMethod(
+    compiledMethod,
+    {
+      inputs: buildOfficialExecutionInputs(params),
+    },
+    { engine: createMethodExecutionEngine() },
+  );
+
+  if (!execution.ok && params.requireSuccess !== false) {
+    return {
+      ok: false,
+      diagnostics: execution.diagnostics,
+      message:
+        execution.diagnostics.find((item) => item.severity === "error")
+          ?.message ?? "Execução oficial do método compilado falhou",
+    };
+  }
+
+  return {
+    ok: true,
+    results: {
+      ...execution.outputs,
+      __compiledExecution: {
+        methodFingerprint: execution.methodFingerprint,
+        engineVersion: execution.engineVersion,
+        engineOptionsFingerprint: execution.engineOptionsFingerprint,
+        calculationFingerprint: execution.calculationFingerprint,
+        resultFingerprint: execution.resultFingerprint,
+        canonicalResultJson: execution.canonicalResultJson,
+        formulaResults: execution.formulaResults,
+        measurementModelResults: execution.measurementModelResults,
+        acceptanceCriteriaResults: execution.acceptanceCriteriaResults,
+        diagnostics: execution.diagnostics,
+      },
+    },
+    execution,
+  };
 }
 
 async function buildAssetSnapshot(
@@ -1377,13 +1514,34 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         normalizedData.data,
         existing.methodSnapshot,
       );
+      const executionData = normalizedData.data ?? {};
+      const officialExecution = executeOfficialCompiledSnapshot({
+        methodSnapshot: existing.methodSnapshot,
+        data: executionData,
+        assetSnapshot: nextAssetSnapshot,
+        standardsSnapshot: nextStandardsSnapshot,
+        environmentalSnapshot: nextEnvironmentalSnapshot,
+        requireSuccess: true,
+      });
+      if (!officialExecution.ok) {
+        return c.json(
+          {
+            error: officialExecution.message,
+            diagnostics: officialExecution.diagnostics,
+          },
+          422,
+        );
+      }
+      const nextResults = officialExecution.execution
+        ? officialExecution.results
+        : (input.results ?? existing.results);
 
       // Update job with execution data and set status to REVIEW
       const [updated] = await db
         .update(calibrationJob)
         .set({
           data: nextData,
-          results: input.results ?? existing.results,
+          results: nextResults,
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
@@ -1400,10 +1558,17 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         changes: {
           status: { old: existing.status, new: "REVIEW" },
           data: { old: existing.data, new: nextData },
-          results:
-            input.results !== undefined
-              ? { old: existing.results, new: input.results }
-              : undefined,
+          results: { old: existing.results, new: nextResults },
+          officialExecution: officialExecution.execution
+            ? {
+                methodFingerprint:
+                  officialExecution.execution.methodFingerprint,
+                calculationFingerprint:
+                  officialExecution.execution.calculationFingerprint,
+                resultFingerprint:
+                  officialExecution.execution.resultFingerprint,
+              }
+            : undefined,
           standardsSnapshot:
             standardsResult.snapshot !== undefined
               ? {
@@ -1533,6 +1698,27 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         normalizedData.data,
         existing.methodSnapshot,
       );
+      const executionData = normalizedData.data ?? {};
+      const officialExecution = executeOfficialCompiledSnapshot({
+        methodSnapshot: existing.methodSnapshot,
+        data: executionData,
+        assetSnapshot: nextAssetSnapshot,
+        standardsSnapshot: nextStandardsSnapshot,
+        environmentalSnapshot: nextEnvironmentalSnapshot,
+        requireSuccess: false,
+      });
+      if (!officialExecution.ok) {
+        return c.json(
+          {
+            error: officialExecution.message,
+            diagnostics: officialExecution.diagnostics,
+          },
+          422,
+        );
+      }
+      const nextResults = officialExecution.execution
+        ? officialExecution.results
+        : (input.results ?? null);
 
       // Determine new status
       const newStatus =
@@ -1543,7 +1729,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         .update(calibrationJob)
         .set({
           data: nextData,
-          results: input.results ?? null,
+          results: nextResults,
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
@@ -1562,6 +1748,17 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
               ? { old: existing.status, new: newStatus }
               : undefined,
           data: { old: existing.data, new: nextData },
+          results: { old: existing.results, new: nextResults },
+          officialExecution: officialExecution.execution
+            ? {
+                methodFingerprint:
+                  officialExecution.execution.methodFingerprint,
+                calculationFingerprint:
+                  officialExecution.execution.calculationFingerprint,
+                resultFingerprint:
+                  officialExecution.execution.resultFingerprint,
+              }
+            : undefined,
           standardsSnapshot:
             standardsResult.snapshot !== undefined
               ? {

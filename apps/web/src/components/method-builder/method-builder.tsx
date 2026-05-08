@@ -1322,10 +1322,12 @@ export function MethodBuilder({
                   className="font-mono text-xs"
                 />
                 <JsonBlock label="Resultados" value={previewResult?.results} />
-                <JsonBlock
-                  label="Dados normalizados"
-                  value={previewResult?.normalizedData}
-                />
+                {previewResult?.normalizedData && (
+                  <JsonBlock
+                    label="Dados normalizados"
+                    value={previewResult.normalizedData}
+                  />
+                )}
               </CardContent>
             </Card>
           </div>

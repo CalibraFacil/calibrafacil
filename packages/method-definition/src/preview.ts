@@ -174,7 +174,11 @@ function buildPreviewContext(
       input.kind === "scalar" &&
       input.metadata?.source === "variable_binding"
     ) {
-      const derivedValue = resolveVariableBindingPreviewValue(input, values);
+      const derivedValue = resolveVariableBindingPreviewValue(
+        input,
+        values,
+        diagnostics,
+      );
       if (derivedValue !== undefined) {
         context[input.key] = derivedValue;
       }
@@ -425,6 +429,7 @@ function buildPreviewContext(
 function resolveVariableBindingPreviewValue(
   input: MethodInput & { kind: "scalar" },
   values: Record<string, unknown>,
+  diagnostics: MethodDiagnostic[],
 ): NumericInput | readonly NumericInput[] | undefined {
   const metadata = input.metadata ?? {};
   switch (metadata.bindingSource) {
@@ -435,6 +440,7 @@ function resolveVariableBindingPreviewValue(
         String(metadata.fieldKey),
         String(metadata.columnKey),
         values,
+        diagnostics,
       );
     case "table_statistic":
       return tableStatistic(
@@ -442,6 +448,7 @@ function resolveVariableBindingPreviewValue(
         String(metadata.columnKey),
         String(metadata.statistic),
         values,
+        diagnostics,
       );
     case "environment":
       return environmentValue(String(metadata.field), values);
@@ -457,8 +464,9 @@ function tableStatistic(
   columnKey: string,
   statistic: string,
   values: Record<string, unknown>,
+  diagnostics: MethodDiagnostic[],
 ): NumericInput | undefined {
-  const numbers = tableColumnNumbers(fieldKey, columnKey, values);
+  const numbers = tableColumnNumbers(fieldKey, columnKey, values, diagnostics);
   if (!numbers.length && statistic !== "count") return undefined;
 
   switch (statistic) {
@@ -481,16 +489,51 @@ function tableColumnNumbers(
   fieldKey: string,
   columnKey: string,
   values: Record<string, unknown>,
+  diagnostics: MethodDiagnostic[],
 ): readonly number[] {
   const rows = values[fieldKey];
   if (!Array.isArray(rows)) return [];
-  return rows
-    .map((row) =>
-      row && typeof row === "object" && !Array.isArray(row)
-        ? toFiniteNumber((row as Record<string, unknown>)[columnKey])
-        : null,
-    )
-    .filter((value): value is number => value !== null);
+
+  const numbers: number[] = [];
+  for (const [rowIndex, row] of rows.entries()) {
+    const path = `inputs.${fieldKey}.${rowIndex}.${columnKey}`;
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      diagnostics.push(
+        errorDiagnostic(
+          "PREVIEW_TABLE_ROW_INVALID",
+          `Preview table ${fieldKey} row ${rowIndex} must be an object`,
+          `inputs.${fieldKey}.${rowIndex}`,
+        ),
+      );
+      continue;
+    }
+
+    const cell = (row as Record<string, unknown>)[columnKey];
+    if (cell === undefined || cell === null || cell === "") {
+      diagnostics.push(
+        errorDiagnostic(
+          "PREVIEW_TABLE_BINDING_CELL_MISSING",
+          `Preview table ${fieldKey} row ${rowIndex} is missing bound column ${columnKey}`,
+          path,
+        ),
+      );
+      continue;
+    }
+
+    const number = toFiniteNumber(cell);
+    if (number === null) {
+      diagnostics.push(
+        errorDiagnostic(
+          "PREVIEW_TABLE_BINDING_CELL_NOT_NUMERIC",
+          `Preview table ${fieldKey} row ${rowIndex} bound column ${columnKey} must be numeric`,
+          path,
+        ),
+      );
+      continue;
+    }
+    numbers.push(number);
+  }
+  return numbers;
 }
 
 function environmentValue(

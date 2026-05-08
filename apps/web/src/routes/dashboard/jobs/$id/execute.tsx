@@ -1252,11 +1252,26 @@ function ExecuteJobForm({
         return val !== undefined && val !== ''
       })
     const hasRequiredAssetSpecs = missingAssetSpecFields.length === 0
+    const hasNoFormulaErrors = Object.values(formulaResults).every(
+      (result) => !result.error,
+    )
     const hasNoErrors = validationResults.every(
       (v) => v.severity !== 'error' || v.passed === true,
     )
-    return hasRequiredFields && hasRequiredAssetSpecs && hasNoErrors
-  }, [job, manualFields, formData, missingAssetSpecFields, validationResults])
+    return (
+      hasRequiredFields &&
+      hasRequiredAssetSpecs &&
+      hasNoFormulaErrors &&
+      hasNoErrors
+    )
+  }, [
+    job,
+    manualFields,
+    formData,
+    missingAssetSpecFields,
+    formulaResults,
+    validationResults,
+  ])
 
   const isEditable = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
   const requiredFields = manualFields.filter((field) => field.required)

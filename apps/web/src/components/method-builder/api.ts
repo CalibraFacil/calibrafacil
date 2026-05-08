@@ -114,7 +114,7 @@ export async function compileMethodDraft(
     fingerprint?: string
     normalizedFormulas?: unknown
     formulas?: unknown
-    compiledDraft?: unknown
+    compiledMethod?: unknown
   }>('/api/methods/compile', { draft }, { allowDiagnosticsResponse: true })
 
   return {
@@ -123,7 +123,7 @@ export async function compileMethodDraft(
     normalizedFormulas: normalizeFormulaList(
       result.normalizedFormulas ?? result.formulas,
     ),
-    compiledDraft: result.compiledDraft,
+    compiledMethod: result.compiledMethod,
   }
 }
 
@@ -156,6 +156,8 @@ export async function publishMethodDraft(params: {
   })
 }
 
-export async function requestMethodApproval(methodId: number): Promise<unknown> {
+export async function requestMethodApproval(
+  methodId: number,
+): Promise<unknown> {
   return postJson(`/api/methods/${methodId}/request-approval`, {})
 }

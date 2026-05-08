@@ -451,6 +451,25 @@ export type MethodPreviewResult = {
   diagnostics: MethodDiagnostic[];
 };
 
+export type CompiledMethodExecutionInput = {
+  inputs: Record<string, unknown>;
+};
+
+export type CompiledMethodExecutionResult = {
+  ok: boolean;
+  methodFingerprint: string;
+  engineVersion: string;
+  engineOptionsFingerprint: string;
+  formulaResults: FormulaPreviewResult[];
+  measurementModelResults: MeasurementModelPreviewResult[];
+  acceptanceCriteriaResults: AcceptanceCriterionPreviewResult[];
+  diagnostics: MethodDiagnostic[];
+  outputs: Record<string, string | number>;
+  canonicalResultJson: string;
+  calculationFingerprint: string;
+  resultFingerprint: string;
+};
+
 export type CompileMethodOptions = {
   engine: CalculationEngineLike;
   engineMetadata?: EngineMetadata;
@@ -473,6 +492,10 @@ export type CompileMethodResult =
     };
 
 export type RunMethodPreviewOptions = {
+  engine: CalculationEngineLike;
+};
+
+export type ExecuteCompiledMethodOptions = {
   engine: CalculationEngineLike;
 };
 

@@ -207,7 +207,7 @@ export interface MethodCompileResult {
   diagnostics: Array<MethodDiagnostic>
   fingerprint?: string
   normalizedFormulas: Array<MethodNormalizedFormula>
-  compiledDraft?: unknown
+  compiledMethod?: unknown
 }
 
 export interface MethodPreviewResult {
