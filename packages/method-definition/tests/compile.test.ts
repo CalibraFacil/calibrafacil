@@ -53,6 +53,24 @@ function evaluateTestExpression(
   if (absMatch?.[1])
     return Math.abs(evaluateTestExpression(absMatch[1], inputs));
 
+  const aggregateMatch = trimmed.match(/^(mean|std)\(([^)]+)\)$/);
+  if (aggregateMatch?.[1] && aggregateMatch[2]) {
+    const value = (inputs as Readonly<Record<string, unknown>>)[
+      aggregateMatch[2]
+    ];
+    if (!Array.isArray(value)) {
+      throw new Error(`Expected array input ${aggregateMatch[2]}`);
+    }
+    const numbers = value.map(Number);
+    const mean = numbers.reduce((sum, item) => sum + item, 0) / numbers.length;
+    if (aggregateMatch[1] === "mean") return mean;
+    if (numbers.length < 2) return 0;
+    const variance =
+      numbers.reduce((sum, item) => sum + (item - mean) ** 2, 0) /
+      (numbers.length - 1);
+    return Math.sqrt(variance);
+  }
+
   for (const operator of ["-", "+"] as const) {
     const parts = trimmed.split(operator);
     if (parts.length === 2 && parts[0] && parts[1]) {
@@ -143,6 +161,65 @@ describe("compileMethodDraft", () => {
     expect(result.method.formulas[0]?.normalizedFormula).toContain("-");
     expect(result.previewResults[0]?.passed).toBe(true);
     expect(Object.isFrozen(result.method)).toBe(true);
+  });
+
+  it("keeps the technical method fingerprint stable across workflow status changes", () => {
+    const draftResult = compileMethodDraft(validDraft({ status: "draft" }), {
+      engine: fakeEngine,
+    });
+    const publishedResult = compileMethodDraft(
+      validDraft({ status: "published" }),
+      { engine: fakeEngine },
+    );
+
+    expect(draftResult.ok).toBe(true);
+    expect(publishedResult.ok).toBe(true);
+    if (!draftResult.ok || !publishedResult.ok) return;
+
+    expect(publishedResult.method.methodFingerprint).toBe(
+      draftResult.method.methodFingerprint,
+    );
+    expect(publishedResult.method.normalizedMethodJson).toBe(
+      draftResult.method.normalizedMethodJson,
+    );
+  });
+
+  it("allows formulas to aggregate repeated observation inputs", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "repeated_observation",
+            key: "readings",
+            label: "Readings",
+            required: true,
+            minCount: 2,
+          },
+        ],
+        formulas: [
+          {
+            key: "average",
+            label: "Average",
+            expression: "mean(readings)",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { readings: [10, 12] },
+            expected: { formulas: { average: 11 } },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.previewResults[0]?.formulaResults[0]?.value).toBe(11);
   });
 
   it("executes a compiled method as the official calculation artifact", () => {

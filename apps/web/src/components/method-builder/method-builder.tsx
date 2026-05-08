@@ -1105,6 +1105,12 @@ export function MethodBuilder({
               actionLabel="Adicionar componente"
               onAction={addUncertainty}
             >
+              {draft.uncertainty.length > 0 ? (
+                <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Componentes Type B legados exigem modelo GUM explícito antes
+                  da publicação regulada.
+                </div>
+              ) : null}
               {draft.uncertainty.map((component, index) => (
                 <div
                   key={`${component.name}-${index}`}

@@ -120,8 +120,9 @@ export function compileMethodDraft(
     return { ok: false, diagnostics, draft };
   }
 
+  const { status: _workflowStatus, ...draftContent } = draft;
   const methodForFingerprint = {
-    ...draft,
+    ...draftContent,
     previewScenarios:
       options.includePreviewScenariosInFingerprint === false
         ? []
@@ -289,7 +290,12 @@ function compileFormulas(context: CompileContext): FormulaCompileEntry[] {
       const nonNumericInputVariables = compiled.variables.filter(
         (variable) =>
           context.inputKeys.has(variable) &&
-          !context.numericInputKeys.has(variable),
+          !context.numericInputKeys.has(variable) &&
+          !isAggregateOnlyInput(
+            context.inputByKey.get(variable),
+            formula.expression,
+            variable,
+          ),
       );
       const directTableColumnVariables = compiled.variables.filter(
         (variable) =>
@@ -534,7 +540,12 @@ function compileAcceptanceCriteria(
       const nonNumericInputVariables = compiled.variables.filter(
         (variable) =>
           context.inputKeys.has(variable) &&
-          !context.numericInputKeys.has(variable),
+          !context.numericInputKeys.has(variable) &&
+          !isAggregateOnlyInput(
+            context.inputByKey.get(variable),
+            criterion.expression,
+            variable,
+          ),
       );
       const directTableColumnVariables = compiled.variables.filter(
         (variable) =>
@@ -585,6 +596,17 @@ function isTableColumnBinding(input: MethodInput | undefined): boolean {
     input?.kind === "scalar" &&
     input.metadata?.source === "variable_binding" &&
     input.metadata.bindingSource === "table_column"
+  );
+}
+
+function isAggregateOnlyInput(
+  input: MethodInput | undefined,
+  expression: string,
+  variable: string,
+): boolean {
+  return (
+    (input?.kind === "repeated_observation" || isTableColumnBinding(input)) &&
+    isVariableUsedOnlyInArrayAggregator(expression, variable)
   );
 }
 

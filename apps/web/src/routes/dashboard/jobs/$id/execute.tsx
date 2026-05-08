@@ -246,6 +246,16 @@ interface CompiledMethodSnapshot {
   measurementModels?: Array<unknown>
 }
 
+interface OfficialCompiledExecution {
+  methodFingerprint?: string
+  engineVersion?: string
+  engineOptionsFingerprint?: string
+  inputFingerprint?: string
+  calculationFingerprint?: string
+  resultFingerprint?: string
+  diagnostics?: Array<unknown>
+}
+
 const statusLabels: Record<string, string> = {
   DRAFT: 'Rascunho',
   IN_PROGRESS: 'Em Execução',
@@ -727,6 +737,17 @@ function ExecuteJobForm({
   }, [normalizedFormData, job, standardsData, selectedStandardIds, environment])
 
   const compiledMethod = job.methodSnapshot.compiledMethod ?? null
+  const officialExecution = useMemo<OfficialCompiledExecution | null>(() => {
+    const value = job.results?.__compiledExecution
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null
+    }
+
+    return value as OfficialCompiledExecution
+  }, [job.results])
+  const officialDiagnosticCount = Array.isArray(officialExecution?.diagnostics)
+    ? officialExecution.diagnostics.length
+    : 0
   const calculationFormulas = useMemo<MethodFormula[]>(() => {
     const compiledFormulas = compiledMethod?.formulas
     if (compiledFormulas?.length) {
@@ -1783,6 +1804,51 @@ function ExecuteJobForm({
 
         {/* Right Column: Results & Validations */}
         <div className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start">
+          {officialExecution ? (
+            <Card className="rounded-2xl border-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+              <CardHeader className="px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-balance text-base">
+                    Execução oficial
+                  </CardTitle>
+                  <Badge
+                    variant={
+                      officialDiagnosticCount > 0 ? 'outline' : 'secondary'
+                    }
+                  >
+                    {officialDiagnosticCount} diagnóstico
+                    {officialDiagnosticCount === 1 ? '' : 's'}
+                  </Badge>
+                </div>
+                <CardDescription>
+                  Resultado persistido pelo backend para o método compilado.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 px-5 pb-5 pt-0 text-xs">
+                {[
+                  ['Method', officialExecution.methodFingerprint],
+                  ['Input', officialExecution.inputFingerprint],
+                  ['Calculation', officialExecution.calculationFingerprint],
+                  ['Result', officialExecution.resultFingerprint],
+                  ['Engine', officialExecution.engineVersion],
+                  ['Engine options', officialExecution.engineOptionsFingerprint],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="grid grid-cols-[110px_minmax(0,1fr)] gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+                  >
+                    <span className="font-medium text-muted-foreground">
+                      {label}
+                    </span>
+                    <span className="min-w-0 overflow-hidden font-mono [overflow-wrap:anywhere]">
+                      {value || '-'}
+                    </span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+
           {/* Formula Results */}
           <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
             <Collapsible

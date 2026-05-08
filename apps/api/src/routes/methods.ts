@@ -132,6 +132,7 @@ function buildPublicationEvidence(params: {
   methodId: number;
   version: number;
   compiledMethod: CompiledMethod;
+  previewScenarios?: MethodDraft["previewScenarios"];
   previewResults: MethodPreviewResult[];
   diagnostics: MethodDiagnostic[];
   reviewedBy?: string | null;
@@ -151,6 +152,7 @@ function buildPublicationEvidence(params: {
     reviewedBy: params.reviewedBy ?? null,
     publishedBy: params.publishedBy,
     reasonForChange: params.reasonForChange ?? null,
+    previewScenarios: params.previewScenarios ?? [],
     previewResults: params.previewResults,
     diagnostics: params.diagnostics,
     certificateContent: params.certificateContent ?? null,
@@ -163,6 +165,7 @@ function buildPublicationEvidence(params: {
         compiledMethod: params.compiledMethod,
         certificateContent: evidenceBase.certificateContent,
         uncertaintyParams: evidenceBase.uncertaintyParams,
+        previewScenarios: evidenceBase.previewScenarios,
         previewResults: params.previewResults,
       },
       "publication",
@@ -255,7 +258,10 @@ function methodPayloadToDefinitionDraft(
     : Array.isArray(candidate.variables)
       ? candidate.variables
       : [];
-  const inferredVariableBindings = buildDefaultVariableBindings(rawInputs);
+  const inferredVariableBindings = [
+    ...buildDefaultVariableBindings(rawInputs),
+    ...buildStandardCompatibilityVariableBindings(rawFormulas, rawValidations),
+  ];
   const definitionInputs: MethodDraft["inputs"] = [];
   const seenInputKeys = new Set<string>();
   for (const input of rawInputs.map(methodInputToDefinitionInput)) {
@@ -646,6 +652,48 @@ function buildDefaultVariableBindings(rawInputs: unknown[]): unknown[] {
   return bindings;
 }
 
+function buildStandardCompatibilityVariableBindings(
+  rawFormulas: unknown[],
+  rawValidations: unknown[],
+): unknown[] {
+  const expressions = [
+    ...rawFormulas.flatMap((formula) => {
+      const record = (formula ?? {}) as Record<string, unknown>;
+      return typeof record.expression === "string" ? [record.expression] : [];
+    }),
+    ...rawValidations.flatMap((validation) => {
+      const record = (validation ?? {}) as Record<string, unknown>;
+      if (typeof record.expression === "string") return [record.expression];
+      return [
+        typeof record.leftExpression === "string"
+          ? record.leftExpression
+          : null,
+        typeof record.rightExpression === "string"
+          ? record.rightExpression
+          : null,
+      ].filter((item): item is string => typeof item === "string");
+    }),
+  ];
+  const keys = new Set<string>();
+
+  for (const expression of expressions) {
+    for (const token of expression.match(/\bstd_\d+_[A-Za-z0-9_]+\b/g) ?? []) {
+      keys.add(token);
+    }
+  }
+
+  return [...keys].map((key) => {
+    const match = key.match(/^std_(\d+)_(.+)$/);
+    return {
+      key,
+      label: key,
+      source: "standard",
+      standardId: match ? Number(match[1]) : undefined,
+      valueKey: match?.[2] ?? key,
+    };
+  });
+}
+
 function methodFormulaReportingToDefinitionReporting(reporting: unknown) {
   const record = (reporting ?? {}) as Record<string, unknown>;
   if (!reporting || typeof reporting !== "object") return undefined;
@@ -816,6 +864,67 @@ function buildAdhocPreviewScenarios(
       inputs: sampleData,
     },
   ];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function buildReviewPreviewEvidence(params: {
+  compiledMethod: CompiledMethod;
+  previewScenarios: MethodDraft["previewScenarios"] | undefined;
+  previewResults: MethodPreviewResult[];
+  diagnostics: MethodDiagnostic[];
+  compiledBy: string;
+}) {
+  const evidenceBase = {
+    kind: "review_preview",
+    methodFingerprint: params.compiledMethod.methodFingerprint,
+    normalizedMethodJson: params.compiledMethod.normalizedMethodJson,
+    engineVersion: params.compiledMethod.engine.version,
+    engineOptionsFingerprint: params.compiledMethod.engine.optionsFingerprint,
+    compiledAt: new Date().toISOString(),
+    compiledBy: params.compiledBy,
+    previewScenarios: params.previewScenarios ?? [],
+    previewResults: params.previewResults,
+    diagnostics: params.diagnostics,
+  };
+
+  return {
+    ...evidenceBase,
+    reviewPreviewFingerprint: fingerprintJson(evidenceBase, "review-preview"),
+  };
+}
+
+function reviewPreviewScenariosFromEvidence(
+  evidence: unknown,
+  methodFingerprint: string | null | undefined,
+): MethodDraft["previewScenarios"] | undefined {
+  if (!isRecord(evidence) || evidence.kind !== "review_preview") {
+    return undefined;
+  }
+  if (
+    typeof methodFingerprint !== "string" ||
+    evidence.methodFingerprint !== methodFingerprint
+  ) {
+    return undefined;
+  }
+  if (!Array.isArray(evidence.previewScenarios)) {
+    return undefined;
+  }
+
+  return evidence.previewScenarios as MethodDraft["previewScenarios"];
+}
+
+function resolvePublicationPreviewScenarios(
+  sampleData: Record<string, unknown> | undefined,
+  evidence: unknown,
+  methodFingerprint: string | null | undefined,
+): MethodDraft["previewScenarios"] | undefined {
+  return (
+    buildAdhocPreviewScenarios(sampleData) ??
+    reviewPreviewScenariosFromEvidence(evidence, methodFingerprint)
+  );
 }
 
 async function resolveMethodRouteId(
@@ -1452,11 +1561,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         const body = (await c.req.json().catch(() => ({}))) as {
           sampleData?: Record<string, unknown>;
         };
+        const previewScenarios = buildAdhocPreviewScenarios(body.sampleData);
         const compileResult = compileDraftWithEngine(
           methodRecordToDraft(existing),
           {
             requirePublishable: true,
-            previewScenarios: buildAdhocPreviewScenarios(body.sampleData),
+            previewScenarios,
             includePreviewScenariosInFingerprint: false,
           },
         );
@@ -1495,6 +1605,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             methodFingerprint: compileResult.method.methodFingerprint,
             methodEngine: compileResult.method.engine,
             methodCompiledAt: new Date(),
+            publicationEvidence: buildReviewPreviewEvidence({
+              compiledMethod: compileResult.method,
+              previewScenarios,
+              previewResults: compileResult.previewResults,
+              diagnostics: compileResult.diagnostics,
+              compiledBy: session.user.id,
+            }),
           })
           .where(eq(calibrationMethod.id, id))
           .returning();
@@ -1670,9 +1787,14 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           ...existing,
           status: "PUBLISHED",
         });
+        const previewScenarios = resolvePublicationPreviewScenarios(
+          body.sampleData,
+          existing.publicationEvidence,
+          existing.methodFingerprint,
+        );
         const compileResult = compileDraftWithEngine(publishDraft, {
           requirePublishable: true,
-          previewScenarios: buildAdhocPreviewScenarios(body.sampleData),
+          previewScenarios,
           includePreviewScenariosInFingerprint: false,
         });
         if (!compileResult.ok) {
@@ -1701,6 +1823,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           methodId: existing.id,
           version: existing.version,
           compiledMethod: compileResult.method,
+          previewScenarios,
           previewResults: compileResult.previewResults,
           diagnostics: compileResult.diagnostics,
           reviewedBy: existing.technicalReviewedBy,
@@ -1924,9 +2047,14 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           ...existing,
           status: "PUBLISHED",
         });
+        const previewScenarios = resolvePublicationPreviewScenarios(
+          body.sampleData,
+          existing.publicationEvidence,
+          existing.methodFingerprint,
+        );
         const compileResult = compileDraftWithEngine(publishDraft, {
           requirePublishable: true,
-          previewScenarios: buildAdhocPreviewScenarios(body.sampleData),
+          previewScenarios,
           includePreviewScenariosInFingerprint: false,
         });
         if (!compileResult.ok) {
@@ -1955,6 +2083,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           methodId: existing.id,
           version: existing.version,
           compiledMethod: compileResult.method,
+          previewScenarios,
           previewResults: compileResult.previewResults,
           diagnostics: compileResult.diagnostics,
           reviewedBy: existing.technicalReviewedBy,
