@@ -310,6 +310,30 @@ async function persistCalibrationJob(
     methodId: methodData.id,
     methodName: methodData.name,
     methodVersion: methodData.version,
+    compiledMethod: methodData.compiledMethod ?? null,
+    methodFingerprint: methodData.methodFingerprint ?? null,
+    engineVersion:
+      methodData.methodEngine &&
+      typeof methodData.methodEngine === "object" &&
+      "version" in methodData.methodEngine &&
+      typeof methodData.methodEngine.version === "string"
+        ? methodData.methodEngine.version
+        : null,
+    engineOptionsFingerprint:
+      methodData.methodEngine &&
+      typeof methodData.methodEngine === "object" &&
+      "optionsFingerprint" in methodData.methodEngine &&
+      typeof methodData.methodEngine.optionsFingerprint === "string"
+        ? methodData.methodEngine.optionsFingerprint
+        : null,
+    normalizedMethodJson:
+      methodData.compiledMethod &&
+      typeof methodData.compiledMethod === "object" &&
+      "normalizedMethodJson" in methodData.compiledMethod &&
+      typeof methodData.compiledMethod.normalizedMethodJson === "string"
+        ? methodData.compiledMethod.normalizedMethodJson
+        : null,
+    publicationEvidence: methodData.publicationEvidence ?? null,
     dataFields: methodData.dataFields,
     variableBindings: methodData.variableBindings ?? [],
     formulas: methodData.formulas,

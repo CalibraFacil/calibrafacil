@@ -169,6 +169,28 @@ describe("compileMethodDraft", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("rejects accessors in arrays without invoking them", () => {
+    const inputs = [...validDraft().inputs];
+    Object.defineProperty(inputs, "0", {
+      enumerable: true,
+      configurable: true,
+      get() {
+        throw new Error("array getter executed");
+      },
+    });
+
+    const result = compileMethodDraft(
+      {
+        ...validDraft(),
+        inputs,
+      },
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics[0]?.message).toContain("must not be an accessor");
+  });
+
   it("detects formula cycles", () => {
     const result = compileMethodDraft(
       validDraft({
@@ -225,7 +247,12 @@ describe("compileMethodDraft", () => {
       { engine: fakeEngine, requirePublishable: true },
     );
 
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "POSITIVE_PREVIEW_REQUIRED",
+      ),
+    ).toBe(true);
   });
 
   it("rejects preview inputs outside scalar constraints", () => {
@@ -323,6 +350,72 @@ describe("compileMethodDraft", () => {
         (item) => item.code === "NON_NUMERIC_ACCEPTANCE_CRITERION_VARIABLE",
       ),
     ).toBe(true);
+  });
+
+  it("compares acceptance criteria with decimal precision", () => {
+    const decimalEngine: CalculationEngineLike = {
+      ...fakeEngine,
+      compileFormula(expression) {
+        const variable = expression.trim();
+        return {
+          normalizedFormula: variable,
+          formulaFingerprint: `formula:${variable}`,
+          variables: [variable],
+          evaluate(inputs) {
+            const value = inputs[variable];
+            if (value === undefined) throw new Error(`Missing ${variable}`);
+            return {
+              value,
+              variables: [variable],
+              normalizedFormula: variable,
+              formulaFingerprint: `formula:${variable}`,
+            };
+          },
+        };
+      },
+    };
+
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "scalar",
+            key: "large_left",
+            label: "Large left",
+            required: true,
+          },
+          {
+            kind: "scalar",
+            key: "large_right",
+            label: "Large right",
+            required: true,
+          },
+        ],
+        formulas: [],
+        acceptanceCriteria: [
+          {
+            key: "decimal",
+            label: "Decimal",
+            expression: "large_left < large_right",
+            severity: "blocking",
+            message: "Decimal comparison failed",
+          },
+        ],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              large_left: "100000000000000000000.1",
+              large_right: "100000000000000000000.2",
+            },
+          },
+        ],
+      }),
+      { engine: decimalEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
   });
 
   it("rejects invalid select values in publishable previews", () => {

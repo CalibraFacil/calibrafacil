@@ -199,6 +199,12 @@ interface JobData {
     methodId: number
     methodName: string
     methodVersion: number
+    compiledMethod?: CompiledMethodSnapshot | null
+    methodFingerprint?: string | null
+    engineVersion?: string | null
+    engineOptionsFingerprint?: string | null
+    normalizedMethodJson?: string | null
+    publicationEvidence?: unknown
     dataFields: MethodInputField[]
     variableBindings?: MethodVariableBinding[]
     formulas: MethodFormula[]
@@ -210,6 +216,34 @@ interface JobData {
   assetSnapshot?: AssetSnapshot | null
   standardsSnapshot?: StandardSnapshotItem[] | null
   environmentalSnapshot?: EnvironmentalSnapshotData | null
+}
+
+interface CompiledMethodSnapshot {
+  methodFingerprint: string
+  engine?: {
+    version?: string
+    optionsFingerprint?: string
+  }
+  formulas?: Array<{
+    key: string
+    label?: string
+    expression: string
+    normalizedFormula?: string
+    formulaFingerprint?: string
+    variables?: string[]
+    outputUnit?: string
+    reporting?: MethodFormula['reporting']
+  }>
+  acceptanceCriteria?: Array<{
+    key: string
+    label?: string
+    expression: string
+    severity: 'info' | 'warning' | 'blocking'
+    message: string
+    normalizedFormula?: string
+    criterionFingerprint?: string
+  }>
+  measurementModels?: Array<unknown>
 }
 
 const statusLabels: Record<string, string> = {
@@ -692,6 +726,39 @@ function ExecuteJobForm({
     })
   }, [normalizedFormData, job, standardsData, selectedStandardIds, environment])
 
+  const compiledMethod = job.methodSnapshot.compiledMethod ?? null
+  const calculationFormulas = useMemo<MethodFormula[]>(() => {
+    const compiledFormulas = compiledMethod?.formulas
+    if (compiledFormulas?.length) {
+      return compiledFormulas.map((formula) => ({
+        outputKey: formula.key,
+        expression: formula.expression,
+        label: formula.label,
+        unit: formula.outputUnit,
+        reporting: formula.reporting,
+      }))
+    }
+    return job.methodSnapshot.formulas
+  }, [compiledMethod, job.methodSnapshot.formulas])
+
+  const calculationValidations = useMemo(() => {
+    const compiledCriteria = compiledMethod?.acceptanceCriteria
+    if (compiledCriteria?.length) {
+      return compiledCriteria.map((criterion) => ({
+        ...normalizeMethodValidations([
+          {
+            expression: criterion.expression,
+            message: criterion.message,
+            severity: criterion.severity === 'blocking' ? 'error' : 'warning',
+          },
+        ])[0],
+        message: criterion.message,
+        severity: criterion.severity === 'blocking' ? 'error' : 'warning',
+      }))
+    }
+    return normalizeMethodValidations(job.methodSnapshot.validations)
+  }, [compiledMethod, job.methodSnapshot.validations])
+
   // Evaluate formulas
   const formulaResults = useMemo(() => {
     if (!job) return {}
@@ -700,7 +767,7 @@ function ExecuteJobForm({
     const runningContext: FormulaContext = { ...context }
     const rawResultValues: Record<string, FormulaScalar> = {}
 
-    for (const formula of job.methodSnapshot.formulas) {
+    for (const formula of calculationFormulas) {
       const result = evaluateFormulaScalar(
         engine,
         formula.expression,
@@ -722,11 +789,11 @@ function ExecuteJobForm({
     const displayResultValues =
       denormalizeMethodResultsForDisplay(
         rawResultValues,
-        job.methodSnapshot.formulas,
+        calculationFormulas,
         assetBaseMeasurementUnit,
       ) ?? rawResultValues
 
-    for (const formula of job.methodSnapshot.formulas) {
+    for (const formula of calculationFormulas) {
       const rawValue = rawResultValues[formula.outputKey]
       if (rawValue === undefined) {
         continue
@@ -743,7 +810,7 @@ function ExecuteJobForm({
     }
 
     return results
-  }, [assetBaseMeasurementUnit, engine, job, context])
+  }, [assetBaseMeasurementUnit, engine, job, context, calculationFormulas])
 
   // Evaluate validations
   const validationResults = useMemo((): ValidationResult[] => {
@@ -756,11 +823,7 @@ function ExecuteJobForm({
       }
     }
 
-    const validations = normalizeMethodValidations(
-      job.methodSnapshot.validations,
-    )
-
-    return validations.map((validation) => {
+    return calculationValidations.map((validation) => {
       const result = evaluateStructuredValidation(
         engine,
         validation,
@@ -777,7 +840,7 @@ function ExecuteJobForm({
         errorCode: result.errorCode,
       }
     })
-  }, [engine, job, context, formulaResults])
+  }, [engine, job, context, formulaResults, calculationValidations])
 
   // Compute certified value options from all active standards
   const certifiedValueOptions = useMemo((): CertifiedValueOption[] => {
@@ -1717,7 +1780,7 @@ function ExecuteJobForm({
                 <CardHeader className="min-h-14 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-balance text-base">
-                      Resultados ({job.methodSnapshot.formulas.length})
+                      Resultados ({calculationFormulas.length})
                     </CardTitle>
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
@@ -1728,7 +1791,7 @@ function ExecuteJobForm({
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <CardContent className="max-h-[560px] space-y-2 overflow-auto px-5 pb-5 pt-0">
-                  {job.methodSnapshot.formulas.map((formula) => {
+                  {calculationFormulas.map((formula) => {
                     const result = formulaResults[formula.outputKey]
                     return (
                       <div

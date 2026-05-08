@@ -39,7 +39,9 @@ export function assertSafeUnknown(value: unknown, path = "draft"): void {
       typeof current === "symbol" ||
       typeof current === "bigint"
     ) {
-      throw new Error(`${currentPath} has unsupported type ${valueKind(current)}`);
+      throw new Error(
+        `${currentPath} has unsupported type ${valueKind(current)}`,
+      );
     }
 
     if (seen.has(current)) {
@@ -52,7 +54,12 @@ export function assertSafeUnknown(value: unknown, path = "draft"): void {
         if (!Object.prototype.hasOwnProperty.call(current, index)) {
           throw new Error(`${currentPath}[${index}] is a sparse array slot`);
         }
-        visit(current[index], `${currentPath}[${index}]`);
+        const descriptor = Object.getOwnPropertyDescriptor(current, index);
+        if (!descriptor) continue;
+        if ("get" in descriptor || "set" in descriptor) {
+          throw new Error(`${currentPath}[${index}] must not be an accessor`);
+        }
+        visit(descriptor.value, `${currentPath}[${index}]`);
       }
       return;
     }

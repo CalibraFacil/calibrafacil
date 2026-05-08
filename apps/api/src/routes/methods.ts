@@ -17,10 +17,13 @@ import {
 import {
   compileMethodDraft,
   fingerprintJson,
+  canonicalJson,
   parseMethodDraft,
   type CalculationEngineLike,
+  type CompiledMethod,
   type MethodDraft,
   type MethodDiagnostic,
+  type MethodPreviewResult,
 } from "@calibra-facil/method-definition";
 import {
   createCalculationEngine,
@@ -122,6 +125,49 @@ function methodCompileResponse(result: ReturnType<typeof compileMethodDraft>) {
     })),
     previewResults: result.previewResults,
     compiledMethod: result.method,
+  };
+}
+
+function buildPublicationEvidence(params: {
+  methodId: number;
+  version: number;
+  compiledMethod: CompiledMethod;
+  previewResults: MethodPreviewResult[];
+  diagnostics: MethodDiagnostic[];
+  reviewedBy?: string | null;
+  publishedBy: string;
+  reasonForChange?: string | null;
+  certificateContent: unknown;
+  uncertaintyParams: unknown;
+}) {
+  const evidenceBase = {
+    methodId: String(params.methodId),
+    version: params.version,
+    methodFingerprint: params.compiledMethod.methodFingerprint,
+    normalizedMethodJson: params.compiledMethod.normalizedMethodJson,
+    engineVersion: params.compiledMethod.engine.version,
+    engineOptionsFingerprint: params.compiledMethod.engine.optionsFingerprint,
+    compiledAt: new Date().toISOString(),
+    reviewedBy: params.reviewedBy ?? null,
+    publishedBy: params.publishedBy,
+    reasonForChange: params.reasonForChange ?? null,
+    previewResults: params.previewResults,
+    diagnostics: params.diagnostics,
+    certificateContent: params.certificateContent ?? null,
+    uncertaintyParams: params.uncertaintyParams ?? [],
+  };
+  return {
+    ...evidenceBase,
+    publicationFingerprint: fingerprintJson(
+      {
+        compiledMethod: params.compiledMethod,
+        certificateContent: evidenceBase.certificateContent,
+        uncertaintyParams: evidenceBase.uncertaintyParams,
+        previewResults: params.previewResults,
+      },
+      "publication",
+    ),
+    publicationEvidenceJson: canonicalJson(evidenceBase),
   };
 }
 
@@ -1221,6 +1267,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         if (Object.keys(updateData).length === 0) {
           return c.json(existing);
         }
+        updateData.compiledMethod = null;
+        updateData.methodFingerprint = null;
+        updateData.methodEngine = null;
+        updateData.methodCompiledAt = null;
+        updateData.publicationEvidence = null;
 
         // Update method
         const [updated] = await db
@@ -1511,6 +1562,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             422,
           );
         }
+        const publicationEvidence = buildPublicationEvidence({
+          methodId: existing.id,
+          version: existing.version,
+          compiledMethod: compileResult.method,
+          previewResults: compileResult.previewResults,
+          diagnostics: compileResult.diagnostics,
+          reviewedBy: existing.technicalReviewedBy,
+          publishedBy: session.user.id,
+          reasonForChange: body.reasonForChange ?? null,
+          certificateContent: existing.certificateContent,
+          uncertaintyParams: existing.uncertaintyParams,
+        });
 
         // Archive any previously published version with same name
         await db
@@ -1539,21 +1602,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             methodFingerprint: compileResult.method.methodFingerprint,
             methodEngine: compileResult.method.engine,
             methodCompiledAt: new Date(),
-            publicationEvidence: {
-              methodId: String(existing.id),
-              version: existing.version,
-              methodFingerprint: compileResult.method.methodFingerprint,
-              normalizedMethodJson: compileResult.method.normalizedMethodJson,
-              engineVersion: compileResult.method.engine.version,
-              engineOptionsFingerprint:
-                compileResult.method.engine.optionsFingerprint,
-              compiledAt: new Date().toISOString(),
-              reviewedBy: existing.technicalReviewedBy,
-              publishedBy: session.user.id,
-              reasonForChange: body.reasonForChange ?? null,
-              previewResults: compileResult.previewResults,
-              diagnostics: compileResult.diagnostics,
-            },
+            publicationEvidence,
           })
           .where(eq(calibrationMethod.id, id))
           .returning();
@@ -1637,6 +1686,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             approvedBy: null,
             publishedAt: null,
             publishedBy: null,
+            compiledMethod: null,
+            methodFingerprint: null,
+            methodEngine: null,
+            methodCompiledAt: null,
+            publicationEvidence: null,
           })
           .where(eq(calibrationMethod.id, id))
           .returning();
@@ -1749,6 +1803,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             422,
           );
         }
+        const publicationEvidence = buildPublicationEvidence({
+          methodId: existing.id,
+          version: existing.version,
+          compiledMethod: compileResult.method,
+          previewResults: compileResult.previewResults,
+          diagnostics: compileResult.diagnostics,
+          reviewedBy: existing.technicalReviewedBy,
+          publishedBy: session.user.id,
+          reasonForChange: body.reasonForChange ?? null,
+          certificateContent: existing.certificateContent,
+          uncertaintyParams: existing.uncertaintyParams,
+        });
 
         // Archive any previously published version with same name
         await db
@@ -1778,21 +1844,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             methodFingerprint: compileResult.method.methodFingerprint,
             methodEngine: compileResult.method.engine,
             methodCompiledAt: new Date(),
-            publicationEvidence: {
-              methodId: String(existing.id),
-              version: existing.version,
-              methodFingerprint: compileResult.method.methodFingerprint,
-              normalizedMethodJson: compileResult.method.normalizedMethodJson,
-              engineVersion: compileResult.method.engine.version,
-              engineOptionsFingerprint:
-                compileResult.method.engine.optionsFingerprint,
-              compiledAt: new Date().toISOString(),
-              reviewedBy: existing.technicalReviewedBy,
-              publishedBy: session.user.id,
-              reasonForChange: body.reasonForChange ?? null,
-              previewResults: compileResult.previewResults,
-              diagnostics: compileResult.diagnostics,
-            },
+            publicationEvidence,
           })
           .where(eq(calibrationMethod.id, id))
           .returning();

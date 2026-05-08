@@ -191,6 +191,18 @@ export interface MethodData {
   validations: Array<MethodValidation>
   uncertaintyParams: Array<MethodTypeBComponent>
   certificateContent?: MethodCertificateContent | null
+  compiledMethod?: unknown
+  methodFingerprint?: string | null
+  methodEngine?: { version?: string; optionsFingerprint?: string } | null
+  methodCompiledAt?: string | null
+  publicationEvidence?: {
+    publicationFingerprint?: string
+    previewResults?: Array<unknown>
+    diagnostics?: Array<unknown>
+    engineVersion?: string
+    engineOptionsFingerprint?: string
+    compiledAt?: string
+  } | null
 }
 
 export interface FormulaResult {

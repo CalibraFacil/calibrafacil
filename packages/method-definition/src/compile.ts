@@ -164,6 +164,7 @@ export function compileMethodDraft(
   );
 
   if (options.requirePublishable) {
+    let positivePreviewPassed = false;
     for (const [index, result] of previewResults.entries()) {
       const scenario = previewScenarios[index];
       if (!result.passed) {
@@ -176,6 +177,9 @@ export function compileMethodDraft(
         );
       }
       if (scenario?.expectFailure) continue;
+      if (result.passed) {
+        positivePreviewPassed = true;
+      }
       for (const criterion of result.acceptanceCriteriaResults) {
         if (!criterion.passed && criterion.severity === "blocking") {
           diagnostics.push(
@@ -187,6 +191,15 @@ export function compileMethodDraft(
           );
         }
       }
+    }
+    if (!positivePreviewPassed) {
+      diagnostics.push(
+        errorDiagnostic(
+          "POSITIVE_PREVIEW_REQUIRED",
+          "Publishing requires at least one passing positive preview scenario",
+          "previewScenarios",
+        ),
+      );
     }
   }
 

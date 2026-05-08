@@ -2496,6 +2496,12 @@ export type MethodSnapshot = {
   methodId: number;
   methodName: string;
   methodVersion: number;
+  compiledMethod?: unknown;
+  methodFingerprint?: string | null;
+  engineVersion?: string | null;
+  engineOptionsFingerprint?: string | null;
+  normalizedMethodJson?: string | null;
+  publicationEvidence?: unknown;
   dataFields: MethodInputField[];
   variableBindings: MethodVariableBinding[];
   formulas: MethodFormula[];

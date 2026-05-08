@@ -556,6 +556,66 @@ function MethodDetailPage() {
             </dl>
           </DetailSection>
 
+          <DetailSection
+            title="Evidência compilada"
+            description="Artefato usado para publicação e execução rastreável."
+          >
+            <dl className="border-t border-border/70">
+              <DetailItem
+                label="Method fingerprint"
+                value={method.methodFingerprint || '-'}
+                mono
+              />
+              <DetailItem
+                label="Publication fingerprint"
+                value={
+                  method.publicationEvidence?.publicationFingerprint || '-'
+                }
+                mono
+              />
+              <DetailItem
+                label="Engine"
+                value={
+                  method.methodEngine?.version ||
+                  method.publicationEvidence?.engineVersion ||
+                  '-'
+                }
+                mono
+              />
+              <DetailItem
+                label="Engine options"
+                value={
+                  method.methodEngine?.optionsFingerprint ||
+                  method.publicationEvidence?.engineOptionsFingerprint ||
+                  '-'
+                }
+                mono
+              />
+              <DetailItem
+                label="Compilado em"
+                value={formatDateTime(
+                  method.methodCompiledAt ||
+                    method.publicationEvidence?.compiledAt,
+                )}
+                mono
+              />
+              <DetailItem
+                label="Previews"
+                value={String(
+                  method.publicationEvidence?.previewResults?.length ?? 0,
+                )}
+                mono
+              />
+              <DetailItem
+                label="Diagnósticos"
+                value={String(
+                  method.publicationEvidence?.diagnostics?.length ?? 0,
+                )}
+                mono
+              />
+            </dl>
+          </DetailSection>
+
           <DetailSection title="Responsáveis">
             <dl className="border-t border-border/70">
               <DetailItem
