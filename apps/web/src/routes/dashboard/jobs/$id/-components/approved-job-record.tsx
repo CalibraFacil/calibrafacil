@@ -73,13 +73,13 @@ import {
 } from '@calibra-facil/shared'
 import { Spinner } from '@/components/ui/spinner'
 import { useMountEffect } from '@/hooks/use-mount-effect'
-import { isMassCompositionValue } from '@/components/method-builder/mass-composition-utils'
-import { normalizeMethodValidations } from '@/components/method-builder/math-runtime'
+import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
+import { normalizeMethodValidations } from '@/components/method-runtime/math-runtime'
 import {
   formatWeighingRangeSpec,
   isWeighingRangeSpecArray,
-} from '@/components/method-builder/weighing-range-utils'
-import type { MethodInputType } from '@/components/method-builder/types'
+} from '@/components/method-runtime/weighing-range-utils'
+import type { MethodInputType } from '@/components/method-runtime/types'
 
 interface MethodSnapshot {
   methodId: number

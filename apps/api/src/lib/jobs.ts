@@ -52,6 +52,7 @@ export const jobCreationClientErrors = new Set([
   "Servico nao possui metodo vinculado",
   "Metodo do servico nao encontrado",
   "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
+  "Método publicado sem artefato compilado consistente não pode gerar job regulado.",
   "Tipo do ativo nao e compativel com o servico selecionado",
   "Tecnico nao encontrado ou sem permissao",
   "Técnico não possui competência ativa para este tipo de instrumento",
@@ -85,6 +86,50 @@ function validateRequiredAssetSpecs(
   if (missing.length > 0) {
     throw new Error(
       "Ativo nao possui especificacao obrigatoria para este metodo",
+    );
+  }
+}
+
+function validatePublishedMethodCompiledArtifact(methodData: {
+  compiledMethod: unknown;
+  methodFingerprint: string | null;
+  methodEngine: unknown;
+  publicationEvidence: unknown;
+}) {
+  const compiledMethod =
+    methodData.compiledMethod &&
+    typeof methodData.compiledMethod === "object" &&
+    !Array.isArray(methodData.compiledMethod)
+      ? (methodData.compiledMethod as Record<string, unknown>)
+      : null;
+  const methodEngine =
+    methodData.methodEngine &&
+    typeof methodData.methodEngine === "object" &&
+    !Array.isArray(methodData.methodEngine)
+      ? (methodData.methodEngine as Record<string, unknown>)
+      : null;
+  const compiledEngine =
+    compiledMethod?.engine &&
+    typeof compiledMethod.engine === "object" &&
+    !Array.isArray(compiledMethod.engine)
+      ? (compiledMethod.engine as Record<string, unknown>)
+      : null;
+
+  if (
+    !compiledMethod ||
+    !methodData.methodFingerprint ||
+    !methodEngine ||
+    !compiledEngine ||
+    !methodData.publicationEvidence ||
+    compiledMethod.methodFingerprint !== methodData.methodFingerprint ||
+    typeof compiledMethod.normalizedMethodJson !== "string" ||
+    typeof methodEngine.version !== "string" ||
+    typeof methodEngine.optionsFingerprint !== "string" ||
+    compiledEngine.version !== methodEngine.version ||
+    compiledEngine.optionsFingerprint !== methodEngine.optionsFingerprint
+  ) {
+    throw new Error(
+      "Método publicado sem artefato compilado consistente não pode gerar job regulado.",
     );
   }
 }
@@ -208,6 +253,7 @@ async function persistCalibrationJob(
       "Metodo do servico nao esta publicado. Publique o metodo antes de criar jobs.",
     );
   }
+  validatePublishedMethodCompiledArtifact(methodData);
 
   if (
     serviceData.assetTypeId &&
@@ -310,6 +356,30 @@ async function persistCalibrationJob(
     methodId: methodData.id,
     methodName: methodData.name,
     methodVersion: methodData.version,
+    compiledMethod: methodData.compiledMethod ?? null,
+    methodFingerprint: methodData.methodFingerprint ?? null,
+    engineVersion:
+      methodData.methodEngine &&
+      typeof methodData.methodEngine === "object" &&
+      "version" in methodData.methodEngine &&
+      typeof methodData.methodEngine.version === "string"
+        ? methodData.methodEngine.version
+        : null,
+    engineOptionsFingerprint:
+      methodData.methodEngine &&
+      typeof methodData.methodEngine === "object" &&
+      "optionsFingerprint" in methodData.methodEngine &&
+      typeof methodData.methodEngine.optionsFingerprint === "string"
+        ? methodData.methodEngine.optionsFingerprint
+        : null,
+    normalizedMethodJson:
+      methodData.compiledMethod &&
+      typeof methodData.compiledMethod === "object" &&
+      "normalizedMethodJson" in methodData.compiledMethod &&
+      typeof methodData.compiledMethod.normalizedMethodJson === "string"
+        ? methodData.compiledMethod.normalizedMethodJson
+        : null,
+    publicationEvidence: methodData.publicationEvidence ?? null,
     dataFields: methodData.dataFields,
     variableBindings: methodData.variableBindings ?? [],
     formulas: methodData.formulas,

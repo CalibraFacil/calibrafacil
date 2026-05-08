@@ -3295,6 +3295,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
   if (job.results) {
     const seenResultKeys = new Set<string>();
     for (const formula of formulas) {
+      if (formula.outputKey.startsWith("__")) continue;
       if (!(formula.outputKey in job.results)) continue;
       seenResultKeys.add(formula.outputKey);
       resultEntries.push({
@@ -3306,6 +3307,7 @@ export function CertificateHtml({ job }: { job: JobData }) {
       });
     }
     for (const [key, value] of Object.entries(job.results)) {
+      if (key.startsWith("__")) continue;
       if (seenResultKeys.has(key)) continue;
       const formula = formulas.find((f) => f.outputKey === key);
       resultEntries.push({

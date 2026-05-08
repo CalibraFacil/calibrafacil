@@ -4,12 +4,16 @@ import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 
-import type { MethodData } from '@/components/method-builder'
-
 import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { MethodBuilder } from '@/components/method-builder'
+import {
+  MethodBuilder,
+  draftToMethodSavePayload,
+  methodDataToDraft,
+  type MethodRecordData,
+  type MethodDraft,
+} from '@/components/method-builder'
 
 export const Route = createFileRoute('/dashboard/methods/$id/edit')({
   head: () => ({
@@ -38,25 +42,16 @@ function EditMethodPage() {
         throw new Error('Falha ao carregar método')
       }
 
-      return res.json() as Promise<MethodData>
+      return res.json() as Promise<MethodRecordData>
     },
   })
 
   const updateMutation = useMutation({
-    mutationFn: async (data: MethodData) => {
+    mutationFn: async (draft: MethodDraft) => {
+      const payload = draftToMethodSavePayload(draft)
       const res = await api.api.methods[':id'].$put({
         param: { id: String(method?.id ?? id) },
-        json: {
-          name: data.name,
-          description: data.description,
-          assetTypeId: data.assetTypeId,
-          dataFields: data.dataFields,
-          variableBindings: data.variableBindings ?? [],
-          formulas: data.formulas,
-          validations: data.validations,
-          uncertaintyParams: data.uncertaintyParams,
-          certificateContent: data.certificateContent,
-        },
+        json: payload,
       })
 
       if (!res.ok) {
@@ -71,31 +66,6 @@ function EditMethodPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })
       toast.success('Método salvo')
-    },
-    onError: (error) => {
-      toast.error(error.message)
-    },
-  })
-
-  const publishMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api.methods[':id']['request-approval'].$post({
-        param: { id: String(method?.id ?? id) },
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao solicitar aprovação',
-        )
-      }
-
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['methods'] })
-      toast.success('Método enviado para aprovação')
-      navigate({ to: '/dashboard/methods' })
     },
     onError: (error) => {
       toast.error(error.message)
@@ -155,11 +125,14 @@ function EditMethodPage() {
 
       <div className="flex-1 min-h-0">
         <MethodBuilder
-          initialData={method}
-          onSave={(data) => updateMutation.mutate(data)}
-          onPublish={() => publishMutation.mutate()}
+          initialDraft={methodDataToDraft(method)}
+          onSave={(data) => updateMutation.mutateAsync(data)}
+          onCancel={() => navigate({ to: '/dashboard/methods' })}
+          onPublished={() => {
+            queryClient.invalidateQueries({ queryKey: ['methods'] })
+            navigate({ to: '/dashboard/methods' })
+          }}
           isSaving={updateMutation.isPending}
-          isPublishing={publishMutation.isPending}
         />
       </div>
     </div>

@@ -21,6 +21,8 @@
     "@aws-sdk/s3-request-presigner": "^3.990.0",
     "@calibra-facil/auth": "workspace:^",
     "@calibra-facil/db": "workspace:^",
+    "@calibra-facil/math-engine": "git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.0-rc.4",
+    "@calibra-facil/method-definition": "workspace:^",
     "@calibra-facil/notifications": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",

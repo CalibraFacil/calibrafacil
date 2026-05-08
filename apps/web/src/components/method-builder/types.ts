@@ -1,17 +1,25 @@
-/**
- * Types for the Method Builder component
- */
+export type MethodDraftStatus =
+  | 'DRAFT'
+  | 'PENDING_APPROVAL'
+  | 'TECHNICAL_REVIEWED'
+  | 'PUBLISHED'
+  | 'ARCHIVED'
 
-export type MethodInputType = 'text' | 'number' | 'select' | 'table'
-export type MethodInputSource = 'manual' | 'asset_spec'
-export type EccentricityIndicatorVariant = 'circular_platform' | 'road_scale'
+export type MethodDraftInputType = 'text' | 'number' | 'select' | 'table'
 
-export interface EccentricityIndicatorConfig {
-  enabled?: boolean
-  variant?: EccentricityIndicatorVariant
+export interface MethodDraftTableColumn {
+  key: string
+  label: string
+  type: 'text' | 'number'
+  unit?: string
 }
 
-export interface WeighingRangeResolverConfig {
+export interface MethodDraftEccentricityIndicatorConfig {
+  enabled?: boolean
+  variant?: 'circular_platform' | 'road_scale'
+}
+
+export interface MethodDraftWeighingRangeResolverConfig {
   enabled?: boolean
   assetSpecKey?: string
   pointColumn?: string
@@ -26,79 +34,23 @@ export interface WeighingRangeResolverConfig {
   }
 }
 
-export type MethodTableColumnRole =
-  | 'standard_value'
-  | 'mass_standard_composition'
-
-export interface MassCompositionConfig {
-  targetUnit?: 'mg' | 'g' | 'kg'
-  optionSource?: 'certified_values' | 'composition_profiles'
-  targetColumns?: {
-    certifiedValue?: string
-    compositionLabel?: string
-    expandedUncertainty?: string
-    maxError?: string
-    drift?: string
-    buoyancy?: string
-  }
-  uncertaintyMode?: 'expanded_rss'
-  quantityMode?: 'linear_per_item_then_rss'
-}
-
-export interface MethodTableColumn {
+export interface MethodDraftInput {
   key: string
   label: string
-  type: 'text' | 'number'
-  unit?: string
-  role?: MethodTableColumnRole
-  massComposition?: MassCompositionConfig
-}
-
-export interface MethodInputField {
-  key: string
-  label: string
-  type: MethodInputType
+  type: MethodDraftInputType
   unit?: string
   required?: boolean
   options?: Array<string>
   defaultValue?: string | number
-  columns?: Array<MethodTableColumn>
-  source?: MethodInputSource
+  columns?: Array<MethodDraftTableColumn>
+  source?: 'manual' | 'asset_spec'
   assetSpecKey?: string
   allowOverride?: boolean
-  eccentricityIndicator?: EccentricityIndicatorConfig
-  weighingRangeResolver?: WeighingRangeResolverConfig
+  eccentricityIndicator?: MethodDraftEccentricityIndicatorConfig
+  weighingRangeResolver?: MethodDraftWeighingRangeResolverConfig
 }
 
-export interface MethodFormulaReporting {
-  includeInCertificate?: boolean
-  role?:
-    | 'primary_result'
-    | 'expanded_uncertainty'
-    | 'coverage_factor'
-    | 'conformity_margin'
-    | 'uncertainty_component'
-    | 'auxiliary'
-  group?: 'calibration_result' | 'uncertainty_budget' | 'raw_calculation'
-}
-
-export interface MethodFormula {
-  outputKey: string
-  expression: string
-  label?: string
-  unit?: string
-  reporting?: MethodFormulaReporting
-}
-
-export interface MethodValidation {
-  leftExpression: string
-  operator: '<' | '<=' | '>' | '>=' | '==' | '!='
-  rightExpression: string
-  message: string
-  severity: 'error' | 'warning'
-}
-
-export type MethodVariableBinding =
+export type MethodDraftVariableBinding =
   | {
       key: string
       label?: string
@@ -108,17 +60,17 @@ export type MethodVariableBinding =
   | {
       key: string
       label?: string
-      source: 'table_statistic'
+      source: 'table_column'
       fieldKey: string
       columnKey: string
-      statistic: 'mean' | 'sample_stddev' | 'count' | 'min' | 'max'
     }
   | {
       key: string
       label?: string
-      source: 'table_column'
+      source: 'table_statistic'
       fieldKey: string
       columnKey: string
+      statistic: 'mean' | 'sample_stddev' | 'count' | 'min' | 'max'
     }
   | {
       key: string
@@ -134,7 +86,33 @@ export type MethodVariableBinding =
       valueKey: string
     }
 
-export interface MethodTypeBComponent {
+export interface MethodDraftFormula {
+  outputKey: string
+  expression: string
+  label?: string
+  unit?: string
+  reporting?: {
+    includeInCertificate?: boolean
+    role?:
+      | 'primary_result'
+      | 'expanded_uncertainty'
+      | 'coverage_factor'
+      | 'conformity_margin'
+      | 'uncertainty_component'
+      | 'auxiliary'
+    group?: 'calibration_result' | 'uncertainty_budget' | 'raw_calculation'
+  }
+}
+
+export interface MethodDraftValidation {
+  leftExpression: string
+  operator: '<' | '<=' | '>' | '>=' | '==' | '!='
+  rightExpression: string
+  message: string
+  severity: 'error' | 'warning'
+}
+
+export interface MethodDraftUncertaintyComponent {
   name: string
   value: number
   distribution: 'normal' | 'rectangular' | 'triangular' | 'u-shaped'
@@ -143,87 +121,120 @@ export interface MethodTypeBComponent {
   degreesOfFreedom?: number
 }
 
-export type MethodCertificateContentSection =
-  | {
-      kind: 'paragraphs'
-      title: string
-      paragraphs: Array<string>
-    }
-  | {
-      kind: 'definition_list'
-      title: string
-      items: Array<{ term: string; definition: string }>
-    }
-  | {
-      kind: 'bullets'
-      title?: string
-      items: Array<string>
-    }
-
-export interface MethodCertificateContent {
+export interface MethodDraftCertificateContent {
   procedureCode?: string
   referenceStandards?: Array<string>
   certifiedValuesDisplay?: 'full' | 'hidden'
   massCompositionDisplay?: 'full' | 'hidden'
   uncertaintyBudgetDisplay?: 'full' | 'hidden'
-  sections?: Array<MethodCertificateContentSection>
+  sections?: Array<
+    | {
+        kind: 'paragraphs'
+        title: string
+        paragraphs: Array<string>
+      }
+    | {
+        kind: 'definition_list'
+        title: string
+        items: Array<{ term: string; definition: string }>
+      }
+    | {
+        kind: 'bullets'
+        title?: string
+        items: Array<string>
+      }
+  >
 }
 
-export type MethodStatus =
-  | 'DRAFT'
-  | 'PENDING_APPROVAL'
-  | 'TECHNICAL_REVIEWED'
-  | 'PUBLISHED'
-  | 'ARCHIVED'
-
-export interface MethodData {
+export interface MethodDraft {
   id?: number
   name: string
   description?: string
   assetTypeId?: number
   version: number
-  status: MethodStatus
-  technicalReviewedBy?: string | null
-  approvedBy?: string | null
-  dataFields: Array<MethodInputField>
-  variableBindings?: Array<MethodVariableBinding>
-  formulas: Array<MethodFormula>
-  validations: Array<MethodValidation>
-  uncertaintyParams: Array<MethodTypeBComponent>
-  certificateContent?: MethodCertificateContent | null
+  status: MethodDraftStatus
+  inputs: Array<MethodDraftInput>
+  variables: Array<MethodDraftVariableBinding>
+  formulas: Array<MethodDraftFormula>
+  validations: Array<MethodDraftValidation>
+  uncertainty: Array<MethodDraftUncertaintyComponent>
+  certificate: MethodDraftCertificateContent | null
 }
 
-export interface FormulaResult {
-  value?: string | number
-  valueText?: string
-  displayValue?: string
-  error?: string
-  errorCode?: string
+export interface MethodRecordData {
+  id?: number
+  name: string
+  description?: string | null
+  assetTypeId?: number | null
+  version?: number
+  status?: MethodDraftStatus
+  dataFields?: Array<MethodDraftInput>
+  variableBindings?: Array<MethodDraftVariableBinding>
+  formulas?: Array<MethodDraftFormula>
+  validations?: Array<MethodDraftValidation>
+  uncertaintyParams?: Array<MethodDraftUncertaintyComponent>
+  certificateContent?: MethodDraftCertificateContent | null
 }
 
-export interface ValidationResult {
-  leftExpression: string
-  operator: MethodValidation['operator']
-  rightExpression: string
+export interface MethodDraftSavePayload {
+  name: string
+  description?: string | null
+  assetTypeId?: number | null
+  dataFields: Array<MethodDraftInput>
+  variableBindings: Array<MethodDraftVariableBinding>
+  formulas: Array<MethodDraftFormula>
+  validations: Array<MethodDraftValidation>
+  uncertaintyParams: Array<MethodDraftUncertaintyComponent>
+  certificateContent: MethodDraftCertificateContent | null
+}
+
+export type MethodDiagnosticSeverity = 'error' | 'warning' | 'info'
+
+export interface MethodDiagnostic {
+  code?: string
+  severity: MethodDiagnosticSeverity
   message: string
-  severity: 'error' | 'warning'
-  passed?: boolean
-  error?: string
-  errorCode?: string
+  path?: string
 }
 
-// Default empty method for new methods
-export const defaultMethodData: MethodData = {
+export interface MethodNormalizedFormula {
+  outputKey: string
+  expression: string
+  normalizedExpression: string
+}
+
+export interface MethodCompileResult {
+  diagnostics: Array<MethodDiagnostic>
+  fingerprint?: string
+  normalizedFormulas: Array<MethodNormalizedFormula>
+  compiledMethod?: unknown
+}
+
+export interface MethodPreviewResult {
+  diagnostics: Array<MethodDiagnostic>
+  results: Record<string, unknown>
+  normalizedData?: Record<string, unknown>
+}
+
+export const emptyMethodDraft: MethodDraft = {
   name: '',
   description: '',
   version: 1,
   status: 'DRAFT',
-  dataFields: [],
-  variableBindings: [],
+  inputs: [
+    {
+      key: 'measurement',
+      label: 'Medição',
+      type: 'number',
+      unit: '',
+      required: true,
+    },
+  ],
+  variables: [],
   formulas: [],
   validations: [],
-  uncertaintyParams: [],
-  certificateContent: {
+  uncertainty: [],
+  certificate: {
     referenceStandards: [],
     sections: [],
   },

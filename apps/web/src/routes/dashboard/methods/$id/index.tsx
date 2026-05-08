@@ -9,7 +9,7 @@ import {
   RefreshIcon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
-import type { MethodData } from '@/components/method-builder'
+import type { MethodData } from '@/components/method-runtime/types'
 
 import { api } from '@/utils/api'
 import {
@@ -163,8 +163,10 @@ function MethodDetailPage() {
 
   const qualityApproveMutation = useMutation({
     mutationFn: async () => {
+      if (!method) throw new Error('Método não carregado')
       const res = await api.api.methods[':id']['quality-approve'].$post({
         param: { id: String(method?.id ?? id) },
+        json: {},
       })
 
       if (!res.ok) {
@@ -552,6 +554,66 @@ function MethodDetailPage() {
               <DetailItem
                 label="Tipo de instrumento"
                 value={method.assetTypeName || '-'}
+              />
+            </dl>
+          </DetailSection>
+
+          <DetailSection
+            title="Evidência compilada"
+            description="Artefato usado para publicação e execução rastreável."
+          >
+            <dl className="border-t border-border/70">
+              <DetailItem
+                label="Method fingerprint"
+                value={method.methodFingerprint || '-'}
+                mono
+              />
+              <DetailItem
+                label="Publication fingerprint"
+                value={
+                  method.publicationEvidence?.publicationFingerprint || '-'
+                }
+                mono
+              />
+              <DetailItem
+                label="Engine"
+                value={
+                  method.methodEngine?.version ||
+                  method.publicationEvidence?.engineVersion ||
+                  '-'
+                }
+                mono
+              />
+              <DetailItem
+                label="Engine options"
+                value={
+                  method.methodEngine?.optionsFingerprint ||
+                  method.publicationEvidence?.engineOptionsFingerprint ||
+                  '-'
+                }
+                mono
+              />
+              <DetailItem
+                label="Compilado em"
+                value={formatDateTime(
+                  method.methodCompiledAt ||
+                    method.publicationEvidence?.compiledAt,
+                )}
+                mono
+              />
+              <DetailItem
+                label="Previews"
+                value={String(
+                  method.publicationEvidence?.previewResults?.length ?? 0,
+                )}
+                mono
+              />
+              <DetailItem
+                label="Diagnósticos"
+                value={String(
+                  method.publicationEvidence?.diagnostics?.length ?? 0,
+                )}
+                mono
               />
             </dl>
           </DetailSection>

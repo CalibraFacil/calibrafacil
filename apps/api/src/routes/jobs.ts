@@ -50,6 +50,7 @@ import {
 import {
   type CertificateTemplateSnapshot,
   normalizeMethodDataForStorage,
+  toCanonicalMassValue,
 } from "@calibra-facil/shared";
 import { requirePlanLimit } from "../middleware/tier-guard";
 import { withCache, withInvalidation } from "../middleware/cache";
@@ -85,10 +86,28 @@ import {
   getEffectiveCertificateTemplateSnapshot,
   serializeCertificateTemplateSnapshot,
 } from "../lib/certificate-template-snapshots";
+import {
+  executeCompiledMethod,
+  type CalculationEngineLike,
+  type CompiledMethod,
+  type CompiledMethodExecutionResult,
+  type MethodDiagnostic,
+} from "@calibra-facil/method-definition";
+import {
+  createCalculationEngine,
+  normalizeEngineOptions,
+} from "@calibra-facil/math-engine";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
+
+const METHOD_ENGINE_OPTIONS = {
+  numericMode: "decimal" as const,
+  rejectUnusedInputs: true,
+  maxExponentMagnitude: 12,
+  maxSignificantDigits: 24,
+};
 
 const CommandPaletteJobSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -231,6 +250,301 @@ function stripAssetSpecData(
   return Object.fromEntries(
     Object.entries(data).filter(([key]) => !assetSpecKeys.has(key)),
   );
+}
+
+function createMethodExecutionEngine(): CalculationEngineLike {
+  return createCalculationEngine(
+    normalizeEngineOptions(METHOD_ENGINE_OPTIONS),
+  ) as unknown as CalculationEngineLike;
+}
+
+function normalizeStandardNumberToGrams(
+  value: number | null | undefined,
+  unit: unknown,
+): { value: number | null | undefined; normalized: boolean } {
+  if (value === null || value === undefined) {
+    return { value, normalized: false };
+  }
+
+  const normalized = toCanonicalMassValue(value, unit);
+  return normalized === null
+    ? { value, normalized: false }
+    : { value: normalized, normalized: true };
+}
+
+function normalizeStandardsForOfficialExecution(
+  standards: StandardSnapshot[] | null | undefined,
+): StandardSnapshot[] | null | undefined {
+  if (!standards) {
+    return standards;
+  }
+
+  return standards.map((standard) => {
+    const certifiedValues = standard.certifiedValues?.map((certifiedValue) => {
+      const value = normalizeStandardNumberToGrams(
+        certifiedValue.value,
+        certifiedValue.unit,
+      );
+      const uncertainty = normalizeStandardNumberToGrams(
+        certifiedValue.uncertainty,
+        certifiedValue.unit,
+      );
+      const maxError = normalizeStandardNumberToGrams(
+        certifiedValue.maxError,
+        certifiedValue.unit,
+      );
+      const drift = normalizeStandardNumberToGrams(
+        certifiedValue.drift,
+        certifiedValue.unit,
+      );
+      const buoyancy = normalizeStandardNumberToGrams(
+        certifiedValue.buoyancy,
+        certifiedValue.unit,
+      );
+
+      return {
+        ...certifiedValue,
+        value: value.value ?? certifiedValue.value,
+        uncertainty: uncertainty.value ?? certifiedValue.uncertainty,
+        unit: value.normalized ? "g" : certifiedValue.unit,
+        maxError: maxError.value ?? certifiedValue.maxError,
+        drift: drift.value ?? certifiedValue.drift,
+        buoyancy: buoyancy.value ?? certifiedValue.buoyancy,
+      };
+    });
+
+    const driftUnit =
+      standard.certifiedValues?.[0]?.unit ?? standard.uncertaintyUnit;
+    const normalizedUncertainty = normalizeStandardNumberToGrams(
+      standard.uncertainty,
+      standard.uncertaintyUnit,
+    );
+    const normalizedDrift = normalizeStandardNumberToGrams(
+      standard.drift,
+      driftUnit,
+    );
+
+    return {
+      ...standard,
+      uncertainty: normalizedUncertainty.value ?? standard.uncertainty,
+      uncertaintyUnit: normalizedUncertainty.normalized
+        ? "g"
+        : standard.uncertaintyUnit,
+      drift: normalizedDrift.value ?? standard.drift,
+      certifiedValues: certifiedValues ?? null,
+    };
+  });
+}
+
+function jobExecutionDiagnostic(
+  code: string,
+  message: string,
+  path: string,
+): MethodDiagnostic {
+  return {
+    code,
+    severity: "error",
+    message,
+    path,
+  };
+}
+
+function getCompiledMethodSnapshot(
+  methodSnapshot: MethodSnapshot | null | undefined,
+):
+  | { ok: true; compiledMethod: CompiledMethod }
+  | { ok: false; diagnostics: MethodDiagnostic[]; message: string } {
+  const compiledMethod = methodSnapshot?.compiledMethod;
+  if (
+    !methodSnapshot ||
+    !compiledMethod ||
+    typeof compiledMethod !== "object" ||
+    !methodSnapshot.methodFingerprint ||
+    !methodSnapshot.engineVersion ||
+    !methodSnapshot.engineOptionsFingerprint ||
+    !methodSnapshot.normalizedMethodJson
+  ) {
+    const message =
+      "Snapshot compilado do método é obrigatório para execução regulada";
+    return {
+      ok: false,
+      message,
+      diagnostics: [
+        jobExecutionDiagnostic(
+          "COMPILED_METHOD_SNAPSHOT_REQUIRED",
+          message,
+          "methodSnapshot.compiledMethod",
+        ),
+      ],
+    };
+  }
+
+  const candidate = compiledMethod as Partial<CompiledMethod>;
+  if (
+    candidate.status !== "compiled" ||
+    typeof candidate.methodFingerprint !== "string" ||
+    !candidate.engine ||
+    !Array.isArray(candidate.inputs) ||
+    !Array.isArray(candidate.formulas) ||
+    !Array.isArray(candidate.measurementModels) ||
+    !Array.isArray(candidate.acceptanceCriteria)
+  ) {
+    const message = "Snapshot compilado do método possui formato inválido";
+    return {
+      ok: false,
+      message,
+      diagnostics: [
+        jobExecutionDiagnostic(
+          "COMPILED_METHOD_SNAPSHOT_INVALID",
+          message,
+          "methodSnapshot.compiledMethod",
+        ),
+      ],
+    };
+  }
+
+  const mismatches: MethodDiagnostic[] = [];
+  if (candidate.methodFingerprint !== methodSnapshot.methodFingerprint) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Fingerprint do método compilado diverge do snapshot do job",
+        "methodSnapshot.methodFingerprint",
+      ),
+    );
+  }
+  if (candidate.engine?.version !== methodSnapshot.engineVersion) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Versão do engine compilado diverge do snapshot do job",
+        "methodSnapshot.engineVersion",
+      ),
+    );
+  }
+  if (
+    candidate.engine?.optionsFingerprint !==
+    methodSnapshot.engineOptionsFingerprint
+  ) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Fingerprint das opções do engine diverge do snapshot do job",
+        "methodSnapshot.engineOptionsFingerprint",
+      ),
+    );
+  }
+  if (candidate.normalizedMethodJson !== methodSnapshot.normalizedMethodJson) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "JSON normalizado do método compilado diverge do snapshot do job",
+        "methodSnapshot.normalizedMethodJson",
+      ),
+    );
+  }
+  if (mismatches.length > 0) {
+    return {
+      ok: false,
+      message: "Snapshot compilado do método diverge dos metadados do job",
+      diagnostics: mismatches,
+    };
+  }
+
+  return { ok: true, compiledMethod: compiledMethod as CompiledMethod };
+}
+
+function buildOfficialExecutionInputs(params: {
+  methodSnapshot: MethodSnapshot;
+  data: Record<string, unknown>;
+  assetSnapshot: AssetSnapshot;
+  standardsSnapshot: StandardSnapshot[] | null | undefined;
+  environmentalSnapshot: EnvironmentalSnapshot | null | undefined;
+}): Record<string, unknown> {
+  const inputs: Record<string, unknown> = { ...params.data };
+
+  for (const field of params.methodSnapshot.dataFields ?? []) {
+    if (field.source !== "asset_spec" || !field.assetSpecKey) continue;
+    const value = params.assetSnapshot.specifications?.[field.assetSpecKey];
+    if (value !== undefined) {
+      inputs[field.key] = value;
+    }
+  }
+
+  if (params.environmentalSnapshot) {
+    inputs.environment = {
+      temperature: params.environmentalSnapshot.temperature,
+      humidity: params.environmentalSnapshot.humidity,
+      pressure: params.environmentalSnapshot.pressure,
+    };
+  }
+
+  if (params.standardsSnapshot !== undefined) {
+    inputs.standards =
+      normalizeStandardsForOfficialExecution(params.standardsSnapshot) ?? [];
+  }
+
+  return inputs;
+}
+
+function executeOfficialCompiledSnapshot(params: {
+  methodSnapshot: MethodSnapshot;
+  data: Record<string, unknown>;
+  assetSnapshot: AssetSnapshot;
+  standardsSnapshot: StandardSnapshot[] | null | undefined;
+  environmentalSnapshot: EnvironmentalSnapshot | null | undefined;
+  requireSuccess?: boolean;
+}):
+  | { ok: true; results: Record<string, unknown>; execution: null }
+  | {
+      ok: true;
+      results: Record<string, unknown>;
+      execution: CompiledMethodExecutionResult;
+    }
+  | { ok: false; diagnostics: MethodDiagnostic[]; message: string } {
+  const snapshot = getCompiledMethodSnapshot(params.methodSnapshot);
+  if (!snapshot.ok) {
+    return snapshot;
+  }
+
+  const execution = executeCompiledMethod(
+    snapshot.compiledMethod,
+    {
+      inputs: buildOfficialExecutionInputs(params),
+    },
+    { engine: createMethodExecutionEngine() },
+  );
+
+  if (!execution.ok && params.requireSuccess !== false) {
+    return {
+      ok: false,
+      diagnostics: execution.diagnostics,
+      message:
+        execution.diagnostics.find((item) => item.severity === "error")
+          ?.message ?? "Execução oficial do método compilado falhou",
+    };
+  }
+
+  return {
+    ok: true,
+    results: {
+      ...execution.outputs,
+      __compiledExecution: {
+        methodFingerprint: execution.methodFingerprint,
+        engineVersion: execution.engineVersion,
+        engineOptionsFingerprint: execution.engineOptionsFingerprint,
+        inputFingerprint: execution.inputFingerprint,
+        calculationFingerprint: execution.calculationFingerprint,
+        resultFingerprint: execution.resultFingerprint,
+        canonicalResultJson: execution.canonicalResultJson,
+        formulaResults: execution.formulaResults,
+        measurementModelResults: execution.measurementModelResults,
+        acceptanceCriteriaResults: execution.acceptanceCriteriaResults,
+        diagnostics: execution.diagnostics,
+      },
+    },
+    execution,
+  };
 }
 
 async function buildAssetSnapshot(
@@ -381,9 +695,16 @@ async function buildStandardsSnapshot(
     };
   }
 
+  const standardsById = new Map(
+    standards.map((standard) => [standard.id, standard]),
+  );
+  const orderedStandards = selectedStandardIds.map(
+    (id) => standardsById.get(id)!,
+  );
+
   return {
     ok: true,
-    snapshot: standards.map((s) => ({
+    snapshot: orderedStandards.map((s) => ({
       id: s.id,
       name: s.name,
       type: s.type,
@@ -1377,13 +1698,34 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         normalizedData.data,
         existing.methodSnapshot,
       );
+      const executionData = normalizedData.data ?? {};
+      const officialExecution = executeOfficialCompiledSnapshot({
+        methodSnapshot: existing.methodSnapshot,
+        data: executionData,
+        assetSnapshot: nextAssetSnapshot,
+        standardsSnapshot: nextStandardsSnapshot,
+        environmentalSnapshot: nextEnvironmentalSnapshot,
+        requireSuccess: true,
+      });
+      if (!officialExecution.ok) {
+        return c.json(
+          {
+            error: officialExecution.message,
+            diagnostics: officialExecution.diagnostics,
+          },
+          422,
+        );
+      }
+      const nextResults = officialExecution.execution
+        ? officialExecution.results
+        : (input.results ?? existing.results);
 
       // Update job with execution data and set status to REVIEW
       const [updated] = await db
         .update(calibrationJob)
         .set({
           data: nextData,
-          results: input.results ?? existing.results,
+          results: nextResults,
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
@@ -1400,10 +1742,18 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         changes: {
           status: { old: existing.status, new: "REVIEW" },
           data: { old: existing.data, new: nextData },
-          results:
-            input.results !== undefined
-              ? { old: existing.results, new: input.results }
-              : undefined,
+          results: { old: existing.results, new: nextResults },
+          officialExecution: officialExecution.execution
+            ? {
+                methodFingerprint:
+                  officialExecution.execution.methodFingerprint,
+                inputFingerprint: officialExecution.execution.inputFingerprint,
+                calculationFingerprint:
+                  officialExecution.execution.calculationFingerprint,
+                resultFingerprint:
+                  officialExecution.execution.resultFingerprint,
+              }
+            : undefined,
           standardsSnapshot:
             standardsResult.snapshot !== undefined
               ? {
@@ -1533,6 +1883,27 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         normalizedData.data,
         existing.methodSnapshot,
       );
+      const executionData = normalizedData.data ?? {};
+      const officialExecution = executeOfficialCompiledSnapshot({
+        methodSnapshot: existing.methodSnapshot,
+        data: executionData,
+        assetSnapshot: nextAssetSnapshot,
+        standardsSnapshot: nextStandardsSnapshot,
+        environmentalSnapshot: nextEnvironmentalSnapshot,
+        requireSuccess: false,
+      });
+      if (!officialExecution.ok) {
+        return c.json(
+          {
+            error: officialExecution.message,
+            diagnostics: officialExecution.diagnostics,
+          },
+          422,
+        );
+      }
+      const nextResults = officialExecution.execution
+        ? officialExecution.results
+        : (input.results ?? null);
 
       // Determine new status
       const newStatus =
@@ -1543,7 +1914,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         .update(calibrationJob)
         .set({
           data: nextData,
-          results: input.results ?? null,
+          results: nextResults,
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
@@ -1562,6 +1933,18 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
               ? { old: existing.status, new: newStatus }
               : undefined,
           data: { old: existing.data, new: nextData },
+          results: { old: existing.results, new: nextResults },
+          officialExecution: officialExecution.execution
+            ? {
+                methodFingerprint:
+                  officialExecution.execution.methodFingerprint,
+                inputFingerprint: officialExecution.execution.inputFingerprint,
+                calculationFingerprint:
+                  officialExecution.execution.calculationFingerprint,
+                resultFingerprint:
+                  officialExecution.execution.resultFingerprint,
+              }
+            : undefined,
           standardsSnapshot:
             standardsResult.snapshot !== undefined
               ? {

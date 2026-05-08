@@ -869,9 +869,9 @@ export type MethodCertificateContent = z.infer<
  * Schema for creating a new method
  */
 export const CreateMethodSchema = z.object({
-  assetTypeId: z.coerce.number().optional(),
+  assetTypeId: z.coerce.number().nullable().optional(),
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   dataFields: z
     .array(MethodInputFieldSchema)
     .min(1, "Defina pelo menos um campo de entrada"),
@@ -1163,6 +1163,12 @@ export const MethodSnapshotSchema = z.object({
   methodId: z.number(),
   methodName: z.string(),
   methodVersion: z.number(),
+  compiledMethod: z.unknown().optional(),
+  methodFingerprint: z.string().nullable().optional(),
+  engineVersion: z.string().nullable().optional(),
+  engineOptionsFingerprint: z.string().nullable().optional(),
+  normalizedMethodJson: z.string().nullable().optional(),
+  publicationEvidence: z.unknown().optional(),
   dataFields: z.array(MethodInputFieldSchema),
   variableBindings: z.array(MethodVariableBindingSchema).default([]),
   formulas: z.array(MethodFormulaSchema),

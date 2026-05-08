@@ -61,13 +61,13 @@ import {
 } from '@calibra-facil/shared'
 import { ApprovedJobRecord } from './-components/approved-job-record'
 import { apiRouteParam } from '@/lib/route-identifiers'
-import { isMassCompositionValue } from '@/components/method-builder/mass-composition-utils'
+import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
 import {
   formatWeighingRangeSpec,
   isWeighingRangeSpecArray,
-} from '@/components/method-builder/weighing-range-utils'
-import type { MethodInputType } from '@/components/method-builder/types'
-import { normalizeMethodValidations } from '@/components/method-builder/math-runtime'
+} from '@/components/method-runtime/weighing-range-utils'
+import type { MethodInputType } from '@/components/method-runtime/types'
+import { normalizeMethodValidations } from '@/components/method-runtime/math-runtime'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/')({
   head: () => ({
