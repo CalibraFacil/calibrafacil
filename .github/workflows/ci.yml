@@ -40,7 +40,12 @@ jobs:
         env:
           MATH_ENGINE_GIT_TOKEN: ${{ secrets.MATH_ENGINE_GIT_TOKEN }}
           MATH_ENGINE_DEPLOY_KEY: ${{ secrets.MATH_ENGINE_DEPLOY_KEY }}
-        run: node scripts/setup-private-git-ssh.mjs --required
+        run: |
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; then
+            node scripts/setup-private-git-ssh.mjs --required
+          else
+            node scripts/setup-private-git-ssh.mjs
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
