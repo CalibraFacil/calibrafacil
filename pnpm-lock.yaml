@@ -72,7 +72,7 @@ importers:
         version: link:../../packages/db
       '@calibra-facil/math-engine':
         specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.0-rc.4
-        version: git+git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549
+        version: git+https://git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549
       '@calibra-facil/method-definition':
         specifier: workspace:^
         version: link:../../packages/method-definition
@@ -679,7 +679,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.17
-        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@22.19.3)(jiti@2.6.1)(jsdom@27.3.0)(lightningcss@1.30.2)(msw@2.12.4(@types/node@22.19.3)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@25.0.3)(jiti@2.6.1)(jsdom@27.3.0)(lightningcss@1.30.2)(msw@2.12.4(@types/node@25.0.3)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2)
 
   packages/notifications:
     dependencies:
