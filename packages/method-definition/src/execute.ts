@@ -32,9 +32,21 @@ export function executeCompiledMethod(
     outputs[result.key] = result.result.value;
   }
 
+  const inputFingerprint = fingerprintJson(input.inputs, "execution-input");
+  const calculationFingerprint = fingerprintJson(
+    {
+      methodFingerprint: method.methodFingerprint,
+      inputFingerprint,
+      inputs: input.inputs,
+      outputs,
+    },
+    "calculation",
+  );
   const canonicalResultJson = canonicalJson({
     methodFingerprint: method.methodFingerprint,
     engine: method.engine,
+    inputFingerprint,
+    calculationFingerprint,
     formulaResults: preview.formulaResults,
     measurementModelResults: preview.measurementModelResults,
     acceptanceCriteriaResults: preview.acceptanceCriteriaResults,
@@ -47,20 +59,14 @@ export function executeCompiledMethod(
     methodFingerprint: method.methodFingerprint,
     engineVersion: method.engine.version,
     engineOptionsFingerprint: method.engine.optionsFingerprint,
+    inputFingerprint,
     formulaResults: preview.formulaResults,
     measurementModelResults: preview.measurementModelResults,
     acceptanceCriteriaResults: preview.acceptanceCriteriaResults,
     diagnostics: preview.diagnostics,
     outputs,
     canonicalResultJson,
-    calculationFingerprint: fingerprintJson(
-      {
-        methodFingerprint: method.methodFingerprint,
-        inputs: input.inputs,
-        outputs,
-      },
-      "calculation",
-    ),
+    calculationFingerprint,
     resultFingerprint: fingerprintJson(canonicalResultJson, "result"),
   };
 }

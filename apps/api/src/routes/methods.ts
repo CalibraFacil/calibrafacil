@@ -1449,8 +1449,16 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
 
+        const body = (await c.req.json().catch(() => ({}))) as {
+          sampleData?: Record<string, unknown>;
+        };
         const compileResult = compileDraftWithEngine(
           methodRecordToDraft(existing),
+          {
+            requirePublishable: true,
+            previewScenarios: buildAdhocPreviewScenarios(body.sampleData),
+            includePreviewScenariosInFingerprint: false,
+          },
         );
         if (!compileResult.ok) {
           return c.json(

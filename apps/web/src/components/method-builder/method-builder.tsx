@@ -185,7 +185,8 @@ export function MethodBuilder({
 
       if (draft.status === 'DRAFT') {
         await onSave(draft)
-        return requestMethodApproval(draft.id)
+        const sampleData = parseJsonObject(sampleDataText)
+        return requestMethodApproval(draft.id, sampleData)
       }
 
       const sampleData = parseJsonObject(sampleDataText)

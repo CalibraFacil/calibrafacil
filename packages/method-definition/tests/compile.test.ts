@@ -167,7 +167,10 @@ describe("compileMethodDraft", () => {
     );
     expect(execution.calculationFingerprint).toMatch(/^calculation:/);
     expect(execution.resultFingerprint).toMatch(/^result:/);
+    expect(execution.inputFingerprint).toMatch(/^execution-input:/);
     expect(execution.canonicalResultJson).toContain("formulaResults");
+    expect(execution.canonicalResultJson).toContain("inputFingerprint");
+    expect(execution.canonicalResultJson).toContain("calculationFingerprint");
   });
 
   it("rejects official execution when a blocking criterion fails", () => {

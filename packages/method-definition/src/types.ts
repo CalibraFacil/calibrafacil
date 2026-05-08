@@ -460,6 +460,7 @@ export type CompiledMethodExecutionResult = {
   methodFingerprint: string;
   engineVersion: string;
   engineOptionsFingerprint: string;
+  inputFingerprint: string;
   formulaResults: FormulaPreviewResult[];
   measurementModelResults: MeasurementModelPreviewResult[];
   acceptanceCriteriaResults: AcceptanceCriterionPreviewResult[];

@@ -257,11 +257,48 @@ function createMethodExecutionEngine(): CalculationEngineLike {
   ) as unknown as CalculationEngineLike;
 }
 
-function tryGetCompiledMethodSnapshot(
+function jobExecutionDiagnostic(
+  code: string,
+  message: string,
+  path: string,
+): MethodDiagnostic {
+  return {
+    code,
+    severity: "error",
+    message,
+    path,
+  };
+}
+
+function getCompiledMethodSnapshot(
   methodSnapshot: MethodSnapshot | null | undefined,
-): CompiledMethod | null {
+):
+  | { ok: true; compiledMethod: CompiledMethod }
+  | { ok: false; diagnostics: MethodDiagnostic[]; message: string } {
   const compiledMethod = methodSnapshot?.compiledMethod;
-  if (!compiledMethod || typeof compiledMethod !== "object") return null;
+  if (
+    !methodSnapshot ||
+    !compiledMethod ||
+    typeof compiledMethod !== "object" ||
+    !methodSnapshot.methodFingerprint ||
+    !methodSnapshot.engineVersion ||
+    !methodSnapshot.engineOptionsFingerprint ||
+    !methodSnapshot.normalizedMethodJson
+  ) {
+    const message =
+      "Snapshot compilado do método é obrigatório para execução regulada";
+    return {
+      ok: false,
+      message,
+      diagnostics: [
+        jobExecutionDiagnostic(
+          "COMPILED_METHOD_SNAPSHOT_REQUIRED",
+          message,
+          "methodSnapshot.compiledMethod",
+        ),
+      ],
+    };
+  }
 
   const candidate = compiledMethod as Partial<CompiledMethod>;
   if (
@@ -273,10 +310,69 @@ function tryGetCompiledMethodSnapshot(
     !Array.isArray(candidate.measurementModels) ||
     !Array.isArray(candidate.acceptanceCriteria)
   ) {
-    return null;
+    const message = "Snapshot compilado do método possui formato inválido";
+    return {
+      ok: false,
+      message,
+      diagnostics: [
+        jobExecutionDiagnostic(
+          "COMPILED_METHOD_SNAPSHOT_INVALID",
+          message,
+          "methodSnapshot.compiledMethod",
+        ),
+      ],
+    };
   }
 
-  return compiledMethod as CompiledMethod;
+  const mismatches: MethodDiagnostic[] = [];
+  if (candidate.methodFingerprint !== methodSnapshot.methodFingerprint) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Fingerprint do método compilado diverge do snapshot do job",
+        "methodSnapshot.methodFingerprint",
+      ),
+    );
+  }
+  if (candidate.engine?.version !== methodSnapshot.engineVersion) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Versão do engine compilado diverge do snapshot do job",
+        "methodSnapshot.engineVersion",
+      ),
+    );
+  }
+  if (
+    candidate.engine?.optionsFingerprint !==
+    methodSnapshot.engineOptionsFingerprint
+  ) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Fingerprint das opções do engine diverge do snapshot do job",
+        "methodSnapshot.engineOptionsFingerprint",
+      ),
+    );
+  }
+  if (candidate.normalizedMethodJson !== methodSnapshot.normalizedMethodJson) {
+    mismatches.push(
+      jobExecutionDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "JSON normalizado do método compilado diverge do snapshot do job",
+        "methodSnapshot.normalizedMethodJson",
+      ),
+    );
+  }
+  if (mismatches.length > 0) {
+    return {
+      ok: false,
+      message: "Snapshot compilado do método diverge dos metadados do job",
+      diagnostics: mismatches,
+    };
+  }
+
+  return { ok: true, compiledMethod: compiledMethod as CompiledMethod };
 }
 
 function buildOfficialExecutionInputs(params: {
@@ -326,13 +422,13 @@ function executeOfficialCompiledSnapshot(params: {
       execution: CompiledMethodExecutionResult;
     }
   | { ok: false; diagnostics: MethodDiagnostic[]; message: string } {
-  const compiledMethod = tryGetCompiledMethodSnapshot(params.methodSnapshot);
-  if (!compiledMethod) {
-    return { ok: true, results: {}, execution: null };
+  const snapshot = getCompiledMethodSnapshot(params.methodSnapshot);
+  if (!snapshot.ok) {
+    return snapshot;
   }
 
   const execution = executeCompiledMethod(
-    compiledMethod,
+    snapshot.compiledMethod,
     {
       inputs: buildOfficialExecutionInputs(params),
     },
@@ -357,6 +453,7 @@ function executeOfficialCompiledSnapshot(params: {
         methodFingerprint: execution.methodFingerprint,
         engineVersion: execution.engineVersion,
         engineOptionsFingerprint: execution.engineOptionsFingerprint,
+        inputFingerprint: execution.inputFingerprint,
         calculationFingerprint: execution.calculationFingerprint,
         resultFingerprint: execution.resultFingerprint,
         canonicalResultJson: execution.canonicalResultJson,
@@ -1563,6 +1660,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             ? {
                 methodFingerprint:
                   officialExecution.execution.methodFingerprint,
+                inputFingerprint: officialExecution.execution.inputFingerprint,
                 calculationFingerprint:
                   officialExecution.execution.calculationFingerprint,
                 resultFingerprint:
@@ -1753,6 +1851,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             ? {
                 methodFingerprint:
                   officialExecution.execution.methodFingerprint,
+                inputFingerprint: officialExecution.execution.inputFingerprint,
                 calculationFingerprint:
                   officialExecution.execution.calculationFingerprint,
                 resultFingerprint:

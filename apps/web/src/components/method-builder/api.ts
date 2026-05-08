@@ -158,6 +158,7 @@ export async function publishMethodDraft(params: {
 
 export async function requestMethodApproval(
   methodId: number,
+  sampleData: Record<string, unknown>,
 ): Promise<unknown> {
-  return postJson(`/api/methods/${methodId}/request-approval`, {})
+  return postJson(`/api/methods/${methodId}/request-approval`, { sampleData })
 }
