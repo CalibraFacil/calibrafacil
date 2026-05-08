@@ -156,8 +156,8 @@ export interface MethodRecordData {
 
 export interface MethodDraftSavePayload {
   name: string
-  description?: string
-  assetTypeId?: number
+  description?: string | null
+  assetTypeId?: number | null
   dataFields: Array<MethodDraftInput>
   variableBindings: Array<MethodDraftVariableBinding>
   formulas: Array<MethodDraftFormula>

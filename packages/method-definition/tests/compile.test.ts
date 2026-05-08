@@ -204,4 +204,142 @@ describe("compileMethodDraft", () => {
     expect(result.ok).toBe(false);
     expect(result.diagnostics.some((item) => item.code === "PREVIEW_REQUIRED")).toBe(true);
   });
+
+  it("lets expected-failure previews pass publication compilation", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        previewScenarios: [
+          {
+            key: "missing_input",
+            label: "Missing input",
+            inputs: { indication: "10" },
+            expectFailure: true,
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects preview inputs outside scalar constraints", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "scalar",
+            key: "indication",
+            label: "Indicação",
+            required: true,
+            constraints: { min: 0, max: 5 },
+          },
+          {
+            kind: "scalar",
+            key: "reference",
+            label: "Referência",
+            required: true,
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.some((item) => item.code === "PREVIEW_FAILED")).toBe(true);
+  });
+
+  it("rejects unknown acceptance criterion variables", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        acceptanceCriteria: [
+          {
+            key: "bad",
+            label: "Bad",
+            expression: "missing <= 1",
+            severity: "blocking",
+            message: "Bad criterion",
+          },
+        ],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "ACCEPTANCE_CRITERION_COMPILE_FAILED",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects unknown measurement model variables", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        formulas: [],
+        acceptanceCriteria: [],
+        measurementModels: [
+          {
+            key: "model",
+            label: "Model",
+            measurand: "y",
+            expression: "x + typo",
+            quantities: [
+              {
+                symbol: "x",
+                source: { kind: "input", key: "indication" },
+                uncertainty: {
+                  kind: "direct_standard_uncertainty",
+                  standardUncertainty: 0.1,
+                },
+              },
+            ],
+          },
+        ],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "MEASUREMENT_MODEL_COMPILE_FAILED",
+      ),
+    ).toBe(true);
+  });
+
+  it("validates Type A observation inputs at compile time", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        formulas: [],
+        acceptanceCriteria: [],
+        measurementModels: [
+          {
+            key: "model",
+            label: "Model",
+            measurand: "y",
+            expression: "x",
+            quantities: [
+              {
+                symbol: "x",
+                source: { kind: "input", key: "indication" },
+                uncertainty: {
+                  kind: "type_a",
+                  observationsInputKey: "indication",
+                },
+              },
+            ],
+          },
+        ],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "MEASUREMENT_MODEL_COMPILE_FAILED",
+      ),
+    ).toBe(true);
+  });
 });

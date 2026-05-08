@@ -126,7 +126,7 @@ function EditMethodPage() {
       <div className="flex-1 min-h-0">
         <MethodBuilder
           initialDraft={methodDataToDraft(method)}
-          onSave={(data) => updateMutation.mutate(data)}
+          onSave={(data) => updateMutation.mutateAsync(data)}
           onCancel={() => navigate({ to: '/dashboard/methods' })}
           onPublished={() => {
             queryClient.invalidateQueries({ queryKey: ['methods'] })

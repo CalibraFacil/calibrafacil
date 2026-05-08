@@ -91,8 +91,9 @@ export function compileMethodDraft(
   const compiledFormulas = orderedFormulaEntries.map(toCompiledFormulaDefinition);
   const compiledModels = compileMeasurementModels(context);
   const compiledCriteria = compileAcceptanceCriteria(context);
+  const previewScenarios = options.previewScenarios ?? draft.previewScenarios;
 
-  if (options.requirePublishable && draft.previewScenarios.length === 0) {
+  if (options.requirePublishable && previewScenarios.length === 0) {
     diagnostics.push(
       errorDiagnostic(
         "PREVIEW_REQUIRED",
@@ -108,6 +109,10 @@ export function compileMethodDraft(
 
   const methodForFingerprint = {
     ...draft,
+    previewScenarios:
+      options.includePreviewScenariosInFingerprint === false
+        ? []
+        : draft.previewScenarios,
     formulas: compiledFormulas,
     measurementModels: compiledModels,
     acceptanceCriteria: compiledCriteria,
@@ -139,14 +144,17 @@ export function compileMethodDraft(
     diagnostics: [...diagnostics],
   });
 
-  const previewResults = draft.previewScenarios.map((scenario) =>
+  const previewResults = previewScenarios.map((scenario) =>
     runMethodPreview(compiledMethod, scenario, { engine }),
   );
 
-  for (const result of previewResults) diagnostics.push(...result.diagnostics);
+  const previewDiagnostics = previewResults.flatMap(
+    (result) => result.diagnostics,
+  );
 
   if (options.requirePublishable) {
-    for (const result of previewResults) {
+    for (const [index, result] of previewResults.entries()) {
+      const scenario = previewScenarios[index];
       if (!result.passed) {
         diagnostics.push(
           errorDiagnostic(
@@ -156,6 +164,7 @@ export function compileMethodDraft(
           ),
         );
       }
+      if (scenario?.expectFailure) continue;
       for (const criterion of result.acceptanceCriteriaResults) {
         if (!criterion.passed && criterion.severity === "blocking") {
           diagnostics.push(
@@ -178,10 +187,10 @@ export function compileMethodDraft(
     ok: true,
     method: deepFreezeJsonLike({
       ...compiledMethod,
-      diagnostics: [...diagnostics],
+      diagnostics: [...diagnostics, ...previewDiagnostics],
     }),
     previewResults,
-    diagnostics,
+    diagnostics: [...diagnostics, ...previewDiagnostics],
   };
 }
 
@@ -339,6 +348,15 @@ function compileMeasurementModels(
       const compiled = context.engine.compileFormula(model.expression, {
         allowedVariables,
       });
+      const allowedQuantitySymbols = new Set(allowedVariables);
+      const unknownVariables = compiled.variables.filter(
+        (variable) => !allowedQuantitySymbols.has(variable),
+      );
+      if (unknownVariables.length > 0) {
+        throw new Error(
+          `Measurement model ${model.key} references unknown variable ${unknownVariables.join(", ")}`,
+        );
+      }
       compiledModels.push({
         key: model.key,
         expression: model.expression,
@@ -398,6 +416,22 @@ function validateMeasurementModelSources(
       !context.formulaKeys.has(quantity.source.key)
     ) {
       throw new Error(`Quantity ${quantity.symbol} references unknown formula ${quantity.source.key}`);
+    }
+    if (quantity.uncertainty.kind === "type_a") {
+      const observationsInputKey = quantity.uncertainty.observationsInputKey;
+      const observationsInput = context.draft.inputs.find(
+        (input) => input.key === observationsInputKey,
+      );
+      if (!observationsInput) {
+        throw new Error(
+          `Type A quantity ${quantity.symbol} references unknown observations input ${observationsInputKey}`,
+        );
+      }
+      if (observationsInput.kind !== "repeated_observation") {
+        throw new Error(
+          `Type A quantity ${quantity.symbol} observations input ${observationsInputKey} must be repeated_observation`,
+        );
+      }
     }
   }
 }

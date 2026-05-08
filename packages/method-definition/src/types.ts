@@ -421,6 +421,8 @@ export type CompileMethodOptions = {
   engine: CalculationEngineLike;
   engineMetadata?: EngineMetadata;
   requirePublishable?: boolean;
+  previewScenarios?: MethodPreviewScenario[];
+  includePreviewScenariosInFingerprint?: boolean;
 };
 
 export type CompileMethodResult =

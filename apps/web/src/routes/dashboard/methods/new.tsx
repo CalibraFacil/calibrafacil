@@ -60,7 +60,7 @@ function NewMethodPage() {
       <div className="flex-1 min-h-0">
         <MethodBuilder
           initialDraft={methodDataToDraft()}
-          onSave={(data) => createMutation.mutate(data)}
+          onSave={(data) => createMutation.mutateAsync(data)}
           onCancel={() => navigate({ to: '/dashboard/methods' })}
           isSaving={createMutation.isPending}
           isNew

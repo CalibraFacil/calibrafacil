@@ -34,6 +34,15 @@ export function compileCriterionExpression(
   const right = engine.compileFormula(match[3].trim(), { allowedVariables });
   const operator = match[2] as CompiledCriterion["operator"];
   const variables = [...new Set([...left.variables, ...right.variables])].sort();
+  const allowed = new Set(allowedVariables);
+  const unknownVariables = variables.filter((variable) => !allowed.has(variable));
+
+  if (unknownVariables.length > 0) {
+    throw new Error(
+      `Acceptance criterion references unknown variable ${unknownVariables.join(", ")}`,
+    );
+  }
+
   const normalizedFormula = `${left.normalizedFormula} ${operator} ${right.normalizedFormula}`;
 
   return {

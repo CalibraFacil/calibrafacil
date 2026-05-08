@@ -38,9 +38,11 @@ import {
   compileMethodDraft,
   previewMethodDraft,
   publishMethodDraft,
+  requestMethodApproval,
 } from './api'
 import type {
   MethodCompileResult,
+  MethodDraftCertificateContent,
   MethodDiagnostic,
   MethodDraft,
   MethodDraftFormula,
@@ -60,7 +62,7 @@ interface AssetTypeOption {
 
 interface MethodBuilderProps {
   initialDraft: MethodDraft
-  onSave: (draft: MethodDraft) => void
+  onSave: (draft: MethodDraft) => void | Promise<unknown>
   onCancel: () => void
   onPublished?: () => void
   isSaving?: boolean
@@ -85,6 +87,23 @@ const validationOperators: Array<MethodDraftValidation['operator']> = [
 
 const distributionOptions: Array<MethodDraftUncertaintyComponent['distribution']> =
   ['normal', 'rectangular', 'triangular', 'u-shaped']
+
+const reportingGroups: Array<
+  NonNullable<MethodDraftFormula['reporting']>['group']
+> = ['calibration_result', 'uncertainty_budget', 'raw_calculation']
+
+const reportingRoles: Array<
+  NonNullable<MethodDraftFormula['reporting']>['role']
+> = [
+  'primary_result',
+  'expanded_uncertainty',
+  'coverage_factor',
+  'conformity_margin',
+  'uncertainty_component',
+  'auxiliary',
+]
+
+const certificateDisplayOptions = ['full', 'hidden'] as const
 
 export function MethodBuilder({
   initialDraft,
@@ -161,19 +180,27 @@ export function MethodBuilder({
   const publishMutation = useMutation({
     mutationFn: async () => {
       if (!draft.id) {
-        throw new Error('Salve o método antes de publicar')
+        throw new Error('Salve o método antes de enviar para revisão')
+      }
+
+      if (draft.status === 'DRAFT') {
+        await onSave(draft)
+        return requestMethodApproval(draft.id)
       }
 
       const sampleData = parseJsonObject(sampleDataText)
       return publishMethodDraft({
         methodId: draft.id,
-        draft,
         sampleData,
         reasonForChange: 'Publicação pelo Method Builder',
       })
     },
     onSuccess: () => {
-      toast.success('Método publicado')
+      toast.success(
+        draft.status === 'DRAFT'
+          ? 'Método enviado para revisão'
+          : 'Método publicado',
+      )
       onPublished?.()
     },
     onError: (error) => {
@@ -315,6 +342,51 @@ export function MethodBuilder({
     })
   }
 
+  function updateCertificate(
+    patch: Partial<MethodDraftCertificateContent>,
+  ) {
+    updateDraft({
+      certificate: {
+        referenceStandards: [],
+        sections: [],
+        ...draft.certificate,
+        ...patch,
+      },
+    })
+  }
+
+  function addCertificateSection() {
+    updateCertificate({
+      sections: [
+        ...(draft.certificate?.sections ?? []),
+        {
+          kind: 'paragraphs',
+          title: 'Seção',
+          paragraphs: [''],
+        },
+      ],
+    })
+  }
+
+  function updateCertificateSection(
+    index: number,
+    section: NonNullable<MethodDraftCertificateContent['sections']>[number],
+  ) {
+    updateCertificate({
+      sections: (draft.certificate?.sections ?? []).map((item, itemIndex) =>
+        itemIndex === index ? section : item,
+      ),
+    })
+  }
+
+  function removeCertificateSection(index: number) {
+    updateCertificate({
+      sections: (draft.certificate?.sections ?? []).filter(
+        (_, itemIndex) => itemIndex !== index,
+      ),
+    })
+  }
+
   function handleSave() {
     onSave(draft)
   }
@@ -356,7 +428,7 @@ export function MethodBuilder({
             onClick={() => publishMutation.mutate()}
             disabled={!draft.id || publishMutation.isPending || hasCompileErrors}
           >
-            Publicar
+            {draft.status === 'DRAFT' ? 'Enviar para revisão' : 'Publicar'}
           </Button>
           <Button onClick={handleSave} disabled={isSaving}>
             <HugeiconsIcon icon={FloppyDiskIcon} className="mr-2 h-4 w-4" />
@@ -632,6 +704,66 @@ export function MethodBuilder({
                       Incluir no certificado
                     </span>
                   </div>
+                  {formula.reporting?.includeInCertificate && (
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <Field label="Grupo no certificado">
+                        <Select
+                          value={formula.reporting.group ?? 'calibration_result'}
+                          onValueChange={(value) =>
+                            updateFormula(index, {
+                              reporting: {
+                                ...formula.reporting,
+                                includeInCertificate: true,
+                                group: value as NonNullable<
+                                  MethodDraftFormula['reporting']
+                                >['group'],
+                              },
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <span>
+                              {formula.reporting.group ?? 'calibration_result'}
+                            </span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {reportingGroups.map((group) => (
+                              <SelectItem key={group} value={group}>
+                                {group}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field label="Papel">
+                        <Select
+                          value={formula.reporting.role ?? 'auxiliary'}
+                          onValueChange={(value) =>
+                            updateFormula(index, {
+                              reporting: {
+                                ...formula.reporting,
+                                includeInCertificate: true,
+                                role: value as NonNullable<
+                                  MethodDraftFormula['reporting']
+                                >['role'],
+                              },
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <span>{formula.reporting.role ?? 'auxiliary'}</span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {reportingRoles.map((role) => (
+                              <SelectItem key={role} value={role}>
+                                {role}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                    </div>
+                  )}
                 </div>
               ))}
             </SectionCard>
@@ -819,32 +951,72 @@ export function MethodBuilder({
                   <Input
                     value={draft.certificate?.procedureCode ?? ''}
                     onChange={(event) =>
-                      updateDraft({
-                        certificate: {
-                          ...draft.certificate,
-                          procedureCode: event.target.value,
-                        },
-                      })
+                      updateCertificate({ procedureCode: event.target.value })
                     }
                   />
                 </Field>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <CertificateDisplaySelect
+                    label="Valores certificados"
+                    value={draft.certificate?.certifiedValuesDisplay ?? 'full'}
+                    onChange={(value) =>
+                      updateCertificate({ certifiedValuesDisplay: value })
+                    }
+                  />
+                  <CertificateDisplaySelect
+                    label="Composição de massa"
+                    value={draft.certificate?.massCompositionDisplay ?? 'full'}
+                    onChange={(value) =>
+                      updateCertificate({ massCompositionDisplay: value })
+                    }
+                  />
+                  <CertificateDisplaySelect
+                    label="Orçamento de incerteza"
+                    value={draft.certificate?.uncertaintyBudgetDisplay ?? 'full'}
+                    onChange={(value) =>
+                      updateCertificate({ uncertaintyBudgetDisplay: value })
+                    }
+                  />
+                </div>
                 <Field label="Padrões de referência">
                   <Textarea
                     value={(draft.certificate?.referenceStandards ?? []).join('\n')}
                     onChange={(event) =>
-                      updateDraft({
-                        certificate: {
-                          ...draft.certificate,
-                          referenceStandards: event.target.value
-                            .split('\n')
-                            .map((item) => item.trim())
-                            .filter(Boolean),
-                        },
+                      updateCertificate({
+                        referenceStandards: event.target.value
+                          .split('\n')
+                          .map((item) => item.trim())
+                          .filter(Boolean),
                       })
                     }
                     rows={3}
                   />
                 </Field>
+                <Separator />
+                <div className="flex items-center justify-between gap-3">
+                  <Label>Seções fixas</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addCertificateSection}
+                  >
+                    <HugeiconsIcon icon={Add01Icon} className="mr-2 h-4 w-4" />
+                    Adicionar seção
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {(draft.certificate?.sections ?? []).map((section, index) => (
+                    <CertificateSectionEditor
+                      key={`${section.kind}-${index}`}
+                      section={section}
+                      onChange={(nextSection) =>
+                        updateCertificateSection(index, nextSection)
+                      }
+                      onRemove={() => removeCertificateSection(index)}
+                    />
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -1300,6 +1472,138 @@ function VariableEditor({
   )
 }
 
+function CertificateDisplaySelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: 'full' | 'hidden'
+  onChange: (value: 'full' | 'hidden') => void
+}) {
+  return (
+    <Field label={label}>
+      <Select value={value} onValueChange={(nextValue) => onChange(nextValue as 'full' | 'hidden')}>
+        <SelectTrigger>
+          <span>{value === 'full' ? 'Exibir' : 'Ocultar'}</span>
+        </SelectTrigger>
+        <SelectContent>
+          {certificateDisplayOptions.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option === 'full' ? 'Exibir' : 'Ocultar'}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  )
+}
+
+function CertificateSectionEditor({
+  section,
+  onChange,
+  onRemove,
+}: {
+  section: NonNullable<MethodDraftCertificateContent['sections']>[number]
+  onChange: (
+    section: NonNullable<MethodDraftCertificateContent['sections']>[number],
+  ) => void
+  onRemove: () => void
+}) {
+  const textValue =
+    section.kind === 'paragraphs'
+      ? section.paragraphs.join('\n')
+      : section.kind === 'bullets'
+        ? section.items.join('\n')
+        : section.items
+            .map((item) => `${item.term}: ${item.definition}`)
+            .join('\n')
+
+  return (
+    <div className="rounded-md border p-3">
+      <div className="grid gap-3 md:grid-cols-[150px_1fr_auto]">
+        <Field label="Tipo">
+          <Select
+            value={section.kind}
+            onValueChange={(kind) => {
+              if (kind === 'definition_list') {
+                onChange({
+                  kind,
+                  title: section.title ?? 'Definições',
+                  items: [],
+                })
+                return
+              }
+              if (kind === 'bullets') {
+                onChange({
+                  kind,
+                  title: section.title,
+                  items: [],
+                })
+                return
+              }
+              onChange({
+                kind: 'paragraphs',
+                title: section.title ?? 'Seção',
+                paragraphs: [],
+              })
+            }}
+          >
+            <SelectTrigger>
+              <span>{section.kind}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="paragraphs">Parágrafos</SelectItem>
+              <SelectItem value="bullets">Lista</SelectItem>
+              <SelectItem value="definition_list">Definições</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Título">
+          <Input
+            value={section.title ?? ''}
+            onChange={(event) => onChange({ ...section, title: event.target.value })}
+          />
+        </Field>
+        <div className="flex items-end justify-end">
+          <IconButton label="Remover seção" icon={Delete02Icon} onClick={onRemove} />
+        </div>
+      </div>
+      <Field label="Conteúdo">
+        <Textarea
+          value={textValue}
+          onChange={(event) => {
+            const lines = event.target.value
+              .split('\n')
+              .map((item) => item.trim())
+              .filter(Boolean)
+
+            if (section.kind === 'paragraphs') {
+              onChange({ ...section, paragraphs: lines })
+              return
+            }
+            if (section.kind === 'bullets') {
+              onChange({ ...section, items: lines })
+              return
+            }
+            onChange({
+              ...section,
+              items: lines.map((line) => {
+                const [term, ...definition] = line.split(':')
+                return {
+                  term: term?.trim() || 'Termo',
+                  definition: definition.join(':').trim(),
+                }
+              }),
+            })
+          }}
+          rows={4}
+        />
+      </Field>
+    </div>
+  )
+}
+
 function DiagnosticsList({
   diagnostics,
 }: {
@@ -1384,14 +1688,17 @@ function parseJsonObject(value: string): Record<string, unknown> {
 }
 
 function buildInitialSampleData(draft: MethodDraft): Record<string, unknown> {
-  return Object.fromEntries(
-    draft.inputs.map((input) => [
+  return {
+    ...Object.fromEntries(
+      draft.inputs.map((input) => [
       input.key,
       input.type === 'number'
         ? 0
         : input.type === 'table'
           ? []
           : input.defaultValue ?? '',
-    ]),
-  )
+      ]),
+    ),
+    ...Object.fromEntries(draft.variables.map((variable) => [variable.key, 0])),
+  }
 }

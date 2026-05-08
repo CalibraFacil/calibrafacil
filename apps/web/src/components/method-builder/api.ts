@@ -19,7 +19,11 @@ function getActiveUnitHeader(): string | null {
   return window.localStorage.getItem(`${ACTIVE_UNIT_KEY_PREFIX}${activeOrgId}`)
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
+async function postJson<T>(
+  path: string,
+  body: unknown,
+  options: { allowDiagnosticsResponse?: boolean } = {},
+): Promise<T> {
   const headers = new Headers({ 'content-type': 'application/json' })
   const activeUnitId = getActiveUnitHeader()
 
@@ -36,9 +40,20 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 
   if (!response.ok) {
     let message = `Endpoint indisponível (${response.status})`
+    let payload: unknown
     try {
-      const payload = (await response.json()) as { error?: string }
-      message = payload.error || message
+      payload = await response.json()
+      const errorPayload = payload as {
+        error?: string
+        diagnostics?: unknown
+      }
+      if (
+        options.allowDiagnosticsResponse &&
+        Array.isArray(errorPayload.diagnostics)
+      ) {
+        return payload as T
+      }
+      message = errorPayload.error || message
     } catch {
       // Keep the status-based message when the server did not return JSON.
     }
@@ -100,7 +115,7 @@ export async function compileMethodDraft(
     normalizedFormulas?: unknown
     formulas?: unknown
     compiledDraft?: unknown
-  }>('/api/methods/compile', { draft })
+  }>('/api/methods/compile', { draft }, { allowDiagnosticsResponse: true })
 
   return {
     diagnostics: normalizeDiagnostics(result.diagnostics),
@@ -121,7 +136,7 @@ export async function previewMethodDraft(params: {
     results?: Record<string, unknown>
     outputs?: Record<string, unknown>
     normalizedData?: Record<string, unknown>
-  }>('/api/methods/preview', params)
+  }>('/api/methods/preview', params, { allowDiagnosticsResponse: true })
 
   return {
     diagnostics: normalizeDiagnostics(result.diagnostics),
@@ -132,13 +147,15 @@ export async function previewMethodDraft(params: {
 
 export async function publishMethodDraft(params: {
   methodId: number
-  draft: MethodDraft
   sampleData: Record<string, unknown>
   reasonForChange?: string
 }): Promise<unknown> {
   return postJson(`/api/methods/${params.methodId}/publish`, {
-    draft: params.draft,
     sampleData: params.sampleData,
     reasonForChange: params.reasonForChange,
   })
+}
+
+export async function requestMethodApproval(methodId: number): Promise<unknown> {
+  return postJson(`/api/methods/${methodId}/request-approval`, {})
 }

@@ -187,6 +187,53 @@ function buildPreviewContext(
         );
         continue;
       }
+      const numericValue = Number(value);
+      if (!Number.isFinite(numericValue)) {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_INPUT_NOT_FINITE",
+            `Preview input ${input.key} must be finite`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
+      if (
+        input.constraints?.min !== undefined &&
+        numericValue < input.constraints.min
+      ) {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_INPUT_BELOW_MIN",
+            `Preview input ${input.key} is below minimum ${input.constraints.min}`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
+      if (
+        input.constraints?.max !== undefined &&
+        numericValue > input.constraints.max
+      ) {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_INPUT_ABOVE_MAX",
+            `Preview input ${input.key} is above maximum ${input.constraints.max}`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
+      if (input.constraints?.integer && !Number.isInteger(numericValue)) {
+        diagnostics.push(
+          errorDiagnostic(
+            "PREVIEW_INPUT_NOT_INTEGER",
+            `Preview input ${input.key} must be an integer`,
+            `inputs.${input.key}`,
+          ),
+        );
+        continue;
+      }
       context[input.key] = value;
     }
 

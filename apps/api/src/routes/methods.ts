@@ -53,7 +53,11 @@ const METHOD_ENGINE_OPTIONS = {
 
 function compileDraftWithEngine(
   draft: MethodDraft,
-  options: { requirePublishable?: boolean } = {},
+  options: {
+    requirePublishable?: boolean;
+    previewScenarios?: MethodDraft["previewScenarios"];
+    includePreviewScenariosInFingerprint?: boolean;
+  } = {},
 ) {
   const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
   const engine =
@@ -67,6 +71,9 @@ function compileDraftWithEngine(
       optionsFingerprint: fingerprintJson(normalizedOptions, "engine-options"),
     },
     requirePublishable: options.requirePublishable,
+    previewScenarios: options.previewScenarios,
+    includePreviewScenariosInFingerprint:
+      options.includePreviewScenariosInFingerprint,
   });
 }
 
@@ -125,6 +132,27 @@ function coerceMethodDraft(value: unknown): MethodDraft {
   return methodPayloadToDefinitionDraft(candidate);
 }
 
+function tryCoerceMethodDraft(
+  value: unknown,
+): { ok: true; draft: MethodDraft } | { ok: false; diagnostics: MethodDiagnostic[] } {
+  try {
+    return { ok: true, draft: coerceMethodDraft(value) };
+  } catch (error) {
+    return {
+      ok: false,
+      diagnostics: [
+        {
+          code: "METHOD_SHAPE_INVALID",
+          severity: "error",
+          message:
+            error instanceof Error ? error.message : "Invalid method draft",
+          path: "draft",
+        },
+      ],
+    };
+  }
+}
+
 function methodPayloadToDefinitionDraft(
   candidate: Record<string, unknown>,
 ): MethodDraft {
@@ -139,6 +167,21 @@ function methodPayloadToDefinitionDraft(
   const rawValidations = Array.isArray(candidate.validations)
     ? candidate.validations
     : [];
+  const rawVariableBindings = Array.isArray(candidate.variableBindings)
+    ? candidate.variableBindings
+    : Array.isArray(candidate.variables)
+      ? candidate.variables
+      : [];
+  const definitionInputs: MethodDraft["inputs"] = [];
+  const seenInputKeys = new Set<string>();
+  for (const input of [
+    ...rawInputs.map(methodInputToDefinitionInput),
+    ...rawVariableBindings.map(methodVariableBindingToDefinitionInput),
+  ]) {
+    if (!input || seenInputKeys.has(input.key)) continue;
+    definitionInputs.push(input);
+    seenInputKeys.add(input.key);
+  }
 
   return parseMethodDraft({
     id: safeMethodId(candidate.id ?? candidate.name ?? "method_draft"),
@@ -153,7 +196,7 @@ function methodPayloadToDefinitionDraft(
       candidate.assetTypeId === undefined || candidate.assetTypeId === null
         ? undefined
         : String(candidate.assetTypeId),
-    inputs: rawInputs.map(methodInputToDefinitionInput),
+    inputs: definitionInputs,
     formulas: rawFormulas.map(methodFormulaToDefinitionFormula),
     measurementModels: [],
     acceptanceCriteria: rawValidations
@@ -167,7 +210,7 @@ function methodPayloadToDefinitionDraft(
   });
 }
 
-function methodInputToDefinitionInput(input: unknown) {
+function methodInputToDefinitionInput(input: unknown): MethodDraft["inputs"][number] {
   const record = (input ?? {}) as Record<string, unknown>;
   const key = typeof record.key === "string" ? record.key : "input";
   const label = typeof record.label === "string" ? record.label : key;
@@ -223,7 +266,7 @@ function methodInputToDefinitionInput(input: unknown) {
               return {
                 key: tableColumn.key,
                 label: tableColumn.label,
-                type: tableColumn.type === "number" ? "number" : "text",
+                type: tableColumn.type === "number" ? "number" as const : "text" as const,
                 unit:
                   typeof tableColumn.unit === "string"
                     ? tableColumn.unit
@@ -270,19 +313,43 @@ function methodFormulaToDefinitionFormula(formula: unknown) {
   };
 }
 
+function methodVariableBindingToDefinitionInput(
+  binding: unknown,
+): MethodDraft["inputs"][number] | null {
+  const record = (binding ?? {}) as Record<string, unknown>;
+  if (typeof record.key !== "string") return null;
+
+  return {
+    kind: "scalar" as const,
+    key: record.key,
+    label:
+      typeof record.label === "string" && record.label.trim()
+        ? record.label
+        : record.key,
+    required: false,
+    quantityKind: "other" as const,
+    metadata: {
+      source: "variable_binding",
+    },
+  };
+}
+
 function methodValidationToAcceptanceCriterion(
   validation: unknown,
   index: number,
 ) {
   const record = (validation ?? {}) as Record<string, unknown>;
 
-  if (
-    typeof record.leftExpression !== "string" ||
-    typeof record.operator !== "string" ||
-    typeof record.rightExpression !== "string"
-  ) {
-    return null;
-  }
+  const expression =
+    typeof record.expression === "string"
+      ? record.expression
+      : typeof record.leftExpression === "string" &&
+          typeof record.operator === "string" &&
+          typeof record.rightExpression === "string"
+        ? `${record.leftExpression} ${record.operator} ${record.rightExpression}`
+        : null;
+
+  if (!expression) return null;
 
   return {
     key: `criterion_${index + 1}`,
@@ -290,7 +357,7 @@ function methodValidationToAcceptanceCriterion(
       typeof record.message === "string"
         ? record.message
         : `Critério ${index + 1}`,
-    expression: `${record.leftExpression} ${record.operator} ${record.rightExpression}`,
+    expression,
     severity: record.severity === "warning" ? "warning" : "blocking",
     message:
       typeof record.message === "string"
@@ -324,10 +391,12 @@ function safeMethodId(value: unknown): string {
 function methodRecordToDraft(method: {
   id: number;
   version: number;
+  status?: string | null;
   name: string;
   description: string | null;
   assetTypeId: number | null;
   dataFields: unknown;
+  variableBindings?: unknown;
   formulas: unknown;
   validations: unknown;
 }): MethodDraft {
@@ -337,7 +406,9 @@ function methodRecordToDraft(method: {
     name: method.name,
     description: method.description ?? undefined,
     assetTypeId: method.assetTypeId ?? undefined,
+    status: method.status ?? undefined,
     dataFields: method.dataFields,
+    variableBindings: method.variableBindings,
     formulas: method.formulas,
     validations: method.validations,
   });
@@ -350,21 +421,17 @@ function diagnosticsMessage(diagnostics: MethodDiagnostic[]): string {
   );
 }
 
-function withAdhocPreviewScenario(
-  draft: MethodDraft,
+function buildAdhocPreviewScenarios(
   sampleData: Record<string, unknown> | undefined,
-): MethodDraft {
-  if (!sampleData) return draft;
-  return {
-    ...draft,
-    previewScenarios: [
-      {
-        key: "publish_preview",
-        label: "Preview de publicação",
-        inputs: sampleData,
-      },
-    ],
-  };
+): MethodDraft["previewScenarios"] | undefined {
+  if (!sampleData) return undefined;
+  return [
+    {
+      key: "publish_preview",
+      label: "Preview de publicação",
+      inputs: sampleData,
+    },
+  ];
 }
 
 async function resolveMethodRouteId(
@@ -507,8 +574,20 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         draft?: unknown;
         method?: unknown;
       };
-      const draft = coerceMethodDraft(body.draft ?? body.method ?? body);
-      const result = compileDraftWithEngine(draft);
+      const draftResult = tryCoerceMethodDraft(body.draft ?? body.method ?? body);
+      if (!draftResult.ok) {
+        return c.json(
+          {
+            ok: false,
+            diagnostics: draftResult.diagnostics,
+            fingerprint: null,
+            normalizedFormulas: [],
+            compiledMethod: null,
+          },
+          422,
+        );
+      }
+      const result = compileDraftWithEngine(draftResult.draft);
 
       return c.json(methodCompileResponse(result), result.ok ? 200 : 422);
     } catch (error) {
@@ -528,9 +607,20 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         sampleData?: Record<string, unknown>;
         inputs?: Record<string, unknown>;
       };
-      const draft = coerceMethodDraft(body.draft ?? body.method ?? body);
-      const previewDraft: MethodDraft = {
-        ...draft,
+      const draftResult = tryCoerceMethodDraft(body.draft ?? body.method ?? body);
+      if (!draftResult.ok) {
+        return c.json(
+          {
+            ok: false,
+            diagnostics: draftResult.diagnostics,
+            fingerprint: null,
+            normalizedFormulas: [],
+            compiledMethod: null,
+          },
+          422,
+        );
+      }
+      const result = compileDraftWithEngine(draftResult.draft, {
         previewScenarios: [
           {
             key: "adhoc_preview",
@@ -538,8 +628,8 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             inputs: body.sampleData ?? body.inputs ?? {},
           },
         ],
-      };
-      const result = compileDraftWithEngine(previewDraft);
+        includePreviewScenariosInFingerprint: false,
+      });
 
       if (!result.ok) {
         return c.json(methodCompileResponse(result), 422);
@@ -1157,19 +1247,14 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         const body = (await c.req.json().catch(() => ({}))) as {
-          draft?: unknown;
           reasonForChange?: string;
           sampleData?: Record<string, unknown>;
         };
-        const compileResult = compileDraftWithEngine(
-          withAdhocPreviewScenario(
-            body.draft
-              ? coerceMethodDraft(body.draft)
-              : methodRecordToDraft(existing),
-            body.sampleData,
-          ),
-          { requirePublishable: true },
-        );
+        const compileResult = compileDraftWithEngine(methodRecordToDraft(existing), {
+          requirePublishable: Boolean(body.sampleData),
+          previewScenarios: buildAdhocPreviewScenarios(body.sampleData),
+          includePreviewScenariosInFingerprint: false,
+        });
         if (!compileResult.ok) {
           return c.json(
             {
@@ -1363,17 +1448,14 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        if (
-          existing.status !== "DRAFT" &&
-          existing.status !== "TECHNICAL_REVIEWED"
-        ) {
+        if (existing.status !== "TECHNICAL_REVIEWED") {
           return c.json(
-            { error: "Apenas rascunhos ou métodos revisados podem ser publicados" },
+            { error: "Apenas métodos revisados podem ser publicados" },
             400,
           );
         }
 
-        if (existing.status === "TECHNICAL_REVIEWED" && !existing.technicalReviewedBy) {
+        if (!existing.technicalReviewedBy) {
           return c.json(
             { error: "Revisao tecnica obrigatoria antes da publicacao" },
             400,
@@ -1381,7 +1463,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         if (
-          existing.status === "TECHNICAL_REVIEWED" &&
           existing.technicalReviewedBy === session.user.id
         ) {
           return c.json(
@@ -1402,19 +1483,14 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         const body = (await c.req.json().catch(() => ({}))) as {
-          draft?: unknown;
           reasonForChange?: string;
           sampleData?: Record<string, unknown>;
         };
-        const compileResult = compileDraftWithEngine(
-          withAdhocPreviewScenario(
-            body.draft
-              ? coerceMethodDraft(body.draft)
-              : methodRecordToDraft(existing),
-            body.sampleData,
-          ),
-          { requirePublishable: true },
-        );
+        const compileResult = compileDraftWithEngine(methodRecordToDraft(existing), {
+          requirePublishable: true,
+          previewScenarios: buildAdhocPreviewScenarios(body.sampleData),
+          includePreviewScenariosInFingerprint: false,
+        });
         if (!compileResult.ok) {
           return c.json(
             {

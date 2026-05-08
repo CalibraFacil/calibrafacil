@@ -34,8 +34,8 @@ export function draftToMethodSavePayload(
 ): MethodDraftSavePayload {
   return {
     name: draft.name.trim(),
-    description: draft.description?.trim() || undefined,
-    assetTypeId: draft.assetTypeId,
+    description: draft.description?.trim() || null,
+    assetTypeId: draft.assetTypeId ?? null,
     dataFields: draft.inputs,
     variableBindings: draft.variables,
     formulas: draft.formulas,
