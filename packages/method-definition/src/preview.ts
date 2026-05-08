@@ -185,18 +185,22 @@ function buildPreviewContext(
       continue;
     }
 
-    const value = values[input.key] as PreviewInputValue | undefined;
+    let value = values[input.key] as PreviewInputValue | undefined;
     if (value === undefined || value === null || value === "") {
-      if (input.required) {
-        diagnostics.push(
-          errorDiagnostic(
-            "REQUIRED_PREVIEW_INPUT_MISSING",
-            `Required preview input ${input.key} is missing`,
-            `inputs.${input.key}`,
-          ),
-        );
+      if (input.kind === "scalar" && input.defaultValue !== undefined) {
+        value = input.defaultValue;
+      } else {
+        if (input.required) {
+          diagnostics.push(
+            errorDiagnostic(
+              "REQUIRED_PREVIEW_INPUT_MISSING",
+              `Required preview input ${input.key} is missing`,
+              `inputs.${input.key}`,
+            ),
+          );
+        }
+        continue;
       }
-      continue;
     }
 
     if (input.kind === "scalar") {

@@ -695,9 +695,16 @@ async function buildStandardsSnapshot(
     };
   }
 
+  const standardsById = new Map(
+    standards.map((standard) => [standard.id, standard]),
+  );
+  const orderedStandards = selectedStandardIds.map(
+    (id) => standardsById.get(id)!,
+  );
+
   return {
     ok: true,
-    snapshot: standards.map((s) => ({
+    snapshot: orderedStandards.map((s) => ({
       id: s.id,
       name: s.name,
       type: s.type,

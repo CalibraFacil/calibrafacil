@@ -1544,7 +1544,7 @@ function VariableEditor({
         key: variable.key,
         label: variable.label,
         source,
-        valueKey: 'value',
+        valueKey: 'uncertainty',
       })
       return
     }

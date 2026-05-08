@@ -687,8 +687,12 @@ function ExecuteJobForm({
       }
     }
 
-    const selectedStandards = standardsData
-      .filter((standard) => selectedStandardIds.includes(standard.id))
+    const standardsById = new Map(
+      standardsData.map((standard) => [standard.id, standard]),
+    )
+    const selectedStandards = selectedStandardIds
+      .map((standardId) => standardsById.get(standardId))
+      .filter((standard): standard is StandardSnapshotItem => Boolean(standard))
       .map((standard) => ({
         id: standard.id,
         uncertainty:

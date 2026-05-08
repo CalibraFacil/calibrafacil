@@ -222,6 +222,50 @@ describe("compileMethodDraft", () => {
     expect(result.previewResults[0]?.formulaResults[0]?.value).toBe(11);
   });
 
+  it("uses scalar default values when preview inputs omit them", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "scalar",
+            key: "indication",
+            label: "Indication",
+            required: true,
+          },
+          {
+            kind: "scalar",
+            key: "offset",
+            label: "Offset",
+            required: false,
+            defaultValue: 0.5,
+          },
+        ],
+        formulas: [
+          {
+            key: "corrected",
+            label: "Corrected",
+            expression: "indication + offset",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "default_offset",
+            label: "Default offset",
+            inputs: { indication: 10 },
+            expected: { formulas: { corrected: 10.5 } },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.previewResults[0]?.formulaResults[0]?.value).toBe(10.5);
+  });
+
   it("executes a compiled method as the official calculation artifact", () => {
     const compileResult = compileMethodDraft(validDraft(), {
       engine: fakeEngine,
