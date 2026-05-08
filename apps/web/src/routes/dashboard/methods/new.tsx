@@ -2,11 +2,14 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import type { MethodData } from '@/components/method-builder'
-
 import { api } from '@/utils/api'
-import { MethodBuilder } from '@/components/method-builder'
 import { methodRouteId } from '@/lib/route-identifiers'
+import {
+  MethodBuilderV2,
+  draftToMethodSavePayload,
+  methodDataToDraft,
+  type MethodDraft,
+} from '@/components/method-builder-v2'
 
 export const Route = createFileRoute('/dashboard/methods/new')({
   head: () => ({
@@ -20,19 +23,10 @@ function NewMethodPage() {
   const queryClient = useQueryClient()
 
   const createMutation = useMutation({
-    mutationFn: async (data: MethodData) => {
+    mutationFn: async (draft: MethodDraft) => {
+      const payload = draftToMethodSavePayload(draft)
       const res = await api.api.methods.$post({
-        json: {
-          name: data.name,
-          description: data.description,
-          assetTypeId: data.assetTypeId,
-          dataFields: data.dataFields,
-          variableBindings: data.variableBindings ?? [],
-          formulas: data.formulas,
-          validations: data.validations,
-          uncertaintyParams: data.uncertaintyParams,
-          certificateContent: data.certificateContent,
-        },
+        json: payload,
       })
 
       if (!res.ok) {
@@ -64,7 +58,8 @@ function NewMethodPage() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 min-h-0">
-        <MethodBuilder
+        <MethodBuilderV2
+          initialDraft={methodDataToDraft()}
           onSave={(data) => createMutation.mutate(data)}
           onCancel={() => navigate({ to: '/dashboard/methods' })}
           isSaving={createMutation.isPending}

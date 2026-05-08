@@ -113,6 +113,13 @@
       "when": 1778112000000,
       "tag": "0015_method_variable_bindings",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1778198400000,
+      "tag": "0016_method_definition_v2",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,18 @@ import {
   ReturnMethodToDraftSchema,
   normalizeMethodValidationsInput,
 } from "@calibra-facil/schemas";
+import {
+  compileMethodDraft,
+  fingerprintJson,
+  migrateLegacyMethodToDraft,
+  type CalculationEngineLike,
+  type MethodDraft,
+  type MethodDiagnostic,
+} from "@calibra-facil/method-definition";
+import {
+  createCalculationEngine,
+  normalizeEngineOptions,
+} from "@calibra-facil/math-engine";
 import { eq, and, ilike, or, count, desc, ne } from "drizzle-orm";
 import {
   withLabPermission,
@@ -32,6 +44,32 @@ import {
 const technicalReviewerUser = alias(user, "technicalReviewerUser");
 const approverUser = alias(user, "approverUser");
 
+const METHOD_ENGINE_OPTIONS = {
+  numericMode: "decimal" as const,
+  rejectUnusedInputs: true,
+  maxExponentMagnitude: 12,
+  maxSignificantDigits: 24,
+};
+
+function compileDraftWithEngine(
+  draft: MethodDraft,
+  options: { requirePublishable?: boolean } = {},
+) {
+  const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
+  const engine =
+    createCalculationEngine(normalizedOptions) as unknown as CalculationEngineLike;
+
+  return compileMethodDraft(draft, {
+    engine,
+    engineMetadata: {
+      packageName: "@calibra-facil/math-engine",
+      version: normalizedOptions.engineVersion,
+      optionsFingerprint: fingerprintJson(normalizedOptions, "engine-options"),
+    },
+    requirePublishable: options.requirePublishable,
+  });
+}
+
 function normalizeMethodRecord<
   T extends { validations?: unknown; variableBindings?: unknown },
 >(method: T) {
@@ -41,6 +79,100 @@ function normalizeMethodRecord<
       ? method.variableBindings
       : [],
     validations: normalizeMethodValidationsInput(method.validations),
+  };
+}
+
+function methodCompileResponse(result: ReturnType<typeof compileMethodDraft>) {
+  if (!result.ok) {
+    return {
+      ok: false,
+      diagnostics: result.diagnostics,
+      fingerprint: null,
+      normalizedFormulas: [],
+      compiledMethod: null,
+    };
+  }
+
+  return {
+    ok: true,
+    diagnostics: result.diagnostics,
+    fingerprint: result.method.methodFingerprint,
+    normalizedFormulas: result.method.formulas.map((formula) => ({
+      outputKey: formula.key,
+      expression: formula.expression,
+      normalizedExpression: formula.normalizedFormula,
+      formulaFingerprint: formula.formulaFingerprint,
+      variables: formula.variables,
+    })),
+    previewResults: result.previewResults,
+    compiledMethod: result.method,
+  };
+}
+
+function coerceMethodDraft(value: unknown): MethodDraft {
+  const candidate = (value ?? {}) as Record<string, unknown>;
+
+  if (
+    typeof candidate.id === "string" &&
+    typeof candidate.status === "string" &&
+    Array.isArray(candidate.measurementModels) &&
+    Array.isArray(candidate.acceptanceCriteria) &&
+    Array.isArray(candidate.previewScenarios)
+  ) {
+    return candidate as MethodDraft;
+  }
+
+  return migrateLegacyMethodToDraft({
+    ...candidate,
+    dataFields: candidate.dataFields ?? candidate.inputs,
+    formulas: candidate.formulas,
+    validations: candidate.validations,
+  }).draft;
+}
+
+function methodRecordToDraft(method: {
+  id: number;
+  version: number;
+  name: string;
+  description: string | null;
+  assetTypeId: number | null;
+  dataFields: unknown;
+  formulas: unknown;
+  validations: unknown;
+}): MethodDraft {
+  return coerceMethodDraft({
+    id: method.id,
+    version: method.version,
+    name: method.name,
+    description: method.description ?? undefined,
+    assetTypeId: method.assetTypeId ?? undefined,
+    dataFields: method.dataFields,
+    formulas: method.formulas,
+    validations: method.validations,
+  });
+}
+
+function diagnosticsMessage(diagnostics: MethodDiagnostic[]): string {
+  return (
+    diagnostics.find((item) => item.severity === "error")?.message ??
+    "Método não compilou"
+  );
+}
+
+function withAdhocPreviewScenario(
+  draft: MethodDraft,
+  sampleData: Record<string, unknown> | undefined,
+): MethodDraft {
+  if (!sampleData) return draft;
+  return {
+    ...draft,
+    previewScenarios: [
+      {
+        key: "publish_preview",
+        label: "Preview de publicação",
+        inputs: sampleData,
+      },
+    ],
   };
 }
 
@@ -145,6 +277,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             formulas: calibrationMethod.formulas,
             validations: calibrationMethod.validations,
             certificateContent: calibrationMethod.certificateContent,
+            methodFingerprint: calibrationMethod.methodFingerprint,
+            methodEngine: calibrationMethod.methodEngine,
+            methodCompiledAt: calibrationMethod.methodCompiledAt,
             createdAt: calibrationMethod.createdAt,
             publishedAt: calibrationMethod.publishedAt,
             parentId: calibrationMethod.parentId,
@@ -171,6 +306,80 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
       }
     },
   )
+
+  // =========================================================================
+  // POST /compile - Compile a Method Builder v2 draft without persistence
+  // =========================================================================
+  .post("/compile", ...withLabPermission({ template: ["read"] }), async (c) => {
+    try {
+      const body = (await c.req.json().catch(() => ({}))) as {
+        draft?: unknown;
+        method?: unknown;
+      };
+      const draft = coerceMethodDraft(body.draft ?? body.method ?? body);
+      const result = compileDraftWithEngine(draft);
+
+      return c.json(methodCompileResponse(result), result.ok ? 200 : 422);
+    } catch (error) {
+      console.error("Error compiling method draft:", error);
+      return c.json({ error: "Erro ao compilar rascunho do método" }, 500);
+    }
+  })
+
+  // =========================================================================
+  // POST /preview - Compile and run an ad-hoc Method Builder v2 preview
+  // =========================================================================
+  .post("/preview", ...withLabPermission({ template: ["read"] }), async (c) => {
+    try {
+      const body = (await c.req.json().catch(() => ({}))) as {
+        draft?: unknown;
+        method?: unknown;
+        sampleData?: Record<string, unknown>;
+        inputs?: Record<string, unknown>;
+      };
+      const draft = coerceMethodDraft(body.draft ?? body.method ?? body);
+      const previewDraft: MethodDraft = {
+        ...draft,
+        previewScenarios: [
+          {
+            key: "adhoc_preview",
+            label: "Preview",
+            inputs: body.sampleData ?? body.inputs ?? {},
+          },
+        ],
+      };
+      const result = compileDraftWithEngine(previewDraft);
+
+      if (!result.ok) {
+        return c.json(methodCompileResponse(result), 422);
+      }
+
+      const preview = result.previewResults[0];
+      return c.json({
+        ok: preview?.passed ?? false,
+        diagnostics: [...result.diagnostics, ...(preview?.diagnostics ?? [])],
+        fingerprint: result.method.methodFingerprint,
+        previewResults: result.previewResults,
+        results: Object.fromEntries([
+          ...result.method.formulas.map((formula) => {
+            const formulaResult = preview?.formulaResults.find(
+              (item) => item.key === formula.key,
+            );
+            return [formula.key, formulaResult?.value ?? null] as const;
+          }),
+          ...result.method.measurementModels.map((model) => {
+            const modelResult = preview?.measurementModelResults.find(
+              (item) => item.key === model.key,
+            );
+            return [model.key, modelResult?.result.value ?? null] as const;
+          }),
+        ]),
+      });
+    } catch (error) {
+      console.error("Error previewing method draft:", error);
+      return c.json({ error: "Erro ao executar preview do método" }, 500);
+    }
+  })
 
   // =========================================================================
   // GET /:id/label - Get method label by ID
@@ -242,6 +451,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           validations: calibrationMethod.validations,
           uncertaintyParams: calibrationMethod.uncertaintyParams,
           certificateContent: calibrationMethod.certificateContent,
+          compiledMethod: calibrationMethod.compiledMethod,
+          methodFingerprint: calibrationMethod.methodFingerprint,
+          methodEngine: calibrationMethod.methodEngine,
+          methodCompiledAt: calibrationMethod.methodCompiledAt,
+          publicationEvidence: calibrationMethod.publicationEvidence,
           parentId: calibrationMethod.parentId,
           createdAt: calibrationMethod.createdAt,
           createdByName: user.name,
@@ -561,6 +775,17 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
 
+        const compileResult = compileDraftWithEngine(methodRecordToDraft(existing));
+        if (!compileResult.ok) {
+          return c.json(
+            {
+              error: diagnosticsMessage(compileResult.diagnostics),
+              diagnostics: compileResult.diagnostics,
+            },
+            422,
+          );
+        }
+
         const [updated] = await db
           .update(calibrationMethod)
           .set({
@@ -569,6 +794,10 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             approvedBy: null,
             publishedAt: null,
             publishedBy: null,
+            compiledMethod: compileResult.method,
+            methodFingerprint: compileResult.method.methodFingerprint,
+            methodEngine: compileResult.method.engine,
+            methodCompiledAt: new Date(),
           })
           .where(eq(calibrationMethod.id, id))
           .returning();
@@ -576,7 +805,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         await db.insert(methodAuditLog).values({
           methodId: id,
           action: "request_approval",
-          changes: { status: { old: "DRAFT", new: "PENDING_APPROVAL" } },
+          changes: {
+            status: { old: "DRAFT", new: "PENDING_APPROVAL" },
+            methodFingerprint: {
+              old: existing.methodFingerprint,
+              new: compileResult.method.methodFingerprint,
+            },
+          },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
@@ -730,6 +965,30 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
 
+        const body = (await c.req.json().catch(() => ({}))) as {
+          draft?: unknown;
+          reasonForChange?: string;
+          sampleData?: Record<string, unknown>;
+        };
+        const compileResult = compileDraftWithEngine(
+          withAdhocPreviewScenario(
+            body.draft
+              ? coerceMethodDraft(body.draft)
+              : methodRecordToDraft(existing),
+            body.sampleData,
+          ),
+          { requirePublishable: true },
+        );
+        if (!compileResult.ok) {
+          return c.json(
+            {
+              error: diagnosticsMessage(compileResult.diagnostics),
+              diagnostics: compileResult.diagnostics,
+            },
+            422,
+          );
+        }
+
         // Archive any previously published version with same name
         await db
           .update(calibrationMethod)
@@ -753,6 +1012,25 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             publishedAt: new Date(),
             publishedBy: session.user.id,
             approvedBy: session.user.id,
+            compiledMethod: compileResult.method,
+            methodFingerprint: compileResult.method.methodFingerprint,
+            methodEngine: compileResult.method.engine,
+            methodCompiledAt: new Date(),
+            publicationEvidence: {
+              methodId: String(existing.id),
+              version: existing.version,
+              methodFingerprint: compileResult.method.methodFingerprint,
+              normalizedMethodJson: compileResult.method.normalizedMethodJson,
+              engineVersion: compileResult.method.engine.version,
+              engineOptionsFingerprint:
+                compileResult.method.engine.optionsFingerprint,
+              compiledAt: new Date().toISOString(),
+              reviewedBy: existing.technicalReviewedBy,
+              publishedBy: session.user.id,
+              reasonForChange: body.reasonForChange ?? null,
+              previewResults: compileResult.previewResults,
+              diagnostics: compileResult.diagnostics,
+            },
           })
           .where(eq(calibrationMethod.id, id))
           .returning();
@@ -760,7 +1038,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         await db.insert(methodAuditLog).values({
           methodId: id,
           action: "quality_approve",
-          changes: { status: { old: "TECHNICAL_REVIEWED", new: "PUBLISHED" } },
+          changes: {
+            status: { old: "TECHNICAL_REVIEWED", new: "PUBLISHED" },
+            methodFingerprint: {
+              old: existing.methodFingerprint,
+              new: compileResult.method.methodFingerprint,
+            },
+          },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
@@ -888,21 +1172,27 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        if (existing.status !== "TECHNICAL_REVIEWED") {
+        if (
+          existing.status !== "DRAFT" &&
+          existing.status !== "TECHNICAL_REVIEWED"
+        ) {
           return c.json(
-            { error: "Apenas métodos revisados podem ser publicados" },
+            { error: "Apenas rascunhos ou métodos revisados podem ser publicados" },
             400,
           );
         }
 
-        if (!existing.technicalReviewedBy) {
+        if (existing.status === "TECHNICAL_REVIEWED" && !existing.technicalReviewedBy) {
           return c.json(
             { error: "Revisao tecnica obrigatoria antes da publicacao" },
             400,
           );
         }
 
-        if (existing.technicalReviewedBy === session.user.id) {
+        if (
+          existing.status === "TECHNICAL_REVIEWED" &&
+          existing.technicalReviewedBy === session.user.id
+        ) {
           return c.json(
             {
               error:
@@ -917,6 +1207,30 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json(
             { error: "Método deve ter pelo menos um campo de entrada" },
             400,
+          );
+        }
+
+        const body = (await c.req.json().catch(() => ({}))) as {
+          draft?: unknown;
+          reasonForChange?: string;
+          sampleData?: Record<string, unknown>;
+        };
+        const compileResult = compileDraftWithEngine(
+          withAdhocPreviewScenario(
+            body.draft
+              ? coerceMethodDraft(body.draft)
+              : methodRecordToDraft(existing),
+            body.sampleData,
+          ),
+          { requirePublishable: true },
+        );
+        if (!compileResult.ok) {
+          return c.json(
+            {
+              error: diagnosticsMessage(compileResult.diagnostics),
+              diagnostics: compileResult.diagnostics,
+            },
+            422,
           );
         }
 
@@ -944,6 +1258,25 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             publishedAt: new Date(),
             publishedBy: session.user.id,
             approvedBy: session.user.id,
+            compiledMethod: compileResult.method,
+            methodFingerprint: compileResult.method.methodFingerprint,
+            methodEngine: compileResult.method.engine,
+            methodCompiledAt: new Date(),
+            publicationEvidence: {
+              methodId: String(existing.id),
+              version: existing.version,
+              methodFingerprint: compileResult.method.methodFingerprint,
+              normalizedMethodJson: compileResult.method.normalizedMethodJson,
+              engineVersion: compileResult.method.engine.version,
+              engineOptionsFingerprint:
+                compileResult.method.engine.optionsFingerprint,
+              compiledAt: new Date().toISOString(),
+              reviewedBy: existing.technicalReviewedBy,
+              publishedBy: session.user.id,
+              reasonForChange: body.reasonForChange ?? null,
+              previewResults: compileResult.previewResults,
+              diagnostics: compileResult.diagnostics,
+            },
           })
           .where(eq(calibrationMethod.id, id))
           .returning();
@@ -952,7 +1285,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         await db.insert(methodAuditLog).values({
           methodId: id,
           action: "publish",
-          changes: { status: { old: "TECHNICAL_REVIEWED", new: "PUBLISHED" } },
+          changes: {
+            status: { old: existing.status, new: "PUBLISHED" },
+            methodFingerprint: {
+              old: existing.methodFingerprint,
+              new: compileResult.method.methodFingerprint,
+            },
+          },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
         });

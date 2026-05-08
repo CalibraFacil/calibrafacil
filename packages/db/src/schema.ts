@@ -2035,6 +2035,11 @@ export const calibrationMethod = pgTable(
     certificateContent: jsonb(
       "certificate_content",
     ).$type<MethodCertificateContent>(),
+    compiledMethod: jsonb("compiled_method").$type<unknown>(),
+    methodFingerprint: text("method_fingerprint"),
+    methodEngine: jsonb("method_engine").$type<unknown>(),
+    methodCompiledAt: timestamp("method_compiled_at"),
+    publicationEvidence: jsonb("publication_evidence").$type<unknown>(),
     // Version chain - links to the parent version
     parentId: integer("parent_id"),
     // Timestamps and actors
