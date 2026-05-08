@@ -43,6 +43,7 @@ type CompileContext = {
   numericInputKeys: Set<string>;
   formulaKeys: Set<string>;
   modelKeys: Set<string>;
+  inputByKey: Map<string, MethodInput>;
 };
 
 export const DEFAULT_ENGINE_METADATA: EngineMetadata = {
@@ -88,6 +89,7 @@ export function compileMethodDraft(
     ),
     formulaKeys: new Set(draft.formulas.map((item) => item.key)),
     modelKeys: new Set(draft.measurementModels.map((item) => item.key)),
+    inputByKey: new Map(draft.inputs.map((item) => [item.key, item])),
   };
 
   validateNamespace(context);
@@ -289,6 +291,11 @@ function compileFormulas(context: CompileContext): FormulaCompileEntry[] {
           context.inputKeys.has(variable) &&
           !context.numericInputKeys.has(variable),
       );
+      const directTableColumnVariables = compiled.variables.filter(
+        (variable) =>
+          isTableColumnBinding(context.inputByKey.get(variable)) &&
+          !isVariableUsedOnlyInArrayAggregator(formula.expression, variable),
+      );
       for (const variable of unknownVariables) {
         context.diagnostics.push(
           errorDiagnostic(
@@ -303,6 +310,15 @@ function compileFormulas(context: CompileContext): FormulaCompileEntry[] {
           errorDiagnostic(
             "NON_NUMERIC_FORMULA_VARIABLE",
             `Formula ${formula.key} references non-numeric input ${variable}`,
+            `formulas.${formula.key}`,
+          ),
+        );
+      }
+      for (const variable of directTableColumnVariables) {
+        context.diagnostics.push(
+          errorDiagnostic(
+            "TABLE_COLUMN_BINDING_REQUIRES_AGGREGATE",
+            `Formula ${formula.key} references table-column binding ${variable} directly; use an aggregate such as mean(${variable}) or std(${variable})`,
             `formulas.${formula.key}`,
           ),
         );
@@ -520,11 +536,25 @@ function compileAcceptanceCriteria(
           context.inputKeys.has(variable) &&
           !context.numericInputKeys.has(variable),
       );
+      const directTableColumnVariables = compiled.variables.filter(
+        (variable) =>
+          isTableColumnBinding(context.inputByKey.get(variable)) &&
+          !isVariableUsedOnlyInArrayAggregator(criterion.expression, variable),
+      );
       for (const variable of nonNumericInputVariables) {
         context.diagnostics.push(
           errorDiagnostic(
             "NON_NUMERIC_ACCEPTANCE_CRITERION_VARIABLE",
             `Acceptance criterion ${criterion.key} references non-numeric input ${variable}`,
+            `acceptanceCriteria.${criterion.key}`,
+          ),
+        );
+      }
+      for (const variable of directTableColumnVariables) {
+        context.diagnostics.push(
+          errorDiagnostic(
+            "TABLE_COLUMN_BINDING_REQUIRES_AGGREGATE",
+            `Acceptance criterion ${criterion.key} references table-column binding ${variable} directly; use an aggregate such as mean(${variable}) or std(${variable})`,
             `acceptanceCriteria.${criterion.key}`,
           ),
         );
@@ -548,6 +578,43 @@ function compileAcceptanceCriteria(
   }
 
   return compiledCriteria;
+}
+
+function isTableColumnBinding(input: MethodInput | undefined): boolean {
+  return (
+    input?.kind === "scalar" &&
+    input.metadata?.source === "variable_binding" &&
+    input.metadata.bindingSource === "table_column"
+  );
+}
+
+function isVariableUsedOnlyInArrayAggregator(
+  expression: string,
+  variable: string,
+): boolean {
+  const variablePattern = new RegExp(`\\b${escapeRegex(variable)}\\b`, "g");
+  const allOccurrences = [...expression.matchAll(variablePattern)];
+  if (allOccurrences.length === 0) return true;
+
+  const aggregatePattern =
+    /\b(?:mean|std)\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*\d+)?\s*\)/g;
+  const coveredRanges = [...expression.matchAll(aggregatePattern)]
+    .filter((match) => match[1] === variable && match.index !== undefined)
+    .map((match) => ({
+      start: match.index!,
+      end: match.index! + match[0].length,
+    }));
+
+  return allOccurrences.every((match) => {
+    const index = match.index ?? -1;
+    return coveredRanges.some(
+      (range) => index >= range.start && index < range.end,
+    );
+  });
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function buildMeasurementModelInput(

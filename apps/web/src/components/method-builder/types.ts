@@ -14,6 +14,26 @@ export interface MethodDraftTableColumn {
   unit?: string
 }
 
+export interface MethodDraftEccentricityIndicatorConfig {
+  enabled?: boolean
+  variant?: 'circular_platform' | 'road_scale'
+}
+
+export interface MethodDraftWeighingRangeResolverConfig {
+  enabled?: boolean
+  assetSpecKey?: string
+  pointColumn?: string
+  pointUnit?: 'mg' | 'g' | 'kg'
+  targetColumns?: {
+    rangeLabel?: string
+    rangeMin?: string
+    rangeMax?: string
+    rangeUnit?: string
+    resolution?: string
+    resolutionUnit?: string
+  }
+}
+
 export interface MethodDraftInput {
   key: string
   label: string
@@ -26,6 +46,8 @@ export interface MethodDraftInput {
   source?: 'manual' | 'asset_spec'
   assetSpecKey?: string
   allowOverride?: boolean
+  eccentricityIndicator?: MethodDraftEccentricityIndicatorConfig
+  weighingRangeResolver?: MethodDraftWeighingRangeResolverConfig
 }
 
 export type MethodDraftVariableBinding =

@@ -11,6 +11,8 @@ export type CompiledCriterion = {
   criterion: MethodAcceptanceCriterion;
   left: CompiledFormulaLike;
   right: CompiledFormulaLike;
+  leftExpression: string;
+  rightExpression: string;
   operator: "<" | "<=" | ">" | ">=" | "==" | "!=";
   normalizedFormula: string;
   variables: string[];
@@ -53,6 +55,8 @@ export function compileCriterionExpression(
     criterion,
     left,
     right,
+    leftExpression: match[1].trim(),
+    rightExpression: match[3].trim(),
     operator,
     normalizedFormula,
     variables,
@@ -90,7 +94,10 @@ export function evaluateCompiledCriterion(
   }
 }
 
-function compareDecimalInputs(left: NumericInput, right: NumericInput): number {
+export function compareDecimalInputs(
+  left: NumericInput,
+  right: NumericInput,
+): number {
   const leftDecimal = parseDecimalInput(left);
   const rightDecimal = parseDecimalInput(right);
   const scale = Math.max(leftDecimal.scale, rightDecimal.scale);

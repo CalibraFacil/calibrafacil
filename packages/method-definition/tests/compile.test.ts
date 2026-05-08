@@ -13,7 +13,7 @@ const fakeEngine: CalculationEngineLike = {
       ...new Set(
         expression
           .match(/[a-zA-Z][a-zA-Z0-9_]*/g)
-          ?.filter((token) => token !== "abs") ?? [],
+          ?.filter((token) => !["abs", "mean", "std"].includes(token)) ?? [],
       ),
     ].sort();
     return {
@@ -551,6 +551,110 @@ describe("compileMethodDraft", () => {
     expect(
       result.diagnostics.some((item) => item.code === "PREVIEW_FAILED"),
     ).toBe(true);
+  });
+
+  it("rejects direct table-column binding use without an aggregate", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            required: true,
+            columns: [{ key: "value", label: "Value", type: "number" }],
+          },
+          {
+            kind: "scalar",
+            key: "measurements_value",
+            label: "Measurement values",
+            required: false,
+            metadata: {
+              source: "variable_binding",
+              bindingSource: "table_column",
+              fieldKey: "measurements",
+              columnKey: "value",
+            },
+          },
+        ],
+        formulas: [
+          {
+            key: "bad",
+            label: "Bad",
+            expression: "measurements_value + 1",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "TABLE_COLUMN_BINDING_REQUIRES_AGGREGATE",
+      ),
+    ).toBe(true);
+  });
+
+  it("previews table-column bindings through runtime-supported aggregators", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            required: true,
+            columns: [{ key: "value", label: "Value", type: "number" }],
+          },
+          {
+            kind: "scalar",
+            key: "measurements_value",
+            label: "Measurement values",
+            required: false,
+            metadata: {
+              source: "variable_binding",
+              bindingSource: "table_column",
+              fieldKey: "measurements",
+              columnKey: "value",
+            },
+          },
+        ],
+        formulas: [
+          {
+            key: "average",
+            label: "Average",
+            expression: "mean(measurements_value)",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [
+          {
+            key: "average_ok",
+            label: "Average OK",
+            expression: "mean(measurements_value) == 11",
+            severity: "blocking",
+            message: "Average mismatch",
+          },
+        ],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { measurements: [{ value: 10 }, { value: 12 }] },
+            expected: { formulas: { average: 11 } },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.previewResults[0]?.formulaResults[0]?.value).toBe(11);
   });
 
   it("preserves formula labels, output kind, and reporting metadata", () => {

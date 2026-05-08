@@ -1,7 +1,4 @@
-import {
-  compileCriterionExpression,
-  evaluateCompiledCriterion,
-} from "./criteria";
+import { compareDecimalInputs, compileCriterionExpression } from "./criteria";
 import { buildMeasurementModelInput } from "./compile";
 import { errorDiagnostic } from "./diagnostics";
 import { fingerprintJson } from "./fingerprint";
@@ -40,8 +37,15 @@ export function runMethodPreview(
 
   for (const formula of method.formulas) {
     try {
-      const inputs = pickNumericContext(context, formula.variables);
-      const result = engine.evaluateFormula(formula.expression, inputs);
+      const prepared = prepareFormulaEvaluation(
+        formula.expression,
+        context,
+        formula.variables,
+      );
+      const result = engine.evaluateFormula(
+        prepared.expression,
+        prepared.inputs,
+      );
       assertFiniteNumericOutput(result.value, `formulas.${formula.key}`);
       context[formula.key] = result.value;
       formulaResults.push({
@@ -117,10 +121,7 @@ export function runMethodPreview(
         [...Object.keys(context)].sort(),
         (value) => fingerprintJson(value, "acceptance-criterion"),
       );
-      const passed = evaluateCompiledCriterion(
-        compiled,
-        pickNumericContext(context, compiled.variables),
-      );
+      const passed = evaluatePreviewCriterion(compiled, context, engine);
       acceptanceCriteriaResults.push({
         key: criterion.key,
         passed,
@@ -589,14 +590,143 @@ function sampleStandardDeviation(values: readonly number[]): number {
   return Math.sqrt(variance);
 }
 
+function evaluatePreviewCriterion(
+  compiled: ReturnType<typeof compileCriterionExpression>,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+  engine: RunMethodPreviewOptions["engine"],
+): boolean {
+  const leftPrepared = prepareFormulaEvaluation(
+    compiled.leftExpression,
+    context,
+    compiled.left.variables,
+  );
+  const rightPrepared = prepareFormulaEvaluation(
+    compiled.rightExpression,
+    context,
+    compiled.right.variables,
+  );
+  const left = engine.evaluateFormula(
+    leftPrepared.expression,
+    leftPrepared.inputs,
+  ).value;
+  const right = engine.evaluateFormula(
+    rightPrepared.expression,
+    rightPrepared.inputs,
+  ).value;
+  const comparison = compareDecimalInputs(left, right);
+
+  switch (compiled.operator) {
+    case "<":
+      return comparison < 0;
+    case "<=":
+      return comparison <= 0;
+    case ">":
+      return comparison > 0;
+    case ">=":
+      return comparison >= 0;
+    case "==":
+      return comparison === 0;
+    case "!=":
+      return comparison !== 0;
+  }
+}
+
+function prepareFormulaEvaluation(
+  expression: string,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+  variables: readonly string[],
+): { expression: string; inputs: Record<string, NumericInput> } {
+  const inputs = pickNumericContext(context, variables, { allowArrays: true });
+  const aggregateInputs: Record<string, NumericInput> = {};
+  const rewrittenExpression = rewriteArrayAggregates(
+    expression,
+    context,
+    aggregateInputs,
+  );
+  return {
+    expression: rewrittenExpression,
+    inputs: { ...inputs, ...aggregateInputs },
+  };
+}
+
+function rewriteArrayAggregates(
+  expression: string,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+  aggregateInputs: Record<string, NumericInput>,
+): string {
+  let index = Object.keys(aggregateInputs).length;
+  return expression.replace(
+    /\b(mean|std)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+    (match, functionName: string, argument: string, correction?: string) => {
+      const values = resolveInlineNumericArguments(argument, context);
+      if (!values.length) return match;
+
+      const value =
+        functionName === "mean"
+          ? sum(values) / values.length
+          : correctedStandardDeviation(values, Number(correction ?? 1));
+      if (!Number.isFinite(value)) return match;
+
+      const key = `preview_${index++}`;
+      aggregateInputs[key] = value;
+      return key;
+    },
+  );
+}
+
+function resolveInlineNumericArguments(
+  argument: string,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+): number[] {
+  const trimmed = argument.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return trimmed
+      .slice(1, -1)
+      .split(",")
+      .flatMap((item) => resolveInlineNumericToken(item.trim(), context));
+  }
+  return resolveInlineNumericToken(trimmed, context);
+}
+
+function resolveInlineNumericToken(
+  token: string,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+): number[] {
+  if (!token) return [];
+  const literal = toFiniteNumber(token);
+  if (literal !== null) return [literal];
+  const value = context[token];
+  if (Array.isArray(value)) return value.map(Number).filter(Number.isFinite);
+  const scalar = toFiniteNumber(value);
+  return scalar === null ? [] : [scalar];
+}
+
+function correctedStandardDeviation(
+  values: readonly number[],
+  correction: number,
+): number {
+  const denominator = values.length - correction;
+  if (denominator <= 0) return Number.NaN;
+
+  const mean = sum(values) / values.length;
+  const variance =
+    values.reduce((acc, value) => acc + (value - mean) ** 2, 0) / denominator;
+  return Math.sqrt(variance);
+}
+
 function pickNumericContext(
   context: Record<string, NumericInput | readonly NumericInput[]>,
   variables: readonly string[],
+  options: { allowArrays?: boolean } = {},
 ): Record<string, NumericInput> {
   const picked: Record<string, NumericInput> = {};
   for (const variable of variables) {
     const value = context[variable];
-    if (Array.isArray(value) || value === undefined) {
+    if (Array.isArray(value)) {
+      if (options.allowArrays) continue;
+      throw new Error(`Numeric variable ${variable} is missing`);
+    }
+    if (value === undefined) {
       throw new Error(`Numeric variable ${variable} is missing`);
     }
     if (typeof value !== "string" && typeof value !== "number") {

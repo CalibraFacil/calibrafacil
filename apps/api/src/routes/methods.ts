@@ -232,11 +232,21 @@ function methodPayloadToDefinitionDraft(
   const inferredVariableBindings = buildDefaultVariableBindings(rawInputs);
   const definitionInputs: MethodDraft["inputs"] = [];
   const seenInputKeys = new Set<string>();
-  for (const input of [
-    ...rawInputs.map(methodInputToDefinitionInput),
-    ...rawVariableBindings.map(methodVariableBindingToDefinitionInput),
-    ...inferredVariableBindings.map(methodVariableBindingToDefinitionInput),
-  ]) {
+  for (const input of rawInputs.map(methodInputToDefinitionInput)) {
+    if (!input) continue;
+    definitionInputs.push(input);
+    seenInputKeys.add(input.key);
+  }
+  for (const input of rawVariableBindings.map(
+    methodVariableBindingToDefinitionInput,
+  )) {
+    if (!input) continue;
+    definitionInputs.push(input);
+    seenInputKeys.add(input.key);
+  }
+  for (const input of inferredVariableBindings.map(
+    methodVariableBindingToDefinitionInput,
+  )) {
     if (!input || seenInputKeys.has(input.key)) continue;
     definitionInputs.push(input);
     seenInputKeys.add(input.key);

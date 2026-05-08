@@ -262,6 +262,10 @@ export function MethodBuilder({
       source: type === 'table' ? 'manual' : (input.source ?? 'manual'),
       assetSpecKey: type === 'table' ? undefined : input.assetSpecKey,
       allowOverride: type === 'table' ? undefined : input.allowOverride,
+      eccentricityIndicator:
+        type === 'table' ? input.eccentricityIndicator : undefined,
+      weighingRangeResolver:
+        type === 'table' ? input.weighingRangeResolver : undefined,
       columns:
         type === 'table'
           ? (input.columns ?? [
@@ -705,10 +709,125 @@ export function MethodBuilder({
                     </Field>
                   )}
                   {input.type === 'table' && (
-                    <TableColumnsEditor
-                      columns={input.columns ?? []}
-                      onChange={(columns) => updateInput(index, { columns })}
-                    />
+                    <div className="mt-3 space-y-3">
+                      <TableColumnsEditor
+                        columns={input.columns ?? []}
+                        onChange={(columns) => updateInput(index, { columns })}
+                      />
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="rounded-md border p-3">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={Boolean(
+                                input.weighingRangeResolver?.enabled,
+                              )}
+                              onCheckedChange={(checked) =>
+                                updateInput(index, {
+                                  weighingRangeResolver: {
+                                    ...input.weighingRangeResolver,
+                                    enabled: checked === true,
+                                  },
+                                })
+                              }
+                            />
+                            <span className="text-sm text-muted-foreground">
+                              Resolver faixas por especificação
+                            </span>
+                          </div>
+                          {input.weighingRangeResolver?.enabled && (
+                            <div className="mt-3 grid gap-2">
+                              <Input
+                                value={
+                                  input.weighingRangeResolver.assetSpecKey ?? ''
+                                }
+                                onChange={(event) =>
+                                  updateInput(index, {
+                                    weighingRangeResolver: {
+                                      ...input.weighingRangeResolver,
+                                      enabled: true,
+                                      assetSpecKey: event.target.value,
+                                    },
+                                  })
+                                }
+                                placeholder="assetSpecKey"
+                              />
+                              <Input
+                                value={
+                                  input.weighingRangeResolver.pointColumn ?? ''
+                                }
+                                onChange={(event) =>
+                                  updateInput(index, {
+                                    weighingRangeResolver: {
+                                      ...input.weighingRangeResolver,
+                                      enabled: true,
+                                      pointColumn: event.target.value,
+                                    },
+                                  })
+                                }
+                                placeholder="Coluna do ponto"
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div className="rounded-md border p-3">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={Boolean(
+                                input.eccentricityIndicator?.enabled,
+                              )}
+                              onCheckedChange={(checked) =>
+                                updateInput(index, {
+                                  eccentricityIndicator: {
+                                    ...input.eccentricityIndicator,
+                                    enabled: checked === true,
+                                    variant:
+                                      input.eccentricityIndicator?.variant ??
+                                      'circular_platform',
+                                  },
+                                })
+                              }
+                            />
+                            <span className="text-sm text-muted-foreground">
+                              Indicador de excentricidade
+                            </span>
+                          </div>
+                          {input.eccentricityIndicator?.enabled && (
+                            <Select
+                              value={
+                                input.eccentricityIndicator.variant ??
+                                'circular_platform'
+                              }
+                              onValueChange={(variant) =>
+                                updateInput(index, {
+                                  eccentricityIndicator: {
+                                    ...input.eccentricityIndicator,
+                                    enabled: true,
+                                    variant: variant as NonNullable<
+                                      MethodDraftInput['eccentricityIndicator']
+                                    >['variant'],
+                                  },
+                                })
+                              }
+                            >
+                              <SelectTrigger className="mt-3">
+                                <span>
+                                  {input.eccentricityIndicator.variant ??
+                                    'circular_platform'}
+                                </span>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="circular_platform">
+                                  circular_platform
+                                </SelectItem>
+                                <SelectItem value="road_scale">
+                                  road_scale
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               ))}
@@ -1393,6 +1512,7 @@ function VariableEditor({
   onRemove: () => void
 }) {
   const tableInputs = inputs.filter((input) => input.type === 'table')
+  const numericInputs = inputs.filter((input) => input.type === 'number')
   const selectedTable =
     'fieldKey' in variable
       ? tableInputs.find((input) => input.key === variable.fieldKey)
@@ -1449,7 +1569,7 @@ function VariableEditor({
       key: variable.key,
       label: variable.label,
       source,
-      fieldKey: inputs[0]?.key ?? '',
+      fieldKey: numericInputs[0]?.key ?? '',
     })
   }
 
@@ -1512,13 +1632,14 @@ function VariableEditor({
                 <span>{variable.fieldKey || 'Campo'}</span>
               </SelectTrigger>
               <SelectContent>
-                {(variable.source === 'data_field' ? inputs : tableInputs).map(
-                  (input) => (
-                    <SelectItem key={input.key} value={input.key}>
-                      {input.label}
-                    </SelectItem>
-                  ),
-                )}
+                {(variable.source === 'data_field'
+                  ? numericInputs
+                  : tableInputs
+                ).map((input) => (
+                  <SelectItem key={input.key} value={input.key}>
+                    {input.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
@@ -1839,17 +1960,88 @@ function parseJsonObject(value: string): Record<string, unknown> {
 }
 
 function buildInitialSampleData(draft: MethodDraft): Record<string, unknown> {
-  return {
-    ...Object.fromEntries(
-      draft.inputs.map((input) => [
-        input.key,
-        input.type === 'number'
-          ? 0
-          : input.type === 'table'
-            ? []
-            : (input.defaultValue ?? ''),
-      ]),
-    ),
-    ...Object.fromEntries(draft.variables.map((variable) => [variable.key, 0])),
+  const sample: Record<string, unknown> = Object.fromEntries(
+    draft.inputs.map((input) => [
+      input.key,
+      input.type === 'number'
+        ? 0
+        : input.type === 'table'
+          ? []
+          : (input.defaultValue ?? ''),
+    ]),
+  )
+
+  for (const variable of draft.variables) {
+    if (variable.source === 'environment') {
+      const environment = ensureRecord(sample, 'environment')
+      environment[variable.field] = 0
+      continue
+    }
+
+    if (variable.source === 'standard') {
+      sample.standards = buildStandardSample(variable.valueKey)
+      continue
+    }
+
+    if (
+      variable.source === 'table_column' ||
+      variable.source === 'table_statistic'
+    ) {
+      const rowsRequired =
+        variable.source === 'table_statistic' &&
+        variable.statistic === 'sample_stddev'
+          ? 2
+          : 1
+      const rows = Array.isArray(sample[variable.fieldKey])
+        ? (sample[variable.fieldKey] as Array<Record<string, unknown>>)
+        : []
+      while (rows.length < rowsRequired) rows.push({})
+      for (const row of rows)
+        row[variable.columnKey] = row[variable.columnKey] ?? 0
+      sample[variable.fieldKey] = rows
+      continue
+    }
+
+    if (variable.source === 'data_field') {
+      sample[variable.fieldKey] = sample[variable.fieldKey] ?? 0
+    }
   }
+
+  return sample
+}
+
+function ensureRecord(
+  source: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> {
+  const value = source[key]
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  const record: Record<string, unknown> = {}
+  source[key] = record
+  return record
+}
+
+function buildStandardSample(valueKey: string): Array<Record<string, unknown>> {
+  const standard: Record<string, unknown> = {
+    id: 0,
+    uncertainty: 0,
+    coverageFactor: 2,
+    drift: 0,
+    certifiedValues: [{ nominal: 'nominal', value: 0, uncertainty: 0 }],
+  }
+
+  if (
+    valueKey &&
+    valueKey !== 'uncertainty' &&
+    valueKey !== 'coverageFactor' &&
+    valueKey !== 'k' &&
+    valueKey !== 'drift'
+  ) {
+    const nominal = valueKey.endsWith('_u') ? valueKey.slice(0, -2) : valueKey
+    standard.certifiedValues = [{ nominal, value: 0, uncertainty: 0 }]
+  }
+
+  return [standard]
 }
