@@ -679,12 +679,18 @@ function prepareFormulaEvaluation(
   context: Record<string, NumericInput | readonly NumericInput[]>,
   variables: readonly string[],
 ): { expression: string; inputs: Record<string, NumericInput> } {
-  const inputs = pickNumericContext(context, variables, { allowArrays: true });
   const aggregateInputs: Record<string, NumericInput> = {};
+  const consumedVariables = new Set<string>();
   const rewrittenExpression = rewriteArrayAggregates(
     expression,
     context,
     aggregateInputs,
+    consumedVariables,
+  );
+  const inputs = pickNumericContext(
+    context,
+    variables.filter((variable) => !consumedVariables.has(variable)),
+    { allowArrays: true },
   );
   return {
     expression: rewrittenExpression,
@@ -696,6 +702,7 @@ function rewriteArrayAggregates(
   expression: string,
   context: Record<string, NumericInput | readonly NumericInput[]>,
   aggregateInputs: Record<string, NumericInput>,
+  consumedVariables: Set<string>,
 ): string {
   let index = Object.keys(aggregateInputs).length;
   return expression.replace(
@@ -712,9 +719,25 @@ function rewriteArrayAggregates(
 
       const key = `preview_${index++}`;
       aggregateInputs[key] = value;
+      for (const variable of aggregateVariableTokens(argument, context)) {
+        consumedVariables.add(variable);
+      }
       return key;
     },
   );
+}
+
+function aggregateVariableTokens(
+  argument: string,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+): string[] {
+  return [
+    ...new Set(
+      argument
+        .match(/[A-Za-z][A-Za-z0-9_]*/g)
+        ?.filter((token) => context[token] !== undefined) ?? [],
+    ),
+  ];
 }
 
 function resolveInlineNumericArguments(

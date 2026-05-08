@@ -1968,10 +1968,11 @@ function buildInitialSampleData(draft: MethodDraft): Record<string, unknown> {
       input.type === 'number'
         ? 0
         : input.type === 'table'
-          ? []
+          ? buildInitialTableRows(input.columns ?? [])
           : (input.defaultValue ?? ''),
     ]),
   )
+  sample.environment = { temperature: 0, humidity: 0, pressure: 0 }
 
   for (const variable of draft.variables) {
     if (variable.source === 'environment') {
@@ -1981,7 +1982,7 @@ function buildInitialSampleData(draft: MethodDraft): Record<string, unknown> {
     }
 
     if (variable.source === 'standard') {
-      sample.standards = buildStandardSample(variable.valueKey)
+      addStandardSampleBinding(sample, variable.standardId, variable.valueKey)
       continue
     }
 
@@ -2012,6 +2013,17 @@ function buildInitialSampleData(draft: MethodDraft): Record<string, unknown> {
   return sample
 }
 
+function buildInitialTableRows(
+  columns: NonNullable<MethodDraftInput['columns']>,
+): Array<Record<string, unknown>> {
+  const numericColumns = columns.filter((column) => column.type === 'number')
+  if (numericColumns.length === 0) return []
+
+  return [0, 1].map(() =>
+    Object.fromEntries(numericColumns.map((column) => [column.key, 0])),
+  )
+}
+
 function ensureRecord(
   source: Record<string, unknown>,
   key: string,
@@ -2025,13 +2037,30 @@ function ensureRecord(
   return record
 }
 
-function buildStandardSample(valueKey: string): Array<Record<string, unknown>> {
-  const standard: Record<string, unknown> = {
-    id: 0,
-    uncertainty: 0,
-    coverageFactor: 2,
-    drift: 0,
-    certifiedValues: [{ nominal: 'nominal', value: 0, uncertainty: 0 }],
+function addStandardSampleBinding(
+  sample: Record<string, unknown>,
+  standardId: number | undefined,
+  valueKey: string,
+): void {
+  const standards = Array.isArray(sample.standards)
+    ? (sample.standards as Array<Record<string, unknown>>)
+    : []
+  const targetId = standardId ?? 0
+  let standard = standards.find((item) => item.id === targetId)
+
+  if (!standard) {
+    standard = {
+      id: targetId,
+      uncertainty: 0,
+      coverageFactor: 2,
+      drift: 0,
+      certifiedValues: [],
+    }
+    standards.push(standard)
+  }
+
+  if (!Array.isArray(standard.certifiedValues)) {
+    standard.certifiedValues = []
   }
 
   if (
@@ -2042,8 +2071,13 @@ function buildStandardSample(valueKey: string): Array<Record<string, unknown>> {
     valueKey !== 'drift'
   ) {
     const nominal = valueKey.endsWith('_u') ? valueKey.slice(0, -2) : valueKey
-    standard.certifiedValues = [{ nominal, value: 0, uncertainty: 0 }]
+    const certifiedValues = standard.certifiedValues as Array<
+      Record<string, unknown>
+    >
+    if (!certifiedValues.some((item) => item.nominal === nominal)) {
+      certifiedValues.push({ nominal, value: 0, uncertainty: 0 })
+    }
   }
 
-  return [standard]
+  sample.standards = standards
 }

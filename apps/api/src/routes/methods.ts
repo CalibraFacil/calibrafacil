@@ -314,6 +314,7 @@ function methodInputToDefinitionInput(
   const required = Boolean(record.required);
 
   if (record.type === "number") {
+    const metadata = methodInputExecutionMetadata(record);
     return {
       kind: "scalar",
       key,
@@ -326,6 +327,7 @@ function methodInputToDefinitionInput(
           ? record.defaultValue
           : undefined,
       quantityKind: "other",
+      ...(metadata ? { metadata } : {}),
     };
   }
 
@@ -348,11 +350,13 @@ function methodInputToDefinitionInput(
   }
 
   if (record.type === "table") {
+    const metadata = methodInputExecutionMetadata(record);
     return {
       kind: "table",
       key,
       label,
       required,
+      ...(metadata ? { metadata } : {}),
       columns: Array.isArray(record.columns)
         ? record.columns
             .map((column) => {
@@ -396,6 +400,67 @@ function methodInputToDefinitionInput(
     defaultValue:
       typeof record.defaultValue === "string" ? record.defaultValue : undefined,
   };
+}
+
+function methodInputExecutionMetadata(
+  record: Record<string, unknown>,
+): MethodDraft["inputs"][number]["metadata"] {
+  const metadata: Record<string, string | number | boolean | null> = {};
+
+  if (record.source === "asset_spec") {
+    metadata.source = "asset_spec";
+    metadata.assetSpecKey = safeMetadataString(record.assetSpecKey);
+    metadata.allowOverride =
+      typeof record.allowOverride === "boolean" ? record.allowOverride : null;
+  }
+
+  const weighingRangeResolver = objectRecord(record.weighingRangeResolver);
+  if (weighingRangeResolver) {
+    metadata.weighingRangeResolverEnabled =
+      weighingRangeResolver.enabled === true;
+    metadata.weighingRangeAssetSpecKey = safeMetadataString(
+      weighingRangeResolver.assetSpecKey,
+    );
+    metadata.weighingRangePointColumn = safeMetadataString(
+      weighingRangeResolver.pointColumn,
+    );
+    metadata.weighingRangePointUnit = safeMetadataString(
+      weighingRangeResolver.pointUnit,
+    );
+
+    const targetColumns = objectRecord(weighingRangeResolver.targetColumns);
+    if (targetColumns) {
+      for (const key of [
+        "rangeLabel",
+        "rangeMin",
+        "rangeMax",
+        "rangeUnit",
+        "resolution",
+        "resolutionUnit",
+      ] as const) {
+        metadata[`weighingRangeTarget_${key}`] = safeMetadataString(
+          targetColumns[key],
+        );
+      }
+    }
+  }
+
+  const eccentricityIndicator = objectRecord(record.eccentricityIndicator);
+  if (eccentricityIndicator) {
+    metadata.eccentricityIndicatorEnabled =
+      eccentricityIndicator.enabled === true;
+    metadata.eccentricityIndicatorVariant = safeMetadataString(
+      eccentricityIndicator.variant,
+    );
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function methodTableColumnRoleToDefinitionRole(

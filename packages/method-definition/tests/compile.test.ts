@@ -706,6 +706,56 @@ describe("compileMethodDraft", () => {
     expect(result.previewResults[0]?.formulaResults[0]?.value).toBe(11);
   });
 
+  it("does not pass aggregate-consumed variables as unused engine inputs", () => {
+    const strictEngine: CalculationEngineLike = {
+      ...fakeEngine,
+      evaluateFormula(expression, inputs) {
+        if (String(expression).includes("preview_0")) {
+          expect(Object.keys(inputs).sort()).toEqual(["preview_0"]);
+        }
+        return fakeEngine.evaluateFormula(expression, inputs);
+      },
+    };
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "scalar",
+            key: "a",
+            label: "A",
+            required: true,
+          },
+          {
+            kind: "scalar",
+            key: "b",
+            label: "B",
+            required: true,
+          },
+        ],
+        formulas: [
+          {
+            key: "average",
+            label: "Average",
+            expression: "mean([a, b])",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { a: 10, b: 12 },
+            expected: { formulas: { average: 11 } },
+          },
+        ],
+      }),
+      { engine: strictEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
   it("rejects table statistics when bound cells are invalid", () => {
     const result = compileMethodDraft(
       validDraft({

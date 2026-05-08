@@ -10,6 +10,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 import type { MethodData } from '@/components/method-runtime/types'
+import type { MethodVariableBinding } from '@/components/method-runtime/types'
 
 import { api } from '@/utils/api'
 import {
@@ -97,6 +98,139 @@ function hasCertificateContent(method: MethodDetail): boolean {
   )
 }
 
+function buildPublicationSampleData(
+  method: MethodDetail,
+): Record<string, unknown> {
+  const sample: Record<string, unknown> = Object.fromEntries(
+    method.dataFields.map((field) => {
+      if (field.type === 'table') {
+        return [field.key, buildTableSampleRows(field.columns ?? [])]
+      }
+
+      return [
+        field.key,
+        field.type === 'number'
+          ? 0
+          : field.type === 'select'
+            ? (field.defaultValue ?? field.options?.[0] ?? '')
+            : (field.defaultValue ?? ''),
+      ]
+    }),
+  )
+  sample.environment = { temperature: 0, humidity: 0, pressure: 0 }
+
+  for (const binding of method.variableBindings ?? []) {
+    applyPublicationSampleBinding(sample, binding)
+  }
+
+  return sample
+}
+
+function buildTableSampleRows(
+  columns: MethodDetail['dataFields'][number]['columns'],
+): Array<Record<string, unknown>> {
+  const numericColumns = (columns ?? []).filter(
+    (column) => column.type === 'number',
+  )
+  if (numericColumns.length === 0) return []
+
+  return [0, 1].map(() =>
+    Object.fromEntries(numericColumns.map((column) => [column.key, 0])),
+  )
+}
+
+function applyPublicationSampleBinding(
+  sample: Record<string, unknown>,
+  binding: MethodVariableBinding,
+): void {
+  if (binding.source === 'environment') {
+    const environment = ensureSampleRecord(sample, 'environment')
+    environment[binding.field] = 0
+    return
+  }
+
+  if (binding.source === 'standard') {
+    addStandardPublicationSample(sample, binding.standardId, binding.valueKey)
+    return
+  }
+
+  if (
+    binding.source === 'table_column' ||
+    binding.source === 'table_statistic'
+  ) {
+    const rowsRequired =
+      binding.source === 'table_statistic' &&
+      binding.statistic === 'sample_stddev'
+        ? 2
+        : 1
+    const rows = Array.isArray(sample[binding.fieldKey])
+      ? (sample[binding.fieldKey] as Array<Record<string, unknown>>)
+      : []
+    while (rows.length < rowsRequired) rows.push({})
+    for (const row of rows) row[binding.columnKey] = row[binding.columnKey] ?? 0
+    sample[binding.fieldKey] = rows
+    return
+  }
+
+  if (binding.source === 'data_field') {
+    sample[binding.fieldKey] = sample[binding.fieldKey] ?? 0
+  }
+}
+
+function ensureSampleRecord(
+  sample: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> {
+  const value = sample[key]
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  const record: Record<string, unknown> = {}
+  sample[key] = record
+  return record
+}
+
+function addStandardPublicationSample(
+  sample: Record<string, unknown>,
+  standardId: number | undefined,
+  valueKey: string,
+): void {
+  const standards = Array.isArray(sample.standards)
+    ? (sample.standards as Array<Record<string, unknown>>)
+    : []
+  const targetId = standardId ?? 0
+  let standard = standards.find((item) => item.id === targetId)
+  if (!standard) {
+    standard = {
+      id: targetId,
+      uncertainty: 0,
+      coverageFactor: 2,
+      drift: 0,
+      certifiedValues: [],
+    }
+    standards.push(standard)
+  }
+  if (!Array.isArray(standard.certifiedValues)) standard.certifiedValues = []
+
+  if (
+    valueKey &&
+    valueKey !== 'uncertainty' &&
+    valueKey !== 'coverageFactor' &&
+    valueKey !== 'k' &&
+    valueKey !== 'drift'
+  ) {
+    const nominal = valueKey.endsWith('_u') ? valueKey.slice(0, -2) : valueKey
+    const certifiedValues = standard.certifiedValues as Array<
+      Record<string, unknown>
+    >
+    if (!certifiedValues.some((item) => item.nominal === nominal)) {
+      certifiedValues.push({ nominal, value: 0, uncertainty: 0 })
+    }
+  }
+
+  sample.standards = standards
+}
+
 function MethodDetailPage() {
   const { id } = Route.useParams()
   const navigate = useNavigate()
@@ -163,8 +297,12 @@ function MethodDetailPage() {
 
   const qualityApproveMutation = useMutation({
     mutationFn: async () => {
+      if (!method) throw new Error('Método não carregado')
       const res = await api.api.methods[':id']['quality-approve'].$post({
         param: { id: String(method?.id ?? id) },
+        json: {
+          sampleData: buildPublicationSampleData(method),
+        },
       })
 
       if (!res.ok) {
