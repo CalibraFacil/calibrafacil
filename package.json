@@ -25,7 +25,7 @@
     "turbo": "^2.6.3",
     "typescript": "5.9.2"
   },
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@9.15.9",
   "engines": {
     "node": ">=20"
   },
@@ -42,6 +42,7 @@
       "seroval": "^1.4.1",
       "next": "16.2.3",
       "fast-xml-parser": "^5.5.6",
+      "fast-xml-builder": "^1.2.0",
       "esbuild": "^0.25.12",
       "h3@<2": "^1.15.6",
       "h3@>=2.0.0-0 <2.0.1-rc.15": "^2.0.1-rc.15",
