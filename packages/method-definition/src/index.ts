@@ -2,7 +2,6 @@ export * from "./compile";
 export * from "./criteria";
 export * from "./diagnostics";
 export * from "./fingerprint";
-export * from "./migration";
 export * from "./normalize";
 export * from "./preview";
 export * from "./schemas";

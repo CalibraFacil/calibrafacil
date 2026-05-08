@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   compileMethodDraft,
-  migrateLegacyMethodToDraft,
   type CalculationEngineLike,
   type MethodDraft,
   type NumericInput,
@@ -204,19 +203,5 @@ describe("compileMethodDraft", () => {
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.some((item) => item.code === "PREVIEW_REQUIRED")).toBe(true);
-  });
-
-  it("migrates legacy methods only as drafts requiring manual review", () => {
-    const migration = migrateLegacyMethodToDraft({
-      id: 7,
-      name: "Legacy",
-      dataFields: [{ key: "x", label: "X", type: "number", required: true }],
-      formulas: [{ outputKey: "y", expression: "x + 1" }],
-      validations: [{ expression: "y < 10", message: "Limite", severity: "error" }],
-    });
-
-    expect(migration.requiresManualReview).toBe(true);
-    expect(migration.draft.status).toBe("draft");
-    expect(migration.draft.metadata.validationStatus).toBe("pending_revalidation");
   });
 });

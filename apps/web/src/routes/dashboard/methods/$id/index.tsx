@@ -9,7 +9,7 @@ import {
   RefreshIcon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
-import type { MethodData } from '@/components/method-builder'
+import type { MethodData } from '@/components/method-runtime/types'
 
 import { api } from '@/utils/api'
 import {

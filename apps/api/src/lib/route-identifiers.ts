@@ -27,3 +27,5 @@ export function parseLegacyNumericIdentifier(
   const value = Number(identifier);
   return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
+
+export const parseNumericRouteIdentifier = parseLegacyNumericIdentifier;

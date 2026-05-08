@@ -1,11 +1,10 @@
-export { MethodBuilderV2 } from './method-builder-v2'
+export { MethodBuilder } from './method-builder'
 export { draftToMethodSavePayload, methodDataToDraft } from './adapters'
 export type {
-  LegacyMethodData,
+  MethodRecordData,
   MethodCompileResult,
   MethodDiagnostic,
   MethodDraft,
   MethodDraftSavePayload,
   MethodPreviewResult,
 } from './types'
-

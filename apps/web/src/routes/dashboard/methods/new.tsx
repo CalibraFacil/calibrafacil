@@ -5,11 +5,11 @@ import { toast } from 'sonner'
 import { api } from '@/utils/api'
 import { methodRouteId } from '@/lib/route-identifiers'
 import {
-  MethodBuilderV2,
+  MethodBuilder,
   draftToMethodSavePayload,
   methodDataToDraft,
   type MethodDraft,
-} from '@/components/method-builder-v2'
+} from '@/components/method-builder'
 
 export const Route = createFileRoute('/dashboard/methods/new')({
   head: () => ({
@@ -58,7 +58,7 @@ function NewMethodPage() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 min-h-0">
-        <MethodBuilderV2
+        <MethodBuilder
           initialDraft={methodDataToDraft()}
           onSave={(data) => createMutation.mutate(data)}
           onCancel={() => navigate({ to: '/dashboard/methods' })}

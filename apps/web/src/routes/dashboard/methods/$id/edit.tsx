@@ -8,12 +8,12 @@ import { api } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  MethodBuilderV2,
+  MethodBuilder,
   draftToMethodSavePayload,
   methodDataToDraft,
-  type LegacyMethodData,
+  type MethodRecordData,
   type MethodDraft,
-} from '@/components/method-builder-v2'
+} from '@/components/method-builder'
 
 export const Route = createFileRoute('/dashboard/methods/$id/edit')({
   head: () => ({
@@ -42,7 +42,7 @@ function EditMethodPage() {
         throw new Error('Falha ao carregar método')
       }
 
-      return res.json() as Promise<LegacyMethodData>
+      return res.json() as Promise<MethodRecordData>
     },
   })
 
@@ -124,7 +124,7 @@ function EditMethodPage() {
       </div>
 
       <div className="flex-1 min-h-0">
-        <MethodBuilderV2
+        <MethodBuilder
           initialDraft={methodDataToDraft(method)}
           onSave={(data) => updateMutation.mutate(data)}
           onCancel={() => navigate({ to: '/dashboard/methods' })}

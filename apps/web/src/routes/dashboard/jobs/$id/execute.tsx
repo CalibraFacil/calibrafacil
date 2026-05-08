@@ -42,11 +42,11 @@ import { Spinner } from '@/components/ui/spinner'
 import {
   TableInputRenderer,
   type CertifiedValueOption,
-} from '@/components/method-builder/table-input-renderer'
+} from '@/components/method-runtime/table-input-renderer'
 import {
   collectMassCompositionStandardIds,
   type MassCompositionOption,
-} from '@/components/method-builder/mass-composition-utils'
+} from '@/components/method-runtime/mass-composition-utils'
 import {
   convertMassValue,
   denormalizeMethodDataForDisplay,
@@ -70,7 +70,7 @@ import type {
   MethodVariableBinding,
   FormulaResult,
   ValidationResult,
-} from '@/components/method-builder/types'
+} from '@/components/method-runtime/types'
 import {
   buildFormulaContext,
   createMethodCalculationEngine,
@@ -79,7 +79,7 @@ import {
   normalizeMethodValidations,
   type FormulaContext,
   type FormulaScalar,
-} from '@/components/method-builder/math-runtime'
+} from '@/components/method-runtime/math-runtime'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/execute')({
   head: () => ({

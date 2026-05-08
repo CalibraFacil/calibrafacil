@@ -1,11 +1,11 @@
 import {
   emptyMethodDraft,
-  type LegacyMethodData,
+  type MethodRecordData,
   type MethodDraft,
   type MethodDraftSavePayload,
 } from './types'
 
-export function methodDataToDraft(method?: LegacyMethodData | null): MethodDraft {
+export function methodDataToDraft(method?: MethodRecordData | null): MethodDraft {
   if (!method) {
     return structuredClone(emptyMethodDraft)
   }
@@ -123,7 +123,7 @@ export function draftToEngineMethodDraft(draft: MethodDraft) {
     previewScenarios: [],
     metadata: {
       validationStatus: 'pending_revalidation',
-      editedIn: 'method-builder-v2',
+      editedIn: 'method-builder',
     },
   }
 }

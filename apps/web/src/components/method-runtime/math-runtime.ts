@@ -161,7 +161,7 @@ export function normalizeMethodValidation(
   validation: unknown,
 ): MethodValidation {
   if (!validation || typeof validation !== 'object') {
-    return legacyValidationFallback('')
+    return validationFallback('')
   }
 
   const value = validation as Record<string, unknown>
@@ -184,7 +184,7 @@ export function normalizeMethodValidation(
   }
 
   if (typeof value.expression === 'string') {
-    return normalizeLegacyMethodValidationExpression(
+    return normalizeMethodValidationExpression(
       value.expression,
       typeof value.message === 'string' && value.message.trim()
         ? value.message
@@ -193,7 +193,7 @@ export function normalizeMethodValidation(
     )
   }
 
-  return legacyValidationFallback('')
+  return validationFallback('')
 }
 
 export function buildFormulaContext(
@@ -414,7 +414,7 @@ function prepareFormulaEvaluation(
   const rewrittenExpression = expression.replace(
     /\b(mean|std)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
     (match, functionName: string, argument: string, correction?: string) => {
-      const values = resolveLegacyNumericArguments(argument, context)
+      const values = resolveInlineNumericArguments(argument, context)
       if (!values.length) return match
 
       const value =
@@ -423,7 +423,7 @@ function prepareFormulaEvaluation(
           : correctedStandardDeviation(values, Number(correction ?? 1))
       if (!Number.isFinite(value)) return match
 
-      const key = `legacy_${index++}`
+      const key = `runtime_${index++}`
       scalarContext[key] = value
       return key
     },
@@ -443,7 +443,7 @@ function toEngineContext(
   return scalarContext
 }
 
-function resolveLegacyNumericArguments(
+function resolveInlineNumericArguments(
   argument: string,
   context: FormulaContext,
 ): number[] {
@@ -452,12 +452,12 @@ function resolveLegacyNumericArguments(
     return trimmed
       .slice(1, -1)
       .split(',')
-      .flatMap((item) => resolveLegacyNumericToken(item.trim(), context))
+      .flatMap((item) => resolveInlineNumericToken(item.trim(), context))
   }
-  return resolveLegacyNumericToken(trimmed, context)
+  return resolveInlineNumericToken(trimmed, context)
 }
 
-function resolveLegacyNumericToken(
+function resolveInlineNumericToken(
   token: string,
   context: FormulaContext,
 ): number[] {
@@ -512,7 +512,7 @@ function isBindingCompatible(
   }
 }
 
-function normalizeLegacyMethodValidationExpression(
+function normalizeMethodValidationExpression(
   expression: string,
   message: string,
   severity: MethodValidation['severity'],
@@ -528,8 +528,8 @@ function normalizeLegacyMethodValidationExpression(
   }
 }
 
-function legacyValidationFallback(expression: string): MethodValidation {
-  return normalizeLegacyMethodValidationExpression(
+function validationFallback(expression: string): MethodValidation {
+  return normalizeMethodValidationExpression(
     expression || '0',
     'Critério de aceitação',
     'error',

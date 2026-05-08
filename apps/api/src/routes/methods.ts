@@ -17,7 +17,7 @@ import {
 import {
   compileMethodDraft,
   fingerprintJson,
-  migrateLegacyMethodToDraft,
+  parseMethodDraft,
   type CalculationEngineLike,
   type MethodDraft,
   type MethodDiagnostic,
@@ -38,7 +38,7 @@ import { CACHE_TTL } from "../lib/cache";
 import { alias } from "drizzle-orm/pg-core";
 import {
   buildMethodRouteIdentifier,
-  parseLegacyNumericIdentifier,
+  parseNumericRouteIdentifier,
 } from "../lib/route-identifiers";
 
 const technicalReviewerUser = alias(user, "technicalReviewerUser");
@@ -122,12 +122,203 @@ function coerceMethodDraft(value: unknown): MethodDraft {
     return candidate as MethodDraft;
   }
 
-  return migrateLegacyMethodToDraft({
-    ...candidate,
-    dataFields: candidate.dataFields ?? candidate.inputs,
-    formulas: candidate.formulas,
-    validations: candidate.validations,
-  }).draft;
+  return methodPayloadToDefinitionDraft(candidate);
+}
+
+function methodPayloadToDefinitionDraft(
+  candidate: Record<string, unknown>,
+): MethodDraft {
+  const rawInputs = Array.isArray(candidate.dataFields)
+    ? candidate.dataFields
+    : Array.isArray(candidate.inputs)
+      ? candidate.inputs
+      : [];
+  const rawFormulas = Array.isArray(candidate.formulas)
+    ? candidate.formulas
+    : [];
+  const rawValidations = Array.isArray(candidate.validations)
+    ? candidate.validations
+    : [];
+
+  return parseMethodDraft({
+    id: safeMethodId(candidate.id ?? candidate.name ?? "method_draft"),
+    version: typeof candidate.version === "number" ? candidate.version : 1,
+    status: mapPersistedStatus(candidate.status),
+    name: typeof candidate.name === "string" ? candidate.name : "Método",
+    description:
+      typeof candidate.description === "string"
+        ? candidate.description
+        : undefined,
+    assetTypeId:
+      candidate.assetTypeId === undefined || candidate.assetTypeId === null
+        ? undefined
+        : String(candidate.assetTypeId),
+    inputs: rawInputs.map(methodInputToDefinitionInput),
+    formulas: rawFormulas.map(methodFormulaToDefinitionFormula),
+    measurementModels: [],
+    acceptanceCriteria: rawValidations
+      .map(methodValidationToAcceptanceCriterion)
+      .filter((item): item is NonNullable<typeof item> => item !== null),
+    previewScenarios: [],
+    metadata: {
+      validationStatus: "pending_revalidation",
+      source: "method-builder",
+    },
+  });
+}
+
+function methodInputToDefinitionInput(input: unknown) {
+  const record = (input ?? {}) as Record<string, unknown>;
+  const key = typeof record.key === "string" ? record.key : "input";
+  const label = typeof record.label === "string" ? record.label : key;
+  const required = Boolean(record.required);
+
+  if (record.type === "number") {
+    return {
+      kind: "scalar",
+      key,
+      label,
+      unit: typeof record.unit === "string" ? record.unit : undefined,
+      required,
+      defaultValue:
+        typeof record.defaultValue === "string" ||
+        typeof record.defaultValue === "number"
+          ? record.defaultValue
+          : undefined,
+      quantityKind: "other",
+    };
+  }
+
+  if (record.type === "select") {
+    return {
+      kind: "select",
+      key,
+      label,
+      required,
+      options: Array.isArray(record.options)
+        ? record.options.filter((item): item is string => typeof item === "string")
+        : [],
+      defaultValue:
+        typeof record.defaultValue === "string" ? record.defaultValue : undefined,
+    };
+  }
+
+  if (record.type === "table") {
+    return {
+      kind: "table",
+      key,
+      label,
+      required,
+      columns: Array.isArray(record.columns)
+        ? record.columns
+            .map((column) => {
+              const tableColumn = (column ?? {}) as Record<string, unknown>;
+              if (
+                typeof tableColumn.key !== "string" ||
+                typeof tableColumn.label !== "string"
+              ) {
+                return null;
+              }
+
+              return {
+                key: tableColumn.key,
+                label: tableColumn.label,
+                type: tableColumn.type === "number" ? "number" : "text",
+                unit:
+                  typeof tableColumn.unit === "string"
+                    ? tableColumn.unit
+                    : undefined,
+              };
+            })
+            .filter((column): column is NonNullable<typeof column> => column !== null)
+        : [],
+    };
+  }
+
+  return {
+    kind: "text",
+    key,
+    label,
+    required,
+    defaultValue:
+      typeof record.defaultValue === "string" ? record.defaultValue : undefined,
+  };
+}
+
+function methodFormulaToDefinitionFormula(formula: unknown) {
+  const record = (formula ?? {}) as Record<string, unknown>;
+  const key =
+    typeof record.outputKey === "string"
+      ? record.outputKey
+      : typeof record.key === "string"
+        ? record.key
+        : "formula";
+
+  return {
+    key,
+    label: typeof record.label === "string" ? record.label : key,
+    expression:
+      typeof record.expression === "string" ? record.expression : "0",
+    outputUnit:
+      typeof record.unit === "string"
+        ? record.unit
+        : typeof record.outputUnit === "string"
+          ? record.outputUnit
+          : undefined,
+    outputKind: "derived_quantity" as const,
+    required: true,
+  };
+}
+
+function methodValidationToAcceptanceCriterion(
+  validation: unknown,
+  index: number,
+) {
+  const record = (validation ?? {}) as Record<string, unknown>;
+
+  if (
+    typeof record.leftExpression !== "string" ||
+    typeof record.operator !== "string" ||
+    typeof record.rightExpression !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    key: `criterion_${index + 1}`,
+    label:
+      typeof record.message === "string"
+        ? record.message
+        : `Critério ${index + 1}`,
+    expression: `${record.leftExpression} ${record.operator} ${record.rightExpression}`,
+    severity: record.severity === "warning" ? "warning" : "blocking",
+    message:
+      typeof record.message === "string"
+        ? record.message
+        : "Critério de aceitação",
+  };
+}
+
+function mapPersistedStatus(status: unknown): MethodDraft["status"] {
+  switch (status) {
+    case "PENDING_APPROVAL":
+      return "ready_for_review";
+    case "TECHNICAL_REVIEWED":
+      return "under_review";
+    case "PUBLISHED":
+      return "published";
+    case "ARCHIVED":
+      return "archived";
+    case "DRAFT":
+    default:
+      return "draft";
+  }
+}
+
+function safeMethodId(value: unknown): string {
+  const text = String(value ?? "method_draft");
+  const sanitized = text.replace(/[^a-zA-Z0-9_]/g, "_");
+  return /^[a-zA-Z]/.test(sanitized) ? sanitized : `method_${sanitized}`;
 }
 
 function methodRecordToDraft(method: {
@@ -180,15 +371,15 @@ async function resolveMethodRouteId(
   identifier: string,
   organizationId: string,
 ): Promise<number | null> {
-  const legacyId = parseLegacyNumericIdentifier(identifier);
+  const numericRouteId = parseNumericRouteIdentifier(identifier);
 
-  if (legacyId) {
+  if (numericRouteId) {
     const [method] = await db
       .select({ id: calibrationMethod.id })
       .from(calibrationMethod)
       .where(
         and(
-          eq(calibrationMethod.id, legacyId),
+          eq(calibrationMethod.id, numericRouteId),
           eq(calibrationMethod.organizationId, organizationId),
         ),
       )
@@ -308,7 +499,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   )
 
   // =========================================================================
-  // POST /compile - Compile a Method Builder v2 draft without persistence
+  // POST /compile - Compile a Method Builder draft without persistence
   // =========================================================================
   .post("/compile", ...withLabPermission({ template: ["read"] }), async (c) => {
     try {
@@ -327,7 +518,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   })
 
   // =========================================================================
-  // POST /preview - Compile and run an ad-hoc Method Builder v2 preview
+  // POST /preview - Compile and run an ad-hoc Method Builder preview
   // =========================================================================
   .post("/preview", ...withLabPermission({ template: ["read"] }), async (c) => {
     try {
