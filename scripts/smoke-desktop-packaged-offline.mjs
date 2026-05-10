@@ -370,6 +370,7 @@ try {
       statusAfterRestart,
     )}`,
   );
+  await waitForSyncSettled(secondPage);
 
   const localCustomers = await localJson(
     secondBootstrap.httpBaseUrl,
@@ -421,10 +422,7 @@ try {
     onlineRetry.ok === true,
     `retrySync online failed: ${JSON.stringify(onlineRetry)}`,
   );
-  const finalStatus = await evaluate(
-    secondPage,
-    "window.calibraBridge.getSyncStatus()",
-  );
+  const finalStatus = await waitForSyncIdle(secondPage);
   assert(
     finalStatus.state === "idle",
     `final status not idle: ${JSON.stringify(finalStatus)}`,
@@ -855,6 +853,49 @@ async function waitForLocalBootstrap(page) {
   }
 
   throw new Error("local environment bootstrap did not become ready");
+}
+
+async function waitForSyncSettled(page, timeoutMs = 30_000) {
+  const startedAt = Date.now();
+  let latestStatus = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    latestStatus = await evaluate(
+      page,
+      "window.calibraBridge.getSyncStatus()",
+    );
+    if (latestStatus?.activeRunId === null && latestStatus.state !== "syncing") {
+      return latestStatus;
+    }
+
+    await sleep(250);
+  }
+
+  throw new Error(
+    `Timed out waiting for sync to settle: ${JSON.stringify(latestStatus)}`,
+  );
+}
+
+async function waitForSyncIdle(page, timeoutMs = 30_000) {
+  const startedAt = Date.now();
+  let latestStatus = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    latestStatus = await waitForSyncSettled(page, timeoutMs);
+    if (
+      latestStatus.state === "idle" &&
+      latestStatus.pendingOutboxCount === 0 &&
+      latestStatus.conflictCount === 0
+    ) {
+      return latestStatus;
+    }
+
+    await sleep(250);
+  }
+
+  throw new Error(
+    `Timed out waiting for idle sync status: ${JSON.stringify(latestStatus)}`,
+  );
 }
 
 async function desktopAuthFetch(page, pathname, init = {}) {
