@@ -31,6 +31,7 @@
     "plan:desktop-release-seed": "node scripts/plan-desktop-release-seed.mjs",
     "smoke:desktop:artifact": "node scripts/smoke-desktop-artifact.mjs",
     "smoke:desktop:local-server": "node scripts/smoke-desktop-local-server.mjs",
+    "smoke:desktop:packaged-offline": "node scripts/smoke-desktop-packaged-offline.mjs",
     "deploy:api": "pnpm --dir apps/api deploy",
     "deploy:web": "pnpm --dir apps/web deploy",
     "deploy:portal": "pnpm --dir apps/portal deploy",

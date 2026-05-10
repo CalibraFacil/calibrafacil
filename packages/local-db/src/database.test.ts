@@ -1566,6 +1566,9 @@ INSERT INTO asset_types (
 
     expect(countPendingOutbox(database)).toBe(1);
     expect(listPendingOutboxEvents(database)).toHaveLength(0);
+    expect(
+      listPendingOutboxEvents(database, 50, { includeDeferred: true }),
+    ).toHaveLength(1);
 
     const failed = database
       .prepare(

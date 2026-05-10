@@ -87,6 +87,7 @@ ON CONFLICT(scope) DO UPDATE SET
 export function listPendingOutboxEvents(
   database: LocalDatabase,
   limit = 50,
+  options: { includeDeferred?: boolean } = {},
 ): PendingOutboxEvent[] {
   const now = new Date().toISOString();
   const rows = database
@@ -106,12 +107,20 @@ SELECT
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
 WHERE outbox.status IN ('pending', 'failed')
-  AND (outbox.next_attempt_at IS NULL OR outbox.next_attempt_at <= @now)
+  AND (
+    @includeDeferred = 1
+    OR outbox.next_attempt_at IS NULL
+    OR outbox.next_attempt_at <= @now
+  )
 ORDER BY outbox.created_at ASC
 LIMIT @limit
 `,
     )
-    .all({ now, limit }) as PendingOutboxEventRow[];
+    .all({
+      now,
+      limit,
+      includeDeferred: options.includeDeferred ? 1 : 0,
+    }) as PendingOutboxEventRow[];
 
   return rows.map((row) => ({
     eventId: row.event_id,

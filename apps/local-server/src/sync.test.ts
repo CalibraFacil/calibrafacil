@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   applySyncBootstrap,
   createLocalCustomer,
+  listPendingOutboxEvents,
+  markOutboxEventsFailedForRetry,
   openLocalDatabase,
 } from "@calibra-facil/local-db";
 import type { LocalServerConfig } from "./bootstrap";
@@ -143,6 +145,76 @@ describe("createLocalSyncRuntime", () => {
         },
       ],
     });
+
+    database.close();
+  });
+
+  it("manual sync retries failed outbox events even when retry backoff is pending", async () => {
+    const dbPath = createTempDatabasePath();
+    const database = openLocalDatabase({ filePath: dbPath });
+    const config = {
+      ...createConfig(dbPath),
+      cloudApiUrl: "https://api.example.test",
+    };
+    const pushedRequests: unknown[] = [];
+    const runtime = createLocalSyncRuntime(config, database, {
+      fetch: async (input, init) => {
+        const url = String(input);
+
+        if (url === "https://api.example.test/api/sync/push") {
+          const body = JSON.parse(String(init?.body));
+          pushedRequests.push(body);
+
+          return Response.json({
+            accepted: body.events.map(
+              (event: { eventId: string; localVersion: number }) => ({
+                eventId: event.eventId,
+                remoteEntityId: 321,
+                remoteVersion: event.localVersion + 1,
+                cloudEventId: `cloud:${event.eventId}`,
+              }),
+            ),
+            rejected: [],
+            conflicts: [],
+            newCursor: "cursor-after-push",
+          });
+        }
+
+        if (url === "https://api.example.test/api/sync/bootstrap") {
+          return Response.json(syncBootstrap("org-1", 1, "user-1"));
+        }
+
+        if (url.startsWith("https://api.example.test/api/sync/pull")) {
+          return Response.json({
+            cursor: "cursor-after-pull",
+            hasMore: false,
+            events: [],
+          });
+        }
+
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+
+    createLocalCustomer(database, {
+      organizationId: "org-1",
+      unitId: 1,
+      name: "Cliente Offline",
+      actorUserId: "user-1",
+      deviceId: "device-test",
+    });
+    const [event] = listPendingOutboxEvents(database);
+    if (!event) throw new Error("Expected one pending outbox event");
+
+    markOutboxEventsFailedForRetry(database, [event.eventId], "offline");
+    expect(listPendingOutboxEvents(database)).toHaveLength(0);
+
+    await expect(runtime.runInitialSync()).resolves.toMatchObject({
+      state: "idle",
+      pendingOutboxCount: 0,
+      conflictCount: 0,
+    });
+    expect(pushedRequests).toHaveLength(1);
 
     database.close();
   });

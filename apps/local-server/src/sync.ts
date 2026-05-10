@@ -93,7 +93,9 @@ export function createLocalSyncRuntime(
       );
 
       try {
-        await pushPendingOutbox(config, database, fetchImpl);
+        await pushPendingOutbox(config, database, fetchImpl, {
+          includeDeferred: true,
+        });
 
         const bootstrapUrl = new URL("/api/sync/bootstrap", config.cloudApiUrl);
         const headers = new Headers({
@@ -185,7 +187,9 @@ export function createLocalSyncRuntime(
       );
 
       try {
-        await pushPendingOutbox(config, database, fetchImpl);
+        await pushPendingOutbox(config, database, fetchImpl, {
+          includeDeferred: true,
+        });
         await pullCloudChanges(config, database, fetchImpl);
         status = {
           ...withLocalCounts(database, status),
@@ -317,13 +321,16 @@ async function pushPendingOutbox(
   config: LocalServerConfig,
   database: LocalDatabase,
   fetchImpl: typeof fetch,
+  options: { includeDeferred?: boolean } = {},
 ) {
   if (!config.cloudApiUrl) {
     throw new Error("Cloud API URL is not configured for local sync");
   }
   const cloudApiUrl = config.cloudApiUrl;
 
-  const pending = listPendingOutboxEvents(database);
+  const pending = listPendingOutboxEvents(database, 50, {
+    includeDeferred: options.includeDeferred,
+  });
   if (pending.length === 0) return;
 
   const certificatePdfEvents = pending.filter(
