@@ -133,8 +133,12 @@ export function createLocalServer(
   });
 
   app.get("/.well-known/calibra/local-environment", (c) => {
+    const context = getLocalRequestContext(config, database);
     return c.json({
       ...createLocalEnvironmentBootstrap(config),
+      organizationId: context.organizationId,
+      unitId: context.unitId,
+      userId: context.userId,
       dbSchemaVersion: getLocalSchemaVersion(database),
     });
   });
@@ -254,15 +258,16 @@ export function createLocalServer(
       return c.json({ error: "Ativo e servico sao obrigatorios" }, 400);
     }
 
+    const context = getLocalRequestContext(config, database);
     try {
       const job = createLocalJobDraft(database, {
-        organizationId: config.organizationId,
-        unitId: config.unitId,
+        organizationId: context.organizationId,
+        unitId: context.unitId,
         assetId: input.assetId,
         serviceId: input.serviceId,
         technicianId: input.technicianId,
         dueDate: input.dueDate,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -505,6 +510,7 @@ export function createLocalServer(
       return c.json({ error: "Job nao encontrado" }, 404);
     }
 
+    const context = getLocalRequestContext(config, database);
     try {
       const results = executeLocalCompiledMethod({
         methodSnapshot: current.methodSnapshot as Record<string, unknown>,
@@ -520,7 +526,7 @@ export function createLocalServer(
         results,
         selectedStandardIds: input.selectedStandardIds,
         environment: input.environment,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -554,6 +560,7 @@ export function createLocalServer(
       return c.json({ error: "Job nao encontrado" }, 404);
     }
 
+    const context = getLocalRequestContext(config, database);
     try {
       const results = executeLocalCompiledMethod({
         methodSnapshot: current.methodSnapshot as Record<string, unknown>,
@@ -570,7 +577,7 @@ export function createLocalServer(
         selectedStandardIds: input.selectedStandardIds,
         environment: input.environment,
         requireResults: true,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -657,17 +664,18 @@ export function createLocalServer(
 
   app.post("/api/customers", async (c) => {
     const input = CreateCustomerSchema.parse(await c.req.json());
+    const context = getLocalRequestContext(config, database);
 
     try {
       const customer = createLocalCustomer(database, {
-        organizationId: config.organizationId,
-        unitId: config.unitId,
+        organizationId: context.organizationId,
+        unitId: context.unitId,
         name: input.name,
         taxId: input.taxId,
         email: input.email || null,
         phone: input.phone,
         address: input.address,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -689,6 +697,7 @@ export function createLocalServer(
 
   app.put("/api/customers/:id", async (c) => {
     const input = UpdateCustomerSchema.parse(await c.req.json());
+    const context = getLocalRequestContext(config, database);
 
     try {
       const customer = updateLocalCustomer(database, {
@@ -698,7 +707,7 @@ export function createLocalServer(
         email: input.email,
         phone: input.phone,
         address: input.address,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -722,13 +731,14 @@ export function createLocalServer(
 
   app.put("/api/customers/:id/compliance", async (c) => {
     const input = UpdateComplianceSchema.parse(await c.req.json());
+    const context = getLocalRequestContext(config, database);
 
     try {
       const customer = updateLocalCustomerCompliance(database, {
         identifier: c.req.param("id"),
         compliance: input.compliance,
         reason: input.reason,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -797,12 +807,13 @@ export function createLocalServer(
       );
     }
 
+    const context = getLocalRequestContext(config, database);
     try {
       const serviceOrder = createLocalServiceOrderIntake(database, {
         ...parsed.data,
-        organizationId: config.organizationId,
-        unitId: config.unitId,
-        actorUserId: config.userId,
+        organizationId: context.organizationId,
+        unitId: context.unitId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -836,11 +847,12 @@ export function createLocalServer(
       );
     }
 
+    const context = getLocalRequestContext(config, database);
     try {
       const quote = createLocalServiceOrderQuoteDraft(database, {
         routeId: c.req.param("id"),
         ...parsed.data,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -864,11 +876,12 @@ export function createLocalServer(
       );
     }
 
+    const context = getLocalRequestContext(config, database);
     try {
       const execution = saveLocalServiceOrderExecutionNotes(database, {
         routeId: c.req.param("id"),
         ...parsed.data,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -892,11 +905,12 @@ export function createLocalServer(
       );
     }
 
+    const context = getLocalRequestContext(config, database);
     try {
       const document = createLocalServiceOrderDeliveryDocumentDraft(database, {
         routeId: c.req.param("id"),
         ...parsed.data,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -986,10 +1000,11 @@ export function createLocalServer(
 
   app.get("/api/environmental-limits/effective/:assetTypeId", (c) => {
     const assetTypeId = parseNumber(c.req.param("assetTypeId"));
+    const context = getLocalRequestContext(config, database);
     const limits = assetTypeId
       ? getLocalEffectiveEnvironmentalLimits(database, {
           assetTypeId,
-          unitId: config.unitId,
+          unitId: context.unitId,
         })
       : null;
 
@@ -1014,11 +1029,12 @@ export function createLocalServer(
 
   app.post("/api/assets", async (c) => {
     const input = CreateAssetSchema.parse(await c.req.json());
+    const context = getLocalRequestContext(config, database);
 
     try {
       const asset = createLocalAsset(database, {
-        organizationId: config.organizationId,
-        unitId: config.unitId,
+        organizationId: context.organizationId,
+        unitId: context.unitId,
         customerId: input.customerId,
         assetTypeId: input.assetTypeId,
         name: input.name,
@@ -1031,7 +1047,7 @@ export function createLocalServer(
         nextCalibrationDate: input.nextCalibrationDate,
         comments: input.comments,
         specifications: input.specifications,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -1053,6 +1069,7 @@ export function createLocalServer(
 
   app.put("/api/assets/:id", async (c) => {
     const input = UpdateAssetSchema.parse(await c.req.json());
+    const context = getLocalRequestContext(config, database);
 
     try {
       const asset = updateLocalAsset(database, {
@@ -1067,7 +1084,7 @@ export function createLocalServer(
         nextCalibrationDate: input.nextCalibrationDate,
         comments: input.comments,
         specifications: input.specifications,
-        actorUserId: config.userId,
+        actorUserId: context.userId,
         deviceId: config.deviceId,
       });
 
@@ -1134,7 +1151,7 @@ export function createLocalServer(
         contentHash,
         mimeType: file.type || "application/octet-stream",
         sizeBytes: bytes.byteLength,
-        actorUserId: config.userId,
+        actorUserId: getLocalRequestContext(config, database).userId,
         deviceId: config.deviceId,
       });
 
@@ -1330,6 +1347,34 @@ async function readJsonOrEmpty(request: Request) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Erro local";
+}
+
+function getLocalRequestContext(
+  config: LocalServerConfig,
+  database: LocalDatabase,
+) {
+  const snapshot = database
+    .prepare(
+      `
+SELECT organization_id, active_unit_id, user_id
+FROM tenant_snapshot
+ORDER BY pulled_at DESC
+LIMIT 1
+`,
+    )
+    .get() as
+    | {
+        organization_id: string;
+        active_unit_id: number | null;
+        user_id: string;
+      }
+    | undefined;
+
+  return {
+    organizationId: config.organizationId ?? snapshot?.organization_id ?? null,
+    unitId: config.unitId ?? snapshot?.active_unit_id ?? null,
+    userId: config.userId ?? snapshot?.user_id ?? null,
+  };
 }
 
 function getDiagnostics(error: unknown) {

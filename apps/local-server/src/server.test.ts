@@ -52,6 +52,90 @@ function createConfig(dbPath: string): LocalServerConfig {
 }
 
 describe("local server", () => {
+  it("uses synced tenant context for local writes after packaged startup", async () => {
+    const dbPath = createTempDatabasePath();
+    const database = openLocalDatabase({ filePath: dbPath });
+    const config = {
+      ...createConfig(dbPath),
+      organizationId: null,
+      unitId: null,
+      userId: null,
+    };
+    const app = createLocalServer(config, database);
+
+    applySyncBootstrap(database, {
+      serverTime: "2026-01-15T10:00:00.000Z",
+      user: {
+        id: "user-synced",
+        name: "Synced User",
+        email: "user@example.com",
+      },
+      organization: {
+        id: "org-synced",
+        type: "LAB",
+      },
+      activeUnits: [{ id: 42, name: "Matriz", role: "technician" }],
+      permissions: {
+        role: "technician",
+        unitRole: "technician",
+        activeUnitId: 42,
+        accessibleUnitIds: [42],
+        canAccessAllUnits: false,
+      },
+      featureFlags: {
+        offlineApprovals: false,
+        offlineCertificatePublication: false,
+      },
+      syncCursor: "cursor-after-bootstrap",
+      publishedMethods: [],
+      assetTypes: [],
+      customers: [],
+      assets: [],
+      services: [],
+      standards: [],
+      environmentalLimits: [],
+      jobs: [],
+      serviceOrders: [],
+    });
+
+    const environmentResponse = await app.request(
+      "/.well-known/calibra/local-environment",
+    );
+    await expect(environmentResponse.json()).resolves.toMatchObject({
+      organizationId: "org-synced",
+      unitId: 42,
+      userId: "user-synced",
+    });
+
+    const response = await app.request("/api/customers", {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Cliente Offline",
+        taxId: "12345678000199",
+        email: "offline@example.com",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      name: "Cliente Offline",
+      syncState: "local",
+    });
+
+    const row = database
+      .prepare(
+        `
+SELECT organization_id, unit_id
+FROM customers
+WHERE name = 'Cliente Offline'
+`,
+      )
+      .get() as { organization_id: string; unit_id: number } | undefined;
+
+    expect(row).toEqual({ organization_id: "org-synced", unit_id: 42 });
+  });
+
   it("serves local jobs from SQLite projections", async () => {
     const dbPath = createTempDatabasePath();
     const database = openLocalDatabase({ filePath: dbPath });

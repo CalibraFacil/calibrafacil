@@ -20,6 +20,7 @@ import {
   desktopSecretNameSchema,
   desktopSecretWriteSchema,
   desktopUpdateStateSchema,
+  localEnvironmentBootstrapSchema,
   localDiagnosticsSchema,
   syncActionResultSchema,
   syncStatusSnapshotSchema,
@@ -239,9 +240,9 @@ function registerIpc(
     }),
   );
 
-  handle(desktopIpcChannels.getLocalEnvironmentBootstrap, () => {
-    return localServer.bootstrap;
-  });
+  handle(desktopIpcChannels.getLocalEnvironmentBootstrap, () =>
+    getCurrentLocalEnvironmentBootstrap(),
+  );
 
   handle(desktopIpcChannels.getSettings, () => settingsStore.get());
 
@@ -660,6 +661,28 @@ async function getLocalDiagnostics() {
     return localDiagnosticsSchema.parse(await response.json());
   } catch {
     return null;
+  }
+}
+
+async function getCurrentLocalEnvironmentBootstrap() {
+  if (!localServer.bootstrap) return null;
+
+  try {
+    const response = await fetch(
+      `${localServer.baseUrl}/.well-known/calibra/local-environment`,
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Local environment bootstrap failed with HTTP ${response.status}`,
+      );
+    }
+
+    return localEnvironmentBootstrapSchema.parse({
+      ...(await response.json()),
+      localApiToken: localServer.bootstrap.localApiToken,
+    });
+  } catch {
+    return localServer.bootstrap;
   }
 }
 
