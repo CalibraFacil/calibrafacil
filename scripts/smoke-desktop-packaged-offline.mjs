@@ -107,6 +107,24 @@ try {
     Array.isArray(localStandards.data) && localStandards.data.length > 0,
     "local standards missing after sync",
   );
+  const localAssets = await localJson(
+    firstBootstrap.httpBaseUrl,
+    "/api/assets?page=1&limit=20",
+    firstLocalHeaders,
+  );
+  assert(
+    Array.isArray(localAssets.data) && localAssets.data.length > 0,
+    "local assets missing after sync",
+  );
+  const localServices = await localJson(
+    firstBootstrap.httpBaseUrl,
+    "/api/services?page=1&limit=20&isActive=true",
+    firstLocalHeaders,
+  );
+  assert(
+    Array.isArray(localServices.data) && localServices.data.length > 0,
+    "local services missing after sync",
+  );
 
   cloudOnline = false;
   const customerName = `Smoke Offline Restart ${Date.now()}`;
@@ -129,6 +147,111 @@ try {
     },
   );
   assert(localCustomer.id, "local customer did not return an id");
+
+  const localJob = await localJson(
+    firstBootstrap.httpBaseUrl,
+    "/api/jobs",
+    firstLocalHeaders,
+    {
+      method: "POST",
+      headers: {
+        ...firstLocalHeaders,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        assetId: localAssets.data[0].id,
+        serviceId: localServices.data[0].id,
+      }),
+    },
+  );
+  assert(localJob.id, "local calibration job did not return an id");
+
+  const execution = await localJson(
+    firstBootstrap.httpBaseUrl,
+    `/api/jobs/${encodeURIComponent(String(localJob.id))}/submit`,
+    firstLocalHeaders,
+    {
+      method: "POST",
+      headers: {
+        ...firstLocalHeaders,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        data: {
+          indication: "10.02",
+          reference: "10",
+          indicacao: "10.02",
+          valor_padrao: "10",
+          tolerancia_max: "0.1",
+        },
+        results: null,
+        selectedStandardIds: [localStandards.data[0].id],
+        environment: {
+          temperature: 20,
+          humidity: 50,
+          pressure: 1013,
+        },
+      }),
+    },
+  );
+  assert(
+    execution.data?.status === "REVIEW",
+    `local calibration submit did not enter REVIEW: ${JSON.stringify(
+      execution,
+    )}`,
+  );
+
+  const jobAttachment = await uploadLocalAttachment(
+    firstBootstrap.httpBaseUrl,
+    firstLocalHeaders,
+    {
+      entityType: "calibration_job",
+      entityId: String(localJob.id),
+      content: `packaged offline evidence ${new Date().toISOString()}`,
+      fileName: "packaged-offline-evidence.txt",
+    },
+  );
+  assert(jobAttachment.id, "local calibration attachment did not return an id");
+
+  const certificateDraft = await localJson(
+    firstBootstrap.httpBaseUrl,
+    `/api/jobs/${encodeURIComponent(String(localJob.id))}/certificate-draft`,
+    firstLocalHeaders,
+    {
+      method: "POST",
+      headers: firstLocalHeaders,
+    },
+  );
+  assert(certificateDraft.id, "local certificate draft did not return an id");
+  const draftHtml = await localText(
+    firstBootstrap.httpBaseUrl,
+    `/api/jobs/${encodeURIComponent(String(localJob.id))}/certificate-draft/file`,
+    firstLocalHeaders,
+  );
+  assert(
+    draftHtml.includes("Rascunho local"),
+    "local certificate draft HTML is missing the local draft banner",
+  );
+
+  const certificatePdf = await localJson(
+    firstBootstrap.httpBaseUrl,
+    `/api/jobs/${encodeURIComponent(
+      String(localJob.id),
+    )}/certificate-draft/${encodeURIComponent(certificateDraft.id)}/pdf`,
+    firstLocalHeaders,
+    {
+      method: "POST",
+      headers: {
+        ...firstLocalHeaders,
+        "Content-Type": "application/pdf",
+      },
+      body: minimalPdfBytes(),
+    },
+  );
+  assert(
+    certificatePdf.status === "pdf_generated",
+    `local certificate PDF was not persisted: ${JSON.stringify(certificatePdf)}`,
+  );
 
   const offlineRetry = await evaluate(
     firstPage,
@@ -175,6 +298,37 @@ try {
     localCustomers.data?.some((customer) => customer.name === customerName),
     "offline customer not readable after restart",
   );
+  const restartedJob = await localJson(
+    secondBootstrap.httpBaseUrl,
+    `/api/jobs/${encodeURIComponent(String(localJob.id))}`,
+    secondLocalHeaders,
+  );
+  assert(
+    restartedJob.status === "REVIEW",
+    "offline calibration execution did not survive restart",
+  );
+  const restartedDraft = await localText(
+    secondBootstrap.httpBaseUrl,
+    `/api/jobs/${encodeURIComponent(String(localJob.id))}/certificate-draft/file`,
+    secondLocalHeaders,
+  );
+  assert(
+    restartedDraft.includes("Rascunho local"),
+    "local certificate draft was not readable after restart",
+  );
+  const restartedAttachments = await localJson(
+    secondBootstrap.httpBaseUrl,
+    `/api/attachments?entityType=calibration_job&entityId=${encodeURIComponent(
+      String(localJob.id),
+    )}&limit=10`,
+    secondLocalHeaders,
+  );
+  assert(
+    restartedAttachments.data?.some(
+      (attachment) => attachment.id === jobAttachment.id,
+    ),
+    "local calibration attachment was not listed after restart",
+  );
 
   cloudOnline = true;
   const onlineRetry = await evaluate(
@@ -208,8 +362,17 @@ try {
         ok: true,
         appInfo,
         cloud: { standards: standards.data.length },
-        local: { standards: localStandards.data.length },
-        localWrite: { customerId: localCustomer.id },
+        local: {
+          standards: localStandards.data.length,
+          assets: localAssets.data.length,
+          services: localServices.data.length,
+        },
+        localWrite: {
+          customerId: localCustomer.id,
+          jobId: localJob.id,
+          attachmentId: jobAttachment.id,
+          certificateDraftId: certificateDraft.id,
+        },
         offlineStatus,
         statusAfterRestart,
         finalStatus,
@@ -570,6 +733,44 @@ async function localJson(baseUrl, pathname, headers, init = {}) {
   return JSON.parse(text);
 }
 
+async function localText(baseUrl, pathname, headers, init = {}) {
+  const response = await fetch(`${baseUrl}${pathname}`, {
+    ...init,
+    headers: init.headers ?? headers,
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`${pathname} returned HTTP ${response.status}: ${text}`);
+  }
+
+  return text;
+}
+
+async function uploadLocalAttachment(baseUrl, headers, input) {
+  const form = new FormData();
+  form.set("entityType", input.entityType);
+  form.set("entityId", input.entityId);
+  form.set(
+    "file",
+    new Blob([input.content], { type: "text/plain" }),
+    input.fileName,
+  );
+
+  const response = await fetch(`${baseUrl}/api/attachments`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(
+      `/api/attachments returned HTTP ${response.status}: ${text}`,
+    );
+  }
+
+  return JSON.parse(text);
+}
+
 function printLocalDiagnostics() {
   try {
     const dbPath = path.join(userData, "local-data", "calibra.sqlite");
@@ -645,6 +846,38 @@ function authHeaders(bootstrap) {
 function createPseudoCnpj() {
   const suffix = String(Date.now()).slice(-8).padStart(8, "0");
   return `99${suffix}0001${Math.floor(Math.random() * 90 + 10)}`;
+}
+
+function minimalPdfBytes() {
+  return Buffer.from(`%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 44 >>
+stream
+BT /F1 12 Tf 20 100 Td (Calibra smoke) Tj ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000204 00000 n
+trailer
+<< /Size 5 /Root 1 0 R >>
+startxref
+297
+%%EOF
+`);
 }
 
 function normalizeBaseUrl(value) {
