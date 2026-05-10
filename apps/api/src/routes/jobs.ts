@@ -95,7 +95,6 @@ import {
 } from "@calibra-facil/method-definition";
 import {
   createCalculationEngine,
-  normalizeEngineOptions,
 } from "@calibra-facil/math-engine";
 
 // Aliases for multiple user joins
@@ -254,7 +253,7 @@ function stripAssetSpecData(
 
 function createMethodExecutionEngine(): CalculationEngineLike {
   return createCalculationEngine(
-    normalizeEngineOptions(METHOD_ENGINE_OPTIONS),
+    METHOD_ENGINE_OPTIONS,
   ) as unknown as CalculationEngineLike;
 }
 

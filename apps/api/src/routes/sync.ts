@@ -45,6 +45,7 @@ import {
   type CompiledMethod,
   type MethodDiagnostic,
 } from "@calibra-facil/method-definition";
+import { createCalculationEngine } from "@calibra-facil/math-engine";
 import { toCanonicalMassValue } from "@calibra-facil/shared";
 import {
   buildDesktopSyncConflictId,
@@ -3133,11 +3134,8 @@ function buildOfficialExecutionInputs(params: {
 }
 
 async function createMethodExecutionEngine(): Promise<CalculationEngineLike> {
-  const { createCalculationEngine, normalizeEngineOptions } =
-    await import("@calibra-facil/math-engine");
-
   return createCalculationEngine(
-    normalizeEngineOptions(METHOD_ENGINE_OPTIONS),
+    METHOD_ENGINE_OPTIONS,
   ) as unknown as CalculationEngineLike;
 }
 

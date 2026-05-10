@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
       where: ReturnType<typeof vi.fn>;
       orderBy: ReturnType<typeof vi.fn>;
       limit: ReturnType<typeof vi.fn>;
+      set: ReturnType<typeof vi.fn>;
       values: ReturnType<typeof vi.fn>;
       returning: ReturnType<typeof vi.fn>;
     };
@@ -33,6 +34,7 @@ const mocks = vi.hoisted(() => {
     query.where = vi.fn(() => query);
     query.orderBy = vi.fn(() => query);
     query.limit = vi.fn(() => query);
+    query.set = vi.fn(() => query);
     query.values = vi.fn(() => query);
     query.returning = vi.fn(() => Promise.resolve(rows));
 
@@ -113,6 +115,30 @@ vi.mock("../lib/storage", () => ({
   generatePresignedUploadUrl: mocks.generatePresignedUploadUrl,
   generatePresignedUrl: mocks.generatePresignedUrl,
   uploadToR2: mocks.uploadToR2,
+}));
+
+vi.mock("@calibra-facil/math-engine", () => ({
+  normalizeEngineOptions: (options: Record<string, unknown> = {}) =>
+    Object.freeze({
+      ...options,
+      engineVersion: "engine-test",
+    }),
+  createCalculationEngine: (options: Record<string, unknown> = {}) => {
+    if ("engineVersion" in options) {
+      throw new Error("Object contains an unsupported field.");
+    }
+
+    return {
+      evaluateFormula: () => {
+        throw new Error("Formula evaluation is not expected in this test.");
+      },
+      evaluateMeasurementModel: () => {
+        throw new Error(
+          "Measurement model evaluation is not expected in this test.",
+        );
+      },
+    };
+  },
 }));
 
 function createApp() {
@@ -544,6 +570,115 @@ describe("syncRouter", () => {
       },
     ]);
     expect(mocks.db.update).not.toHaveBeenCalled();
+  });
+
+  it("accepts saved desktop executions with a valid compiled method snapshot", async () => {
+    const compiledMethod = {
+      methodId: "method-1",
+      methodVersion: 1,
+      status: "compiled",
+      coreVersion: "0.1.0",
+      methodFingerprint: "method-v1",
+      normalizedMethodJson: "{}",
+      engine: {
+        packageName: "@calibra-facil/math-engine",
+        version: "engine-1",
+        optionsFingerprint: "options-1",
+      },
+      inputs: [],
+      formulas: [],
+      measurementModels: [],
+      acceptanceCriteria: [],
+      diagnostics: [],
+    };
+
+    mocks.selectResults.push(
+      [],
+      [
+        {
+          details: {
+            remoteEntityId: 42,
+          },
+        },
+      ],
+      [
+        {
+          id: 42,
+          jobId: "CAL-2026-0042",
+          status: "IN_PROGRESS",
+          updatedAt: new Date("2026-05-09T12:30:00.000Z"),
+          performedAt: null,
+          data: null,
+          results: null,
+          methodSnapshot: {
+            methodFingerprint: "method-v1",
+            engineVersion: "engine-1",
+            engineOptionsFingerprint: "options-1",
+            normalizedMethodJson: "{}",
+            dataFields: [],
+            compiledMethod,
+          },
+          assetSnapshot: {
+            id: 10,
+            specifications: {},
+          },
+          standardsSnapshot: null,
+          environmentalSnapshot: null,
+        },
+      ],
+      [
+        {
+          id: 42,
+          jobId: "CAL-2026-0042",
+          status: "IN_PROGRESS",
+          performedAt: null,
+        },
+      ],
+    );
+
+    const response = await createApp().request("/api/sync/push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        deviceId: "desktop-1",
+        clientBatchId: "batch-valid-execution",
+        baseCursor: "cursor-before",
+        events: [
+          syncEvent({
+            eventId: "evt-valid-execution",
+            entityType: "calibration_job",
+            entityId: "local-job-1",
+            operation: "save_local_execution",
+            payload: {
+              status: "IN_PROGRESS",
+              data: {},
+              results: null,
+            },
+          }),
+        ],
+      }),
+    });
+    const body = syncPushResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(body.rejected).toEqual([]);
+    expect(body.conflicts).toEqual([]);
+    expect(body.accepted).toEqual([
+      {
+        eventId: "evt-valid-execution",
+        remoteEntityId: 42,
+        remoteEntity: {
+          id: 42,
+          jobId: "CAL-2026-0042",
+          status: "IN_PROGRESS",
+          performedAt: null,
+        },
+        remoteVersion: 1,
+        cloudEventId: "cloud:evt-valid-execution",
+      },
+    ]);
+    expect(mocks.db.update).toHaveBeenCalledTimes(1);
+    expect(mocks.db.insert).toHaveBeenCalledTimes(2);
   });
 
   it("acknowledges pull cursors through the sync ack endpoint", async () => {

@@ -72,7 +72,7 @@ function compileDraftWithEngine(
 ) {
   const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
   const engine = createCalculationEngine(
-    normalizedOptions,
+    METHOD_ENGINE_OPTIONS,
   ) as unknown as CalculationEngineLike;
 
   return compileMethodDraft(draft, {
