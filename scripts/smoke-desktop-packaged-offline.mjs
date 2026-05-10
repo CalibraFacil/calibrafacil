@@ -19,6 +19,70 @@ const email = process.env.CALIBRA_PARITY_EMAIL;
 const password = process.env.CALIBRA_PARITY_PASSWORD;
 const activeUnitId = process.env.CALIBRA_PARITY_ACTIVE_UNIT_ID ?? "1";
 const origin = process.env.CALIBRA_PARITY_ORIGIN ?? "https://calibrafacil.com";
+const onlineWebParityRoutes = [
+  {
+    path: "/dashboard/standards",
+    text: "Gerencie os padrões e equipamentos de calibração do laboratório",
+  },
+  {
+    path: "/dashboard/assets",
+    text: "Gerencie os ativos e instrumentos do laboratório.",
+  },
+  {
+    path: "/dashboard/jobs",
+    text: "Gerencie jobs de calibração e emissão de certificados",
+  },
+  {
+    path: "/dashboard/service-orders",
+    text: "Recebimento, avaliação, orçamento, execução e entrega",
+  },
+  {
+    path: "/dashboard/reports",
+    text: "Visão executiva multiunidade",
+  },
+  {
+    path: "/dashboard/requests",
+    text: "Revise, aprove e converta as solicitações enviadas pelos clientes.",
+  },
+  {
+    path: "/dashboard/nc",
+    text: "Controle de trabalhos não conformes - ISO 17025 Cláusula 8.7",
+  },
+  {
+    path: "/dashboard/capa",
+    text: "Ações corretivas e preventivas - ISO 17025 Cláusula 8.2",
+  },
+  {
+    path: "/dashboard/certificate-designer",
+    text: "Edite blocos em A4 com coordenadas em milímetros.",
+  },
+  {
+    path: "/dashboard/settings/profile",
+    text: "Gerencie seu perfil de usuário.",
+  },
+];
+const offlineCachedRoutes = [
+  {
+    path: "/dashboard/standards",
+    text: "Gerencie os padrões e equipamentos de calibração do laboratório",
+  },
+  {
+    path: "/dashboard/assets",
+    text: "Gerencie os ativos e instrumentos do laboratório.",
+  },
+  {
+    path: "/dashboard/clients",
+    text: "Gerencie os clientes do laboratório.",
+  },
+  {
+    path: "/dashboard/jobs",
+    text: "Gerencie jobs de calibração e emissão de certificados",
+  },
+  {
+    path: "/dashboard/service-orders",
+    text: "Recebimento, avaliação, orçamento, execução e entrega",
+  },
+];
 
 if (!email || !password) {
   console.error(`Packaged offline desktop smoke requires credentials.
@@ -124,6 +188,11 @@ try {
   assert(
     Array.isArray(localServices.data) && localServices.data.length > 0,
     "local services missing after sync",
+  );
+
+  const onlineWebParity = await runOnlineWebParitySmoke(
+    firstPage,
+    firstBootstrap,
   );
 
   cloudOnline = false;
@@ -252,6 +321,8 @@ try {
     certificatePdf.status === "pdf_generated",
     `local certificate PDF was not persisted: ${JSON.stringify(certificatePdf)}`,
   );
+
+  const offlineCachedScreens = await runOfflineCachedRouteSmoke(firstPage);
 
   const offlineRetry = await evaluate(
     firstPage,
@@ -390,6 +461,8 @@ try {
           attachmentId: jobAttachment.id,
           certificateDraftId: certificateDraft.id,
         },
+        onlineWebParity,
+        offlineCachedScreens,
         offlineStatus,
         updateInstallBlocked,
         statusAfterRestart,
@@ -929,6 +1002,50 @@ LIMIT 1
     entityId: String(customer.id),
     resolution: "ignored",
   };
+}
+
+async function runOnlineWebParitySmoke(page, bootstrap) {
+  await signInProductionSessionForUi(page, bootstrap);
+  await navigateHash(page, "/dashboard");
+  await reloadPage(page);
+  await waitForBridge(page);
+
+  for (const route of onlineWebParityRoutes) {
+    await verifyRouteLoads(page, route);
+  }
+
+  return onlineWebParityRoutes.map((route) => route.path);
+}
+
+async function runOfflineCachedRouteSmoke(page) {
+  const loadedRoutes = [];
+
+  for (const route of offlineCachedRoutes) {
+    await verifyRouteLoads(page, route);
+    loadedRoutes.push(route.path);
+  }
+
+  return loadedRoutes;
+}
+
+async function verifyRouteLoads(page, route) {
+  await navigateHash(page, route.path);
+  await waitForHashIncludes(page, route.path);
+  await waitForText(page, route.text);
+  await assertPageDoesNotInclude(page, "Tela indisponível offline");
+  await assertPageDoesNotInclude(page, "Cache não pronto");
+  await assertPageDoesNotInclude(page, "Erro ao carregar");
+}
+
+async function assertPageDoesNotInclude(page, text) {
+  const bodyText = await evaluate(
+    page,
+    "document.body?.innerText?.slice(0, 5000) ?? ''",
+  );
+  assert(
+    !bodyText.includes(text),
+    `Page unexpectedly included ${JSON.stringify(text)}:\n${bodyText}`,
+  );
 }
 
 function seedCustomerConflict(customer) {
