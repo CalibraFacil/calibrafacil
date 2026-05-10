@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
-import { api } from '@/utils/api'
+import { api, calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -24,6 +24,10 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
 
 export const Route = createFileRoute('/dashboard/capa/new')({
   head: () => ({
@@ -85,6 +89,7 @@ const RCA_METHOD_LABELS: Record<string, string> = {
 
 function NewCAPAPage() {
   const navigate = useNavigate()
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const [detectionDate, setDetectionDate] = useState<Date | undefined>(
     new Date(),
   )
@@ -123,13 +128,8 @@ function NewCAPAPage() {
   // Fetch organization members (technicians) for responsible selection
   const { data: membersData } = useQuery({
     queryKey: ['jobs', 'technicians'],
-    queryFn: async () => {
-      const res = await api.api.jobs['technicians']['list'].$get()
-      if (!res.ok) return { data: [] }
-      return res.json() as Promise<{
-        data: Array<{ id: string; name: string; role: string }>
-      }>
-    },
+    enabled: !cloudOnlyUnavailable,
+    queryFn: () => calibraApi.jobs.listTechnicians(),
   })
 
   const selectedMember = membersData?.data?.find(
@@ -232,6 +232,12 @@ function NewCAPAPage() {
     })
   }
 
+  if (cloudOnlyUnavailable) {
+    return (
+      <CloudOnlyOfflineState title="Criação de CAPA indisponível offline" />
+    )
+  }
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -312,9 +318,7 @@ function NewCAPAPage() {
                     </span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="nc_detection">
-                      Detecção de NC
-                    </SelectItem>
+                    <SelectItem value="nc_detection">Detecção de NC</SelectItem>
                     <SelectItem value="internal_audit">
                       Auditoria Interna
                     </SelectItem>
@@ -502,8 +506,7 @@ function NewCAPAPage() {
                   required: 'Plano de ação é obrigatório',
                   minLength: {
                     value: 10,
-                    message:
-                      'Plano de ação deve ter pelo menos 10 caracteres',
+                    message: 'Plano de ação deve ter pelo menos 10 caracteres',
                   },
                 })}
                 placeholder="Descreva as ações a serem tomadas para corrigir o problema e prevenir recorrência..."

@@ -6,7 +6,7 @@ import { parseAsInteger, useQueryState } from 'nuqs'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon, ShoppingBasket03Icon } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -32,11 +32,7 @@ import {
 } from '@/components/ui/select'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { DataTable } from '@/components/ui/data-table'
-import {
-  type Service,
-  type ServicesTableMeta,
-  servicesColumns,
-} from './-components/columns'
+import { type ServicesTableMeta, servicesColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/services/')({
   head: () => ({
@@ -62,49 +58,22 @@ function ServicesListPage() {
     queryKey: ['services', organizationQueryKey, page, search, statusFilter],
     enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
-      const res = await api.api.services.$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          query: search || undefined,
-          isActive:
-            statusFilter === 'active'
-              ? 'true'
-              : statusFilter === 'inactive'
-                ? 'false'
-                : undefined,
-        },
+      return calibraApi.services.list({
+        page,
+        limit,
+        query: search || undefined,
+        isActive:
+          statusFilter === 'active'
+            ? true
+            : statusFilter === 'inactive'
+              ? false
+              : undefined,
       })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar serviços')
-      }
-
-      return res.json() as Promise<{
-        data: Array<Service>
-        pagination: {
-          page: number
-          limit: number
-          total: number
-          totalPages: number
-        }
-      }>
     },
   })
 
   const deactivateMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await api.api.services[':id'].$delete({
-        param: { id: String(id) },
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao desativar',
-        )
-      }
-      return res.json()
-    },
+    mutationFn: (id: number) => calibraApi.services.deactivate(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] })
       toast.success('Serviço desativado com sucesso')
@@ -115,19 +84,8 @@ function ServicesListPage() {
   })
 
   const reactivateMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await api.api.services[':id'].$put({
-        param: { id: String(id) },
-        json: { isActive: true },
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao reativar',
-        )
-      }
-      return res.json()
-    },
+    mutationFn: (id: number) =>
+      calibraApi.services.update(id, { isActive: true }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] })
       toast.success('Serviço reativado com sucesso')

@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+
+import { useMountEffect } from '@/hooks/use-mount-effect'
+import { isDesktopRuntime } from '@/runtime/desktop'
 
 const PREWARM_DEBOUNCE_MS = 120
 
@@ -69,11 +72,11 @@ export function useRoutePrewarmIntent(
     [debounceMs],
   )
 
-  useEffect(() => {
+  useMountEffect(() => {
     return () => {
       controller.cancel()
     }
-  }, [controller])
+  })
 
   return controller.handlers
 }
@@ -86,12 +89,28 @@ export function usePathPrewarmIntent(
 
   return useRoutePrewarmIntent(() => {
     if (!path || typeof window === 'undefined') return
-
-    const url = new URL(path, window.location.href)
-    if (url.origin !== window.location.origin) return
+    const url = resolvePrewarmUrl(path, window.location.href, {
+      isDesktop: isDesktopRuntime(),
+    })
+    if (!url) return
 
     return import('@/lib/route-prewarm').then(({ prewarmRouteDataForPath }) =>
       prewarmRouteDataForPath(url, queryClient),
     )
   }, options)
+}
+
+export function resolvePrewarmUrl(
+  path: string | null | undefined,
+  currentHref: string,
+  options: { isDesktop?: boolean } = {},
+) {
+  if (!path || options.isDesktop) return null
+
+  const url = new URL(path, currentHref)
+  const currentUrl = new URL(currentHref)
+
+  if (url.origin !== currentUrl.origin) return null
+
+  return url
 }

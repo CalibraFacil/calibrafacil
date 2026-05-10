@@ -14,7 +14,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 
 import { authClient, useActiveOrganization } from '@calibra-facil/auth/client'
 import { usePlanAccess } from '@/hooks/use-plan-access'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -312,106 +312,43 @@ function OrganizationSettingsPage({
   const unitsQuery = useQuery({
     queryKey: ['organization-units', activeOrg.id],
     enabled: hasMultiUnit,
-    queryFn: async () => {
-      const response = await api.api.units.admin.units.$get()
-      if (response.status === 403) {
-        return {
-          data: [] as OrganizationUnit[],
-          viewer: {
-            isGlobalManager: false,
-            canManageOrganizationUnits: false,
-            canManageAssignments: false,
-            canManageGlobalRoles: false,
-            canViewGovernance: false,
-            canAccessConsolidatedView: false,
-            managedUnitIds: [],
-          } satisfies GovernanceViewer,
-        }
-      }
-      if (!response.ok) {
-        throw new Error('Falha ao carregar unidades')
-      }
-
-      return (await response.json()) as {
+    queryFn: () =>
+      calibraApi.units.listAdminUnits<{
         data: OrganizationUnit[]
         viewer: GovernanceViewer
-      }
-    },
+      }>(),
   })
 
   const unitContextQuery = useQuery({
     queryKey: ['dashboard-units', activeOrg.id],
     enabled: hasMultiUnit,
     queryFn: async () => {
-      const response = await api.api.units.$get()
-      if (!response.ok) {
+      const response = await calibraApi.units.getDashboardUnits()
+      if (!response) {
         throw new Error('Falha ao carregar contexto da unidade')
       }
-
-      return (await response.json()) as UnitContextResponse
+      return response as UnitContextResponse
     },
   })
 
   const governanceMembersQuery = useQuery({
     queryKey: ['organization-governance-members', activeOrg.id],
     enabled: hasMultiUnit,
-    queryFn: async () => {
-      const response = await api.api.units.admin.members.$get()
-      if (response.status === 403) {
-        return {
-          data: [] as GovernanceMember[],
-          viewer: {
-            isGlobalManager: false,
-            canManageOrganizationUnits: false,
-            canManageAssignments: false,
-            canManageGlobalRoles: false,
-            canViewGovernance: false,
-            canAccessConsolidatedView: false,
-            managedUnitIds: [],
-          } satisfies GovernanceViewer,
-        }
-      }
-
-      if (!response.ok) {
-        throw new Error('Falha ao carregar governança por unidade')
-      }
-
-      return (await response.json()) as {
+    queryFn: () =>
+      calibraApi.units.listAdminMembers<{
         data: GovernanceMember[]
         viewer: GovernanceViewer
-      }
-    },
+      }>(),
   })
 
   const governanceActivityQuery = useQuery({
     queryKey: ['organization-governance-activity', activeOrg.id],
     enabled: hasMultiUnit,
-    queryFn: async () => {
-      const response = await api.api.units.admin.activity.$get()
-      if (response.status === 403) {
-        return {
-          data: [] as GovernanceActivityEntry[],
-          viewer: {
-            isGlobalManager: false,
-            canManageOrganizationUnits: false,
-            canManageAssignments: false,
-            canManageGlobalRoles: false,
-            canViewGovernance: false,
-            canAccessConsolidatedView: false,
-            managedUnitIds: [],
-          } satisfies GovernanceViewer,
-        }
-      }
-
-      if (!response.ok) {
-        throw new Error('Falha ao carregar atividade de governança')
-      }
-
-      return (await response.json()) as {
+    queryFn: () =>
+      calibraApi.units.listAdminActivity<{
         data: GovernanceActivityEntry[]
         viewer: GovernanceViewer
-      }
-    },
+      }>(),
   })
 
   const governanceViewer =
@@ -486,21 +423,7 @@ function OrganizationSettingsPage({
 
   const createUnitMutation = useMutation({
     mutationFn: async (name: string) => {
-      const response = await api.api.units.admin.units.$post({
-        json: { name },
-      })
-
-      const data = (await response.json()) as
-        | OrganizationUnit
-        | { error?: string }
-
-      if (!response.ok || 'error' in data) {
-        throw new Error(
-          ('error' in data && data.error) || 'Erro ao criar unidade',
-        )
-      }
-
-      return data
+      return calibraApi.units.createAdminUnit<OrganizationUnit>(name)
     },
     onSuccess: async () => {
       setNewUnitName('')
@@ -533,22 +456,7 @@ function OrganizationSettingsPage({
       unitId: number
       payload: { name?: string; status?: 'ACTIVE' | 'ARCHIVED' }
     }) => {
-      const response = await api.api.units.admin.units[':id'].$patch({
-        param: { id: String(unitId) },
-        json: payload,
-      })
-
-      const data = (await response.json()) as
-        | OrganizationUnit
-        | { error?: string }
-
-      if (!response.ok || 'error' in data) {
-        throw new Error(
-          ('error' in data && data.error) || 'Erro ao atualizar unidade',
-        )
-      }
-
-      return data
+      return calibraApi.units.updateAdminUnit<OrganizationUnit>(unitId, payload)
     },
     onSuccess: async () => {
       setEditingUnitId(null)
@@ -583,22 +491,7 @@ function OrganizationSettingsPage({
       memberId: string
       assignments: Array<{ unitId: number; role: UnitAssignmentRole }>
     }) => {
-      const response = await api.api.units.admin.members[
-        ':memberId'
-      ].assignments.$put({
-        param: { memberId },
-        json: { assignments },
-      })
-
-      const data = (await response.json()) as {
-        success?: boolean
-        error?: string
-      }
-      if (!response.ok || data.error) {
-        throw new Error(data.error || 'Erro ao atualizar atribuições')
-      }
-
-      return data
+      return calibraApi.units.updateMemberAssignments(memberId, assignments)
     },
     onSuccess: async () => {
       setSavingAssignmentsFor(null)
@@ -631,22 +524,7 @@ function OrganizationSettingsPage({
       memberId: string
       role: GlobalMemberRole
     }) => {
-      const response = await api.api.units.admin.members[
-        ':memberId'
-      ].role.$patch({
-        param: { memberId },
-        json: { role },
-      })
-
-      const data = (await response.json()) as {
-        success?: boolean
-        error?: string
-      }
-      if (!response.ok || data.error) {
-        throw new Error(data.error || 'Erro ao atualizar papel global')
-      }
-
-      return data
+      return calibraApi.units.updateMemberRole(memberId, role)
     },
     onSuccess: async () => {
       await Promise.all([

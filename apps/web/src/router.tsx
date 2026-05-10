@@ -1,6 +1,11 @@
-import { createRouter } from '@tanstack/react-router'
+import {
+  createBrowserHistory,
+  createHashHistory,
+  createRouter,
+} from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
 import { routeTree } from './routeTree.gen'
+import { isDesktopRuntime } from './runtime/desktop'
 
 const SENTRY_DSN =
   'https://examplePublicKey@o0.ingest.sentry.io/0'
@@ -28,7 +33,13 @@ function scheduleIdle(callback: () => void) {
 }
 
 async function initializeSentry() {
-  if (typeof window === 'undefined' || !import.meta.env.PROD) return
+  if (
+    typeof window === 'undefined' ||
+    !import.meta.env.PROD ||
+    isDesktopRuntime()
+  ) {
+    return
+  }
 
   const Sentry = await import('@sentry/react')
   const replayEnabled = shouldEnableSessionReplay(window.location.pathname)
@@ -46,6 +57,7 @@ async function initializeSentry() {
 }
 
 export const getRouter = () => {
+  const isDesktop = isDesktopRuntime()
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -56,12 +68,16 @@ export const getRouter = () => {
 
   const router = createRouter({
     routeTree,
+    history: isDesktop ? createHashHistory() : createBrowserHistory(),
     scrollRestoration: true,
     defaultPreload: 'intent',
     defaultPreloadDelay: 80,
     defaultPreloadStaleTime: 0,
     context: {
       queryClient,
+      runtime: {
+        isDesktop,
+      },
     },
   })
 

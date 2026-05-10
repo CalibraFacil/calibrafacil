@@ -21,6 +21,7 @@ coverage
 
 # Vercel
 .vercel
+.calibra-local/
 
 # Build Outputs
 .next/

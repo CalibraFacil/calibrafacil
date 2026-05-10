@@ -12,10 +12,11 @@ import {
   ViewIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { SyncStateBadge } from '@/components/sync-state-badge'
 import {
   Empty,
   EmptyContent,
@@ -67,7 +68,8 @@ type ServiceOrderListItem = {
   approvedAt: string | null
   totalApprovedCents: number
   totalQuotedCents: number
-  unitName: string
+  unitName: string | null
+  syncState?: string | null
 }
 
 type ServiceOrderStatus =
@@ -230,9 +232,12 @@ const serviceOrderColumns: ColumnDef<ServiceOrderListItem>[] = [
     cell: ({ row }) => {
       const status = row.original.status as ServiceOrderStatus
       return (
-        <Badge variant={statusVariants[status] ?? 'secondary'}>
-          {row.original.statusLabel}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={statusVariants[status] ?? 'secondary'}>
+            {row.original.statusLabel}
+          </Badge>
+          <SyncStateBadge syncState={row.original.syncState} />
+        </div>
       )
     },
   },
@@ -271,24 +276,12 @@ function ServiceOrdersPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['service-orders', page, search, statusFilter],
     queryFn: async () => {
-      const response = await api.api['service-orders'].$get({
-        query: {
-          query: search || undefined,
-          status: statusFilter || undefined,
-          page: String(page),
-          limit: String(limit),
-        },
+      return calibraApi.serviceOrders.list({
+        query: search || undefined,
+        status: statusFilter || undefined,
+        page,
+        limit,
       })
-      if (!response.ok) throw new Error('Erro ao carregar ordens de serviço')
-      return response.json() as Promise<{
-        data: ServiceOrderListItem[]
-        pagination: {
-          page: number
-          limit: number
-          total: number
-          totalPages: number
-        }
-      }>
     },
   })
 

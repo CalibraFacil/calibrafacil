@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { Copy01Icon, Tick02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
@@ -128,34 +128,23 @@ function NewClientPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const res = await api.api.customers.$post({
-        json: {
-          name: data.name,
-          taxId: data.taxId || undefined,
-          email: data.email || undefined,
-          phone: data.phone || undefined,
-          address: Object.values(data.address).some(Boolean)
-            ? {
-                cep: data.address.cep || undefined,
-                street: data.address.street || undefined,
-                number: data.address.number || undefined,
-                complement: data.address.complement || undefined,
-                neighbourhood: data.address.neighbourhood || undefined,
-                city: data.address.city || undefined,
-                state: data.address.state || undefined,
-              }
-            : undefined,
-        },
+      return calibraApi.customers.create({
+        name: data.name,
+        taxId: data.taxId || undefined,
+        email: data.email || undefined,
+        phone: data.phone || undefined,
+        address: Object.values(data.address).some(Boolean)
+          ? {
+              cep: data.address.cep || undefined,
+              street: data.address.street || undefined,
+              number: data.address.number || undefined,
+              complement: data.address.complement || undefined,
+              neighbourhood: data.address.neighbourhood || undefined,
+              city: data.address.city || undefined,
+              state: data.address.state || undefined,
+            }
+          : undefined,
       })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao criar cliente',
-        )
-      }
-
-      return res.json()
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['customers'] })

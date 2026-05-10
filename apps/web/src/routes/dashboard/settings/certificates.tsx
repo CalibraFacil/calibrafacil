@@ -16,9 +16,10 @@ import {
   Building06Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import type { SigningCertificate } from '@calibra-facil/client-runtime'
 
 import { useDashboardUnits } from '@/hooks/use-dashboard-units'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   Card,
   CardAction,
@@ -76,24 +77,7 @@ export const Route = createFileRoute('/dashboard/settings/certificates')({
   component: CertificatesSettingsPage,
 })
 
-interface Certificate {
-  id: number
-  unitId: number
-  name: string
-  serialNumber: string
-  issuerCn: string
-  subjectCn: string
-  subjectCpfCnpj: string | null
-  validFrom: string
-  validUntil: string
-  isActive: boolean
-  isDefault: boolean
-  createdAt: string
-  createdByName: string | null
-  revokedAt: string | null
-  revokedReason: string | null
-  status: 'valid' | 'expired' | 'not_yet_valid' | 'revoked'
-}
+type Certificate = SigningCertificate
 
 function CertificatesSettingsPage() {
   const queryClient = useQueryClient()
@@ -105,28 +89,16 @@ function CertificatesSettingsPage() {
   const { isCheckingAccess, isConsolidated, selectedUnit } =
     useDashboardUnits()
 
-  // Fetch certificates
   const { data, isLoading, error } = useQuery({
     queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
     enabled: Boolean(selectedUnit),
-    queryFn: async () => {
-      const res = await api.api.signing.certificates.$get()
-      if (!res.ok) throw new Error('Failed to fetch certificates')
-      return res.json()
-    },
+    queryFn: () => calibraApi.signingCertificates.list(),
   })
 
-  const certificates = (data as { certificates: Certificate[] })?.certificates ?? []
+  const certificates = data?.certificates ?? []
 
-  // Set default mutation
   const setDefaultMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await api.api.signing.certificates[':id']['set-default'].$post({
-        param: { id: String(id) },
-      })
-      if (!res.ok) throw new Error('Failed to set default')
-      return res.json()
-    },
+    mutationFn: (id: number) => calibraApi.signingCertificates.setDefault(id),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
@@ -138,16 +110,9 @@ function CertificatesSettingsPage() {
     },
   })
 
-  // Revoke mutation
   const revokeMutation = useMutation({
-    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
-      const res = await api.api.signing.certificates[':id'].$delete({
-        param: { id: String(id) },
-        json: { reason },
-      })
-      if (!res.ok) throw new Error('Failed to revoke')
-      return res.json()
-    },
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
+      calibraApi.signingCertificates.revoke(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
@@ -524,20 +489,12 @@ function UploadCertificateDialog({ onSuccess }: { onSuccess: () => void }) {
         reader.readAsDataURL(file)
       })
 
-      const res = await api.api.signing.certificates.$post({
-        json: {
-          name: name.trim(),
-          p12Base64: base64,
-          password,
-          setAsDefault,
-        },
+      return calibraApi.signingCertificates.upload({
+        name: name.trim(),
+        p12Base64: base64,
+        password,
+        setAsDefault,
       })
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error((data as { error?: string }).error || 'Upload failed')
-      }
-      return res.json()
     },
     onSuccess: () => {
       toast.success('Certificado adicionado com sucesso!')

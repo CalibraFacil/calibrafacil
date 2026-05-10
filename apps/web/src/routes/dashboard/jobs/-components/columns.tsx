@@ -11,6 +11,7 @@ import {
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SyncStateBadge } from '@/components/sync-state-badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,6 +85,7 @@ export interface Job {
   invoiceDocumentNumber?: string | null
   invoiceEligibility?: boolean
   overdueBalanceFlag?: boolean
+  syncState?: string | null
 }
 
 const statusLabels: Record<JobStatus, string> = {
@@ -292,26 +294,29 @@ export const jobsColumns: ColumnDef<Job>[] = [
       const isGenerating = status === 'GENERATING_PDF'
 
       return (
-        <Badge
-          variant={statusVariants[status]}
-          className={
-            isGenerating
-              ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
-              : ''
-          }
-        >
-          {isGenerating && (
-            <span className="inline-flex">
-              <span className="animate-[ellipsis_1.5s_infinite]">
-                Gerando PDF
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            variant={statusVariants[status]}
+            className={
+              isGenerating
+                ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
+                : ''
+            }
+          >
+            {isGenerating && (
+              <span className="inline-flex">
+                <span className="animate-[ellipsis_1.5s_infinite]">
+                  Gerando PDF
+                </span>
+                <span className="w-4 text-left">
+                  <LoadingDots />
+                </span>
               </span>
-              <span className="w-4 text-left">
-                <LoadingDots />
-              </span>
-            </span>
-          )}
-          {!isGenerating && statusLabels[status]}
-        </Badge>
+            )}
+            {!isGenerating && statusLabels[status]}
+          </Badge>
+          <SyncStateBadge syncState={row.original.syncState} />
+        </div>
       )
     },
   },

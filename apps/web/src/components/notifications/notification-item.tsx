@@ -12,19 +12,13 @@ import {
   UserAdd02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import type {
-  NotificationPriority,
-  NotificationStatus,
-  NotificationType,
-} from '@calibra-facil/db/schema'
-
 import { cn } from '@/lib/utils'
 
 interface Notification {
   id: number
-  type: NotificationType
-  priority: NotificationPriority
-  status: NotificationStatus
+  type: string
+  priority: string
+  status: string
   title: string
   message: string
   actionUrl?: string | null
@@ -63,7 +57,7 @@ const notificationIcons = {
   CUSTOMER_SUCCESS_ESCALATION_REQUIRED: Alert02Icon,
 } as const
 
-const notificationColors: Record<NotificationType, string> = {
+const notificationColors: Record<string, string> = {
   JOB_SUBMITTED_FOR_REVIEW: 'text-blue-500',
   JOB_APPROVED: 'text-green-500',
   JOB_REJECTED: 'text-red-500',
@@ -94,7 +88,9 @@ export function NotificationItem({
   notification,
   onClick,
 }: NotificationItemProps) {
-  const icon = notificationIcons[notification.type] ?? Notification01Icon
+  const icon =
+    notificationIcons[notification.type as keyof typeof notificationIcons] ??
+    Notification01Icon
   const iconColor =
     notificationColors[notification.type] ?? 'text-muted-foreground'
   const isUnread = notification.status === 'UNREAD'

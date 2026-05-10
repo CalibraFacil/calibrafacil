@@ -6,7 +6,7 @@ import { parseAsInteger, useQueryState } from 'nuqs'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon, RulerIcon } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -67,44 +67,17 @@ function StandardsListPage() {
     queryKey: ['standards', organizationQueryKey, page, search, statusFilter],
     enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
-      const res = await api.api.standards.$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          query: search || undefined,
-          status: statusFilter || undefined,
-        },
+      return calibraApi.standards.list({
+        page,
+        limit,
+        query: search || undefined,
+        status: statusFilter || undefined,
       })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar padroes')
-      }
-
-      return res.json() as Promise<{
-        data: Array<ReferenceStandard>
-        pagination: {
-          page: number
-          limit: number
-          total: number
-          totalPages: number
-        }
-      }>
     },
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await api.api.standards[':id'].$delete({
-        param: { id: String(id) },
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao remover',
-        )
-      }
-      return res.json()
-    },
+    mutationFn: (id: number) => calibraApi.standards.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })
       toast.success('Padrão removido com sucesso')
@@ -122,17 +95,7 @@ function StandardsListPage() {
       id: number
       status: ReferenceStandard['status']
     }) => {
-      const res = await api.api.standards[':id'].$put({
-        param: { id: String(id) },
-        json: { status },
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao atualizar status',
-        )
-      }
-      return res.json()
+      return calibraApi.standards.update(id, { status })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })

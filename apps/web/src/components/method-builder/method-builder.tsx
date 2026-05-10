@@ -11,7 +11,7 @@ import {
   PlayIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -54,11 +54,6 @@ import type {
   MethodDraftVariableBinding,
   MethodPreviewResult,
 } from './types'
-
-interface AssetTypeOption {
-  id: number
-  name: string
-}
 
 interface MethodBuilderProps {
   initialDraft: MethodDraft
@@ -125,11 +120,7 @@ export function MethodBuilder({
 
   const { data: assetTypesData } = useQuery({
     queryKey: ['asset-types'],
-    queryFn: async () => {
-      const res = await api.api['asset-types'].$get({ query: {} })
-      if (!res.ok) throw new Error('Falha ao carregar tipos de ativo')
-      return res.json() as Promise<{ data: Array<AssetTypeOption> }>
-    },
+    queryFn: () => calibraApi.assetTypes.list(),
     staleTime: 60_000,
   })
 

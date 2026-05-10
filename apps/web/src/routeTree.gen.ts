@@ -60,6 +60,7 @@ import { Route as DashboardCapaIndexRouteImport } from './routes/dashboard/capa/
 import { Route as DashboardAssetsIndexRouteImport } from './routes/dashboard/assets/index'
 import { Route as BackofficeOrganizationsIndexRouteImport } from './routes/backoffice/organizations/index'
 import { Route as BackofficeCustomerSuccessIndexRouteImport } from './routes/backoffice/customer-success/index'
+import { Route as DashboardSyncConflictsRouteImport } from './routes/dashboard/sync/conflicts'
 import { Route as DashboardStandardsNewRouteImport } from './routes/dashboard/standards/new'
 import { Route as DashboardSettingsSubscriptionRouteImport } from './routes/dashboard/settings/subscription'
 import { Route as DashboardSettingsSignatureRouteImport } from './routes/dashboard/settings/signature'
@@ -391,6 +392,11 @@ const BackofficeCustomerSuccessIndexRoute =
     path: '/',
     getParentRoute: () => BackofficeCustomerSuccessRouteRoute,
   } as any)
+const DashboardSyncConflictsRoute = DashboardSyncConflictsRouteImport.update({
+  id: '/sync/conflicts',
+  path: '/sync/conflicts',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardStandardsNewRoute = DashboardStandardsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -838,6 +844,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
+  '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/backoffice/customer-success/': typeof BackofficeCustomerSuccessIndexRoute
   '/backoffice/organizations/': typeof BackofficeOrganizationsIndexRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
@@ -936,6 +943,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
+  '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/backoffice/customer-success': typeof BackofficeCustomerSuccessIndexRoute
   '/backoffice/organizations': typeof BackofficeOrganizationsIndexRoute
   '/dashboard/assets': typeof DashboardAssetsIndexRoute
@@ -1056,6 +1064,7 @@ export interface FileRoutesById {
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
   '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
+  '/dashboard/sync/conflicts': typeof DashboardSyncConflictsRoute
   '/backoffice/customer-success/': typeof BackofficeCustomerSuccessIndexRoute
   '/backoffice/organizations/': typeof BackofficeOrganizationsIndexRoute
   '/dashboard/assets/': typeof DashboardAssetsIndexRoute
@@ -1177,6 +1186,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/signature'
     | '/dashboard/settings/subscription'
     | '/dashboard/standards/new'
+    | '/dashboard/sync/conflicts'
     | '/backoffice/customer-success/'
     | '/backoffice/organizations/'
     | '/dashboard/assets/'
@@ -1275,6 +1285,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/signature'
     | '/dashboard/settings/subscription'
     | '/dashboard/standards/new'
+    | '/dashboard/sync/conflicts'
     | '/backoffice/customer-success'
     | '/backoffice/organizations'
     | '/dashboard/assets'
@@ -1394,6 +1405,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings/signature'
     | '/dashboard/settings/subscription'
     | '/dashboard/standards/new'
+    | '/dashboard/sync/conflicts'
     | '/backoffice/customer-success/'
     | '/backoffice/organizations/'
     | '/dashboard/assets/'
@@ -1811,6 +1823,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/backoffice/customer-success/'
       preLoaderRoute: typeof BackofficeCustomerSuccessIndexRouteImport
       parentRoute: typeof BackofficeCustomerSuccessRouteRoute
+    }
+    '/dashboard/sync/conflicts': {
+      id: '/dashboard/sync/conflicts'
+      path: '/sync/conflicts'
+      fullPath: '/dashboard/sync/conflicts'
+      preLoaderRoute: typeof DashboardSyncConflictsRouteImport
+      parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/standards/new': {
       id: '/dashboard/standards/new'
@@ -2727,6 +2746,7 @@ interface DashboardRouteRouteChildren {
   DashboardCustomerSuccessRoute: typeof DashboardCustomerSuccessRoute
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardSyncConflictsRoute: typeof DashboardSyncConflictsRoute
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
@@ -2749,6 +2769,7 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardCustomerSuccessRoute: DashboardCustomerSuccessRoute,
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
+  DashboardSyncConflictsRoute: DashboardSyncConflictsRoute,
 }
 
 const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(

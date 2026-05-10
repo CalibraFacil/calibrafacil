@@ -9,7 +9,7 @@ import {
   PlusSignIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -143,17 +143,12 @@ function NewServiceOrderPage() {
 
   const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ['customers', 'service-order-open', customerSearch],
-    queryFn: async () => {
-      const res = await api.api.customers.$get({
-        query: {
-          limit: '100',
-          query: customerSearch.trim() || undefined,
-        },
-      })
-
-      if (!res.ok) throw new Error('Falha ao carregar clientes')
-      return res.json() as Promise<{ data: Array<Customer> }>
-    },
+    queryFn: () =>
+      calibraApi.customers.list({
+        page: 1,
+        limit: 100,
+        query: customerSearch.trim() || undefined,
+      }) as Promise<{ data: Array<Customer> }>,
   })
 
   const { data: assetsData, isLoading: assetsLoading } = useQuery({
@@ -163,19 +158,15 @@ function NewServiceOrderPage() {
       formData.customerId,
       assetSearch,
     ],
-    queryFn: async () => {
+    queryFn: () => {
       if (!formData.customerId) return { data: [] }
 
-      const res = await api.api.assets.$get({
-        query: {
-          customerId: String(formData.customerId),
-          limit: '100',
-          query: assetSearch.trim() || undefined,
-        },
-      })
-
-      if (!res.ok) throw new Error('Falha ao carregar ativos')
-      return res.json() as Promise<{ data: Array<Asset> }>
+      return calibraApi.assets.list({
+        page: 1,
+        limit: 100,
+        customerId: formData.customerId,
+        query: assetSearch.trim() || undefined,
+      }) as Promise<{ data: Array<Asset> }>
     },
     enabled: !!formData.customerId,
   })
@@ -202,58 +193,42 @@ function NewServiceOrderPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'].$post({
-        json: {
-          customerId: formData.customerId!,
-          assetId: formData.assetId!,
-          intakeType: formData.intakeType,
-          priority: formData.priority,
-          deliveryMethod: formData.deliveryMethod,
-          claimedDefect: formData.claimedDefect.trim(),
-          intakeCondition: formData.intakeCondition.trim(),
-          accessories: toOptional(formData.accessories),
-          oldSealNumber: toOptional(formData.oldSealNumber),
-          invoiceRemittanceNumber: toOptional(formData.invoiceRemittanceNumber),
-          invoiceRemittanceKey: toOptional(formData.invoiceRemittanceKey),
-          carrierName:
-            formData.intakeType === 'carrier'
-              ? toOptional(formData.carrierName)
-              : null,
-          carrierDocument:
-            formData.intakeType === 'carrier'
-              ? toOptional(formData.carrierDocument)
-              : null,
-          thirdPartyName:
-            formData.intakeType === 'third_party'
-              ? toOptional(formData.thirdPartyName)
-              : null,
-          thirdPartyDocument:
-            formData.intakeType === 'third_party'
-              ? toOptional(formData.thirdPartyDocument)
-              : null,
-          thirdPartyPhone:
-            formData.intakeType === 'third_party'
-              ? toOptional(formData.thirdPartyPhone)
-              : null,
-          clientVisibleNotes: toOptional(formData.clientVisibleNotes),
-          internalNotes: toOptional(formData.internalNotes),
-          evaluationFeeCents: centsFromCurrency(formData.evaluationFeeCents),
-        },
+      return calibraApi.serviceOrders.create({
+        customerId: formData.customerId!,
+        assetId: formData.assetId!,
+        intakeType: formData.intakeType,
+        priority: formData.priority,
+        deliveryMethod: formData.deliveryMethod,
+        claimedDefect: formData.claimedDefect.trim(),
+        intakeCondition: formData.intakeCondition.trim(),
+        accessories: toOptional(formData.accessories),
+        oldSealNumber: toOptional(formData.oldSealNumber),
+        invoiceRemittanceNumber: toOptional(formData.invoiceRemittanceNumber),
+        invoiceRemittanceKey: toOptional(formData.invoiceRemittanceKey),
+        carrierName:
+          formData.intakeType === 'carrier'
+            ? toOptional(formData.carrierName)
+            : null,
+        carrierDocument:
+          formData.intakeType === 'carrier'
+            ? toOptional(formData.carrierDocument)
+            : null,
+        thirdPartyName:
+          formData.intakeType === 'third_party'
+            ? toOptional(formData.thirdPartyName)
+            : null,
+        thirdPartyDocument:
+          formData.intakeType === 'third_party'
+            ? toOptional(formData.thirdPartyDocument)
+            : null,
+        thirdPartyPhone:
+          formData.intakeType === 'third_party'
+            ? toOptional(formData.thirdPartyPhone)
+            : null,
+        clientVisibleNotes: toOptional(formData.clientVisibleNotes),
+        internalNotes: toOptional(formData.internalNotes),
+        evaluationFeeCents: centsFromCurrency(formData.evaluationFeeCents),
       })
-
-      if (!response.ok) {
-        const body = await response.text()
-        let message = 'Erro ao criar OS'
-        try {
-          const parsed = JSON.parse(body) as { error?: string }
-          message = parsed.error ?? message
-        } catch {
-          message = body || message
-        }
-        throw new Error(message)
-      }
-
-      return response.json() as Promise<{ data: { id: number } }>
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['service-orders'] })

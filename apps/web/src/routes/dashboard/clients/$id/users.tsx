@@ -16,7 +16,7 @@ import {
   UserMultipleIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   Table,
   TableBody,
@@ -108,42 +108,23 @@ function ClientUsersTab() {
   const { data: members = [], isLoading: membersLoading } = useQuery({
     queryKey: ['customer-members', id],
     queryFn: async () => {
-      const res = await api.api.customers[':id'].members.$get({
-        param: { id },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar usuarios')
-      }
-      return res.json() as Promise<Array<PortalMember>>
+      return calibraApi.customers.listMembers<PortalMember>(id)
     },
   })
 
   const { data: invitations = [], isLoading: invitationsLoading } = useQuery({
     queryKey: ['customer-invitations', id],
     queryFn: async () => {
-      const res = await api.api.customers[':id'].invitations.$get({
-        param: { id },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar convites')
-      }
-      return res.json() as Promise<Array<PortalInvitation>>
+      return calibraApi.customers.listInvitations<PortalInvitation>(id)
     },
   })
 
   const inviteMutation = useMutation({
     mutationFn: async (email: string) => {
-      const res = await api.api.customers[':id'].invitations.$post({
-        param: { id },
-        json: { email, role: defaultPortalRole },
+      return calibraApi.customers.createInvitation(id, {
+        email,
+        role: defaultPortalRole,
       })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Falha ao enviar convite',
-        )
-      }
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
@@ -158,15 +139,7 @@ function ClientUsersTab() {
 
   const resendMutation = useMutation({
     mutationFn: async (invId: string) => {
-      const res = await api.api.customers[':id'].invitations[
-        ':invId'
-      ].resend.$post({
-        param: { id, invId },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao reenviar convite')
-      }
-      return res.json()
+      return calibraApi.customers.resendInvitation(id, invId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
@@ -179,13 +152,7 @@ function ClientUsersTab() {
 
   const cancelInvitationMutation = useMutation({
     mutationFn: async (invId: string) => {
-      const res = await api.api.customers[':id'].invitations[':invId'].$delete({
-        param: { id, invId },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao cancelar convite')
-      }
-      return res.json()
+      return calibraApi.customers.cancelInvitation(id, invId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
@@ -198,13 +165,7 @@ function ClientUsersTab() {
 
   const removeMemberMutation = useMutation({
     mutationFn: async (memberId: string) => {
-      const res = await api.api.customers[':id'].members[':memberId'].$delete({
-        param: { id, memberId },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao remover usuário')
-      }
-      return res.json()
+      return calibraApi.customers.removeMember(id, memberId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-members', id] })

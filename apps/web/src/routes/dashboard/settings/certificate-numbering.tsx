@@ -1,11 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Certificate01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
+import type {
+  CertificateNumberingProfileResponse,
+  CertificateNumberingResetScope,
+} from '@calibra-facil/client-runtime'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -35,36 +39,7 @@ export const Route = createFileRoute(
   component: CertificateNumberingSettingsPage,
 })
 
-type ResetScope = 'never' | 'year' | 'month' | 'project'
-
-type CertificateNumberingConfig = {
-  labCode: string
-  projectCode?: string | null
-  numberTemplate: string
-  certificateNameTemplate: string
-  sequence: {
-    resetScope: ResetScope
-    startAt: number
-    increment: number
-    padding: number
-  }
-}
-
-type ProfileResponse = {
-  profile: {
-    id: number | null
-    name: string
-    config: CertificateNumberingConfig
-    createdAt: string | null
-    updatedAt: string | null
-  }
-  example: {
-    number: string
-    name: string
-    sequenceKey: string
-  }
-  supportedTokens: string[]
-}
+type ResetScope = CertificateNumberingResetScope
 
 type FormState = {
   name: string
@@ -96,7 +71,9 @@ const examples = [
   'MICROBIO-APR-26-789',
 ]
 
-function formFromConfig(response: ProfileResponse): FormState {
+function formFromConfig(
+  response: CertificateNumberingProfileResponse,
+): FormState {
   const config = response.profile.config
   return {
     name: response.profile.name || 'Padrao',
@@ -131,40 +108,37 @@ function buildPayload(form: FormState) {
 }
 
 function CertificateNumberingSettingsPage() {
-  const queryClient = useQueryClient()
-  const [form, setForm] = useState<FormState>(fallbackForm)
-
   const { data, isLoading } = useQuery({
     queryKey: ['certificate-numbering-profile'],
-    queryFn: async () => {
-      const res = await api.api['certificate-numbering'].$get()
-      if (!res.ok) {
-        throw new Error('Falha ao carregar perfil de numeração')
-      }
-      return res.json() as Promise<ProfileResponse>
-    },
+    queryFn: () => calibraApi.certificateNumbering.getProfile(),
   })
 
-  useEffect(() => {
-    if (data) {
-      setForm(formFromConfig(data))
-    }
-  }, [data])
+  if (isLoading || !data) {
+    return <CertificateNumberingSkeleton />
+  }
 
+  return (
+    <CertificateNumberingForm
+      key={`${data.profile.id ?? 'default'}-${String(
+        data.profile.updatedAt ?? 'initial',
+      )}`}
+      data={data}
+    />
+  )
+}
+
+function CertificateNumberingForm({
+  data,
+}: {
+  data: CertificateNumberingProfileResponse
+}) {
+  const queryClient = useQueryClient()
+  const [form, setForm] = useState<FormState>(() => formFromConfig(data))
   const preview = useMemo(() => buildLocalPreview(form), [form])
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api['certificate-numbering'].$put({
-        json: buildPayload(form),
-      })
-      if (!res.ok) {
-        const error = (await res.json().catch(() => null)) as {
-          error?: string
-        } | null
-        throw new Error(error?.error ?? 'Falha ao salvar perfil')
-      }
-      return res.json()
+      return calibraApi.certificateNumbering.updateProfile(buildPayload(form))
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -176,10 +150,6 @@ function CertificateNumberingSettingsPage() {
       toast.error(error instanceof Error ? error.message : 'Erro ao salvar')
     },
   })
-
-  if (isLoading) {
-    return <CertificateNumberingSkeleton />
-  }
 
   return (
     <div className="space-y-6">

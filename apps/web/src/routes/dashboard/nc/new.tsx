@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
-import { api } from '@/utils/api'
+import { api, calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -24,6 +24,10 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
 
 export const Route = createFileRoute('/dashboard/nc/new')({
   head: () => ({
@@ -46,6 +50,7 @@ const NC_TYPE_LABELS: Record<NCFormData['type'], string> = {
 
 function NewNCPage() {
   const navigate = useNavigate()
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const now = new Date()
   const [detectedDate, setDetectedDate] = useState<Date | undefined>(now)
   const [detectedTime, setDetectedTime] = useState(
@@ -72,16 +77,12 @@ function NewNCPage() {
   // Fetch jobs for linking
   const { data: jobsData } = useQuery({
     queryKey: ['jobs-for-nc'],
-    queryFn: async () => {
-      const res = await api.api.jobs.$get({
-        query: { limit: '100' },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar ordens')
-      return res.json() as Promise<{
-        data: Array<{ id: number; jobId: string; status: string }>
-        pagination: { total: number }
-      }>
-    },
+    enabled: !cloudOnlyUnavailable,
+    queryFn: () =>
+      calibraApi.jobs.list({
+        page: 1,
+        limit: 100,
+      }),
   })
 
   const selectedJob = jobsData?.data.find((j) => String(j.id) === jobIdValue)
@@ -130,6 +131,12 @@ function NewNCPage() {
     })
   }
 
+  if (cloudOnlyUnavailable) {
+    return (
+      <CloudOnlyOfflineState title="Registro de não conformidade indisponível offline" />
+    )
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       <Card>
@@ -146,12 +153,13 @@ function NewNCPage() {
               <Label htmlFor="type">Tipo de Não Conformidade</Label>
               <Select
                 value={typeValue}
-                onValueChange={(v) =>
-                  setValue('type', v as NCFormData['type'])
-                }
+                onValueChange={(v) => setValue('type', v as NCFormData['type'])}
               >
                 <SelectTrigger>
-                  <span className="flex flex-1 text-left line-clamp-1" data-slot="select-value">
+                  <span
+                    className="flex flex-1 text-left line-clamp-1"
+                    data-slot="select-value"
+                  >
                     {NC_TYPE_LABELS[typeValue] ?? 'Selecione o tipo'}
                   </span>
                 </SelectTrigger>
@@ -193,15 +201,16 @@ function NewNCPage() {
 
             {/* Job Link (optional) */}
             <div className="space-y-2">
-              <Label htmlFor="jobId">
-                Ordem de Serviço (opcional)
-              </Label>
+              <Label htmlFor="jobId">Ordem de Serviço (opcional)</Label>
               <Select
                 value={jobIdValue || ''}
                 onValueChange={(v) => setValue('jobId', v ?? '')}
               >
                 <SelectTrigger>
-                  <span className="flex flex-1 text-left line-clamp-1" data-slot="select-value">
+                  <span
+                    className="flex flex-1 text-left line-clamp-1"
+                    data-slot="select-value"
+                  >
                     {selectedJob
                       ? `${selectedJob.jobId} (${selectedJob.status})`
                       : 'Nenhuma OS vinculada'}
@@ -253,9 +262,7 @@ function NewNCPage() {
                 Cancelar
               </Button>
               <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending
-                  ? 'Registrando...'
-                  : 'Registrar NC'}
+                {createMutation.isPending ? 'Registrando...' : 'Registrar NC'}
               </Button>
             </div>
           </form>

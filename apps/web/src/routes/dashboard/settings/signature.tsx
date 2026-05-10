@@ -11,7 +11,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -36,38 +36,14 @@ function SignatureSettingsPage() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
-  // Fetch current signature
   const { data: signatureData, isLoading } = useQuery({
     queryKey: ['my-signature'],
-    queryFn: async () => {
-      const res = await api.api.signatures['my-signature'].$get()
-      if (!res.ok) throw new Error('Failed to fetch signature')
-      return res.json()
-    },
+    queryFn: () => calibraApi.signatures.getMine(),
   })
 
-  // Upload mutation
   const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData()
-      formData.append('signature', file)
-
-      // Use native fetch for FormData uploads - Hono RPC client doesn't handle FormData properly
-      const apiUrl =
-        import.meta.env.VITE_API_URL ||
-        `${window.location.protocol}//${window.location.hostname}:3000`
-      const res = await fetch(`${apiUrl}/api/signatures/my-signature`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error((error as { error?: string }).error || 'Upload failed')
-      }
-      return res.json()
-    },
+    mutationFn: (file: File) =>
+      calibraApi.signatures.uploadMine(file, { fileName: file.name }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-signature'] })
       setPreviewUrl(null)
@@ -78,13 +54,8 @@ function SignatureSettingsPage() {
     },
   })
 
-  // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api.signatures['my-signature'].$delete()
-      if (!res.ok) throw new Error('Failed to delete signature')
-      return res.json()
-    },
+    mutationFn: () => calibraApi.signatures.deleteMine(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-signature'] })
       toast.success('Assinatura removida')

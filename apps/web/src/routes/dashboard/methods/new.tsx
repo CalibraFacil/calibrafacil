@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { methodRouteId } from '@/lib/route-identifiers'
 import {
   MethodBuilder,
@@ -25,18 +25,7 @@ function NewMethodPage() {
   const createMutation = useMutation({
     mutationFn: async (draft: MethodDraft) => {
       const payload = draftToMethodSavePayload(draft)
-      const res = await api.api.methods.$post({
-        json: payload,
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao criar método',
-        )
-      }
-
-      return res.json() as Promise<{
+      return calibraApi.methods.create(payload) as Promise<{
         id: number
         name: string
         version: number

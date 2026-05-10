@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
-import { api } from '@/utils/api'
+import { api, calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -23,6 +23,10 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
 
 export const Route = createFileRoute('/dashboard/requests/$id/')({
   head: () => ({
@@ -173,7 +177,9 @@ function CalibrationRequestTriagePanel({
   servicesLoading: boolean
   onInvalidate: () => Promise<void>
 }) {
-  const [internalNotes, setInternalNotes] = useState(request.internalNotes || '')
+  const [internalNotes, setInternalNotes] = useState(
+    request.internalNotes || '',
+  )
   const [rejectionReason, setRejectionReason] = useState(
     request.rejectionReason || '',
   )
@@ -565,11 +571,15 @@ function CalibrationRequestDetailPage() {
   const queryClient = useQueryClient()
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const organizationQueryKey = activeOrganizationId ?? 'no-org'
 
   const detailQuery = useQuery({
     queryKey: ['calibration-request', organizationQueryKey, id],
-    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
+    enabled:
+      Boolean(activeOrganizationId) &&
+      !isContextSwitching &&
+      !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api['calibration-requests'][':id'].$get({
         param: { id },
@@ -585,63 +595,37 @@ function CalibrationRequestDetailPage() {
 
   const servicesQuery = useQuery({
     queryKey: ['services', organizationQueryKey, 'request-conversion'],
-    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
+    enabled:
+      Boolean(activeOrganizationId) &&
+      !isContextSwitching &&
+      !cloudOnlyUnavailable,
     queryFn: async () => {
-      const firstPageResponse = await api.api.services.$get({
-        query: {
-          page: '1',
-          limit: '100',
-          isActive: 'true',
-        },
+      const firstPage = await calibraApi.services.list({
+        page: 1,
+        limit: 100,
+        isActive: true,
       })
 
-      if (!firstPageResponse.ok) {
-        throw new Error('Falha ao carregar serviços')
-      }
-
-      const firstPage = (await firstPageResponse.json()) as {
-        data: Array<Service>
-        pagination: {
-          totalPages: number
-        }
-      }
-
-      if (firstPage.pagination.totalPages <= 1) {
-        return { data: firstPage.data }
-      }
-
-      const remainingPages = await Promise.all(
-        Array.from(
-          { length: firstPage.pagination.totalPages - 1 },
-          (_, index) =>
-            api.api.services.$get({
-              query: {
-                page: String(index + 2),
-                limit: '100',
-                isActive: 'true',
-              },
-            }),
-        ),
-      )
-
-      const failedPage = remainingPages.find((response) => !response.ok)
-      if (failedPage) {
-        throw new Error('Falha ao carregar serviços')
+      if ((firstPage.pagination?.totalPages ?? 1) <= 1) {
+        return { data: firstPage.data as Array<Service> }
       }
 
       const remainingData = await Promise.all(
-        remainingPages.map(
-          async (response) =>
-            (await response.json()) as {
-              data: Array<Service>
-            },
+        Array.from(
+          { length: (firstPage.pagination?.totalPages ?? 1) - 1 },
+          (_, index) =>
+            calibraApi.services.list({
+              page: index + 2,
+              limit: 100,
+              isActive: true,
+            }),
         ),
       )
 
       return {
         data: [
-          ...firstPage.data,
-          ...remainingData.flatMap((page) => page.data),
+          ...(firstPage.data as Array<Service>),
+          ...remainingData.flatMap((page) => page.data as Array<Service>),
         ],
       }
     },
@@ -649,15 +633,14 @@ function CalibrationRequestDetailPage() {
 
   const techniciansQuery = useQuery({
     queryKey: ['jobs', organizationQueryKey, 'technicians'],
-    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
+    enabled:
+      Boolean(activeOrganizationId) &&
+      !isContextSwitching &&
+      !cloudOnlyUnavailable,
     queryFn: async () => {
-      const res = await api.api.jobs.technicians.list.$get()
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar técnicos')
-      }
-
-      return res.json() as Promise<{ data: Array<Technician> }>
+      return calibraApi.jobs.listTechnicians() as Promise<{
+        data: Array<Technician>
+      }>
     },
   })
 
@@ -675,6 +658,10 @@ function CalibrationRequestDetailPage() {
         queryKey: ['jobs', organizationQueryKey],
       }),
     ])
+  }
+
+  if (cloudOnlyUnavailable) {
+    return <CloudOnlyOfflineState title="Solicitação indisponível offline" />
   }
 
   if (detailQuery.isLoading) {

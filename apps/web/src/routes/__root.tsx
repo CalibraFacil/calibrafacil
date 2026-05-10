@@ -7,15 +7,19 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/sonner'
+import { OfflineBanner, SyncStatusProvider } from '@/runtime/sync-status'
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
+  runtime: {
+    isDesktop: boolean
+  }
 }>()({
   component: RootComponent,
 })
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext()
+  const { queryClient, runtime } = Route.useRouteContext()
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -26,10 +30,13 @@ function RootComponent() {
         disableTransitionOnChange
         storageKey="theme"
       >
-        <NuqsAdapter>
-          <Outlet />
-        </NuqsAdapter>
-        <Analytics />
+        <SyncStatusProvider isDesktop={runtime.isDesktop}>
+          <OfflineBanner />
+          <NuqsAdapter>
+            <Outlet />
+          </NuqsAdapter>
+        </SyncStatusProvider>
+        {!runtime.isDesktop ? <Analytics /> : null}
         <Toaster richColors position="top-center" />
       </ThemeProvider>
     </QueryClientProvider>

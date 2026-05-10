@@ -58,9 +58,10 @@ import {
   AuditTimeline,
   buildJobTimelineEvents,
 } from '@/components/audit-timeline'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { toast } from 'sonner'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
   convertMassValue,
@@ -214,9 +215,6 @@ export function ApprovedJobRecord({
   const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)
   const [isDownloadingLabel, setIsDownloadingLabel] = useState(false)
   const [labelPending, setLabelPending] = useState(false)
-  const [certificatePreviewUrl, setCertificatePreviewUrl] = useState<
-    string | null
-  >(null)
   // Amendment state - ISO 17025 Clause 7.8.4.1
   const [isAmendDialogOpen, setIsAmendDialogOpen] = useState(false)
   const [amendmentReason, setAmendmentReason] = useState('')
@@ -342,36 +340,18 @@ export function ApprovedJobRecord({
       : nonAssetDataFields
 
   const fetchCertificateDownloadUrl = useCallback(async () => {
-    const res = await api.api.jobs[':id'].download.$get({
-      param: { id: String(job.id) },
-    })
-    if (!res.ok) {
-      const error = (await res.json()) as { error?: string }
-      throw new Error(error.error || 'Falha ao gerar link')
-    }
-    const data = (await res.json()) as { url: string }
+    const data = await calibraApi.jobs.getCertificateDownloadUrl(job.id)
     return data.url
   }, [job.id])
 
-  useEffect(() => {
-    if (!job.certificateUrl) {
-      setCertificatePreviewUrl(null)
-      return
-    }
-
-    let ignore = false
-    void fetchCertificateDownloadUrl()
-      .then((url) => {
-        if (!ignore) setCertificatePreviewUrl(url)
-      })
-      .catch(() => {
-        if (!ignore) setCertificatePreviewUrl(job.certificateUrl ?? null)
-      })
-
-    return () => {
-      ignore = true
-    }
-  }, [fetchCertificateDownloadUrl, job.certificateUrl])
+  const { data: certificatePreviewDownloadUrl } = useQuery({
+    queryKey: ['jobs', job.id, 'certificate-download-url', job.certificateUrl],
+    queryFn: fetchCertificateDownloadUrl,
+    enabled: Boolean(job.certificateUrl),
+    retry: false,
+  })
+  const certificatePreviewUrl =
+    certificatePreviewDownloadUrl ?? job.certificateUrl
 
   const handleDownloadCertificate = async () => {
     setIsDownloading(true)
@@ -390,13 +370,7 @@ export function ApprovedJobRecord({
   const handleGenerateLabel = async () => {
     setIsGeneratingLabel(true)
     try {
-      const res = await api.api.jobs[':id']['generate-label'].$post({
-        param: { id: String(job.id) },
-      })
-      if (!res.ok) {
-        const error = (await res.json()) as { error?: string }
-        throw new Error(error.error || 'Falha ao gerar etiqueta')
-      }
+      await calibraApi.jobs.generateLabel(job.id)
       // Start polling for label completion
       setLabelPending(true)
       toast.info('Gerando etiqueta... Aguarde.')
@@ -412,14 +386,7 @@ export function ApprovedJobRecord({
   const handleDownloadLabel = async () => {
     setIsDownloadingLabel(true)
     try {
-      const res = await api.api.jobs[':id']['download-label'].$get({
-        param: { id: String(job.id) },
-      })
-      if (!res.ok) {
-        const error = (await res.json()) as { error?: string }
-        throw new Error(error.error || 'Falha ao gerar link')
-      }
-      const data = (await res.json()) as { url: string }
+      const data = await calibraApi.jobs.getLabelDownloadUrl(job.id)
       window.open(data.url, '_blank')
     } catch (error) {
       toast.error(
@@ -439,20 +406,7 @@ export function ApprovedJobRecord({
 
     setIsAmending(true)
     try {
-      const res = await api.api.jobs[':id'].amend.$post({
-        param: { id: String(job.id) },
-        json: { reason: amendmentReason },
-      })
-
-      if (!res.ok) {
-        const error = (await res.json()) as { error?: string }
-        throw new Error(error.error || 'Falha ao criar retificação')
-      }
-
-      const result = (await res.json()) as {
-        message: string
-        amendedJob: { id: number; jobId: string }
-      }
+      const result = await calibraApi.jobs.amend(job.id, amendmentReason)
 
       toast.success(`Retificação criada: ${result.amendedJob.jobId}`)
       setIsAmendDialogOpen(false)

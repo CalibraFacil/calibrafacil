@@ -11,7 +11,7 @@ import {
 import { toast } from 'sonner'
 import type { MethodData } from '@/components/method-runtime/types'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   AuditTimeline,
   buildAuditTimelineEvents,
@@ -109,47 +109,20 @@ function MethodDetailPage() {
   } = useQuery({
     queryKey: ['methods', id],
     queryFn: async () => {
-      const res = await api.api.methods[':id'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar método')
-      }
-
-      return res.json() as Promise<MethodDetail>
+      return calibraApi.methods.get(id) as Promise<MethodDetail>
     },
   })
 
   const { data: auditLogData } = useQuery({
     queryKey: ['methods', id, 'audit'],
     queryFn: async () => {
-      const res = await api.api.methods[':id'].audit.$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar histórico')
-      }
-
-      return res.json() as Promise<{ data: AuditLogRecord[] }>
+      return calibraApi.methods.audit<AuditLogRecord>(id)
     },
   })
 
   const technicalReviewMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.methods[':id']['technical-review'].$post({
-        param: { id: String(method?.id ?? id) },
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao revisar tecnicamente',
-        )
-      }
-
-      return res.json()
+      return calibraApi.methods.technicalReview(method?.id ?? id)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods', id] })
@@ -164,19 +137,7 @@ function MethodDetailPage() {
   const qualityApproveMutation = useMutation({
     mutationFn: async () => {
       if (!method) throw new Error('Método não carregado')
-      const res = await api.api.methods[':id']['quality-approve'].$post({
-        param: { id: String(method?.id ?? id) },
-        json: {},
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao aprovar qualidade',
-        )
-      }
-
-      return res.json()
+      return calibraApi.methods.qualityApprove(method.id, {})
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods', id] })
@@ -190,20 +151,7 @@ function MethodDetailPage() {
 
   const returnToDraftMutation = useMutation({
     mutationFn: async (reason: string) => {
-      const res = await api.api.methods[':id']['return-to-draft'].$post({
-        param: { id: String(method?.id ?? id) },
-        json: { reason },
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error ||
-            'Erro ao retornar para rascunho',
-        )
-      }
-
-      return res.json()
+      return calibraApi.methods.returnToDraft(method?.id ?? id, reason)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods', id] })

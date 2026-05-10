@@ -13,7 +13,7 @@ import {
   ComboboxList,
 } from '@/components/ui/combobox'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -118,19 +118,11 @@ function NewAssetPage() {
   const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ['customers', 'search', customerSearch],
     queryFn: async () => {
-      const res = await api.api.customers.$get({
-        query: {
-          page: '1',
-          limit: '50',
-          query: customerSearch || undefined,
-        },
+      return calibraApi.customers.list({
+        page: 1,
+        limit: 50,
+        query: customerSearch || undefined,
       })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar clientes')
-      }
-
-      return res.json()
     },
     staleTime: 30000,
   })
@@ -139,15 +131,7 @@ function NewAssetPage() {
   const { data: assetTypesData, isLoading: assetTypesLoading } = useQuery({
     queryKey: ['asset-types'],
     queryFn: async () => {
-      const res = await api.api['asset-types'].$get({
-        query: {},
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar tipos de instrumento')
-      }
-
-      return res.json() as Promise<{ data: AssetType[] }>
+      return calibraApi.assetTypes.list() as Promise<{ data: AssetType[] }>
     },
     staleTime: 60000, // Cache for 1 minute
   })
@@ -198,37 +182,26 @@ function NewAssetPage() {
         throw new Error('Tipo de instrumento é obrigatório')
       }
 
-      const res = await api.api.assets.$post({
-        json: {
-          customerId: data.customerId,
-          assetTypeId: data.assetTypeId,
-          name: data.name,
-          manufacturer: data.manufacturer || undefined,
-          model: data.model || undefined,
-          serialNumber: data.serialNumber,
-          tag: data.tag,
-          status: data.status,
-          baseMeasurementUnit: data.baseMeasurementUnit,
-          lastCalibrationDate:
-            data.lastCalibrationDate?.toISOString() || undefined,
-          nextCalibrationDate:
-            data.nextCalibrationDate?.toISOString() || undefined,
-          comments: data.comments || undefined,
-          specifications:
-            Object.keys(data.specifications).length > 0
-              ? data.specifications
-              : undefined,
-        },
+      return calibraApi.assets.create({
+        customerId: data.customerId,
+        assetTypeId: data.assetTypeId,
+        name: data.name,
+        manufacturer: data.manufacturer || undefined,
+        model: data.model || undefined,
+        serialNumber: data.serialNumber,
+        tag: data.tag,
+        status: data.status,
+        baseMeasurementUnit: data.baseMeasurementUnit,
+        lastCalibrationDate:
+          data.lastCalibrationDate?.toISOString() || undefined,
+        nextCalibrationDate:
+          data.nextCalibrationDate?.toISOString() || undefined,
+        comments: data.comments || undefined,
+        specifications:
+          Object.keys(data.specifications).length > 0
+            ? data.specifications
+            : undefined,
       })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao criar ativo',
-        )
-      }
-
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assets'] })

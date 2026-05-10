@@ -1,0 +1,3621 @@
+import { Hono } from "hono";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  syncBootstrapResponseSchema,
+  syncAckRequestSchema,
+  syncAckResponseSchema,
+  syncAttachmentCompleteUploadRequestSchema,
+  syncAttachmentCompleteUploadResponseSchema,
+  syncAttachmentDownloadResponseSchema,
+  syncAttachmentInitUploadRequestSchema,
+  syncAttachmentInitUploadResponseSchema,
+  syncConflictResolutionRequestSchema,
+  syncConflictResolutionResponseSchema,
+  type SyncEvent,
+  syncPullResponseSchema,
+  syncPushRequestSchema,
+  syncPushResponseSchema,
+} from "@calibra-facil/contracts";
+import { db } from "@calibra-facil/db";
+import {
+  asset,
+  assetAuditLog,
+  assetType,
+  type AssetSnapshot,
+  calibrationJob,
+  calibrationMethod,
+  customer,
+  customerAuditLog,
+  environmentalLimits,
+  type EnvironmentalSnapshot,
+  jobAuditLog,
+  organizationEventLog,
+  referenceStandard,
+  service,
+  serviceOrder,
+  serviceOrderDeliveryDocument,
+  serviceOrderExecution,
+  serviceOrderQuote,
+  type MethodSnapshot,
+  type StandardSnapshot,
+} from "@calibra-facil/db/schema";
+import {
+  executeCompiledMethod,
+  type CalculationEngineLike,
+  type CompiledMethod,
+  type MethodDiagnostic,
+} from "@calibra-facil/method-definition";
+import { toCanonicalMassValue } from "@calibra-facil/shared";
+import {
+  buildDesktopSyncConflictId,
+  buildSyncPushCursor,
+} from "@calibra-facil/sync";
+import {
+  CreateAssetSchema,
+  CreateCustomerSchema,
+  CreateServiceOrderQuoteSchema,
+  CreateServiceOrderSchema,
+  IssueServiceOrderDeliveryDocumentSchema,
+  UpdateAssetSchema,
+  UpdateComplianceSchema,
+  UpdateCustomerSchema,
+  UpdateServiceOrderExecutionSchema,
+} from "@calibra-facil/schemas";
+import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
+import { writeOrganizationAuditEvent } from "../lib/audit";
+import {
+  createR2Client,
+  generatePresignedUploadUrl,
+  generatePresignedUrl,
+  uploadToR2,
+  type R2Env,
+} from "../lib/storage";
+import {
+  type AuthVariables,
+  type MemberData,
+  withLabPermission,
+} from "../middleware/permission";
+import { buildUnitScopeCondition } from "../lib/units";
+import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
+import {
+  normalizeAssetSpecificationsFromInput,
+  resolveAssetBaseMeasurementUnit,
+} from "../lib/asset-measurement";
+import {
+  getEffectiveCertificateTemplateSnapshot,
+  serializeCertificateTemplateSnapshot,
+} from "../lib/certificate-template-snapshots";
+import {
+  createInitialServiceOrderRecords,
+  recordServiceOrderEvent,
+  replaceExecutionItems,
+  replaceQuoteItems,
+} from "../lib/service-order-workflow";
+import { createClientOrganizationAsServiceOwner } from "../lib/portal-service-account";
+import {
+  loadCustomerActiveCommercialAgreement,
+  syncComplianceWithActiveAgreement,
+} from "../lib/finance";
+
+const METHOD_ENGINE_OPTIONS = {
+  numericMode: "decimal" as const,
+  rejectUnusedInputs: true,
+  maxExponentMagnitude: 12,
+  maxSignificantDigits: 24,
+};
+const MAX_DESKTOP_CERTIFICATE_PDF_BYTES = 25 * 1024 * 1024;
+const CERTIFICATE_PUBLIC_BASE_URL = "https://certificates.calibrafacil.com";
+const DEFAULT_SYNC_PULL_LIMIT = 100;
+const MAX_SYNC_PULL_LIMIT = 500;
+const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;
+
+function getMemberData(c: { get: (key: string) => unknown }) {
+  return c.get("member") as MemberData;
+}
+
+export const syncRouter = new Hono<{
+  Variables: AuthVariables;
+  Bindings: R2Env;
+}>()
+  .post(
+    "/bootstrap",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const session = c.get("session");
+      const memberData = getMemberData(c);
+      const [
+        publishedMethods,
+        assetTypes,
+        customers,
+        assets,
+        services,
+        standards,
+        environmentalLimitRows,
+        jobs,
+        serviceOrders,
+      ] = await Promise.all([
+        db
+          .select({
+            id: calibrationMethod.id,
+            organizationId: calibrationMethod.organizationId,
+            assetTypeId: calibrationMethod.assetTypeId,
+            name: calibrationMethod.name,
+            version: calibrationMethod.version,
+            dataFields: calibrationMethod.dataFields,
+            variableBindings: calibrationMethod.variableBindings,
+            formulas: calibrationMethod.formulas,
+            validations: calibrationMethod.validations,
+            uncertaintyParams: calibrationMethod.uncertaintyParams,
+            certificateContent: calibrationMethod.certificateContent,
+            methodFingerprint: calibrationMethod.methodFingerprint,
+            methodEngine: calibrationMethod.methodEngine,
+            compiledMethod: calibrationMethod.compiledMethod,
+            publicationEvidence: calibrationMethod.publicationEvidence,
+            publishedAt: calibrationMethod.publishedAt,
+          })
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.organizationId, memberData.organizationId),
+              eq(calibrationMethod.status, "PUBLISHED"),
+            ),
+          ),
+        db.select().from(assetType),
+        db
+          .select({
+            id: customer.id,
+            name: customer.name,
+            taxId: customer.taxId,
+            email: customer.email,
+            phone: customer.phone,
+            address: customer.address,
+            compliance: customer.compliance,
+            updatedAt: customer.updatedAt,
+          })
+          .from(customer)
+          .where(eq(customer.labOrganizationId, memberData.organizationId)),
+        db
+          .select({
+            id: asset.id,
+            organizationId: customer.labOrganizationId,
+            unitId: asset.unitId,
+            customerId: asset.customerId,
+            assetTypeId: asset.assetTypeId,
+            name: asset.name,
+            serialNumber: asset.serialNumber,
+            tag: asset.tag,
+            manufacturer: asset.manufacturer,
+            model: asset.model,
+            baseMeasurementUnit: asset.baseMeasurementUnit,
+            specifications: asset.specifications,
+            status: asset.status,
+            updatedAt: asset.updatedAt,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(
+            and(
+              eq(customer.labOrganizationId, memberData.organizationId),
+              buildUnitScopeCondition(asset.unitId, memberData),
+              isNull(asset.deletedAt),
+            ),
+          ),
+        db
+          .select({
+            id: service.id,
+            organizationId: service.organizationId,
+            unitId: service.unitId,
+            assetTypeId: service.assetTypeId,
+            methodId: service.methodId,
+            name: service.name,
+            description: service.description,
+            isActive: service.isActive,
+            updatedAt: service.updatedAt,
+          })
+          .from(service)
+          .where(
+            and(
+              eq(service.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(service.unitId, memberData),
+              eq(service.isActive, true),
+            ),
+          ),
+        db
+          .select({
+            id: referenceStandard.id,
+            organizationId: referenceStandard.organizationId,
+            unitId: referenceStandard.unitId,
+            name: referenceStandard.name,
+            serialNumber: referenceStandard.serialNumber,
+            certificateNumber: referenceStandard.certificateNumber,
+            nextCalibrationDate: referenceStandard.nextCalibrationDate,
+            status: referenceStandard.status,
+            updatedAt: referenceStandard.updatedAt,
+          })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, memberData),
+              isNull(referenceStandard.deletedAt),
+            ),
+          ),
+        db
+          .select()
+          .from(environmentalLimits)
+          .where(
+            and(
+              eq(environmentalLimits.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(environmentalLimits.unitId, memberData),
+            ),
+          ),
+        db
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            organizationId: calibrationJob.organizationId,
+            unitId: calibrationJob.unitId,
+            customerId: calibrationJob.customerId,
+            assetId: calibrationJob.assetId,
+            serviceId: calibrationJob.serviceId,
+            technicianId: calibrationJob.technicianId,
+            methodSnapshot: calibrationJob.methodSnapshot,
+            assetSnapshot: calibrationJob.assetSnapshot,
+            standardsSnapshot: calibrationJob.standardsSnapshot,
+            environmentalSnapshot: calibrationJob.environmentalSnapshot,
+            data: calibrationJob.data,
+            results: calibrationJob.results,
+            status: calibrationJob.status,
+            dueDate: calibrationJob.dueDate,
+            createdAt: calibrationJob.createdAt,
+            updatedAt: calibrationJob.updatedAt,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          ),
+        db
+          .select({
+            id: serviceOrder.id,
+            organizationId: serviceOrder.organizationId,
+            unitId: serviceOrder.unitId,
+            serviceOrderNumber: serviceOrder.serviceOrderNumber,
+            customerId: serviceOrder.customerId,
+            assetId: serviceOrder.assetId,
+            clientContactId: serviceOrder.clientContactId,
+            clientContactSnapshot: serviceOrder.clientContactSnapshot,
+            intakeType: serviceOrder.intakeType,
+            sourceServiceOrderId: serviceOrder.sourceServiceOrderId,
+            status: serviceOrder.status,
+            priority: serviceOrder.priority,
+            responsibleTechnicianId: serviceOrder.responsibleTechnicianId,
+            claimedDefect: serviceOrder.claimedDefect,
+            intakeCondition: serviceOrder.intakeCondition,
+            accessories: serviceOrder.accessories,
+            oldSealNumber: serviceOrder.oldSealNumber,
+            newSealNumber: serviceOrder.newSealNumber,
+            repairedSealNumber: serviceOrder.repairedSealNumber,
+            inmetroRepairSealNumber: serviceOrder.inmetroRepairSealNumber,
+            invoiceRemittanceNumber: serviceOrder.invoiceRemittanceNumber,
+            invoiceRemittanceKey: serviceOrder.invoiceRemittanceKey,
+            invoiceRemittanceIssuedAt: serviceOrder.invoiceRemittanceIssuedAt,
+            carrierName: serviceOrder.carrierName,
+            carrierDocument: serviceOrder.carrierDocument,
+            thirdPartyName: serviceOrder.thirdPartyName,
+            thirdPartyDocument: serviceOrder.thirdPartyDocument,
+            thirdPartyPhone: serviceOrder.thirdPartyPhone,
+            deliveryMethod: serviceOrder.deliveryMethod,
+            internalNotes: serviceOrder.internalNotes,
+            clientVisibleNotes: serviceOrder.clientVisibleNotes,
+            evaluationFeeCents: serviceOrder.evaluationFeeCents,
+            warrantyUntil: serviceOrder.warrantyUntil,
+            warrantyTerms: serviceOrder.warrantyTerms,
+            openedAt: serviceOrder.openedAt,
+            updatedAt: serviceOrder.updatedAt,
+          })
+          .from(serviceOrder)
+          .where(
+            and(
+              eq(serviceOrder.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(serviceOrder.unitId, memberData),
+            ),
+          ),
+      ]);
+
+      return c.json(
+        syncBootstrapResponseSchema.parse({
+          serverTime: new Date().toISOString(),
+          user: {
+            id: session.user.id,
+            name: session.user.name ?? null,
+            email: session.user.email ?? null,
+          },
+          organization: {
+            id: memberData.organizationId,
+            type: memberData.organizationType,
+          },
+          activeUnits: memberData.accessibleUnits.map((unit) => ({
+            id: unit.id,
+            name: unit.name,
+            role: unit.role ?? null,
+          })),
+          permissions: {
+            role: memberData.role,
+            unitRole: memberData.unitRole,
+            activeUnitId: memberData.activeUnitId,
+            accessibleUnitIds: memberData.accessibleUnitIds,
+            canAccessAllUnits: memberData.canAccessAllUnits,
+          },
+          featureFlags: {
+            offlineApprovals: false,
+            offlineCertificatePublication: false,
+          },
+          syncCursor: new Date().toISOString(),
+          publishedMethods,
+          assetTypes,
+          customers,
+          assets,
+          services,
+          standards,
+          environmentalLimits: environmentalLimitRows,
+          jobs,
+          serviceOrders,
+        }),
+      );
+    },
+  )
+  .post(
+    "/certificate-pdfs",
+    ...withLabPermission({ calibration: ["approve"] }),
+    async (c) => {
+      const memberData = getMemberData(c);
+      const session = c.get("session");
+      const formData = await c.req.formData();
+      const result = await applyDesktopCertificatePdfUpload({
+        formData,
+        memberData,
+        sessionUserId: session.user.id,
+        env: c.env as R2Env,
+      });
+
+      return c.json(syncPushResponseSchema.parse(result));
+    },
+  )
+  .post(
+    "/push",
+    ...withLabPermission({ calibration: ["create"] }),
+    async (c) => {
+      const memberData = getMemberData(c);
+      const session = c.get("session");
+      const body = syncPushRequestSchema.parse(await c.req.json());
+      const accepted: Array<{
+        eventId: string;
+        remoteEntityId?: number | string;
+        remoteEntity?: unknown;
+        remoteVersion: number;
+        cloudEventId: string;
+      }> = [];
+      const rejected: Array<{
+        eventId: string;
+        reason: string;
+        code: string;
+      }> = [];
+      const conflicts: Array<{
+        id: string;
+        eventId: string;
+        entityType: string;
+        entityId: string;
+        conflictType: string;
+        status: string;
+        localPayload: unknown;
+        remotePayload: unknown;
+      }> = [];
+
+      for (const event of body.events) {
+        if (event.organizationId !== memberData.organizationId) {
+          rejected.push({
+            eventId: event.eventId,
+            code: "ORGANIZATION_SCOPE_MISMATCH",
+            reason:
+              "Sync event organization does not match active organization.",
+          });
+          continue;
+        }
+
+        if (
+          event.unitId !== null &&
+          !memberData.accessibleUnitIds.includes(event.unitId)
+        ) {
+          rejected.push({
+            eventId: event.eventId,
+            code: "UNIT_SCOPE_MISMATCH",
+            reason: "Sync event unit is not accessible to this member.",
+          });
+          continue;
+        }
+
+        const appliedEvent = await findAppliedDesktopSyncEvent(
+          memberData.organizationId,
+          event,
+        );
+        if (appliedEvent) {
+          accepted.push({
+            eventId: event.eventId,
+            remoteEntityId: appliedEvent.remoteEntityId,
+            remoteEntity: appliedEvent.remoteEntity,
+            remoteVersion: event.localVersion + 1,
+            cloudEventId: `cloud:${event.eventId}`,
+          });
+          continue;
+        }
+
+        const result = await applyDesktopSyncEvent({
+          event,
+          memberData,
+          sessionUserId: session.user.id,
+          deviceId: body.deviceId,
+          clientBatchId: body.clientBatchId,
+        });
+
+        if (!result.ok) {
+          if (result.conflict) {
+            conflicts.push({
+              id: buildDesktopSyncConflictId(event),
+              eventId: event.eventId,
+              entityType: event.entityType,
+              entityId: event.entityId,
+              conflictType: result.conflict.conflictType,
+              status: "open",
+              localPayload: event.payload,
+              remotePayload: result.conflict.remotePayload ?? {},
+            });
+            continue;
+          }
+
+          rejected.push({
+            eventId: event.eventId,
+            code: result.code,
+            reason: result.reason,
+          });
+          continue;
+        }
+
+        accepted.push({
+          eventId: event.eventId,
+          remoteEntityId: result.remoteEntityId,
+          remoteEntity: result.remoteEntity,
+          remoteVersion: event.localVersion + 1,
+          cloudEventId: `cloud:${event.eventId}`,
+        });
+      }
+
+      return c.json(
+        syncPushResponseSchema.parse({
+          accepted,
+          rejected,
+          conflicts,
+          newCursor:
+            accepted.length > 0 || conflicts.length > 0
+              ? buildSyncPushCursor(
+                  body.clientBatchId,
+                  accepted.length,
+                  conflicts.length,
+                )
+              : (body.baseCursor ?? undefined),
+        }),
+      );
+    },
+  )
+  .get("/pull", ...withLabPermission({ calibration: ["read"] }), async (c) => {
+    const cursor = c.req.query("cursor") ?? null;
+    const since = parseSyncPullCursor(cursor);
+    const limit = parseSyncPullLimit(c.req.query("limit"));
+    const memberData = getMemberData(c);
+    const pull = await loadCloudSyncEventsSince(memberData, since, limit);
+    const serverCursor = new Date().toISOString();
+
+    return c.json(
+      syncPullResponseSchema.parse({
+        cursor: pull.hasMore ? pull.cursor : serverCursor,
+        hasMore: pull.hasMore,
+        events: pull.events,
+      }),
+    );
+  })
+  .post("/ack", ...withLabPermission({ calibration: ["read"] }), async (c) => {
+    const body = syncAckRequestSchema.parse(await c.req.json());
+
+    return c.json(
+      syncAckResponseSchema.parse({
+        ok: true,
+        cursor: body.cursor,
+        acknowledgedAt: new Date().toISOString(),
+      }),
+    );
+  })
+  .post(
+    "/conflicts/:id/resolve",
+    ...withLabPermission({ calibration: ["create"] }),
+    async (c) => {
+      const memberData = getMemberData(c);
+      const session = c.get("session");
+      const conflictId = c.req.param("id");
+      const body = syncConflictResolutionRequestSchema.parse(
+        await c.req.json(),
+      );
+      const resolvedAt = new Date().toISOString();
+
+      await writeOrganizationAuditEvent({
+        organizationId: memberData.organizationId,
+        unitId: memberData.activeUnitId,
+        actorUserId: session.user.id,
+        actorMemberId: memberData.id,
+        action: "sync.conflict_resolved",
+        entityType: "sync_conflict",
+        entityId: conflictId,
+        details: {
+          conflictId,
+          status: body.status,
+          resolvedAt,
+        },
+      });
+
+      return c.json(
+        syncConflictResolutionResponseSchema.parse({
+          data: {
+            id: conflictId,
+            status: body.status,
+            resolvedAt,
+          },
+        }),
+      );
+    },
+  )
+  .post(
+    "/attachments/init-upload",
+    ...withLabPermission({ calibration: ["create"] }),
+    async (c) => {
+      const memberData = getMemberData(c);
+      const body = syncAttachmentInitUploadRequestSchema.parse(
+        await c.req.json(),
+      );
+      const objectKey = buildSyncAttachmentObjectKey(memberData, body);
+      const uploadUrl = await generatePresignedUploadUrl(
+        createR2Client(c.env as R2Env),
+        (c.env as R2Env).R2_BUCKET_NAME,
+        objectKey,
+        body.mimeType,
+        SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS,
+      );
+
+      return c.json(
+        syncAttachmentInitUploadResponseSchema.parse({
+          attachmentId: encodeSyncAttachmentId(objectKey),
+          objectKey,
+          uploadUrl,
+          expiresInSeconds: SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS,
+          headers: {
+            "content-type": body.mimeType,
+          },
+        }),
+      );
+    },
+  )
+  .post(
+    "/attachments/complete-upload",
+    ...withLabPermission({ calibration: ["create"] }),
+    async (c) => {
+      const body = syncAttachmentCompleteUploadRequestSchema.parse(
+        await c.req.json(),
+      );
+      const objectKey = tryDecodeSyncAttachmentId(body.attachmentId);
+      if (!objectKey) {
+        return c.json({ error: "Invalid attachment id." }, 400);
+      }
+
+      if (objectKey !== body.objectKey) {
+        return c.json(
+          { error: "Attachment id does not match object key." },
+          400,
+        );
+      }
+
+      return c.json(
+        syncAttachmentCompleteUploadResponseSchema.parse({
+          ok: true,
+          attachmentId: body.attachmentId,
+          objectKey: body.objectKey,
+          completedAt: new Date().toISOString(),
+        }),
+      );
+    },
+  )
+  .get(
+    "/attachments/:attachmentId/download",
+    ...withLabPermission({ calibration: ["read"] }),
+    async (c) => {
+      const attachmentId = c.req.param("attachmentId");
+      const objectKey = tryDecodeSyncAttachmentId(attachmentId);
+      if (!objectKey) {
+        return c.json({ error: "Invalid attachment id." }, 400);
+      }
+
+      const downloadUrl = await generatePresignedUrl(
+        createR2Client(c.env as R2Env),
+        (c.env as R2Env).R2_BUCKET_NAME,
+        objectKey,
+        SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS,
+      );
+
+      return c.json(
+        syncAttachmentDownloadResponseSchema.parse({
+          attachmentId,
+          objectKey,
+          downloadUrl,
+          expiresInSeconds: SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS,
+        }),
+      );
+    },
+  );
+
+type ApplyDesktopSyncEventInput = {
+  event: SyncEvent;
+  memberData: MemberData;
+  sessionUserId: string;
+  deviceId: string;
+  clientBatchId: string;
+};
+
+type ApplyDesktopCertificatePdfUploadInput = {
+  formData: FormData;
+  memberData: MemberData;
+  sessionUserId: string;
+  env: R2Env;
+};
+
+type ApplyDesktopSyncEventResult =
+  | { ok: true; remoteEntityId?: number | string; remoteEntity?: unknown }
+  | {
+      ok: false;
+      code: string;
+      reason: string;
+      conflict?: {
+        conflictType: string;
+        remotePayload?: unknown;
+      };
+    };
+
+async function loadCloudSyncEventsSince(
+  memberData: MemberData,
+  since: Date,
+  limit: number,
+) {
+  const [
+    changedAssetTypes,
+    changedCustomers,
+    changedAssets,
+    changedServices,
+    changedStandards,
+    changedEnvironmentalLimits,
+    changedJobs,
+    changedServiceOrders,
+    changedMethods,
+  ] = await Promise.all([
+    db
+      .select()
+      .from(assetType)
+      .where(gt(assetType.updatedAt, since))
+      .orderBy(assetType.updatedAt)
+      .limit(limit + 1),
+    db
+      .select({
+        id: customer.id,
+        name: customer.name,
+        taxId: customer.taxId,
+        email: customer.email,
+        phone: customer.phone,
+        address: customer.address,
+        compliance: customer.compliance,
+        updatedAt: customer.updatedAt,
+      })
+      .from(customer)
+      .where(
+        and(
+          eq(customer.labOrganizationId, memberData.organizationId),
+          gt(customer.updatedAt, since),
+        ),
+      )
+      .orderBy(customer.updatedAt)
+      .limit(limit + 1),
+    db
+      .select({
+        id: asset.id,
+        organizationId: customer.labOrganizationId,
+        unitId: asset.unitId,
+        customerId: asset.customerId,
+        assetTypeId: asset.assetTypeId,
+        name: asset.name,
+        serialNumber: asset.serialNumber,
+        tag: asset.tag,
+        manufacturer: asset.manufacturer,
+        model: asset.model,
+        baseMeasurementUnit: asset.baseMeasurementUnit,
+        specifications: asset.specifications,
+        status: asset.status,
+        updatedAt: asset.updatedAt,
+      })
+      .from(asset)
+      .innerJoin(customer, eq(asset.customerId, customer.id))
+      .where(
+        and(
+          eq(customer.labOrganizationId, memberData.organizationId),
+          buildUnitScopeCondition(asset.unitId, memberData),
+          isNull(asset.deletedAt),
+          gt(asset.updatedAt, since),
+        ),
+      )
+      .orderBy(asset.updatedAt)
+      .limit(limit + 1),
+    db
+      .select({
+        id: service.id,
+        organizationId: service.organizationId,
+        unitId: service.unitId,
+        assetTypeId: service.assetTypeId,
+        methodId: service.methodId,
+        name: service.name,
+        description: service.description,
+        isActive: service.isActive,
+        updatedAt: service.updatedAt,
+      })
+      .from(service)
+      .where(
+        and(
+          eq(service.organizationId, memberData.organizationId),
+          buildUnitScopeCondition(service.unitId, memberData),
+          gt(service.updatedAt, since),
+        ),
+      )
+      .orderBy(service.updatedAt)
+      .limit(limit + 1),
+    db
+      .select({
+        id: referenceStandard.id,
+        organizationId: referenceStandard.organizationId,
+        unitId: referenceStandard.unitId,
+        name: referenceStandard.name,
+        serialNumber: referenceStandard.serialNumber,
+        certificateNumber: referenceStandard.certificateNumber,
+        nextCalibrationDate: referenceStandard.nextCalibrationDate,
+        status: referenceStandard.status,
+        updatedAt: referenceStandard.updatedAt,
+      })
+      .from(referenceStandard)
+      .where(
+        and(
+          eq(referenceStandard.organizationId, memberData.organizationId),
+          buildUnitScopeCondition(referenceStandard.unitId, memberData),
+          isNull(referenceStandard.deletedAt),
+          gt(referenceStandard.updatedAt, since),
+        ),
+      )
+      .orderBy(referenceStandard.updatedAt)
+      .limit(limit + 1),
+    db
+      .select()
+      .from(environmentalLimits)
+      .where(
+        and(
+          eq(environmentalLimits.organizationId, memberData.organizationId),
+          buildUnitScopeCondition(environmentalLimits.unitId, memberData),
+          gt(environmentalLimits.updatedAt, since),
+        ),
+      )
+      .orderBy(environmentalLimits.updatedAt)
+      .limit(limit + 1),
+    db
+      .select({
+        id: calibrationJob.id,
+        jobId: calibrationJob.jobId,
+        organizationId: calibrationJob.organizationId,
+        unitId: calibrationJob.unitId,
+        customerId: calibrationJob.customerId,
+        assetId: calibrationJob.assetId,
+        serviceId: calibrationJob.serviceId,
+        technicianId: calibrationJob.technicianId,
+        methodSnapshot: calibrationJob.methodSnapshot,
+        assetSnapshot: calibrationJob.assetSnapshot,
+        standardsSnapshot: calibrationJob.standardsSnapshot,
+        environmentalSnapshot: calibrationJob.environmentalSnapshot,
+        data: calibrationJob.data,
+        results: calibrationJob.results,
+        status: calibrationJob.status,
+        dueDate: calibrationJob.dueDate,
+        createdAt: calibrationJob.createdAt,
+        updatedAt: calibrationJob.updatedAt,
+      })
+      .from(calibrationJob)
+      .where(
+        and(
+          eq(calibrationJob.organizationId, memberData.organizationId),
+          buildUnitScopeCondition(calibrationJob.unitId, memberData),
+          gt(calibrationJob.updatedAt, since),
+        ),
+      )
+      .orderBy(calibrationJob.updatedAt)
+      .limit(limit + 1),
+    db
+      .select({
+        id: serviceOrder.id,
+        organizationId: serviceOrder.organizationId,
+        unitId: serviceOrder.unitId,
+        serviceOrderNumber: serviceOrder.serviceOrderNumber,
+        customerId: serviceOrder.customerId,
+        assetId: serviceOrder.assetId,
+        clientContactId: serviceOrder.clientContactId,
+        clientContactSnapshot: serviceOrder.clientContactSnapshot,
+        intakeType: serviceOrder.intakeType,
+        sourceServiceOrderId: serviceOrder.sourceServiceOrderId,
+        status: serviceOrder.status,
+        priority: serviceOrder.priority,
+        responsibleTechnicianId: serviceOrder.responsibleTechnicianId,
+        claimedDefect: serviceOrder.claimedDefect,
+        intakeCondition: serviceOrder.intakeCondition,
+        accessories: serviceOrder.accessories,
+        oldSealNumber: serviceOrder.oldSealNumber,
+        newSealNumber: serviceOrder.newSealNumber,
+        repairedSealNumber: serviceOrder.repairedSealNumber,
+        inmetroRepairSealNumber: serviceOrder.inmetroRepairSealNumber,
+        invoiceRemittanceNumber: serviceOrder.invoiceRemittanceNumber,
+        invoiceRemittanceKey: serviceOrder.invoiceRemittanceKey,
+        invoiceRemittanceIssuedAt: serviceOrder.invoiceRemittanceIssuedAt,
+        carrierName: serviceOrder.carrierName,
+        carrierDocument: serviceOrder.carrierDocument,
+        thirdPartyName: serviceOrder.thirdPartyName,
+        thirdPartyDocument: serviceOrder.thirdPartyDocument,
+        thirdPartyPhone: serviceOrder.thirdPartyPhone,
+        deliveryMethod: serviceOrder.deliveryMethod,
+        internalNotes: serviceOrder.internalNotes,
+        clientVisibleNotes: serviceOrder.clientVisibleNotes,
+        evaluationFeeCents: serviceOrder.evaluationFeeCents,
+        warrantyUntil: serviceOrder.warrantyUntil,
+        warrantyTerms: serviceOrder.warrantyTerms,
+        openedAt: serviceOrder.openedAt,
+        updatedAt: serviceOrder.updatedAt,
+      })
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.organizationId, memberData.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, memberData),
+          gt(serviceOrder.updatedAt, since),
+        ),
+      )
+      .orderBy(serviceOrder.updatedAt)
+      .limit(limit + 1),
+    db
+      .select({
+        id: calibrationMethod.id,
+        organizationId: calibrationMethod.organizationId,
+        assetTypeId: calibrationMethod.assetTypeId,
+        name: calibrationMethod.name,
+        version: calibrationMethod.version,
+        dataFields: calibrationMethod.dataFields,
+        variableBindings: calibrationMethod.variableBindings,
+        formulas: calibrationMethod.formulas,
+        validations: calibrationMethod.validations,
+        uncertaintyParams: calibrationMethod.uncertaintyParams,
+        certificateContent: calibrationMethod.certificateContent,
+        methodFingerprint: calibrationMethod.methodFingerprint,
+        methodEngine: calibrationMethod.methodEngine,
+        compiledMethod: calibrationMethod.compiledMethod,
+        publicationEvidence: calibrationMethod.publicationEvidence,
+        publishedAt: calibrationMethod.publishedAt,
+      })
+      .from(calibrationMethod)
+      .where(
+        and(
+          eq(calibrationMethod.organizationId, memberData.organizationId),
+          eq(calibrationMethod.status, "PUBLISHED"),
+          gt(calibrationMethod.publishedAt, since),
+        ),
+      )
+      .orderBy(calibrationMethod.publishedAt)
+      .limit(limit + 1),
+  ]);
+
+  const events = [
+    ...toCloudEvents("asset_type", changedAssetTypes, "updatedAt", limit),
+    ...toCloudEvents("customer", changedCustomers, "updatedAt", limit),
+    ...toCloudEvents("asset", changedAssets, "updatedAt", limit),
+    ...toCloudEvents("service", changedServices, "updatedAt", limit),
+    ...toCloudEvents(
+      "reference_standard",
+      changedStandards,
+      "updatedAt",
+      limit,
+    ),
+    ...toCloudEvents(
+      "environmental_limit",
+      changedEnvironmentalLimits,
+      "updatedAt",
+      limit,
+    ),
+    ...toCloudEvents("calibration_job", changedJobs, "updatedAt", limit),
+    ...toCloudEvents("service_order", changedServiceOrders, "updatedAt", limit),
+    ...toCloudEvents("published_method", changedMethods, "publishedAt", limit),
+  ].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
+
+  return {
+    events,
+    cursor: events.at(-1)?.occurredAt ?? since.toISOString(),
+    hasMore: [
+      changedAssetTypes,
+      changedCustomers,
+      changedAssets,
+      changedServices,
+      changedStandards,
+      changedEnvironmentalLimits,
+      changedJobs,
+      changedServiceOrders,
+      changedMethods,
+    ].some((rows) => rows.length > limit),
+  };
+}
+
+function parseSyncPullCursor(cursor: string | null) {
+  if (!cursor) return new Date(0);
+  const parsed = new Date(cursor);
+  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
+}
+
+function parseSyncPullLimit(rawLimit: string | undefined) {
+  if (!rawLimit) return DEFAULT_SYNC_PULL_LIMIT;
+  const parsed = Number.parseInt(rawLimit, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_SYNC_PULL_LIMIT;
+  }
+  return Math.min(parsed, MAX_SYNC_PULL_LIMIT);
+}
+
+function toCloudEvents(
+  entityType:
+    | "asset_type"
+    | "customer"
+    | "asset"
+    | "service"
+    | "published_method"
+    | "reference_standard"
+    | "environmental_limit"
+    | "calibration_job"
+    | "service_order",
+  rows: Array<Record<string, unknown>>,
+  timestampKey: string,
+  limit: number,
+) {
+  return rows.slice(0, limit).map((row) => {
+    const occurredAt = toSyncTimestamp(row[timestampKey]);
+    return {
+      cloudEventId: `cloud:${entityType}:${String(row.id)}:${occurredAt}`,
+      entityType,
+      entityId:
+        typeof row.id === "number" || typeof row.id === "string"
+          ? row.id
+          : String(row.id),
+      operation: "upsert" as const,
+      occurredAt,
+      payload: row,
+    };
+  });
+}
+
+function toSyncTimestamp(value: unknown) {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return value;
+  return new Date().toISOString();
+}
+
+async function applyDesktopCertificatePdfUpload(
+  input: ApplyDesktopCertificatePdfUploadInput,
+) {
+  const fields = readCertificatePdfUploadFields(input.formData);
+  if (!fields.ok) {
+    return syncPushResponseSchema.parse({
+      accepted: [],
+      rejected: [
+        {
+          eventId: fields.eventId,
+          code: fields.code,
+          reason: fields.reason,
+        },
+      ],
+      conflicts: [],
+    });
+  }
+
+  const upload = fields.value;
+  if (upload.organizationId !== input.memberData.organizationId) {
+    return syncPushResponseSchema.parse({
+      accepted: [],
+      rejected: [
+        {
+          eventId: upload.eventId,
+          code: "ORGANIZATION_SCOPE_MISMATCH",
+          reason: "Certificate PDF upload organization does not match.",
+        },
+      ],
+      conflicts: [],
+    });
+  }
+
+  if (
+    upload.unitId !== null &&
+    !input.memberData.accessibleUnitIds.includes(upload.unitId)
+  ) {
+    return syncPushResponseSchema.parse({
+      accepted: [],
+      rejected: [
+        {
+          eventId: upload.eventId,
+          code: "UNIT_SCOPE_MISMATCH",
+          reason: "Certificate PDF upload unit is not accessible.",
+        },
+      ],
+      conflicts: [],
+    });
+  }
+
+  try {
+    const existingRemoteKey = await findDesktopSyncRemoteEntityId(
+      input.memberData.organizationId,
+      upload.entityId,
+    );
+    if (typeof existingRemoteKey === "string") {
+      return syncPushResponseSchema.parse({
+        accepted: [
+          {
+            eventId: upload.eventId,
+            remoteEntityId: existingRemoteKey,
+            remoteVersion: upload.localVersion + 1,
+            cloudEventId: `cloud:${upload.eventId}`,
+          },
+        ],
+        rejected: [],
+        conflicts: [],
+      });
+    }
+
+    const remoteJobId = await findDesktopSyncRemoteEntityId(
+      input.memberData.organizationId,
+      upload.localJobId,
+    );
+    if (typeof remoteJobId !== "number") {
+      return syncPushResponseSchema.parse({
+        accepted: [],
+        rejected: [
+          {
+            eventId: upload.eventId,
+            code: "REMOTE_ENTITY_MAPPING_MISSING",
+            reason: "Desktop certificate PDF upload has no synced cloud job.",
+          },
+        ],
+        conflicts: [],
+      });
+    }
+
+    const [job] = await db
+      .select()
+      .from(calibrationJob)
+      .where(
+        and(
+          eq(calibrationJob.id, remoteJobId),
+          eq(calibrationJob.organizationId, input.memberData.organizationId),
+          buildUnitScopeCondition(calibrationJob.unitId, input.memberData),
+        ),
+      )
+      .limit(1);
+
+    if (!job) {
+      return syncPushResponseSchema.parse({
+        accepted: [],
+        rejected: [
+          {
+            eventId: upload.eventId,
+            code: "REMOTE_ENTITY_NOT_FOUND",
+            reason: "Cloud job for desktop certificate PDF was not found.",
+          },
+        ],
+        conflicts: [],
+      });
+    }
+
+    if (!["REVIEW", "GENERATING_PDF"].includes(job.status)) {
+      return syncPushResponseSchema.parse({
+        accepted: [],
+        rejected: [
+          {
+            eventId: upload.eventId,
+            code: "INVALID_STATUS_TRANSITION",
+            reason: `Cannot publish desktop certificate PDF for job with status ${job.status}.`,
+          },
+        ],
+        conflicts: [],
+      });
+    }
+
+    if (job.certificateUrl) {
+      return syncPushResponseSchema.parse({
+        accepted: [],
+        rejected: [
+          {
+            eventId: upload.eventId,
+            code: "CERTIFICATE_ALREADY_PUBLISHED",
+            reason: "Cloud job already has a published certificate PDF.",
+          },
+        ],
+        conflicts: [],
+      });
+    }
+
+    const bytes = new Uint8Array(await upload.file.arrayBuffer());
+    if (bytes.byteLength === 0) {
+      throw new Error("Uploaded certificate PDF is empty.");
+    }
+
+    if (bytes.byteLength > MAX_DESKTOP_CERTIFICATE_PDF_BYTES) {
+      throw new Error("Uploaded certificate PDF exceeds the size limit.");
+    }
+
+    if (bytes.byteLength !== upload.sizeBytes) {
+      throw new Error("Uploaded certificate PDF size does not match metadata.");
+    }
+
+    const contentHash = createHash("sha256").update(bytes).digest("hex");
+    if (contentHash !== upload.contentHash) {
+      throw new Error("Uploaded certificate PDF hash does not match metadata.");
+    }
+
+    const year = new Date(upload.occurredAt).getUTCFullYear();
+    const remoteKey = buildDesktopCertificatePdfKey({
+      organizationId: input.memberData.organizationId,
+      year,
+      jobId: job.jobId,
+      draftId: upload.draftId,
+    });
+    const certificateUrl = `${CERTIFICATE_PUBLIC_BASE_URL}/${remoteKey}`;
+    const r2Client = createR2Client(input.env);
+    const actorUserId = getSyncActorUserId(
+      buildCertificatePdfUploadSyncEvent(upload, {
+        contentHash,
+        remoteKey,
+        sizeBytes: bytes.byteLength,
+      }),
+      input.sessionUserId,
+    );
+    const approvedAt = job.approvedAt ?? new Date();
+    const effectiveTemplateSnapshot =
+      (job.certificateTemplateSnapshot as
+        | ReturnType<typeof serializeCertificateTemplateSnapshot>
+        | null
+        | undefined) ??
+      serializeCertificateTemplateSnapshot(
+        await getEffectiveCertificateTemplateSnapshot(
+          input.memberData.organizationId,
+        ),
+      );
+
+    await uploadToR2(
+      r2Client,
+      input.env.R2_BUCKET_NAME,
+      remoteKey,
+      bytes,
+      "application/pdf",
+    );
+
+    await db
+      .update(calibrationJob)
+      .set({
+        status: "APPROVED",
+        certificateUrl,
+        approvedBy: job.approvedBy ?? actorUserId,
+        approvedAt,
+        certificateTemplateId:
+          job.certificateTemplateId ??
+          (typeof effectiveTemplateSnapshot.id === "number"
+            ? effectiveTemplateSnapshot.id
+            : null),
+        certificateTemplateSnapshot:
+          job.certificateTemplateSnapshot ?? effectiveTemplateSnapshot,
+        updatedAt: new Date(),
+      })
+      .where(eq(calibrationJob.id, job.id));
+
+    await db.insert(jobAuditLog).values({
+      jobId: job.id,
+      action: "certificate_published_from_desktop",
+      changes: {
+        source: "desktop_sync",
+        status: { old: job.status, new: "APPROVED" },
+        approvedBy: { old: job.approvedBy, new: job.approvedBy ?? actorUserId },
+        approvedAt: {
+          old: job.approvedAt?.toISOString?.() ?? job.approvedAt,
+          new: approvedAt.toISOString(),
+        },
+        certificateUrl: { old: job.certificateUrl, new: certificateUrl },
+        contentHash,
+        sizeBytes: bytes.byteLength,
+        remoteKey,
+      },
+      performedBy: actorUserId,
+    });
+
+    await writeOrganizationAuditEvent({
+      organizationId: input.memberData.organizationId,
+      unitId: upload.unitId,
+      actorUserId,
+      actorMemberId: input.memberData.id,
+      action: "desktop_sync.generate_local_certificate_pdf",
+      entityType: "certificate_draft",
+      entityId: upload.entityId,
+      details: {
+        eventId: upload.eventId,
+        idempotencyKey: upload.idempotencyKey,
+        localVersion: upload.localVersion,
+        localEntityId: upload.entityId,
+        localJobId: upload.localJobId,
+        remoteEntityId: remoteKey,
+        remoteJobId: job.id,
+        certificateUrl,
+        portalVisible: true,
+        contentHash,
+        sizeBytes: bytes.byteLength,
+      },
+    });
+
+    return syncPushResponseSchema.parse({
+      accepted: [
+        {
+          eventId: upload.eventId,
+          remoteEntityId: remoteKey,
+          remoteEntity: {
+            jobId: job.jobId,
+            status: "APPROVED",
+            certificateUrl,
+            remoteKey,
+            portalVisible: true,
+            approvedAt: approvedAt.toISOString(),
+          },
+          remoteVersion: upload.localVersion + 1,
+          cloudEventId: `cloud:${upload.eventId}`,
+        },
+      ],
+      rejected: [],
+      conflicts: [],
+    });
+  } catch (error) {
+    return syncPushResponseSchema.parse({
+      accepted: [],
+      rejected: [
+        {
+          eventId: upload.eventId,
+          code: "CERTIFICATE_PDF_UPLOAD_FAILED",
+          reason:
+            error instanceof Error
+              ? error.message
+              : "Desktop certificate PDF upload failed.",
+        },
+      ],
+      conflicts: [],
+    });
+  }
+}
+
+async function applyDesktopSyncEvent(
+  input: ApplyDesktopSyncEventInput,
+): Promise<ApplyDesktopSyncEventResult> {
+  const actorUserId = getSyncActorUserId(input.event, input.sessionUserId);
+
+  try {
+    if (
+      input.event.entityType === "calibration_job" &&
+      input.event.operation === "create_local_job_draft"
+    ) {
+      return await applyCreateLocalJobDraft(input, actorUserId);
+    }
+
+    if (
+      input.event.entityType === "asset" &&
+      input.event.operation === "create_local_asset"
+    ) {
+      return await applyCreateLocalAsset(input, actorUserId);
+    }
+
+    if (
+      input.event.entityType === "asset" &&
+      input.event.operation === "update_local_asset"
+    ) {
+      return await applyUpdateLocalAsset(input, actorUserId);
+    }
+
+    if (
+      input.event.entityType === "customer" &&
+      input.event.operation === "create_local_customer"
+    ) {
+      return await applyCreateLocalCustomer(input, actorUserId);
+    }
+
+    if (
+      input.event.entityType === "customer" &&
+      input.event.operation === "update_local_customer"
+    ) {
+      return await applyUpdateLocalCustomer(input, actorUserId);
+    }
+
+    if (
+      input.event.entityType === "customer" &&
+      input.event.operation === "update_local_customer_compliance"
+    ) {
+      return await applyUpdateLocalCustomerCompliance(input, actorUserId);
+    }
+
+    if (
+      input.event.entityType === "calibration_job" &&
+      (input.event.operation === "save_local_execution" ||
+        input.event.operation === "submit_local_execution")
+    ) {
+      return await applyLocalJobExecution(input, actorUserId);
+    }
+
+    if (
+      input.event.entityType === "service_order" &&
+      input.event.operation === "create_local_service_order_intake"
+    ) {
+      return await applyCreateLocalServiceOrderIntake(input, actorUserId);
+    }
+
+    if (
+      input.event.entityType === "service_order_quote" &&
+      input.event.operation === "create_local_service_order_quote_draft"
+    ) {
+      return await applyCreateLocalServiceOrderQuoteDraft(input, actorUserId);
+    }
+
+    if (
+      input.event.entityType === "service_order_execution" &&
+      input.event.operation === "save_local_service_order_execution_notes"
+    ) {
+      return await applyLocalServiceOrderExecutionNotes(input, actorUserId);
+    }
+
+    if (
+      input.event.entityType === "service_order_delivery_document" &&
+      input.event.operation ===
+        "create_local_service_order_delivery_document_draft"
+    ) {
+      return await applyCreateLocalServiceOrderDeliveryDocumentDraft(
+        input,
+        actorUserId,
+      );
+    }
+
+    await writeDesktopSyncAudit(input, actorUserId);
+    return { ok: true };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Desktop sync event failed.";
+    const code = jobCreationClientErrors.has(message)
+      ? "DOMAIN_VALIDATION_FAILED"
+      : "DESKTOP_SYNC_APPLY_FAILED";
+    return {
+      ok: false,
+      code,
+      reason: message,
+    };
+  }
+}
+
+async function applyCreateLocalJobDraft(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+  if (existingRemoteEntityId !== null) {
+    return { ok: true, remoteEntityId: existingRemoteEntityId };
+  }
+
+  const payload = asRecord(input.event.payload);
+  const assetId = getNumber(payload, "assetId");
+  const serviceId = getNumber(payload, "serviceId");
+  const unitId =
+    input.event.unitId ??
+    getNumber(payload, "unitId") ??
+    input.memberData.activeUnitId;
+
+  if (!assetId || !serviceId || !unitId) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason: "Desktop job draft event is missing asset, service, or unit.",
+    };
+  }
+
+  const job = await createCalibrationJob({
+    organizationId: input.memberData.organizationId,
+    unitId,
+    createdBy: actorUserId,
+    assetId,
+    serviceId,
+    technicianId: getNullableString(payload, "technicianId"),
+    dueDate: getNullableString(payload, "dueDate"),
+    notifyOnAssignment: false,
+  });
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: job.id,
+    remoteJobId: job.jobId,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: job.id,
+    remoteEntity: {
+      id: job.id,
+      jobId: job.jobId,
+      status: job.status,
+      certificateName: job.certificateName,
+    },
+  };
+}
+
+async function applyCreateLocalAsset(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+  if (existingRemoteEntityId !== null) {
+    return { ok: true, remoteEntityId: existingRemoteEntityId };
+  }
+
+  const payload = asRecord(input.event.payload);
+  const parseResult = CreateAssetSchema.safeParse(payload);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop asset event is invalid.",
+    };
+  }
+
+  const values = parseResult.data;
+  const unitId = input.event.unitId ?? input.memberData.activeUnitId;
+  if (!unitId) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason: "Desktop asset event is missing a unit.",
+    };
+  }
+
+  const [foundCustomer] = await db
+    .select()
+    .from(customer)
+    .where(
+      and(
+        eq(customer.id, values.customerId),
+        eq(customer.labOrganizationId, input.memberData.organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!foundCustomer) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Cliente nao encontrado",
+    };
+  }
+
+  const [foundAssetType] = await db
+    .select()
+    .from(assetType)
+    .where(eq(assetType.id, values.assetTypeId))
+    .limit(1);
+
+  if (!foundAssetType) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Tipo de instrumento nao encontrado",
+    };
+  }
+
+  const baseMeasurementUnitResult = resolveAssetBaseMeasurementUnit(
+    foundAssetType,
+    values.baseMeasurementUnit,
+  );
+  if (!baseMeasurementUnitResult.ok) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: baseMeasurementUnitResult.error,
+    };
+  }
+
+  if (foundAssetType.definition && values.specifications) {
+    const requiredFields = foundAssetType.definition.filter(
+      (field) => field.required,
+    );
+    for (const field of requiredFields) {
+      if (
+        values.specifications[field.key] === undefined ||
+        values.specifications[field.key] === null ||
+        values.specifications[field.key] === ""
+      ) {
+        return {
+          ok: false,
+          code: "DOMAIN_VALIDATION_FAILED",
+          reason: `Campo obrigatorio: ${field.label}`,
+        };
+      }
+    }
+  }
+
+  const [existingAsset] = await db
+    .select({ id: asset.id })
+    .from(asset)
+    .where(eq(asset.tag, values.tag))
+    .limit(1);
+  if (existingAsset) {
+    return {
+      ok: false,
+      code: "TAG_ALREADY_EXISTS",
+      reason: "Tag ja esta em uso",
+    };
+  }
+
+  const lastCalibrationDate = parseSyncDate(values.lastCalibrationDate);
+  const nextCalibrationDate = parseSyncDate(values.nextCalibrationDate);
+  const normalizedSpecifications = normalizeAssetSpecificationsFromInput({
+    specifications: values.specifications || null,
+    definition: foundAssetType.definition,
+    baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
+  });
+
+  const newAsset = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(asset)
+      .values({
+        unitId,
+        customerId: values.customerId,
+        assetTypeId: values.assetTypeId,
+        name: values.name,
+        manufacturer: values.manufacturer || null,
+        model: values.model || null,
+        serialNumber: values.serialNumber,
+        tag: values.tag,
+        status: values.status || "ACTIVE",
+        baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
+        lastCalibrationDate,
+        nextCalibrationDate,
+        comments: values.comments || null,
+        specifications: normalizedSpecifications.specifications || null,
+      })
+      .returning();
+
+    if (!created) throw new Error("Erro ao criar ativo");
+
+    await tx.insert(assetAuditLog).values({
+      assetId: created.id,
+      action: "create",
+      changes: {
+        source: "desktop_sync",
+        asset: { old: null, new: created },
+        unitConversions:
+          normalizedSpecifications.conversions.length > 0
+            ? normalizedSpecifications.conversions
+            : undefined,
+      },
+      performedBy: actorUserId,
+    });
+
+    return created;
+  });
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: newAsset.id,
+    remoteAssetTag: newAsset.tag,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: newAsset.id,
+    remoteEntity: {
+      id: newAsset.id,
+      tag: newAsset.tag,
+      status: newAsset.status,
+    },
+  };
+}
+
+async function applyUpdateLocalAsset(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const payload = asRecord(input.event.payload);
+  const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+  const remoteEntityId =
+    typeof mappedRemoteEntityId === "number"
+      ? mappedRemoteEntityId
+      : getNumber(payload, "remoteId");
+
+  if (remoteEntityId === null) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Ativo desktop ainda nao possui ID remoto para atualizar.",
+    };
+  }
+
+  const parseResult = UpdateAssetSchema.safeParse(payload);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop asset update event is invalid.",
+    };
+  }
+
+  const values = parseResult.data;
+  const [existingAsset] = await db
+    .select({
+      id: asset.id,
+      customerId: asset.customerId,
+      name: asset.name,
+      manufacturer: asset.manufacturer,
+      model: asset.model,
+      serialNumber: asset.serialNumber,
+      tag: asset.tag,
+      status: asset.status,
+      baseMeasurementUnit: asset.baseMeasurementUnit,
+      lastCalibrationDate: asset.lastCalibrationDate,
+      nextCalibrationDate: asset.nextCalibrationDate,
+      comments: asset.comments,
+      specifications: asset.specifications,
+      assetTypeDefinition: assetType.definition,
+    })
+    .from(asset)
+    .innerJoin(customer, eq(asset.customerId, customer.id))
+    .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
+    .where(
+      and(
+        eq(asset.id, remoteEntityId),
+        eq(customer.labOrganizationId, input.memberData.organizationId),
+        isNull(asset.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!existingAsset) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Ativo nao encontrado para atualizacao desktop.",
+    };
+  }
+
+  if (values.tag && values.tag !== existingAsset.tag) {
+    const [duplicateTag] = await db
+      .select({ id: asset.id })
+      .from(asset)
+      .where(and(eq(asset.tag, values.tag), isNull(asset.deletedAt)))
+      .limit(1);
+
+    if (duplicateTag && duplicateTag.id !== existingAsset.id) {
+      return {
+        ok: false,
+        code: "TAG_ALREADY_EXISTS",
+        reason: "Tag ja esta em uso",
+      };
+    }
+  }
+
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+  const changes: Record<string, { old: unknown; new: unknown }> = {};
+
+  if (values.name !== undefined) updateData.name = values.name;
+  if (values.manufacturer !== undefined)
+    updateData.manufacturer = values.manufacturer || null;
+  if (values.model !== undefined) updateData.model = values.model || null;
+  if (values.serialNumber !== undefined)
+    updateData.serialNumber = values.serialNumber;
+  if (values.tag !== undefined) updateData.tag = values.tag;
+  if (values.status !== undefined) updateData.status = values.status;
+  if (values.lastCalibrationDate !== undefined) {
+    updateData.lastCalibrationDate = parseSyncDate(values.lastCalibrationDate);
+  }
+  if (values.nextCalibrationDate !== undefined) {
+    updateData.nextCalibrationDate = parseSyncDate(values.nextCalibrationDate);
+  }
+  if (values.comments !== undefined)
+    updateData.comments = values.comments || null;
+  if (values.specifications !== undefined) {
+    const normalizedSpecifications = normalizeAssetSpecificationsFromInput({
+      specifications: values.specifications || null,
+      definition: existingAsset.assetTypeDefinition,
+      baseMeasurementUnit: existingAsset.baseMeasurementUnit,
+    });
+    updateData.specifications = normalizedSpecifications.specifications || null;
+    if (normalizedSpecifications.conversions.length > 0) {
+      changes.unitConversions = {
+        old: null,
+        new: normalizedSpecifications.conversions,
+      };
+    }
+  }
+
+  for (const [key, value] of Object.entries(updateData)) {
+    if (key === "updatedAt") continue;
+    const oldValue = existingAsset[key as keyof typeof existingAsset];
+    if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
+      changes[key] = { old: oldValue, new: value };
+    }
+  }
+
+  const [updatedAsset] = await db
+    .update(asset)
+    .set(updateData)
+    .where(and(eq(asset.id, remoteEntityId), isNull(asset.deletedAt)))
+    .returning();
+
+  if (!updatedAsset) throw new Error("Erro ao atualizar ativo");
+
+  if (Object.keys(changes).length > 0) {
+    await db.insert(assetAuditLog).values({
+      assetId: remoteEntityId,
+      action: "status" in changes ? "status_change" : "update",
+      changes,
+      performedBy: actorUserId,
+    });
+  }
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: updatedAsset.id,
+    remoteAssetTag: updatedAsset.tag,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: updatedAsset.id,
+    remoteEntity: {
+      id: updatedAsset.id,
+      tag: updatedAsset.tag,
+      status: updatedAsset.status,
+    },
+  };
+}
+
+async function applyCreateLocalCustomer(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+  if (existingRemoteEntityId !== null) {
+    return { ok: true, remoteEntityId: existingRemoteEntityId };
+  }
+
+  const payload = asRecord(input.event.payload);
+  const parseResult = CreateCustomerSchema.safeParse(payload);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop customer event is invalid.",
+    };
+  }
+
+  const values = parseResult.data;
+  const slug = generateDesktopCustomerSlug(values.name);
+  const orgResult = await createClientOrganizationAsServiceOwner({
+    name: values.name,
+    slug,
+  });
+
+  if (!orgResult?.id) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Falha ao criar organizacao do cliente",
+    };
+  }
+
+  const newCustomer = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(customer)
+      .values({
+        name: values.name,
+        taxId: values.taxId || null,
+        email: values.email || null,
+        phone: values.phone || null,
+        address: values.address || null,
+        authOrganizationId: orgResult.id,
+        labOrganizationId: input.memberData.organizationId,
+      })
+      .returning();
+
+    if (!created) throw new Error("Erro ao criar cliente");
+
+    await tx.insert(customerAuditLog).values({
+      customerId: created.id,
+      action: "create",
+      changes: {
+        source: "desktop_sync",
+        customer: { old: null, new: created },
+      },
+      performedBy: actorUserId,
+    });
+
+    return created;
+  });
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: newCustomer.id,
+    remoteCustomerName: newCustomer.name,
+    remoteAuthOrganizationId: newCustomer.authOrganizationId,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: newCustomer.id,
+    remoteEntity: {
+      id: newCustomer.id,
+      name: newCustomer.name,
+      taxId: newCustomer.taxId,
+      email: newCustomer.email,
+      authOrganizationId: newCustomer.authOrganizationId,
+    },
+  };
+}
+
+async function applyUpdateLocalCustomer(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const payload = asRecord(input.event.payload);
+  const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+  const remoteEntityId =
+    typeof mappedRemoteEntityId === "number"
+      ? mappedRemoteEntityId
+      : getNumber(payload, "remoteId");
+
+  if (remoteEntityId === null) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Cliente desktop ainda nao possui ID remoto para atualizar.",
+    };
+  }
+
+  const parseResult = UpdateCustomerSchema.safeParse(payload);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop customer update event is invalid.",
+    };
+  }
+
+  const values = parseResult.data;
+  const [existing] = await db
+    .select()
+    .from(customer)
+    .where(
+      and(
+        eq(customer.id, remoteEntityId),
+        eq(customer.labOrganizationId, input.memberData.organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!existing) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Cliente nao encontrado para atualizacao desktop.",
+    };
+  }
+
+  const changes: Record<string, { old: unknown; new: unknown }> = {};
+  for (const [key, value] of Object.entries(values)) {
+    const oldValue = existing[key as keyof typeof existing];
+    if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
+      changes[key] = { old: oldValue, new: value };
+    }
+  }
+
+  const updatedCustomer = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(customer)
+      .set({
+        ...values,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(customer.id, remoteEntityId),
+          eq(customer.labOrganizationId, input.memberData.organizationId),
+        ),
+      )
+      .returning();
+
+    if (!updated) throw new Error("Erro ao atualizar cliente");
+
+    if (Object.keys(changes).length > 0) {
+      await tx.insert(customerAuditLog).values({
+        customerId: remoteEntityId,
+        action: "update",
+        changes: {
+          source: "desktop_sync",
+          fields: changes,
+        },
+        performedBy: actorUserId,
+      });
+    }
+
+    return updated;
+  });
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: updatedCustomer.id,
+    remoteCustomerName: updatedCustomer.name,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: updatedCustomer.id,
+    remoteEntity: {
+      id: updatedCustomer.id,
+      name: updatedCustomer.name,
+      taxId: updatedCustomer.taxId,
+      email: updatedCustomer.email,
+      authOrganizationId: updatedCustomer.authOrganizationId,
+    },
+  };
+}
+
+async function applyUpdateLocalCustomerCompliance(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const payload = asRecord(input.event.payload);
+  const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+  const remoteEntityId =
+    typeof mappedRemoteEntityId === "number"
+      ? mappedRemoteEntityId
+      : getNumber(payload, "remoteId");
+
+  if (remoteEntityId === null) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Cliente desktop ainda nao possui ID remoto para conformidade.",
+    };
+  }
+
+  const parseResult = UpdateComplianceSchema.safeParse(payload);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop customer compliance event is invalid.",
+    };
+  }
+
+  const { compliance, reason } = parseResult.data;
+  const [existing] = await db
+    .select()
+    .from(customer)
+    .where(
+      and(
+        eq(customer.id, remoteEntityId),
+        eq(customer.labOrganizationId, input.memberData.organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!existing) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Cliente nao encontrado para conformidade desktop.",
+    };
+  }
+
+  const baseCompliance = existing.compliance ?? {
+    qualificationStatus: "pending" as const,
+    qualityRequirementsAcknowledged: false,
+  };
+  const mergedCompliance = {
+    ...baseCompliance,
+    ...compliance,
+    qualificationStatus:
+      compliance.qualificationStatus ??
+      baseCompliance.qualificationStatus ??
+      ("pending" as const),
+    qualityRequirementsAcknowledged:
+      compliance.qualityRequirementsAcknowledged ??
+      baseCompliance.qualityRequirementsAcknowledged ??
+      false,
+    ...(compliance.qualityRequirementsAcknowledged &&
+    !baseCompliance.qualityRequirementsAcknowledged
+      ? { qualityRequirementsAcknowledgedAt: new Date().toISOString() }
+      : {}),
+  };
+  const activeCommercialAgreement = await loadCustomerActiveCommercialAgreement(
+    input.memberData.organizationId,
+    remoteEntityId,
+  );
+  const updatedCompliance = syncComplianceWithActiveAgreement(
+    mergedCompliance,
+    activeCommercialAgreement,
+  );
+
+  const [updatedCustomer] = await db
+    .update(customer)
+    .set({
+      compliance: updatedCompliance,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(customer.id, remoteEntityId),
+        eq(customer.labOrganizationId, input.memberData.organizationId),
+      ),
+    )
+    .returning();
+
+  if (!updatedCustomer) throw new Error("Erro ao atualizar conformidade");
+
+  await db.insert(customerAuditLog).values({
+    customerId: remoteEntityId,
+    action: "compliance_change",
+    changes: { old: existing.compliance, new: updatedCompliance },
+    performedBy: actorUserId,
+    reason,
+  });
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: updatedCustomer.id,
+    remoteCustomerName: updatedCustomer.name,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: updatedCustomer.id,
+    remoteEntity: {
+      id: updatedCustomer.id,
+      name: updatedCustomer.name,
+      taxId: updatedCustomer.taxId,
+      email: updatedCustomer.email,
+      compliance: updatedCustomer.compliance,
+    },
+  };
+}
+
+async function applyLocalJobExecution(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const remoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+
+  if (typeof remoteEntityId !== "number") {
+    return {
+      ok: false,
+      code: "REMOTE_ENTITY_MAPPING_MISSING",
+      reason: "Desktop execution event has no synced cloud job mapping.",
+    };
+  }
+
+  const [existing] = await db
+    .select()
+    .from(calibrationJob)
+    .where(
+      and(
+        eq(calibrationJob.id, remoteEntityId),
+        eq(calibrationJob.organizationId, input.memberData.organizationId),
+        buildUnitScopeCondition(calibrationJob.unitId, input.memberData),
+      ),
+    )
+    .limit(1);
+
+  if (!existing) {
+    return {
+      ok: false,
+      code: "REMOTE_ENTITY_NOT_FOUND",
+      reason: "Cloud job for desktop execution event was not found.",
+    };
+  }
+
+  if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+    return {
+      ok: false,
+      code: "INVALID_STATUS_TRANSITION",
+      reason: `Cannot apply desktop execution to job with status ${existing.status}.`,
+      conflict: {
+        conflictType: "status_transition",
+        remotePayload: {
+          id: existing.id,
+          jobId: existing.jobId,
+          status: existing.status,
+          updatedAt:
+            existing.updatedAt instanceof Date
+              ? existing.updatedAt.toISOString()
+              : existing.updatedAt,
+        },
+      },
+    };
+  }
+
+  const payload = asRecord(input.event.payload);
+  const nextStatus =
+    input.event.operation === "submit_local_execution"
+      ? "REVIEW"
+      : (getJobStatus(payload, "status") ?? "IN_PROGRESS");
+  const nextData = getRecordOrNull(payload, "data") ?? {};
+  const nextStandardsSnapshot = hasOwn(payload, "standardsSnapshot")
+    ? getArrayOrNull(payload, "standardsSnapshot")
+    : existing.standardsSnapshot;
+  const nextEnvironmentalSnapshot = hasOwn(payload, "environmentalSnapshot")
+    ? getRecordOrNull(payload, "environmentalSnapshot")
+    : existing.environmentalSnapshot;
+  const standardsValidation = await validateDesktopExecutionStandardsSnapshot(
+    nextStandardsSnapshot as StandardSnapshot[] | null,
+    input.memberData,
+  );
+
+  if (!standardsValidation.ok) {
+    return {
+      ok: false,
+      code: standardsValidation.code,
+      reason: standardsValidation.reason,
+    };
+  }
+
+  const officialExecution = await executeOfficialDesktopSyncSnapshot({
+    methodSnapshot: existing.methodSnapshot,
+    data: nextData,
+    assetSnapshot: existing.assetSnapshot,
+    standardsSnapshot: nextStandardsSnapshot as StandardSnapshot[] | null,
+    environmentalSnapshot:
+      nextEnvironmentalSnapshot as EnvironmentalSnapshot | null,
+  });
+
+  if (!officialExecution.ok) {
+    return {
+      ok: false,
+      code: officialExecution.code,
+      reason: officialExecution.reason,
+    };
+  }
+
+  const submittedResults = getRecordOrNull(payload, "results");
+  const nextResults = officialExecution.results;
+
+  const [updated] = await db
+    .update(calibrationJob)
+    .set({
+      data: nextData,
+      results: nextResults,
+      standardsSnapshot: nextStandardsSnapshot as StandardSnapshot[] | null,
+      environmentalSnapshot:
+        nextEnvironmentalSnapshot as EnvironmentalSnapshot | null,
+      status: nextStatus,
+      performedAt: nextStatus === "REVIEW" ? new Date() : existing.performedAt,
+      updatedAt: new Date(),
+    })
+    .where(eq(calibrationJob.id, existing.id))
+    .returning();
+
+  await db.insert(jobAuditLog).values({
+    jobId: existing.id,
+    action:
+      input.event.operation === "submit_local_execution" ? "submit" : "execute",
+    changes: {
+      source: "desktop_sync",
+      status: { old: existing.status, new: updated?.status ?? nextStatus },
+      data: { old: existing.data, new: nextData },
+      results: { old: existing.results, new: nextResults },
+      desktopSubmittedResults: submittedResults,
+      officialExecution: {
+        methodFingerprint:
+          nextResults.__compiledExecution &&
+          typeof nextResults.__compiledExecution === "object"
+            ? (nextResults.__compiledExecution as Record<string, unknown>)
+                .methodFingerprint
+            : null,
+        resultFingerprint:
+          nextResults.__compiledExecution &&
+          typeof nextResults.__compiledExecution === "object"
+            ? (nextResults.__compiledExecution as Record<string, unknown>)
+                .resultFingerprint
+            : null,
+      },
+      standardsSnapshot: {
+        old: existing.standardsSnapshot,
+        new: nextStandardsSnapshot,
+      },
+      environmentalSnapshot: {
+        old: existing.environmentalSnapshot,
+        new: nextEnvironmentalSnapshot,
+      },
+    },
+    performedBy: actorUserId,
+  });
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: existing.id,
+    remoteJobId: existing.jobId,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: existing.id,
+    remoteEntity: {
+      id: existing.id,
+      jobId: existing.jobId,
+      status: updated?.status ?? nextStatus,
+      performedAt:
+        updated?.performedAt?.toISOString?.() ??
+        existing.performedAt?.toISOString?.() ??
+        null,
+    },
+  };
+}
+
+async function validateDesktopExecutionStandardsSnapshot(
+  standardsSnapshot: StandardSnapshot[] | null,
+  memberData: MemberData,
+): Promise<
+  | { ok: true }
+  | {
+      ok: false;
+      code: string;
+      reason: string;
+    }
+> {
+  if (!standardsSnapshot || standardsSnapshot.length === 0) {
+    return { ok: true };
+  }
+
+  const selectedStandardIds = standardsSnapshot.map((standard) => standard.id);
+  const invalidIds = selectedStandardIds.filter(
+    (id): id is Exclude<typeof id, number> => !Number.isInteger(id),
+  );
+
+  if (invalidIds.length > 0) {
+    return {
+      ok: false,
+      code: "INVALID_STANDARD_SNAPSHOT",
+      reason: "Desktop execution standard snapshot contains invalid ids.",
+    };
+  }
+
+  const uniqueIds = [...new Set(selectedStandardIds as number[])];
+  const standards = await db
+    .select({
+      id: referenceStandard.id,
+      name: referenceStandard.name,
+      status: referenceStandard.status,
+      nextCalibrationDate: referenceStandard.nextCalibrationDate,
+    })
+    .from(referenceStandard)
+    .where(
+      and(
+        inArray(referenceStandard.id, uniqueIds),
+        eq(referenceStandard.organizationId, memberData.organizationId),
+        buildUnitScopeCondition(referenceStandard.unitId, memberData),
+        isNull(referenceStandard.deletedAt),
+      ),
+    );
+
+  if (standards.length !== uniqueIds.length) {
+    const foundIds = new Set(standards.map((standard) => standard.id));
+    const missingIds = uniqueIds.filter((id) => !foundIds.has(id));
+    return {
+      ok: false,
+      code: "STANDARD_SCOPE_MISMATCH",
+      reason: `Desktop execution references standards that are missing or outside scope: ${missingIds.join(", ")}.`,
+    };
+  }
+
+  const inactiveStandards = standards.filter(
+    (standard) => standard.status !== "ACTIVE",
+  );
+  if (inactiveStandards.length > 0) {
+    return {
+      ok: false,
+      code: "STANDARD_NOT_ACTIVE",
+      reason: `Desktop execution references inactive standards: ${inactiveStandards.map((standard) => standard.name).join(", ")}.`,
+    };
+  }
+
+  const now = new Date();
+  const expiredStandards = standards.filter((standard) => {
+    const nextCalibrationDate =
+      standard.nextCalibrationDate instanceof Date
+        ? standard.nextCalibrationDate
+        : new Date(standard.nextCalibrationDate);
+
+    return Number.isFinite(nextCalibrationDate.getTime())
+      ? nextCalibrationDate < now
+      : true;
+  });
+
+  if (expiredStandards.length > 0) {
+    return {
+      ok: false,
+      code: "STANDARD_EXPIRED",
+      reason: `Desktop execution references expired standards: ${expiredStandards.map((standard) => standard.name).join(", ")}.`,
+    };
+  }
+
+  return { ok: true };
+}
+
+async function applyCreateLocalServiceOrderIntake(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+  if (existingRemoteEntityId !== null) {
+    return { ok: true, remoteEntityId: existingRemoteEntityId };
+  }
+
+  const payload = asRecord(input.event.payload);
+  const parseResult = CreateServiceOrderSchema.safeParse(payload);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop service-order intake event is invalid.",
+    };
+  }
+
+  const values = parseResult.data;
+  const unitId =
+    input.event.unitId ??
+    getNumber(payload, "unitId") ??
+    input.memberData.activeUnitId ??
+    input.memberData.accessibleUnitIds[0];
+  if (!unitId) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason: "Desktop service-order intake event is missing a unit.",
+    };
+  }
+
+  const [assetRow] = await db
+    .select({
+      id: asset.id,
+      unitId: asset.unitId,
+      customerId: asset.customerId,
+      labOrganizationId: customer.labOrganizationId,
+    })
+    .from(asset)
+    .innerJoin(customer, eq(asset.customerId, customer.id))
+    .where(eq(asset.id, values.assetId))
+    .limit(1);
+
+  if (
+    !assetRow ||
+    assetRow.customerId !== values.customerId ||
+    assetRow.labOrganizationId !== input.memberData.organizationId ||
+    !input.memberData.accessibleUnitIds.includes(unitId)
+  ) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Ativo ou cliente invalido para esta OS",
+    };
+  }
+
+  const created = await createInitialServiceOrderRecords({
+    organizationId: input.memberData.organizationId,
+    unitId,
+    customerId: values.customerId,
+    assetId: values.assetId,
+    userId: actorUserId,
+    assetSnapshot: values.assetSnapshot,
+    signatureData: values.signatureData ?? null,
+    values: {
+      clientContactId: values.clientContactId ?? null,
+      clientContactSnapshot: values.clientContactSnapshot ?? null,
+      intakeType: values.intakeType,
+      sourceServiceOrderId: values.sourceServiceOrderId ?? null,
+      priority: values.priority,
+      responsibleTechnicianId: values.responsibleTechnicianId ?? null,
+      claimedDefect: values.claimedDefect,
+      intakeCondition: values.intakeCondition,
+      accessories: values.accessories ?? null,
+      oldSealNumber: values.oldSealNumber ?? null,
+      newSealNumber: values.newSealNumber ?? null,
+      repairedSealNumber: values.repairedSealNumber ?? null,
+      inmetroRepairSealNumber: values.inmetroRepairSealNumber ?? null,
+      invoiceRemittanceNumber: values.invoiceRemittanceNumber ?? null,
+      invoiceRemittanceKey: values.invoiceRemittanceKey ?? null,
+      invoiceRemittanceIssuedAt: parseSyncDate(
+        values.invoiceRemittanceIssuedAt,
+      ),
+      carrierName: values.carrierName ?? null,
+      carrierDocument: values.carrierDocument ?? null,
+      thirdPartyName: values.thirdPartyName ?? null,
+      thirdPartyDocument: values.thirdPartyDocument ?? null,
+      thirdPartyPhone: values.thirdPartyPhone ?? null,
+      deliveryMethod: values.deliveryMethod,
+      internalNotes: values.internalNotes ?? null,
+      clientVisibleNotes: values.clientVisibleNotes ?? null,
+      evaluationFeeCents: values.evaluationFeeCents,
+      warrantyUntil: parseSyncDate(values.warrantyUntil),
+      warrantyTerms: values.warrantyTerms ?? null,
+    },
+  });
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: created.id,
+    remoteServiceOrderNumber: created.serviceOrderNumber,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: created.id,
+    remoteEntity: {
+      id: created.id,
+      serviceOrderNumber: created.serviceOrderNumber,
+      status: created.status,
+      openedAt: created.openedAt?.toISOString?.() ?? created.openedAt,
+    },
+  };
+}
+
+async function applyCreateLocalServiceOrderQuoteDraft(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+  if (existingRemoteEntityId !== null) {
+    return { ok: true, remoteEntityId: existingRemoteEntityId };
+  }
+
+  const payload = asRecord(input.event.payload);
+  const remoteServiceOrderId = await getRemoteServiceOrderIdFromPayload(
+    input,
+    payload,
+  );
+  if (typeof remoteServiceOrderId !== "number") {
+    return {
+      ok: false,
+      code: "REMOTE_ENTITY_MAPPING_MISSING",
+      reason: "Desktop service-order quote has no synced cloud OS mapping.",
+    };
+  }
+
+  const parseResult = CreateServiceOrderQuoteSchema.safeParse(payload);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop service-order quote event is invalid.",
+    };
+  }
+
+  const [order] = await db
+    .select()
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.id, remoteServiceOrderId),
+        eq(serviceOrder.organizationId, input.memberData.organizationId),
+        buildUnitScopeCondition(serviceOrder.unitId, input.memberData),
+      ),
+    )
+    .limit(1);
+  if (!order) {
+    return {
+      ok: false,
+      code: "REMOTE_ENTITY_NOT_FOUND",
+      reason: "Cloud service order for desktop quote was not found.",
+    };
+  }
+
+  const values = parseResult.data;
+  const [latest] = await db
+    .select({ version: serviceOrderQuote.version })
+    .from(serviceOrderQuote)
+    .where(eq(serviceOrderQuote.serviceOrderId, order.id))
+    .orderBy(desc(serviceOrderQuote.version))
+    .limit(1);
+  const version = (latest?.version ?? 0) + 1;
+  const quote = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(serviceOrderQuote)
+      .values({
+        serviceOrderId: order.id,
+        quoteNumber: `${order.serviceOrderNumber}/ORC`,
+        version,
+        validUntil: parseSyncDate(values.validUntil),
+        paymentTerms: values.paymentTerms ?? null,
+        deliveryEstimate: values.deliveryEstimate ?? null,
+        warrantyTerms: values.warrantyTerms ?? null,
+        clientMessage: values.clientMessage ?? null,
+        internalNotes: values.internalNotes ?? null,
+        createdByUserId: actorUserId,
+      })
+      .returning();
+    if (!created) throw new Error("Falha ao criar orcamento");
+
+    const totals = await replaceQuoteItems(
+      {
+        quoteId: created.id,
+        items: values.items.map((item) => ({
+          ...item,
+          warrantyUntil: parseSyncDate(item.warrantyUntil),
+        })),
+      },
+      tx,
+    );
+    await tx
+      .update(serviceOrderQuote)
+      .set({
+        subtotalServicesCents: totals.subtotalServicesCents,
+        subtotalPartsCents: totals.subtotalPartsCents,
+        discountCents: totals.discountCents,
+        freightCents: totals.freightCents,
+        totalCents: totals.totalCents,
+      })
+      .where(eq(serviceOrderQuote.id, created.id));
+    await recordServiceOrderEvent(
+      {
+        organizationId: order.organizationId,
+        unitId: order.unitId,
+        serviceOrderId: order.id,
+        actorType: "lab_user",
+        actorId: actorUserId,
+        eventType: "service_order.quote_created",
+        metadata: {
+          quoteId: created.id,
+          version,
+          source: "desktop_sync",
+        },
+      },
+      tx,
+    );
+
+    return { ...created, ...totals };
+  });
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: quote.id,
+    remoteServiceOrderId: order.id,
+    remoteQuoteNumber: quote.quoteNumber,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: quote.id,
+    remoteEntity: {
+      id: quote.id,
+      quoteNumber: quote.quoteNumber,
+      version: quote.version,
+      status: quote.status,
+      totalCents: quote.totalCents,
+    },
+  };
+}
+
+async function applyLocalServiceOrderExecutionNotes(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const payload = asRecord(input.event.payload);
+  const remoteServiceOrderId = await getRemoteServiceOrderIdFromPayload(
+    input,
+    payload,
+  );
+  if (typeof remoteServiceOrderId !== "number") {
+    return {
+      ok: false,
+      code: "REMOTE_ENTITY_MAPPING_MISSING",
+      reason: "Desktop service-order execution has no synced cloud OS mapping.",
+    };
+  }
+
+  const parseResult = UpdateServiceOrderExecutionSchema.safeParse(payload);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop service-order execution event is invalid.",
+    };
+  }
+
+  const [order] = await db
+    .select()
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.id, remoteServiceOrderId),
+        eq(serviceOrder.organizationId, input.memberData.organizationId),
+        buildUnitScopeCondition(serviceOrder.unitId, input.memberData),
+      ),
+    )
+    .limit(1);
+  if (!order) {
+    return {
+      ok: false,
+      code: "REMOTE_ENTITY_NOT_FOUND",
+      reason: "Cloud service order for desktop execution was not found.",
+    };
+  }
+
+  const values = parseResult.data;
+  const execution = await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(serviceOrderExecution)
+      .where(eq(serviceOrderExecution.serviceOrderId, order.id))
+      .limit(1);
+    const [current] =
+      existing !== undefined
+        ? [existing]
+        : await tx
+            .insert(serviceOrderExecution)
+            .values({
+              serviceOrderId: order.id,
+              startedByUserId: actorUserId,
+              technicalNotes: values.technicalNotes ?? null,
+            })
+            .returning();
+    if (!current) throw new Error("Falha ao criar execucao");
+
+    if (values.items) {
+      await replaceExecutionItems(
+        {
+          executionId: current.id,
+          items: values.items.map((item) => ({
+            ...item,
+            warrantyUntil: parseSyncDate(item.warrantyUntil),
+          })),
+        },
+        tx,
+      );
+    }
+
+    const [updated] = await tx
+      .update(serviceOrderExecution)
+      .set({
+        servicePerformed: values.servicePerformed,
+        partsUsedSummary: values.partsUsedSummary,
+        technicalNotes: values.technicalNotes,
+        calibrationRequiredAfterRepair: values.calibrationRequiredAfterRepair,
+        result: values.result,
+        updatedAt: new Date(),
+      })
+      .where(eq(serviceOrderExecution.id, current.id))
+      .returning();
+    await tx
+      .update(serviceOrder)
+      .set({
+        status: "repair_in_progress",
+        repairStartedAt: order.repairStartedAt ?? new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(serviceOrder.id, order.id));
+    await recordServiceOrderEvent(
+      {
+        organizationId: order.organizationId,
+        unitId: order.unitId,
+        serviceOrderId: order.id,
+        actorType: "lab_user",
+        actorId: actorUserId,
+        eventType: "service_order.repair_started",
+        metadata: { source: "desktop_sync", executionId: current.id },
+      },
+      tx,
+    );
+
+    return updated ?? current;
+  });
+
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: execution.id,
+    remoteServiceOrderId: order.id,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: execution.id,
+    remoteEntity: {
+      id: execution.id,
+      status: "repair_in_progress",
+      serviceOrderId: order.id,
+      startedAt: execution.startedAt?.toISOString?.() ?? execution.startedAt,
+      updatedAt: execution.updatedAt?.toISOString?.() ?? execution.updatedAt,
+    },
+  };
+}
+
+async function applyCreateLocalServiceOrderDeliveryDocumentDraft(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+): Promise<ApplyDesktopSyncEventResult> {
+  const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    input.event.entityId,
+  );
+  if (existingRemoteEntityId !== null) {
+    return { ok: true, remoteEntityId: existingRemoteEntityId };
+  }
+
+  const payload = asRecord(input.event.payload);
+  const remoteServiceOrderId = await getRemoteServiceOrderIdFromPayload(
+    input,
+    payload,
+  );
+  if (typeof remoteServiceOrderId !== "number") {
+    return {
+      ok: false,
+      code: "REMOTE_ENTITY_MAPPING_MISSING",
+      reason:
+        "Desktop service-order delivery document has no synced cloud OS mapping.",
+    };
+  }
+
+  const parseResult =
+    IssueServiceOrderDeliveryDocumentSchema.safeParse(payload);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop service-order delivery document event is invalid.",
+    };
+  }
+
+  const [order] = await db
+    .select()
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.id, remoteServiceOrderId),
+        eq(serviceOrder.organizationId, input.memberData.organizationId),
+        buildUnitScopeCondition(serviceOrder.unitId, input.memberData),
+      ),
+    )
+    .limit(1);
+  if (!order) {
+    return {
+      ok: false,
+      code: "REMOTE_ENTITY_NOT_FOUND",
+      reason:
+        "Cloud service order for desktop delivery document was not found.",
+    };
+  }
+
+  const values = parseResult.data;
+  const [latest] = await db
+    .select({ version: serviceOrderDeliveryDocument.version })
+    .from(serviceOrderDeliveryDocument)
+    .where(eq(serviceOrderDeliveryDocument.serviceOrderId, order.id))
+    .orderBy(desc(serviceOrderDeliveryDocument.version))
+    .limit(1);
+  const version = (latest?.version ?? 0) + 1;
+  const [document] = await db
+    .insert(serviceOrderDeliveryDocument)
+    .values({
+      serviceOrderId: order.id,
+      documentNumber: `${order.serviceOrderNumber}/ENT`,
+      version,
+      issuedAt: new Date(),
+      issuedByUserId: actorUserId,
+      technicianSignatureData: values.technicianSignatureData ?? null,
+      clientSignatureData: values.clientSignatureData ?? null,
+    })
+    .returning();
+  if (!document) throw new Error("Falha ao criar documento de entrega");
+
+  await recordServiceOrderEvent({
+    organizationId: order.organizationId,
+    unitId: order.unitId,
+    serviceOrderId: order.id,
+    actorType: "lab_user",
+    actorId: actorUserId,
+    eventType: "service_order.delivery_document_issued",
+    metadata: {
+      source: "desktop_sync",
+      deliveryDocumentId: document.id,
+      version,
+    },
+  });
+  await writeDesktopSyncAudit(input, actorUserId, {
+    remoteEntityId: document.id,
+    remoteServiceOrderId: order.id,
+    remoteDocumentNumber: document.documentNumber,
+  });
+
+  return {
+    ok: true,
+    remoteEntityId: document.id,
+    remoteEntity: {
+      id: document.id,
+      documentNumber: document.documentNumber,
+      version: document.version,
+      issuedAt: document.issuedAt?.toISOString?.() ?? document.issuedAt,
+    },
+  };
+}
+
+async function executeOfficialDesktopSyncSnapshot(params: {
+  methodSnapshot: MethodSnapshot | null;
+  data: Record<string, unknown>;
+  assetSnapshot: AssetSnapshot | null;
+  standardsSnapshot: StandardSnapshot[] | null;
+  environmentalSnapshot: EnvironmentalSnapshot | null;
+}): Promise<
+  | { ok: true; results: Record<string, unknown> }
+  | {
+      ok: false;
+      code: string;
+      reason: string;
+      diagnostics: MethodDiagnostic[];
+    }
+> {
+  if (!params.methodSnapshot || !params.assetSnapshot) {
+    return {
+      ok: false,
+      code: "COMPILED_METHOD_SNAPSHOT_REQUIRED",
+      reason:
+        "Desktop execution sync requires frozen method and asset snapshots.",
+      diagnostics: [],
+    };
+  }
+
+  const methodSnapshot = params.methodSnapshot;
+  const assetSnapshot = params.assetSnapshot;
+  const compiled = getCompiledMethodSnapshot(methodSnapshot);
+  if (!compiled.ok) {
+    return {
+      ok: false,
+      code: "COMPILED_METHOD_SNAPSHOT_INVALID",
+      reason: compiled.reason,
+      diagnostics: compiled.diagnostics,
+    };
+  }
+
+  const execution = executeCompiledMethod(
+    compiled.compiledMethod,
+    {
+      inputs: buildOfficialExecutionInputs({
+        ...params,
+        methodSnapshot,
+        assetSnapshot,
+      }),
+    },
+    { engine: await createMethodExecutionEngine() },
+  );
+
+  if (!execution.ok) {
+    return {
+      ok: false,
+      code: "OFFICIAL_EXECUTION_FAILED",
+      reason:
+        execution.diagnostics.find((item) => item.severity === "error")
+          ?.message ?? "Cloud verification of desktop execution failed.",
+      diagnostics: execution.diagnostics,
+    };
+  }
+
+  return {
+    ok: true,
+    results: {
+      ...execution.outputs,
+      __compiledExecution: {
+        methodFingerprint: execution.methodFingerprint,
+        engineVersion: execution.engineVersion,
+        engineOptionsFingerprint: execution.engineOptionsFingerprint,
+        inputFingerprint: execution.inputFingerprint,
+        calculationFingerprint: execution.calculationFingerprint,
+        resultFingerprint: execution.resultFingerprint,
+        canonicalResultJson: execution.canonicalResultJson,
+        formulaResults: execution.formulaResults,
+        measurementModelResults: execution.measurementModelResults,
+        acceptanceCriteriaResults: execution.acceptanceCriteriaResults,
+        diagnostics: execution.diagnostics,
+      },
+    },
+  };
+}
+
+function getCompiledMethodSnapshot(
+  methodSnapshot: MethodSnapshot,
+):
+  | { ok: true; compiledMethod: CompiledMethod }
+  | { ok: false; diagnostics: MethodDiagnostic[]; reason: string } {
+  const compiledMethod = methodSnapshot.compiledMethod;
+  if (
+    !compiledMethod ||
+    typeof compiledMethod !== "object" ||
+    Array.isArray(compiledMethod) ||
+    !methodSnapshot.methodFingerprint ||
+    !methodSnapshot.engineVersion ||
+    !methodSnapshot.engineOptionsFingerprint ||
+    !methodSnapshot.normalizedMethodJson
+  ) {
+    const reason =
+      "Compiled method snapshot is required for desktop execution sync.";
+    return {
+      ok: false,
+      reason,
+      diagnostics: [
+        methodDiagnostic(
+          "COMPILED_METHOD_SNAPSHOT_REQUIRED",
+          reason,
+          "methodSnapshot.compiledMethod",
+        ),
+      ],
+    };
+  }
+
+  const candidate = compiledMethod as Partial<CompiledMethod>;
+  if (
+    candidate.status !== "compiled" ||
+    typeof candidate.methodFingerprint !== "string" ||
+    !candidate.engine ||
+    !Array.isArray(candidate.inputs) ||
+    !Array.isArray(candidate.formulas) ||
+    !Array.isArray(candidate.measurementModels) ||
+    !Array.isArray(candidate.acceptanceCriteria)
+  ) {
+    const reason = "Compiled method snapshot has an invalid shape.";
+    return {
+      ok: false,
+      reason,
+      diagnostics: [
+        methodDiagnostic(
+          "COMPILED_METHOD_SNAPSHOT_INVALID",
+          reason,
+          "methodSnapshot.compiledMethod",
+        ),
+      ],
+    };
+  }
+
+  const mismatches: MethodDiagnostic[] = [];
+  if (candidate.methodFingerprint !== methodSnapshot.methodFingerprint) {
+    mismatches.push(
+      methodDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Compiled method fingerprint differs from the job snapshot.",
+        "methodSnapshot.methodFingerprint",
+      ),
+    );
+  }
+
+  if (candidate.engine.version !== methodSnapshot.engineVersion) {
+    mismatches.push(
+      methodDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Compiled engine version differs from the job snapshot.",
+        "methodSnapshot.engineVersion",
+      ),
+    );
+  }
+
+  if (
+    candidate.engine.optionsFingerprint !==
+    methodSnapshot.engineOptionsFingerprint
+  ) {
+    mismatches.push(
+      methodDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Compiled engine options fingerprint differs from the job snapshot.",
+        "methodSnapshot.engineOptionsFingerprint",
+      ),
+    );
+  }
+
+  if (candidate.normalizedMethodJson !== methodSnapshot.normalizedMethodJson) {
+    mismatches.push(
+      methodDiagnostic(
+        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
+        "Compiled normalized method JSON differs from the job snapshot.",
+        "methodSnapshot.normalizedMethodJson",
+      ),
+    );
+  }
+
+  if (mismatches.length > 0) {
+    return {
+      ok: false,
+      reason: "Compiled method snapshot does not match job metadata.",
+      diagnostics: mismatches,
+    };
+  }
+
+  return { ok: true, compiledMethod: compiledMethod as CompiledMethod };
+}
+
+function buildOfficialExecutionInputs(params: {
+  methodSnapshot: MethodSnapshot;
+  data: Record<string, unknown>;
+  assetSnapshot: AssetSnapshot;
+  standardsSnapshot: StandardSnapshot[] | null;
+  environmentalSnapshot: EnvironmentalSnapshot | null;
+}): Record<string, unknown> {
+  const inputs: Record<string, unknown> = { ...params.data };
+
+  for (const field of params.methodSnapshot.dataFields ?? []) {
+    if (field.source !== "asset_spec" || !field.assetSpecKey) continue;
+    const value = params.assetSnapshot.specifications?.[field.assetSpecKey];
+    if (value !== undefined) {
+      inputs[field.key] = value;
+    }
+  }
+
+  if (params.environmentalSnapshot) {
+    inputs.environment = {
+      temperature: params.environmentalSnapshot.temperature,
+      humidity: params.environmentalSnapshot.humidity,
+      pressure: params.environmentalSnapshot.pressure,
+    };
+  }
+
+  if (params.standardsSnapshot !== undefined) {
+    inputs.standards =
+      normalizeStandardsForOfficialExecution(params.standardsSnapshot) ?? [];
+  }
+
+  return inputs;
+}
+
+async function createMethodExecutionEngine(): Promise<CalculationEngineLike> {
+  const { createCalculationEngine, normalizeEngineOptions } =
+    await import("@calibra-facil/math-engine");
+
+  return createCalculationEngine(
+    normalizeEngineOptions(METHOD_ENGINE_OPTIONS),
+  ) as unknown as CalculationEngineLike;
+}
+
+function normalizeStandardNumberToGrams(
+  value: number | null | undefined,
+  unit: unknown,
+): { value: number | null | undefined; normalized: boolean } {
+  if (value === null || value === undefined) {
+    return { value, normalized: false };
+  }
+
+  const normalized = toCanonicalMassValue(value, unit);
+  return normalized === null
+    ? { value, normalized: false }
+    : { value: normalized, normalized: true };
+}
+
+function normalizeStandardsForOfficialExecution(
+  standards: StandardSnapshot[] | null,
+): StandardSnapshot[] | null {
+  if (!standards) {
+    return standards;
+  }
+
+  return standards.map((standard) => {
+    const certifiedValues = standard.certifiedValues?.map((certifiedValue) => {
+      const value = normalizeStandardNumberToGrams(
+        certifiedValue.value,
+        certifiedValue.unit,
+      );
+      const uncertainty = normalizeStandardNumberToGrams(
+        certifiedValue.uncertainty,
+        certifiedValue.unit,
+      );
+      const maxError = normalizeStandardNumberToGrams(
+        certifiedValue.maxError,
+        certifiedValue.unit,
+      );
+      const drift = normalizeStandardNumberToGrams(
+        certifiedValue.drift,
+        certifiedValue.unit,
+      );
+      const buoyancy = normalizeStandardNumberToGrams(
+        certifiedValue.buoyancy,
+        certifiedValue.unit,
+      );
+
+      return {
+        ...certifiedValue,
+        value: value.value ?? certifiedValue.value,
+        uncertainty: uncertainty.value ?? certifiedValue.uncertainty,
+        unit: value.normalized ? "g" : certifiedValue.unit,
+        maxError: maxError.value ?? certifiedValue.maxError,
+        drift: drift.value ?? certifiedValue.drift,
+        buoyancy: buoyancy.value ?? certifiedValue.buoyancy,
+      };
+    });
+
+    const driftUnit =
+      standard.certifiedValues?.[0]?.unit ?? standard.uncertaintyUnit;
+    const normalizedUncertainty = normalizeStandardNumberToGrams(
+      standard.uncertainty,
+      standard.uncertaintyUnit,
+    );
+    const normalizedDrift = normalizeStandardNumberToGrams(
+      standard.drift,
+      driftUnit,
+    );
+
+    return {
+      ...standard,
+      uncertainty: normalizedUncertainty.value ?? standard.uncertainty,
+      uncertaintyUnit: normalizedUncertainty.normalized
+        ? "g"
+        : standard.uncertaintyUnit,
+      drift: normalizedDrift.value ?? standard.drift,
+      certifiedValues: certifiedValues ?? null,
+    };
+  });
+}
+
+type CertificatePdfUploadFields = {
+  eventId: string;
+  entityId: string;
+  operation: string;
+  idempotencyKey: string;
+  localVersion: number;
+  occurredAt: string;
+  actorUserId: string;
+  organizationId: string;
+  unitId: number | null;
+  localJobId: string;
+  draftId: string;
+  contentHash: string;
+  sizeBytes: number;
+  file: File;
+};
+
+function buildCertificatePdfUploadSyncEvent(
+  upload: CertificatePdfUploadFields,
+  payload: Record<string, unknown>,
+): SyncEvent {
+  return {
+    eventId: upload.eventId,
+    entityType: "certificate_draft",
+    entityId: upload.entityId,
+    operation: upload.operation,
+    payload,
+    occurredAt: upload.occurredAt,
+    actorUserId: upload.actorUserId,
+    organizationId: upload.organizationId,
+    unitId: upload.unitId,
+    idempotencyKey: upload.idempotencyKey,
+    localVersion: upload.localVersion,
+  };
+}
+
+function readCertificatePdfUploadFields(
+  formData: FormData,
+):
+  | { ok: true; value: CertificatePdfUploadFields }
+  | { ok: false; eventId: string; code: string; reason: string } {
+  const eventId = formString(formData, "eventId") ?? "unknown";
+  const file = formData.get("file");
+  const localVersion = formNumber(formData, "localVersion");
+  const sizeBytes = formNumber(formData, "sizeBytes");
+  const unitIdText = formString(formData, "unitId");
+  const unitId =
+    unitIdText === null || unitIdText === "" ? null : Number(unitIdText);
+
+  if (!(file instanceof File)) {
+    return {
+      ok: false,
+      eventId,
+      code: "INVALID_CERTIFICATE_PDF_UPLOAD",
+      reason: "Certificate PDF upload is missing the PDF file.",
+    };
+  }
+
+  if (
+    !Number.isInteger(localVersion) ||
+    !Number.isInteger(sizeBytes) ||
+    sizeBytes <= 0 ||
+    (unitId !== null && (!Number.isInteger(unitId) || unitId <= 0))
+  ) {
+    return {
+      ok: false,
+      eventId,
+      code: "INVALID_CERTIFICATE_PDF_UPLOAD",
+      reason: "Certificate PDF upload has invalid numeric metadata.",
+    };
+  }
+
+  const required = {
+    entityId: formString(formData, "entityId"),
+    operation: formString(formData, "operation"),
+    idempotencyKey: formString(formData, "idempotencyKey"),
+    occurredAt: formString(formData, "occurredAt"),
+    actorUserId: formString(formData, "actorUserId"),
+    organizationId: formString(formData, "organizationId"),
+    localJobId: formString(formData, "localJobId"),
+    draftId: formString(formData, "draftId"),
+    contentHash: formString(formData, "contentHash"),
+  };
+
+  if (Object.values(required).some((value) => !value)) {
+    return {
+      ok: false,
+      eventId,
+      code: "INVALID_CERTIFICATE_PDF_UPLOAD",
+      reason: "Certificate PDF upload is missing required metadata.",
+    };
+  }
+
+  if (required.operation !== "generate_local_certificate_pdf") {
+    return {
+      ok: false,
+      eventId,
+      code: "INVALID_CERTIFICATE_PDF_UPLOAD_OPERATION",
+      reason: "Certificate PDF upload operation is not supported.",
+    };
+  }
+
+  if (!/^[a-f0-9]{64}$/.test(required.contentHash!)) {
+    return {
+      ok: false,
+      eventId,
+      code: "INVALID_CERTIFICATE_PDF_HASH",
+      reason: "Certificate PDF upload hash is invalid.",
+    };
+  }
+
+  if (file.type && file.type !== "application/pdf") {
+    return {
+      ok: false,
+      eventId,
+      code: "INVALID_CERTIFICATE_PDF_CONTENT_TYPE",
+      reason: "Certificate PDF upload must be application/pdf.",
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      eventId,
+      entityId: required.entityId!,
+      operation: required.operation!,
+      idempotencyKey: required.idempotencyKey!,
+      localVersion,
+      occurredAt: required.occurredAt!,
+      actorUserId: required.actorUserId!,
+      organizationId: required.organizationId!,
+      unitId,
+      localJobId: required.localJobId!,
+      draftId: required.draftId!,
+      contentHash: required.contentHash!,
+      sizeBytes,
+      file,
+    },
+  };
+}
+
+function buildDesktopCertificatePdfKey(input: {
+  organizationId: string;
+  year: number;
+  jobId: string;
+  draftId: string;
+}) {
+  return `org/${input.organizationId}/${input.year}/jobs/${safeR2Segment(
+    input.jobId,
+  )}/desktop-${safeR2Segment(input.draftId)}.pdf`;
+}
+
+function buildSyncAttachmentObjectKey(
+  memberData: MemberData,
+  input: {
+    eventId: string;
+    entityType: string;
+    entityId: string;
+    fileName: string;
+    contentHash: string;
+  },
+) {
+  const fileIdentity = [
+    input.contentHash.slice(0, 16),
+    safeR2Segment(input.eventId),
+  ].join("-");
+
+  return [
+    "org",
+    safeR2Segment(memberData.organizationId),
+    "sync-attachments",
+    safeR2Segment(input.entityType),
+    safeR2Segment(input.entityId),
+    `${fileIdentity}${safeAttachmentExtension(input.fileName)}`,
+  ].join("/");
+}
+
+function encodeSyncAttachmentId(objectKey: string) {
+  return Buffer.from(objectKey, "utf8").toString("base64url");
+}
+
+function tryDecodeSyncAttachmentId(attachmentId: string) {
+  const objectKey = Buffer.from(attachmentId, "base64url").toString("utf8");
+  if (!isValidSyncAttachmentObjectKey(objectKey)) {
+    return null;
+  }
+
+  return objectKey;
+}
+
+function isValidSyncAttachmentObjectKey(objectKey: string) {
+  return (
+    objectKey.startsWith("org/") &&
+    objectKey.includes("/sync-attachments/") &&
+    !objectKey.includes("..") &&
+    !objectKey.startsWith("/") &&
+    !objectKey.endsWith("/")
+  );
+}
+
+function safeAttachmentExtension(fileName: string) {
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex < 0) return "";
+
+  const extension = fileName.slice(dotIndex, dotIndex + 16);
+  return /^\.[a-zA-Z0-9]+$/.test(extension) ? extension : "";
+}
+
+function formString(formData: FormData, key: string) {
+  const value = formData.get(key);
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function formNumber(formData: FormData, key: string) {
+  const value = formString(formData, key);
+  return value ? Number(value) : Number.NaN;
+}
+
+function safeR2Segment(value: string) {
+  return (
+    value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "local"
+  );
+}
+
+function methodDiagnostic(
+  code: string,
+  message: string,
+  path: string,
+): MethodDiagnostic {
+  return {
+    code,
+    severity: "error",
+    message,
+    path,
+  };
+}
+
+async function findDesktopSyncRemoteEntityId(
+  organizationId: string,
+  localEntityId: string,
+) {
+  const rows = await db
+    .select({
+      details: organizationEventLog.details,
+    })
+    .from(organizationEventLog)
+    .where(
+      and(
+        eq(organizationEventLog.organizationId, organizationId),
+        eq(organizationEventLog.entityId, localEntityId),
+      ),
+    )
+    .limit(20);
+
+  for (const row of rows) {
+    const details = asRecord(row.details);
+    const remoteEntityId = details.remoteEntityId;
+    if (
+      typeof remoteEntityId === "number" ||
+      typeof remoteEntityId === "string"
+    ) {
+      return remoteEntityId;
+    }
+  }
+
+  return null;
+}
+
+async function findAppliedDesktopSyncEvent(
+  organizationId: string,
+  event: SyncEvent,
+) {
+  const rows = await db
+    .select({
+      details: organizationEventLog.details,
+    })
+    .from(organizationEventLog)
+    .where(
+      and(
+        eq(organizationEventLog.organizationId, organizationId),
+        eq(organizationEventLog.entityId, event.entityId),
+      ),
+    )
+    .limit(100);
+
+  for (const row of rows) {
+    const details = asRecord(row.details);
+    if (details.eventId !== event.eventId) continue;
+
+    const remoteEntityId = details.remoteEntityId;
+    return {
+      remoteEntityId:
+        typeof remoteEntityId === "number" || typeof remoteEntityId === "string"
+          ? remoteEntityId
+          : undefined,
+      remoteEntity: details.remoteEntity,
+    };
+  }
+
+  return null;
+}
+
+async function getRemoteServiceOrderIdFromPayload(
+  input: ApplyDesktopSyncEventInput,
+  payload: Record<string, unknown>,
+) {
+  const localServiceOrderId = getNullableString(payload, "serviceOrderId");
+  if (!localServiceOrderId) return null;
+
+  return findDesktopSyncRemoteEntityId(
+    input.memberData.organizationId,
+    localServiceOrderId,
+  );
+}
+
+async function writeDesktopSyncAudit(
+  input: ApplyDesktopSyncEventInput,
+  actorUserId: string,
+  details: Record<string, unknown> = {},
+) {
+  await writeOrganizationAuditEvent({
+    organizationId: input.memberData.organizationId,
+    unitId: input.event.unitId,
+    actorUserId,
+    actorMemberId: input.memberData.id,
+    action: `desktop_sync.${input.event.operation}`,
+    entityType: input.event.entityType,
+    entityId: input.event.entityId,
+    details: {
+      eventId: input.event.eventId,
+      deviceId: input.deviceId,
+      clientBatchId: input.clientBatchId,
+      idempotencyKey: input.event.idempotencyKey,
+      localVersion: input.event.localVersion,
+      payload: input.event.payload,
+      localEntityId: input.event.entityId,
+      ...details,
+    },
+  });
+}
+
+function getSyncActorUserId(event: SyncEvent, fallbackUserId: string) {
+  return event.actorUserId && event.actorUserId !== "local"
+    ? event.actorUserId
+    : fallbackUserId;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getNumber(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function getNullableString(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function getRecordOrNull(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function getArrayOrNull(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  return Array.isArray(value) ? value : null;
+}
+
+function hasOwn(row: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(row, key);
+}
+
+function getJobStatus(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  if (
+    value === "DRAFT" ||
+    value === "IN_PROGRESS" ||
+    value === "REVIEW" ||
+    value === "REJECTED"
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
+function parseSyncDate(value: string | null | undefined) {
+  return value ? new Date(value) : null;
+}
+
+function generateDesktopCustomerSlug(name: string) {
+  const base = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .substring(0, 50);
+
+  return `${base || "cliente"}-${randomUUID().slice(0, 8)}`;
+}

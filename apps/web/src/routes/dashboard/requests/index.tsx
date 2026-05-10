@@ -25,6 +25,10 @@ import {
 } from '@/components/ui/card'
 import { DataTable } from '@/components/ui/data-table'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
 
 export const Route = createFileRoute('/dashboard/requests/')({
   head: () => ({
@@ -83,6 +87,7 @@ function formatDate(date: string | null | undefined) {
 function RequestsPage() {
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const organizationQueryKey = activeOrganizationId ?? 'no-org'
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -98,7 +103,10 @@ function RequestsPage() {
       deferredSearch,
       statusFilter,
     ],
-    enabled: Boolean(activeOrganizationId) && !isContextSwitching,
+    enabled:
+      Boolean(activeOrganizationId) &&
+      !isContextSwitching &&
+      !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api['calibration-requests'].$get({
         query: {
@@ -183,6 +191,10 @@ function RequestsPage() {
         </CardContent>
       </Card>
     )
+  }
+
+  if (cloudOnlyUnavailable) {
+    return <CloudOnlyOfflineState title="Solicitações indisponíveis offline" />
   }
 
   return (

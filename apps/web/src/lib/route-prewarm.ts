@@ -8,8 +8,8 @@ import {
   getStoredDashboardOrganizationId,
   prewarmRouteQueries,
 } from '@/lib/route-data'
-import { apiRouteParam } from '@/lib/route-identifiers'
-import { api } from '@/utils/api'
+import { api, calibraApi } from '@/utils/api'
+import { isDesktopRuntime } from '@/runtime/desktop'
 
 const PREWARM_COOLDOWN_MS = 3_000
 const DEFAULT_PREWARM_STALE_TIME_MS = 15_000
@@ -53,11 +53,6 @@ async function jsonOrThrow(response: Response, message: string) {
   return response.json() as Promise<unknown>
 }
 
-async function dataOrThrow(response: Response, message: string) {
-  const result = (await jsonOrThrow(response, message)) as { data?: unknown }
-  return result.data
-}
-
 function prewarmQueries(
   queryClient: QueryClient,
   queries: Array<PrewarmQuery | null | undefined>,
@@ -94,16 +89,11 @@ function customersSearchQuery(organizationId: string, search = '') {
   return query({
     queryKey: ['customers', organizationId, 'search', search],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.customers.$get({
-          query: {
-            page: '1',
-            limit: '50',
-            query: search || undefined,
-          },
-        }),
-        'Failed to load customers',
-      ),
+      calibraApi.customers.list({
+        page: 1,
+        limit: 50,
+        query: search || undefined,
+      }),
     staleTime: 30_000,
   })
 }
@@ -112,27 +102,18 @@ function customersPlainSearchQuery(search = '') {
   return query({
     queryKey: ['customers', 'search', search],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.customers.$get({
-          query: {
-            page: '1',
-            limit: '50',
-            query: search || undefined,
-          },
-        }),
-        'Failed to load customers',
-      ),
+      calibraApi.customers.list({
+        page: 1,
+        limit: 50,
+        query: search || undefined,
+      }),
   })
 }
 
 function customerDetailQuery(id: string) {
   return query({
     queryKey: ['customer', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.customers[':id'].$get({ param: { id } }),
-        'Failed to load customer',
-      ),
+    queryFn: async () => calibraApi.customers.get(id),
   })
 }
 
@@ -154,51 +135,34 @@ function assetsListQuery(organizationId: string, url: URL) {
       customerIdParam,
     ],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.assets.$get({
-          query: apiQuery({
-            page: String(page),
-            limit: String(DEFAULT_LIST_LIMIT),
-            query: search || undefined,
-            status: status || undefined,
-            customerId: customerIdParam ? String(customerIdParam) : undefined,
-          }),
-        }),
-        'Failed to load assets',
-      ),
+      calibraApi.assets.list({
+        page,
+        limit: DEFAULT_LIST_LIMIT,
+        query: search || undefined,
+        status: status || undefined,
+        customerId: customerIdParam || undefined,
+      }),
   })
 }
 
 function assetDetailQuery(id: string) {
   return query({
     queryKey: ['asset', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.assets[':id'].$get({ param: { id } }),
-        'Failed to load asset',
-      ),
+    queryFn: async () => calibraApi.assets.get(id),
   })
 }
 
 function assetAuditQuery(id: string) {
   return query({
     queryKey: ['asset', id, 'audit-log'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.assets[':id']['audit-log'].$get({ param: { id } }),
-        'Failed to load asset audit log',
-      ),
+    queryFn: async () => calibraApi.assets.auditLog(id),
   })
 }
 
 function assetTypesQuery() {
   return query({
     queryKey: ['asset-types'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api['asset-types'].$get({ query: {} }),
-        'Failed to load asset types',
-      ),
+    queryFn: async () => calibraApi.assetTypes.list(),
   })
 }
 
@@ -210,52 +174,33 @@ function standardsListQuery(organizationId: string, url: URL) {
   return query({
     queryKey: ['standards', organizationId, page, search, status],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.standards.$get({
-          query: apiQuery({
-            page: String(page),
-            limit: String(DEFAULT_LIST_LIMIT),
-            query: search || undefined,
-            status: status || undefined,
-          }),
-        }),
-        'Failed to load standards',
-      ),
+      calibraApi.standards.list({
+        page,
+        limit: DEFAULT_LIST_LIMIT,
+        query: search || undefined,
+        status: status || undefined,
+      }),
   })
 }
 
 function activeStandardsQuery() {
   return query({
     queryKey: ['standards', 'active'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.standards.$get({
-          query: { status: 'ACTIVE', limit: '100' },
-        }),
-        'Failed to load standards',
-      ),
+    queryFn: async () => calibraApi.jobs.listStandards(),
   })
 }
 
 function standardDetailQuery(id: string) {
   return query({
     queryKey: ['standards', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.standards[':id'].$get({ param: { id } }),
-        'Failed to load standard',
-      ),
+    queryFn: async () => calibraApi.standards.get(id),
   })
 }
 
 function standardAuditQuery(id: string) {
   return query({
     queryKey: ['standards', id, 'audit-log'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.standards[':id']['audit-log'].$get({ param: { id } }),
-        'Failed to load standard audit log',
-      ),
+    queryFn: async () => calibraApi.standards.auditLog(id),
   })
 }
 
@@ -267,55 +212,49 @@ function servicesListQuery(organizationId: string, url: URL) {
   return query({
     queryKey: ['services', organizationId, page, search, status],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.services.$get({
-          query: {
-            page: String(page),
-            limit: String(DEFAULT_LIST_LIMIT),
-            query: search || undefined,
-            isActive:
-              status === 'active'
-                ? 'true'
-                : status === 'inactive'
-                  ? 'false'
-                  : undefined,
-          },
-        }),
-        'Failed to load services',
-      ),
+      calibraApi.services.list({
+        page,
+        limit: DEFAULT_LIST_LIMIT,
+        query: search || undefined,
+        isActive:
+          status === 'active'
+            ? true
+            : status === 'inactive'
+              ? false
+              : undefined,
+      }),
   })
 }
 
 function serviceOptionsQuery() {
   return query({
     queryKey: ['finance', 'contract-form', 'services'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.services.$get({ query: { limit: '100' } }),
-        'Failed to load services',
-      ),
+    queryFn: async () => calibraApi.services.list({ limit: 100 }),
   })
 }
 
 function serviceDetailQuery(id: string) {
   return query({
     queryKey: ['services', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.services[':id'].$get({ param: { id } }),
-        'Failed to load service',
-      ),
+    queryFn: async () => calibraApi.services.get(id),
   })
 }
 
 function serviceAuditQuery(id: string) {
   return query({
     queryKey: ['services', id, 'audit-log'],
+    queryFn: async () => calibraApi.services.auditLog(id),
+  })
+}
+
+function publishedMethodsQuery() {
+  return query({
+    queryKey: ['methods', 'published'],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.services[':id']['audit-log'].$get({ param: { id } }),
-        'Failed to load service audit log',
-      ),
+      calibraApi.methods.list({
+        status: 'PUBLISHED',
+        limit: 100,
+      }),
   })
 }
 
@@ -327,29 +266,19 @@ function methodsListQuery(url: URL) {
   return query({
     queryKey: ['methods', page, search, status],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.methods.$get({
-          query: apiQuery({
-            page: String(page),
-            limit: String(DEFAULT_LIST_LIMIT),
-            query: search || undefined,
-            status: status || undefined,
-            includeArchived: status === 'ARCHIVED' ? 'true' : 'false',
-          }),
-        }),
-        'Failed to load methods',
-      ),
+      calibraApi.methods.list({
+        page,
+        limit: DEFAULT_LIST_LIMIT,
+        query: search || undefined,
+        status: status || undefined,
+      }),
   })
 }
 
 function methodDetailQuery(id: string) {
   return query({
     queryKey: ['methods', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.methods[':id'].$get({ param: { id } }),
-        'Failed to load method',
-      ),
+    queryFn: async () => calibraApi.methods.get(id),
   })
 }
 
@@ -361,28 +290,19 @@ function serviceOrdersListQuery(url: URL) {
   return query({
     queryKey: ['service-orders', page, search, status],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api['service-orders'].$get({
-          query: apiQuery({
-            query: search || undefined,
-            status: status || undefined,
-            page: String(page),
-            limit: String(DEFAULT_LIST_LIMIT),
-          }),
-        }),
-        'Failed to load service orders',
-      ),
+      calibraApi.serviceOrders.list({
+        query: search || undefined,
+        status: status || undefined,
+        page,
+        limit: DEFAULT_LIST_LIMIT,
+      }),
   })
 }
 
 function serviceOrderDetailQuery(id: string) {
   return query({
     queryKey: ['service-order', id],
-    queryFn: async () =>
-      dataOrThrow(
-        await api.api['service-orders'][':id'].$get({ param: { id } }),
-        'Failed to load service order',
-      ),
+    queryFn: async () => calibraApi.serviceOrders.get(id),
   })
 }
 
@@ -582,11 +502,7 @@ function capaAuditQuery(id: string) {
 function techniciansQuery(key: readonly unknown[] = ['jobs', 'technicians']) {
   return query({
     queryKey: key,
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.jobs.technicians.list.$get(),
-        'Failed to load technicians',
-      ),
+    queryFn: async () => calibraApi.jobs.listTechnicians(),
   })
 }
 
@@ -718,17 +634,6 @@ function trendReportQuery() {
         await api.api.reports.consolidated.trend.$get({ query: {} }),
         'Failed to load trend report',
       ),
-  })
-}
-
-function settingsQuery(
-  queryKey: readonly unknown[],
-  fetcher: () => Promise<Response>,
-) {
-  return query({
-    queryKey,
-    queryFn: async () =>
-      jsonOrThrow(await fetcher(), 'Failed to load settings'),
   })
 }
 
@@ -944,16 +849,7 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     match: /^\/dashboard\/jobs\/new\/?$/,
     prewarm: ({ queryClient }) =>
       prewarmQueries(queryClient, [
-        query({
-          queryKey: ['customers', 'list'],
-          queryFn: async () =>
-            jsonOrThrow(
-              await api.api.customers.$get({
-                query: { page: '1', limit: '100' },
-              }),
-              'Failed to load customers',
-            ),
-        }),
+        customersPlainSearchQuery(),
         techniciansQuery(),
       ]),
   },
@@ -970,10 +866,7 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     id: 'dashboard:services:new',
     match: /^\/dashboard\/services\/new\/?$/,
     prewarm: ({ queryClient }) =>
-      prewarmQueries(queryClient, [
-        methodsListQuery(new URL('/dashboard/methods', window.location.href)),
-        assetTypesQuery(),
-      ]),
+      prewarmQueries(queryClient, [publishedMethodsQuery(), assetTypesQuery()]),
   },
   {
     id: 'dashboard:nc:new',
@@ -983,10 +876,10 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
         query({
           queryKey: ['jobs-for-nc'],
           queryFn: async () =>
-            jsonOrThrow(
-              await api.api.jobs.$get({ query: { limit: '100' } }),
-              'Failed to load jobs',
-            ),
+            calibraApi.jobs.list({
+              page: 1,
+              limit: 100,
+            }),
         }),
       ]),
   },
@@ -1021,10 +914,10 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
         query({
           queryKey: ['finance', 'contract-form', 'customers'],
           queryFn: async () =>
-            jsonOrThrow(
-              await api.api.customers.$get({ query: { limit: '100' } }),
-              'Failed to load customers',
-            ),
+            calibraApi.customers.list({
+              page: 1,
+              limit: 100,
+            }),
         }),
         serviceOptionsQuery(),
       ]),
@@ -1070,16 +963,11 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
           ? query({
               queryKey: ['assets', 'customer', customerId, 1, 20, ''],
               queryFn: async () =>
-                jsonOrThrow(
-                  await api.api.assets.$get({
-                    query: {
-                      customerId: String(customerId),
-                      page: '1',
-                      limit: '20',
-                    },
-                  }),
-                  'Failed to load customer assets',
-                ),
+                calibraApi.assets.list({
+                  customerId,
+                  page: 1,
+                  limit: 20,
+                }),
             })
           : null,
       ])
@@ -1108,15 +996,10 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     match: /^\/dashboard\/jobs\/([^/]+)\/?$/,
     prewarm: ({ queryClient, match }) => {
       const id = segment(match)
-      const apiJobId = apiRouteParam(id)
       return prewarmQueries(queryClient, [
         query({
           queryKey: ['jobs', id],
-          queryFn: async () =>
-            jsonOrThrow(
-              await api.api.jobs[':id'].$get({ param: { id: apiJobId } }),
-              'Failed to load job',
-            ),
+          queryFn: async () => calibraApi.jobs.get(id),
         }),
         techniciansQuery(),
       ])
@@ -1127,15 +1010,10 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     match: /^\/dashboard\/jobs\/([^/]+)\/execute\/?$/,
     prewarm: ({ queryClient, match }) => {
       const id = segment(match)
-      const apiJobId = apiRouteParam(id)
       return prewarmQueries(queryClient, [
         query({
           queryKey: ['jobs', id],
-          queryFn: async () =>
-            jsonOrThrow(
-              await api.api.jobs[':id'].$get({ param: { id: apiJobId } }),
-              'Failed to load job',
-            ),
+          queryFn: async () => calibraApi.jobs.get(id),
         }),
         activeStandardsQuery(),
       ])
@@ -1181,7 +1059,7 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
       const id = segment(match)
       return prewarmQueries(queryClient, [
         serviceDetailQuery(id),
-        methodsListQuery(new URL('/dashboard/methods', window.location.href)),
+        publishedMethodsQuery(),
         assetTypesQuery(),
         serviceAuditQuery(id),
       ])
@@ -1288,11 +1166,15 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     match: /^\/dashboard\/settings\/authentication\/?$/,
     prewarm: ({ queryClient }) =>
       prewarmQueries(queryClient, [
-        settingsQuery(['api-keys'], () => api.api['api-keys'].$get()),
+        query({
+          queryKey: ['api-keys'],
+          queryFn: () => calibraApi.apiKeys.list(),
+        }),
         maybeOrgQuery((organizationId) =>
-          settingsQuery(['sso-settings', organizationId], () =>
-            api.api.sso.providers.$get(),
-          ),
+          query({
+            queryKey: ['sso-settings', organizationId],
+            queryFn: () => calibraApi.sso.getProviders(),
+          }),
         ),
       ]),
   },
@@ -1301,9 +1183,10 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     match: /^\/dashboard\/settings\/certificate-numbering\/?$/,
     prewarm: ({ queryClient }) =>
       prewarmQueries(queryClient, [
-        settingsQuery(['certificate-numbering-profile'], () =>
-          api.api['certificate-numbering'].$get(),
-        ),
+        query({
+          queryKey: ['certificate-numbering-profile'],
+          queryFn: () => calibraApi.certificateNumbering.getProfile(),
+        }),
       ]),
   },
   {
@@ -1311,9 +1194,10 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     match: /^\/dashboard\/settings\/certificates\/?$/,
     prewarm: ({ queryClient }) =>
       prewarmQueries(queryClient, [
-        settingsQuery(['signing-certificates', 'no-unit'], () =>
-          api.api.signing.certificates.$get(),
-        ),
+        query({
+          queryKey: ['signing-certificates', 'no-unit'],
+          queryFn: () => calibraApi.signingCertificates.list(),
+        }),
       ]),
   },
   {
@@ -1406,6 +1290,8 @@ const prewarmState = new Map<
 >()
 
 export function prewarmRouteDataForPath(url: URL, queryClient: QueryClient) {
+  if (isDesktopRuntime()) return
+
   const specMatch = routePrewarmSpecs
     .map((candidate) => ({
       spec: candidate,

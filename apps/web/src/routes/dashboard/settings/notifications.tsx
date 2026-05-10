@@ -12,7 +12,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/dashboard/settings/notifications')({
   head: () => ({
@@ -237,11 +237,7 @@ function NotificationsSettingsPage() {
   // Fetch preferences
   const { data: prefsData, isLoading } = useQuery({
     queryKey: ['notification-preferences'],
-    queryFn: async () => {
-      const res = await api.api.notifications.preferences.$get()
-      if (!res.ok) throw new Error('Failed to fetch preferences')
-      return res.json()
-    },
+    queryFn: async () => calibraApi.notifications.getPreferences(),
   })
 
   // Update preferences mutation with optimistic updates
@@ -250,13 +246,7 @@ function NotificationsSettingsPage() {
       preferences?: NotificationPreferencesMap
       emailEnabled?: boolean
       notifySelfActions?: boolean
-    }) => {
-      const res = await api.api.notifications.preferences.$put({
-        json: data,
-      })
-      if (!res.ok) throw new Error('Failed to update preferences')
-      return res.json()
-    },
+    }) => calibraApi.notifications.updatePreferences(data),
     onMutate: async (newData) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['notification-preferences'] })

@@ -10,7 +10,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { useMemo, useState } from 'react'
 import { parseAsInteger, useQueryState } from 'nuqs'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -87,17 +87,11 @@ function AssetsPage() {
     queryKey: ['customers', organizationQueryKey, 'search', customerSearch],
     enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
-      const res = await api.api.customers.$get({
-        query: {
-          page: '1',
-          limit: '50',
-          query: customerSearch || undefined,
-        },
+      return calibraApi.customers.list({
+        page: 1,
+        limit: 50,
+        query: customerSearch || undefined,
       })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar clientes')
-      }
-      return res.json()
     },
     staleTime: 30000,
   })
@@ -120,29 +114,13 @@ function AssetsPage() {
     ],
     enabled: Boolean(activeOrganizationId) && !isContextSwitching,
     queryFn: async () => {
-      const res = await api.api.assets.$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          query: search || undefined,
-          status: (statusFilter as AssetStatus) || undefined,
-          customerId: customerIdParam ? String(customerIdParam) : undefined,
-        },
+      return calibraApi.assets.list({
+        page,
+        limit,
+        query: search || undefined,
+        status: statusFilter || undefined,
+        customerId: customerIdParam ?? undefined,
       })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar ativos')
-      }
-
-      return res.json() as Promise<{
-        data: Asset[]
-        pagination: {
-          page: number
-          limit: number
-          total: number
-          totalPages: number
-        }
-      }>
     },
   })
 

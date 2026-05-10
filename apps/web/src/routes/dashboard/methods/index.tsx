@@ -10,7 +10,7 @@ import {
   PlusSignIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -74,21 +74,12 @@ function MethodsListPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['methods', page, search, statusFilter],
     queryFn: async () => {
-      const res = await api.api.methods.$get({
-        query: {
-          page: String(page),
-          limit: '20',
-          query: search || undefined,
-          status: statusFilter || undefined,
-          includeArchived: statusFilter === 'ARCHIVED' ? 'true' : 'false',
-        },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar métodos')
-      }
-
-      return res.json() as Promise<{
+      return calibraApi.methods.list({
+        page,
+        limit: 20,
+        query: search || undefined,
+        status: statusFilter || undefined,
+      }) as Promise<{
         data: Array<Method>
         pagination: {
           page: number
@@ -102,16 +93,7 @@ function MethodsListPage() {
 
   const archiveMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.api.methods[':id'].archive.$post({
-        param: { id: String(id) },
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao arquivar',
-        )
-      }
-      return res.json()
+      return calibraApi.methods.archive(id)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })
@@ -124,16 +106,7 @@ function MethodsListPage() {
 
   const newVersionMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.api.methods[':id']['new-version'].$post({
-        param: { id: String(id) },
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao criar nova versão',
-        )
-      }
-      return res.json() as Promise<Method>
+      return calibraApi.methods.createNewVersion(id) as Promise<Method>
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })

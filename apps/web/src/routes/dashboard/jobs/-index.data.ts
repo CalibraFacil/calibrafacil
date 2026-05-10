@@ -1,6 +1,6 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -37,20 +37,12 @@ export type JobsListQueryInput = {
 const JOBS_LIST_LIMIT = 20
 
 export async function fetchJobsList(input: JobsListQueryInput) {
-  const res = await api.api.jobs.$get({
-    query: {
-      page: String(input.page),
-      limit: String(JOBS_LIST_LIMIT),
-      query: input.search || undefined,
-      status: input.statusFilter || undefined,
-    },
+  return calibraApi.jobs.list({
+    page: input.page,
+    limit: JOBS_LIST_LIMIT,
+    query: input.search || undefined,
+    status: input.statusFilter || undefined,
   })
-
-  if (!res.ok) {
-    throw new Error('Falha ao carregar calibrações')
-  }
-
-  return res.json() as Promise<JobsListData>
 }
 
 export function jobsListQueryOptions(input: JobsListQueryInput) {

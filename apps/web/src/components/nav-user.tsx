@@ -4,7 +4,6 @@ import {
   CreditCardIcon,
   Logout01Icon,
   Notification02Icon,
-  SparklesIcon,
   UnfoldMoreIcon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -35,7 +34,8 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
+import { markDesktopSignedOut } from '@/runtime/desktop-auth'
 
 export function NavUser() {
   const { isMobile } = useSidebar()
@@ -65,16 +65,15 @@ export function NavUser() {
     } else {
       await signOut()
     }
+    markDesktopSignedOut()
     window.location.replace(
       isBackofficePath ? '/backoffice/sign-in' : '/sign-in',
     )
   }
 
   const handleStopImpersonating = async () => {
-    const res = await api.api.backoffice.impersonation.stop.$post()
-    if (res.ok) {
-      window.location.assign('/backoffice')
-    }
+    await calibraApi.backoffice.stopImpersonation()
+    window.location.assign('/backoffice')
   }
 
   if (isPending) {

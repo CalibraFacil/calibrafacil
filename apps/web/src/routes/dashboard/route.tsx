@@ -2,7 +2,7 @@ import {
   Outlet,
   createFileRoute,
   redirect,
-  useMatches,
+  useLocation,
   useNavigate,
 } from '@tanstack/react-router'
 
@@ -32,6 +32,13 @@ import {
   useDashboardContextState,
 } from '@/contexts/dashboard-context'
 import { useMountEffect } from '@/hooks/use-mount-effect'
+import { hasDesktopSession } from '@/runtime/desktop-auth'
+import { isDesktopRuntime } from '@/runtime/desktop'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
+import { isCloudOnlyDashboardPath } from '@/runtime/cloud-only-routes'
 
 export { useDashboardContextState }
 
@@ -46,9 +53,10 @@ type DashboardSessionResult = Awaited<ReturnType<typeof authClient.getSession>>
 
 let dashboardSessionPromise: ReturnType<typeof authClient.getSession> | null =
   null
-let dashboardSessionCache:
-  | { expiresAt: number; result: DashboardSessionResult }
-  | null = null
+let dashboardSessionCache: {
+  expiresAt: number
+  result: DashboardSessionResult
+} | null = null
 const activeOrganizationSwitches = new Set<string>()
 
 function mark(name: string) {
@@ -70,6 +78,15 @@ export const Route = createFileRoute('/dashboard')({
   beforeLoad: async ({ location, preload }) => {
     if (preload) return
 
+    if (isDesktopRuntime()) {
+      if (await hasDesktopSession()) return
+
+      throw redirect({
+        to: '/sign-in',
+        search: { redirect: location.pathname },
+      })
+    }
+
     const { data: session } = await getDashboardSession()
 
     if (!session) {
@@ -90,10 +107,7 @@ export const Route = createFileRoute('/dashboard')({
 })
 
 async function getDashboardSession() {
-  if (
-    dashboardSessionCache &&
-    dashboardSessionCache.expiresAt > Date.now()
-  ) {
+  if (dashboardSessionCache && dashboardSessionCache.expiresAt > Date.now()) {
     return dashboardSessionCache.result
   }
 
@@ -115,7 +129,8 @@ async function getDashboardSession() {
 
 function DashboardLayout() {
   const navigate = useNavigate()
-  const matches = useMatches()
+  const location = useLocation()
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const { data: organizations, isPending: organizationsLoading } =
     useListOrganizations()
   const { data: activeOrg, isPending: activeOrgLoading } =
@@ -137,7 +152,7 @@ function DashboardLayout() {
       ? (labOrganizations.find((org) => org.id === activeOrg?.id) ?? null)
       : null
 
-  const pathname = matches[matches.length - 1]?.pathname ?? ''
+  const pathname = location.pathname
   const isDashboardHome =
     pathname === '/dashboard' || pathname === '/dashboard/'
   const hasLabAccess = labOrganizations.length > 0
@@ -155,6 +170,10 @@ function DashboardLayout() {
     !hasLoadedOrganizations || activeOrgLoading || needsDashboardOrgSwitch
   const isContextSwitching = isBootstrappingContext
   const shouldBlockChildRoutes = !isDashboardHome && isContextSwitching
+  const shouldBlockCloudOnlyRoute =
+    !shouldBlockChildRoutes &&
+    cloudOnlyUnavailable &&
+    isCloudOnlyDashboardPath(pathname)
   const effectiveActiveOrganizationId = activeLabOrg?.id ?? null
 
   // No LAB access but no organizations yet - send to onboarding
@@ -170,7 +189,9 @@ function DashboardLayout() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <Button onClick={() => navigate({ to: '/onboarding/organization' })}>
+            <Button
+              onClick={() => navigate({ to: '/onboarding/organization' })}
+            >
               Criar laboratório
             </Button>
             <Button variant="outline" onClick={() => navigate({ to: '/' })}>
@@ -246,6 +267,8 @@ function DashboardLayout() {
                   <div className="h-10 w-56 rounded-md border bg-card/60 animate-pulse" />
                   <div className="h-64 rounded-lg border bg-card/60 animate-pulse" />
                 </div>
+              ) : shouldBlockCloudOnlyRoute ? (
+                <CloudOnlyOfflineState title="Tela indisponível offline" />
               ) : (
                 <Outlet />
               )}

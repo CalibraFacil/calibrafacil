@@ -1,27 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { useActiveOrganization } from '@calibra-facil/auth/client'
-import { api } from '@/utils/api'
+import type {
+  DashboardUnitSummary,
+  DashboardUnitsResponse,
+} from '@calibra-facil/client-runtime'
+import { calibraApi } from '@/utils/api'
 import { usePlanAccess } from '@/hooks/use-plan-access'
+import { isDesktopRuntime } from '@/runtime/desktop'
 
 type ActiveOrganization = NonNullable<
   ReturnType<typeof useActiveOrganization>['data']
 >
 
-export type DashboardUnitSummary = {
-  id: number
-  name: string
-  slug: string
-  role: string
-}
-
-export type DashboardUnitsResponse = {
-  activeUnitId: number | null
-  activeUnitName: string | null
-  selectedUnitScope: 'all' | 'unit'
-  canAccessAllUnits: boolean
-  data: DashboardUnitSummary[]
-}
+export type { DashboardUnitSummary, DashboardUnitsResponse }
 
 export type DashboardScopedUnit = {
   id: number | string
@@ -37,29 +29,52 @@ function getCurrentOrganizationRole(activeOrg: ActiveOrganization | undefined) {
 }
 
 export function useDashboardUnits() {
-  const { data: activeOrg } = useActiveOrganization()
+  const isDesktop = isDesktopRuntime()
+  const { data: cloudActiveOrg } = useActiveOrganization()
   const accessQuery = usePlanAccess()
-  const hasMultiUnit =
-    accessQuery.data?.entitlements.includes('multi_unit') ?? false
+  const desktopSessionQuery = useQuery({
+    queryKey: ['desktop-local-session'],
+    enabled: isDesktop,
+    queryFn: () => calibraApi.sync.getSession(),
+    staleTime: 30_000,
+  })
+  const desktopSession = desktopSessionQuery.data?.data ?? null
+  const desktopUnits = desktopSession?.activeUnits ?? []
+  const desktopCanAccessAllUnits =
+    desktopSession?.permissions.canAccessAllUnits ?? false
+  const activeOrg =
+    cloudActiveOrg ??
+    (desktopSession
+      ? ({
+          id: desktopSession.organization.id,
+          name: desktopSession.organization.id,
+          slug: desktopSession.organization.id,
+          members: [
+            {
+              role: desktopSession.permissions.role,
+            },
+          ],
+        } as ActiveOrganization)
+      : undefined)
+  const hasMultiUnit = isDesktop
+    ? desktopUnits.length > 1 || desktopCanAccessAllUnits
+    : (accessQuery.data?.entitlements.includes('multi_unit') ?? false)
 
   const unitsQuery = useQuery({
-    queryKey: ['dashboard-units', activeOrg?.id ?? 'no-org', hasMultiUnit],
+    queryKey: [
+      'dashboard-units',
+      activeOrg?.id ?? 'no-org',
+      hasMultiUnit,
+      isDesktop ? 'desktop' : 'cloud',
+    ],
     enabled: Boolean(activeOrg?.id && hasMultiUnit),
-    queryFn: async () => {
-      const response = await api.api.units.$get()
-      if (response.status === 403) {
-        return null
-      }
-      if (!response.ok) {
-        throw new Error('Falha ao carregar unidades')
-      }
-
-      return (await response.json()) as DashboardUnitsResponse
-    },
+    queryFn: async () => calibraApi.units.getDashboardUnits(),
   })
 
   const data = hasMultiUnit ? unitsQuery.data : null
-  const isCheckingAccess = Boolean(activeOrg?.id) && accessQuery.isPending
+  const isCheckingAccess = isDesktop
+    ? desktopSessionQuery.isPending
+    : Boolean(activeOrg?.id) && accessQuery.isPending
   const canUseSingleUnitFallback =
     Boolean(activeOrg) && !accessQuery.isPending && !hasMultiUnit
   const currentUnitValue = data

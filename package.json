@@ -5,11 +5,28 @@
     "build": "turbo run build",
     "bench:api": "node scripts/bench-api.mjs",
     "bench:api:bun": "bun scripts/bench-api.mjs",
+    "check:offline-release-signoff": "node scripts/check-offline-release-signoff.mjs",
+    "test:offline-release-signoff": "node scripts/check-offline-release-signoff.test.mjs",
+    "test:desktop-release-gate": "node scripts/build-desktop-artifact.test.mjs",
+    "test:desktop-cloud-release-smoke": "node scripts/smoke-desktop-cloud-release.test.mjs",
+    "test:desktop-release-local-gates": "pnpm test:desktop-cloud-release-smoke && pnpm test:desktop-release-gate && pnpm test:offline-release-signoff",
     "check:blocked-deps": "node -e \"const fs=require('fs'); const lock=fs.readFileSync('pnpm-lock.yaml','utf8'); const packagesSection=lock.includes('\\npackages:\\n')?lock.split('\\npackages:\\n')[1]:lock; const blocked=[['axios@1.14.1','Blocked due to compromised Axios release on 2026-03-31'],['axios@0.30.4','Blocked due to compromised Axios release on 2026-03-31'],['plain-crypto-js','Blocked due to malicious transitive package in Axios supply-chain attack']]; const hits=blocked.filter(([pattern])=>packagesSection.includes(pattern)); if(hits.length){console.error('Blocked dependencies detected in pnpm-lock.yaml:'); for(const [pattern,reason] of hits) console.error('- '+pattern+': '+reason); process.exit(1);} console.log('Blocked dependency check passed.');\"",
     "dev": "turbo run dev --filter=!@calibra-facil/email --filter=!@calibra-facil/worker",
     "dev:all": "turbo run dev",
+    "dev:desktop": "turbo run dev --filter=@calibra-facil/web --filter=@calibra-facil/desktop",
     "dev:email": "pnpm --dir packages/email run dev",
+    "dev:local-server": "pnpm --dir apps/local-server run dev",
     "dev:worker": "pnpm --dir apps/worker dev",
+    "build:desktop": "node scripts/build-desktop-artifact.mjs --dir",
+    "dist:desktop:artifact": "node scripts/build-desktop-artifact.mjs",
+    "dist:desktop:linux": "node scripts/build-desktop-artifact.mjs --linux",
+    "dist:desktop:mac": "node scripts/build-desktop-artifact.mjs --mac",
+    "dist:desktop:win": "node scripts/build-desktop-artifact.mjs --win",
+    "smoke:desktop:electron": "node scripts/smoke-desktop-electron.mjs",
+    "smoke:desktop:cloud-parity": "node scripts/smoke-desktop-cloud-parity.mjs",
+    "smoke:desktop:cloud-release": "node scripts/smoke-desktop-cloud-release.mjs",
+    "smoke:desktop:artifact": "node scripts/smoke-desktop-artifact.mjs",
+    "smoke:desktop:local-server": "node scripts/smoke-desktop-local-server.mjs",
     "deploy:api": "pnpm --dir apps/api deploy",
     "deploy:web": "pnpm --dir apps/web deploy",
     "deploy:portal": "pnpm --dir apps/portal deploy",
@@ -20,6 +37,7 @@
   },
   "devDependencies": {
     "@typescript/native-preview": "beta",
+    "better-sqlite3": "^12.0.0",
     "oxlint": "^0.16.10",
     "prettier": "^3.7.4",
     "turbo": "^2.6.3",
@@ -60,7 +78,8 @@
       "basic-ftp": "^5.3.1",
       "rollup": "^4.59.0",
       "svgo": "^4.0.1",
-      "@xmldom/xmldom": "^0.8.13"
+      "@xmldom/xmldom": "^0.8.13",
+      "fast-uri": "^3.1.2"
     }
   }
 }

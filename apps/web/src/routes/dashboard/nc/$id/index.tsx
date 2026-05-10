@@ -30,6 +30,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
 
 export const Route = createFileRoute('/dashboard/nc/$id/')({
   head: () => ({
@@ -94,6 +98,7 @@ function getDispositionLabel(disposition: string | null): string {
 function NCDetailPage() {
   const { id } = Route.useParams()
   const queryClient = useQueryClient()
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const [dispositionDialogOpen, setDispositionDialogOpen] = useState(false)
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false)
   const [capaDialogOpen, setCapaDialogOpen] = useState(false)
@@ -104,6 +109,7 @@ function NCDetailPage() {
     error,
   } = useQuery({
     queryKey: ['non-conformance', id],
+    enabled: !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api.nc[':id'].$get({
         param: { id },
@@ -115,6 +121,7 @@ function NCDetailPage() {
 
   const { data: auditLog } = useQuery({
     queryKey: ['non-conformance-audit', id],
+    enabled: !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api.nc[':id']['audit-log'].$get({
         param: { id },
@@ -214,6 +221,12 @@ function NCDetailPage() {
     },
     onError: (error) => toast.error(error.message),
   })
+
+  if (cloudOnlyUnavailable) {
+    return (
+      <CloudOnlyOfflineState title="Não conformidade indisponível offline" />
+    )
+  }
 
   if (isLoading) {
     return (

@@ -30,6 +30,10 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
 import { type CAPARow, capaColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/capa/')({
@@ -80,6 +84,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 function CAPAListPage() {
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
@@ -97,6 +102,7 @@ function CAPAListPage() {
       severityFilter,
       categoryFilter,
     ],
+    enabled: !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api.capa.$get({
         query: {
@@ -127,6 +133,7 @@ function CAPAListPage() {
 
   const { data: summary } = useQuery({
     queryKey: ['capas-summary'],
+    enabled: !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api.capa.summary.$get()
       if (!res.ok) throw new Error('Falha ao carregar resumo')
@@ -150,6 +157,10 @@ function CAPAListPage() {
     summary?.byStatus.find((s) => s.status === status)?.count ?? 0
 
   const hasFilters = search || statusFilter || severityFilter || categoryFilter
+
+  if (cloudOnlyUnavailable) {
+    return <CloudOnlyOfflineState title="CAPA indisponível offline" />
+  }
 
   if (error) {
     return (
@@ -246,7 +257,9 @@ function CAPAListPage() {
             >
               <SelectTrigger className="w-48">
                 <span>
-                  {statusFilter ? STATUS_LABELS[statusFilter] : 'Todos os Status'}
+                  {statusFilter
+                    ? STATUS_LABELS[statusFilter]
+                    : 'Todos os Status'}
                 </span>
               </SelectTrigger>
               <SelectContent>

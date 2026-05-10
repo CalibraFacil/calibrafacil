@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft02Icon, Edit02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -47,13 +47,7 @@ function AssetDetailLayout() {
   } = useQuery({
     queryKey: ['asset', id],
     queryFn: async () => {
-      const res = await api.api.assets[':id'].$get({
-        param: { id },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar ativo')
-      }
-      return res.json()
+      return calibraApi.assets.get(id)
     },
   })
 

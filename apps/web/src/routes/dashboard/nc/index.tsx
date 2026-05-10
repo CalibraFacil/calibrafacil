@@ -30,6 +30,10 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
 import { type NonConformanceRow, ncColumns } from './-components/columns'
 
 export const Route = createFileRoute('/dashboard/nc/')({
@@ -43,6 +47,7 @@ type StatusFilter = 'open' | 'under_review' | 'resolved' | ''
 type TypeFilter = 'work' | 'equipment' | 'documentation' | ''
 
 function NCListPage() {
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const [page, setPage] = useQueryState('page', parseAsInteger.withDefault(1))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
@@ -52,6 +57,7 @@ function NCListPage() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['non-conformances', page, search, statusFilter, typeFilter],
+    enabled: !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api.nc.$get({
         query: {
@@ -81,6 +87,7 @@ function NCListPage() {
 
   const { data: summary } = useQuery({
     queryKey: ['non-conformances-summary'],
+    enabled: !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api.nc.summary.$get()
       if (!res.ok) throw new Error('Falha ao carregar resumo')
@@ -101,6 +108,12 @@ function NCListPage() {
     summary?.byStatus.find((s) => s.status === 'open')?.count ?? 0
   const reviewCount =
     summary?.byStatus.find((s) => s.status === 'under_review')?.count ?? 0
+
+  if (cloudOnlyUnavailable) {
+    return (
+      <CloudOnlyOfflineState title="Não conformidades indisponíveis offline" />
+    )
+  }
 
   if (error) {
     return (

@@ -5,7 +5,8 @@ import {
   backofficeSignOut,
   signIn,
 } from '@calibra-facil/auth/client'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
+import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
 import { cn } from '@/lib/utils'
 import { BrandMark } from '@/components/brand'
 import { Button } from '@/components/ui/button'
@@ -17,10 +18,6 @@ import { Separator } from '@/components/ui/separator'
 interface SignInFormProps extends React.ComponentProps<'form'> {
   redirect?: string
   mode?: 'lab' | 'backoffice'
-}
-
-interface SsoStartResponse {
-  url: string
 }
 
 export function SignInForm({
@@ -43,31 +40,22 @@ export function SignInForm({
     setError(null)
     setIsLoading(true)
 
-    const authSignIn = mode === 'backoffice' ? backofficeSignIn : signIn
-    const { error } = await authSignIn.email({
-      email,
-      password,
-    })
+    try {
+      const authSignIn = mode === 'backoffice' ? backofficeSignIn : signIn
+      const { error } = await authSignIn.email({
+        email,
+        password,
+      })
 
-    if (error) {
-      setIsLoading(false)
-      setError(error.message ?? 'Failed to sign in')
-      return
-    }
+      if (error) {
+        setError(error.message ?? 'Failed to sign in')
+        return
+      }
 
-    if (mode === 'backoffice') {
-      try {
-        const accessRes = await api.api.backoffice.access.$get()
+      clearDesktopSignedOut()
 
-        if (!accessRes.ok) {
-          setError('Falha ao validar acesso ao backoffice')
-          return
-        }
-
-        const access = (await accessRes.json()) as {
-          allowed: boolean
-          bootstrapAvailable: boolean
-        }
+      if (mode === 'backoffice') {
+        const access = await calibraApi.backoffice.getAccess()
 
         if (access.allowed) {
           navigate({ to: redirect || '/backoffice' })
@@ -82,13 +70,17 @@ export function SignInForm({
         await backofficeSignOut()
         setError('Sua conta não possui acesso ao backoffice')
         return
-      } finally {
-        setIsLoading(false)
       }
-    }
 
-    setIsLoading(false)
-    navigate({ to: redirect || '/dashboard' })
+      startDesktopInitialSync()
+      navigate({ to: redirect || '/dashboard' })
+    } catch {
+      setError(
+        'Não foi possível conectar ao servidor de autenticação. Verifique sua conexão e tente novamente.',
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   async function handleSsoSubmit(e: React.SyntheticEvent) {
@@ -97,33 +89,17 @@ export function SignInForm({
     setIsSsoLoading(true)
 
     try {
-      const res = await api.api.sso.start.$post({
-        json: {
-          organizationSlug,
-          ...(ssoEmail ? { email: ssoEmail } : {}),
-          redirectPath: redirect || '/dashboard',
-        },
+      const data = await calibraApi.sso.start({
+        organizationSlug,
+        ...(ssoEmail ? { email: ssoEmail } : {}),
+        redirectPath: redirect || '/dashboard',
       })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        const message =
-          data &&
-          typeof data === 'object' &&
-          'error' in data &&
-          typeof data.error === 'string'
-            ? data.error
-            : 'Falha ao iniciar login via SSO'
-        setError(message)
-        return
-      }
-
-      const data = (await res.json()) as SsoStartResponse
       if (!data.url) {
         setError('Falha ao iniciar login via SSO')
         return
       }
 
+      clearDesktopSignedOut()
       window.location.assign(data.url)
     } catch {
       setError('Falha ao iniciar login via SSO')
@@ -142,7 +118,9 @@ export function SignInForm({
         <div className="flex flex-col items-center gap-3 text-center">
           <BrandMark className="size-12" />
           <h1 className="text-2xl font-bold">
-            {mode === 'backoffice' ? 'Entrar no backoffice' : 'Entre em sua conta'}
+            {mode === 'backoffice'
+              ? 'Entrar no backoffice'
+              : 'Entre em sua conta'}
           </h1>
           <p className="text-muted-foreground text-sm text-balance">
             {mode === 'backoffice'
@@ -201,10 +179,12 @@ export function SignInForm({
             <Separator />
             <Field>
               <div className="space-y-1">
-                <FieldLabel htmlFor="organizationSlug">Entrar com SSO</FieldLabel>
+                <FieldLabel htmlFor="organizationSlug">
+                  Entrar com SSO
+                </FieldLabel>
                 <p className="text-sm text-muted-foreground">
-                  Informe o slug da organização e, se quiser, um email corporativo
-                  como login hint.
+                  Informe o slug da organização e, se quiser, um email
+                  corporativo como login hint.
                 </p>
               </div>
             </Field>
@@ -261,4 +241,12 @@ export function SignInForm({
       </FieldGroup>
     </form>
   )
+}
+
+export function startDesktopInitialSync() {
+  if (typeof window === 'undefined' || !window.calibraBridge) return
+
+  void window.calibraBridge.startSync().catch(() => {
+    // The sync status banner surfaces failures after navigation.
+  })
 }

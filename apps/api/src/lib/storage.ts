@@ -53,6 +53,21 @@ export async function generatePresignedUrl(
   return getSignedUrl(client, command, { expiresIn });
 }
 
+export async function generatePresignedUploadUrl(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+  contentType: string,
+  expiresIn: number = 900,
+): Promise<string> {
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ContentType: contentType,
+  });
+  return getSignedUrl(client, command, { expiresIn });
+}
+
 /**
  * Extract R2 key from stored certificateUrl
  * Format: https://certificates.calibrafacil.com/job-123.pdf -> job-123.pdf

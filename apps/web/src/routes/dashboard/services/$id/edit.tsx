@@ -8,7 +8,7 @@ import {
   InformationCircleIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   AuditTimeline,
   buildAuditTimelineEvents,
@@ -99,15 +99,7 @@ function EditServicePage() {
   } = useQuery({
     queryKey: ['services', id],
     queryFn: async () => {
-      const res = await api.api.services[':id'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar serviço')
-      }
-
-      return res.json() as Promise<Service>
+      return calibraApi.services.get(id) as Promise<Service>
     },
   })
 
@@ -115,20 +107,10 @@ function EditServicePage() {
   const { data: methodsData, isLoading: methodsLoading } = useQuery({
     queryKey: ['methods', 'published'],
     queryFn: async () => {
-      const res = await api.api.methods.$get({
-        query: {
-          status: 'PUBLISHED',
-          limit: '100',
-        },
+      return calibraApi.methods.list({
+        status: 'PUBLISHED',
+        limit: 100,
       })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar métodos')
-      }
-
-      return res.json() as Promise<{
-        data: Array<Method>
-      }>
     },
   })
 
@@ -136,15 +118,7 @@ function EditServicePage() {
   const { data: assetTypesData, isLoading: assetTypesLoading } = useQuery({
     queryKey: ['asset-types'],
     queryFn: async () => {
-      const res = await api.api['asset-types'].$get({
-        query: {},
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar tipos de instrumento')
-      }
-
-      return res.json() as Promise<{
+      return calibraApi.assetTypes.list() as Promise<{
         data: Array<AssetType>
       }>
     },
@@ -154,15 +128,7 @@ function EditServicePage() {
   const { data: auditLogData } = useQuery({
     queryKey: ['services', id, 'audit-log'],
     queryFn: async () => {
-      const res = await api.api.services[':id']['audit-log'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar histórico')
-      }
-
-      return res.json() as Promise<{ data: AuditLogRecord[] }>
+      return calibraApi.services.auditLog<AuditLogRecord>(id)
     },
   })
 
@@ -263,9 +229,9 @@ function EditServiceForm({
     tat: serviceData.tat !== null ? String(serviceData.tat) : '',
     isActive: serviceData.isActive,
   })
-  const [errors, setErrors] = useState<
-    Partial<Record<keyof FormData, string>>
-  >({})
+  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
+    {},
+  )
   const [isAssetTypeLocked, setIsAssetTypeLocked] = useState(() => {
     const method = methodsData.find((m) => m.id === serviceData.methodId)
     return !!method?.assetTypeId
@@ -291,27 +257,15 @@ function EditServiceForm({
         }
       }
 
-      const res = await api.api.services[':id'].$put({
-        param: { id: String(serviceData.id) },
-        json: {
-          name: data.name,
-          description: data.description || undefined,
-          methodId: data.methodId,
-          assetTypeId: data.assetTypeId,
-          price: priceInCents,
-          tat: tatValue,
-          isActive: data.isActive,
-        },
+      return calibraApi.services.update(serviceData.id, {
+        name: data.name,
+        description: data.description || undefined,
+        methodId: data.methodId,
+        assetTypeId: data.assetTypeId,
+        price: priceInCents,
+        tat: tatValue,
+        isActive: data.isActive,
       })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao atualizar serviço',
-        )
-      }
-
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] })
@@ -333,7 +287,9 @@ function EditServiceForm({
 
   const selectedAssetTypeName = useMemo(() => {
     if (!formData.assetTypeId) return ''
-    const assetType = assetTypesData.find((at) => at.id === formData.assetTypeId)
+    const assetType = assetTypesData.find(
+      (at) => at.id === formData.assetTypeId,
+    )
     return assetType?.name || ''
   }, [formData.assetTypeId, assetTypesData])
 

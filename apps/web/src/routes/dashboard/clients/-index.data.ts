@@ -1,6 +1,6 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -35,19 +35,11 @@ export function clientsListQueryOptions(input: ClientsListQueryInput) {
       input.search,
     ],
     queryFn: async () => {
-      const res = await api.api.customers.$get({
-        query: {
-          page: String(input.page),
-          limit: String(input.limit),
-          query: input.search || undefined,
-        },
+      return calibraApi.customers.list({
+        page: input.page,
+        limit: input.limit,
+        query: input.search || undefined,
       })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar clientes')
-      }
-
-      return res.json() as Promise<ClientsListData>
     },
   })
 }

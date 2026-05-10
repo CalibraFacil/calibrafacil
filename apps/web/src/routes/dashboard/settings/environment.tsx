@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { EnvironmentalLimit } from '@calibra-facil/client-runtime'
 import {
   ThermometerIcon,
   Add01Icon,
@@ -12,7 +13,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useDashboardUnits } from '@/hooks/use-dashboard-units'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -57,25 +58,6 @@ export const Route = createFileRoute('/dashboard/settings/environment')({
   component: EnvironmentSettingsPage,
 })
 
-interface EnvironmentalLimit {
-  id: number
-  unitId: number
-  assetTypeId: number | null
-  assetTypeName: string | null
-  temperatureMin: number | null
-  temperatureMax: number | null
-  humidityMin: number | null
-  humidityMax: number | null
-  pressureMin: number | null
-  pressureMax: number | null
-}
-
-interface AssetType {
-  id: number
-  name: string
-  slug: string
-}
-
 interface LimitFormState {
   assetTypeId: number | null
   temperatureMin: string
@@ -110,24 +92,13 @@ function EnvironmentSettingsPage() {
   const { data: limitsData, isLoading } = useQuery({
     queryKey: ['environmental-limits', selectedUnit?.id ?? 'no-unit'],
     enabled: Boolean(selectedUnit),
-    queryFn: async () => {
-      const res = await api.api['environmental-limits'].$get()
-      if (!res.ok) throw new Error('Falha ao carregar limites')
-      return res.json() as Promise<{
-        limits: EnvironmentalLimit[]
-        unit: { unitId: number; unitName: string | null }
-      }>
-    },
+    queryFn: () => calibraApi.environmentalLimits.list(),
   })
 
   // Fetch asset types
   const { data: assetTypesData } = useQuery({
     queryKey: ['asset-types'],
-    queryFn: async () => {
-      const res = await api.api['asset-types'].$get({ query: {} })
-      if (!res.ok) throw new Error('Falha ao carregar tipos')
-      return res.json() as Promise<{ data: AssetType[] }>
-    },
+    queryFn: () => calibraApi.assetTypes.list(),
     staleTime: 60000,
   })
 
@@ -141,19 +112,15 @@ function EnvironmentSettingsPage() {
   // Upsert mutation
   const upsertMutation = useMutation({
     mutationFn: async (data: LimitFormState) => {
-      const res = await api.api['environmental-limits'].$put({
-        json: {
-          assetTypeId: data.assetTypeId,
-          temperatureMin: data.temperatureMin ? Number(data.temperatureMin) : null,
-          temperatureMax: data.temperatureMax ? Number(data.temperatureMax) : null,
-          humidityMin: data.humidityMin ? Number(data.humidityMin) : null,
-          humidityMax: data.humidityMax ? Number(data.humidityMax) : null,
-          pressureMin: data.pressureMin ? Number(data.pressureMin) : null,
-          pressureMax: data.pressureMax ? Number(data.pressureMax) : null,
-        },
+      return calibraApi.environmentalLimits.save({
+        assetTypeId: data.assetTypeId,
+        temperatureMin: data.temperatureMin ? Number(data.temperatureMin) : null,
+        temperatureMax: data.temperatureMax ? Number(data.temperatureMax) : null,
+        humidityMin: data.humidityMin ? Number(data.humidityMin) : null,
+        humidityMax: data.humidityMax ? Number(data.humidityMax) : null,
+        pressureMin: data.pressureMin ? Number(data.pressureMin) : null,
+        pressureMax: data.pressureMax ? Number(data.pressureMax) : null,
       })
-      if (!res.ok) throw new Error('Falha ao salvar')
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -172,11 +139,7 @@ function EnvironmentSettingsPage() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await api.api['environmental-limits'][':id'].$delete({
-        param: { id: String(id) },
-      })
-      if (!res.ok) throw new Error('Falha ao remover')
-      return res.json()
+      return calibraApi.environmentalLimits.delete(id)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

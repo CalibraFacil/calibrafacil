@@ -20,7 +20,7 @@ import {
   CommandShortcut,
 } from '@/components/ui/command'
 import { useCommandPalette } from '../command-context'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { apiRouteParam } from '@/lib/route-identifiers'
 
 type ContextAction = {
@@ -75,17 +75,9 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
           if (!jobId) return
 
           try {
-            const res = await api.api.jobs[':id'].approve.$post({
-              param: { id: apiRouteParam(jobId) },
-              json: { reason: 'Aprovado via comando rápido' },
+            await calibraApi.jobs.approve(apiRouteParam(jobId), {
+              reason: 'Aprovado via comando rápido',
             })
-
-            if (!res.ok) {
-              const error = await res.json()
-              throw new Error(
-                (error as { error?: string }).error || 'Erro ao aprovar',
-              )
-            }
 
             queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
             toast.success('Job aprovado com sucesso!', {
@@ -123,16 +115,7 @@ function getContextActions(ctx: ActionContext): ContextAction[] {
           if (!jobId) return
 
           try {
-            const res = await api.api.jobs[':id']['generate-label'].$post({
-              param: { id: apiRouteParam(jobId) },
-            })
-
-            if (!res.ok) {
-              const error = await res.json()
-              throw new Error(
-                (error as { error?: string }).error || 'Erro ao gerar etiqueta',
-              )
-            }
+            await calibraApi.jobs.generateLabel(apiRouteParam(jobId))
 
             queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
             toast.success('Gerando etiqueta...', {

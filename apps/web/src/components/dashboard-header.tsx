@@ -13,9 +13,13 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { NotificationBell } from '@/components/notifications/notification-bell'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { apiRouteParam } from '@/lib/route-identifiers'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
+import {
+  DesktopDataSourceIndicator,
+  DesktopSyncButton,
+} from '@/runtime/sync-status'
 
 const routeLabels: Record<string, string> = {
   // Dashboard
@@ -118,23 +122,10 @@ const routeLabels: Record<string, string> = {
 
 const LABEL_STALE_TIME = 5 * 60 * 1000
 
-type LabelResponse = {
-  ok: boolean
-  status: number
-  json: () => Promise<unknown>
-}
-
-async function parseLabelResponse(
-  response: LabelResponse,
-  entityName: string,
-): Promise<string | null> {
-  if (!response.ok) {
-    if (response.status === 404) return null
-    throw new Error(`Failed to fetch ${entityName} label`)
-  }
-
-  const data = (await response.json()) as { label?: string }
-  return data.label ?? null
+type EntityLabelData = {
+  name?: string | null
+  jobId?: string | null
+  serviceOrderNumber?: string | null
 }
 
 function getCachedLabel(
@@ -380,10 +371,14 @@ export function DashboardHeader({
     queryFn: async () => {
       if (customerCachedLabel) return customerCachedLabel
 
-      const res = await api.api.customers[':id'].label.$get({
-        param: { id: customerId! },
-      })
-      return parseLabelResponse(res, 'customer')
+      try {
+        const customer = await calibraApi.customers.get<EntityLabelData>(
+          customerId!,
+        )
+        return customer.name ?? null
+      } catch {
+        return null
+      }
     },
     enabled:
       !suspendEntityQueries &&
@@ -398,10 +393,12 @@ export function DashboardHeader({
     queryFn: async () => {
       if (assetCachedLabel) return assetCachedLabel
 
-      const res = await api.api.assets[':id'].label.$get({
-        param: { id: assetId! },
-      })
-      return parseLabelResponse(res, 'asset')
+      try {
+        const asset = await calibraApi.assets.get<EntityLabelData>(assetId!)
+        return asset.name ?? null
+      } catch {
+        return null
+      }
     },
     enabled:
       !suspendEntityQueries &&
@@ -416,10 +413,12 @@ export function DashboardHeader({
     queryFn: async () => {
       if (methodCachedLabel) return methodCachedLabel
 
-      const res = await api.api.methods[':id'].label.$get({
-        param: { id: methodId! },
-      })
-      return parseLabelResponse(res, 'method')
+      try {
+        const method = await calibraApi.methods.get(methodId!)
+        return method.name ?? null
+      } catch {
+        return null
+      }
     },
     enabled:
       !suspendEntityQueries &&
@@ -434,10 +433,14 @@ export function DashboardHeader({
     queryFn: async () => {
       if (jobCachedLabel) return jobCachedLabel
 
-      const res = await api.api.jobs[':id'].label.$get({
-        param: { id: apiRouteParam(jobId!) },
-      })
-      return parseLabelResponse(res, 'job')
+      try {
+        const job = await calibraApi.jobs.get<EntityLabelData>(
+          apiRouteParam(jobId!),
+        )
+        return job.jobId ?? null
+      } catch {
+        return null
+      }
     },
     enabled:
       !suspendEntityQueries &&
@@ -452,10 +455,12 @@ export function DashboardHeader({
     queryFn: async () => {
       if (serviceCachedLabel) return serviceCachedLabel
 
-      const res = await api.api.services[':id'].label.$get({
-        param: { id: serviceId! },
-      })
-      return parseLabelResponse(res, 'service')
+      try {
+        const service = await calibraApi.services.get(serviceId!)
+        return service.name ?? null
+      } catch {
+        return null
+      }
     },
     enabled:
       !suspendEntityQueries &&
@@ -470,17 +475,12 @@ export function DashboardHeader({
     queryFn: async () => {
       if (serviceOrderCachedLabel) return serviceOrderCachedLabel
 
-      const res = await api.api['service-orders'][':id'].$get({
-        param: { id: serviceOrderId! },
-      })
-      if (!res.ok) {
-        if (res.status === 404) return null
-        throw new Error('Failed to fetch service order label')
+      try {
+        const serviceOrder = await calibraApi.serviceOrders.get(serviceOrderId!)
+        return serviceOrder.serviceOrderNumber ?? null
+      } catch {
+        return null
       }
-      const data = (await res.json()) as {
-        data?: { serviceOrderNumber?: string }
-      }
-      return data.data?.serviceOrderNumber ?? null
     },
     enabled:
       !suspendEntityQueries &&
@@ -495,10 +495,12 @@ export function DashboardHeader({
     queryFn: async () => {
       if (standardCachedLabel) return standardCachedLabel
 
-      const res = await api.api.standards[':id'].label.$get({
-        param: { id: standardId! },
-      })
-      return parseLabelResponse(res, 'standard')
+      try {
+        const standard = await calibraApi.standards.get(standardId!)
+        return standard.name ?? null
+      } catch {
+        return null
+      }
     },
     enabled:
       !suspendEntityQueries &&
@@ -513,10 +515,7 @@ export function DashboardHeader({
     queryFn: async () => {
       if (ncCachedLabel) return ncCachedLabel
 
-      const res = await api.api.nc[':id'].label.$get({
-        param: { id: ncId! },
-      })
-      return parseLabelResponse(res, 'non-conformance')
+      return calibraApi.entityLabels.getNonConformance(ncId!)
     },
     enabled:
       !suspendEntityQueries &&
@@ -531,10 +530,7 @@ export function DashboardHeader({
     queryFn: async () => {
       if (capaCachedLabel) return capaCachedLabel
 
-      const res = await api.api.capa[':id'].label.$get({
-        param: { id: capaId! },
-      })
-      return parseLabelResponse(res, 'capa')
+      return calibraApi.entityLabels.getCapa(capaId!)
     },
     enabled:
       !suspendEntityQueries &&
@@ -549,10 +545,7 @@ export function DashboardHeader({
     queryFn: async () => {
       if (competenceCachedLabel) return competenceCachedLabel
 
-      const res = await api.api.competences[':id'].label.$get({
-        param: { id: competenceId! },
-      })
-      return parseLabelResponse(res, 'competence')
+      return calibraApi.entityLabels.getCompetence(competenceId!)
     },
     enabled:
       !suspendEntityQueries &&
@@ -725,6 +718,8 @@ export function DashboardHeader({
         </Breadcrumb>
       </div>
       <div className="flex items-center gap-2">
+        <DesktopDataSourceIndicator />
+        <DesktopSyncButton />
         <NotificationBell />
       </div>
     </header>

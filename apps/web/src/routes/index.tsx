@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import {
@@ -52,6 +52,8 @@ import {
 } from '@/components/ui/table'
 import certificatePreviewHtml from './certificate-preview.html?raw'
 import { cn } from '@/lib/utils'
+import { hasDesktopSession } from '@/runtime/desktop-auth'
+import { isDesktopRuntime } from '@/runtime/desktop'
 
 const commonProblems = [
   'Planilhas complexas para cálculo de incerteza.',
@@ -280,6 +282,18 @@ const dashboardPreviewChartConfig = {
 } satisfies ChartConfig
 
 export const Route = createFileRoute('/')({
+  beforeLoad: async () => {
+    if (!isDesktopRuntime()) return
+
+    if (await hasDesktopSession()) {
+      throw redirect({ to: '/dashboard' })
+    }
+
+    throw redirect({
+      to: '/sign-in',
+      search: { redirect: '/dashboard' },
+    })
+  },
   component: LandingPage,
 })
 

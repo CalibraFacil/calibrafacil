@@ -9,7 +9,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import type { ReactNode } from 'react'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   AuditTimeline,
   buildAuditTimelineEvents,
@@ -130,30 +130,14 @@ function StandardDetailPage() {
   } = useQuery({
     queryKey: ['standards', id],
     queryFn: async () => {
-      const res = await api.api.standards[':id'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar padrão de referência')
-      }
-
-      return res.json() as Promise<Standard>
+      return calibraApi.standards.get(id) as Promise<Standard>
     },
   })
 
   const { data: auditLogData } = useQuery({
     queryKey: ['standards', id, 'audit-log'],
     queryFn: async () => {
-      const res = await api.api.standards[':id']['audit-log'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar histórico')
-      }
-
-      return res.json() as Promise<{ data: AuditLogRecord[] }>
+      return calibraApi.standards.auditLog<AuditLogRecord>(id)
     },
   })
 

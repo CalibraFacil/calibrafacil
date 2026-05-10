@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authClient, useSession } from '@calibra-facil/auth/client'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 // =============================================================================
 // TYPES
@@ -180,20 +180,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         (prev) => (prev ?? []).filter((s) => s.id !== sessionId),
       )
       try {
-        const res = await api.api.sessions.revoke.$post({
-          json: { sessionId },
-        })
-        if (!res.ok) {
-          const data = await res.json().catch(() => null)
-          const message =
-            data &&
-            typeof data === 'object' &&
-            'error' in data &&
-            typeof data.error === 'string'
-              ? data.error
-              : 'Falha ao encerrar sessão'
-          throw new Error(message)
-        }
+        await calibraApi.sessions.revoke(sessionId)
         await refreshSessions()
       } catch (err) {
         const message =

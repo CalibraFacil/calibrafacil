@@ -11,7 +11,7 @@ import {
   ViewIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -295,13 +295,7 @@ function ClientCalibrationsTab() {
   const { data: customer } = useQuery({
     queryKey: ['customer', id],
     queryFn: async () => {
-      const res = await api.api.customers[':id'].$get({
-        param: { id },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar cliente')
-      }
-      return res.json() as Promise<{ id: number }>
+      return calibraApi.customers.get<{ id: number }>(id)
     },
   })
 
@@ -310,21 +304,13 @@ function ClientCalibrationsTab() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['jobs', 'customer', customerId, page, search, statusFilter],
     queryFn: async () => {
-      const res = await api.api.jobs.$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          customerId: String(customerId),
-          query: search || undefined,
-          status: statusFilter || undefined,
-        },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar calibrações')
-      }
-
-      return res.json() as Promise<{
+      return calibraApi.jobs.list({
+        page,
+        limit,
+        customerId,
+        query: search || undefined,
+        status: statusFilter || undefined,
+      }) as Promise<{
         data: Array<Job>
         pagination: {
           page: number

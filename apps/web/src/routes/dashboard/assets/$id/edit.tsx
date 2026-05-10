@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -49,8 +49,15 @@ import {
 } from '@/components/eccentricity-indicator'
 import { assetRouteId } from '@/lib/route-identifiers'
 import { isMassAssetTypeDefinition, type MassUnit } from '@calibra-facil/shared'
+import {
+  parseSyncConflictReturnSearch,
+  shouldReturnToSyncConflicts,
+  SyncConflictReturnNotice,
+  type SyncConflictReturnSearch,
+} from '@/runtime/sync-conflict-return'
 
 export const Route = createFileRoute('/dashboard/assets/$id/edit')({
+  validateSearch: parseSyncConflictReturnSearch,
   head: () => ({
     meta: [{ title: 'Editar Ativo | CalibraFácil' }],
   }),
@@ -104,6 +111,7 @@ function parseDate(date: string | Date | null | undefined): Date | undefined {
 
 function EditAssetPage() {
   const { id } = useParams({ from: '/dashboard/assets/$id/edit' })
+  const conflictReturn = Route.useSearch()
 
   // Fetch the asset data
   const {
@@ -113,13 +121,7 @@ function EditAssetPage() {
   } = useQuery({
     queryKey: ['asset', id],
     queryFn: async () => {
-      const res = await api.api.assets[':id'].$get({
-        param: { id },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar ativo')
-      }
-      return res.json() as Promise<AssetData>
+      return calibraApi.assets.get<AssetData>(id)
     },
   })
 
@@ -173,15 +175,24 @@ function EditAssetPage() {
     )
   }
 
-  return <EditAssetForm key={asset.id} asset={asset} assetId={id} />
+  return (
+    <EditAssetForm
+      key={asset.id}
+      asset={asset}
+      assetId={id}
+      conflictReturn={conflictReturn}
+    />
+  )
 }
 
 function EditAssetForm({
   asset,
   assetId,
+  conflictReturn,
 }: {
   asset: AssetData
   assetId: string
+  conflictReturn: SyncConflictReturnSearch
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -231,40 +242,32 @@ function EditAssetForm({
 
   const updateMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const res = await api.api.assets[':id'].$put({
-        param: { id: assetId },
-        json: {
-          name: data.name,
-          manufacturer: data.manufacturer || undefined,
-          model: data.model || undefined,
-          serialNumber: data.serialNumber,
-          tag: data.tag,
-          status: data.status,
-          lastCalibrationDate:
-            data.lastCalibrationDate?.toISOString() || undefined,
-          nextCalibrationDate:
-            data.nextCalibrationDate?.toISOString() || undefined,
-          comments: data.comments || undefined,
-          specifications:
-            Object.keys(data.specifications).length > 0
-              ? data.specifications
-              : undefined,
-        },
+      return calibraApi.assets.update(assetId, {
+        name: data.name,
+        manufacturer: data.manufacturer || undefined,
+        model: data.model || undefined,
+        serialNumber: data.serialNumber,
+        tag: data.tag,
+        status: data.status,
+        lastCalibrationDate:
+          data.lastCalibrationDate?.toISOString() || undefined,
+        nextCalibrationDate:
+          data.nextCalibrationDate?.toISOString() || undefined,
+        comments: data.comments || undefined,
+        specifications:
+          Object.keys(data.specifications).length > 0
+            ? data.specifications
+            : undefined,
       })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao atualizar ativo',
-        )
-      }
-
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assets'] })
       queryClient.invalidateQueries({ queryKey: ['asset', assetId] })
       toast.success('Ativo atualizado com sucesso!')
+      if (shouldReturnToSyncConflicts(conflictReturn)) {
+        navigate({ to: '/dashboard/sync/conflicts' })
+        return
+      }
       navigate({
         to: '/dashboard/assets/$id',
         params: { id: assetRouteId({ tag: formData.tag }) },
@@ -361,6 +364,7 @@ function EditAssetForm({
 
   return (
     <div className="space-y-6">
+      <SyncConflictReturnNotice search={conflictReturn} />
       <div>
         <Button
           variant="ghost"

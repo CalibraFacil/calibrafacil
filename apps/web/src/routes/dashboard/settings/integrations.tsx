@@ -19,7 +19,7 @@ import type {
   IntegrationTargetSyncSummary,
 } from '@calibra-facil/shared'
 import { getDefaultIntegrationMappings, INTEGRATION_CANONICAL_FIELDS } from '@calibra-facil/shared'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -226,18 +226,6 @@ function createEmptyMappingRule(target: SyncTarget): IntegrationFieldMappingRule
 
 function formatPreviewPayload(payload: Record<string, unknown>) {
   return JSON.stringify(payload, null, 2)
-}
-
-async function parseApiError(res: Response, fallback: string) {
-  const data = await res.json().catch(() => null)
-
-  if (data && typeof data === 'object') {
-    if ('error' in data && typeof data.error === 'string') return data.error
-    if ('message' in data && typeof data.message === 'string')
-      return data.message
-  }
-
-  return fallback
 }
 
 function formatDateTime(value: string | null) {
@@ -451,17 +439,7 @@ function IntegrationsSettingsPage() {
 
   const integrationsQuery = useQuery({
     queryKey: ['integrations'],
-    queryFn: async () => {
-      const res = await api.api.integrations.$get()
-
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao carregar integrações'),
-        )
-      }
-
-      return res.json() as Promise<IntegrationsResponse>
-    },
+    queryFn: () => calibraApi.integrations.list<IntegrationsResponse>(),
     enabled: canManage,
   })
 
@@ -491,15 +469,7 @@ function IntegrationsSettingsPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.integrations.$post({
-        json: draft,
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao criar integração'))
-      }
-
-      return res.json()
+      return calibraApi.integrations.create(draft)
     },
     onSuccess: async () => {
       toast.success('Integração criada')
@@ -515,15 +485,7 @@ function IntegrationsSettingsPage() {
 
   const validateMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await api.api.integrations[':id'].validate.$post({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao validar conexão'))
-      }
-
-      return res.json()
+      return calibraApi.integrations.validate(id)
     },
     onSuccess: async () => {
       toast.success('Conector validado')
@@ -544,16 +506,7 @@ function IntegrationsSettingsPage() {
       id: string
       mappings: IntegrationMappingsConfig
     }) => {
-      const res = await api.api.integrations[':id'].$put({
-        param: { id },
-        json: { mappings },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao salvar mapeamento'))
-      }
-
-      return res.json()
+      return calibraApi.integrations.update(id, { mappings })
     },
     onSuccess: async (_data, variables) => {
       toast.success('Mapeamento salvo')
@@ -584,16 +537,7 @@ function IntegrationsSettingsPage() {
       id: string
       enabled: boolean
     }) => {
-      const res = await api.api.integrations[':id'].toggle.$post({
-        param: { id },
-        json: { enabled },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao atualizar status'))
-      }
-
-      return res.json()
+      return calibraApi.integrations.toggle(id, { enabled })
     },
     onSuccess: async () => {
       toast.success('Status da integração atualizado')
@@ -616,16 +560,11 @@ function IntegrationsSettingsPage() {
       target: SyncTarget
       mappings?: IntegrationMappingsConfig
     }) => {
-      const res = await api.api.integrations[':id'].sync.preview.$post({
-        param: { id },
-        json: { target, limit: 50, mappings },
+      return calibraApi.integrations.previewSync<SyncPreviewResponse>(id, {
+        target,
+        limit: 50,
+        mappings,
       })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao montar prévia'))
-      }
-
-      return res.json() as Promise<SyncPreviewResponse>
     },
     onSuccess: (data, variables) => {
       setPreviewByKey((current) => ({
@@ -649,16 +588,7 @@ function IntegrationsSettingsPage() {
       id: string
       target: SyncTarget
     }) => {
-      const res = await api.api.integrations[':id'].sync.$post({
-        param: { id },
-        json: { target, limit: 50 },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao iniciar sync'))
-      }
-
-      return res.json()
+      return calibraApi.integrations.sync(id, { target, limit: 50 })
     },
     onSuccess: async (data, variables) => {
       toast.success(
@@ -687,16 +617,7 @@ function IntegrationsSettingsPage() {
       mode: IntegrationRunMode
       frequency?: IntegrationScheduleFrequency
     }) => {
-      const res = await api.api.integrations[':id'].schedule.$post({
-        param: { id },
-        json: { target, mode, frequency },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao atualizar agenda'))
-      }
-
-      return res.json()
+      return calibraApi.integrations.schedule(id, { target, mode, frequency })
     },
     onSuccess: async () => {
       toast.success('Agendamento atualizado')
@@ -717,15 +638,7 @@ function IntegrationsSettingsPage() {
       id: string
       runId: string
     }) => {
-      const res = await api.api.integrations[':id'].runs[':runId'].retry.$post({
-        param: { id, runId },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao reprocessar sync'))
-      }
-
-      return res.json()
+      return calibraApi.integrations.retryRun(id, runId)
     },
     onSuccess: async () => {
       toast.success('Reprocessamento disparado')

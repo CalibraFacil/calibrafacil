@@ -17,7 +17,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Spinner } from '@/components/ui/spinner'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { cn } from '@/lib/utils'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 
@@ -34,11 +34,7 @@ export function NotificationBell() {
   const { data: countData } = useQuery({
     queryKey: ['notifications', organizationQueryKey, 'unread-count'],
     enabled: canQueryNotifications,
-    queryFn: async () => {
-      const res = await api.api.notifications['unread-count'].$get()
-      if (!res.ok) throw new Error('Failed to fetch unread count')
-      return res.json()
-    },
+    queryFn: async () => calibraApi.notifications.getUnreadCount(),
     refetchInterval: 30000, // Poll every 30 seconds
     staleTime: 10000,
   })
@@ -46,26 +42,16 @@ export function NotificationBell() {
   // Fetch recent notifications when popover opens
   const { data: notificationsData, isLoading } = useQuery({
     queryKey: ['notifications', organizationQueryKey, 'recent'],
-    queryFn: async () => {
-      const res = await api.api.notifications.$get({
-        query: { page: '1', limit: '5' },
-      })
-      if (!res.ok) throw new Error('Failed to fetch notifications')
-      return res.json()
-    },
+    queryFn: async () =>
+      calibraApi.notifications.listRecent({ page: 1, limit: 5 }),
     enabled: canQueryNotifications && isOpen,
     staleTime: 5000,
   })
 
   // Mark notification as read mutation
   const markReadMutation = useMutation({
-    mutationFn: async (notificationIds: Array<number>) => {
-      const res = await api.api.notifications['mark-read'].$post({
-        json: { notificationIds },
-      })
-      if (!res.ok) throw new Error('Failed to mark as read')
-      return res.json()
-    },
+    mutationFn: async (notificationIds: Array<number>) =>
+      calibraApi.notifications.markRead(notificationIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
@@ -73,11 +59,7 @@ export function NotificationBell() {
 
   // Mark all as read mutation
   const markAllReadMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api.notifications['mark-all-read'].$post()
-      if (!res.ok) throw new Error('Failed to mark all as read')
-      return res.json()
-    },
+    mutationFn: async () => calibraApi.notifications.markAllRead(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },

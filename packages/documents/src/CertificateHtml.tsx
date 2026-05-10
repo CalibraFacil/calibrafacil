@@ -4,13 +4,15 @@ import {
   type CertificateTemplateBlock,
   type CertificateTemplateConfig,
   type CertificateTemplateSnapshot,
-  convertMassValue,
   formatCalibrationValue,
-  isMassMeasurementUnit,
   normalizeCertificateTemplateConfig,
+} from "@calibra-facil/shared";
+import {
+  convertMassValue,
+  isMassMeasurementUnit,
   resolveMassDisplayUnit,
   type MassUnit,
-} from "@calibra-facil/shared";
+} from "@calibra-facil/shared/mass-units";
 
 // Types for certificate generation (standalone, does not depend on @calibra-facil/db)
 

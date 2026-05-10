@@ -1,5 +1,6 @@
 import { type ColumnDef } from '@tanstack/react-table'
 import { Badge } from '@/components/ui/badge'
+import { SyncStateBadge } from '@/components/sync-state-badge'
 
 type AssetStatus = 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'SCRAPPED'
 
@@ -17,6 +18,7 @@ export interface Asset {
   customerTaxId: string | null
   status: AssetStatus
   nextCalibrationDate: string | null
+  syncState?: string | null
 }
 
 const statusLabels: Record<AssetStatus, string> = {
@@ -64,6 +66,12 @@ export const assetsColumns: ColumnDef<Asset>[] = [
   {
     accessorKey: 'name',
     header: 'Nome',
+    cell: ({ row }) => (
+      <div className="flex items-center gap-2">
+        <span>{row.original.name}</span>
+        <SyncStateBadge syncState={row.original.syncState} />
+      </div>
+    ),
   },
   {
     accessorKey: 'manufacturer',

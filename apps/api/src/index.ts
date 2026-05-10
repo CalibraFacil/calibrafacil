@@ -52,6 +52,7 @@ import { certificateTemplatesRouter } from "./routes/certificate-templates";
 import { certificateNumberingRouter } from "./routes/certificate-numbering";
 import { unitsRouter } from "./routes/units";
 import { integrationsRouter } from "./routes/integrations";
+import { syncRouter } from "./routes/sync";
 import { customerSuccessRouter } from "./routes/customer-success";
 import { internalCustomerSuccessRouter } from "./routes/internal-customer-success";
 import { backofficeRouter } from "./routes/backoffice";
@@ -84,6 +85,7 @@ interface Env {
 const app = new Hono<{ Bindings: Env }>();
 
 const allowedOrigins = new Set([
+  "app://calibra-facil",
   "http://localhost:5173",
   "http://localhost:5174",
   "https://localhost:5173",
@@ -310,6 +312,7 @@ const routes = app
   .route("/api/certificate-numbering", certificateNumberingRouter)
   .route("/api/units", unitsRouter)
   .route("/api/integrations", integrationsRouter)
+  .route("/api/sync", syncRouter)
   .route("/api/customer-success", customerSuccessRouter)
   .route("/api/backoffice", backofficeRouter)
   .route("/api/internal/customer-success", internalCustomerSuccessRouter)

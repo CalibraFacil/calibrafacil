@@ -8,7 +8,7 @@ import {
   InformationCircleIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   AuditTimeline,
   buildAuditTimelineEvents,
@@ -109,30 +109,14 @@ function ServiceDetailPage() {
   } = useQuery({
     queryKey: ['services', id],
     queryFn: async () => {
-      const res = await api.api.services[':id'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar serviço')
-      }
-
-      return res.json() as Promise<Service>
+      return calibraApi.services.get(id) as Promise<Service>
     },
   })
 
   const { data: auditLogData } = useQuery({
     queryKey: ['services', id, 'audit-log'],
     queryFn: async () => {
-      const res = await api.api.services[':id']['audit-log'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar histórico')
-      }
-
-      return res.json() as Promise<{ data: AuditLogRecord[] }>
+      return calibraApi.services.auditLog<AuditLogRecord>(id)
     },
   })
 

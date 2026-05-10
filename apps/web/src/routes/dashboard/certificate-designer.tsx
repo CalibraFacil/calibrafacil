@@ -17,7 +17,11 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { cn } from '@/lib/utils'
-import { api, resolveApiURL } from '@/utils/api'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
+import { api, apiFetch } from '@/utils/api'
 import {
   DEFAULT_CERTIFICATE_TEMPLATE_CONFIG,
   normalizeCertificateTemplateConfig,
@@ -66,7 +70,8 @@ function createTemplateDraft(template: TemplateItem): TemplateDraft {
 
 function CertificateDesignerPage() {
   const queryClient = useQueryClient()
-  const accessQuery = usePlanAccess()
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
+  const accessQuery = usePlanAccess({ enabled: !cloudOnlyUnavailable })
   const logoInputRef = useRef<HTMLInputElement>(null)
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string | null>(
     null,
@@ -78,6 +83,7 @@ function CertificateDesignerPage() {
 
   const templatesQuery = useQuery({
     queryKey: ['certificate-templates'],
+    enabled: !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api['certificate-templates'].$get()
       if (!res.ok) {
@@ -283,12 +289,11 @@ function CertificateDesignerPage() {
       const formData = new FormData()
       formData.append('logo', file)
 
-      const res = await fetch(
-        resolveApiURL(`/api/certificate-templates/${selectedTemplate.id}/logo`),
+      const res = await apiFetch(
+        `/api/certificate-templates/${selectedTemplate.id}/logo`,
         {
           method: 'POST',
           body: formData,
-          credentials: 'include',
         },
       )
 
@@ -330,11 +335,10 @@ function CertificateDesignerPage() {
         throw new Error('Selecione um template editável')
       }
 
-      const res = await fetch(
-        resolveApiURL(`/api/certificate-templates/${selectedTemplate.id}/logo`),
+      const res = await apiFetch(
+        `/api/certificate-templates/${selectedTemplate.id}/logo`,
         {
           method: 'DELETE',
-          credentials: 'include',
         },
       )
 
@@ -369,6 +373,12 @@ function CertificateDesignerPage() {
       )
     },
   })
+
+  if (cloudOnlyUnavailable) {
+    return (
+      <CloudOnlyOfflineState title="Editor de certificados indisponível offline" />
+    )
+  }
 
   if (templatesQuery.isLoading || accessQuery.isLoading) {
     return <DesignerSkeleton />

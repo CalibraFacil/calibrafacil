@@ -1,4 +1,4 @@
-import { resolveApiURL } from '@/utils/api'
+import { apiFetch } from '@/utils/api'
 
 import type {
   MethodCompileResult,
@@ -31,9 +31,8 @@ async function postJson<T>(
     headers.set('x-active-unit-id', activeUnitId)
   }
 
-  const response = await fetch(resolveApiURL(path), {
+  const response = await apiFetch(path, {
     method: 'POST',
-    credentials: 'include',
     headers,
     body: JSON.stringify(body),
   })

@@ -13,7 +13,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -82,13 +82,7 @@ function ClientEquipmentTab() {
   const { data: customer, isLoading: customerLoading } = useQuery({
     queryKey: ['customer', id],
     queryFn: async () => {
-      const res = await api.api.customers[':id'].$get({
-        param: { id },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar cliente')
-      }
-      return res.json() as Promise<{ id: number }>
+      return calibraApi.customers.get<{ id: number }>(id)
     },
   })
 
@@ -97,20 +91,12 @@ function ClientEquipmentTab() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['assets', 'customer', customerId, page, limit, search],
     queryFn: async () => {
-      const res = await api.api.assets.$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          customerId: String(customerId),
-          query: search || undefined,
-        },
+      return calibraApi.assets.list({
+        page,
+        limit,
+        customerId,
+        query: search || undefined,
       })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar ativos')
-      }
-
-      return res.json()
     },
     enabled: customerId !== undefined,
   })

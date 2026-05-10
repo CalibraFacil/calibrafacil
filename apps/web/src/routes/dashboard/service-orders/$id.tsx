@@ -1,6 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -15,7 +15,7 @@ import {
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   EventTimeline,
   type EventTimelineItem,
@@ -36,8 +36,16 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { isDesktopRuntime } from '@calibra-facil/client-runtime'
+import {
+  parseSyncConflictReturnSearch,
+  shouldReturnToSyncConflicts,
+  SyncConflictReturnNotice,
+  type SyncConflictReturnSearch,
+} from '@/runtime/sync-conflict-return'
 
 export const Route = createFileRoute('/dashboard/service-orders/$id')({
+  validateSearch: parseSyncConflictReturnSearch,
   head: () => ({ meta: [{ title: 'Detalhe da OS | CalibraFácil' }] }),
   component: ServiceOrderDetailPage,
 })
@@ -406,7 +414,10 @@ function buildServiceOrderTimelineItems(
 
 function buildServiceOrderIntakeHtml(order: ServiceOrderDetail) {
   const snapshot = order.assetSnapshot
-  const publicUrl = `${window.location.origin}/dashboard/service-orders/${order.id}`
+  const publicOrigin = globalThis.location?.origin
+  const publicUrl = publicOrigin
+    ? `${publicOrigin}/dashboard/service-orders/${order.id}`
+    : null
   const organizationAddress = [
     order.organizationStreet,
     order.organizationNumber,
@@ -501,17 +512,92 @@ function openServiceOrderIntakePreview(order: ServiceOrderDetail) {
   }
 }
 
+function getPublicUrl(result: unknown) {
+  if (!result || typeof result !== 'object') return null
+  const record = result as Record<string, unknown>
+  if (typeof record.publicUrl === 'string') return record.publicUrl
+  const data = record.data
+  if (!data || typeof data !== 'object') return null
+  const nested = data as Record<string, unknown>
+  return typeof nested.publicUrl === 'string' ? nested.publicUrl : null
+}
+
 function ServiceOrderDetailPage() {
   const { id } = Route.useParams()
+  const conflictReturn = Route.useSearch()
+  const orderQuery = useQuery({
+    queryKey: ['service-order', id],
+    queryFn: () =>
+      calibraApi.serviceOrders.get(id) as Promise<ServiceOrderDetail>,
+  })
+
+  if (!orderQuery.data) {
+    return (
+      <Card>
+        <CardContent className="pt-6">Carregando OS...</CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <ServiceOrderDetailContent
+      key={buildServiceOrderDetailFormKey(orderQuery.data)}
+      id={id}
+      order={orderQuery.data}
+      conflictReturn={conflictReturn}
+    />
+  )
+}
+
+function buildServiceOrderDetailFormKey(order: ServiceOrderDetail) {
+  return [
+    order.id,
+    order.evaluations[0]?.id ?? 'no-evaluation',
+    order.execution?.id ?? 'no-execution',
+    order.deliveryDocuments[0]?.id ?? 'no-delivery-document',
+  ].join(':')
+}
+
+function ServiceOrderDetailContent({
+  id,
+  order,
+  conflictReturn,
+}: {
+  id: string
+  order: ServiceOrderDetail
+  conflictReturn: SyncConflictReturnSearch
+}) {
   const queryClient = useQueryClient()
-  const [diagnosis, setDiagnosis] = useState('')
-  const [detectedIssues, setDetectedIssues] = useState('')
+  const navigate = useNavigate()
+  const isDesktop = isDesktopRuntime()
+  const latestEvaluation = order.evaluations[0]
+  const latestQuote = order.quotes[0]
+  const draftQuotes =
+    order.quotes.filter((quote) => quote.status === 'draft') ?? []
+  const approvedQuote = order.quotes.find(
+    (quote) => quote.status === 'approved',
+  )
+  const latestDeliveryDocument = order.deliveryDocuments[0]
+  const [diagnosis, setDiagnosis] = useState(latestEvaluation?.diagnosis ?? '')
+  const [detectedIssues, setDetectedIssues] = useState(
+    latestEvaluation?.detectedIssues ?? '',
+  )
   const [recommendedAction, setRecommendedAction] =
-    useState<ServiceOrderRecommendedAction>('repair')
-  const [requiresQuote, setRequiresQuote] = useState(true)
-  const [requiresClientApproval, setRequiresClientApproval] = useState(true)
-  const [calibrationRecommended, setCalibrationRecommended] = useState(false)
-  const [evaluationClientNotes, setEvaluationClientNotes] = useState('')
+    useState<ServiceOrderRecommendedAction>(
+      latestEvaluation?.recommendedAction ?? 'repair',
+    )
+  const [requiresQuote, setRequiresQuote] = useState(
+    latestEvaluation?.requiresQuote ?? true,
+  )
+  const [requiresClientApproval, setRequiresClientApproval] = useState(
+    latestEvaluation?.requiresClientApproval ?? true,
+  )
+  const [calibrationRecommended, setCalibrationRecommended] = useState(
+    latestEvaluation?.calibrationRecommended ?? false,
+  )
+  const [evaluationClientNotes, setEvaluationClientNotes] = useState(
+    latestEvaluation?.clientVisibleNotes ?? '',
+  )
   const [quoteItems, setQuoteItems] = useState<QuoteDraftItem[]>([
     createEmptyQuoteItem('service'),
     createEmptyQuoteItem('part'),
@@ -519,98 +605,68 @@ function ServiceOrderDetailPage() {
   const [paymentTerms, setPaymentTerms] = useState('')
   const [deliveryEstimate, setDeliveryEstimate] = useState('')
   const [quoteClientMessage, setQuoteClientMessage] = useState('')
-  const [executionServicePerformed, setExecutionServicePerformed] = useState('')
-  const [executionPartsUsedSummary, setExecutionPartsUsedSummary] = useState('')
-  const [executionTechnicalNotes, setExecutionTechnicalNotes] = useState('')
+  const [executionServicePerformed, setExecutionServicePerformed] = useState(
+    order.execution?.servicePerformed ?? '',
+  )
+  const [executionPartsUsedSummary, setExecutionPartsUsedSummary] = useState(
+    order.execution?.partsUsedSummary ?? '',
+  )
+  const [executionTechnicalNotes, setExecutionTechnicalNotes] = useState(
+    order.execution?.technicalNotes ?? '',
+  )
   const [executionResult, setExecutionResult] =
-    useState<ServiceOrderExecutionResult>('repaired')
+    useState<ServiceOrderExecutionResult>(order.execution?.result ?? 'repaired')
   const [executionRequiresCalibration, setExecutionRequiresCalibration] =
-    useState(false)
-  const [deliveryMethod, setDeliveryMethod] =
-    useState<keyof typeof deliveryMethodLabels>('pickup_at_lab')
-  const [deliveredToDocument, setDeliveredToDocument] = useState('')
-  const [deliveryNotes, setDeliveryNotes] = useState('')
-  const [repairSealNumber, setRepairSealNumber] = useState('')
-  const [repairSealNotes, setRepairSealNotes] = useState('')
-  const [repairSealApplied, setRepairSealApplied] = useState(false)
+    useState(order.execution?.calibrationRequiredAfterRepair ?? false)
+  const [deliveryMethod, setDeliveryMethod] = useState<
+    keyof typeof deliveryMethodLabels
+  >(order.deliveryMethod ?? 'pickup_at_lab')
+  const [deliveredToDocument, setDeliveredToDocument] = useState(
+    order.deliveredToDocument ?? '',
+  )
+  const [deliveryNotes, setDeliveryNotes] = useState(order.deliveryNotes ?? '')
+  const [repairSealNumber, setRepairSealNumber] = useState(
+    order.inmetroRepairSealNumber ?? '',
+  )
+  const [repairSealNotes, setRepairSealNotes] = useState(
+    order.inmetroRepairSealNotes ?? '',
+  )
+  const [repairSealApplied, setRepairSealApplied] = useState(
+    Boolean(order.inmetroRepairSealAppliedAt),
+  )
   const [activeTab, setActiveTab] =
     useState<(typeof workflowTabs)[number]['value']>('evaluation')
-
-  const orderQuery = useQuery({
-    queryKey: ['service-order', id],
-    queryFn: async () => {
-      const response = await api.api['service-orders'][':id'].$get({
-        param: { id },
-      })
-      if (!response.ok) throw new Error('Erro ao carregar OS')
-      const result = await response.json()
-      return result.data as ServiceOrderDetail
-    },
-  })
-
-  const order = orderQuery.data
-  const latestEvaluation = order?.evaluations[0]
-  const latestQuote = order?.quotes[0]
-  const draftQuotes =
-    order?.quotes.filter((quote) => quote.status === 'draft') ?? []
-  const approvedQuote = order?.quotes.find(
-    (quote) => quote.status === 'approved',
-  )
   const quoteTotal = useMemo(() => quoteItemsTotal(quoteItems), [quoteItems])
-  const latestDeliveryDocument = order?.deliveryDocuments[0]
-
-  useEffect(() => {
-    if (!latestEvaluation) return
-    setDiagnosis(latestEvaluation.diagnosis)
-    setDetectedIssues(latestEvaluation.detectedIssues ?? '')
-    setRecommendedAction(latestEvaluation.recommendedAction)
-    setRequiresQuote(latestEvaluation.requiresQuote)
-    setRequiresClientApproval(latestEvaluation.requiresClientApproval)
-    setCalibrationRecommended(latestEvaluation.calibrationRecommended)
-    setEvaluationClientNotes(latestEvaluation.clientVisibleNotes ?? '')
-  }, [latestEvaluation])
-
-  useEffect(() => {
-    if (!order) return
-    setDeliveryMethod(order.deliveryMethod ?? 'pickup_at_lab')
-    setDeliveredToDocument(order.deliveredToDocument ?? '')
-    setDeliveryNotes(order.deliveryNotes ?? '')
-    setRepairSealNumber(order.inmetroRepairSealNumber ?? '')
-    setRepairSealNotes(order.inmetroRepairSealNotes ?? '')
-    setRepairSealApplied(Boolean(order.inmetroRepairSealAppliedAt))
-  }, [order])
+  const returnToSyncConflicts = () => {
+    if (shouldReturnToSyncConflicts(conflictReturn)) {
+      navigate({ to: '/dashboard/sync/conflicts' })
+    }
+  }
 
   const saveEvaluation = useMutation({
     mutationFn: async () => {
       if (!diagnosis.trim()) throw new Error('Informe o diagnóstico técnico.')
-      const json = {
-        diagnosis,
-        detectedIssues: detectedIssues || null,
-        recommendedAction,
-        requiresQuote,
-        requiresClientApproval,
-        calibrationRecommended,
-        clientVisibleNotes: evaluationClientNotes || null,
-        photos: [],
-      }
-      const response = latestEvaluation
-        ? await api.api['service-orders'][':id'].evaluations[
-            ':evaluationId'
-          ].$patch({
-            param: { id, evaluationId: String(latestEvaluation.id) },
-            json,
-          })
-        : await api.api['service-orders'][':id'].evaluations.$post({
-            param: { id },
-            json,
-          })
-      if (!response.ok) throw new Error('Erro ao salvar avaliação')
+      await calibraApi.serviceOrders.saveEvaluation(
+        id,
+        latestEvaluation?.id ?? null,
+        {
+          diagnosis,
+          detectedIssues: detectedIssues || null,
+          recommendedAction,
+          requiresQuote,
+          requiresClientApproval,
+          calibrationRecommended,
+          clientVisibleNotes: evaluationClientNotes || null,
+          photos: [],
+        },
+      )
     },
     onSuccess: () => {
       toast.success(
         latestEvaluation ? 'Avaliação atualizada' : 'Avaliação registrada',
       )
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+      returnToSyncConflicts()
     },
     onError: (error) => {
       toast.error(
@@ -621,20 +677,17 @@ function ServiceOrderDetailPage() {
 
   const createQuote = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'][':id'].quotes.$post({
-        param: { id },
-        json: {
-          deliveryEstimate: deliveryEstimate || null,
-          paymentTerms: paymentTerms || null,
-          clientMessage: quoteClientMessage || null,
-          items: toApiItems(quoteItems),
-        },
+      await calibraApi.serviceOrders.createQuote(id, {
+        deliveryEstimate: deliveryEstimate || null,
+        paymentTerms: paymentTerms || null,
+        clientMessage: quoteClientMessage || null,
+        items: toApiItems(quoteItems),
       })
-      if (!response.ok) throw new Error('Erro ao salvar orçamento')
     },
     onSuccess: () => {
       toast.success('Orçamento salvo como rascunho')
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+      returnToSyncConflicts()
     },
     onError: (error) => {
       toast.error(
@@ -645,21 +698,15 @@ function ServiceOrderDetailPage() {
 
   const sendQuote = useMutation({
     mutationFn: async (quoteId: number) => {
-      const response = await api.api['service-orders'][':id'].quotes[
-        ':quoteId'
-      ].send.$post({
-        param: { id, quoteId: String(quoteId) },
-        json: {
-          clientMessage: quoteClientMessage || null,
-        },
+      return calibraApi.serviceOrders.sendQuote(id, quoteId, {
+        clientMessage: quoteClientMessage || null,
       })
-      if (!response.ok) throw new Error('Erro ao emitir orçamento')
-      return response.json()
     },
     onSuccess: (result) => {
       toast.success('Orçamento emitido para aprovação')
-      if ('data' in result && 'publicUrl' in result) {
-        navigator.clipboard?.writeText(result.publicUrl as string)
+      const publicUrl = getPublicUrl(result)
+      if (publicUrl) {
+        navigator.clipboard?.writeText(publicUrl)
       }
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
     },
@@ -672,47 +719,38 @@ function ServiceOrderDetailPage() {
 
   const startExecution = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'][
-        ':id'
-      ].execution.start.$post({
-        param: { id },
-        json: { notes: executionTechnicalNotes || null },
+      await calibraApi.serviceOrders.saveExecution(id, {
+        technicalNotes: executionTechnicalNotes || null,
       })
-      if (!response.ok) throw new Error('Erro ao iniciar execução')
     },
     onSuccess: () => {
       toast.success('Execução iniciada')
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+      returnToSyncConflicts()
     },
   })
 
   const finishExecution = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'][
-        ':id'
-      ].execution.finish.$post({
-        param: { id },
-        json: {
-          servicePerformed: executionServicePerformed,
-          partsUsedSummary: executionPartsUsedSummary || null,
-          technicalNotes: executionTechnicalNotes || null,
-          calibrationRequiredAfterRepair: executionRequiresCalibration,
-          result: executionResult,
-          items: approvedQuote?.items.map((item) => ({
-            quoteItemId: item.id,
-            type: item.type,
-            description: item.description,
-            quantity: item.quantity,
-            unit: item.unit,
-            unitPriceCents: item.unitPriceCents,
-          })),
-        },
+      await calibraApi.serviceOrders.saveExecution(id, {
+        servicePerformed: executionServicePerformed,
+        partsUsedSummary: executionPartsUsedSummary || null,
+        technicalNotes: executionTechnicalNotes || null,
+        calibrationRequiredAfterRepair: executionRequiresCalibration,
+        result: executionResult,
+        items: approvedQuote?.items.map((item) => ({
+          type: item.type,
+          description: item.description,
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPriceCents: item.unitPriceCents,
+        })),
       })
-      if (!response.ok) throw new Error('Erro ao finalizar execução')
     },
     onSuccess: () => {
       toast.success('Execução finalizada')
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+      returnToSyncConflicts()
     },
     onError: (error) => {
       toast.error(
@@ -722,14 +760,7 @@ function ServiceOrderDetailPage() {
   })
 
   const generateIntakeDocument = useMutation({
-    mutationFn: async () => {
-      const response = await api.api['service-orders'][':id'][
-        'intake-document'
-      ].$post({
-        param: { id },
-      })
-      if (!response.ok) throw new Error('Erro ao gerar comprovante')
-    },
+    mutationFn: () => calibraApi.serviceOrders.generateIntakeDocument(id),
     onSuccess: () => {
       toast.success('Comprovante enviado para geração')
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
@@ -738,13 +769,7 @@ function ServiceOrderDetailPage() {
 
   const openIntakeDocument = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'][':id'][
-        'intake-document.pdf'
-      ].$get({
-        param: { id },
-      })
-      if (!response.ok) throw new Error('PDF ainda indisponível')
-      const result = await response.json()
+      const result = await calibraApi.serviceOrders.getIntakeDocumentPdf(id)
       window.open(result.url, '_blank', 'noopener,noreferrer')
     },
     onError: (error) => {
@@ -757,12 +782,7 @@ function ServiceOrderDetailPage() {
   })
 
   const generateTag = useMutation({
-    mutationFn: async () => {
-      const response = await api.api['service-orders'][':id'].tag.$post({
-        param: { id },
-      })
-      if (!response.ok) throw new Error('Erro ao gerar etiqueta')
-    },
+    mutationFn: () => calibraApi.serviceOrders.generateTag(id),
     onSuccess: () => {
       toast.success('Etiqueta enviada para geração')
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
@@ -771,11 +791,7 @@ function ServiceOrderDetailPage() {
 
   const openTag = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'][':id']['tag.pdf'].$get({
-        param: { id },
-      })
-      if (!response.ok) throw new Error('PDF ainda indisponível')
-      const result = await response.json()
+      const result = await calibraApi.serviceOrders.getTagPdf(id)
       window.open(result.url, '_blank', 'noopener,noreferrer')
     },
     onError: (error) => {
@@ -789,26 +805,21 @@ function ServiceOrderDetailPage() {
 
   const updateRepairSeal = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'][':id'][
-        'repair-seal'
-      ].$patch({
-        param: { id },
-        json: {
-          inmetroRepairSealNumber: repairSealNumber || null,
-          inmetroRepairSealIssuedAt: repairSealNumber
-            ? new Date().toISOString()
-            : null,
-          inmetroRepairSealAppliedAt: repairSealApplied
-            ? new Date().toISOString()
-            : null,
-          inmetroRepairSealNotes: repairSealNotes || null,
-        },
+      await calibraApi.serviceOrders.updateRepairSeal(id, {
+        inmetroRepairSealNumber: repairSealNumber || null,
+        inmetroRepairSealIssuedAt: repairSealNumber
+          ? new Date().toISOString()
+          : null,
+        inmetroRepairSealAppliedAt: repairSealApplied
+          ? new Date().toISOString()
+          : null,
+        inmetroRepairSealNotes: repairSealNotes || null,
       })
-      if (!response.ok) throw new Error('Erro ao salvar selo de reparado')
     },
     onSuccess: () => {
       toast.success('Selo de reparado atualizado')
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+      returnToSyncConflicts()
     },
     onError: (error) => {
       toast.error(
@@ -820,21 +831,18 @@ function ServiceOrderDetailPage() {
   const deliverOrder = useMutation({
     mutationFn: async () => {
       if (!order?.customerName) throw new Error('Cliente da OS não encontrado.')
-      const response = await api.api['service-orders'][':id'].deliver.$post({
-        param: { id },
-        json: {
-          deliveryMethod,
-          deliveredToName: order.customerName,
-          deliveredToDocument: deliveredToDocument || null,
-          deliveryNotes: deliveryNotes || null,
-          inmetroRepairSealNumber: repairSealNumber || null,
-        },
+      await calibraApi.serviceOrders.deliver(id, {
+        deliveryMethod,
+        deliveredToName: order.customerName,
+        deliveredToDocument: deliveredToDocument || null,
+        deliveryNotes: deliveryNotes || null,
+        inmetroRepairSealNumber: repairSealNumber || null,
       })
-      if (!response.ok) throw new Error('Erro ao registrar entrega')
     },
     onSuccess: () => {
       toast.success('Entrega registrada')
       queryClient.invalidateQueries({ queryKey: ['service-order', id] })
+      returnToSyncConflicts()
     },
     onError: (error) => {
       toast.error(
@@ -845,16 +853,10 @@ function ServiceOrderDetailPage() {
 
   const issueDeliveryDocument = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'][':id'][
-        'delivery-document'
-      ].$post({
-        param: { id },
-        json: {
-          technicianSignatureData: null,
-          clientSignatureData: null,
-        },
+      await calibraApi.serviceOrders.issueDeliveryDocument(id, {
+        technicianSignatureData: null,
+        clientSignatureData: null,
       })
-      if (!response.ok) throw new Error('Erro ao gerar comprovante de entrega')
     },
     onSuccess: () => {
       toast.success('Comprovante de entrega enviado para geração')
@@ -871,13 +873,7 @@ function ServiceOrderDetailPage() {
 
   const openDeliveryDocument = useMutation({
     mutationFn: async () => {
-      const response = await api.api['service-orders'][':id'][
-        'delivery-document.pdf'
-      ].$get({
-        param: { id },
-      })
-      if (!response.ok) throw new Error('PDF ainda indisponível')
-      const result = await response.json()
+      const result = await calibraApi.serviceOrders.getDeliveryDocumentPdf(id)
       window.open(result.url, '_blank', 'noopener,noreferrer')
     },
     onError: (error) => {
@@ -901,18 +897,11 @@ function ServiceOrderDetailPage() {
     )
   }
 
-  if (!order) {
-    return (
-      <Card>
-        <CardContent className="pt-6">Carregando OS...</CardContent>
-      </Card>
-    )
-  }
-
   const execution = order.execution
 
   return (
     <div className="space-y-6">
+      <SyncConflictReturnNotice search={conflictReturn} />
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -942,7 +931,7 @@ function ServiceOrderDetailPage() {
                 size="sm"
                 className="active:scale-[0.96] transition-transform"
                 onClick={() => generateIntakeDocument.mutate()}
-                disabled={generateIntakeDocument.isPending}
+                disabled={isDesktop || generateIntakeDocument.isPending}
               >
                 Gerar comprovante
               </Button>
@@ -951,7 +940,7 @@ function ServiceOrderDetailPage() {
                 size="sm"
                 className="active:scale-[0.96] transition-transform"
                 onClick={() => openIntakeDocument.mutate()}
-                disabled={openIntakeDocument.isPending}
+                disabled={isDesktop || openIntakeDocument.isPending}
               >
                 Abrir comprovante
               </Button>
@@ -960,7 +949,7 @@ function ServiceOrderDetailPage() {
                 size="sm"
                 className="active:scale-[0.96] transition-transform"
                 onClick={() => generateTag.mutate()}
-                disabled={generateTag.isPending}
+                disabled={isDesktop || generateTag.isPending}
               >
                 Gerar etiqueta
               </Button>
@@ -969,7 +958,7 @@ function ServiceOrderDetailPage() {
                 size="sm"
                 className="active:scale-[0.96] transition-transform"
                 onClick={() => openTag.mutate()}
-                disabled={openTag.isPending}
+                disabled={isDesktop || openTag.isPending}
               >
                 Abrir etiqueta
               </Button>
@@ -1143,7 +1132,7 @@ function ServiceOrderDetailPage() {
                   <Button
                     className="active:scale-[0.96] transition-transform"
                     onClick={() => saveEvaluation.mutate()}
-                    disabled={saveEvaluation.isPending}
+                    disabled={isDesktop || saveEvaluation.isPending}
                   >
                     <HugeiconsIcon
                       icon={CheckmarkCircle02Icon}
@@ -1329,7 +1318,7 @@ function ServiceOrderDetailPage() {
                       key={quote.id}
                       className="active:scale-[0.96] transition-transform"
                       onClick={() => sendQuote.mutate(quote.id)}
-                      disabled={sendQuote.isPending}
+                      disabled={isDesktop || sendQuote.isPending}
                     >
                       <HugeiconsIcon icon={SentIcon} className="mr-2 size-4" />
                       Emitir v{quote.version}
@@ -1659,7 +1648,7 @@ function ServiceOrderDetailPage() {
                       variant="outline"
                       className="active:scale-[0.96] transition-transform"
                       onClick={() => updateRepairSeal.mutate()}
-                      disabled={updateRepairSeal.isPending}
+                      disabled={isDesktop || updateRepairSeal.isPending}
                     >
                       Salvar selo
                     </Button>
@@ -1671,7 +1660,7 @@ function ServiceOrderDetailPage() {
                     variant="outline"
                     className="active:scale-[0.96] transition-transform"
                     onClick={() => deliverOrder.mutate()}
-                    disabled={deliverOrder.isPending}
+                    disabled={isDesktop || deliverOrder.isPending}
                   >
                     Registrar entrega
                   </Button>
@@ -1687,7 +1676,7 @@ function ServiceOrderDetailPage() {
                     variant="outline"
                     className="active:scale-[0.96] transition-transform"
                     onClick={() => openDeliveryDocument.mutate()}
-                    disabled={openDeliveryDocument.isPending}
+                    disabled={isDesktop || openDeliveryDocument.isPending}
                   >
                     Abrir comprovante
                   </Button>

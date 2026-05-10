@@ -1,6 +1,8 @@
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { BrandLockup } from '@/components/brand'
 import { SignInForm } from '@/components/sign-in-form'
+import { hasDesktopSession } from '@/runtime/desktop-auth'
+import { isDesktopRuntime } from '@/runtime/desktop'
 
 type SignInSearch = {
   redirect?: string
@@ -10,6 +12,13 @@ export const Route = createFileRoute('/sign-in/')({
   validateSearch: (search: Record<string, unknown>): SignInSearch => ({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
   }),
+  beforeLoad: async () => {
+    if (!isDesktopRuntime()) return
+
+    if (await hasDesktopSession()) {
+      throw redirect({ to: '/dashboard' })
+    }
+  },
   head: () => ({
     meta: [
       {

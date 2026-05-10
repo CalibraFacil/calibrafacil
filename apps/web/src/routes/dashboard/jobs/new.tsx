@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { InformationCircleIcon } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -38,44 +38,6 @@ interface FormData {
   serviceId: number | null
   technicianId: string | null
   dueDate: Date | null
-}
-
-interface Customer {
-  id: number
-  name: string
-  taxId: string | null
-  compliance?: {
-    qualificationStatus?: 'pending' | 'qualified' | 'suspended' | 'expired'
-  } | null
-}
-
-interface Asset {
-  id: number
-  name: string
-  tag: string
-  serialNumber: string
-  assetTypeId: number
-  assetTypeName: string | null
-  customerId: number
-}
-
-interface Service {
-  id: number
-  name: string
-  methodId: number | null
-  methodName: string | null
-  methodStatus: string | null
-  assetTypeId: number | null
-  price: number | null
-  currency: string
-  tat: number | null
-}
-
-interface Technician {
-  id: string
-  name: string
-  email: string
-  role: string
 }
 
 const initialFormData: FormData = {
@@ -111,21 +73,11 @@ function NewJobPage() {
   const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ['customers', 'search', customerSearch],
     queryFn: async () => {
-      const res = await api.api.customers.$get({
-        query: {
-          page: '1',
-          limit: '50',
-          query: customerSearch || undefined,
-        },
+      return calibraApi.customers.list({
+        page: 1,
+        limit: 50,
+        query: customerSearch || undefined,
       })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar clientes')
-      }
-
-      return res.json() as Promise<{
-        data: Array<Customer>
-      }>
     },
     staleTime: 30000,
   })
@@ -136,20 +88,11 @@ function NewJobPage() {
     queryFn: async () => {
       if (!formData.customerId) return { data: [] }
 
-      const res = await api.api.assets.$get({
-        query: {
-          customerId: String(formData.customerId),
-          limit: '100',
-        },
+      return calibraApi.assets.list({
+        page: 1,
+        limit: 100,
+        customerId: formData.customerId,
       })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar ativos')
-      }
-
-      return res.json() as Promise<{
-        data: Array<Asset>
-      }>
     },
     enabled: !!formData.customerId,
   })
@@ -163,25 +106,12 @@ function NewJobPage() {
   const { data: servicesData, isLoading: servicesLoading } = useQuery({
     queryKey: ['services', 'for-job', selectedAsset?.assetTypeId],
     queryFn: async () => {
-      const query: Record<string, string> = {
-        isActive: 'true',
-        limit: '100',
-      }
-
-      // Filter by asset type if asset is selected
-      if (selectedAsset?.assetTypeId) {
-        query.assetTypeId = String(selectedAsset.assetTypeId)
-      }
-
-      const res = await api.api.services.$get({ query })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar servicos')
-      }
-
-      return res.json() as Promise<{
-        data: Array<Service>
-      }>
+      return calibraApi.services.list({
+        page: 1,
+        limit: 100,
+        isActive: true,
+        assetTypeId: selectedAsset?.assetTypeId,
+      })
     },
     enabled: !!selectedAsset,
   })
@@ -190,15 +120,7 @@ function NewJobPage() {
   const { data: techniciansData, isLoading: techniciansLoading } = useQuery({
     queryKey: ['jobs', 'technicians'],
     queryFn: async () => {
-      const res = await api.api.jobs['technicians']['list'].$get()
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar tecnicos')
-      }
-
-      return res.json() as Promise<{
-        data: Array<Technician>
-      }>
+      return calibraApi.jobs.listTechnicians()
     },
   })
 
@@ -251,23 +173,16 @@ function NewJobPage() {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const res = await api.api.jobs.$post({
-        json: {
-          assetId: data.assetId!,
-          serviceId: data.serviceId!,
-          technicianId: data.technicianId || undefined,
-          dueDate: data.dueDate?.toISOString() || undefined,
-        },
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao criar ordem',
-        )
+      if (!data.assetId || !data.serviceId) {
+        throw new Error('Ativo e serviço são obrigatórios')
       }
 
-      return res.json() as Promise<{ id: number; jobId: string }>
+      return calibraApi.jobs.create({
+        assetId: data.assetId,
+        serviceId: data.serviceId,
+        technicianId: data.technicianId || undefined,
+        dueDate: data.dueDate?.toISOString() || undefined,
+      })
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })

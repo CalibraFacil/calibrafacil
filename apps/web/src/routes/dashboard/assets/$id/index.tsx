@@ -1,7 +1,7 @@
 import { createFileRoute, useParams } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   AuditTimeline,
   buildAuditTimelineEvents,
@@ -73,13 +73,7 @@ function AssetDetailPage() {
   } = useQuery({
     queryKey: ['asset', id],
     queryFn: async () => {
-      const res = await api.api.assets[':id'].$get({
-        param: { id },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar ativo')
-      }
-      return res.json() as Promise<AssetDetail>
+      return calibraApi.assets.get<AssetDetail>(id)
     },
   })
 
@@ -87,15 +81,7 @@ function AssetDetailPage() {
   const { data: auditLogData } = useQuery({
     queryKey: ['asset', id, 'audit-log'],
     queryFn: async () => {
-      const res = await api.api.assets[':id']['audit-log'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar histórico')
-      }
-
-      return res.json() as Promise<{ data: AuditLogRecord[] }>
+      return calibraApi.assets.auditLog<AuditLogRecord>(id)
     },
   })
 

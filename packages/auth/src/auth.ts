@@ -43,7 +43,6 @@ function isProductionRuntime(): boolean {
   return process.env.VERCEL_ENV === "production";
 }
 
-
 function createBaseUrlConfig(isProduction: boolean): string {
   if (isProduction) {
     return getRequiredEnv("API_URL");
@@ -105,6 +104,7 @@ function resolveAuthSecret(isProduction: boolean): string {
 }
 
 const DEV_TRUSTED_ORIGINS = [
+  "app://calibra-facil",
   "http://localhost:5173",
   "http://localhost:5174",
   "https://localhost:5173",
@@ -117,6 +117,7 @@ const DEV_TRUSTED_ORIGINS = [
 
 // Include wildcard preview hosts because Vercel preview domains are intentionally dynamic.
 const PROD_TRUSTED_ORIGINS = [
+  "app://calibra-facil",
   "https://calibrafacil.com",
   "https://www.calibrafacil.com",
   "https://portal.calibrafacil.com",
@@ -189,7 +190,6 @@ function normalizeDynamicTrustedOrigin(
     return null;
   }
 }
-
 
 function isVercelPreviewOrigin(origin: string): boolean {
   try {

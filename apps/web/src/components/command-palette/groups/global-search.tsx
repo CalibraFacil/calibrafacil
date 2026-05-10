@@ -10,7 +10,7 @@ import {
 
 import { useCommandPalette } from '../command-context'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   CommandGroup,
   CommandItem,
@@ -55,7 +55,7 @@ type JobSearchResult = {
 
 const SEARCH_DEBOUNCE_MS = 150
 const SEARCH_MIN_LENGTH = 2
-const SEARCH_RESULT_LIMIT = '5'
+const SEARCH_RESULT_LIMIT = 5
 
 // Derive search mode from active page
 function getSearchModeFromPage(activePage: string): SearchMode {
@@ -103,11 +103,19 @@ export function GlobalSearchGroup({
     queryKey: ['command-search', 'assets', debouncedSearch],
     queryFn: async () => {
       if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
-      const res = await api.api.assets.search.$get({
-        query: { query: debouncedSearch, limit: SEARCH_RESULT_LIMIT },
+      const result = await calibraApi.assets.list({
+        page: 1,
+        limit: SEARCH_RESULT_LIMIT,
+        query: debouncedSearch,
       })
-      if (!res.ok) throw new Error('Search failed')
-      return await res.json()
+      return result.data.map((asset) => ({
+        id: asset.id,
+        tag: asset.tag,
+        serialNumber: asset.serialNumber,
+        assetTypeName: asset.assetTypeName,
+        customerName: asset.customerName,
+        customerTaxId: asset.customerTaxId ?? null,
+      }))
     },
     enabled: searchMode === 'assets' && hasMinimumQuery,
     staleTime: 30000,
@@ -123,11 +131,17 @@ export function GlobalSearchGroup({
     queryKey: ['command-search', 'clients', debouncedSearch],
     queryFn: async () => {
       if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
-      const res = await api.api.customers.search.$get({
-        query: { query: debouncedSearch, limit: SEARCH_RESULT_LIMIT },
+      const result = await calibraApi.customers.list({
+        page: 1,
+        limit: SEARCH_RESULT_LIMIT,
+        query: debouncedSearch,
       })
-      if (!res.ok) throw new Error('Search failed')
-      return await res.json()
+      return result.data.map((customer) => ({
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        taxId: customer.taxId,
+      }))
     },
     enabled: searchMode === 'clients' && hasMinimumQuery,
     staleTime: 30000,
@@ -143,33 +157,12 @@ export function GlobalSearchGroup({
     queryKey: ['command-search', 'standards', debouncedSearch],
     queryFn: async () => {
       if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
-      const res = await api.api.standards.search.$get({
-        query: { query: debouncedSearch, limit: SEARCH_RESULT_LIMIT },
+      const result = await calibraApi.standards.list({
+        page: 1,
+        limit: SEARCH_RESULT_LIMIT,
+        query: debouncedSearch,
       })
-      if (res.ok) {
-        return await res.json()
-      }
-
-      // Backward-compatible fallback for environments where /standards/search
-      // is not deployed yet.
-      if (res.status !== 404) {
-        throw new Error('Search failed')
-      }
-
-      const fallbackRes = await api.api.standards.$get({
-        query: {
-          query: debouncedSearch,
-          limit: SEARCH_RESULT_LIMIT,
-          page: '1',
-        },
-      })
-
-      if (!fallbackRes.ok) {
-        throw new Error('Search failed')
-      }
-
-      const fallbackData = await fallbackRes.json()
-      return fallbackData.data.map((standard) => ({
+      return result.data.map((standard) => ({
         id: standard.id,
         name: standard.name,
         serialNumber: standard.serialNumber,
@@ -190,11 +183,16 @@ export function GlobalSearchGroup({
     queryKey: ['command-search', 'jobs', debouncedSearch],
     queryFn: async () => {
       if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
-      const res = await api.api.jobs.search.$get({
-        query: { query: debouncedSearch, limit: SEARCH_RESULT_LIMIT },
+      const result = await calibraApi.jobs.list({
+        page: 1,
+        limit: SEARCH_RESULT_LIMIT,
+        query: debouncedSearch,
       })
-      if (!res.ok) throw new Error('Search failed')
-      return await res.json()
+      return result.data.map((job) => ({
+        id: job.id,
+        jobId: job.jobId,
+        status: job.status,
+      }))
     },
     enabled: searchMode === 'jobs' && hasMinimumQuery,
     staleTime: 30000,

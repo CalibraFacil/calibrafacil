@@ -17,6 +17,10 @@ import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
 
 export const Route = createFileRoute('/dashboard/capa/$id/')({
   head: () => ({
@@ -136,6 +140,7 @@ type AuditLogEntry = {
 function CAPADetailPage() {
   const { id } = Route.useParams()
   const queryClient = useQueryClient()
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
 
   const [implementationEvidence, setImplementationEvidence] = useState('')
   const [verificationNotes, setVerificationNotes] = useState('')
@@ -144,6 +149,7 @@ function CAPADetailPage() {
 
   const { data: capa, isLoading } = useQuery({
     queryKey: ['capa', id],
+    enabled: !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api.capa[':id'].$get({
         param: { id },
@@ -155,6 +161,7 @@ function CAPADetailPage() {
 
   const { data: auditLog } = useQuery({
     queryKey: ['capa-audit-log', id],
+    enabled: !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api.capa[':id']['audit-log'].$get({
         param: { id },
@@ -237,6 +244,10 @@ function CAPADetailPage() {
     },
     onError: (e) => toast.error(e.message),
   })
+
+  if (cloudOnlyUnavailable) {
+    return <CloudOnlyOfflineState title="CAPA indisponível offline" />
+  }
 
   if (isLoading) {
     return (

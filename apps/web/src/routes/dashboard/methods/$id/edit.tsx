@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -34,34 +34,14 @@ function EditMethodPage() {
   } = useQuery({
     queryKey: ['methods', id],
     queryFn: async () => {
-      const res = await api.api.methods[':id'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar método')
-      }
-
-      return res.json() as Promise<MethodRecordData>
+      return calibraApi.methods.get(id) as Promise<MethodRecordData>
     },
   })
 
   const updateMutation = useMutation({
     mutationFn: async (draft: MethodDraft) => {
       const payload = draftToMethodSavePayload(draft)
-      const res = await api.api.methods[':id'].$put({
-        param: { id: String(method?.id ?? id) },
-        json: payload,
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao atualizar método',
-        )
-      }
-
-      return res.json()
+      return calibraApi.methods.update(method?.id ?? id, payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })

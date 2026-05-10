@@ -33,7 +33,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { usePlanAccess } from '@/hooks/use-plan-access'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   ENTITLEMENT_METADATA,
   formatPrice,
@@ -94,31 +94,15 @@ export function BillingSettingsPage() {
     ? (accessQuery.data.canManageBilling ?? true)
     : false
 
-  // Fetch subscription data
   const subscriptionQuery = useQuery({
     queryKey: ['billing', 'subscription'],
-    queryFn: async () => {
-      const response = await api.api.billing.subscription.$get()
-      if (!response.ok) {
-        throw new Error('Erro ao carregar assinatura')
-      }
-      return response.json()
-    },
+    queryFn: () => calibraApi.billing.getSubscription(),
     enabled: accessReady && canManageBilling,
   })
 
-  // Fetch payment history
   const paymentsQuery = useQuery({
     queryKey: ['billing', 'payments'],
-    queryFn: async () => {
-      const response = await api.api.billing.payments.$get({
-        query: { limit: '10', offset: '0' },
-      })
-      if (!response.ok) {
-        throw new Error('Erro ao carregar pagamentos')
-      }
-      return response.json()
-    },
+    queryFn: () => calibraApi.billing.listPayments({ limit: 10, offset: 0 }),
     enabled: accessReady && canManageBilling,
   })
 

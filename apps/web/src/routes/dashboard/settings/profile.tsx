@@ -10,7 +10,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useSettings } from '@/contexts/settings-context'
-import { resolveApiURL } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -83,27 +83,8 @@ function ProfileSettingsForm({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const formData = new FormData()
-      formData.append('avatar', file)
-
-      const res = await fetch(`${resolveApiURL()}/api/profile-media/avatar`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao enviar avatar',
-        )
-      }
-
-      return res.json() as Promise<{ imageUrl: string }>
-    },
+    mutationFn: (file: File) =>
+      calibraApi.profileMedia.uploadAvatar(file, { fileName: file.name }),
     onSuccess: async (data) => {
       await updateProfile({ image: data.imageUrl })
       setPreviewUrl(null)
@@ -115,21 +96,7 @@ function ProfileSettingsForm({
   })
 
   const deleteAvatarMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${resolveApiURL()}/api/profile-media/avatar`, {
-        method: 'DELETE',
-        credentials: 'include',
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao remover avatar',
-        )
-      }
-    },
+    mutationFn: () => calibraApi.profileMedia.deleteAvatar(),
     onSuccess: async () => {
       await updateProfile({ image: '' })
       setPreviewUrl(null)

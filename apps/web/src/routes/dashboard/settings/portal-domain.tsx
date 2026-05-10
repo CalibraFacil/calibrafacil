@@ -2,9 +2,10 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import type { PortalDomainResponse } from '@calibra-facil/client-runtime'
 
 import { usePlanAccess } from '@/hooks/use-plan-access'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -30,37 +31,7 @@ export const Route = createFileRoute('/dashboard/settings/portal-domain')({
   component: PortalDomainSettingsPage,
 })
 
-interface PortalDomainResponse {
-  portalBaseUrl: string
-  domain: {
-    id: string
-    hostname: string
-    verifiedAt: string | null
-    activatedAt: string | null
-    lastVerifiedAt: string | null
-    isActive: boolean
-    verification: { type: 'TXT'; host: string; value: string }
-  } | null
-  statusSummary: {
-    status:
-      | 'not_configured'
-      | 'waiting_dns'
-      | 'token_mismatch'
-      | 'ready_to_verify'
-      | 'verified'
-      | 'active'
-    readiness: 'not_ready' | 'ready' | 'active'
-    canActivate: boolean
-    message: string
-    diagnostics: {
-      host: string | null
-      expectedValue: string | null
-      observedValues: string[]
-    }
-  }
-}
-
-function formatDateTime(value: string | null) {
+function formatDateTime(value: string | Date | null) {
   if (!value) return 'Ainda não disponível'
 
   return new Date(value).toLocaleString('pt-BR', {
@@ -107,13 +78,7 @@ function PortalDomainSettingsPage() {
 
   const domainQuery = useQuery({
     queryKey: ['portal-domain'],
-    queryFn: async () => {
-      const res = await api.api['portal-domains'].$get()
-      if (!res.ok) {
-        throw new Error('Falha ao carregar domínio do portal')
-      }
-      return res.json() as Promise<PortalDomainResponse>
-    },
+    queryFn: () => calibraApi.portalDomains.get(),
   })
 
   const refresh = async () => {
@@ -122,18 +87,7 @@ function PortalDomainSettingsPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api['portal-domains'].$post({
-        json: { hostname },
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao salvar domínio',
-        )
-      }
-      return res.json()
+      return calibraApi.portalDomains.create({ hostname })
     },
     onSuccess: async () => {
       toast.success('Domínio salvo. Configure o TXT e valide o lifecycle.')
@@ -146,16 +100,7 @@ function PortalDomainSettingsPage() {
 
   const verifyMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api['portal-domains'].verify.$post()
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao verificar domínio',
-        )
-      }
-      return res.json()
+      return calibraApi.portalDomains.verify()
     },
     onSuccess: async () => {
       toast.success('Domínio verificado')
@@ -170,16 +115,7 @@ function PortalDomainSettingsPage() {
 
   const activateMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api['portal-domains'].activate.$post()
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao ativar domínio',
-        )
-      }
-      return res.json()
+      return calibraApi.portalDomains.activate()
     },
     onSuccess: async () => {
       toast.success('Domínio ativado')
@@ -194,10 +130,7 @@ function PortalDomainSettingsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api['portal-domains'].$delete()
-      if (!res.ok) {
-        throw new Error('Falha ao remover domínio')
-      }
+      return calibraApi.portalDomains.delete()
     },
     onSuccess: async () => {
       setHostname('')

@@ -33,6 +33,10 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import {
+  CloudOnlyOfflineState,
+  useDesktopCloudOnlyUnavailable,
+} from '@/runtime/sync-status'
 
 const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
 
@@ -101,13 +105,17 @@ type ExecutiveOverviewResponse = {
   }
 }
 
-function getHealthBadgeVariant(status: ComparisonResponse['rows'][number]['healthStatus']) {
+function getHealthBadgeVariant(
+  status: ComparisonResponse['rows'][number]['healthStatus'],
+) {
   if (status === 'critical') return 'destructive' as const
   if (status === 'attention') return 'secondary' as const
   return 'outline' as const
 }
 
-function getHealthLabel(status: ComparisonResponse['rows'][number]['healthStatus']) {
+function getHealthLabel(
+  status: ComparisonResponse['rows'][number]['healthStatus'],
+) {
   if (status === 'critical') return 'Crítica'
   if (status === 'attention') return 'Atenção'
   return 'Saudável'
@@ -156,10 +164,14 @@ export const Route = createFileRoute('/dashboard/reports')({
 function ConsolidatedReportsPage() {
   const navigate = useNavigate()
   const { data: activeOrg } = useActiveOrganization()
-  const { activeOrganizationId, isContextSwitching } = useDashboardContextState()
+  const { activeOrganizationId, isContextSwitching } =
+    useDashboardContextState()
+  const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const [period, setPeriod] = useState<ReportPeriod>('30d')
   const [selectedUnitIds, setSelectedUnitIds] = useState<number[]>([])
-  const [sortKey, setSortKey] = useState<ComparisonSortKey>('jobsCreatedInPeriod')
+  const [sortKey, setSortKey] = useState<ComparisonSortKey>(
+    'jobsCreatedInPeriod',
+  )
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
 
   const currentRole =
@@ -178,14 +190,16 @@ function ConsolidatedReportsPage() {
       period,
       unitIdsParam ?? 'all',
     ],
-    enabled: !isContextSwitching && canAccessReports,
+    enabled: !isContextSwitching && canAccessReports && !cloudOnlyUnavailable,
     queryFn: async () => {
-      const res = await api.api.reports.consolidated['executive-overview'].$get({
-        query: {
-          period,
-          unitIds: unitIdsParam,
+      const res = await api.api.reports.consolidated['executive-overview'].$get(
+        {
+          query: {
+            period,
+            unitIds: unitIdsParam,
+          },
         },
-      })
+      )
 
       if (!res.ok) {
         const data = await res.json().catch(() => null)
@@ -208,7 +222,7 @@ function ConsolidatedReportsPage() {
       period,
       unitIdsParam ?? 'all',
     ],
-    enabled: !isContextSwitching && canAccessReports,
+    enabled: !isContextSwitching && canAccessReports && !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api.reports.consolidated.comparison.$get({
         query: {
@@ -238,7 +252,7 @@ function ConsolidatedReportsPage() {
       period,
       unitIdsParam ?? 'all',
     ],
-    enabled: !isContextSwitching && canAccessReports,
+    enabled: !isContextSwitching && canAccessReports && !cloudOnlyUnavailable,
     queryFn: async () => {
       const res = await api.api.reports.consolidated.trend.$get({
         query: {
@@ -288,7 +302,9 @@ function ConsolidatedReportsPage() {
   }, [comparisonQuery.data?.rows, sortDirection, sortKey])
 
   const isLoading =
-    executiveQuery.isPending || comparisonQuery.isPending || trendQuery.isPending
+    executiveQuery.isPending ||
+    comparisonQuery.isPending ||
+    trendQuery.isPending
 
   if (isContextSwitching) {
     return (
@@ -308,12 +324,16 @@ function ConsolidatedReportsPage() {
         <CardHeader>
           <CardTitle>Acesso restrito</CardTitle>
           <CardDescription>
-            Relatórios consolidados ficam disponíveis apenas para administradores
-            globais da organização.
+            Relatórios consolidados ficam disponíveis apenas para
+            administradores globais da organização.
           </CardDescription>
         </CardHeader>
       </Card>
     )
+  }
+
+  if (cloudOnlyUnavailable) {
+    return <CloudOnlyOfflineState title="Relatórios indisponíveis offline" />
   }
 
   if (executiveQuery.error || comparisonQuery.error || trendQuery.error) {
@@ -422,7 +442,8 @@ function ConsolidatedReportsPage() {
             Recorte executivo
           </CardTitle>
           <CardDescription>
-            Compare todas as unidades ou reduza o consolidado para um subconjunto específico.
+            Compare todas as unidades ou reduza o consolidado para um
+            subconjunto específico.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -501,12 +522,11 @@ function ConsolidatedReportsPage() {
                 {executiveQuery.data
                   ? `${new Intl.DateTimeFormat('pt-BR', {
                       dateStyle: 'medium',
-                    }).format(new Date(executiveQuery.data.range.startDate))} até ${new Intl.DateTimeFormat(
-                      'pt-BR',
-                      {
-                        dateStyle: 'medium',
-                      },
-                    ).format(new Date(executiveQuery.data.range.endDate))}`
+                    }).format(
+                      new Date(executiveQuery.data.range.startDate),
+                    )} até ${new Intl.DateTimeFormat('pt-BR', {
+                      dateStyle: 'medium',
+                    }).format(new Date(executiveQuery.data.range.endDate))}`
                   : 'Período selecionado'}
               </p>
             </div>
@@ -586,7 +606,8 @@ function ConsolidatedReportsPage() {
           <CardHeader>
             <CardTitle>Leitura do período</CardTitle>
             <CardDescription>
-              Corte de {executiveQuery.data?.label ?? 'período selecionado'} com foco em throughput, risco e qualidade.
+              Corte de {executiveQuery.data?.label ?? 'período selecionado'} com
+              foco em throughput, risco e qualidade.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -631,7 +652,8 @@ function ConsolidatedReportsPage() {
         <CardHeader>
           <CardTitle>Comparativo por Unidade</CardTitle>
           <CardDescription>
-            Ranking executivo do período selecionado com estado de saúde por unidade e drill-down direto.
+            Ranking executivo do período selecionado com estado de saúde por
+            unidade e drill-down direto.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -866,7 +888,10 @@ function ComparisonTable({
                 onClick={() => onDrilldown(row.unitId)}
               >
                 Abrir
-                <HugeiconsIcon icon={ArrowRight02Icon} className="ml-1 size-4" />
+                <HugeiconsIcon
+                  icon={ArrowRight02Icon}
+                  className="ml-1 size-4"
+                />
               </Button>
             </TableCell>
           </TableRow>

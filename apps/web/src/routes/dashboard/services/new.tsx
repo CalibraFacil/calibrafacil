@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { InformationCircleIcon } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -43,14 +43,6 @@ interface FormData {
   isActive: boolean
 }
 
-interface Method {
-  id: number
-  name: string
-  status: string
-  assetTypeId: number | null
-  assetTypeName: string | null
-}
-
 interface AssetType {
   id: number
   name: string
@@ -81,20 +73,10 @@ function NewServicePage() {
   const { data: methodsData, isLoading: methodsLoading } = useQuery({
     queryKey: ['methods', 'published'],
     queryFn: async () => {
-      const res = await api.api.methods.$get({
-        query: {
-          status: 'PUBLISHED',
-          limit: '100',
-        },
+      return calibraApi.methods.list({
+        status: 'PUBLISHED',
+        limit: 100,
       })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar métodos')
-      }
-
-      return res.json() as Promise<{
-        data: Array<Method>
-      }>
     },
   })
 
@@ -102,15 +84,7 @@ function NewServicePage() {
   const { data: assetTypesData, isLoading: assetTypesLoading } = useQuery({
     queryKey: ['asset-types'],
     queryFn: async () => {
-      const res = await api.api['asset-types'].$get({
-        query: {},
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar tipos de instrumento')
-      }
-
-      return res.json() as Promise<{
+      return calibraApi.assetTypes.list() as Promise<{
         data: Array<AssetType>
       }>
     },
@@ -153,26 +127,15 @@ function NewServicePage() {
         }
       }
 
-      const res = await api.api.services.$post({
-        json: {
-          name: data.name,
-          description: data.description || undefined,
-          methodId: data.methodId,
-          assetTypeId: data.assetTypeId,
-          price: priceInCents,
-          tat: tatValue,
-          isActive: data.isActive,
-        },
+      return calibraApi.services.create({
+        name: data.name,
+        description: data.description || undefined,
+        methodId: data.methodId,
+        assetTypeId: data.assetTypeId,
+        price: priceInCents,
+        tat: tatValue,
+        isActive: data.isActive,
       })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao criar serviço',
-        )
-      }
-
-      return res.json() as Promise<{ id: number }>
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] })

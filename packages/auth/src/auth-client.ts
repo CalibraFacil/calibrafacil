@@ -9,13 +9,62 @@ import { ssoClient } from "@better-auth/sso/client";
 import { ac, platformAc, platformRoles, roles } from "./access";
 
 function getApiBaseURL(): string {
-  // Primary source of truth (Cloudflare Pages, Vite)
-  if (typeof window !== "undefined" && import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+  if (typeof window !== "undefined") {
+    if (isDesktopRuntime()) {
+      return (
+        import.meta.env.VITE_DESKTOP_AUTH_API_URL ??
+        "https://api.calibrafacil.com"
+      );
+    }
+
+    if (import.meta.env.VITE_API_URL) {
+      return import.meta.env.VITE_API_URL;
+    }
+
+    const host = window.location.hostname;
+    if (host === "localhost" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+      return `http://${host}:3000`;
+    }
+
+    return "https://api.calibrafacil.com";
   }
 
   // Fallback for local development
   return "http://localhost:3000";
+}
+
+function isDesktopRuntime() {
+  return (
+    typeof window !== "undefined" &&
+    (("calibraBridge" in window &&
+      typeof (window as { calibraBridge?: unknown }).calibraBridge ===
+        "object") ||
+      window.navigator.userAgent.includes("Electron"))
+  );
+}
+
+async function desktopAuthFetch(input: RequestInfo | URL, init?: RequestInit) {
+  if (!isDesktopRuntime() || !window.calibraBridge?.authFetch) {
+    return fetch(input, init);
+  }
+
+  const request = new Request(input, init);
+  const body =
+    request.method === "GET" || request.method === "HEAD"
+      ? null
+      : await request.clone().text();
+  const response = await window.calibraBridge.authFetch({
+    url: request.url,
+    method: request.method,
+    headers: [...request.headers.entries()],
+    body,
+  });
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
 }
 
 // Shared organization plugin config
@@ -60,6 +109,7 @@ export const labAuthClient = createBetterAuthClient({
   basePath: "/api/auth/lab",
   fetchOptions: {
     credentials: "include",
+    customFetchImpl: desktopAuthFetch,
   },
   sessionOptions: {
     refetchOnWindowFocus: false,
@@ -83,6 +133,7 @@ export const portalAuthClient = createBetterAuthClient({
   basePath: "/api/auth/portal",
   fetchOptions: {
     credentials: "include",
+    customFetchImpl: desktopAuthFetch,
   },
   sessionOptions: {
     refetchOnWindowFocus: false,
@@ -99,6 +150,7 @@ export const backofficeAuthClient = createBetterAuthClient({
   basePath: "/api/auth/backoffice",
   fetchOptions: {
     credentials: "include",
+    customFetchImpl: desktopAuthFetch,
   },
   plugins: [
     adminClient({

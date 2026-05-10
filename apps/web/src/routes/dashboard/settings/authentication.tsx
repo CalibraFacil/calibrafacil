@@ -1,8 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { InferResponseType } from 'hono/client'
 import { toast } from 'sonner'
+import type {
+  SsoSettingsResponse,
+  SsoVerificationRecord,
+} from '@calibra-facil/client-runtime'
 import {
   Cancel01Icon,
   CheckmarkBadge01Icon,
@@ -16,7 +19,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { useSettings } from '@/contexts/settings-context'
-import { api, resolveApiURL } from '@/utils/api'
+import { calibraApi, resolveApiURL } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -55,85 +58,10 @@ export const Route = createFileRoute('/dashboard/settings/authentication')({
   component: AuthenticationSettingsPage,
 })
 
-interface VerificationRecord {
-  type: 'TXT'
-  host: string
-  value: string
-}
-
-interface SsoProviderSummary {
-  id: string
-  providerId: string
-  issuer: string
-  domain: string
-  domainHost: string
-  domainVerified: boolean
-  organizationId: string | null
-  type: string
-  redirectURI: string
-  oidcConfig: {
-    discoveryEndpoint: string | null
-    authorizationEndpoint: string | null
-    tokenEndpoint: string | null
-    userInfoEndpoint: string | null
-    jwksEndpoint: string | null
-    scopes: string[]
-    pkce: boolean
-    clientIdLastFour: string | null
-    tokenEndpointAuthentication: string | null
-  } | null
-}
-
-interface SsoSettingsResponse {
-  provider: SsoProviderSummary | null
-  access: {
-    role: string
-    canCreate: boolean
-    canManage: boolean
-    canDelete: boolean
-  }
-  billing: {
-    planId: string
-    planName: string
-    status: string
-    hasSso: boolean
-  }
-}
-
-type SsoSettingsApiResponse = InferResponseType<typeof api.api.sso.providers.$get, 200>
-
-interface ApiKeySummary {
-  id: string
-  name: string
-  keyPrefix: string
-  scopes: string[]
-  lastUsedAt: string | null
-  createdAt: string
-  revokedAt: string | null
-}
-
-async function parseApiError(res: Response, fallback: string) {
-  const data = await res.json().catch(() => null)
-
-  if (data && typeof data === 'object') {
-    if ('error' in data && typeof data.error === 'string') return data.error
-    if ('message' in data && typeof data.message === 'string')
-      return data.message
-  }
-
-  return fallback
-}
+type VerificationRecord = SsoVerificationRecord
 
 async function fetchSsoSettings(): Promise<SsoSettingsResponse> {
-  const res = await api.api.sso.providers.$get()
-
-  if (!res.ok) {
-    throw new Error(
-      await parseApiError(res, 'Falha ao carregar configuração SSO'),
-    )
-  }
-
-  return (await res.json()) as SsoSettingsApiResponse
+  return calibraApi.sso.getProviders()
 }
 
 function AuthenticationSettingsPage() {
@@ -213,27 +141,11 @@ function ApiKeysCard() {
 
   const apiKeysQuery = useQuery({
     queryKey: ['api-keys'],
-    queryFn: async () => {
-      const res = await api.api['api-keys'].$get()
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao carregar API keys'))
-      }
-      return res.json() as Promise<{ data: ApiKeySummary[] }>
-    },
+    queryFn: () => calibraApi.apiKeys.list(),
   })
 
   const createMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api['api-keys'].$post({
-        json: { name },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao criar API key'))
-      }
-
-      return res.json() as Promise<{ secret: string }>
-    },
+    mutationFn: () => calibraApi.apiKeys.create({ name }),
     onSuccess: async (data) => {
       setLatestSecret(data.secret)
       setName('')
@@ -246,17 +158,7 @@ function ApiKeysCard() {
   })
 
   const rotateMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await api.api['api-keys'][':id'].rotate.$post({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao rotacionar API key'))
-      }
-
-      return res.json() as Promise<{ secret: string }>
-    },
+    mutationFn: (id: string) => calibraApi.apiKeys.rotate(id),
     onSuccess: async (data) => {
       setLatestSecret(data.secret)
       toast.success('API key rotacionada')
@@ -270,15 +172,7 @@ function ApiKeysCard() {
   })
 
   const revokeMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await api.api['api-keys'][':id'].revoke.$post({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao revogar API key'))
-      }
-    },
+    mutationFn: (id: string) => calibraApi.apiKeys.revoke(id),
     onSuccess: async () => {
       toast.success('API key revogada')
       await queryClient.invalidateQueries({ queryKey: ['api-keys'] })
@@ -501,27 +395,14 @@ function SsoSettingsCard({
         .map((scope) => scope.trim())
         .filter(Boolean)
 
-      const res = await api.api.sso.providers.$post({
-        json: {
-          providerId,
-          issuer,
-          domain,
-          clientId,
-          clientSecret,
-          scopes: parsedScopes,
-        },
+      return calibraApi.sso.createProvider({
+        providerId,
+        issuer,
+        domain,
+        clientId,
+        clientSecret,
+        scopes: parsedScopes,
       })
-
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao registrar provedor SSO'),
-        )
-      }
-
-      return res.json() as Promise<{
-        provider: SsoProviderSummary
-        verificationRecord: VerificationRecord | null
-      }>
     },
     onSuccess: async (data) => {
       setVerificationRecord(data.verificationRecord)
@@ -541,19 +422,8 @@ function SsoSettingsCard({
   })
 
   const requestVerificationMutation = useMutation({
-    mutationFn: async (targetProviderId: string) => {
-      const res = await api.api.sso.providers[':providerId'][
-        'request-domain-verification'
-      ].$post({
-        param: { providerId: targetProviderId },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao gerar token DNS'))
-      }
-
-      return res.json() as Promise<{ verificationRecord: VerificationRecord }>
-    },
+    mutationFn: (targetProviderId: string) =>
+      calibraApi.sso.requestDomainVerification(targetProviderId),
     onSuccess: (data) => {
       setVerificationRecord(data.verificationRecord)
       toast.success('Novo token DNS gerado')
@@ -566,19 +436,8 @@ function SsoSettingsCard({
   })
 
   const verifyDomainMutation = useMutation({
-    mutationFn: async (targetProviderId: string) => {
-      const res = await api.api.sso.providers[':providerId'][
-        'verify-domain'
-      ].$post({
-        param: { providerId: targetProviderId },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao verificar domínio'))
-      }
-
-      return res.json()
-    },
+    mutationFn: (targetProviderId: string) =>
+      calibraApi.sso.verifyDomain(targetProviderId),
     onSuccess: async () => {
       setVerificationRecord(null)
       toast.success('Domínio verificado com sucesso')
@@ -594,17 +453,8 @@ function SsoSettingsCard({
   })
 
   const deleteProviderMutation = useMutation({
-    mutationFn: async (targetProviderId: string) => {
-      const res = await api.api.sso.providers[':providerId'].$delete({
-        param: { providerId: targetProviderId },
-      })
-
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao remover provedor SSO'),
-        )
-      }
-    },
+    mutationFn: (targetProviderId: string) =>
+      calibraApi.sso.deleteProvider(targetProviderId),
     onSuccess: async () => {
       setVerificationRecord(null)
       setIssuer('')

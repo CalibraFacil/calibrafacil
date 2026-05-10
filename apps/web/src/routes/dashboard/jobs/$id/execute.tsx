@@ -14,7 +14,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { GaugeIcon, ThermometerIcon } from '@phosphor-icons/react'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { apiRouteParam } from '@/lib/route-identifiers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import {
+  applyTableWeighingRangeResolvers,
   TableInputRenderer,
   type CertifiedValueOption,
 } from '@/components/method-runtime/table-input-renderer'
@@ -80,8 +81,15 @@ import {
   type FormulaContext,
   type FormulaScalar,
 } from '@/components/method-runtime/math-runtime'
+import {
+  parseSyncConflictReturnSearch,
+  shouldReturnToSyncConflicts,
+  SyncConflictReturnNotice,
+  type SyncConflictReturnSearch,
+} from '@/runtime/sync-conflict-return'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/execute')({
+  validateSearch: parseSyncConflictReturnSearch,
   head: () => ({
     meta: [{ title: 'Executar Calibração | CalibraFacil' }],
   }),
@@ -365,6 +373,7 @@ function resolveFieldForDisplay(
 
 function ExecuteJobPage() {
   const { id } = Route.useParams()
+  const conflictReturn = Route.useSearch()
   const apiJobId = apiRouteParam(id)
   const engine = useMemo(() => createMethodCalculationEngine(), [])
 
@@ -375,23 +384,13 @@ function ExecuteJobPage() {
     error: jobError,
   } = useQuery({
     queryKey: ['jobs', id],
-    queryFn: async () => {
-      const res = await api.api.jobs[':id'].$get({ param: { id: apiJobId } })
-      if (!res.ok) throw new Error('Falha ao carregar job')
-      return res.json() as Promise<JobData>
-    },
+    queryFn: () => calibraApi.jobs.get<JobData>(apiJobId),
   })
 
   // Fetch available standards
   const { data: standardsData } = useQuery({
     queryKey: ['standards', 'active'],
-    queryFn: async () => {
-      const res = await api.api.standards.$get({
-        query: { status: 'ACTIVE', limit: '100' },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar padrões')
-      return res.json() as Promise<{ data: ReferenceStandard[] }>
-    },
+    queryFn: () => calibraApi.jobs.listStandards<ReferenceStandard>(),
   })
 
   // Fetch effective environmental limits for this job's asset type
@@ -402,22 +401,11 @@ function ExecuteJobPage() {
       job?.assetTypeId,
       job?.unitId,
     ],
-    queryFn: async () => {
-      const res = await fetch(
-        new URL(
-          `/api/environmental-limits/effective/${job!.assetTypeId}?unitId=${job!.unitId}`,
-          window.location.origin,
-        ),
-        {
-          credentials: 'include',
-        },
-      )
-      if (!res.ok) return { limits: null, source: null }
-      return res.json() as Promise<{
-        limits: EffectiveLimits | null
-        source: string | null
-      }>
-    },
+    queryFn: () =>
+      calibraApi.jobs.getEffectiveEnvironmentalLimits<EffectiveLimits>(
+        job!.assetTypeId,
+        { unitId: job!.unitId },
+      ),
     enabled: !!job?.assetTypeId && !!job?.unitId,
     staleTime: 60000,
   })
@@ -452,6 +440,7 @@ function ExecuteJobPage() {
       envLimits={envLimits}
       engine={engine}
       jobId={id}
+      conflictReturn={conflictReturn}
     />
   )
 }
@@ -462,12 +451,14 @@ function ExecuteJobForm({
   envLimits,
   engine,
   jobId,
+  conflictReturn,
 }: {
   job: JobData
   standardsData: Array<ReferenceStandard>
   envLimits: EffectiveLimits | null
   engine: ReturnType<typeof createMethodCalculationEngine>
   jobId: string
+  conflictReturn: SyncConflictReturnSearch
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -607,11 +598,12 @@ function ExecuteJobForm({
       const normalized: Record<string, unknown> = {}
       const manualKeys = new Set(manualFields.map((field) => field.key))
       for (const [key, value] of Object.entries(data)) {
-        if (!manualKeys.has(key)) {
+        const field = manualFields.find((candidate) => candidate.key === key)
+        if (!manualKeys.has(key) || !field) {
           continue
         }
         if (Array.isArray(value)) {
-          normalized[key] = value.map((row) => {
+          const normalizedRows = value.map((row) => {
             if (typeof row === 'object' && row !== null) {
               const normalizedRow: Record<string, unknown> = {}
               for (const [cellKey, cellValue] of Object.entries(
@@ -627,6 +619,14 @@ function ExecuteJobForm({
             }
             return row
           })
+          normalized[key] =
+            field.type === 'table'
+              ? applyTableWeighingRangeResolvers(
+                  field,
+                  normalizedRows as Array<Record<string, unknown>>,
+                  job.assetSnapshot?.specifications ?? null,
+                )
+              : normalizedRows
         } else if (typeof value === 'string' && /^-?\d*\.?\d+$/.test(value)) {
           normalized[key] = parseFloat(value)
         } else {
@@ -635,7 +635,7 @@ function ExecuteJobForm({
       }
       return normalized
     },
-    [manualFields],
+    [job.assetSnapshot?.specifications, manualFields],
   )
 
   const parsedFormData = useMemo(
@@ -1058,28 +1058,23 @@ function ExecuteJobForm({
   // Save draft mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.jobs[':id'].execute.$post({
-        param: { id: apiRouteParam(jobId) },
-        json: {
-          selectedStandardIds: buildSelectedStandardPayload(parsedFormData),
-          data: parsedFormData,
-          results: Object.fromEntries(
-            Object.entries(formulaResults)
-              .filter(([, r]) => r.value !== undefined)
-              .map(([k, r]) => [k, r.value]),
-          ),
-          environment: environmentPayload,
-        },
+      return calibraApi.jobs.saveExecution(apiRouteParam(jobId), {
+        selectedStandardIds: buildSelectedStandardPayload(parsedFormData),
+        data: parsedFormData,
+        results: Object.fromEntries(
+          Object.entries(formulaResults)
+            .filter(([, r]) => r.value !== undefined)
+            .map(([k, r]) => [k, r.value]),
+        ),
+        environment: environmentPayload,
       })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error((error as { error?: string }).error || 'Erro ao salvar')
-      }
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
       toast.success('Dados salvos com sucesso!')
+      if (shouldReturnToSyncConflicts(conflictReturn)) {
+        navigate({ to: '/dashboard/sync/conflicts' })
+      }
     },
     onError: (error) => {
       toast.error(error.message)
@@ -1089,30 +1084,24 @@ function ExecuteJobForm({
   // Submit for review mutation
   const submitMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.jobs[':id'].submit.$post({
-        param: { id: apiRouteParam(jobId) },
-        json: {
-          selectedStandardIds: buildSelectedStandardPayload(parsedFormData),
-          data: parsedFormData,
-          results: Object.fromEntries(
-            Object.entries(formulaResults)
-              .filter(([, r]) => r.value !== undefined)
-              .map(([k, r]) => [k, r.value]),
-          ),
-          environment: environmentPayload,
-        },
+      return calibraApi.jobs.submitExecution(apiRouteParam(jobId), {
+        selectedStandardIds: buildSelectedStandardPayload(parsedFormData),
+        data: parsedFormData,
+        results: Object.fromEntries(
+          Object.entries(formulaResults)
+            .filter(([, r]) => r.value !== undefined)
+            .map(([k, r]) => [k, r.value]),
+        ),
+        environment: environmentPayload,
       })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao submeter',
-        )
-      }
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       toast.success('Job enviado para revisão!')
+      if (shouldReturnToSyncConflicts(conflictReturn)) {
+        navigate({ to: '/dashboard/sync/conflicts' })
+        return
+      }
       navigate({ to: '/dashboard/jobs' })
     },
     onError: (error) => {
@@ -1340,6 +1329,7 @@ function ExecuteJobForm({
 
   return (
     <div className="mx-auto w-full max-w-[1500px] space-y-6 pb-10">
+      <SyncConflictReturnNotice search={conflictReturn} />
       {/* Header */}
       <div className="space-y-5">
         <div className="flex items-center">
@@ -1835,7 +1825,10 @@ function ExecuteJobForm({
                   ['Calculation', officialExecution.calculationFingerprint],
                   ['Result', officialExecution.resultFingerprint],
                   ['Engine', officialExecution.engineVersion],
-                  ['Engine options', officialExecution.engineOptionsFingerprint],
+                  [
+                    'Engine options',
+                    officialExecution.engineOptionsFingerprint,
+                  ],
                 ].map(([label, value]) => (
                   <div
                     key={label}

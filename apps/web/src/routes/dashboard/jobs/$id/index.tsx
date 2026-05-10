@@ -14,7 +14,7 @@ import {
   Alert02Icon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -215,6 +215,12 @@ function numberFromUnknown(value: unknown): number | null {
   return null
 }
 
+function desktopCloudActionError() {
+  return new Error(
+    'Esta ação exige validação online na API da nuvem. Sincronize o job e conclua pelo ambiente web.',
+  )
+}
+
 function arrayValueAt(value: unknown, index: number): unknown {
   return Array.isArray(value) ? value[index] : undefined
 }
@@ -243,6 +249,7 @@ interface Technician {
 
 function JobDetailPage() {
   const { id } = Route.useParams()
+  const { runtime } = Route.useRouteContext()
   const apiJobId = apiRouteParam(id)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -269,15 +276,7 @@ function JobDetailPage() {
     error,
   } = useQuery({
     queryKey: ['jobs', id],
-    queryFn: async () => {
-      const res = await api.api.jobs[':id'].$get({
-        param: { id: apiJobId },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar job')
-      }
-      return res.json()
-    },
+    queryFn: () => calibraApi.jobs.get<Record<string, any>>(apiJobId),
     // Auto-refresh every 2s while PDF is being generated
     refetchInterval: (query) => {
       const status = query.state.data?.status
@@ -288,31 +287,21 @@ function JobDetailPage() {
   // Fetch technicians for assign dialog
   const { data: techniciansData } = useQuery({
     queryKey: ['jobs', 'technicians'],
-    queryFn: async () => {
-      const res = await api.api.jobs['technicians'].list.$get()
-      if (!res.ok) throw new Error('Falha ao carregar técnicos')
-      return res.json() as Promise<{ data: Technician[] }>
-    },
-    enabled: assignDialogOpen,
+    queryFn: async () =>
+      calibraApi.jobs.listTechnicians() as Promise<{ data: Technician[] }>,
+    enabled: assignDialogOpen && !runtime.isDesktop,
   })
 
   // Approve mutation
   const approveMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.jobs[':id'].approve.$post({
-        param: { id: apiJobId },
-        json: {
-          reason: 'Aprovado',
-          environmentalJustification: envJustification || undefined,
-        },
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao aprovar',
-        )
+      if (runtime.isDesktop) {
+        throw desktopCloudActionError()
       }
-      return res.json()
+      return calibraApi.jobs.approve(apiJobId, {
+        reason: 'Aprovado',
+        environmentalJustification: envJustification || undefined,
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
@@ -329,17 +318,10 @@ function JobDetailPage() {
   // Reject mutation
   const rejectMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.jobs[':id'].reject.$post({
-        param: { id: apiJobId },
-        json: { reason: rejectReason },
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao rejeitar',
-        )
+      if (runtime.isDesktop) {
+        throw desktopCloudActionError()
       }
-      return res.json()
+      return calibraApi.jobs.reject(apiJobId, rejectReason)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
@@ -355,17 +337,10 @@ function JobDetailPage() {
   // Cancel mutation
   const cancelMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.jobs[':id'].$delete({
-        param: { id: apiJobId },
-        json: { reason: cancelReason },
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao cancelar',
-        )
+      if (runtime.isDesktop) {
+        throw desktopCloudActionError()
       }
-      return res.json()
+      return calibraApi.jobs.cancel(apiJobId, cancelReason)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
@@ -382,23 +357,35 @@ function JobDetailPage() {
   // Assign mutation
   const assignMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.jobs[':id'].assign.$post({
-        param: { id: apiJobId },
-        json: { technicianId: selectedTechnician },
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao atribuir',
-        )
+      if (runtime.isDesktop) {
+        throw desktopCloudActionError()
       }
-      return res.json()
+      return calibraApi.jobs.assign(apiJobId, selectedTechnician)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs', id] })
       toast.success('Técnico atribuído com sucesso!')
       setAssignDialogOpen(false)
       setSelectedTechnician('')
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const saveLocalCertificatePdfMutation = useMutation({
+    mutationFn: async () => {
+      if (!window.calibraBridge) {
+        throw new Error('Exportacao local disponivel apenas no desktop')
+      }
+
+      return window.calibraBridge.saveCertificatePdf({ jobId: id })
+    },
+    onSuccess: (filePath) => {
+      if (filePath) {
+        toast.success('PDF local salvo')
+        queryClient.invalidateQueries({ queryKey: ['jobs', id] })
+      }
     },
     onError: (error) => {
       toast.error(error.message)
@@ -519,12 +506,14 @@ function JobDetailPage() {
 
   const isGeneratingPdf = job.status === 'GENERATING_PDF'
   const canExecute = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
-  const canApprove = job.status === 'REVIEW'
+  const canApprove = job.status === 'REVIEW' && !runtime.isDesktop
   const canShowReviewEvidence = canApprove || isGeneratingPdf
-  const canCancel = ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'REJECTED'].includes(
-    job.status,
-  )
-  const canAssign = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
+  const canCancel =
+    ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'REJECTED'].includes(job.status) &&
+    !runtime.isDesktop
+  const canAssign =
+    ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status) &&
+    !runtime.isDesktop
   const financialStatus =
     typeof job.financialStatus === 'string' ? job.financialStatus : 'UNBILLED'
   const reviewHasData =
@@ -961,13 +950,30 @@ function JobDetailPage() {
                         : 'Revise os dados executados antes de aprovar o certificado da Laboratório Exemplo.'}
                     </p>
                   </div>
-                  <Badge variant="outline" className="w-fit">
-                    {isGeneratingPdf
-                      ? 'Gerando PDF'
-                      : reviewHasData
-                        ? 'Dados capturados'
-                        : 'Sem dados'}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="w-fit">
+                      {isGeneratingPdf
+                        ? 'Gerando PDF'
+                        : reviewHasData
+                          ? 'Dados capturados'
+                          : 'Sem dados'}
+                    </Badge>
+                    {runtime.isDesktop && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className={reviewActionButtonClass}
+                        onClick={() => saveLocalCertificatePdfMutation.mutate()}
+                        disabled={saveLocalCertificatePdfMutation.isPending}
+                      >
+                        {saveLocalCertificatePdfMutation.isPending && (
+                          <Spinner className="mr-2 size-3" />
+                        )}
+                        Salvar PDF local
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <div className="grid gap-px overflow-hidden rounded-lg bg-black/5 md:grid-cols-3">
                   <div className="bg-background p-3">

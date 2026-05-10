@@ -10,7 +10,7 @@ import {
   Shield01Icon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   Table,
   TableBody,
@@ -109,39 +109,21 @@ function ClientComplianceTab() {
   const { data: customer, isLoading: customerLoading } = useQuery({
     queryKey: ['customer', id],
     queryFn: async () => {
-      const res = await api.api.customers[':id'].$get({
-        param: { id },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar cliente')
-      }
-      return res.json() as Promise<{
+      return calibraApi.customers.get<{
         id: number
         compliance?: CustomerCompliance
         activeCommercialAgreement?: ActiveCommercialAgreement | null
-      }>
+      }>(id)
     },
   })
 
   const { data: auditLogData, isLoading: auditLoading } = useQuery({
     queryKey: ['customer-audit-log', id],
     queryFn: async () => {
-      const res = await api.api.customers[':id']['audit-log'].$get({
-        param: { id },
-        query: { page: '1', limit: '50' },
+      return calibraApi.customers.auditLog<AuditLogEntry>(id, {
+        page: 1,
+        limit: 50,
       })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar historico')
-      }
-      return res.json() as Promise<{
-        data: Array<AuditLogEntry>
-        pagination: {
-          page: number
-          limit: number
-          total: number
-          totalPages: number
-        }
-      }>
     },
   })
 
@@ -265,14 +247,7 @@ function ClientComplianceForm({
       compliance: CustomerCompliance
       reason: string
     }) => {
-      const res = await api.api.customers[':id'].compliance.$put({
-        param: { id: customerId },
-        json: data,
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao atualizar conformidade')
-      }
-      return res.json()
+      return calibraApi.customers.updateCompliance(customerId, data)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer', customerId] })

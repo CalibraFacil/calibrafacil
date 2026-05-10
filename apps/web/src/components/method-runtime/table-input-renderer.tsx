@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
@@ -208,61 +208,30 @@ function rowsAreEqual(
   })
 }
 
-export function TableInputRenderer({
-  field,
-  value,
-  onChange,
-  disabled = false,
-  certifiedValueOptions = [],
-  massCompositionOptions = [],
-  assetSpecifications,
-}: TableInputRendererProps) {
-  const rows = value || []
+export function applyTableWeighingRangeResolvers(
+  field: MethodInputField,
+  rows: Array<Record<string, unknown>>,
+  assetSpecifications: Record<string, unknown> | null | undefined,
+) {
   const columns = field.columns || []
-  const shouldUsePanelRows =
-    columns.length > 5 ||
-    columns.some((col) => col.role === 'mass_standard_composition')
-  const panelColumnGroups = {
-    primary: columns.filter(
-      (column) => getMeasurementColumnGroup(column) === 'other',
-    ),
-    before: columns.filter(
-      (column) => getMeasurementColumnGroup(column) === 'before',
-    ),
-    after: columns.filter(
-      (column) => getMeasurementColumnGroup(column) === 'after',
-    ),
-  }
-  const shouldGroupReadings =
-    panelColumnGroups.before.length > 0 && panelColumnGroups.after.length > 0
-  const panelHiddenColumnKeys = new Set<string>()
-  for (const column of columns) {
-    if (column.role !== 'mass_standard_composition') continue
-
-    const targetColumns = column.massComposition?.targetColumns ?? {}
-    for (const targetName of PANEL_HIDDEN_COMPOSITION_TARGETS) {
-      const targetKey = targetColumns[targetName]
-      if (targetKey) {
-        panelHiddenColumnKeys.add(targetKey)
-      }
-    }
-  }
-  const isPanelVisibleColumn = (column: TableColumn) =>
-    !panelHiddenColumnKeys.has(column.key)
-  const hasCertifiedValues = certifiedValueOptions.length > 0
   const weighingRangeResolver =
     field.weighingRangeResolver?.enabled !== false
       ? field.weighingRangeResolver
       : undefined
+
+  if (!weighingRangeResolver || rows.length === 0) {
+    return rows
+  }
+
   const weighingRangePointColumn = columns.find(
-    (col) => col.key === weighingRangeResolver?.pointColumn,
+    (col) => col.key === weighingRangeResolver.pointColumn,
   )
 
   const resolveRowWeighingRange = (
     row: Record<string, unknown>,
   ): ResolvedWeighingRange | null => {
     if (
-      !weighingRangeResolver?.assetSpecKey ||
+      !weighingRangeResolver.assetSpecKey ||
       !weighingRangeResolver.pointColumn
     ) {
       return null
@@ -275,10 +244,10 @@ export function TableInputRenderer({
     )
   }
 
-  const applyWeighingRangeResolver = (row: Record<string, unknown>) => {
+  const applyResolver = (row: Record<string, unknown>) => {
     const resolved = resolveRowWeighingRange(row)
-    const targetColumns = weighingRangeResolver?.targetColumns ?? {}
-    const configuredRanges = weighingRangeResolver?.assetSpecKey
+    const targetColumns = weighingRangeResolver.targetColumns ?? {}
+    const configuredRanges = weighingRangeResolver.assetSpecKey
       ? assetSpecifications?.[weighingRangeResolver.assetSpecKey]
       : null
     const hasConfiguredRanges =
@@ -347,29 +316,70 @@ export function TableInputRenderer({
       columns,
       targetColumns,
       'resolution',
-      resolutionSource?.resolution,
-      resolutionSource?.resolutionUnit,
+      resolutionSource.resolution,
+      resolutionSource.resolutionUnit,
     )
     setRangeTargetValue(
       nextRow,
       columns,
       targetColumns,
       'resolutionUnit',
-      resolutionSource?.resolutionUnit,
+      resolutionSource.resolutionUnit,
     )
 
     return nextRow
   }
 
-  useEffect(() => {
-    if (!weighingRangeResolver || rows.length === 0) return
+  const resolvedRows = rows.map((row) => applyResolver(row))
+  return rowsAreEqual(rows, resolvedRows) ? rows : resolvedRows
+}
 
-    const resolvedRows = rows.map((row) => applyWeighingRangeResolver(row))
-    if (!rowsAreEqual(rows, resolvedRows)) {
-      onChange(resolvedRows)
+export function TableInputRenderer({
+  field,
+  value,
+  onChange,
+  disabled = false,
+  certifiedValueOptions = [],
+  massCompositionOptions = [],
+  assetSpecifications,
+}: TableInputRendererProps) {
+  const rows = applyTableWeighingRangeResolvers(
+    field,
+    value || [],
+    assetSpecifications,
+  )
+  const columns = field.columns || []
+  const shouldUsePanelRows =
+    columns.length > 5 ||
+    columns.some((col) => col.role === 'mass_standard_composition')
+  const panelColumnGroups = {
+    primary: columns.filter(
+      (column) => getMeasurementColumnGroup(column) === 'other',
+    ),
+    before: columns.filter(
+      (column) => getMeasurementColumnGroup(column) === 'before',
+    ),
+    after: columns.filter(
+      (column) => getMeasurementColumnGroup(column) === 'after',
+    ),
+  }
+  const shouldGroupReadings =
+    panelColumnGroups.before.length > 0 && panelColumnGroups.after.length > 0
+  const panelHiddenColumnKeys = new Set<string>()
+  for (const column of columns) {
+    if (column.role !== 'mass_standard_composition') continue
+
+    const targetColumns = column.massComposition?.targetColumns ?? {}
+    for (const targetName of PANEL_HIDDEN_COMPOSITION_TARGETS) {
+      const targetKey = targetColumns[targetName]
+      if (targetKey) {
+        panelHiddenColumnKeys.add(targetKey)
+      }
     }
-  }, [assetSpecifications, onChange, rows, weighingRangeResolver])
-
+  }
+  const isPanelVisibleColumn = (column: TableColumn) =>
+    !panelHiddenColumnKeys.has(column.key)
+  const hasCertifiedValues = certifiedValueOptions.length > 0
   const addRow = () => {
     const newRow: Record<string, unknown> = {}
     for (const col of columns) {
@@ -384,10 +394,19 @@ export function TableInputRenderer({
 
   const updateCell = (rowIndex: number, colKey: string, cellValue: unknown) => {
     const newRows = [...rows]
-    newRows[rowIndex] = applyWeighingRangeResolver({
+    newRows[rowIndex] = applyTableWeighingRangeResolvers(
+      field,
+      [
+        {
+          ...newRows[rowIndex],
+          [colKey]: cellValue,
+        },
+      ],
+      assetSpecifications,
+    )[0] ?? {
       ...newRows[rowIndex],
       [colKey]: cellValue,
-    })
+    }
     onChange(newRows)
   }
 

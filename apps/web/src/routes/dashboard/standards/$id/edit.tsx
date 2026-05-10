@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import type { InferResponseType } from 'hono/client'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -12,8 +11,9 @@ import {
   RefreshIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import type { RenewCertificateInput } from '@calibra-facil/schemas'
+import type { StandardData } from '@calibra-facil/client-runtime'
 import {
   AuditTimeline,
   buildAuditTimelineEvents,
@@ -60,8 +60,7 @@ export const Route = createFileRoute('/dashboard/standards/$id/edit')({
   component: EditStandardPage,
 })
 
-type StandardDetailRequest = (typeof api.api.standards)[':id']['$get']
-type StandardDetail = InferResponseType<StandardDetailRequest, 200>
+type StandardDetail = StandardData
 
 interface CertifiedValue {
   nominal: string
@@ -114,15 +113,7 @@ function EditStandardPage() {
   const { data: standard, isLoading } = useQuery({
     queryKey: ['standards', id],
     queryFn: async () => {
-      const res = await api.api.standards[':id'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar padrão')
-      }
-
-      return res.json()
+      return calibraApi.standards.get(id)
     },
   })
 
@@ -130,15 +121,7 @@ function EditStandardPage() {
   const { data: auditLogData } = useQuery({
     queryKey: ['standards', id, 'audit-log'],
     queryFn: async () => {
-      const res = await api.api.standards[':id']['audit-log'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar histórico')
-      }
-
-      return res.json() as Promise<{ data: AuditLogRecord[] }>
+      return calibraApi.standards.auditLog<AuditLogRecord>(id)
     },
   })
 
@@ -291,19 +274,7 @@ function EditStandardForm({
         payload.certifiedValues = null
       }
 
-      const res = await api.api.standards[':id'].$put({
-        param: { id: String(standard.id) },
-        json: payload,
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao atualizar padrão',
-        )
-      }
-
-      return res.json()
+      return calibraApi.standards.update(standard.id, payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })
@@ -353,19 +324,10 @@ function EditStandardForm({
         }
       }
 
-      const res = await api.api.standards[':id'].renew.$post({
-        param: { id: String(standard.id) },
-        json: payload,
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao renovar certificado',
-        )
-      }
-
-      return res.json()
+      return calibraApi.standards.renew(
+        standard.id,
+        payload as Record<string, unknown>,
+      )
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })

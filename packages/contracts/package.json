@@ -1,0 +1,25 @@
+{
+  "name": "@calibra-facil/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./desktop": "./src/desktop.ts",
+    "./sync": "./src/sync.ts"
+  },
+  "scripts": {
+    "build": "tsgo --noEmit",
+    "check-types": "tsgo --noEmit",
+    "lint": "oxlint",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}

@@ -9,7 +9,7 @@ import {
   PlusSignIcon,
 } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -162,18 +162,7 @@ function NewStandardPage() {
         payload.uncertaintyUnit = data.uncertaintyUnit || undefined
       }
 
-      const res = await api.api.standards.$post({
-        json: payload as Parameters<typeof api.api.standards.$post>[0]['json'],
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao criar padrão',
-        )
-      }
-
-      return res.json() as Promise<{ id: number }>
+      return calibraApi.standards.create(payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })
