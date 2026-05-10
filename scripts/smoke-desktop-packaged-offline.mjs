@@ -356,6 +356,12 @@ try {
     `unexpected sync conflicts: ${JSON.stringify(finalStatus)}`,
   );
 
+  const conflictUx = await runConflictUxSmoke(
+    secondPage,
+    secondBootstrap,
+    localCustomer,
+  );
+
   console.log(
     JSON.stringify(
       {
@@ -376,6 +382,7 @@ try {
         offlineStatus,
         statusAfterRestart,
         finalStatus,
+        conflictUx,
       },
       null,
       2,
@@ -668,6 +675,70 @@ async function evaluate(page, expression) {
   return result.result?.value;
 }
 
+async function navigateHash(page, routePath) {
+  await evaluate(
+    page,
+    `(() => { window.location.hash = ${JSON.stringify(routePath)}; })()`,
+  );
+}
+
+async function reloadPage(page) {
+  await evaluate(page, "window.location.reload()");
+  await sleep(1000);
+}
+
+async function waitForText(page, text, timeoutMs = 30_000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const found = await evaluate(
+      page,
+      `document.body?.innerText?.includes(${JSON.stringify(text)}) ?? false`,
+    );
+    if (found) return;
+    await sleep(250);
+  }
+
+  const bodyText = await evaluate(
+    page,
+    "document.body?.innerText?.slice(0, 2000) ?? ''",
+  );
+  throw new Error(`Timed out waiting for text ${JSON.stringify(text)}.
+Current body text:
+${bodyText}`);
+}
+
+async function waitForHashIncludes(page, text, timeoutMs = 30_000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const hash = await evaluate(page, "window.location.hash");
+    if (hash.includes(text)) return;
+    await sleep(250);
+  }
+
+  const hash = await evaluate(page, "window.location.hash");
+  throw new Error(
+    `Timed out waiting for hash to include ${JSON.stringify(text)}; got ${hash}`,
+  );
+}
+
+async function clickElementByText(page, selector, text) {
+  const clicked = await evaluate(
+    page,
+    `(() => {
+      const elements = [...document.querySelectorAll(${JSON.stringify(
+        selector,
+      )})];
+      const element = elements.find((candidate) =>
+        candidate.textContent?.includes(${JSON.stringify(text)}),
+      );
+      if (!element) return false;
+      element.click();
+      return true;
+    })()`,
+  );
+  assert(clicked, `Could not click ${selector} containing ${text}`);
+}
+
 async function waitForBridge(page) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < 30_000) {
@@ -771,9 +842,257 @@ async function uploadLocalAttachment(baseUrl, headers, input) {
   return JSON.parse(text);
 }
 
+async function runConflictUxSmoke(page, bootstrap, customer) {
+  const conflict = seedCustomerConflict(customer);
+  const headers = authHeaders(bootstrap);
+  const list = await localJson(
+    bootstrap.httpBaseUrl,
+    "/api/local/sync/conflicts?status=open",
+    headers,
+  );
+  assert(
+    list.data?.some((item) => item.id === conflict.id),
+    "seeded customer conflict was not listed by the local API",
+  );
+
+  await navigateHash(page, "/dashboard/sync/conflicts");
+  await signInProductionSessionForUi(page, bootstrap);
+  await reloadPage(page);
+  await waitForBridge(page);
+  await waitForText(page, "Conflitos de sincronização");
+  await waitForText(page, `Cliente · ${customer.id}`);
+  await waitForText(page, "CAMPO");
+  await waitForText(page, "ALTERAÇÃO LOCAL");
+  await waitForText(page, "ESTADO NA NUVEM");
+  await waitForText(page, "Nome");
+  await waitForText(page, conflict.localName);
+  await waitForText(page, conflict.remoteName);
+  await waitForText(page, "Payload bruto · Local");
+
+  await clickElementByText(page, "a,button", "Editar antes de tentar");
+  await waitForHashIncludes(
+    page,
+    `/dashboard/clients/${encodeURIComponent(String(customer.id))}/info`,
+  );
+  await waitForText(page, "Edição para conflito local");
+  await waitForText(page, "Voltar aos conflitos");
+  await waitForText(page, "Salvar Alterações");
+  await clickElementByText(page, "button", "Salvar Alterações");
+  await waitForHashIncludes(page, "/dashboard/sync/conflicts");
+  await waitForText(page, `Cliente · ${customer.id}`);
+
+  await clickElementByText(page, "button", "Manter nuvem");
+  await waitForText(page, "Nenhum conflito aberto no banco local.");
+
+  const openAfterResolve = await localJson(
+    bootstrap.httpBaseUrl,
+    "/api/local/sync/conflicts?status=open",
+    headers,
+  );
+  assert(openAfterResolve.total === 0, "resolved conflict still listed open");
+
+  const database = new Database(localDatabasePath(), { readonly: true });
+  try {
+    const row = database
+      .prepare(
+        `
+SELECT status, resolved_at
+FROM sync_conflicts
+WHERE id = @id
+LIMIT 1
+`,
+      )
+      .get({ id: conflict.id });
+    assert(row?.status === "ignored", "conflict was not ignored by UI action");
+    assert(row?.resolved_at, "conflict resolved_at was not recorded");
+  } finally {
+    database.close();
+  }
+
+  return {
+    conflictId: conflict.id,
+    entityType: "customer",
+    entityId: String(customer.id),
+    resolution: "ignored",
+  };
+}
+
+function seedCustomerConflict(customer) {
+  const now = new Date().toISOString();
+  const eventId = `event-smoke-conflict-${Date.now()}`;
+  const id = `smoke-conflict:customer:${customer.id}:${eventId}`;
+  const localName = `${customer.name} Local`;
+  const remoteName = `${customer.name} Nuvem`;
+  const localPayload = {
+    operation: "update_local_customer",
+    name: localName,
+    email: customer.email,
+    phone: customer.phone,
+    updatedAt: now,
+  };
+  const remotePayload = {
+    operation: "update_local_customer",
+    name: remoteName,
+    email: customer.email,
+    phone: customer.phone,
+    updatedAt: now,
+  };
+
+  const database = new Database(localDatabasePath());
+  try {
+    database.transaction(() => {
+      database
+        .prepare(
+          `
+INSERT INTO domain_events (
+  event_id,
+  aggregate_kind,
+  aggregate_id,
+  aggregate_version,
+  event_type,
+  payload_json,
+  metadata_json,
+  actor_user_id,
+  device_id,
+  occurred_at,
+  causation_id,
+  correlation_id,
+  sync_state
+) VALUES (
+  @eventId,
+  'customer',
+  @customerId,
+  2,
+  'customer.updated',
+  @localPayloadJson,
+  '{}',
+  NULL,
+  'packaged-conflict-smoke',
+  @now,
+  NULL,
+  NULL,
+  'conflict'
+)
+ON CONFLICT(event_id) DO NOTHING
+`,
+        )
+        .run({
+          eventId,
+          customerId: String(customer.id),
+          localPayloadJson: JSON.stringify(localPayload),
+          now,
+        });
+
+      database
+        .prepare(
+          `
+INSERT INTO outbox (
+  id,
+  event_id,
+  operation,
+  payload_json,
+  idempotency_key,
+  status,
+  last_error,
+  created_at
+) VALUES (
+  @outboxId,
+  @eventId,
+  'update_local_customer',
+  @localPayloadJson,
+  @idempotencyKey,
+  'conflict',
+  'concurrent_update: conflict requires review',
+  @now
+)
+ON CONFLICT(id) DO NOTHING
+`,
+        )
+        .run({
+          outboxId: `outbox:${eventId}`,
+          eventId,
+          localPayloadJson: JSON.stringify(localPayload),
+          idempotencyKey: `local:${eventId}`,
+          now,
+        });
+
+      database
+        .prepare(
+          `
+INSERT INTO sync_conflicts (
+  id,
+  event_id,
+  entity_type,
+  entity_id,
+  local_payload_json,
+  remote_payload_json,
+  conflict_type,
+  status,
+  created_at
+) VALUES (
+  @id,
+  @eventId,
+  'customer',
+  @customerId,
+  @localPayloadJson,
+  @remotePayloadJson,
+  'concurrent_update',
+  'open',
+  @now
+)
+ON CONFLICT(id) DO NOTHING
+`,
+        )
+        .run({
+          id,
+          eventId,
+          customerId: String(customer.id),
+          localPayloadJson: JSON.stringify(localPayload),
+          remotePayloadJson: JSON.stringify(remotePayload),
+          now,
+        });
+    })();
+  } finally {
+    database.close();
+  }
+
+  return { id, eventId, localName, remoteName };
+}
+
+async function signInProductionSessionForUi(page, bootstrap) {
+  const response = await evaluate(
+    page,
+    `window.calibraBridge.authFetch(${JSON.stringify({
+      url: `${apiBase}/api/auth/lab/sign-in/email`,
+      method: "POST",
+      headers: [
+        ["content-type", "application/json"],
+        ["x-active-unit-id", activeUnitId],
+      ],
+      body: JSON.stringify({ email, password }),
+    })})`,
+  );
+  assert(
+    response.status === 200,
+    `production UI sign-in returned HTTP ${response.status}: ${response.body}`,
+  );
+  await evaluate(
+    page,
+    `(() => {
+      window.localStorage.setItem('dashboard-active-org', ${JSON.stringify(
+        bootstrap.organizationId,
+      )});
+      window.localStorage.setItem(
+        ${JSON.stringify(`dashboard-active-unit:${bootstrap.organizationId}`)},
+        ${JSON.stringify(String(bootstrap.unitId))},
+      );
+    })()`,
+  );
+}
+
 function printLocalDiagnostics() {
   try {
-    const dbPath = path.join(userData, "local-data", "calibra.sqlite");
+    const dbPath = localDatabasePath();
     const database = new Database(dbPath, { readonly: true });
     try {
       const outbox = database
@@ -837,6 +1156,10 @@ function readOptionalRows(database, query) {
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function localDatabasePath() {
+  return path.join(userData, "local-data", "calibra.sqlite");
 }
 
 function authHeaders(bootstrap) {
