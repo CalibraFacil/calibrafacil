@@ -29,7 +29,7 @@ export const Route = createFileRoute('/dashboard/sync/conflicts')({
   component: SyncConflictsPage,
 })
 
-function SyncConflictsPage() {
+export function SyncConflictsPage() {
   const sync = useSyncStatus()
   const conflictsQuery = useQuery({
     queryKey: ['desktop-sync-conflicts', 'open'],
