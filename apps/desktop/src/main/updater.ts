@@ -65,6 +65,15 @@ export class DesktopUpdater {
         message: formatUpdaterError(error),
       });
     });
+
+    const smokeDownloadedVersion = getSmokeDownloadedUpdateVersion();
+    if (smokeDownloadedVersion) {
+      this.setState({
+        status: "downloaded",
+        version: smokeDownloadedVersion,
+        message: "Smoke update downloaded and ready to install.",
+      });
+    }
   }
 
   getState() {
@@ -177,4 +186,11 @@ export class DesktopUpdater {
 
 function formatUpdaterError(error: unknown) {
   return error instanceof Error ? error.message : "Desktop update failed.";
+}
+
+function getSmokeDownloadedUpdateVersion() {
+  if (process.env.CALIBRA_DESKTOP_ENABLE_SMOKE_HOOKS !== "1") return null;
+
+  const version = process.env.CALIBRA_DESKTOP_SMOKE_DOWNLOADED_UPDATE_VERSION;
+  return version && version.trim() ? version.trim() : null;
 }

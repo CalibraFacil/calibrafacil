@@ -269,6 +269,17 @@ try {
     offlineStatus.pendingOutboxCount >= 1,
     `expected pending outbox while offline: ${JSON.stringify(offlineStatus)}`,
   );
+  const updateInstallBlocked = await evaluate(
+    firstPage,
+    "window.calibraBridge.installUpdate()",
+  );
+  assert(
+    updateInstallBlocked.status === "downloaded" &&
+      updateInstallBlocked.message?.includes("local changes are pending sync"),
+    `update install was not blocked by pending outbox: ${JSON.stringify(
+      updateInstallBlocked,
+    )}`,
+  );
 
   await closePackagedApp();
   appProcess = await launchPackagedApp(secondRemoteDebuggingPort);
@@ -380,6 +391,7 @@ try {
           certificateDraftId: certificateDraft.id,
         },
         offlineStatus,
+        updateInstallBlocked,
         statusAfterRestart,
         finalStatus,
         conflictUx,
@@ -555,6 +567,8 @@ async function launchPackagedApp(remoteDebuggingPort) {
         ...process.env,
         CALIBRA_DESKTOP_AUTH_API_URL: `http://127.0.0.1:${proxyPort}`,
         CALIBRA_DESKTOP_AUTH_ORIGIN: origin,
+        CALIBRA_DESKTOP_ENABLE_SMOKE_HOOKS: "1",
+        CALIBRA_DESKTOP_SMOKE_DOWNLOADED_UPDATE_VERSION: "9.9.9-smoke",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
