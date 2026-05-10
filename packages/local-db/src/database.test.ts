@@ -24,6 +24,7 @@ import {
   listLocalJobs,
   openLocalDatabase,
   resolveSyncConflict,
+  saveLocalJobExecution,
   saveLocalServiceOrderExecutionNotes,
   updateLocalAsset,
   updateLocalCustomer,
@@ -676,6 +677,123 @@ INSERT INTO services (
     database.close();
   });
 
+  it("includes remote job IDs in synced job execution outbox payloads", () => {
+    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
+    const now = new Date("2026-01-15T10:00:00.000Z").toISOString();
+
+    database
+      .prepare(
+        `
+INSERT INTO customers (
+  id,
+  organization_id,
+  unit_id,
+  name,
+  updated_at,
+  sync_state
+) VALUES ('customer-local', 'org-1', 1, 'Acme Lab', @now, 'synced')
+`,
+      )
+      .run({ now });
+    database
+      .prepare(
+        `
+INSERT INTO asset_types (
+  id,
+  organization_id,
+  name,
+  specifications_schema_json,
+  pulled_at,
+  sync_state
+) VALUES ('asset-type-local', 'org-1', 'Balanca', '{}', @now, 'synced')
+`,
+      )
+      .run({ now });
+    database
+      .prepare(
+        `
+INSERT INTO assets (
+  id,
+  organization_id,
+  unit_id,
+  customer_id,
+  asset_type_id,
+  name,
+  serial_number,
+  tag,
+  status,
+  updated_at,
+  sync_state
+) VALUES (
+  'asset-local',
+  'org-1',
+  1,
+  'customer-local',
+  'asset-type-local',
+  'Scale 01',
+  'SN-001',
+  'TAG-001',
+  'ACTIVE',
+  @now,
+  'synced'
+)
+`,
+      )
+      .run({ now });
+    database
+      .prepare(
+        `
+INSERT INTO services (
+  id,
+  organization_id,
+  name,
+  status,
+  pulled_at,
+  sync_state
+) VALUES ('service-local', 'org-1', 'Mass calibration', 'ACTIVE', @now, 'synced')
+`,
+      )
+      .run({ now });
+
+    upsertLocalJobProjection(database, {
+      id: "job-local",
+      remoteId: 123,
+      jobId: "CAL-2026-0001",
+      organizationId: "org-1",
+      unitId: 1,
+      customerId: "customer-local",
+      assetId: "asset-local",
+      serviceId: "service-local",
+      methodSnapshotJson: "{}",
+      assetSnapshotJson: "{}",
+      status: "DRAFT",
+      createdAt: now,
+      updatedAt: now,
+      syncState: "synced",
+    });
+
+    saveLocalJobExecution(database, {
+      routeId: "123",
+      data: { indication: "10.03", reference: "10" },
+      results: null,
+      actorUserId: "user-1",
+      deviceId: "device-1",
+    });
+
+    const [event] = listPendingOutboxEvents(database);
+    expect(event).toMatchObject({
+      entityType: "calibration_job",
+      entityId: "job-local",
+      operation: "save_local_execution",
+      payload: {
+        remoteId: 123,
+        data: { indication: "10.03", reference: "10" },
+      },
+    });
+
+    database.close();
+  });
+
   it("writes accepted remote entity IDs back to local job projections", () => {
     const database = openLocalDatabase({ filePath: createTempDatabasePath() });
     const now = new Date("2026-01-15T10:00:00.000Z").toISOString();
@@ -1273,6 +1391,40 @@ WHERE name = 'Cliente Local'
     expect(synced).toEqual({
       remote_id: 987,
       sync_state: "synced",
+    });
+
+    database.close();
+  });
+
+  it("omits blank optional customer fields from desktop sync payloads", () => {
+    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
+
+    const created = createLocalCustomer(database, {
+      organizationId: "org-1",
+      unitId: 1,
+      name: "Cliente Sem Documento",
+      actorUserId: "user-1",
+      deviceId: "device-1",
+    });
+
+    updateLocalCustomer(database, {
+      identifier: String(created.id),
+      name: "Cliente Sem Documento Atualizado",
+      actorUserId: "user-1",
+      deviceId: "device-1",
+    });
+
+    const events = listPendingOutboxEvents(database);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      operation: "create_local_customer",
+    });
+    expect(events[0]?.payload).toEqual({ name: "Cliente Sem Documento" });
+    expect(events[1]).toMatchObject({
+      operation: "update_local_customer",
+    });
+    expect(events[1]?.payload).toEqual({
+      name: "Cliente Sem Documento Atualizado",
     });
 
     database.close();

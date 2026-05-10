@@ -2,7 +2,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { openLocalDatabase } from "@calibra-facil/local-db";
+import {
+  applySyncBootstrap,
+  createLocalCustomer,
+  openLocalDatabase,
+} from "@calibra-facil/local-db";
 import type { LocalServerConfig } from "./bootstrap";
 import { createLocalSyncRuntime } from "./sync";
 
@@ -62,4 +66,125 @@ describe("createLocalSyncRuntime", () => {
 
     database.close();
   });
+
+  it("uses synced tenant context for outbound events after packaged startup", async () => {
+    const dbPath = createTempDatabasePath();
+    const database = openLocalDatabase({ filePath: dbPath });
+    const config = {
+      ...createConfig(dbPath),
+      organizationId: null,
+      unitId: null,
+      userId: null,
+      cloudApiUrl: "https://api.example.test",
+    };
+    const pushedRequests: unknown[] = [];
+    const runtime = createLocalSyncRuntime(config, database, {
+      fetch: async (input, init) => {
+        const url = String(input);
+
+        if (url === "https://api.example.test/api/sync/push") {
+          const body = JSON.parse(String(init?.body));
+          pushedRequests.push(body);
+
+          return Response.json({
+            accepted: body.events.map(
+              (event: { eventId: string; localVersion: number }) => ({
+                eventId: event.eventId,
+                remoteEntityId: 123,
+                remoteVersion: event.localVersion + 1,
+                cloudEventId: `cloud:${event.eventId}`,
+              }),
+            ),
+            rejected: [],
+            conflicts: [],
+            newCursor: "cursor-after-push",
+          });
+        }
+
+        if (url.startsWith("https://api.example.test/api/sync/pull")) {
+          return Response.json({
+            cursor: "cursor-after-pull",
+            hasMore: false,
+            events: [],
+          });
+        }
+
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+
+    applySyncBootstrap(
+      database,
+      syncBootstrap("org-synced", 42, "user-synced"),
+    );
+    createLocalCustomer(database, {
+      organizationId: "org-synced",
+      unitId: 42,
+      name: "Cliente Offline",
+      email: "offline@example.com",
+      actorUserId: "user-synced",
+      deviceId: "device-test",
+    });
+
+    await expect(runtime.runPushSync()).resolves.toMatchObject({
+      state: "idle",
+      pendingOutboxCount: 0,
+      conflictCount: 0,
+      lastError: null,
+    });
+
+    expect(pushedRequests).toHaveLength(1);
+    expect(pushedRequests[0]).toMatchObject({
+      events: [
+        {
+          actorUserId: "user-synced",
+          organizationId: "org-synced",
+          unitId: 42,
+        },
+      ],
+    });
+
+    database.close();
+  });
 });
+
+function syncBootstrap(
+  organizationId: string,
+  activeUnitId: number,
+  userId: string,
+) {
+  return {
+    serverTime: "2026-01-15T10:00:00.000Z",
+    user: {
+      id: userId,
+      name: "Synced User",
+      email: "user@example.com",
+    },
+    organization: {
+      id: organizationId,
+      type: "LAB",
+    },
+    activeUnits: [{ id: activeUnitId, name: "Matriz", role: "technician" }],
+    permissions: {
+      role: "technician",
+      unitRole: "technician",
+      activeUnitId,
+      accessibleUnitIds: [activeUnitId],
+      canAccessAllUnits: false,
+    },
+    featureFlags: {
+      offlineApprovals: false,
+      offlineCertificatePublication: false,
+    },
+    syncCursor: "cursor-after-bootstrap",
+    publishedMethods: [],
+    assetTypes: [],
+    customers: [],
+    assets: [],
+    services: [],
+    standards: [],
+    environmentalLimits: [],
+    jobs: [],
+    serviceOrders: [],
+  };
+}

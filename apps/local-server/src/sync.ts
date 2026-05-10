@@ -363,6 +363,7 @@ async function pushOutboxEvents(
 ) {
   if (pending.length === 0) return;
 
+  const context = getLocalSyncContext(config, database);
   const pushUrl = new URL("/api/sync/push", cloudApiUrl);
   const headers = new Headers({
     "Content-Type": "application/json",
@@ -386,9 +387,9 @@ async function pushOutboxEvents(
           operation: event.operation,
           payload: event.payload,
           occurredAt: event.occurredAt,
-          actorUserId: event.actorUserId ?? config.userId ?? "local",
-          organizationId: config.organizationId ?? "",
-          unitId: config.unitId,
+          actorUserId: event.actorUserId ?? context.userId ?? "local",
+          organizationId: context.organizationId ?? "",
+          unitId: context.unitId,
           idempotencyKey: event.idempotencyKey,
           localVersion: event.localVersion,
         })),
@@ -428,6 +429,7 @@ async function uploadPendingCertificatePdfs(
   cloudApiUrl: string,
 ) {
   const uploadUrl = new URL("/api/sync/certificate-pdfs", cloudApiUrl);
+  const context = getLocalSyncContext(config, database);
   const accepted: SyncPushResponse["accepted"] = [];
   const rejected: SyncPushResponse["rejected"] = [];
 
@@ -435,6 +437,7 @@ async function uploadPendingCertificatePdfs(
     const payload = asRecord(event.payload);
     const localPath = getString(payload, "localPath");
     const localJobId = getString(payload, "jobId");
+    const remoteJobId = getNumber(payload, "remoteJobId");
     const draftId = getString(payload, "draftId");
     const contentHash = getString(payload, "contentHash");
     const sizeBytes = getNumber(payload, "sizeBytes");
@@ -457,10 +460,16 @@ async function uploadPendingCertificatePdfs(
     formData.set("idempotencyKey", event.idempotencyKey);
     formData.set("localVersion", String(event.localVersion));
     formData.set("occurredAt", event.occurredAt);
-    formData.set("actorUserId", event.actorUserId ?? config.userId ?? "local");
-    formData.set("organizationId", config.organizationId ?? "");
-    formData.set("unitId", config.unitId === null ? "" : String(config.unitId));
+    formData.set("actorUserId", event.actorUserId ?? context.userId ?? "local");
+    formData.set("organizationId", context.organizationId ?? "");
+    formData.set(
+      "unitId",
+      context.unitId === null ? "" : String(context.unitId),
+    );
     formData.set("localJobId", localJobId);
+    if (remoteJobId !== null) {
+      formData.set("remoteJobId", String(remoteJobId));
+    }
     formData.set("draftId", draftId);
     formData.set("contentHash", contentHash);
     formData.set("sizeBytes", String(sizeBytes));
@@ -501,6 +510,34 @@ async function uploadPendingCertificatePdfs(
       conflicts: [],
     }),
   );
+}
+
+function getLocalSyncContext(
+  config: LocalServerConfig,
+  database: LocalDatabase,
+) {
+  const snapshot = database
+    .prepare(
+      `
+SELECT organization_id, active_unit_id, user_id
+FROM tenant_snapshot
+ORDER BY pulled_at DESC
+LIMIT 1
+`,
+    )
+    .get() as
+    | {
+        organization_id: string;
+        active_unit_id: number | null;
+        user_id: string;
+      }
+    | undefined;
+
+  return {
+    organizationId: config.organizationId ?? snapshot?.organization_id ?? null,
+    unitId: config.unitId ?? snapshot?.active_unit_id ?? null,
+    userId: config.userId ?? snapshot?.user_id ?? null,
+  };
 }
 
 function resolveLocalStoragePath(storageRoot: string, localPath: string) {

@@ -93,13 +93,13 @@ export function createLocalCustomer(
 
   const now = new Date().toISOString();
   const id = `customer:${randomUUID()}`;
-  const payload = {
+  const payload: Record<string, unknown> = {
     name: input.name,
-    taxId: input.taxId || null,
-    email: input.email || null,
-    phone: input.phone || null,
-    address: input.address ?? null,
   };
+  assignSyncPayloadValue(payload, "taxId", input.taxId);
+  assignSyncPayloadValue(payload, "email", input.email);
+  assignSyncPayloadValue(payload, "phone", input.phone);
+  assignSyncPayloadValue(payload, "address", input.address);
 
   database.transaction(() => {
     database
@@ -246,14 +246,13 @@ export function updateLocalCustomer(
         ? (parseJson(row.address_json) as Record<string, unknown> | null)
         : input.address,
   };
-  const payload = {
-    remoteId: row.remote_id,
-    name: values.name,
-    taxId: values.taxId,
-    email: values.email,
-    phone: values.phone,
-    address: values.address,
-  };
+  const payload: Record<string, unknown> = {};
+  assignSyncPayloadValue(payload, "remoteId", row.remote_id);
+  assignSyncPayloadValue(payload, "name", input.name);
+  assignSyncPayloadValue(payload, "taxId", input.taxId);
+  assignSyncPayloadValue(payload, "email", input.email);
+  assignSyncPayloadValue(payload, "phone", input.phone);
+  assignSyncPayloadValue(payload, "address", input.address);
 
   database.transaction(() => {
     database
@@ -570,6 +569,16 @@ INSERT INTO outbox (
       idempotencyKey,
       createdAt: input.occurredAt,
     });
+}
+
+function assignSyncPayloadValue(
+  payload: Record<string, unknown>,
+  key: string,
+  value: unknown,
+) {
+  if (value === undefined || value === null) return;
+  if (typeof value === "string" && value.length === 0) return;
+  payload[key] = value;
 }
 
 function slugifyRouteIdentifier(value: string): string {

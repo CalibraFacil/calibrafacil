@@ -289,6 +289,17 @@ WHERE id = @id
       },
       createdAt: now,
     });
+    const payload: Record<string, unknown> = {
+      data: input.data,
+      results: input.results ?? null,
+      standardsSnapshot,
+      environmentalSnapshot,
+      status: nextStatus,
+    };
+    if (existing.remote_id !== null) {
+      payload.remoteId = existing.remote_id;
+    }
+
     appendOutboxEvent(database, {
       entityType: "calibration_job",
       entityId: existing.id,
@@ -296,13 +307,7 @@ WHERE id = @id
         nextStatus === "REVIEW"
           ? "submit_local_execution"
           : "save_local_execution",
-      payload: {
-        data: input.data,
-        results: input.results ?? null,
-        standardsSnapshot,
-        environmentalSnapshot,
-        status: nextStatus,
-      },
+      payload,
       actorUserId: input.actorUserId,
       deviceId: input.deviceId,
       occurredAt: now,
@@ -396,11 +401,21 @@ WHERE id = @jobId
       details: { jobId: job.id, localPath },
       createdAt: now,
     });
+    const payload: Record<string, unknown> = {
+      draftId,
+      jobId: job.id,
+      localPath,
+      metadata,
+    };
+    if (job.remote_id !== null) {
+      payload.remoteJobId = job.remote_id;
+    }
+
     appendOutboxEvent(database, {
       entityType: "certificate_draft",
       entityId: draftId,
       operation: "create_local_certificate_draft",
-      payload: { draftId, jobId: job.id, localPath, metadata },
+      payload,
       actorUserId: input.actorUserId,
       deviceId: input.deviceId,
       occurredAt: now,
@@ -529,17 +544,22 @@ WHERE id = @jobId
       },
       createdAt: now,
     });
+    const payload: Record<string, unknown> = {
+      draftId: input.draftId,
+      jobId: job.id,
+      localPath: input.localPath,
+      contentHash: input.contentHash,
+      sizeBytes: input.sizeBytes,
+    };
+    if (job.remote_id !== null) {
+      payload.remoteJobId = job.remote_id;
+    }
+
     appendOutboxEvent(database, {
       entityType: "certificate_draft",
       entityId: input.draftId,
       operation: "generate_local_certificate_pdf",
-      payload: {
-        draftId: input.draftId,
-        jobId: job.id,
-        localPath: input.localPath,
-        contentHash: input.contentHash,
-        sizeBytes: input.sizeBytes,
-      },
+      payload,
       actorUserId: input.actorUserId,
       deviceId: input.deviceId,
       occurredAt: now,

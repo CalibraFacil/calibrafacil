@@ -1088,10 +1088,14 @@ async function applyDesktopCertificatePdfUpload(
       });
     }
 
-    const remoteJobId = await findDesktopSyncRemoteEntityId(
+    const mappedRemoteJobId = await findDesktopSyncRemoteEntityId(
       input.memberData.organizationId,
       upload.localJobId,
     );
+    const remoteJobId =
+      typeof mappedRemoteJobId === "number"
+        ? mappedRemoteJobId
+        : upload.remoteJobId;
     if (typeof remoteJobId !== "number") {
       return syncPushResponseSchema.parse({
         accepted: [],
@@ -2136,10 +2140,15 @@ async function applyLocalJobExecution(
   input: ApplyDesktopSyncEventInput,
   actorUserId: string,
 ): Promise<ApplyDesktopSyncEventResult> {
-  const remoteEntityId = await findDesktopSyncRemoteEntityId(
+  const payload = asRecord(input.event.payload);
+  const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
   );
+  const remoteEntityId =
+    typeof mappedRemoteEntityId === "number"
+      ? mappedRemoteEntityId
+      : getNumber(payload, "remoteId");
 
   if (typeof remoteEntityId !== "number") {
     return {
@@ -2189,7 +2198,6 @@ async function applyLocalJobExecution(
     };
   }
 
-  const payload = asRecord(input.event.payload);
   const nextStatus =
     input.event.operation === "submit_local_execution"
       ? "REVIEW"
@@ -3222,6 +3230,7 @@ type CertificatePdfUploadFields = {
   organizationId: string;
   unitId: number | null;
   localJobId: string;
+  remoteJobId: number | null;
   draftId: string;
   contentHash: string;
   sizeBytes: number;
@@ -3256,6 +3265,10 @@ function readCertificatePdfUploadFields(
   const file = formData.get("file");
   const localVersion = formNumber(formData, "localVersion");
   const sizeBytes = formNumber(formData, "sizeBytes");
+  const remoteJobIdValue = formNumber(formData, "remoteJobId");
+  const remoteJobId = Number.isInteger(remoteJobIdValue)
+    ? remoteJobIdValue
+    : null;
   const unitIdText = formString(formData, "unitId");
   const unitId =
     unitIdText === null || unitIdText === "" ? null : Number(unitIdText);
@@ -3344,6 +3357,7 @@ function readCertificatePdfUploadFields(
       organizationId: required.organizationId!,
       unitId,
       localJobId: required.localJobId!,
+      remoteJobId,
       draftId: required.draftId!,
       contentHash: required.contentHash!,
       sizeBytes,
