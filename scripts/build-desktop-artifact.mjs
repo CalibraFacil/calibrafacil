@@ -18,13 +18,15 @@ const stagedLocalServerDir = path.join(desktopDir, "dist/local-server");
 const electronBuilderArgs = process.argv.slice(2);
 const requireFromDesktop = createRequire(path.join(desktopDir, "package.json"));
 const rendererBuildStartedAt = new Date().toISOString();
+const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 
 validateDesktopReleaseSignoff();
 validateLinuxPackagePrerequisites();
 
-run("pnpm", ["--dir", "apps/local-server", "run", "bundle"]);
-run("pnpm", ["--dir", "apps/desktop", "run", "build"]);
-run("pnpm", [
+run(pnpmCommand, ["--dir", "apps/local-server", "run", "bundle"]);
+run(pnpmCommand, ["--dir", "apps/desktop", "run", "build"]);
+run(pnpmCommand, [
   "--dir",
   "apps/web",
   "exec",
@@ -85,7 +87,7 @@ function validateDesktopReleaseSignoff() {
   }
 
   try {
-    run("pnpm", ["check:offline-release-signoff"]);
+    run(process.execPath, ["scripts/check-offline-release-signoff.mjs"]);
   } catch {
     process.exit(1);
   }
@@ -316,7 +318,7 @@ function restoreNodeBetterSqliteBuild() {
   const packageJsonPath = requireFromDesktop.resolve(
     "better-sqlite3/package.json",
   );
-  run("npm", ["run", "build-release"], {
+  run(npmCommand, ["run", "build-release"], {
     cwd: path.dirname(packageJsonPath),
   });
 }

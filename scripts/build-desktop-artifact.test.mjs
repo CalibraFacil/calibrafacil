@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -14,15 +15,28 @@ const rootPackage = JSON.parse(
 const desktopPackage = JSON.parse(
   readFileSync(path.join(root, "apps/desktop/package.json"), "utf8"),
 );
+const incompleteSignoffDir = mkdtempSync(
+  path.join(tmpdir(), "calibra-desktop-release-gate-"),
+);
+const incompleteSignoffPath = path.join(incompleteSignoffDir, "signoff.md");
+writeFileSync(incompleteSignoffPath, "Final decision: `pending`\n");
 
 assertSourceOrder(
   "validateDesktopReleaseSignoff();",
-  'run("pnpm", ["--dir", "apps/local-server", "run", "bundle"]);',
+  'run(pnpmCommand, ["--dir", "apps/local-server", "run", "bundle"]);',
   "release sign-off must run before local-server bundle work",
 );
 assertIncludes(
-  'run("pnpm", ["check:offline-release-signoff"]);',
+  'run(process.execPath, ["scripts/check-offline-release-signoff.mjs"]);',
   "builder must invoke the release sign-off checker",
+);
+assertIncludes(
+  'process.platform === "win32" ? "pnpm.cmd" : "pnpm"',
+  "builder must use the pnpm command shim on Windows",
+);
+assertIncludes(
+  'process.platform === "win32" ? "npm.cmd" : "npm"',
+  "builder must use the npm command shim on Windows",
 );
 assertIncludes(
   'arg === "--dir"',
@@ -84,6 +98,10 @@ function assertBlockedInstallerBuild(args) {
   const blockedInstallerBuild = spawnSync("node", args, {
     cwd: root,
     encoding: "utf8",
+    env: {
+      ...process.env,
+      CALIBRA_OFFLINE_RELEASE_SIGNOFF_WORKSHEET: incompleteSignoffPath,
+    },
   });
 
   if (blockedInstallerBuild.status !== 1) {
