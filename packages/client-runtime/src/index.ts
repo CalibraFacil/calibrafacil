@@ -281,6 +281,7 @@ export type MethodsListData = {
     dataFields: unknown[];
     variableBindings?: unknown[];
     formulas: unknown[];
+    measurementModels?: unknown[];
     validations: unknown[];
     uncertaintyParams?: unknown[];
     certificateContent?: unknown;

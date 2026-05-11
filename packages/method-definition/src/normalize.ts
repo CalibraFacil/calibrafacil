@@ -27,7 +27,9 @@ export function normalizeMethodDraft(draft: MethodDraft): MethodDraft {
     inputs: draft.inputs.map(normalizeMethodInput),
     formulas: draft.formulas.map(normalizeFormula),
     measurementModels: draft.measurementModels.map(normalizeMeasurementModel),
-    acceptanceCriteria: draft.acceptanceCriteria.map(normalizeAcceptanceCriterion),
+    acceptanceCriteria: draft.acceptanceCriteria.map(
+      normalizeAcceptanceCriterion,
+    ),
     previewScenarios: draft.previewScenarios.map(normalizePreviewScenario),
     metadata: normalizeSafeMetadata(draft.metadata) ?? {},
   };
@@ -79,7 +81,9 @@ function normalizeMethodInput(input: MethodInput): MethodInput {
         key: input.key.trim(),
         label: input.label.trim(),
         options: input.options.map((option) => option.trim()).sort(),
-        ...(input.defaultValue ? { defaultValue: input.defaultValue.trim() } : {}),
+        ...(input.defaultValue
+          ? { defaultValue: input.defaultValue.trim() }
+          : {}),
         ...(input.metadata
           ? { metadata: normalizeSafeMetadata(input.metadata) }
           : {}),
@@ -111,9 +115,24 @@ function normalizeFormula(formula: MethodFormula): MethodFormula {
     key: formula.key.trim(),
     label: formula.label.trim(),
     expression: normalizeExpression(formula.expression),
+    ...(formula.scope
+      ? {
+          scope:
+            formula.scope.kind === "table_row"
+              ? {
+                  kind: "table_row",
+                  tableKey: formula.scope.tableKey.trim(),
+                }
+              : { kind: "scalar" },
+        }
+      : {}),
     ...(formula.outputUnit ? { outputUnit: formula.outputUnit.trim() } : {}),
     ...(formula.dependencies
-      ? { dependencies: [...new Set(formula.dependencies.map((key) => key.trim()))].sort() }
+      ? {
+          dependencies: [
+            ...new Set(formula.dependencies.map((key) => key.trim())),
+          ].sort(),
+        }
       : {}),
     ...(formula.metadata
       ? { metadata: normalizeSafeMetadata(formula.metadata) }
@@ -128,6 +147,17 @@ function normalizeMeasurementModel(
     ...model,
     key: model.key.trim(),
     label: model.label.trim(),
+    ...(model.scope
+      ? {
+          scope:
+            model.scope.kind === "table_row"
+              ? {
+                  kind: "table_row",
+                  tableKey: model.scope.tableKey.trim(),
+                }
+              : { kind: "scalar" },
+        }
+      : {}),
     measurand: model.measurand.trim(),
     expression: normalizeExpression(model.expression),
     quantities: model.quantities.map(normalizeQuantity),
@@ -140,7 +170,9 @@ function normalizeMeasurementModel(
       covariance: item.covariance,
     })),
     ...(model.outputUnit ? { outputUnit: model.outputUnit.trim() } : {}),
-    ...(model.metadata ? { metadata: normalizeSafeMetadata(model.metadata) } : {}),
+    ...(model.metadata
+      ? { metadata: normalizeSafeMetadata(model.metadata) }
+      : {}),
   };
 }
 
@@ -148,15 +180,39 @@ function normalizeQuantity(quantity: MethodQuantity): MethodQuantity {
   return {
     ...quantity,
     symbol: quantity.symbol.trim(),
-    source:
-      quantity.source.kind === "constant"
-        ? quantity.source
-        : { ...quantity.source, key: quantity.source.key.trim() },
+    source: normalizeQuantitySource(quantity.source),
+    uncertainty:
+      quantity.uncertainty.kind === "type_a"
+        ? {
+            ...quantity.uncertainty,
+            ...(quantity.uncertainty.observations
+              ? {
+                  observations: quantity.uncertainty.observations.map(
+                    normalizeQuantitySource,
+                  ),
+                }
+              : {}),
+          }
+        : quantity.uncertainty,
     ...(quantity.unit ? { unit: quantity.unit.trim() } : {}),
     ...(quantity.metadata
       ? { metadata: normalizeSafeMetadata(quantity.metadata) }
       : {}),
   };
+}
+
+function normalizeQuantitySource(
+  source: MethodQuantity["source"],
+): MethodQuantity["source"] {
+  if (source.kind === "constant") return source;
+  if (source.kind === "table_column") {
+    return {
+      kind: "table_column",
+      tableKey: source.tableKey.trim(),
+      columnKey: source.columnKey.trim(),
+    };
+  }
+  return { ...source, key: source.key.trim() };
 }
 
 function normalizeAcceptanceCriterion(

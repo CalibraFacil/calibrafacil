@@ -90,6 +90,7 @@ function normalizeFormulaList(value: unknown): Array<MethodNormalizedFormula> {
         expression: item.expression ?? '',
         normalizedExpression:
           item.normalizedExpression ?? item.expression ?? '',
+        scope: item.scope,
       }
     })
   }

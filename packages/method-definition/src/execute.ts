@@ -5,7 +5,6 @@ import type {
   CompiledMethodExecutionInput,
   CompiledMethodExecutionResult,
   ExecuteCompiledMethodOptions,
-  NumericInput,
 } from "./types";
 
 export function executeCompiledMethod(
@@ -22,14 +21,17 @@ export function executeCompiledMethod(
     },
     { engine: options.engine },
   );
-  const outputs: Record<string, NumericInput> = {};
+  const outputs: CompiledMethodExecutionResult["outputs"] = {};
 
   for (const result of preview.formulaResults) {
     outputs[result.key] = result.value;
   }
 
   for (const result of preview.measurementModelResults) {
-    outputs[result.key] = result.result.value;
+    const modelResult = result.result;
+    outputs[result.key] = Array.isArray(modelResult)
+      ? modelResult.map((item) => item.value)
+      : (modelResult as { value: string | number }).value;
   }
 
   const inputFingerprint = fingerprintJson(input.inputs, "execution-input");

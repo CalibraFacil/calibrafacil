@@ -2305,6 +2305,24 @@ INSERT INTO published_methods (
               outputUnit: "g",
             },
           ],
+          measurementModels: [
+            {
+              key: "mass_uncertainty",
+              label: "Mass uncertainty",
+              measurand: "error",
+              expression: "error",
+              quantities: [
+                {
+                  symbol: "error",
+                  source: { kind: "formula", key: "error" },
+                  uncertainty: {
+                    kind: "direct_standard_uncertainty",
+                    standardUncertainty: "0.01",
+                  },
+                },
+              ],
+            },
+          ],
           validations: [],
           uncertaintyParams: [],
           certificateContent: null,
@@ -2468,6 +2486,13 @@ INSERT INTO environmental_limits (
         __compiledExecution: {
           methodFingerprint: compiledMethod.methodFingerprint,
         },
+      },
+      methodSnapshot: {
+        measurementModels: [
+          {
+            key: "mass_uncertainty",
+          },
+        ],
       },
     });
 

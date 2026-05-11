@@ -383,6 +383,7 @@ async function persistCalibrationJob(
     dataFields: methodData.dataFields,
     variableBindings: methodData.variableBindings ?? [],
     formulas: methodData.formulas,
+    measurementModels: methodData.measurementModels ?? [],
     validations: normalizeMethodValidationsInput(methodData.validations),
     uncertaintyParams: methodData.uncertaintyParams,
     certificateContent: methodData.certificateContent ?? null,

@@ -230,6 +230,7 @@ export type MethodFormula = {
   key: string;
   label: string;
   expression: string;
+  scope?: FormulaScope;
   outputUnit?: string;
   outputKind?:
     | "correction"
@@ -253,9 +254,14 @@ export type MethodFormula = {
   metadata?: SafeMetadata;
 };
 
+export type FormulaScope =
+  | { kind: "scalar" }
+  | { kind: "table_row"; tableKey: string };
+
 export type TypeAUncertaintySource = {
   kind: "type_a";
-  observationsInputKey: string;
+  observationsInputKey?: string;
+  observations?: QuantitySource[];
   minDegreesOfFreedom?: number;
 };
 
@@ -282,10 +288,7 @@ export type DirectStandardUncertaintySource = {
 
 export type MethodQuantity = {
   symbol: string;
-  source:
-    | { kind: "input"; key: string }
-    | { kind: "formula"; key: string }
-    | { kind: "constant"; value: string | number };
+  source: QuantitySource;
   unit?: string;
   uncertainty:
     | TypeAUncertaintySource
@@ -295,6 +298,12 @@ export type MethodQuantity = {
   sensitivity?: string | number;
   metadata?: SafeMetadata;
 };
+
+export type QuantitySource =
+  | { kind: "input"; key: string }
+  | { kind: "formula"; key: string }
+  | { kind: "table_column"; tableKey: string; columnKey: string }
+  | { kind: "constant"; value: string | number };
 
 export type MethodCorrelation = {
   symbols: [string, string];
@@ -309,6 +318,7 @@ export type MethodCovariance = {
 export type MethodMeasurementModel = {
   key: string;
   label: string;
+  scope?: FormulaScope;
   measurand: string;
   expression: string;
   quantities: MethodQuantity[];
@@ -336,13 +346,13 @@ export type MethodPreviewScenario = {
   label: string;
   inputs: Record<string, unknown>;
   expected?: {
-    formulas?: Record<string, string | number>;
+    formulas?: Record<string, string | number | readonly (string | number)[]>;
     measurementModels?: Record<
       string,
       {
-        estimate?: string | number;
-        standardUncertainty?: string | number;
-        expandedUncertainty?: string | number;
+        estimate?: string | number | readonly (string | number)[];
+        standardUncertainty?: string | number | readonly (string | number)[];
+        expandedUncertainty?: string | number | readonly (string | number)[];
       }
     >;
   };
@@ -381,6 +391,7 @@ export type CompiledFormulaDefinition = {
   key: string;
   label: string;
   expression: string;
+  scope?: FormulaScope;
   normalizedFormula: string;
   formulaFingerprint: string;
   variables: string[];
@@ -393,6 +404,7 @@ export type CompiledFormulaDefinition = {
 export type CompiledMeasurementModelDefinition = {
   key: string;
   formulaKey?: string;
+  scope?: FormulaScope;
   expression: string;
   normalizedFormula: string;
   modelFingerprint: string;
@@ -425,14 +437,14 @@ export type CompiledMethod = {
 
 export type FormulaPreviewResult = {
   key: string;
-  value: string | number;
+  value: string | number | readonly (string | number)[];
   normalizedFormula: string;
   formulaFingerprint: string;
 };
 
 export type MeasurementModelPreviewResult = {
   key: string;
-  result: MeasurementModelResultLike;
+  result: MeasurementModelResultLike | readonly MeasurementModelResultLike[];
 };
 
 export type AcceptanceCriterionPreviewResult = {
@@ -465,7 +477,7 @@ export type CompiledMethodExecutionResult = {
   measurementModelResults: MeasurementModelPreviewResult[];
   acceptanceCriteriaResults: AcceptanceCriterionPreviewResult[];
   diagnostics: MethodDiagnostic[];
-  outputs: Record<string, string | number>;
+  outputs: Record<string, string | number | readonly (string | number)[]>;
   canonicalResultJson: string;
   calculationFingerprint: string;
   resultFingerprint: string;

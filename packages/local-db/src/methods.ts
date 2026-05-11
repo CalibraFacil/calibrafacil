@@ -21,6 +21,7 @@ export type LocalMethodsListData = {
     dataFields: unknown[];
     variableBindings: unknown[];
     formulas: unknown[];
+    measurementModels: unknown[];
     validations: unknown[];
     uncertaintyParams: unknown[];
     certificateContent: unknown | null;
@@ -252,6 +253,7 @@ function toLocalMethod(row: LocalMethodRow): LocalMethod {
     dataFields: getArray(normalized, "dataFields"),
     variableBindings: getArray(normalized, "variableBindings"),
     formulas: getArray(normalized, "formulas"),
+    measurementModels: getArray(normalized, "measurementModels"),
     validations: getArray(normalized, "validations"),
     uncertaintyParams: getArray(normalized, "uncertaintyParams"),
     certificateContent: normalized.certificateContent ?? null,

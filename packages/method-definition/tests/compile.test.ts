@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   compileMethodDraft,
+  compileCriterionExpression,
   executeCompiledMethod,
+  evaluateCompiledCriterion,
   type CalculationEngineLike,
   type MethodDraft,
   type NumericInput,
@@ -41,6 +43,35 @@ const fakeEngine: CalculationEngineLike = {
   },
   evaluateMeasurementModel() {
     throw new Error("Measurement model tests must provide a dedicated fake");
+  },
+};
+
+const fakeGumEngine: CalculationEngineLike = {
+  ...fakeEngine,
+  evaluateMeasurementModel(input) {
+    const firstQuantity = Object.values(input.quantities)[0];
+    const value = firstQuantity?.estimate ?? firstQuantity?.value ?? 0;
+    const repeatedObservations = firstQuantity?.repeatedObservations ?? [];
+    const combinedStandardUncertainty =
+      repeatedObservations.length > 1
+        ? 0.1
+        : (firstQuantity?.standardUncertainty ?? 0);
+    return {
+      value,
+      combinedStandardUncertainty,
+      expandedUncertainty: Number(combinedStandardUncertainty) * 2,
+      coverageFactor: 2,
+      coverageProbability: input.coverageProbability ?? 0.9545,
+      effectiveDegreesOfFreedom: firstQuantity?.degreesOfFreedom ?? "Infinity",
+      sensitivityCoefficients: { x: 1 },
+      uncertaintyBudget: [],
+      diagnostics: [],
+      formulaFingerprint: `model:${input.formula}`,
+      calculationFingerprint: `calculation:${input.formula}:${value}`,
+      canonicalResultJson: JSON.stringify({ formula: input.formula, value }),
+      normalizedFormula: input.formula,
+      normalizedAst: input.formula,
+    };
   },
 };
 
@@ -834,8 +865,8 @@ describe("compileMethodDraft", () => {
     const strictEngine: CalculationEngineLike = {
       ...fakeEngine,
       evaluateFormula(expression, inputs) {
-        if (String(expression).includes("preview_0")) {
-          expect(Object.keys(inputs).sort()).toEqual(["preview_0"]);
+        if (String(expression).includes("cf_internal_preview_0")) {
+          expect(Object.keys(inputs).sort()).toEqual(["cf_internal_preview_0"]);
         }
         return fakeEngine.evaluateFormula(expression, inputs);
       },
@@ -878,6 +909,28 @@ describe("compileMethodDraft", () => {
     );
 
     expect(result.ok).toBe(true);
+  });
+
+  it("evaluates compiled criteria with aggregate expressions", () => {
+    const compiled = compileCriterionExpression(
+      {
+        key: "max_error",
+        label: "Max error",
+        expression: "max(error) <= limit",
+        severity: "blocking",
+        message: "Bad",
+      },
+      fakeEngine,
+      ["error", "limit"],
+      (value) => JSON.stringify(value),
+    );
+
+    expect(
+      evaluateCompiledCriterion(compiled, {
+        error: [0.1, 0.2, 0.3],
+        limit: 0.3,
+      }),
+    ).toBe(true);
   });
 
   it("rejects table statistics when bound cells are invalid", () => {
@@ -968,6 +1021,164 @@ describe("compileMethodDraft", () => {
         role: "primary_result",
       },
     });
+  });
+
+  it("executes table-row formulas in row order", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "scalar",
+            key: "reference",
+            label: "Reference",
+            required: true,
+          },
+          {
+            kind: "table",
+            key: "readings",
+            label: "Readings",
+            required: true,
+            columns: [
+              { key: "indication", label: "Indication", type: "number" },
+            ],
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            expression: "indication - reference",
+            scope: { kind: "table_row", tableKey: "readings" },
+            required: true,
+          },
+          {
+            key: "shifted_error",
+            label: "Shifted error",
+            expression: "error + 1",
+            scope: { kind: "table_row", tableKey: "readings" },
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [
+          {
+            key: "max_error",
+            label: "Max error",
+            expression: "max(error) <= 2",
+            severity: "blocking",
+            message: "Error too high",
+          },
+        ],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              reference: 10,
+              readings: [{ indication: 10.1 }, { indication: 10.2 }],
+            },
+            expected: {
+              formulas: {
+                error: [0.1, 0.2],
+                shifted_error: [1.1, 1.2],
+              },
+            },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.previewResults[0]?.formulaResults[0]?.value).toEqual([
+      expect.closeTo(0.1),
+      expect.closeTo(0.2),
+    ]);
+    expect(result.previewResults[0]?.passed).toBe(true);
+  });
+
+  it("rejects scalar formulas that directly reference row formula outputs", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "readings",
+            label: "Readings",
+            required: true,
+            columns: [
+              { key: "indication", label: "Indication", type: "number" },
+            ],
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            expression: "indication",
+            scope: { kind: "table_row", tableKey: "readings" },
+            required: true,
+          },
+          {
+            key: "bad",
+            label: "Bad",
+            expression: "error + 1",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "ROW_FORMULA_OUTPUT_REQUIRES_AGGREGATE",
+      ),
+    ).toBe(true);
+  });
+
+  it("reports row-indexed diagnostics for invalid row formula inputs", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "readings",
+            label: "Readings",
+            required: true,
+            columns: [
+              { key: "indication", label: "Indication", type: "number" },
+            ],
+          },
+        ],
+        formulas: [
+          {
+            key: "copy",
+            label: "Copy",
+            expression: "indication + 0",
+            scope: { kind: "table_row", tableKey: "readings" },
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "bad_row",
+            label: "Bad row",
+            inputs: { readings: [{ indication: 10 }, {}] },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some((item) => item.path?.includes("formulas.copy.1")),
+    ).toBe(true);
   });
 
   it("preserves table column role and mass composition metadata", () => {
@@ -1222,5 +1433,980 @@ describe("compileMethodDraft", () => {
         (item) => item.code === "MEASUREMENT_MODEL_COMPILE_FAILED",
       ),
     ).toBe(true);
+  });
+
+  it("executes table-row measurement models with row quantity sources", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [
+              { key: "indication", label: "Indication", type: "number" },
+              { key: "repeat_1", label: "Repeat 1", type: "number" },
+              { key: "repeat_2", label: "Repeat 2", type: "number" },
+            ],
+          },
+        ],
+        formulas: [],
+        acceptanceCriteria: [],
+        measurementModels: [
+          {
+            key: "row_gum",
+            label: "Row GUM",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            measurand: "x",
+            expression: "x",
+            quantities: [
+              {
+                symbol: "x",
+                source: {
+                  kind: "table_column",
+                  tableKey: "measurements",
+                  columnKey: "indication",
+                },
+                uncertainty: {
+                  kind: "type_a",
+                  observations: [
+                    {
+                      kind: "table_column",
+                      tableKey: "measurements",
+                      columnKey: "repeat_1",
+                    },
+                    {
+                      kind: "table_column",
+                      tableKey: "measurements",
+                      columnKey: "repeat_2",
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              measurements: [
+                { indication: 10, repeat_1: 9.9, repeat_2: 10.1 },
+                { indication: 20, repeat_1: 19.9, repeat_2: 20.1 },
+              ],
+            },
+          },
+        ],
+      }),
+      { engine: fakeGumEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const execution = executeCompiledMethod(
+      result.method,
+      {
+        inputs: {
+          measurements: [
+            { indication: 10, repeat_1: 9.9, repeat_2: 10.1 },
+            { indication: 20, repeat_1: 19.9, repeat_2: 20.1 },
+          ],
+        },
+      },
+      { engine: fakeGumEngine },
+    );
+
+    expect(execution.ok).toBe(true);
+    expect(execution.outputs.row_gum).toEqual([10, 20]);
+    expect(execution.measurementModelResults[0]?.result).toHaveLength(2);
+  });
+
+  it("rejects table-column quantity sources outside table-row measurement models", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [
+              { key: "indication", label: "Indication", type: "number" },
+            ],
+          },
+        ],
+        formulas: [],
+        acceptanceCriteria: [],
+        measurementModels: [
+          {
+            key: "bad_model",
+            label: "Bad model",
+            measurand: "x",
+            expression: "x",
+            quantities: [
+              {
+                symbol: "x",
+                source: {
+                  kind: "table_column",
+                  tableKey: "measurements",
+                  columnKey: "indication",
+                },
+                uncertainty: {
+                  kind: "direct_standard_uncertainty",
+                  standardUncertainty: 0.1,
+                },
+              },
+            ],
+          },
+        ],
+      }),
+      { engine: fakeGumEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "MEASUREMENT_MODEL_COMPILE_FAILED",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects row formulas that directly bind columns from another table", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "table_a",
+            label: "Table A",
+            columns: [{ key: "value", label: "Value", type: "number" }],
+          },
+          {
+            kind: "table",
+            key: "table_b",
+            label: "Table B",
+            columns: [{ key: "value", label: "Value", type: "number" }],
+          },
+          {
+            kind: "scalar",
+            key: "b_value",
+            label: "B value",
+            required: false,
+            metadata: {
+              source: "variable_binding",
+              bindingSource: "table_column",
+              fieldKey: "table_b",
+              columnKey: "value",
+            },
+          },
+        ],
+        formulas: [
+          {
+            key: "row_value",
+            label: "Row value",
+            scope: { kind: "table_row", tableKey: "table_a" },
+            expression: "b_value + 1",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "ROW_FORMULA_CROSS_TABLE_BINDING",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects ambiguous row column and formula output name collisions", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [
+              { key: "reading", label: "Reading", type: "number" },
+              { key: "error", label: "Error column", type: "number" },
+            ],
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error formula",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "reading",
+            required: true,
+          },
+          {
+            key: "shifted_error",
+            label: "Shifted error",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "error + 1",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+      }),
+      { engine: fakeEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "ROW_FORMULA_VARIABLE_COLLISION",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not shift dependent row formula outputs after a row failure", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+        ],
+        formulas: [
+          {
+            key: "row_reading",
+            label: "Row reading",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "reading",
+            required: true,
+          },
+          {
+            key: "shifted",
+            label: "Shifted",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "row_reading + 1",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { measurements: [{}, { reading: 10 }] },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) =>
+          item.code === "ROW_FORMULA_PREVIEW_FAILED" &&
+          item.path === "formulas.shifted.0",
+      ),
+    ).toBe(true);
+    expect(
+      result.diagnostics.some(
+        (item) =>
+          item.code === "ROW_FORMULA_PREVIEW_FAILED" &&
+          item.path === "formulas.shifted.1",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects scalar measurement models sourced from row formulas", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+        ],
+        formulas: [
+          {
+            key: "row_reading",
+            label: "Row reading",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "reading",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        measurementModels: [
+          {
+            key: "scalar_model",
+            label: "Scalar model",
+            measurand: "x",
+            expression: "x",
+            quantities: [
+              {
+                symbol: "x",
+                source: { kind: "formula", key: "row_reading" },
+                uncertainty: {
+                  kind: "direct_standard_uncertainty",
+                  standardUncertainty: 0.1,
+                },
+              },
+            ],
+          },
+        ],
+      }),
+      { engine: fakeGumEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "MEASUREMENT_MODEL_COMPILE_FAILED",
+      ),
+    ).toBe(true);
+  });
+
+  it("requires aggregates for row measurement model acceptance criteria", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+        ],
+        formulas: [],
+        measurementModels: [
+          {
+            key: "row_gum",
+            label: "Row GUM",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            measurand: "x",
+            expression: "x",
+            quantities: [
+              {
+                symbol: "x",
+                source: {
+                  kind: "table_column",
+                  tableKey: "measurements",
+                  columnKey: "reading",
+                },
+                uncertainty: {
+                  kind: "direct_standard_uncertainty",
+                  standardUncertainty: 0.1,
+                },
+              },
+            ],
+          },
+        ],
+        acceptanceCriteria: [
+          {
+            key: "direct_row_model",
+            label: "Direct row model",
+            expression: "row_gum <= 10",
+            severity: "blocking",
+            message: "Bad",
+          },
+        ],
+      }),
+      { engine: fakeGumEngine },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) =>
+          item.code === "ROW_MEASUREMENT_MODEL_OUTPUT_REQUIRES_AGGREGATE",
+      ),
+    ).toBe(true);
+  });
+
+  it("preserves global repeated observations in row measurement models", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "repeated_observation",
+            key: "repeatability",
+            label: "Repeatability",
+            minCount: 2,
+            required: true,
+          },
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+        ],
+        formulas: [],
+        acceptanceCriteria: [],
+        measurementModels: [
+          {
+            key: "row_gum",
+            label: "Row GUM",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            measurand: "x",
+            expression: "x",
+            quantities: [
+              {
+                symbol: "x",
+                source: {
+                  kind: "table_column",
+                  tableKey: "measurements",
+                  columnKey: "reading",
+                },
+                uncertainty: {
+                  kind: "type_a",
+                  observationsInputKey: "repeatability",
+                },
+              },
+            ],
+          },
+        ],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              repeatability: [1, 2, 3],
+              measurements: [{ reading: 10 }, { reading: 20 }],
+            },
+            expected: {
+              measurementModels: { row_gum: { estimate: [10, 20] } },
+            },
+          },
+        ],
+      }),
+      { engine: fakeGumEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("validates expected values for row measurement models", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+        ],
+        formulas: [],
+        acceptanceCriteria: [],
+        measurementModels: [
+          {
+            key: "row_gum",
+            label: "Row GUM",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            measurand: "x",
+            expression: "x",
+            quantities: [
+              {
+                symbol: "x",
+                source: {
+                  kind: "table_column",
+                  tableKey: "measurements",
+                  columnKey: "reading",
+                },
+                uncertainty: {
+                  kind: "direct_standard_uncertainty",
+                  standardUncertainty: 0.1,
+                },
+              },
+            ],
+          },
+        ],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { measurements: [{ reading: 10 }, { reading: 20 }] },
+            expected: {
+              measurementModels: { row_gum: { estimate: [10, 21] } },
+            },
+          },
+        ],
+      }),
+      { engine: fakeGumEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "PREVIEW_EXPECTED_VALUE_MISMATCH",
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps row arrays available for aggregates inside row formulas", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "reading",
+            required: true,
+          },
+          {
+            key: "deviation",
+            label: "Deviation",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "error - mean(error)",
+            required: true,
+          },
+        ],
+        measurementModels: [],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { measurements: [{ reading: 10 }, { reading: 20 }] },
+            expected: { formulas: { deviation: [-5, 5] } },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("allows row formulas to aggregate cross-table bindings", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+          {
+            kind: "table",
+            key: "references",
+            label: "References",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+          {
+            kind: "scalar",
+            key: "reference_reading",
+            label: "Reference reading",
+            required: false,
+            metadata: {
+              source: "variable_binding",
+              bindingSource: "table_column",
+              fieldKey: "references",
+              columnKey: "reading",
+            },
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "reading - mean(reference_reading)",
+            required: true,
+          },
+        ],
+        measurementModels: [],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              measurements: [{ reading: 10 }, { reading: 20 }],
+              references: [{ reading: 100 }, { reading: 110 }],
+            },
+            expected: { formulas: { error: [-95, -85] } },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("allows row formulas to aggregate repeated observations", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "repeated_observation",
+            key: "reference_runs",
+            label: "Reference runs",
+            minCount: 2,
+            required: true,
+          },
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "reading - mean(reference_runs)",
+            required: true,
+          },
+        ],
+        measurementModels: [],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              reference_runs: [1, 3],
+              measurements: [{ reading: 10 }, { reading: 20 }],
+            },
+            expected: { formulas: { error: [8, 18] } },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("allows inline-list aggregates over row outputs in criteria", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+        ],
+        formulas: [
+          {
+            key: "error",
+            label: "Error",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "reading",
+            required: true,
+          },
+          {
+            key: "shifted_error",
+            label: "Shifted error",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "reading + 1",
+            required: true,
+          },
+        ],
+        measurementModels: [],
+        acceptanceCriteria: [
+          {
+            key: "mean_error",
+            label: "Mean error",
+            expression: "mean([error, shifted_error]) <= 10",
+            severity: "blocking",
+            message: "Mean error too high",
+          },
+        ],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { measurements: [{ reading: 1 }, { reading: 2 }] },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("uses explicit row table-column sources over global name collisions", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "scalar",
+            key: "x",
+            label: "Global x",
+            required: true,
+          },
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "x", label: "X", type: "number" }],
+          },
+        ],
+        formulas: [],
+        acceptanceCriteria: [],
+        measurementModels: [
+          {
+            key: "row_gum",
+            label: "Row GUM",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            measurand: "q",
+            expression: "q",
+            quantities: [
+              {
+                symbol: "q",
+                source: {
+                  kind: "table_column",
+                  tableKey: "measurements",
+                  columnKey: "x",
+                },
+                uncertainty: {
+                  kind: "direct_standard_uncertainty",
+                  standardUncertainty: 0.1,
+                },
+              },
+            ],
+          },
+        ],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              x: 999,
+              measurements: [{ x: 10 }, { x: 20 }],
+            },
+            expected: {
+              measurementModels: { row_gum: { estimate: [10, 20] } },
+            },
+          },
+        ],
+      }),
+      { engine: fakeGumEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("does not reject unrelated row arrays while evaluating row models", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "table_a",
+            label: "Table A",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+          {
+            kind: "table",
+            key: "table_b",
+            label: "Table B",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+        ],
+        formulas: [
+          {
+            key: "row_a",
+            label: "Row A",
+            scope: { kind: "table_row", tableKey: "table_a" },
+            expression: "reading",
+            required: true,
+          },
+        ],
+        acceptanceCriteria: [],
+        measurementModels: [
+          {
+            key: "row_b_gum",
+            label: "Row B GUM",
+            scope: { kind: "table_row", tableKey: "table_b" },
+            measurand: "x",
+            expression: "x",
+            quantities: [
+              {
+                symbol: "x",
+                source: {
+                  kind: "table_column",
+                  tableKey: "table_b",
+                  columnKey: "reading",
+                },
+                uncertainty: {
+                  kind: "direct_standard_uncertainty",
+                  standardUncertainty: 0.1,
+                },
+              },
+            ],
+          },
+        ],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              table_a: [{ reading: 1 }, { reading: 2 }],
+              table_b: [{ reading: 10 }, { reading: 20 }],
+            },
+            expected: {
+              measurementModels: { row_b_gum: { estimate: [10, 20] } },
+            },
+          },
+        ],
+      }),
+      { engine: fakeGumEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("validates expected uncertainty arrays for row measurement models", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [{ key: "reading", label: "Reading", type: "number" }],
+          },
+        ],
+        formulas: [],
+        acceptanceCriteria: [],
+        measurementModels: [
+          {
+            key: "row_gum",
+            label: "Row GUM",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            measurand: "x",
+            expression: "x",
+            quantities: [
+              {
+                symbol: "x",
+                source: {
+                  kind: "table_column",
+                  tableKey: "measurements",
+                  columnKey: "reading",
+                },
+                uncertainty: {
+                  kind: "direct_standard_uncertainty",
+                  standardUncertainty: 0.1,
+                },
+              },
+            ],
+          },
+        ],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: { measurements: [{ reading: 10 }, { reading: 20 }] },
+            expected: {
+              measurementModels: {
+                row_gum: {
+                  estimate: [10, 20],
+                  standardUncertainty: [0.2, 0.2],
+                },
+              },
+            },
+          },
+        ],
+      }),
+      { engine: fakeGumEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.diagnostics.some(
+        (item) => item.code === "PREVIEW_EXPECTED_VALUE_MISMATCH",
+      ),
+    ).toBe(true);
+  });
+
+  it("avoids aggregate placeholder collisions with user variables", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "scalar",
+            key: "cf_internal_agg_0",
+            label: "Compile placeholder-shaped input",
+            required: true,
+          },
+          {
+            kind: "scalar",
+            key: "cf_internal_preview_0",
+            label: "Preview placeholder-shaped input",
+            required: true,
+          },
+          {
+            kind: "repeated_observation",
+            key: "observations",
+            label: "Observations",
+            minCount: 2,
+            required: true,
+          },
+        ],
+        formulas: [
+          {
+            key: "compile_safe",
+            label: "Compile safe",
+            expression: "cf_internal_agg_0 + mean(observations)",
+            required: true,
+          },
+          {
+            key: "preview_safe",
+            label: "Preview safe",
+            expression: "cf_internal_preview_0 + mean(observations)",
+            required: true,
+          },
+        ],
+        measurementModels: [],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              cf_internal_agg_0: 1,
+              cf_internal_preview_0: 2,
+              observations: [3, 3],
+            },
+            expected: {
+              formulas: {
+                compile_safe: 4,
+                preview_safe: 5,
+              },
+            },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
   });
 });

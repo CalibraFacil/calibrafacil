@@ -1901,9 +1901,26 @@ export type MethodFormulaReporting = {
 export type MethodFormula = {
   outputKey: string; // Variable name for result, e.g., "error"
   expression: string; // Math expression, e.g., "reading_1 - nominal"
+  scope?: { kind: "scalar" } | { kind: "table_row"; tableKey: string };
   label?: string; // Display label, e.g., "Measurement Error"
   unit?: string;
   reporting?: MethodFormulaReporting;
+};
+
+export type MethodMeasurementModel = {
+  key: string;
+  label: string;
+  scope?: { kind: "scalar" } | { kind: "table_row"; tableKey: string };
+  measurand: string;
+  expression: string;
+  quantities: unknown[];
+  correlations?: unknown[];
+  covariances?: unknown[];
+  coverageProbability?: number;
+  coverageFactor?: string | number;
+  outputUnit?: string;
+  options?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 };
 
 /**
@@ -2024,6 +2041,10 @@ export const calibrationMethod = pgTable(
       .default([])
       .notNull(),
     formulas: jsonb("formulas").$type<MethodFormula[]>().default([]).notNull(),
+    measurementModels: jsonb("measurement_models")
+      .$type<MethodMeasurementModel[]>()
+      .default([])
+      .notNull(),
     validations: jsonb("validations")
       .$type<MethodValidation[]>()
       .default([])
@@ -2505,6 +2526,7 @@ export type MethodSnapshot = {
   dataFields: MethodInputField[];
   variableBindings: MethodVariableBinding[];
   formulas: MethodFormula[];
+  measurementModels: MethodMeasurementModel[];
   validations: MethodValidation[];
   uncertaintyParams: MethodTypeBComponent[];
   certificateContent?: MethodCertificateContent | null;

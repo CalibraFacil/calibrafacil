@@ -85,6 +85,7 @@ export function createLocalJobDraft(
     dataFields: getArray(methodPayload.dataFields),
     variableBindings: getArray(methodPayload.variableBindings),
     formulas: getArray(methodPayload.formulas),
+    measurementModels: getArray(methodPayload.measurementModels),
     validations: getArray(methodPayload.validations),
     uncertaintyParams: getArray(methodPayload.uncertaintyParams),
     certificateContent: methodPayload.certificateContent ?? null,

@@ -20,6 +20,7 @@ import type {
   MethodInput,
   MethodMeasurementModel,
   MethodQuantity,
+  QuantitySource,
   NormalizedAcceptanceCriterion,
   NumericInput,
 } from "./types";
@@ -32,6 +33,9 @@ import { runMethodPreview } from "./preview";
 type FormulaCompileEntry = {
   formula: MethodFormula;
   compiled: CompiledFormulaLike;
+  normalizedFormula: string;
+  formulaFingerprint: string;
+  variables: string[];
   dependencies: string[];
 };
 
@@ -207,7 +211,11 @@ export function compileMethodDraft(
   }
 
   if (hasErrors(diagnostics)) {
-    return { ok: false, diagnostics, draft };
+    return {
+      ok: false,
+      diagnostics: [...diagnostics, ...previewDiagnostics],
+      draft,
+    };
   }
 
   return {
@@ -271,23 +279,42 @@ function addUnique(
 }
 
 function compileFormulas(context: CompileContext): FormulaCompileEntry[] {
-  const allowedVariables = [
-    ...context.inputKeys,
-    ...context.formulaKeys,
-  ].sort();
+  const formulaByKey = new Map(
+    context.draft.formulas.map((formula) => [formula.key, formula]),
+  );
   const entries: FormulaCompileEntry[] = [];
 
   for (const formula of context.draft.formulas) {
+    const allowedVariables = formulaAllowedVariables(formula, context);
+    const aggregateRewrite = rewriteAggregatesForCompile(
+      formula.expression,
+      allowedVariables,
+    );
+    const allowedVariableSet = new Set([
+      ...allowedVariables,
+      ...aggregateRewrite.syntheticVariables,
+    ]);
+    const formulaScope = getFormulaScope(formula);
     try {
-      const compiled = context.engine.compileFormula(formula.expression, {
-        allowedVariables,
-      });
-      const unknownVariables = compiled.variables.filter(
-        (variable) =>
-          !context.inputKeys.has(variable) &&
-          !context.formulaKeys.has(variable),
+      const compiled = context.engine.compileFormula(
+        aggregateRewrite.expression,
+        {
+          allowedVariables: [...allowedVariableSet].sort(),
+        },
       );
-      const nonNumericInputVariables = compiled.variables.filter(
+      const variables = [
+        ...new Set(
+          compiled.variables
+            .filter(
+              (variable) => !aggregateRewrite.syntheticVariables.has(variable),
+            )
+            .concat([...aggregateRewrite.consumedVariables]),
+        ),
+      ].sort();
+      const unknownVariables = variables.filter(
+        (variable) => !allowedVariableSet.has(variable),
+      );
+      const nonNumericInputVariables = variables.filter(
         (variable) =>
           context.inputKeys.has(variable) &&
           !context.numericInputKeys.has(variable) &&
@@ -297,16 +324,83 @@ function compileFormulas(context: CompileContext): FormulaCompileEntry[] {
             variable,
           ),
       );
-      const directTableColumnVariables = compiled.variables.filter(
+      const directTableColumnVariables = variables.filter(
         (variable) =>
+          formulaScope.kind === "scalar" &&
           isTableColumnBinding(context.inputByKey.get(variable)) &&
           !isVariableUsedOnlyInArrayAggregator(formula.expression, variable),
       );
+      const directRowFormulaVariables = variables.filter(
+        (variable) =>
+          formulaScope.kind === "scalar" &&
+          formulaByKey.get(variable)?.scope?.kind === "table_row" &&
+          !isVariableUsedOnlyInArrayAggregator(formula.expression, variable),
+      );
+      const rowColumnVariables =
+        formulaScope.kind === "table_row"
+          ? rowFormulaNumericColumnKeys(formula, context)
+          : new Set<string>();
+      const ambiguousRowVariables =
+        formulaScope.kind === "table_row"
+          ? variables.filter(
+              (variable) =>
+                rowColumnVariables.has(variable) &&
+                context.formulaKeys.has(variable),
+            )
+          : [];
       for (const variable of unknownVariables) {
         context.diagnostics.push(
           errorDiagnostic(
             "UNKNOWN_FORMULA_VARIABLE",
             `Formula ${formula.key} references unknown variable ${variable}`,
+            `formulas.${formula.key}`,
+          ),
+        );
+      }
+      if (formulaScope.kind === "table_row") {
+        const currentTableKey = formulaScope.tableKey;
+        for (const variable of variables) {
+          const dependency = formulaByKey.get(variable);
+          const requiresRowAlignedValue = !isVariableUsedOnlyInArrayAggregator(
+            formula.expression,
+            variable,
+          );
+          const tableBindingTableKey = tableColumnBindingTableKey(
+            context.inputByKey.get(variable),
+          );
+          if (
+            requiresRowAlignedValue &&
+            tableBindingTableKey &&
+            tableBindingTableKey !== currentTableKey
+          ) {
+            context.diagnostics.push(
+              errorDiagnostic(
+                "ROW_FORMULA_CROSS_TABLE_BINDING",
+                `Row formula ${formula.key} cannot reference table-column binding ${variable} from table ${tableBindingTableKey}`,
+                `formulas.${formula.key}`,
+              ),
+            );
+          }
+          if (
+            requiresRowAlignedValue &&
+            dependency?.scope?.kind === "table_row" &&
+            dependency.scope.tableKey !== currentTableKey
+          ) {
+            context.diagnostics.push(
+              errorDiagnostic(
+                "ROW_FORMULA_CROSS_TABLE_DEPENDENCY",
+                `Row formula ${formula.key} cannot reference row formula ${variable} from table ${dependency.scope.tableKey}`,
+                `formulas.${formula.key}`,
+              ),
+            );
+          }
+        }
+      }
+      for (const variable of ambiguousRowVariables) {
+        context.diagnostics.push(
+          errorDiagnostic(
+            "ROW_FORMULA_VARIABLE_COLLISION",
+            `Row formula ${formula.key} references ${variable}, which is both a row column and a formula output; use distinct keys`,
             `formulas.${formula.key}`,
           ),
         );
@@ -329,11 +423,34 @@ function compileFormulas(context: CompileContext): FormulaCompileEntry[] {
           ),
         );
       }
+      for (const variable of directRowFormulaVariables) {
+        context.diagnostics.push(
+          errorDiagnostic(
+            "ROW_FORMULA_OUTPUT_REQUIRES_AGGREGATE",
+            `Formula ${formula.key} references row formula output ${variable} directly; use an aggregate such as mean(${variable}), min(${variable}), or max(${variable})`,
+            `formulas.${formula.key}`,
+          ),
+        );
+      }
       entries.push({
         formula,
         compiled,
-        dependencies: compiled.variables.filter((variable) =>
-          context.formulaKeys.has(variable),
+        normalizedFormula: compiled.normalizedFormula,
+        formulaFingerprint: fingerprintJson(
+          {
+            key: formula.key,
+            expression: formula.expression,
+            rewrittenExpression: aggregateRewrite.expression,
+            normalizedFormula: compiled.normalizedFormula,
+            scope: formula.scope ?? { kind: "scalar" },
+          },
+          "formula",
+        ),
+        variables,
+        dependencies: variables.filter(
+          (variable) =>
+            context.formulaKeys.has(variable) &&
+            !rowColumnVariables.has(variable),
         ),
       });
     } catch (error) {
@@ -349,6 +466,97 @@ function compileFormulas(context: CompileContext): FormulaCompileEntry[] {
   }
 
   return entries;
+}
+
+function rewriteAggregatesForCompile(
+  expression: string,
+  reservedVariables: readonly string[] = [],
+): {
+  expression: string;
+  consumedVariables: Set<string>;
+  syntheticVariables: Set<string>;
+} {
+  const consumedVariables = new Set<string>();
+  const syntheticVariables = new Set<string>();
+  const reserved = new Set(reservedVariables);
+  let index = 0;
+  const rewritten = expression.replace(
+    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+    (match, _functionName: string, argument: string) => {
+      const tokens = aggregateVariableTokens(argument);
+      if (tokens.length === 0) return match;
+      for (const token of tokens) consumedVariables.add(token);
+      let key = `cf_internal_agg_${index++}`;
+      while (reserved.has(key) || syntheticVariables.has(key)) {
+        key = `cf_internal_agg_${index++}`;
+      }
+      syntheticVariables.add(key);
+      return key;
+    },
+  );
+
+  return {
+    expression: rewritten,
+    consumedVariables,
+    syntheticVariables,
+  };
+}
+
+function aggregateVariableTokens(argument: string): string[] {
+  return [
+    ...new Set(argument.match(/[A-Za-z][A-Za-z0-9_]*/g)?.filter(Boolean) ?? []),
+  ];
+}
+
+function formulaAllowedVariables(
+  formula: MethodFormula,
+  context: CompileContext,
+): string[] {
+  const scope = getFormulaScope(formula);
+  if (scope.kind === "scalar") {
+    return [...context.inputKeys, ...context.formulaKeys].sort();
+  }
+
+  const tableInput = context.draft.inputs.find(
+    (input) => input.kind === "table" && input.key === scope.tableKey,
+  );
+  if (!tableInput || tableInput.kind !== "table") {
+    context.diagnostics.push(
+      errorDiagnostic(
+        "ROW_FORMULA_TABLE_UNKNOWN",
+        `Row formula ${formula.key} references unknown table ${scope.tableKey}`,
+        `formulas.${formula.key}.scope.tableKey`,
+      ),
+    );
+    return [...context.numericInputKeys, ...context.formulaKeys].sort();
+  }
+
+  const numericColumnKeys = tableInput.columns
+    .filter((column) => column.type === "number")
+    .map((column) => column.key);
+
+  return [
+    ...context.inputKeys,
+    ...numericColumnKeys,
+    ...context.formulaKeys,
+  ].sort();
+}
+
+function rowFormulaNumericColumnKeys(
+  formula: MethodFormula,
+  context: CompileContext,
+): Set<string> {
+  const scope = getFormulaScope(formula);
+  if (scope.kind !== "table_row") return new Set();
+  const tableInput = context.draft.inputs.find(
+    (input) => input.kind === "table" && input.key === scope.tableKey,
+  );
+  if (!tableInput || tableInput.kind !== "table") return new Set();
+  return new Set(
+    tableInput.columns
+      .filter((column) => column.type === "number")
+      .map((column) => column.key),
+  );
 }
 
 function orderFormulaEntries(
@@ -394,9 +602,10 @@ function toCompiledFormulaDefinition(
     key: entry.formula.key,
     label: entry.formula.label,
     expression: entry.formula.expression,
-    normalizedFormula: entry.compiled.normalizedFormula,
-    formulaFingerprint: entry.compiled.formulaFingerprint,
-    variables: [...entry.compiled.variables].sort(),
+    ...(entry.formula.scope ? { scope: entry.formula.scope } : {}),
+    normalizedFormula: entry.normalizedFormula,
+    formulaFingerprint: entry.formulaFingerprint,
+    variables: entry.variables,
     ...(entry.formula.outputUnit
       ? { outputUnit: entry.formula.outputUnit }
       : {}),
@@ -433,6 +642,7 @@ function compileMeasurementModels(
       }
       compiledModels.push({
         key: model.key,
+        ...(model.scope ? { scope: model.scope } : {}),
         expression: model.expression,
         normalizedFormula: compiled.normalizedFormula,
         modelFingerprint: fingerprintJson(
@@ -445,6 +655,7 @@ function compileMeasurementModels(
             covariances: model.covariances ?? [],
             coverageProbability: model.coverageProbability,
             coverageFactor: model.coverageFactor,
+            scope: model.scope ?? { kind: "scalar" },
           },
           "measurement-model",
         ),
@@ -479,43 +690,136 @@ function validateMeasurementModelSources(
   context: CompileContext,
 ): void {
   const quantitySymbols = new Set<string>();
+  const modelScope = model.scope ?? { kind: "scalar" as const };
+  if (modelScope.kind === "table_row") {
+    const tableInput = context.draft.inputs.find(
+      (input) => input.kind === "table" && input.key === modelScope.tableKey,
+    );
+    if (!tableInput || tableInput.kind !== "table") {
+      throw new Error(
+        `Measurement model ${model.key} references unknown table ${modelScope.tableKey}`,
+      );
+    }
+  }
   for (const quantity of model.quantities) {
     if (quantitySymbols.has(quantity.symbol)) {
       throw new Error(`Duplicate quantity symbol ${quantity.symbol}`);
     }
     quantitySymbols.add(quantity.symbol);
-    if (
-      quantity.source.kind === "input" &&
-      !context.inputKeys.has(quantity.source.key)
-    ) {
-      throw new Error(
-        `Quantity ${quantity.symbol} references unknown input ${quantity.source.key}`,
-      );
-    }
-    if (
-      quantity.source.kind === "formula" &&
-      !context.formulaKeys.has(quantity.source.key)
-    ) {
-      throw new Error(
-        `Quantity ${quantity.symbol} references unknown formula ${quantity.source.key}`,
-      );
-    }
+    validateQuantitySource(quantity.source, quantity.symbol, model, context);
     if (quantity.uncertainty.kind === "type_a") {
       const observationsInputKey = quantity.uncertainty.observationsInputKey;
-      const observationsInput = context.draft.inputs.find(
-        (input) => input.key === observationsInputKey,
-      );
-      if (!observationsInput) {
-        throw new Error(
-          `Type A quantity ${quantity.symbol} references unknown observations input ${observationsInputKey}`,
+      if (observationsInputKey) {
+        const observationsInput = context.draft.inputs.find(
+          (input) => input.key === observationsInputKey,
         );
+        if (!observationsInput) {
+          throw new Error(
+            `Type A quantity ${quantity.symbol} references unknown observations input ${observationsInputKey}`,
+          );
+        }
+        if (observationsInput.kind !== "repeated_observation") {
+          throw new Error(
+            `Type A quantity ${quantity.symbol} observations input ${observationsInputKey} must be repeated_observation`,
+          );
+        }
       }
-      if (observationsInput.kind !== "repeated_observation") {
+      if (quantity.uncertainty.observations) {
+        for (const source of quantity.uncertainty.observations) {
+          validateQuantitySource(source, quantity.symbol, model, context);
+        }
+      }
+      if (!observationsInputKey && !quantity.uncertainty.observations?.length) {
         throw new Error(
-          `Type A quantity ${quantity.symbol} observations input ${observationsInputKey} must be repeated_observation`,
+          `Type A quantity ${quantity.symbol} requires observationsInputKey or observations`,
         );
       }
     }
+  }
+}
+
+function validateQuantitySource(
+  source: QuantitySource,
+  symbol: string,
+  model: MethodMeasurementModel,
+  context: CompileContext,
+): void {
+  if (source.kind === "constant") return;
+
+  if (source.kind === "input") {
+    if (!context.inputKeys.has(source.key)) {
+      throw new Error(
+        `Quantity ${symbol} references unknown input ${source.key}`,
+      );
+    }
+    const input = context.inputByKey.get(source.key);
+    if (input?.kind === "table") {
+      throw new Error(
+        `Quantity ${symbol} input source ${source.key} must be scalar`,
+      );
+    }
+    return;
+  }
+
+  if (source.kind === "formula") {
+    if (!context.formulaKeys.has(source.key)) {
+      throw new Error(
+        `Quantity ${symbol} references unknown formula ${source.key}`,
+      );
+    }
+    const dependency = context.draft.formulas.find(
+      (formula) => formula.key === source.key,
+    );
+    if (
+      dependency?.scope?.kind === "table_row" &&
+      model.scope?.kind !== "table_row"
+    ) {
+      throw new Error(
+        `Quantity ${symbol} references row formula ${source.key}; scalar measurement models require an aggregate scalar formula`,
+      );
+    }
+    if (
+      model.scope?.kind === "table_row" &&
+      dependency?.scope?.kind === "table_row" &&
+      dependency.scope.tableKey !== model.scope.tableKey
+    ) {
+      throw new Error(
+        `Quantity ${symbol} references row formula ${source.key} from table ${dependency.scope.tableKey}`,
+      );
+    }
+    return;
+  }
+
+  const tableInput = context.draft.inputs.find(
+    (input) => input.kind === "table" && input.key === source.tableKey,
+  );
+  if (!tableInput || tableInput.kind !== "table") {
+    throw new Error(
+      `Quantity ${symbol} references unknown table ${source.tableKey}`,
+    );
+  }
+  if (model.scope?.kind !== "table_row") {
+    throw new Error(
+      `Quantity ${symbol} table column source requires a table-row measurement model`,
+    );
+  }
+  if (model.scope.tableKey !== source.tableKey) {
+    throw new Error(
+      `Quantity ${symbol} references table ${source.tableKey} outside model scope ${model.scope.tableKey}`,
+    );
+  }
+  const column = tableInput.columns.find(
+    (item) => item.key === source.columnKey,
+  );
+  if (!column) {
+    throw new Error(
+      `Quantity ${symbol} references unknown column ${source.columnKey}`,
+    );
+  }
+  if (column.type !== "number") {
+    throw new Error(
+      `Quantity ${symbol} column source ${source.columnKey} must be numeric`,
+    );
   }
 }
 
@@ -527,6 +831,12 @@ function compileAcceptanceCriteria(
     ...context.formulaKeys,
     ...context.modelKeys,
   ].sort();
+  const formulaByKey = new Map(
+    context.draft.formulas.map((formula) => [formula.key, formula]),
+  );
+  const modelByKey = new Map(
+    context.draft.measurementModels.map((model) => [model.key, model]),
+  );
   const compiledCriteria: NormalizedAcceptanceCriterion[] = [];
 
   for (const criterion of context.draft.acceptanceCriteria) {
@@ -552,6 +862,16 @@ function compileAcceptanceCriteria(
           isTableColumnBinding(context.inputByKey.get(variable)) &&
           !isVariableUsedOnlyInArrayAggregator(criterion.expression, variable),
       );
+      const directRowFormulaVariables = compiled.variables.filter(
+        (variable) =>
+          formulaByKey.get(variable)?.scope?.kind === "table_row" &&
+          !isVariableUsedOnlyInArrayAggregator(criterion.expression, variable),
+      );
+      const directRowModelVariables = compiled.variables.filter(
+        (variable) =>
+          modelByKey.get(variable)?.scope?.kind === "table_row" &&
+          !isVariableUsedOnlyInArrayAggregator(criterion.expression, variable),
+      );
       for (const variable of nonNumericInputVariables) {
         context.diagnostics.push(
           errorDiagnostic(
@@ -566,6 +886,24 @@ function compileAcceptanceCriteria(
           errorDiagnostic(
             "TABLE_COLUMN_BINDING_REQUIRES_AGGREGATE",
             `Acceptance criterion ${criterion.key} references table-column binding ${variable} directly; use an aggregate such as mean(${variable}) or std(${variable})`,
+            `acceptanceCriteria.${criterion.key}`,
+          ),
+        );
+      }
+      for (const variable of directRowFormulaVariables) {
+        context.diagnostics.push(
+          errorDiagnostic(
+            "ROW_FORMULA_OUTPUT_REQUIRES_AGGREGATE",
+            `Acceptance criterion ${criterion.key} references row formula output ${variable} directly; use an aggregate such as mean(${variable}), min(${variable}), or max(${variable})`,
+            `acceptanceCriteria.${criterion.key}`,
+          ),
+        );
+      }
+      for (const variable of directRowModelVariables) {
+        context.diagnostics.push(
+          errorDiagnostic(
+            "ROW_MEASUREMENT_MODEL_OUTPUT_REQUIRES_AGGREGATE",
+            `Acceptance criterion ${criterion.key} references row measurement model output ${variable} directly; use an aggregate such as mean(${variable}), min(${variable}), or max(${variable})`,
             `acceptanceCriteria.${criterion.key}`,
           ),
         );
@@ -599,6 +937,14 @@ function isTableColumnBinding(input: MethodInput | undefined): boolean {
   );
 }
 
+function tableColumnBindingTableKey(
+  input: MethodInput | undefined,
+): string | null {
+  if (!isTableColumnBinding(input)) return null;
+  const fieldKey = input?.metadata?.fieldKey;
+  return typeof fieldKey === "string" ? fieldKey : null;
+}
+
 function isAggregateOnlyInput(
   input: MethodInput | undefined,
   expression: string,
@@ -619,9 +965,14 @@ function isVariableUsedOnlyInArrayAggregator(
   if (allOccurrences.length === 0) return true;
 
   const aggregatePattern =
-    /\b(?:mean|std)\s*\(\s*([A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*\d+)?\s*\)/g;
+    /\b(?:mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*\d+)?\s*\)/g;
   const coveredRanges = [...expression.matchAll(aggregatePattern)]
-    .filter((match) => match[1] === variable && match.index !== undefined)
+    .filter(
+      (match) =>
+        match[1] !== undefined &&
+        aggregateVariableTokens(match[1]).includes(variable) &&
+        match.index !== undefined,
+    )
     .map((match) => ({
       start: match.index!,
       end: match.index! + match[0].length,
@@ -635,6 +986,12 @@ function isVariableUsedOnlyInArrayAggregator(
   });
 }
 
+function getFormulaScope(
+  formula: MethodFormula,
+): NonNullable<MethodFormula["scope"]> {
+  return formula.scope ?? { kind: "scalar" };
+}
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -642,10 +999,15 @@ function escapeRegex(value: string): string {
 export function buildMeasurementModelInput(
   model: MethodMeasurementModel,
   context: Record<string, NumericInput | readonly NumericInput[]>,
+  options: { engine?: CalculationEngineLike } = {},
 ): MeasurementModelInputLike {
   const quantities: Record<string, InputQuantityLike> = {};
   for (const quantity of model.quantities) {
-    quantities[quantity.symbol] = buildInputQuantity(quantity, context);
+    quantities[quantity.symbol] = buildInputQuantity(
+      quantity,
+      context,
+      options,
+    );
   }
   return {
     formula: model.expression,
@@ -661,7 +1023,11 @@ export function buildMeasurementModelInput(
       item.covariance,
     ]),
     coverageProbability: model.coverageProbability,
-    coverageFactor: model.coverageFactor,
+    coverageFactor: resolveOptionalNumericExpression(
+      model.coverageFactor,
+      context,
+      options.engine,
+    ),
     allowNonSmoothWithExplicitSensitivities:
       model.options?.allowNonSmoothWithExplicitSensitivities,
   };
@@ -670,85 +1036,231 @@ export function buildMeasurementModelInput(
 function buildInputQuantity(
   quantity: MethodQuantity,
   context: Record<string, NumericInput | readonly NumericInput[]>,
+  options: { engine?: CalculationEngineLike },
 ): InputQuantityLike {
   const base: InputQuantityLike = {
     unit: quantity.unit,
-    degreesOfFreedom: quantity.degreesOfFreedom,
-    sensitivityCoefficient: quantity.sensitivity,
+    degreesOfFreedom: resolveOptionalNumericExpression(
+      quantity.degreesOfFreedom,
+      context,
+      options.engine,
+    ),
+    sensitivityCoefficient: resolveOptionalNumericExpression(
+      quantity.sensitivity,
+      context,
+      options.engine,
+    ),
     metadata: quantity.metadata,
   };
 
-  const estimate = resolveQuantityEstimate(quantity, context);
+  const estimate = resolveQuantityEstimate(quantity, context, options.engine);
 
   if (quantity.uncertainty.kind === "type_a") {
-    const observations = context[quantity.uncertainty.observationsInputKey];
-    if (!Array.isArray(observations)) {
-      throw new Error(
-        `Type A quantity ${quantity.symbol} requires repeated observations`,
-      );
-    }
+    const observations = resolveTypeAObservations(
+      quantity,
+      context,
+      options.engine,
+    );
     return {
       ...base,
+      estimate,
       repeatedObservations: observations,
-      degreesOfFreedom:
+      degreesOfFreedom: resolveOptionalNumericExpression(
         quantity.degreesOfFreedom ??
-        quantity.uncertainty.minDegreesOfFreedom ??
-        undefined,
+          quantity.uncertainty.minDegreesOfFreedom ??
+          undefined,
+        context,
+        options.engine,
+      ),
     };
   }
 
   if (quantity.uncertainty.kind === "type_b") {
     const source = quantity.uncertainty;
+    const distribution =
+      source.distribution === "u_shaped" ? "u-shaped" : source.distribution;
+    const standardUncertainty = resolveOptionalNumericExpression(
+      source.standardUncertainty,
+      context,
+      options.engine,
+    );
+    const halfWidth = resolveOptionalNumericExpression(
+      source.halfWidth,
+      context,
+      options.engine,
+    );
+    const lowerLimit = resolveOptionalNumericExpression(
+      source.limits?.lower,
+      context,
+      options.engine,
+    );
+    const upperLimit = resolveOptionalNumericExpression(
+      source.limits?.upper,
+      context,
+      options.engine,
+    );
+    const expandedUncertainty = resolveOptionalNumericExpression(
+      source.expandedUncertainty,
+      context,
+      options.engine,
+    );
+    const coverageFactor = resolveOptionalNumericExpression(
+      source.coverageFactor,
+      context,
+      options.engine,
+    );
     return {
       ...base,
       estimate,
-      distribution:
-        source.distribution === "u_shaped" ? "u-shaped" : source.distribution,
-      standardUncertainty: source.standardUncertainty,
-      halfWidth: source.halfWidth,
-      lowerLimit: source.limits?.lower,
-      upperLimit: source.limits?.upper,
-      expandedUncertainty: source.expandedUncertainty,
-      coverageFactor: source.coverageFactor,
+      distribution,
+      standardUncertainty,
+      halfWidth,
+      lowerLimit,
+      upperLimit,
+      expandedUncertainty,
+      coverageFactor,
       typeB: {
-        distribution:
-          source.distribution === "u_shaped" ? "u-shaped" : source.distribution,
-        standardUncertainty: source.standardUncertainty,
-        halfWidth: source.halfWidth,
-        lowerLimit: source.limits?.lower,
-        upperLimit: source.limits?.upper,
-        expandedUncertainty: source.expandedUncertainty,
-        coverageFactor: source.coverageFactor,
-        divisor: source.divisor,
+        distribution,
+        standardUncertainty,
+        halfWidth,
+        lowerLimit,
+        upperLimit,
+        expandedUncertainty,
+        coverageFactor,
+        divisor: resolveOptionalNumericExpression(
+          source.divisor,
+          context,
+          options.engine,
+        ),
       },
-      degreesOfFreedom:
+      degreesOfFreedom: resolveOptionalNumericExpression(
         quantity.degreesOfFreedom ?? source.degreesOfFreedom ?? undefined,
+        context,
+        options.engine,
+      ),
     };
   }
 
   return {
     ...base,
     estimate,
-    standardUncertainty: quantity.uncertainty.standardUncertainty,
-    degreesOfFreedom:
+    standardUncertainty: resolveNumericExpression(
+      quantity.uncertainty.standardUncertainty,
+      context,
+      options.engine,
+    ),
+    degreesOfFreedom: resolveOptionalNumericExpression(
       quantity.degreesOfFreedom ?? quantity.uncertainty.degreesOfFreedom,
+      context,
+      options.engine,
+    ),
   };
 }
 
 function resolveQuantityEstimate(
   quantity: MethodQuantity,
   context: Record<string, NumericInput | readonly NumericInput[]>,
+  engine?: CalculationEngineLike,
 ): NumericInput {
-  if (quantity.source.kind === "constant") return quantity.source.value;
-  const value = context[quantity.source.key];
+  const value = resolveQuantitySource(quantity.source, context, engine);
+  if (value === "Infinity") {
+    throw new Error(`Quantity ${quantity.symbol} estimate must be finite`);
+  }
+  return value;
+}
+
+function resolveTypeAObservations(
+  quantity: MethodQuantity,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+  engine?: CalculationEngineLike,
+): NumericInput[] {
+  if (quantity.uncertainty.kind !== "type_a") return [];
+  if (quantity.uncertainty.observations?.length) {
+    return quantity.uncertainty.observations.map((source) => {
+      const value = resolveQuantitySource(source, context, engine);
+      if (value === "Infinity") {
+        throw new Error(
+          `Type A quantity ${quantity.symbol} observations must be finite`,
+        );
+      }
+      return value;
+    });
+  }
+
+  const observationsInputKey = quantity.uncertainty.observationsInputKey;
+  const observations = observationsInputKey
+    ? context[observationsInputKey]
+    : undefined;
+  if (!Array.isArray(observations)) {
+    throw new Error(
+      `Type A quantity ${quantity.symbol} requires repeated observations`,
+    );
+  }
+  return observations;
+}
+
+function resolveQuantitySource(
+  source: QuantitySource,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+  engine?: CalculationEngineLike,
+): NumericInput | "Infinity" {
+  if (source.kind === "constant") {
+    return resolveNumericExpression(source.value, context, engine);
+  }
+  const key = source.kind === "table_column" ? source.columnKey : source.key;
+  const value = context[key];
   if (Array.isArray(value)) {
-    throw new Error(`Quantity ${quantity.symbol} source must be scalar`);
+    throw new Error(`Quantity source ${key} must be scalar`);
   }
   if (value === undefined) {
-    throw new Error(`Quantity ${quantity.symbol} source is missing`);
+    throw new Error(`Quantity source ${key} is missing`);
   }
   if (typeof value === "string" || typeof value === "number") return value;
-  throw new Error(`Quantity ${quantity.symbol} source must be scalar`);
+  throw new Error(`Quantity source ${key} must be scalar`);
+}
+
+function resolveOptionalNumericExpression(
+  value: string | number | undefined,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+  engine?: CalculationEngineLike,
+): NumericInput | "Infinity" | undefined {
+  return value === undefined
+    ? undefined
+    : resolveNumericExpression(value, context, engine);
+}
+
+function resolveNumericExpression(
+  value: string | number,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+  engine?: CalculationEngineLike,
+): NumericInput | "Infinity" {
+  if (typeof value === "number") return value;
+  if (value === "Infinity") return value;
+  if (Number.isFinite(Number(value))) return value;
+
+  const directValue = context[value];
+  if (typeof directValue === "string" || typeof directValue === "number") {
+    return directValue;
+  }
+  if (!engine) return value;
+
+  const allowedVariables = Object.entries(context)
+    .filter(([, item]) => !Array.isArray(item))
+    .map(([key]) => key)
+    .sort();
+  const compiled = engine.compileFormula(value, { allowedVariables });
+  const inputs: Record<string, NumericInput> = {};
+  for (const variable of compiled.variables) {
+    const input = context[variable];
+    if (typeof input === "string" || typeof input === "number") {
+      inputs[variable] = input;
+      continue;
+    }
+    throw new Error(
+      `Expression ${value} references missing scalar ${variable}`,
+    );
+  }
+  return engine.evaluateFormula(compiled, inputs).value;
 }
 
 function calculationErrorDiagnostic(

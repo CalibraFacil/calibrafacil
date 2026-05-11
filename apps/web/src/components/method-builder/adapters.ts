@@ -22,6 +22,7 @@ export function methodDataToDraft(
     inputs: method.dataFields ?? [],
     variables: method.variableBindings ?? [],
     formulas: method.formulas ?? [],
+    measurementModels: method.measurementModels ?? [],
     validations: method.validations ?? [],
     uncertainty: method.uncertaintyParams ?? [],
     certificate: method.certificateContent ?? {
@@ -41,6 +42,7 @@ export function draftToMethodSavePayload(
     dataFields: draft.inputs,
     variableBindings: draft.variables,
     formulas: draft.formulas,
+    measurementModels: draft.measurementModels,
     validations: draft.validations,
     uncertaintyParams: draft.uncertainty,
     certificateContent: draft.certificate,
@@ -112,13 +114,14 @@ export function draftToEngineMethodDraft(draft: MethodDraft) {
       key: formula.outputKey,
       label: formula.label || formula.outputKey,
       expression: formula.expression,
+      scope: formula.scope,
       outputUnit: formula.unit || undefined,
       outputKind:
         formula.reporting?.role === 'primary_result' ? 'display' : undefined,
       required: true,
       reporting: formula.reporting,
     })),
-    measurementModels: [],
+    measurementModels: draft.measurementModels,
     acceptanceCriteria: draft.validations.map((validation, index) => ({
       key: `criterion_${index + 1}`,
       label: validation.message || `Critério ${index + 1}`,

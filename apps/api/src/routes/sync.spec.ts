@@ -259,6 +259,78 @@ describe("syncRouter", () => {
     expect(mocks.db.select).toHaveBeenCalledTimes(9);
   });
 
+  it("includes measurement models in synced published methods", async () => {
+    const measurementModels = [
+      {
+        key: "mass_uncertainty",
+        label: "Mass uncertainty",
+        measurand: "error",
+        expression: "error",
+        quantities: [
+          {
+            symbol: "error",
+            source: { kind: "formula", key: "error" },
+            uncertainty: {
+              kind: "direct_standard_uncertainty",
+              standardUncertainty: "0.01",
+            },
+          },
+        ],
+      },
+    ];
+    mocks.selectResults.push(
+      [
+        {
+          id: 1,
+          organizationId: "org-1",
+          assetTypeId: 10,
+          name: "Mass calibration",
+          version: 1,
+          dataFields: [],
+          variableBindings: [],
+          formulas: [],
+          measurementModels,
+          validations: [],
+          uncertaintyParams: [],
+          certificateContent: null,
+          methodFingerprint: "method-v1",
+          methodEngine: {
+            version: "engine-1",
+            optionsFingerprint: "options-1",
+          },
+          compiledMethod: {
+            methodFingerprint: "method-v1",
+            measurementModels,
+          },
+          publicationEvidence: null,
+          publishedAt: "2026-05-10T12:00:00.000Z",
+        },
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+    );
+
+    const response = await createApp().request("/api/sync/bootstrap", {
+      method: "POST",
+    });
+    const body = syncBootstrapResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(body.publishedMethods[0]).toMatchObject({
+      id: 1,
+      measurementModels,
+      compiledMethod: {
+        measurementModels,
+      },
+    });
+  });
+
   it("rejects pushed events outside the active organization or accessible units", async () => {
     const response = await createApp().request("/api/sync/push", {
       method: "POST",

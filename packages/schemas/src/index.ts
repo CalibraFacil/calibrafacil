@@ -662,12 +662,57 @@ export const MethodFormulaSchema = z.object({
       "Chave deve começar com letra e conter apenas letras, números e underscore",
     ),
   expression: z.string().min(1, "Expressão é obrigatória"),
+  scope: z
+    .discriminatedUnion("kind", [
+      z.object({ kind: z.literal("scalar") }),
+      z.object({
+        kind: z.literal("table_row"),
+        tableKey: z.string().min(1, "Tabela é obrigatória"),
+      }),
+    ])
+    .optional(),
   label: z.string().optional(),
   unit: z.string().optional(),
   reporting: MethodFormulaReportingSchema.optional(),
 });
 
 export type MethodFormula = z.infer<typeof MethodFormulaSchema>;
+
+export const MethodMeasurementModelSchema = z
+  .object({
+    key: z
+      .string()
+      .min(1, "Chave é obrigatória")
+      .regex(
+        /^[a-zA-Z][a-zA-Z0-9_]*$/,
+        "Chave deve começar com letra e conter apenas letras, números e underscore",
+      ),
+    label: z.string().min(1, "Rótulo é obrigatório"),
+    scope: z
+      .discriminatedUnion("kind", [
+        z.object({ kind: z.literal("scalar") }),
+        z.object({
+          kind: z.literal("table_row"),
+          tableKey: z.string().min(1, "Tabela é obrigatória"),
+        }),
+      ])
+      .optional(),
+    measurand: z.string().min(1, "Mensurando é obrigatório"),
+    expression: z.string().min(1, "Expressão é obrigatória"),
+    quantities: z.array(z.unknown()).default([]),
+    correlations: z.array(z.unknown()).optional(),
+    covariances: z.array(z.unknown()).optional(),
+    coverageProbability: z.coerce.number().gt(0).lt(1).optional(),
+    coverageFactor: z.union([z.string(), z.number()]).optional(),
+    outputUnit: z.string().optional(),
+    options: z.record(z.string(), z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
+
+export type MethodMeasurementModel = z.infer<
+  typeof MethodMeasurementModelSchema
+>;
 
 /**
  * Validation rule for pass/fail criteria
@@ -877,6 +922,7 @@ export const CreateMethodSchema = z.object({
     .min(1, "Defina pelo menos um campo de entrada"),
   variableBindings: z.array(MethodVariableBindingSchema).default([]),
   formulas: z.array(MethodFormulaSchema).default([]),
+  measurementModels: z.array(MethodMeasurementModelSchema).default([]),
   validations: z.array(MethodValidationSchema).default([]),
   uncertaintyParams: z.array(MethodTypeBComponentSchema).default([]),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),
@@ -1172,6 +1218,7 @@ export const MethodSnapshotSchema = z.object({
   dataFields: z.array(MethodInputFieldSchema),
   variableBindings: z.array(MethodVariableBindingSchema).default([]),
   formulas: z.array(MethodFormulaSchema),
+  measurementModels: z.array(MethodMeasurementModelSchema).default([]),
   validations: z.array(MethodValidationSchema),
   uncertaintyParams: z.array(MethodTypeBComponentSchema),
   certificateContent: MethodCertificateContentSchema.nullable().optional(),

@@ -93,9 +93,7 @@ import {
   type CompiledMethodExecutionResult,
   type MethodDiagnostic,
 } from "@calibra-facil/method-definition";
-import {
-  createCalculationEngine,
-} from "@calibra-facil/math-engine";
+import { createCalculationEngine } from "@calibra-facil/math-engine";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");

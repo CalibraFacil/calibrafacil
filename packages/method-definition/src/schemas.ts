@@ -137,11 +137,35 @@ export const MethodInputSchema = z.discriminatedUnion("kind", [
   TextInputSchema,
 ]);
 
+const FormulaScopeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("scalar") }).strict(),
+  z
+    .object({
+      kind: z.literal("table_row"),
+      tableKey: SafeKeySchema,
+    })
+    .strict(),
+]);
+
+const QuantitySourceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("input"), key: SafeKeySchema }).strict(),
+  z.object({ kind: z.literal("formula"), key: SafeKeySchema }).strict(),
+  z
+    .object({
+      kind: z.literal("table_column"),
+      tableKey: SafeKeySchema,
+      columnKey: SafeKeySchema,
+    })
+    .strict(),
+  z.object({ kind: z.literal("constant"), value: NumericValueSchema }).strict(),
+]);
+
 export const MethodFormulaSchema = z
   .object({
     key: SafeKeySchema,
     label: z.string().trim().min(1),
     expression: z.string().trim().min(1),
+    scope: FormulaScopeSchema.optional(),
     outputUnit: z.string().trim().optional(),
     outputKind: z
       .enum([
@@ -180,7 +204,8 @@ export const MethodFormulaSchema = z
 const TypeAUncertaintySchema = z
   .object({
     kind: z.literal("type_a"),
-    observationsInputKey: SafeKeySchema,
+    observationsInputKey: SafeKeySchema.optional(),
+    observations: z.array(QuantitySourceSchema).min(2).optional(),
     minDegreesOfFreedom: z.number().finite().positive().optional(),
   })
   .strict();
@@ -221,13 +246,7 @@ const DirectStandardUncertaintySchema = z
 export const MethodQuantitySchema = z
   .object({
     symbol: SafeKeySchema,
-    source: z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("input"), key: SafeKeySchema }).strict(),
-      z.object({ kind: z.literal("formula"), key: SafeKeySchema }).strict(),
-      z
-        .object({ kind: z.literal("constant"), value: NumericValueSchema })
-        .strict(),
-    ]),
+    source: QuantitySourceSchema,
     unit: z.string().trim().optional(),
     uncertainty: z.discriminatedUnion("kind", [
       TypeAUncertaintySchema,
@@ -246,6 +265,7 @@ export const MethodMeasurementModelSchema = z
   .object({
     key: SafeKeySchema,
     label: z.string().trim().min(1),
+    scope: FormulaScopeSchema.optional(),
     measurand: SafeKeySchema,
     expression: z.string().trim().min(1),
     quantities: z.array(MethodQuantitySchema).min(1),
@@ -299,15 +319,26 @@ export const MethodPreviewScenarioSchema = z
     inputs: z.record(z.string(), z.unknown()),
     expected: z
       .object({
-        formulas: z.record(z.string(), NumericValueSchema).optional(),
+        formulas: z
+          .record(
+            z.string(),
+            z.union([NumericValueSchema, z.array(NumericValueSchema)]),
+          )
+          .optional(),
         measurementModels: z
           .record(
             z.string(),
             z
               .object({
-                estimate: NumericValueSchema.optional(),
-                standardUncertainty: NumericValueSchema.optional(),
-                expandedUncertainty: NumericValueSchema.optional(),
+                estimate: z
+                  .union([NumericValueSchema, z.array(NumericValueSchema)])
+                  .optional(),
+                standardUncertainty: z
+                  .union([NumericValueSchema, z.array(NumericValueSchema)])
+                  .optional(),
+                expandedUncertainty: z
+                  .union([NumericValueSchema, z.array(NumericValueSchema)])
+                  .optional(),
               })
               .strict(),
           )

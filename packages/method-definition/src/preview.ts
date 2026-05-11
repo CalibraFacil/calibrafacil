@@ -3,12 +3,14 @@ import { buildMeasurementModelInput } from "./compile";
 import { errorDiagnostic } from "./diagnostics";
 import { fingerprintJson } from "./fingerprint";
 import type {
+  CompiledFormulaDefinition,
   CompiledMethod,
   CompiledMeasurementModelDefinition,
   FormulaPreviewResult,
   MethodDiagnostic,
   MethodInput,
   MethodMeasurementModel,
+  MeasurementModelResultLike,
   MethodPreviewResult,
   MethodPreviewScenario,
   NumericInput,
@@ -37,6 +39,32 @@ export function runMethodPreview(
 
   for (const formula of method.formulas) {
     try {
+      if (formula.scope?.kind === "table_row") {
+        const values = evaluateTableRowFormula(
+          formula,
+          method.inputs,
+          method.formulas,
+          scenario.inputs,
+          context,
+          engine,
+          diagnostics,
+        );
+        context[formula.key] = values;
+        formulaResults.push({
+          key: formula.key,
+          value: values,
+          normalizedFormula: formula.normalizedFormula,
+          formulaFingerprint: formula.formulaFingerprint,
+        });
+        validateExpected(
+          values,
+          scenario.expected?.formulas?.[formula.key],
+          `formulas.${formula.key}`,
+          diagnostics,
+        );
+        continue;
+      }
+
       const prepared = prepareFormulaEvaluation(
         formula.expression,
         context,
@@ -51,8 +79,8 @@ export function runMethodPreview(
       formulaResults.push({
         key: formula.key,
         value: result.value,
-        normalizedFormula: result.normalizedFormula,
-        formulaFingerprint: result.formulaFingerprint,
+        normalizedFormula: formula.normalizedFormula,
+        formulaFingerprint: formula.formulaFingerprint,
       });
       validateExpected(
         result.value,
@@ -74,10 +102,46 @@ export function runMethodPreview(
 
   for (const model of method.measurementModels) {
     try {
+      if (model.scope?.kind === "table_row") {
+        const results = evaluateTableRowMeasurementModel(
+          model,
+          method.inputs,
+          method.formulas,
+          scenario.inputs,
+          context,
+          engine,
+          diagnostics,
+        );
+        context[model.key] = results.map((result) => result.value);
+        measurementModelResults.push({ key: model.key, result: results });
+        validateExpected(
+          results.map((result) => result.value),
+          scenario.expected?.measurementModels?.[model.key]?.estimate,
+          `measurementModels.${model.key}.estimate`,
+          diagnostics,
+        );
+        validateExpected(
+          results.map((result) => result.combinedStandardUncertainty),
+          scenario.expected?.measurementModels?.[model.key]
+            ?.standardUncertainty,
+          `measurementModels.${model.key}.standardUncertainty`,
+          diagnostics,
+        );
+        validateExpected(
+          results.map((result) => result.expandedUncertainty),
+          scenario.expected?.measurementModels?.[model.key]
+            ?.expandedUncertainty,
+          `measurementModels.${model.key}.expandedUncertainty`,
+          diagnostics,
+        );
+        continue;
+      }
+
       const result = engine.evaluateMeasurementModel(
         buildMeasurementModelInput(
           compiledModelToMeasurementModel(model),
           context,
+          { engine },
         ),
       );
       assertFiniteNumericOutput(result.value, `measurementModels.${model.key}`);
@@ -160,6 +224,345 @@ export function runMethodPreview(
     acceptanceCriteriaResults,
     diagnostics,
   };
+}
+
+function evaluateTableRowFormula(
+  formula: CompiledFormulaDefinition,
+  inputs: readonly MethodInput[],
+  formulas: readonly CompiledFormulaDefinition[],
+  values: Record<string, unknown>,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+  engine: RunMethodPreviewOptions["engine"],
+  diagnostics: MethodDiagnostic[],
+): NumericInput[] {
+  const tableKey =
+    formula.scope?.kind === "table_row" ? formula.scope.tableKey : "";
+  const tableInput = inputs.find(
+    (input) => input.kind === "table" && input.key === tableKey,
+  );
+  const rows = values[tableKey];
+  if (!tableInput || tableInput.kind !== "table") {
+    diagnostics.push(
+      errorDiagnostic(
+        "ROW_FORMULA_TABLE_UNKNOWN",
+        `Row formula ${formula.key} references unknown table ${tableKey}`,
+        `formulas.${formula.key}.scope.tableKey`,
+      ),
+    );
+    return [];
+  }
+  if (!Array.isArray(rows)) {
+    diagnostics.push(
+      errorDiagnostic(
+        "ROW_FORMULA_TABLE_INPUT_MISSING",
+        `Row formula ${formula.key} requires table input ${tableKey}`,
+        `inputs.${tableKey}`,
+      ),
+    );
+    return [];
+  }
+
+  const numericColumns = tableInput.columns.filter(
+    (column) => column.type === "number",
+  );
+  const outputs: NumericInput[] = [];
+  let failed = false;
+
+  for (const [rowIndex, row] of rows.entries()) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      failed = true;
+      diagnostics.push(
+        errorDiagnostic(
+          "ROW_FORMULA_TABLE_ROW_INVALID",
+          `Row formula ${formula.key} requires row ${rowIndex} from table ${tableKey} to be an object`,
+          `inputs.${tableKey}.${rowIndex}`,
+        ),
+      );
+      continue;
+    }
+
+    const rowContext: Record<string, NumericInput | readonly NumericInput[]> = {
+      ...context,
+    };
+    for (const variable of formula.variables) {
+      const value = context[variable];
+      if (Array.isArray(value) && value[rowIndex] !== undefined) {
+        const sourceTableKey = rowAlignedArrayTableKey(
+          variable,
+          inputs,
+          formulas,
+        );
+        const requiresRowAlignedValue = !isVariableUsedOnlyInArrayAggregator(
+          formula.expression,
+          variable,
+        );
+        if (sourceTableKey === tableKey && requiresRowAlignedValue) {
+          rowContext[variable] = value[rowIndex];
+        } else if (sourceTableKey && requiresRowAlignedValue) {
+          failed = true;
+          diagnostics.push(
+            errorDiagnostic(
+              "ROW_FORMULA_CROSS_TABLE_ARRAY",
+              `Row formula ${formula.key} cannot use array variable ${variable} from table ${sourceTableKey} while evaluating table ${tableKey}`,
+              `formulas.${formula.key}.${rowIndex}`,
+            ),
+          );
+        }
+      }
+    }
+
+    const record = row as Record<string, unknown>;
+    for (const column of numericColumns) {
+      const value = record[column.key];
+      if (value === undefined || value === null || value === "") continue;
+      if (typeof value !== "string" && typeof value !== "number") continue;
+      if (
+        formula.variables.includes(column.key) &&
+        context[column.key] !== undefined
+      ) {
+        continue;
+      }
+      rowContext[column.key] = value;
+    }
+
+    try {
+      const prepared = prepareFormulaEvaluation(
+        formula.expression,
+        rowContext,
+        formula.variables,
+        { aggregateContext: context },
+      );
+      const result = engine.evaluateFormula(
+        prepared.expression,
+        prepared.inputs,
+      );
+      assertFiniteNumericOutput(
+        result.value,
+        `formulas.${formula.key}.${rowIndex}`,
+      );
+      outputs[rowIndex] = result.value;
+    } catch (error) {
+      failed = true;
+      diagnostics.push(
+        toPreviewDiagnostic(
+          error,
+          "ROW_FORMULA_PREVIEW_FAILED",
+          `Formula ${formula.key} failed during preview for row ${rowIndex}`,
+          `formulas.${formula.key}.${rowIndex}`,
+        ),
+      );
+    }
+  }
+
+  return failed ? [] : outputs;
+}
+
+function evaluateTableRowMeasurementModel(
+  model: CompiledMeasurementModelDefinition,
+  inputs: readonly MethodInput[],
+  formulas: readonly CompiledFormulaDefinition[],
+  values: Record<string, unknown>,
+  context: Record<string, NumericInput | readonly NumericInput[]>,
+  engine: RunMethodPreviewOptions["engine"],
+  diagnostics: MethodDiagnostic[],
+): MeasurementModelResultLike[] {
+  const tableKey =
+    model.scope?.kind === "table_row" ? model.scope.tableKey : "";
+  const tableInput = inputs.find(
+    (input) => input.kind === "table" && input.key === tableKey,
+  );
+  const rows = values[tableKey];
+  if (!tableInput || tableInput.kind !== "table") {
+    diagnostics.push(
+      errorDiagnostic(
+        "ROW_MEASUREMENT_MODEL_TABLE_UNKNOWN",
+        `Measurement model ${model.key} references unknown table ${tableKey}`,
+        `measurementModels.${model.key}.scope.tableKey`,
+      ),
+    );
+    return [];
+  }
+  if (!Array.isArray(rows)) {
+    diagnostics.push(
+      errorDiagnostic(
+        "ROW_MEASUREMENT_MODEL_TABLE_INPUT_MISSING",
+        `Measurement model ${model.key} requires table input ${tableKey}`,
+        `inputs.${tableKey}`,
+      ),
+    );
+    return [];
+  }
+
+  const numericColumns = tableInput.columns.filter(
+    (column) => column.type === "number",
+  );
+  const outputs: MeasurementModelResultLike[] = [];
+  const methodModel = compiledModelToMeasurementModel(model);
+  const referencedContextKeys = rowMeasurementModelContextKeys(
+    methodModel,
+    tableKey,
+  );
+  const scopedColumnKeys = rowMeasurementModelTableColumnKeys(
+    methodModel,
+    tableKey,
+  );
+  let failed = false;
+
+  for (const [rowIndex, row] of rows.entries()) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      failed = true;
+      diagnostics.push(
+        errorDiagnostic(
+          "ROW_MEASUREMENT_MODEL_TABLE_ROW_INVALID",
+          `Measurement model ${model.key} requires row ${rowIndex} from table ${tableKey} to be an object`,
+          `inputs.${tableKey}.${rowIndex}`,
+        ),
+      );
+      continue;
+    }
+
+    const rowContext: Record<string, NumericInput | readonly NumericInput[]> = {
+      ...context,
+    };
+    for (const variable of referencedContextKeys) {
+      const value = context[variable];
+      if (Array.isArray(value) && value[rowIndex] !== undefined) {
+        const sourceTableKey = rowAlignedArrayTableKey(
+          variable,
+          inputs,
+          formulas,
+        );
+        if (sourceTableKey === tableKey) {
+          rowContext[variable] = value[rowIndex];
+        } else if (sourceTableKey) {
+          failed = true;
+          diagnostics.push(
+            errorDiagnostic(
+              "ROW_MEASUREMENT_MODEL_CROSS_TABLE_ARRAY",
+              `Measurement model ${model.key} cannot use array variable ${variable} from table ${sourceTableKey} while evaluating table ${tableKey}`,
+              `measurementModels.${model.key}.${rowIndex}`,
+            ),
+          );
+        }
+      }
+    }
+
+    const record = row as Record<string, unknown>;
+    for (const column of numericColumns) {
+      const value = record[column.key];
+      if (value === undefined || value === null || value === "") continue;
+      if (typeof value !== "string" && typeof value !== "number") continue;
+      if (
+        context[column.key] !== undefined &&
+        !scopedColumnKeys.has(column.key)
+      ) {
+        continue;
+      }
+      rowContext[column.key] = value;
+    }
+
+    try {
+      const result = engine.evaluateMeasurementModel(
+        buildMeasurementModelInput(methodModel, rowContext, { engine }),
+      );
+      assertFiniteNumericOutput(
+        result.value,
+        `measurementModels.${model.key}.${rowIndex}`,
+      );
+      outputs[rowIndex] = result;
+    } catch (error) {
+      failed = true;
+      diagnostics.push(
+        toPreviewDiagnostic(
+          error,
+          "ROW_MEASUREMENT_MODEL_PREVIEW_FAILED",
+          `Measurement model ${model.key} failed during preview for row ${rowIndex}`,
+          `measurementModels.${model.key}.${rowIndex}`,
+        ),
+      );
+    }
+  }
+
+  return failed ? [] : outputs;
+}
+
+function rowMeasurementModelContextKeys(
+  model: MethodMeasurementModel,
+  tableKey: string,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const quantity of model.quantities) {
+    addQuantitySourceContextKey(quantity.source, keys, tableKey);
+    if (quantity.uncertainty.kind === "type_a") {
+      if (quantity.uncertainty.observationsInputKey) {
+        keys.add(quantity.uncertainty.observationsInputKey);
+      }
+      for (const source of quantity.uncertainty.observations ?? []) {
+        addQuantitySourceContextKey(source, keys, tableKey);
+      }
+    }
+  }
+  return keys;
+}
+
+function rowMeasurementModelTableColumnKeys(
+  model: MethodMeasurementModel,
+  tableKey: string,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const quantity of model.quantities) {
+    addTableColumnSourceKey(quantity.source, keys, tableKey);
+    if (quantity.uncertainty.kind === "type_a") {
+      for (const source of quantity.uncertainty.observations ?? []) {
+        addTableColumnSourceKey(source, keys, tableKey);
+      }
+    }
+  }
+  return keys;
+}
+
+function addQuantitySourceContextKey(
+  source: MethodMeasurementModel["quantities"][number]["source"],
+  keys: Set<string>,
+  tableKey: string,
+): void {
+  if (source.kind === "constant") return;
+  if (source.kind === "table_column") {
+    if (source.tableKey === tableKey) keys.add(source.columnKey);
+    return;
+  }
+  keys.add(source.key);
+}
+
+function addTableColumnSourceKey(
+  source: MethodMeasurementModel["quantities"][number]["source"],
+  keys: Set<string>,
+  tableKey: string,
+): void {
+  if (source.kind === "table_column" && source.tableKey === tableKey) {
+    keys.add(source.columnKey);
+  }
+}
+
+function rowAlignedArrayTableKey(
+  variable: string,
+  inputs: readonly MethodInput[],
+  formulas: readonly CompiledFormulaDefinition[],
+): string | null {
+  const input = inputs.find((item) => item.key === variable);
+  if (
+    input?.kind === "scalar" &&
+    input.metadata?.source === "variable_binding" &&
+    input.metadata.bindingSource === "table_column" &&
+    typeof input.metadata.fieldKey === "string"
+  ) {
+    return input.metadata.fieldKey;
+  }
+
+  const formula = formulas.find((item) => item.key === variable);
+  if (formula?.scope?.kind === "table_row") return formula.scope.tableKey;
+
+  return null;
 }
 
 function buildPreviewContext(
@@ -645,12 +1048,12 @@ function evaluatePreviewCriterion(
   const leftPrepared = prepareFormulaEvaluation(
     compiled.leftExpression,
     context,
-    compiled.left.variables,
+    compiled.leftVariables,
   );
   const rightPrepared = prepareFormulaEvaluation(
     compiled.rightExpression,
     context,
-    compiled.right.variables,
+    compiled.rightVariables,
   );
   const left = engine.evaluateFormula(
     leftPrepared.expression,
@@ -682,18 +1085,26 @@ function prepareFormulaEvaluation(
   expression: string,
   context: Record<string, NumericInput | readonly NumericInput[]>,
   variables: readonly string[],
+  options: {
+    aggregateContext?: Record<string, NumericInput | readonly NumericInput[]>;
+  } = {},
 ): { expression: string; inputs: Record<string, NumericInput> } {
   const aggregateInputs: Record<string, NumericInput> = {};
   const consumedVariables = new Set<string>();
   const rewrittenExpression = rewriteArrayAggregates(
     expression,
-    context,
+    options.aggregateContext ?? context,
     aggregateInputs,
     consumedVariables,
   );
   const inputs = pickNumericContext(
     context,
-    variables.filter((variable) => !consumedVariables.has(variable)),
+    variables.filter(
+      (variable) =>
+        !consumedVariables.has(variable) ||
+        (!Array.isArray(context[variable]) &&
+          !isVariableUsedOnlyInArrayAggregator(expression, variable)),
+    ),
     { allowArrays: true },
   );
   return {
@@ -702,26 +1113,67 @@ function prepareFormulaEvaluation(
   };
 }
 
+function isVariableUsedOnlyInArrayAggregator(
+  expression: string,
+  variable: string,
+): boolean {
+  const variablePattern = new RegExp(`\\b${escapeRegex(variable)}\\b`, "g");
+  const allOccurrences = [...expression.matchAll(variablePattern)];
+  if (allOccurrences.length === 0) return true;
+
+  const aggregatePattern =
+    /\b(?:mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*\d+)?\s*\)/g;
+  const coveredRanges = [...expression.matchAll(aggregatePattern)]
+    .filter(
+      (match) =>
+        match[1] !== undefined &&
+        aggregateVariableTokensFromExpression(match[1]).includes(variable) &&
+        match.index !== undefined,
+    )
+    .map((match) => ({
+      start: match.index!,
+      end: match.index! + match[0].length,
+    }));
+
+  return allOccurrences.every((match) => {
+    const index = match.index ?? -1;
+    return coveredRanges.some(
+      (range) => index >= range.start && index < range.end,
+    );
+  });
+}
+
+function aggregateVariableTokensFromExpression(argument: string): string[] {
+  return [
+    ...new Set(argument.match(/[A-Za-z][A-Za-z0-9_]*/g)?.filter(Boolean) ?? []),
+  ];
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function rewriteArrayAggregates(
   expression: string,
   context: Record<string, NumericInput | readonly NumericInput[]>,
   aggregateInputs: Record<string, NumericInput>,
   consumedVariables: Set<string>,
 ): string {
+  const reserved = new Set(Object.keys(context));
   let index = Object.keys(aggregateInputs).length;
   return expression.replace(
-    /\b(mean|std)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
     (match, functionName: string, argument: string, correction?: string) => {
       const values = resolveInlineNumericArguments(argument, context);
       if (!values.length) return match;
 
-      const value =
-        functionName === "mean"
-          ? sum(values) / values.length
-          : correctedStandardDeviation(values, Number(correction ?? 1));
+      const value = aggregateValues(functionName, values, correction);
       if (!Number.isFinite(value)) return match;
 
-      const key = `preview_${index++}`;
+      let key = `cf_internal_preview_${index++}`;
+      while (reserved.has(key) || key in aggregateInputs) {
+        key = `cf_internal_preview_${index++}`;
+      }
       aggregateInputs[key] = value;
       for (const variable of aggregateVariableTokens(argument, context)) {
         consumedVariables.add(variable);
@@ -729,6 +1181,25 @@ function rewriteArrayAggregates(
       return key;
     },
   );
+}
+
+function aggregateValues(
+  functionName: string,
+  values: readonly number[],
+  correction?: string,
+): number {
+  switch (functionName) {
+    case "mean":
+      return sum(values) / values.length;
+    case "std":
+      return correctedStandardDeviation(values, Number(correction ?? 1));
+    case "min":
+      return Math.min(...values);
+    case "max":
+      return Math.max(...values);
+    default:
+      return Number.NaN;
+  }
 }
 
 function aggregateVariableTokens(
@@ -814,12 +1285,38 @@ function assertFiniteNumericOutput(value: string | number, path: string): void {
 }
 
 function validateExpected(
-  actual: string | number,
-  expected: string | number | undefined,
+  actual: string | number | readonly (string | number)[],
+  expected: string | number | readonly (string | number)[] | undefined,
   path: string,
   diagnostics: MethodDiagnostic[],
 ): void {
   if (expected === undefined) return;
+  if (Array.isArray(actual) || Array.isArray(expected)) {
+    if (!Array.isArray(actual) || !Array.isArray(expected)) {
+      diagnostics.push(
+        errorDiagnostic(
+          "PREVIEW_EXPECTED_VALUE_MISMATCH",
+          `Preview expected ${path} to be an array`,
+          path,
+        ),
+      );
+      return;
+    }
+    if (actual.length !== expected.length) {
+      diagnostics.push(
+        errorDiagnostic(
+          "PREVIEW_EXPECTED_VALUE_MISMATCH",
+          `Preview expected ${expected.length} values at ${path} but got ${actual.length}`,
+          path,
+        ),
+      );
+      return;
+    }
+    for (const [index, item] of actual.entries()) {
+      validateExpected(item, expected[index], `${path}.${index}`, diagnostics);
+    }
+    return;
+  }
   const actualNumber = Number(actual);
   const expectedNumber = Number(expected);
   if (!Number.isFinite(actualNumber) || !Number.isFinite(expectedNumber)) {
@@ -850,6 +1347,7 @@ function compiledModelToMeasurementModel(
   return {
     key: model.key,
     label: model.key,
+    scope: model.scope,
     measurand: model.key,
     expression: model.expression,
     quantities: model.quantities,

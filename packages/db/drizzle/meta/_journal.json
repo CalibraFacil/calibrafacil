@@ -120,6 +120,13 @@
       "when": 1778198400000,
       "tag": "0016_method_definition",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1778202000000,
+      "tag": "0017_method_measurement_models",
+      "breakpoints": true
     }
   ]
 }

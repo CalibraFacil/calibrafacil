@@ -18,6 +18,7 @@ import {
   listPendingOutboxEvents,
   listLocalAssets,
   listLocalCustomers,
+  listLocalMethods,
   listLocalServiceOrders,
   LocalDatabaseVersionError,
   markOutboxEventsFailedForRetry,
@@ -448,6 +449,107 @@ WHERE id = 'customer:123'
       sync_state: "synced",
     });
     expect(cursor.cursor).toBe("2026-01-15T10:05:00.000Z");
+
+    database.close();
+  });
+
+  it("preserves synced method measurement models in local method projections", () => {
+    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
+    const now = new Date("2026-01-15T10:00:00.000Z").toISOString();
+    const measurementModels = [
+      {
+        key: "mass_uncertainty",
+        label: "Mass uncertainty",
+        measurand: "error",
+        expression: "error",
+        quantities: [
+          {
+            symbol: "error",
+            source: { kind: "formula", key: "error" },
+            uncertainty: {
+              kind: "direct_standard_uncertainty",
+              standardUncertainty: "0.01",
+            },
+          },
+        ],
+      },
+    ];
+
+    applySyncBootstrap(database, {
+      serverTime: now,
+      user: {
+        id: "user-1",
+        name: "User One",
+        email: "user@example.com",
+      },
+      organization: {
+        id: "org-1",
+        type: "LAB",
+      },
+      activeUnits: [
+        {
+          id: 1,
+          name: "Matriz",
+          role: "technician",
+        },
+      ],
+      permissions: {
+        role: "technician",
+        unitRole: "technician",
+        activeUnitId: 1,
+        accessibleUnitIds: [1],
+        canAccessAllUnits: false,
+      },
+      featureFlags: {
+        offlineApprovals: false,
+        offlineCertificatePublication: false,
+      },
+      syncCursor: now,
+      publishedMethods: [
+        {
+          id: 321,
+          organizationId: "org-1",
+          assetTypeId: null,
+          name: "Mass calibration",
+          version: 1,
+          dataFields: [],
+          variableBindings: [],
+          formulas: [],
+          measurementModels,
+          validations: [],
+          uncertaintyParams: [],
+          certificateContent: null,
+          methodFingerprint: "method-v1",
+          methodEngine: {
+            version: "engine-1",
+            optionsFingerprint: "options-1",
+          },
+          compiledMethod: {
+            methodFingerprint: "method-v1",
+            measurementModels,
+          },
+          publicationEvidence: null,
+          publishedAt: now,
+        },
+      ],
+      assetTypes: [],
+      customers: [],
+      assets: [],
+      services: [],
+      standards: [],
+      environmentalLimits: [],
+      jobs: [],
+      serviceOrders: [],
+    });
+
+    const methods = listLocalMethods(database, { page: 1, limit: 20 });
+    expect(methods.data[0]).toMatchObject({
+      id: 321,
+      measurementModels,
+      compiledMethod: {
+        measurementModels,
+      },
+    });
 
     database.close();
   });

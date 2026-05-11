@@ -89,6 +89,7 @@ export type MethodDraftVariableBinding =
 export interface MethodDraftFormula {
   outputKey: string
   expression: string
+  scope?: { kind: 'scalar' } | { kind: 'table_row'; tableKey: string }
   label?: string
   unit?: string
   reporting?: {
@@ -119,6 +120,72 @@ export interface MethodDraftUncertaintyComponent {
   coverageFactor?: number
   divisor?: number
   degreesOfFreedom?: number
+}
+
+export type MethodDraftMeasurementModelSource =
+  | { kind: 'input'; key: string }
+  | { kind: 'formula'; key: string }
+  | { kind: 'table_column'; tableKey: string; columnKey: string }
+  | { kind: 'constant'; value: string | number }
+
+export interface MethodDraftMeasurementModelQuantity {
+  symbol: string
+  label?: string
+  source: MethodDraftMeasurementModelSource
+  unit?: string
+  uncertainty:
+    | {
+        kind: 'type_a'
+        observationsInputKey?: string
+        observations?: Array<MethodDraftMeasurementModelSource>
+        minDegreesOfFreedom?: number
+      }
+    | {
+        kind: 'type_b'
+        distribution:
+          | 'normal'
+          | 'rectangular'
+          | 'triangular'
+          | 'u_shaped'
+          | 'custom'
+        standardUncertainty?: string | number
+        halfWidth?: string | number
+        limits?: { lower: string | number; upper: string | number }
+        divisor?: string | number
+        coverageFactor?: string | number
+        expandedUncertainty?: string | number
+        degreesOfFreedom?: number
+      }
+    | {
+        kind: 'direct_standard_uncertainty'
+        standardUncertainty: string | number
+        degreesOfFreedom?: number | 'Infinity'
+      }
+  degreesOfFreedom?: number | 'Infinity'
+  sensitivity?: string | number
+}
+
+export interface MethodDraftMeasurementModel {
+  key: string
+  label: string
+  scope?: { kind: 'scalar' } | { kind: 'table_row'; tableKey: string }
+  measurand: string
+  expression: string
+  quantities: Array<MethodDraftMeasurementModelQuantity>
+  correlations?: Array<{
+    symbols: [string, string]
+    coefficient: string | number
+  }>
+  covariances?: Array<{
+    symbols: [string, string]
+    covariance: string | number
+  }>
+  coverageProbability?: number
+  coverageFactor?: string | number
+  outputUnit?: string
+  options?: {
+    allowNonSmoothWithExplicitSensitivities?: boolean
+  }
 }
 
 export interface MethodDraftCertificateContent {
@@ -156,6 +223,7 @@ export interface MethodDraft {
   inputs: Array<MethodDraftInput>
   variables: Array<MethodDraftVariableBinding>
   formulas: Array<MethodDraftFormula>
+  measurementModels: Array<MethodDraftMeasurementModel>
   validations: Array<MethodDraftValidation>
   uncertainty: Array<MethodDraftUncertaintyComponent>
   certificate: MethodDraftCertificateContent | null
@@ -171,6 +239,7 @@ export interface MethodRecordData {
   dataFields?: Array<MethodDraftInput>
   variableBindings?: Array<MethodDraftVariableBinding>
   formulas?: Array<MethodDraftFormula>
+  measurementModels?: Array<MethodDraftMeasurementModel>
   validations?: Array<MethodDraftValidation>
   uncertaintyParams?: Array<MethodDraftUncertaintyComponent>
   certificateContent?: MethodDraftCertificateContent | null
@@ -183,6 +252,7 @@ export interface MethodDraftSavePayload {
   dataFields: Array<MethodDraftInput>
   variableBindings: Array<MethodDraftVariableBinding>
   formulas: Array<MethodDraftFormula>
+  measurementModels: Array<MethodDraftMeasurementModel>
   validations: Array<MethodDraftValidation>
   uncertaintyParams: Array<MethodDraftUncertaintyComponent>
   certificateContent: MethodDraftCertificateContent | null
@@ -201,6 +271,7 @@ export interface MethodNormalizedFormula {
   outputKey: string
   expression: string
   normalizedExpression: string
+  scope?: { kind: 'scalar' } | { kind: 'table_row'; tableKey: string }
 }
 
 export interface MethodCompileResult {
@@ -232,6 +303,7 @@ export const emptyMethodDraft: MethodDraft = {
   ],
   variables: [],
   formulas: [],
+  measurementModels: [],
   validations: [],
   uncertainty: [],
   certificate: {

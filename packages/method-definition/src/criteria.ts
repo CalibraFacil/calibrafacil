@@ -13,6 +13,8 @@ export type CompiledCriterion = {
   right: CompiledFormulaLike;
   leftExpression: string;
   rightExpression: string;
+  leftVariables: string[];
+  rightVariables: string[];
   operator: "<" | "<=" | ">" | ">=" | "==" | "!=";
   normalizedFormula: string;
   variables: string[];
@@ -32,11 +34,57 @@ export function compileCriterionExpression(
     );
   }
 
-  const left = engine.compileFormula(match[1].trim(), { allowedVariables });
-  const right = engine.compileFormula(match[3].trim(), { allowedVariables });
+  const leftOriginalExpression = match[1].trim();
+  const rightOriginalExpression = match[3].trim();
+  const leftRewrite = rewriteAggregatesForCompile(
+    leftOriginalExpression,
+    allowedVariables,
+  );
+  const rightRewrite = rewriteAggregatesForCompile(
+    rightOriginalExpression,
+    allowedVariables,
+  );
+  const allowedWithSyntheticVariables = [
+    ...new Set([
+      ...allowedVariables,
+      ...leftRewrite.syntheticVariables,
+      ...rightRewrite.syntheticVariables,
+    ]),
+  ].sort();
+  const left = engine.compileFormula(leftRewrite.expression, {
+    allowedVariables: allowedWithSyntheticVariables,
+  });
+  const right = engine.compileFormula(rightRewrite.expression, {
+    allowedVariables: allowedWithSyntheticVariables,
+  });
   const operator = match[2] as CompiledCriterion["operator"];
   const variables = [
-    ...new Set([...left.variables, ...right.variables]),
+    ...new Set(
+      [...left.variables, ...right.variables]
+        .filter(
+          (variable) =>
+            !leftRewrite.syntheticVariables.has(variable) &&
+            !rightRewrite.syntheticVariables.has(variable),
+        )
+        .concat([
+          ...leftRewrite.consumedVariables,
+          ...rightRewrite.consumedVariables,
+        ]),
+    ),
+  ].sort();
+  const leftVariables = [
+    ...new Set(
+      left.variables
+        .filter((variable) => !leftRewrite.syntheticVariables.has(variable))
+        .concat([...leftRewrite.consumedVariables]),
+    ),
+  ].sort();
+  const rightVariables = [
+    ...new Set(
+      right.variables
+        .filter((variable) => !rightRewrite.syntheticVariables.has(variable))
+        .concat([...rightRewrite.consumedVariables]),
+    ),
   ].sort();
   const allowed = new Set(allowedVariables);
   const unknownVariables = variables.filter(
@@ -55,8 +103,10 @@ export function compileCriterionExpression(
     criterion,
     left,
     right,
-    leftExpression: match[1].trim(),
-    rightExpression: match[3].trim(),
+    leftExpression: leftOriginalExpression,
+    rightExpression: rightOriginalExpression,
+    leftVariables,
+    rightVariables,
     operator,
     normalizedFormula,
     variables,
@@ -70,12 +120,58 @@ export function compileCriterionExpression(
   };
 }
 
+function rewriteAggregatesForCompile(
+  expression: string,
+  reservedVariables: readonly string[] = [],
+): {
+  expression: string;
+  consumedVariables: Set<string>;
+  syntheticVariables: Set<string>;
+} {
+  const consumedVariables = new Set<string>();
+  const syntheticVariables = new Set<string>();
+  const reserved = new Set(reservedVariables);
+  let index = 0;
+  const rewritten = expression.replace(
+    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+    (match, _functionName: string, argument: string) => {
+      const tokens = [
+        ...new Set(argument.match(/[A-Za-z][A-Za-z0-9_]*/g) ?? []),
+      ];
+      if (tokens.length === 0) return match;
+      for (const token of tokens) consumedVariables.add(token);
+      let key = `cf_internal_criterion_agg_${index++}`;
+      while (reserved.has(key) || syntheticVariables.has(key)) {
+        key = `cf_internal_criterion_agg_${index++}`;
+      }
+      syntheticVariables.add(key);
+      return key;
+    },
+  );
+
+  return {
+    expression: rewritten,
+    consumedVariables,
+    syntheticVariables,
+  };
+}
+
 export function evaluateCompiledCriterion(
   compiled: CompiledCriterion,
-  context: Readonly<Record<string, NumericInput>>,
+  context: Readonly<Record<string, NumericInput | readonly NumericInput[]>>,
 ): boolean {
-  const left = compiled.left.evaluate(context).value;
-  const right = compiled.right.evaluate(context).value;
+  const leftPrepared = prepareCriterionSide(
+    compiled.leftExpression,
+    context,
+    compiled.leftVariables,
+  );
+  const rightPrepared = prepareCriterionSide(
+    compiled.rightExpression,
+    context,
+    compiled.rightVariables,
+  );
+  const left = compiled.left.evaluate(leftPrepared.inputs).value;
+  const right = compiled.right.evaluate(rightPrepared.inputs).value;
   const comparison = compareDecimalInputs(left, right);
 
   switch (compiled.operator) {
@@ -92,6 +188,136 @@ export function evaluateCompiledCriterion(
     case "!=":
       return comparison !== 0;
   }
+}
+
+function prepareCriterionSide(
+  expression: string,
+  context: Readonly<Record<string, NumericInput | readonly NumericInput[]>>,
+  variables: readonly string[],
+): { inputs: Record<string, NumericInput> } {
+  const aggregateInputs: Record<string, NumericInput> = {};
+  const consumedVariables = new Set<string>();
+  rewriteArrayAggregates(
+    expression,
+    context,
+    aggregateInputs,
+    consumedVariables,
+  );
+  const inputs: Record<string, NumericInput> = {};
+  for (const variable of variables) {
+    if (consumedVariables.has(variable)) continue;
+    const value = context[variable];
+    if (
+      Array.isArray(value) ||
+      (typeof value !== "string" && typeof value !== "number")
+    ) {
+      throw new Error(`Numeric variable ${variable} is missing`);
+    }
+    inputs[variable] = value;
+  }
+  return { inputs: { ...inputs, ...aggregateInputs } };
+}
+
+function rewriteArrayAggregates(
+  expression: string,
+  context: Readonly<Record<string, NumericInput | readonly NumericInput[]>>,
+  aggregateInputs: Record<string, NumericInput>,
+  consumedVariables: Set<string>,
+): void {
+  const reserved = new Set(Object.keys(context));
+  let index = Object.keys(aggregateInputs).length;
+  expression.replace(
+    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+    (match, functionName: string, argument: string, correction?: string) => {
+      const values = resolveInlineNumericArguments(argument, context);
+      if (!values.length) return match;
+
+      const value = aggregateValues(functionName, values, correction);
+      if (!Number.isFinite(value)) return match;
+
+      let key = `cf_internal_criterion_agg_${index++}`;
+      while (reserved.has(key) || key in aggregateInputs) {
+        key = `cf_internal_criterion_agg_${index++}`;
+      }
+      aggregateInputs[key] = value;
+      for (const variable of aggregateVariableTokens(argument, context)) {
+        consumedVariables.add(variable);
+      }
+      return key;
+    },
+  );
+}
+
+function aggregateValues(
+  functionName: string,
+  values: readonly number[],
+  correction?: string,
+): number {
+  switch (functionName) {
+    case "mean":
+      return values.reduce((sum, item) => sum + item, 0) / values.length;
+    case "std":
+      return correctedStandardDeviation(values, Number(correction ?? 1));
+    case "min":
+      return Math.min(...values);
+    case "max":
+      return Math.max(...values);
+    default:
+      return Number.NaN;
+  }
+}
+
+function aggregateVariableTokens(
+  argument: string,
+  context: Readonly<Record<string, NumericInput | readonly NumericInput[]>>,
+): string[] {
+  return [
+    ...new Set(
+      argument
+        .match(/[A-Za-z][A-Za-z0-9_]*/g)
+        ?.filter((token) => context[token] !== undefined) ?? [],
+    ),
+  ];
+}
+
+function resolveInlineNumericArguments(
+  argument: string,
+  context: Readonly<Record<string, NumericInput | readonly NumericInput[]>>,
+): number[] {
+  const trimmed = argument.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return trimmed
+      .slice(1, -1)
+      .split(",")
+      .flatMap((item) => resolveInlineNumericToken(item.trim(), context));
+  }
+  return resolveInlineNumericToken(trimmed, context);
+}
+
+function resolveInlineNumericToken(
+  token: string,
+  context: Readonly<Record<string, NumericInput | readonly NumericInput[]>>,
+): number[] {
+  if (!token) return [];
+  const literal = Number(token);
+  if (Number.isFinite(literal)) return [literal];
+  const value = context[token];
+  if (Array.isArray(value)) return value.map(Number).filter(Number.isFinite);
+  const scalar = Number(value);
+  return Number.isFinite(scalar) ? [scalar] : [];
+}
+
+function correctedStandardDeviation(
+  values: readonly number[],
+  correction: number,
+): number {
+  const denominator = values.length - correction;
+  if (denominator <= 0) return Number.NaN;
+
+  const mean = values.reduce((sum, item) => sum + item, 0) / values.length;
+  const variance =
+    values.reduce((sum, item) => sum + (item - mean) ** 2, 0) / denominator;
+  return Math.sqrt(variance);
 }
 
 export function compareDecimalInputs(

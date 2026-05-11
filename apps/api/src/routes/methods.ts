@@ -90,12 +90,19 @@ function compileDraftWithEngine(
 }
 
 function normalizeMethodRecord<
-  T extends { validations?: unknown; variableBindings?: unknown },
+  T extends {
+    validations?: unknown;
+    variableBindings?: unknown;
+    measurementModels?: unknown;
+  },
 >(method: T) {
   return {
     ...method,
     variableBindings: Array.isArray(method.variableBindings)
       ? method.variableBindings
+      : [],
+    measurementModels: Array.isArray(method.measurementModels)
+      ? method.measurementModels
       : [],
     validations: normalizeMethodValidationsInput(method.validations),
   };
@@ -122,6 +129,7 @@ function methodCompileResponse(result: ReturnType<typeof compileMethodDraft>) {
       normalizedExpression: formula.normalizedFormula,
       formulaFingerprint: formula.formulaFingerprint,
       variables: formula.variables,
+      scope: formula.scope ?? { kind: "scalar" },
     })),
     previewResults: result.previewResults,
     compiledMethod: result.method,
@@ -140,6 +148,7 @@ function buildPublicationEvidence(params: {
   reasonForChange?: string | null;
   certificateContent: unknown;
   uncertaintyParams: unknown;
+  measurementModels: unknown;
 }) {
   const evidenceBase = {
     methodId: String(params.methodId),
@@ -157,6 +166,7 @@ function buildPublicationEvidence(params: {
     diagnostics: params.diagnostics,
     certificateContent: params.certificateContent ?? null,
     uncertaintyParams: params.uncertaintyParams ?? [],
+    measurementModels: params.measurementModels ?? [],
   };
   return {
     ...evidenceBase,
@@ -165,6 +175,7 @@ function buildPublicationEvidence(params: {
         compiledMethod: params.compiledMethod,
         certificateContent: evidenceBase.certificateContent,
         uncertaintyParams: evidenceBase.uncertaintyParams,
+        measurementModels: evidenceBase.measurementModels,
         previewScenarios: evidenceBase.previewScenarios,
         previewResults: params.previewResults,
       },
@@ -253,6 +264,9 @@ function methodPayloadToDefinitionDraft(
   const rawValidations = Array.isArray(candidate.validations)
     ? candidate.validations
     : [];
+  const rawMeasurementModels = Array.isArray(candidate.measurementModels)
+    ? candidate.measurementModels
+    : [];
   const rawVariableBindings = Array.isArray(candidate.variableBindings)
     ? candidate.variableBindings
     : Array.isArray(candidate.variables)
@@ -299,7 +313,7 @@ function methodPayloadToDefinitionDraft(
         : String(candidate.assetTypeId),
     inputs: definitionInputs,
     formulas: rawFormulas.map(methodFormulaToDefinitionFormula),
-    measurementModels: [],
+    measurementModels: rawMeasurementModels,
     acceptanceCriteria: rawValidations
       .map(methodValidationToAcceptanceCriterion)
       .filter((item): item is NonNullable<typeof item> => item !== null),
@@ -565,7 +579,20 @@ function methodFormulaToDefinitionFormula(formula: unknown) {
     outputKind: "derived_quantity" as const,
     required: true,
     reporting: methodFormulaReportingToDefinitionReporting(record.reporting),
+    scope: methodFormulaScopeToDefinitionScope(record.scope),
   };
+}
+
+function methodFormulaScopeToDefinitionScope(scope: unknown) {
+  if (!scope || typeof scope !== "object" || Array.isArray(scope)) {
+    return undefined;
+  }
+  const record = scope as Record<string, unknown>;
+  if (record.kind === "scalar") return { kind: "scalar" as const };
+  if (record.kind === "table_row" && typeof record.tableKey === "string") {
+    return { kind: "table_row" as const, tableKey: record.tableKey };
+  }
+  return undefined;
 }
 
 function buildDefaultVariableBindings(rawInputs: unknown[]): unknown[] {
@@ -830,6 +857,7 @@ function methodRecordToDraft(method: {
   dataFields: unknown;
   variableBindings?: unknown;
   formulas: unknown;
+  measurementModels?: unknown;
   validations: unknown;
 }): MethodDraft {
   return coerceMethodDraft({
@@ -842,6 +870,7 @@ function methodRecordToDraft(method: {
     dataFields: method.dataFields,
     variableBindings: method.variableBindings,
     formulas: method.formulas,
+    measurementModels: method.measurementModels,
     validations: method.validations,
   });
 }
@@ -1026,6 +1055,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             dataFields: calibrationMethod.dataFields,
             variableBindings: calibrationMethod.variableBindings,
             formulas: calibrationMethod.formulas,
+            measurementModels: calibrationMethod.measurementModels,
             validations: calibrationMethod.validations,
             certificateContent: calibrationMethod.certificateContent,
             methodFingerprint: calibrationMethod.methodFingerprint,
@@ -1149,7 +1179,12 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             const modelResult = preview?.measurementModelResults.find(
               (item) => item.key === model.key,
             );
-            return [model.key, modelResult?.result.value ?? null] as const;
+            const value = modelResult
+              ? Array.isArray(modelResult.result)
+                ? modelResult.result.map((item) => item.value)
+                : (modelResult.result as { value: string | number }).value
+              : null;
+            return [model.key, value] as const;
           }),
         ]),
       });
@@ -1226,6 +1261,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           dataFields: calibrationMethod.dataFields,
           variableBindings: calibrationMethod.variableBindings,
           formulas: calibrationMethod.formulas,
+          measurementModels: calibrationMethod.measurementModels,
           validations: calibrationMethod.validations,
           uncertaintyParams: calibrationMethod.uncertaintyParams,
           certificateContent: calibrationMethod.certificateContent,
@@ -1318,6 +1354,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             dataFields: input.dataFields,
             variableBindings: input.variableBindings,
             formulas: input.formulas,
+            measurementModels: input.measurementModels,
             validations: input.validations,
             uncertaintyParams: input.uncertaintyParams,
             certificateContent: input.certificateContent ?? null,
@@ -1451,6 +1488,13 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         if (input.formulas !== undefined) {
           updateData.formulas = input.formulas;
           changes.formulas = { old: existing.formulas, new: input.formulas };
+        }
+        if (input.measurementModels !== undefined) {
+          updateData.measurementModels = input.measurementModels;
+          changes.measurementModels = {
+            old: existing.measurementModels,
+            new: input.measurementModels,
+          };
         }
         if (input.validations !== undefined) {
           updateData.validations = input.validations;
@@ -1831,6 +1875,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           reasonForChange: body.reasonForChange ?? null,
           certificateContent: existing.certificateContent,
           uncertaintyParams: existing.uncertaintyParams,
+          measurementModels: existing.measurementModels,
         });
 
         // Archive any previously published version with same name
@@ -2091,6 +2136,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           reasonForChange: body.reasonForChange ?? null,
           certificateContent: existing.certificateContent,
           uncertaintyParams: existing.uncertaintyParams,
+          measurementModels: existing.measurementModels,
         });
 
         // Archive any previously published version with same name
@@ -2314,6 +2360,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             dataFields: existing.dataFields,
             variableBindings: existing.variableBindings ?? [],
             formulas: existing.formulas,
+            measurementModels: existing.measurementModels ?? [],
             validations: normalizeMethodValidationsInput(existing.validations),
             uncertaintyParams: existing.uncertaintyParams,
             certificateContent: existing.certificateContent,
