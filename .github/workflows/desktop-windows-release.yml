@@ -1,0 +1,94 @@
+name: Desktop Windows Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing GitHub release tag to upload Windows assets to"
+        required: true
+        default: "desktop-v0.0.0-20260510.1"
+        type: string
+      ref:
+        description: "Git ref to build from"
+        required: true
+        default: "main"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-windows-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+jobs:
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Check release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ inputs.tag }}
+        shell: pwsh
+        run: gh release view $env:TAG_NAME --repo $env:GITHUB_REPOSITORY
+
+      - name: Check blocked dependencies
+        run: pnpm check:blocked-deps
+
+      - name: Setup private Git dependencies
+        env:
+          MATH_ENGINE_GIT_TOKEN: ${{ secrets.MATH_ENGINE_GIT_TOKEN }}
+          MATH_ENGINE_DEPLOY_KEY: ${{ secrets.MATH_ENGINE_DEPLOY_KEY }}
+          MATH_ENGINE_DEPLOY_KEY_BASE64: ${{ secrets.MATH_ENGINE_DEPLOY_KEY_BASE64 }}
+        run: node scripts/setup-private-git-ssh.mjs --required
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows desktop installer
+        run: pnpm dist:desktop:win
+
+      - name: Verify staged desktop artifact
+        run: pnpm smoke:desktop:artifact
+
+      - name: Upload Windows release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ inputs.tag }}
+        shell: pwsh
+        run: |
+          $files = @(
+            Get-ChildItem -Path "apps/desktop/out" -File |
+              Where-Object { $_.Name -ne "builder-debug.yml" }
+          )
+
+          if ($files.Count -eq 0) {
+            throw "No Windows desktop release files were produced."
+          }
+
+          Write-Host "Uploading $($files.Count) Windows desktop release asset(s):"
+          $files | ForEach-Object { Write-Host "  $($_.FullName)" }
+
+          gh release upload $env:TAG_NAME @($files.FullName) --repo $env:GITHUB_REPOSITORY --clobber
