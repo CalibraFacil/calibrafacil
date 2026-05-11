@@ -27,6 +27,10 @@ assertSourceOrder(
   "release sign-off must run before local-server bundle work",
 );
 assertIncludes(
+  'run(pnpmCommand, [\n    "--dir",\n    "apps/desktop",\n    "exec",\n    "electron-builder",',
+  "builder must invoke electron-builder through the Windows-safe pnpm command",
+);
+assertIncludes(
   'run(process.execPath, ["scripts/check-offline-release-signoff.mjs"]);',
   "builder must invoke the release sign-off checker",
 );

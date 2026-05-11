@@ -57,7 +57,7 @@ validateLocalServerBundle();
 
 let builderError;
 try {
-  run("pnpm", [
+  run(pnpmCommand, [
     "--dir",
     "apps/desktop",
     "exec",
@@ -78,6 +78,7 @@ function run(command, args, options = {}) {
   execFileSync(command, args, {
     cwd: options.cwd ?? root,
     stdio: "inherit",
+    shell: process.platform === "win32",
   });
 }
 
