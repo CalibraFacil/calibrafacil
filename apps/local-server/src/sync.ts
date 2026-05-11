@@ -53,172 +53,183 @@ export function createLocalSyncRuntime(
     lastRunId: null,
     lastError: null,
   };
+  let syncQueue: Promise<unknown> = Promise.resolve();
 
   return {
     getStatus() {
       status = withLocalCounts(database, status);
       return status;
     },
-    async runInitialSync() {
-      const runId = createSyncRunId("initial");
-      if (!config.syncEnabled) {
-        status = {
-          ...withLocalCounts(database, status),
-          state: "offline",
-          activeRunId: null,
-          lastRunId: runId,
-        };
-        return status;
-      }
-
-      if (!config.cloudApiUrl) {
-        status = {
-          ...withLocalCounts(database, status),
-          state: "error",
-          activeRunId: null,
-          lastRunId: runId,
-          lastError: "Cloud API URL is not configured for local sync",
-        };
-        throw new Error("Cloud API URL is not configured for local sync");
-      }
-
-      status = {
-        ...withLocalCounts(database, status),
-        state: "syncing",
-        activeRunId: runId,
-        lastError: null,
-      };
-      console.log(
-        `[sync:${runId}] starting initial sync for local-server ${config.localServerRunId}`,
-      );
-
-      try {
-        await pushPendingOutbox(config, database, fetchImpl, {
-          includeDeferred: true,
-        });
-
-        const bootstrapUrl = new URL("/api/sync/bootstrap", config.cloudApiUrl);
-        const headers = new Headers({
-          "Content-Type": "application/json",
-        });
-
-        applyCloudAuthHeaders(config, headers);
-
-        const response = await fetchImpl(bootstrapUrl, {
-          method: "POST",
-          headers,
-        });
-
-        if (!response.ok) {
-          throw new Error(
-            `Cloud bootstrap failed with HTTP ${response.status}`,
-          );
-        }
-
-        const bootstrap = syncBootstrapResponseSchema.parse(
-          await response.json(),
-        );
-        const syncedAt = new Date().toISOString();
-        applySyncBootstrap(database, bootstrap, syncedAt);
-        await pullCloudChanges(config, database, fetchImpl);
-
-        status = {
-          ...withLocalCounts(database, status),
-          state:
-            countOpenSyncConflicts(database) > 0
-              ? "conflict"
-              : countPendingOutbox(database) > 0
-                ? "error"
-                : "idle",
-          lastSyncedAt: syncedAt,
-          activeRunId: null,
-          lastRunId: runId,
-          lastError: null,
-        };
-        console.log(
-          `[sync:${runId}] initial sync finished with ${status.state}`,
-        );
-        return status;
-      } catch (error) {
-        status = {
-          ...withLocalCounts(database, status),
-          state: "error",
-          activeRunId: null,
-          lastRunId: runId,
-          lastError: error instanceof Error ? error.message : "Sync failed",
-        };
-        console.error(
-          `[sync:${runId}] initial sync failed: ${status.lastError}`,
-        );
-        throw error;
-      }
+    runInitialSync() {
+      return enqueueSync(runInitialSyncOnce);
     },
-    async runPushSync() {
-      const runId = createSyncRunId("push");
-      if (!config.syncEnabled) {
-        status = {
-          ...withLocalCounts(database, status),
-          state: "offline",
-          activeRunId: null,
-          lastRunId: runId,
-        };
-        return status;
-      }
-
-      if (!config.cloudApiUrl) {
-        status = {
-          ...withLocalCounts(database, status),
-          state: "error",
-          activeRunId: null,
-          lastRunId: runId,
-          lastError: "Cloud API URL is not configured for local sync",
-        };
-        throw new Error("Cloud API URL is not configured for local sync");
-      }
-
-      status = {
-        ...withLocalCounts(database, status),
-        state: "syncing",
-        activeRunId: runId,
-        lastError: null,
-      };
-      console.log(
-        `[sync:${runId}] starting push sync for local-server ${config.localServerRunId}`,
-      );
-
-      try {
-        await pushPendingOutbox(config, database, fetchImpl, {
-          includeDeferred: true,
-        });
-        await pullCloudChanges(config, database, fetchImpl);
-        status = {
-          ...withLocalCounts(database, status),
-          state:
-            countOpenSyncConflicts(database) > 0
-              ? "conflict"
-              : countPendingOutbox(database) > 0
-                ? "error"
-                : "idle",
-          lastSyncedAt: new Date().toISOString(),
-          activeRunId: null,
-          lastRunId: runId,
-          lastError: null,
-        };
-        console.log(`[sync:${runId}] push sync finished with ${status.state}`);
-        return status;
-      } catch (error) {
-        status = {
-          ...withLocalCounts(database, status),
-          state: "error",
-          activeRunId: null,
-          lastRunId: runId,
-          lastError: error instanceof Error ? error.message : "Sync failed",
-        };
-        console.error(`[sync:${runId}] push sync failed: ${status.lastError}`);
-        throw error;
-      }
+    runPushSync() {
+      return enqueueSync(runPushSyncOnce);
     },
   };
+
+  function enqueueSync(
+    run: () => Promise<SyncStatusSnapshot>,
+  ): Promise<SyncStatusSnapshot> {
+    const queuedRun = syncQueue.catch(() => undefined).then(run);
+    syncQueue = queuedRun.catch(() => undefined);
+    return queuedRun;
+  }
+
+  async function runInitialSyncOnce() {
+    const runId = createSyncRunId("initial");
+    if (!config.syncEnabled) {
+      status = {
+        ...withLocalCounts(database, status),
+        state: "offline",
+        activeRunId: null,
+        lastRunId: runId,
+      };
+      return status;
+    }
+
+    if (!config.cloudApiUrl) {
+      status = {
+        ...withLocalCounts(database, status),
+        state: "error",
+        activeRunId: null,
+        lastRunId: runId,
+        lastError: "Cloud API URL is not configured for local sync",
+      };
+      throw new Error("Cloud API URL is not configured for local sync");
+    }
+
+    status = {
+      ...withLocalCounts(database, status),
+      state: "syncing",
+      activeRunId: runId,
+      lastError: null,
+    };
+    console.log(
+      `[sync:${runId}] starting initial sync for local-server ${config.localServerRunId}`,
+    );
+
+    try {
+      await pushPendingOutbox(config, database, fetchImpl, {
+        includeDeferred: true,
+      });
+
+      const bootstrapUrl = new URL("/api/sync/bootstrap", config.cloudApiUrl);
+      const headers = new Headers({
+        "Content-Type": "application/json",
+      });
+
+      applyCloudAuthHeaders(config, headers);
+
+      const response = await fetchImpl(bootstrapUrl, {
+        method: "POST",
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Cloud bootstrap failed with HTTP ${response.status}`);
+      }
+
+      const bootstrap = syncBootstrapResponseSchema.parse(
+        await response.json(),
+      );
+      const syncedAt = new Date().toISOString();
+      applySyncBootstrap(database, bootstrap, syncedAt);
+      await pullCloudChanges(config, database, fetchImpl);
+
+      status = {
+        ...withLocalCounts(database, status),
+        state:
+          countOpenSyncConflicts(database) > 0
+            ? "conflict"
+            : countPendingOutbox(database) > 0
+              ? "error"
+              : "idle",
+        lastSyncedAt: syncedAt,
+        activeRunId: null,
+        lastRunId: runId,
+        lastError: null,
+      };
+      console.log(`[sync:${runId}] initial sync finished with ${status.state}`);
+      return status;
+    } catch (error) {
+      status = {
+        ...withLocalCounts(database, status),
+        state: "error",
+        activeRunId: null,
+        lastRunId: runId,
+        lastError: error instanceof Error ? error.message : "Sync failed",
+      };
+      console.error(`[sync:${runId}] initial sync failed: ${status.lastError}`);
+      throw error;
+    }
+  }
+
+  async function runPushSyncOnce() {
+    const runId = createSyncRunId("push");
+    if (!config.syncEnabled) {
+      status = {
+        ...withLocalCounts(database, status),
+        state: "offline",
+        activeRunId: null,
+        lastRunId: runId,
+      };
+      return status;
+    }
+
+    if (!config.cloudApiUrl) {
+      status = {
+        ...withLocalCounts(database, status),
+        state: "error",
+        activeRunId: null,
+        lastRunId: runId,
+        lastError: "Cloud API URL is not configured for local sync",
+      };
+      throw new Error("Cloud API URL is not configured for local sync");
+    }
+
+    status = {
+      ...withLocalCounts(database, status),
+      state: "syncing",
+      activeRunId: runId,
+      lastError: null,
+    };
+    console.log(
+      `[sync:${runId}] starting push sync for local-server ${config.localServerRunId}`,
+    );
+
+    try {
+      await pushPendingOutbox(config, database, fetchImpl, {
+        includeDeferred: true,
+      });
+      await pullCloudChanges(config, database, fetchImpl);
+      status = {
+        ...withLocalCounts(database, status),
+        state:
+          countOpenSyncConflicts(database) > 0
+            ? "conflict"
+            : countPendingOutbox(database) > 0
+              ? "error"
+              : "idle",
+        lastSyncedAt: new Date().toISOString(),
+        activeRunId: null,
+        lastRunId: runId,
+        lastError: null,
+      };
+      console.log(`[sync:${runId}] push sync finished with ${status.state}`);
+      return status;
+    } catch (error) {
+      status = {
+        ...withLocalCounts(database, status),
+        state: "error",
+        activeRunId: null,
+        lastRunId: runId,
+        lastError: error instanceof Error ? error.message : "Sync failed",
+      };
+      console.error(`[sync:${runId}] push sync failed: ${status.lastError}`);
+      throw error;
+    }
+  }
 }
 
 function createSyncRunId(kind: "initial" | "push") {

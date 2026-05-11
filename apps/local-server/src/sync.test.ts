@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applySyncBootstrap,
@@ -215,6 +216,106 @@ describe("createLocalSyncRuntime", () => {
       conflictCount: 0,
     });
     expect(pushedRequests).toHaveLength(1);
+
+    database.close();
+  });
+
+  it("serializes overlapping sync runs so one local event is pushed once", async () => {
+    const dbPath = createTempDatabasePath();
+    const database = openLocalDatabase({ filePath: dbPath });
+    const config = {
+      ...createConfig(dbPath),
+      cloudApiUrl: "https://api.example.test",
+    };
+    let activePushes = 0;
+    let maxActivePushes = 0;
+    const pushedEventIds = new Set<string>();
+    const pushedRequests: unknown[] = [];
+    const runtime = createLocalSyncRuntime(config, database, {
+      fetch: async (input, init) => {
+        const url = String(input);
+
+        if (url === "https://api.example.test/api/sync/push") {
+          activePushes += 1;
+          maxActivePushes = Math.max(maxActivePushes, activePushes);
+          const body = JSON.parse(String(init?.body));
+          pushedRequests.push(body);
+
+          for (const event of body.events as Array<{ eventId: string }>) {
+            pushedEventIds.add(event.eventId);
+          }
+
+          await delay(20);
+          activePushes -= 1;
+
+          return Response.json({
+            accepted: body.events.map(
+              (event: { eventId: string; localVersion: number }) => ({
+                eventId: event.eventId,
+                remoteEntityId: 456,
+                remoteVersion: event.localVersion + 1,
+                cloudEventId: `cloud:${event.eventId}`,
+              }),
+            ),
+            rejected: [],
+            conflicts: [],
+            newCursor: "cursor-after-push",
+          });
+        }
+
+        if (url === "https://api.example.test/api/sync/bootstrap") {
+          return Response.json(syncBootstrap("org-1", 1, "user-1"));
+        }
+
+        if (url.startsWith("https://api.example.test/api/sync/pull")) {
+          return Response.json({
+            cursor: "cursor-after-pull",
+            hasMore: false,
+            events: [],
+          });
+        }
+
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+
+    createLocalCustomer(database, {
+      organizationId: "org-1",
+      unitId: 1,
+      name: "Cliente Offline",
+      actorUserId: "user-1",
+      deviceId: "device-test",
+    });
+    const [event] = listPendingOutboxEvents(database);
+    if (!event) throw new Error("Expected one pending outbox event");
+
+    await expect(
+      Promise.all([
+        runtime.runInitialSync(),
+        runtime.runInitialSync(),
+        runtime.runPushSync(),
+      ]),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        state: "idle",
+        pendingOutboxCount: 0,
+        conflictCount: 0,
+      }),
+      expect.objectContaining({
+        state: "idle",
+        pendingOutboxCount: 0,
+        conflictCount: 0,
+      }),
+      expect.objectContaining({
+        state: "idle",
+        pendingOutboxCount: 0,
+        conflictCount: 0,
+      }),
+    ]);
+
+    expect(maxActivePushes).toBe(1);
+    expect(pushedRequests).toHaveLength(1);
+    expect(pushedEventIds).toEqual(new Set([event.eventId]));
 
     database.close();
   });
