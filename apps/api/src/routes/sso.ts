@@ -541,7 +541,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
 
       const auth = createLabAuth();
       const response = await auth.api.deleteSSOProvider({
-        params: { providerId },
+        body: { providerId },
         headers: buildAuthHeaders(c.req.raw.headers),
         asResponse: true,
       });

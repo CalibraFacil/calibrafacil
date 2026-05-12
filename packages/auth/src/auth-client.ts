@@ -216,10 +216,10 @@ export const backofficeAdmin = backofficeAuthClient.admin;
 export async function hasPermission(
   permissions: Parameters<
     typeof authClient.organization.hasPermission
-  >[0]["permission"],
+  >[0]["permissions"],
 ): Promise<boolean> {
   const result = await authClient.organization.hasPermission({
-    permission: permissions,
+    permissions,
   });
   return result.data?.success ?? false;
 }

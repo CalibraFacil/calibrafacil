@@ -584,13 +584,13 @@ export function requirePermission(permissions: PermissionCheck) {
       const labAuth = getRequestLabAuth(c);
       result = await labAuth.api.hasPermission({
         headers: c.req.raw.headers,
-        body: { permission: permissions },
+        body: { permissions },
       });
     } else if (authSource === "portal") {
       const portalAuth = getRequestPortalAuth(c);
       result = await portalAuth.api.hasPermission({
         headers: c.req.raw.headers,
-        body: { permission: permissions },
+        body: { permissions },
       });
     } else if (authSource === "backoffice") {
       throw new HTTPException(403, {
@@ -601,7 +601,7 @@ export function requirePermission(permissions: PermissionCheck) {
       const labAuth = getRequestLabAuth(c);
       result = await labAuth.api.hasPermission({
         headers: c.req.raw.headers,
-        body: { permission: permissions },
+        body: { permissions },
       });
     }
 
