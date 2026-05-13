@@ -1851,7 +1851,7 @@ export type MassCompositionConfig = {
     buoyancy?: string;
   };
   uncertaintyMode?: "expanded_rss";
-  quantityMode?: "linear_per_item_then_rss";
+  quantityMode?: "linear_per_item_then_rss" | "profile_linear";
 };
 
 /**
@@ -1871,6 +1871,8 @@ export type MethodInputField = {
   allowOverride?: boolean;
   eccentricityIndicator?: EccentricityIndicatorConfig;
   weighingRangeResolver?: WeighingRangeResolverConfig;
+  phaseBlockKey?: string;
+  phaseBlockLabel?: string;
   // For table type only:
   columns?: Array<{
     key: string;
@@ -1878,6 +1880,7 @@ export type MethodInputField = {
     type: "text" | "number";
     unit?: string;
     role?: MethodTableColumnRole;
+    phase?: "before" | "after" | "always";
     massComposition?: MassCompositionConfig;
   }>;
 };
@@ -1905,6 +1908,7 @@ export type MethodFormula = {
   label?: string; // Display label, e.g., "Measurement Error"
   unit?: string;
   reporting?: MethodFormulaReporting;
+  metadata?: Record<string, unknown>;
 };
 
 export type MethodMeasurementModel = {
@@ -1935,6 +1939,7 @@ export type MethodValidation = {
   rightExpression: string;
   message: string; // Message shown on failure
   severity: "error" | "warning";
+  metadata?: Record<string, unknown>;
 };
 
 export type MethodVariableBinding =
@@ -2586,6 +2591,34 @@ export type EnvironmentalSnapshot = {
   outOfLimitsJustification: string | null;
 };
 
+export type CalibrationLocationType = "customer_site" | "lab" | "other";
+
+export type CalibrationLocationSnapshot = {
+  type: CalibrationLocationType;
+  addressText: string;
+  notes?: string | null;
+  recordedAt: string;
+  recordedBy: string;
+};
+
+export type CalibrationPhaseMode =
+  | "before_and_after"
+  | "before_only"
+  | "after_only"
+  | "not_performed";
+
+export type CalibrationPhaseSnapshot = {
+  blocks: Record<
+    string,
+    {
+      mode: CalibrationPhaseMode;
+      reason?: string | null;
+    }
+  >;
+  recordedAt: string;
+  recordedBy: string;
+};
+
 export type CalibrationRequestStatus =
   | "PENDING"
   | "UNDER_REVIEW"
@@ -2660,6 +2693,12 @@ export const calibrationJob = pgTable(
     environmentalSnapshot: jsonb(
       "environmental_snapshot",
     ).$type<EnvironmentalSnapshot>(),
+    calibrationLocationSnapshot: jsonb(
+      "calibration_location_snapshot",
+    ).$type<CalibrationLocationSnapshot>(),
+    calibrationPhaseSnapshot: jsonb(
+      "calibration_phase_snapshot",
+    ).$type<CalibrationPhaseSnapshot>(),
     certificateTemplateId: integer("certificate_template_id").references(
       () => certificateTemplate.id,
       { onDelete: "set null" },

@@ -400,6 +400,9 @@ function methodInputToDefinitionInput(
                     ? tableColumn.unit
                     : undefined,
                 role: methodTableColumnRoleToDefinitionRole(tableColumn.role),
+                phase: methodTableColumnPhaseToDefinitionPhase(
+                  tableColumn.phase,
+                ),
                 massComposition: methodTableColumnMassCompositionToDefinition(
                   tableColumn.massComposition,
                 ),
@@ -432,6 +435,11 @@ function methodInputExecutionMetadata(
     metadata.assetSpecKey = safeMetadataString(record.assetSpecKey);
     metadata.allowOverride =
       typeof record.allowOverride === "boolean" ? record.allowOverride : null;
+  }
+
+  if (typeof record.phaseBlockKey === "string" && record.phaseBlockKey.trim()) {
+    metadata.phaseBlock = record.phaseBlockKey.trim();
+    metadata.phaseBlockLabel = safeMetadataString(record.phaseBlockLabel);
   }
 
   const weighingRangeResolver = objectRecord(record.weighingRangeResolver);
@@ -472,6 +480,18 @@ function methodInputExecutionMetadata(
     metadata.eccentricityIndicatorVariant = safeMetadataString(
       eccentricityIndicator.variant,
     );
+    metadata.eccentricityIndicatorPointColumn = safeMetadataString(
+      eccentricityIndicator.pointColumn,
+    );
+    metadata.eccentricityIndicatorLoadPoints = Array.isArray(
+      eccentricityIndicator.loadPoints,
+    )
+      ? eccentricityIndicator.loadPoints
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .join(",")
+      : null;
   }
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -488,6 +508,14 @@ function methodTableColumnRoleToDefinitionRole(
 ): DefinitionTableColumn["role"] {
   return role === "standard_value" || role === "mass_standard_composition"
     ? role
+    : undefined;
+}
+
+function methodTableColumnPhaseToDefinitionPhase(
+  phase: unknown,
+): DefinitionTableColumn["phase"] {
+  return phase === "before" || phase === "after" || phase === "always"
+    ? phase
     : undefined;
 }
 
@@ -515,7 +543,7 @@ function methodTableColumnMassCompositionToDefinition(
     ...(record.uncertaintyMode === "expanded_rss"
       ? { uncertaintyMode: record.uncertaintyMode }
       : {}),
-    ...(record.quantityMode === "linear_per_item_then_rss"
+    ...(isMassCompositionQuantityMode(record.quantityMode)
       ? { quantityMode: record.quantityMode }
       : {}),
   };
@@ -557,6 +585,12 @@ function isMassCompositionOptionSource(
   return value === "certified_values" || value === "composition_profiles";
 }
 
+function isMassCompositionQuantityMode(
+  value: unknown,
+): value is "linear_per_item_then_rss" | "profile_linear" {
+  return value === "linear_per_item_then_rss" || value === "profile_linear";
+}
+
 function methodFormulaToDefinitionFormula(formula: unknown) {
   const record = (formula ?? {}) as Record<string, unknown>;
   const key =
@@ -580,6 +614,7 @@ function methodFormulaToDefinitionFormula(formula: unknown) {
     required: true,
     reporting: methodFormulaReportingToDefinitionReporting(record.reporting),
     scope: methodFormulaScopeToDefinitionScope(record.scope),
+    metadata: safeDefinitionMetadata(record.metadata),
   };
 }
 
@@ -634,6 +669,7 @@ function buildDefaultVariableBindings(rawInputs: unknown[]): unknown[] {
         source: "table_column",
         fieldKey: record.key,
         columnKey: tableColumn.key,
+        metadata: variableBindingPhaseMetadata(record, tableColumn),
       });
 
       for (const statistic of [
@@ -650,6 +686,7 @@ function buildDefaultVariableBindings(rawInputs: unknown[]): unknown[] {
           fieldKey: record.key,
           columnKey: tableColumn.key,
           statistic,
+          metadata: variableBindingPhaseMetadata(record, tableColumn),
         });
       }
     }
@@ -677,6 +714,23 @@ function buildDefaultVariableBindings(rawInputs: unknown[]): unknown[] {
   );
 
   return bindings;
+}
+
+function variableBindingPhaseMetadata(
+  field: Record<string, unknown>,
+  column: Record<string, unknown>,
+) {
+  if (
+    typeof field.phaseBlockKey !== "string" ||
+    !field.phaseBlockKey.trim() ||
+    (column.phase !== "before" && column.phase !== "after")
+  ) {
+    return undefined;
+  }
+  return {
+    phaseBlock: field.phaseBlockKey.trim(),
+    phase: column.phase,
+  };
 }
 
 function buildStandardCompatibilityVariableBindings(
@@ -779,6 +833,7 @@ function methodVariableBindingToDefinitionInput(
       columnKey: safeMetadataString(record.columnKey),
       statistic: safeMetadataString(record.statistic),
       field: safeMetadataString(record.field),
+      ...safeDefinitionMetadata(record.metadata),
       standardId:
         typeof record.standardId === "number" &&
         Number.isFinite(record.standardId)
@@ -791,6 +846,26 @@ function methodVariableBindingToDefinitionInput(
 
 function safeMetadataString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function safeDefinitionMetadata(
+  value: unknown,
+): Record<string, string | number | boolean | null> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const metadata: Record<string, string | number | boolean | null> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      typeof item === "string" ||
+      typeof item === "boolean" ||
+      item === null ||
+      (typeof item === "number" && Number.isFinite(item))
+    ) {
+      metadata[key] = item;
+    }
+  }
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 function methodValidationToAcceptanceCriterion(
@@ -822,6 +897,7 @@ function methodValidationToAcceptanceCriterion(
       typeof record.message === "string"
         ? record.message
         : "Critério de aceitação",
+    metadata: safeDefinitionMetadata(record.metadata),
   };
 }
 

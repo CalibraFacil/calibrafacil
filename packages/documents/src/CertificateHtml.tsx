@@ -109,6 +109,8 @@ export type MethodInputField = {
   source?: "manual" | "asset_spec";
   assetSpecKey?: string;
   allowOverride?: boolean;
+  phaseBlockKey?: string;
+  phaseBlockLabel?: string;
   eccentricityIndicator?: {
     enabled?: boolean;
     variant?: "circular_platform" | "road_scale";
@@ -133,6 +135,7 @@ export type MethodInputField = {
     type: "text" | "number";
     unit?: string;
     role?: "standard_value" | "mass_standard_composition";
+    phase?: "before" | "after" | "always";
     massComposition?: {
       targetUnit?: "mg" | "g" | "kg";
       optionSource?: "certified_values" | "composition_profiles";
@@ -206,6 +209,24 @@ export type MethodSnapshot = {
   certificateContent?: MethodCertificateContent | null;
 };
 
+type CalibrationPhaseMode =
+  | "before_and_after"
+  | "before_only"
+  | "after_only"
+  | "not_performed";
+
+type CalibrationPhaseSnapshot = {
+  blocks: Record<
+    string,
+    {
+      mode: CalibrationPhaseMode;
+      reason?: string | null;
+    }
+  >;
+  recordedAt?: string;
+  recordedBy?: string;
+};
+
 export type CertifiedValue = {
   nominal: string;
   value: number;
@@ -244,6 +265,14 @@ export type EnvironmentalSnapshot = {
   } | null;
   withinLimits: boolean;
   outOfLimitsJustification: string | null;
+};
+
+export type CalibrationLocationSnapshot = {
+  type: "customer_site" | "lab" | "other";
+  addressText: string;
+  notes?: string | null;
+  recordedAt?: string;
+  recordedBy?: string;
 };
 
 type MassCompositionItem = {
@@ -310,6 +339,8 @@ export type JobData = {
   performedAt: Date | null;
   approvedAt: Date | null;
   environmentalSnapshot?: EnvironmentalSnapshot | null;
+  calibrationLocationSnapshot?: CalibrationLocationSnapshot | null;
+  calibrationPhaseSnapshot?: CalibrationPhaseSnapshot | null;
   lab: {
     name: string;
     cnpj?: string | null;
@@ -325,6 +356,7 @@ export type JobData = {
     phone?: string | null;
     email?: string | null;
     website?: string | null;
+    logo?: string | null;
     technicalManagerName?: string | null;
     technicalManagerTitle?: string | null;
   };
@@ -885,12 +917,18 @@ const exemploFor51Styles = `
     box-sizing: border-box;
   }
   body {
+    --for51-rule: 0.35mm solid #000;
+    --for51-frame-rule: 0.55mm solid #000;
     margin: 0;
     background: #fff;
     color: #000;
     font-family: Arial, Helvetica, sans-serif;
     font-size: 8.7pt;
     line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .for51-page {
     width: 210mm;
@@ -916,24 +954,24 @@ const exemploFor51Styles = `
   }
   .for51-table th,
   .for51-table td {
-    border: 0.35mm solid #000;
+    border: var(--for51-rule);
     padding: 0.8mm 1.1mm;
     vertical-align: middle;
     overflow-wrap: normal;
     word-break: normal;
   }
   .for51-outer {
-    border: 0.6mm solid #000;
+    border: var(--for51-frame-rule);
   }
   .for51-header {
     display: grid;
     grid-template-columns: 39mm 1fr 31mm;
-    border: 0.6mm solid #000;
+    border: var(--for51-frame-rule);
     margin-bottom: 4mm;
     min-height: 17mm;
   }
   .for51-header > div {
-    border-right: 0.45mm solid #000;
+    border-right: var(--for51-rule);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -989,16 +1027,20 @@ const exemploFor51Styles = `
     font-weight: 800;
     font-size: 9pt;
     padding: 0.75mm;
-    border: 0.45mm solid #000;
+    border: var(--for51-rule);
     border-bottom: 0;
   }
   .for51-field-label {
-    width: 26mm;
+    width: 33mm;
+    min-width: 33mm;
     font-weight: 400;
+    white-space: nowrap;
   }
   .for51-field-label-compact {
-    width: 22mm;
+    width: 28mm;
+    min-width: 28mm;
     font-weight: 400;
+    white-space: nowrap;
   }
   .for51-section {
     margin-bottom: 0;
@@ -1009,7 +1051,7 @@ const exemploFor51Styles = `
   .for51-method,
   .for51-conventions,
   .for51-info {
-    border: 0.45mm solid #000;
+    border: var(--for51-rule);
     border-top: 0;
     padding: 1mm;
   }
@@ -1029,7 +1071,7 @@ const exemploFor51Styles = `
     font-size: 9pt;
   }
   .for51-page2-shell {
-    border: 0.6mm solid #000;
+    border: var(--for51-frame-rule);
     height: 272mm;
     position: relative;
     padding: 0 8mm 8mm;
@@ -1070,9 +1112,6 @@ const exemploFor51Styles = `
   .for51-result-table th {
     font-weight: 800;
   }
-  .for51-blank-row td {
-    height: 4.2mm;
-  }
   .for51-repeat td,
   .for51-repeat th,
   .for51-ecc td,
@@ -1087,92 +1126,44 @@ const exemploFor51Styles = `
   }
   .for51-ecc-wrap {
     display: grid;
-    grid-template-columns: 1fr 50mm;
-    border: 0.45mm solid #000;
-    border-top: 0;
+    grid-template-columns: minmax(0, 1fr) 50mm;
+    align-items: stretch;
+    border: var(--for51-frame-rule);
   }
   .for51-ecc-wrap .for51-ecc {
     border: 0;
+    height: 100%;
   }
   .for51-ecc-wrap .for51-ecc th,
   .for51-ecc-wrap .for51-ecc td {
     border-left: 0;
   }
   .for51-diagram-cell {
-    border-left: 0.45mm solid #000;
+    border-left: var(--for51-frame-rule);
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 34mm;
-    padding-bottom: 4mm;
+    min-height: 0;
   }
   .for51-diagram {
     position: relative;
-    width: 40mm;
-    height: 31mm;
+    width: 42mm;
+    height: 32mm;
     font-size: 9pt;
   }
-  .for51-diagram .circle {
-    position: absolute;
-    left: 12mm;
-    top: 7mm;
-    width: 18mm;
-    height: 18mm;
-    border: 0.45mm solid #000;
-    border-radius: 50%;
-  }
-  .for51-diagram .vline {
-    position: absolute;
-    left: 21mm;
-    top: 2mm;
-    width: 0.25mm;
-    height: 28mm;
-    background: #000;
-  }
-  .for51-diagram .hline {
-    position: absolute;
-    left: 5mm;
-    top: 16mm;
-    width: 31mm;
-    height: 0.25mm;
-    background: #000;
-  }
-  .for51-diagram .box {
-    position: absolute;
-    width: 4mm;
-    height: 4mm;
-    border: 0.3mm solid #777;
-    background: #fff;
-    text-align: center;
-    line-height: 3.4mm;
-    font-size: 7pt;
-  }
-  .for51-diagram .box.top { left: 19mm; top: 0; }
-  .for51-diagram .box.right { right: 0; top: 14mm; }
-  .for51-diagram .box.bottom { left: 19mm; bottom: 0; }
-  .for51-diagram .box.left { left: 0; top: 14mm; }
-  .for51-diagram .p {
-    position: absolute;
-    font-weight: 700;
-    background: #fff;
-    line-height: 1;
-  }
-  .for51-diagram .a { left: 20mm; top: 14mm; }
-  .for51-diagram .b { left: 15mm; top: 10mm; }
-  .for51-diagram .c { left: 24mm; top: 10mm; }
-  .for51-diagram .d { left: 23mm; top: 19mm; }
-  .for51-diagram .e { left: 15mm; top: 19mm; }
-  .for51-diagram-caption {
-    position: absolute;
-    left: 6mm;
-    bottom: -2mm;
-    white-space: nowrap;
-    font-size: 7.8pt;
+  .for51-diagram svg {
+    display: block;
+    width: 100%;
+    height: 100%;
   }
   .for51-observations {
     margin-top: 4mm;
-    border: 0.45mm solid #000;
+    border: var(--for51-frame-rule);
     height: 21mm;
+  }
+  .for51-observations .for51-section-title {
+    border: 0;
+    border-bottom: var(--for51-rule);
   }
   .for51-signature {
     position: absolute;
@@ -1191,7 +1182,7 @@ const exemploFor51Styles = `
   }
   .for51-signature-line {
     width: 55mm;
-    border-top: 0.35mm solid #000;
+    border-top: var(--for51-rule);
     margin: 0 auto 1mm;
     padding-top: 1mm;
   }
@@ -1259,6 +1250,19 @@ function formatLabAddress(lab: JobData["lab"]): string | null {
     lab.cep,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : null;
+}
+
+function calibrationLocationText(job: JobData): string {
+  const snapshot = job.calibrationLocationSnapshot;
+  if (snapshot?.addressText) return snapshot.addressText;
+  return asString(job.data?.local_calibracao) || "";
+}
+
+function calibrationLocationChecked(
+  job: JobData,
+  type: CalibrationLocationSnapshot["type"],
+): string {
+  return job.calibrationLocationSnapshot?.type === type ? "☒" : "☐";
 }
 
 function formatTaxId(taxId: string | null | undefined): string {
@@ -2688,7 +2692,8 @@ function formatFor51Veff(value: unknown) {
   const raw = asString(value);
   if (raw === "Infinity" || raw === "infinito") return "infinito";
   const numeric = asNumber(value);
-  return numeric === null ? raw : formatFor51Number(numeric, 0);
+  if (numeric === null) return raw;
+  return numeric >= 1_000_000_000 ? "infinito" : formatFor51Number(numeric, 0);
 }
 
 function formatFor51K(value: unknown) {
@@ -2696,11 +2701,44 @@ function formatFor51K(value: unknown) {
   return numeric === null ? asString(value) : formatFor51Number(numeric, 2);
 }
 
+function isFor51PhaseActive(
+  job: JobData,
+  blockKey: "indication" | "repeatability" | "eccentricity",
+  phase: "before" | "after",
+) {
+  const mode =
+    job.calibrationPhaseSnapshot?.blocks?.[blockKey]?.mode ??
+    "before_and_after";
+  if (mode === "before_and_after") return true;
+  if (mode === "before_only") return phase === "before";
+  if (mode === "after_only") return phase === "after";
+  if (mode === "not_performed") return false;
+  return true;
+}
+
+function for51PhaseText(
+  active: boolean,
+  value: unknown,
+  decimals: number,
+): string {
+  return active ? formatFor51MassFromG(value, decimals) : "x";
+}
+
+function for51PhaseK(active: boolean, value: unknown): string {
+  return active ? formatFor51K(value) : "x";
+}
+
+function for51PhaseVeff(active: boolean, value: unknown): string {
+  return active ? formatFor51Veff(value) : "x";
+}
+
 function renderFor51ResultRows(
   job: JobData,
   kind: "antes" | "apos",
   decimals: number,
 ) {
+  const phase = kind === "antes" ? "before" : "after";
+  const phaseActive = isFor51PhaseActive(job, "indication", phase);
   const pointRows = getFor51Rows(job, "pontos_indicacao");
   const mediaKey =
     kind === "antes" ? "media_indicacao_antes" : "media_indicacao_apos";
@@ -2722,62 +2760,59 @@ function renderFor51ResultRows(
             <td>{formatFor51IntegerMassFromG(row.valor_padrao)}</td>
             <td>kg</td>
             <td>
-              {formatFor51MassFromG(
+              {for51PhaseText(
+                phaseActive,
                 row[`${readingPrefix}_leitura_1`],
                 rowDecimals,
               )}
             </td>
             <td>
-              {formatFor51MassFromG(
+              {for51PhaseText(
+                phaseActive,
                 row[`${readingPrefix}_leitura_2`],
                 rowDecimals,
               )}
             </td>
             <td>
-              {formatFor51MassFromG(
+              {for51PhaseText(
+                phaseActive,
                 row[`${readingPrefix}_leitura_3`],
                 rowDecimals,
               )}
             </td>
             <td>
-              {formatFor51MassFromG(
+              {for51PhaseText(
+                phaseActive,
                 getFor51ResultValue(job, mediaKey, index),
                 rowDecimals,
               )}
             </td>
             <td>
-              {formatFor51MassFromG(
+              {for51PhaseText(
+                phaseActive,
                 getFor51ResultValue(job, errorKey, index),
                 rowDecimals,
               )}
             </td>
             <td>
-              {formatFor51MassFromG(
+              {for51PhaseText(
+                phaseActive,
                 getFor51ResultValue(job, uncertaintyKey, index),
                 rowDecimals,
               )}
             </td>
-            <td>{formatFor51K(getFor51ResultValue(job, kKey, index))}</td>
-            <td>{formatFor51Veff(getFor51ResultValue(job, veffKey, index))}</td>
+            <td>
+              {for51PhaseK(phaseActive, getFor51ResultValue(job, kKey, index))}
+            </td>
+            <td>
+              {for51PhaseVeff(
+                phaseActive,
+                getFor51ResultValue(job, veffKey, index),
+              )}
+            </td>
           </tr>
         );
       })}
-      {Array.from({ length: Math.max(0, 5 - pointRows.length) }).map(
-        (_, index) => (
-          <tr className="for51-blank-row" key={`${kind}-blank-${index}`}>
-            <td />
-            <td />
-            <td />
-            <td />
-            <td />
-            <td />
-            <td />
-            <td />
-            <td />
-            <td />
-          </tr>
-        ),
-      )}
     </>
   );
 }
@@ -2798,6 +2833,10 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
     pointRows,
   );
   const observation = asString(job.data?.observacao);
+  const renderBeforeIndication =
+    pointRows.length > 0 && isFor51PhaseActive(job, "indication", "before");
+  const renderAfterIndication =
+    pointRows.length > 0 && isFor51PhaseActive(job, "indication", "after");
 
   return (
     <html lang="pt-BR">
@@ -2815,10 +2854,18 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
           <div className="for51-frame">
             <div className="for51-header">
               <div>
-                <div className="for51-logo-text">
-                  EXEMPLO
-                  <small>BALANÇAS</small>
-                </div>
+                {job.lab.logo ? (
+                  <img
+                    src={job.lab.logo}
+                    alt={job.lab.name}
+                    className="for51-logo"
+                  />
+                ) : (
+                  <div className="for51-logo-text">
+                    EXEMPLO
+                    <small>BALANÇAS</small>
+                  </div>
+                )}
               </div>
               <div className="for51-title">
                 <div>
@@ -2928,7 +2975,13 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
                   </tr>
                   <tr>
                     <td className="for51-field-label">Local da Calibração:</td>
-                    <td colSpan={3}>{asString(job.data?.local_calibracao)}</td>
+                    <td colSpan={3}>
+                      {calibrationLocationChecked(job, "customer_site")} Cliente{" "}
+                      {calibrationLocationChecked(job, "lab")} Laboratório{" "}
+                      {calibrationLocationChecked(job, "other")} Outro
+                      <br />
+                      {calibrationLocationText(job)}
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -2943,28 +2996,28 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
                     <td style={{ textAlign: "center" }}>
                       {job.environmentalSnapshot?.temperature == null
                         ? "x"
-                        : formatFor51Number(
+                        : `${formatFor51Number(
                             job.environmentalSnapshot.temperature,
                             1,
-                          )}
+                          )} ºC`}
                     </td>
                     <td>Umidade Relativa:</td>
                     <td style={{ textAlign: "center" }}>
                       {job.environmentalSnapshot?.humidity == null
                         ? "x"
-                        : formatFor51Number(
+                        : `${formatFor51Number(
                             job.environmentalSnapshot.humidity,
                             1,
-                          )}
+                          )} %`}
                     </td>
                     <td>Pressão atm:</td>
                     <td style={{ textAlign: "center" }}>
                       {job.environmentalSnapshot?.pressure == null
                         ? "x"
-                        : formatFor51Number(
+                        : `${formatFor51Number(
                             job.environmentalSnapshot.pressure,
                             1,
-                          )}
+                          )} hPa`}
                     </td>
                   </tr>
                 </tbody>
@@ -2998,19 +3051,6 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
                             standard.calibrationDate,
                         )}
                       </td>
-                    </tr>
-                  ))}
-                  {Array.from({
-                    length: Math.max(
-                      0,
-                      7 - (job.standardsSnapshot?.length ?? 0),
-                    ),
-                  }).map((_, index) => (
-                    <tr className="for51-blank-row" key={index}>
-                      <td />
-                      <td />
-                      <td />
-                      <td />
                     </tr>
                   ))}
                 </tbody>
@@ -3087,55 +3127,69 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
             </div>
             <div className="for51-results-label">RESULTADOS:</div>
 
-            <div className="for51-result-block">
-              <div className="for51-section-title">
-                CALIBRAÇÃO ANTES DO AJUSTE
+            {renderBeforeIndication ? (
+              <div className="for51-result-block">
+                <div className="for51-section-title">
+                  CALIBRAÇÃO ANTES DO AJUSTE
+                </div>
+                <table className="for51-table for51-result-table for51-outer">
+                  <thead>
+                    <tr>
+                      <th>V C</th>
+                      <th>Unid</th>
+                      <th>Leitura 1</th>
+                      <th>Leitura 2</th>
+                      <th>Leitura 3</th>
+                      <th>Média</th>
+                      <th>EI</th>
+                      <th>U</th>
+                      <th>K</th>
+                      <th>Veff</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {renderFor51ResultRows(job, "antes", decimals)}
+                  </tbody>
+                </table>
               </div>
-              <table className="for51-table for51-result-table for51-outer">
-                <thead>
-                  <tr>
-                    <th>V C</th>
-                    <th>Unid</th>
-                    <th>Leitura 1</th>
-                    <th>Leitura 2</th>
-                    <th>Leitura 3</th>
-                    <th>Média</th>
-                    <th>EI</th>
-                    <th>U</th>
-                    <th>K</th>
-                    <th>Veff</th>
-                  </tr>
-                </thead>
-                <tbody>{renderFor51ResultRows(job, "antes", decimals)}</tbody>
-              </table>
-            </div>
+            ) : null}
+
+            {renderAfterIndication ? (
+              <div className="for51-result-block">
+                <div className="for51-section-title">
+                  CALIBRAÇÃO APÓS O AJUSTE
+                </div>
+                <table className="for51-table for51-result-table for51-outer">
+                  <thead>
+                    <tr>
+                      <th>V C</th>
+                      <th>Unid</th>
+                      <th>Leitura 1</th>
+                      <th>Leitura 2</th>
+                      <th>Leitura 3</th>
+                      <th>Média</th>
+                      <th>EI</th>
+                      <th>U</th>
+                      <th>K</th>
+                      <th>Veff</th>
+                    </tr>
+                  </thead>
+                  <tbody>{renderFor51ResultRows(job, "apos", decimals)}</tbody>
+                </table>
+              </div>
+            ) : null}
 
             <div className="for51-result-block">
-              <div className="for51-section-title">
-                CALIBRAÇÃO APÓS O AJUSTE
-              </div>
-              <table className="for51-table for51-result-table for51-outer">
-                <thead>
-                  <tr>
-                    <th>V C</th>
-                    <th>Unid</th>
-                    <th>Leitura 1</th>
-                    <th>Leitura 2</th>
-                    <th>Leitura 3</th>
-                    <th>Média</th>
-                    <th>EI</th>
-                    <th>U</th>
-                    <th>K</th>
-                    <th>Veff</th>
-                  </tr>
-                </thead>
-                <tbody>{renderFor51ResultRows(job, "apos", decimals)}</tbody>
-              </table>
-            </div>
-
-            <div className="for51-section">
               <div className="for51-section-title">REPETIBILIDADE</div>
               <table className="for51-table for51-repeat for51-outer">
+                <colgroup>
+                  <col style={{ width: "29mm" }} />
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <col key={index} style={{ width: "18mm" }} />
+                  ))}
+                  <col style={{ width: "31mm" }} />
+                  <col style={{ width: "14mm" }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th />
@@ -3150,23 +3204,34 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
                 </thead>
                 <tbody>
                   {[
-                    ["Antes do ajuste", repeatBefore],
-                    ["Depois do ajuste", repeatAfter],
-                  ].map(([label, values]) => {
+                    ["Antes do ajuste", "before", repeatBefore],
+                    ["Depois do ajuste", "after", repeatAfter],
+                  ].map(([label, phase, values]) => {
                     const readings = values as number[];
+                    const phaseActive = isFor51PhaseActive(
+                      job,
+                      "repeatability",
+                      phase as "before" | "after",
+                    );
                     return (
                       <tr key={label as string}>
                         <td className="row-label">{label as string}</td>
                         {Array.from({ length: 5 }).map((_, index) => (
                           <td key={index}>
-                            {formatFor51MassFromG(readings[index], decimals)}
+                            {for51PhaseText(
+                              phaseActive,
+                              readings[index],
+                              decimals,
+                            )}
                           </td>
                         ))}
                         <td>
-                          {formatFor51Number(
-                            sampleStandardDeviation(readings) / 1000,
-                            decimals,
-                          )}
+                          {phaseActive
+                            ? formatFor51Number(
+                                sampleStandardDeviation(readings) / 1000,
+                                decimals,
+                              )
+                            : "x"}
                         </td>
                         <td>kg</td>
                       </tr>
@@ -3176,7 +3241,7 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
               </table>
             </div>
 
-            <div className="for51-section">
+            <div className="for51-result-block">
               <div className="for51-section-title">EXCENTRICIDADE</div>
               <div className="for51-ecc-wrap">
                 <table className="for51-table for51-ecc">
@@ -3192,8 +3257,20 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
                     {eccentricityRows.map((row, index) => (
                       <tr key={index}>
                         <td>{asString(row.posicao)}</td>
-                        <td>{formatFor51MassFromG(row.antes, decimals)}</td>
-                        <td>{formatFor51MassFromG(row.apos, decimals)}</td>
+                        <td>
+                          {for51PhaseText(
+                            isFor51PhaseActive(job, "eccentricity", "before"),
+                            row.antes,
+                            decimals,
+                          )}
+                        </td>
+                        <td>
+                          {for51PhaseText(
+                            isFor51PhaseActive(job, "eccentricity", "after"),
+                            row.apos,
+                            decimals,
+                          )}
+                        </td>
                         <td>kg</td>
                       </tr>
                     ))}
@@ -3201,21 +3278,106 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
                 </table>
                 <div className="for51-diagram-cell">
                   <div className="for51-diagram" aria-hidden="true">
-                    <div className="vline" />
-                    <div className="hline" />
-                    <div className="circle" />
-                    <div className="box top">✓</div>
-                    <div className="box right" />
-                    <div className="box bottom" />
-                    <div className="box left" />
-                    <div className="p a">A</div>
-                    <div className="p b">B</div>
-                    <div className="p c">C</div>
-                    <div className="p d">D</div>
-                    <div className="p e">E</div>
-                    <div className="for51-diagram-caption">
-                      Posição do indicador
-                    </div>
+                    <svg viewBox="0 0 180 175" role="img">
+                      <g
+                        fill="none"
+                        stroke="#000"
+                        strokeLinecap="butt"
+                        strokeWidth="2"
+                      >
+                        <line
+                          strokeDasharray="5 4"
+                          x1="38"
+                          x2="80"
+                          y1="75"
+                          y2="75"
+                        />
+                        <line
+                          strokeDasharray="5 4"
+                          transform="rotate(90 90 75)"
+                          x1="38"
+                          x2="80"
+                          y1="75"
+                          y2="75"
+                        />
+                        <line
+                          strokeDasharray="5 4"
+                          transform="rotate(90 90 75)"
+                          x1="142"
+                          x2="100"
+                          y1="75"
+                          y2="75"
+                        />
+                        <line
+                          strokeDasharray="5 4"
+                          x1="142"
+                          x2="100"
+                          y1="75"
+                          y2="75"
+                        />
+                        <circle cx="90" cy="75" r="36" />
+                      </g>
+                      {[
+                        ["82", "1", "X"],
+                        ["150", "67", ""],
+                        ["82", "133", ""],
+                        ["14", "67", ""],
+                      ].map(([x, y, label], index) => (
+                        <g key={index}>
+                          <rect
+                            fill="#fff"
+                            height="16"
+                            stroke="#777"
+                            strokeWidth="2"
+                            width="16"
+                            x={x}
+                            y={y}
+                          />
+                          {label ? (
+                            <text
+                              dominantBaseline="middle"
+                              fill="#000"
+                              fontSize="15"
+                              fontWeight="700"
+                              textAnchor="middle"
+                              x={Number(x) + 8}
+                              y={Number(y) + 8}
+                            >
+                              {label}
+                            </text>
+                          ) : null}
+                        </g>
+                      ))}
+                      {[
+                        ["A", 90, 75],
+                        ["B", 70, 60],
+                        ["C", 110, 60],
+                        ["D", 110, 94],
+                        ["E", 70, 94],
+                      ].map(([label, x, y]) => (
+                        <text
+                          dominantBaseline="middle"
+                          fill="#000"
+                          fontSize="15"
+                          fontWeight="700"
+                          key={label}
+                          textAnchor="middle"
+                          x={x}
+                          y={y}
+                        >
+                          {label}
+                        </text>
+                      ))}
+                      <text
+                        fill="#000"
+                        fontSize="14"
+                        textAnchor="middle"
+                        x="90"
+                        y="170"
+                      >
+                        Posição do indicador
+                      </text>
+                    </svg>
                   </div>
                 </div>
               </div>

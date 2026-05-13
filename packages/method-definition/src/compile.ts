@@ -669,6 +669,7 @@ function compileMeasurementModels(
           ? { coverageFactor: model.coverageFactor }
           : {}),
         ...(model.options ? { options: model.options } : {}),
+        ...(model.metadata ? { metadata: model.metadata } : {}),
       });
     } catch (error) {
       context.diagnostics.push(

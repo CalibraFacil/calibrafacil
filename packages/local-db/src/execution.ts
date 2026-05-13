@@ -40,6 +40,8 @@ export type SaveLocalExecutionInput = LocalJobCommandInput & {
     humidity: number | null;
     pressure: number | null;
   };
+  calibrationLocationSnapshot?: JsonRecord | null;
+  calibrationPhaseSnapshot?: JsonRecord | null;
   requireResults?: boolean;
 };
 
@@ -129,6 +131,8 @@ INSERT INTO calibration_jobs (
   asset_snapshot_json,
   standards_snapshot_json,
   environmental_snapshot_json,
+  calibration_location_snapshot_json,
+  calibration_phase_snapshot_json,
   data_json,
   results_json,
   status,
@@ -150,6 +154,8 @@ INSERT INTO calibration_jobs (
   @technicianId,
   @methodSnapshotJson,
   @assetSnapshotJson,
+  NULL,
+  NULL,
   NULL,
   NULL,
   NULL,
@@ -247,6 +253,14 @@ export function saveLocalJobExecution(
         recordedBy: input.actorUserId ?? "local",
       })
     : parseJson(existing.environmental_snapshot_json);
+  const calibrationLocationSnapshot =
+    input.calibrationLocationSnapshot === undefined
+      ? parseJson(existing.calibration_location_snapshot_json)
+      : input.calibrationLocationSnapshot;
+  const calibrationPhaseSnapshot =
+    input.calibrationPhaseSnapshot === undefined
+      ? parseJson(existing.calibration_phase_snapshot_json)
+      : input.calibrationPhaseSnapshot;
 
   database.transaction(() => {
     database
@@ -258,6 +272,8 @@ SET
   results_json = @resultsJson,
   standards_snapshot_json = @standardsSnapshotJson,
   environmental_snapshot_json = @environmentalSnapshotJson,
+  calibration_location_snapshot_json = @calibrationLocationSnapshotJson,
+  calibration_phase_snapshot_json = @calibrationPhaseSnapshotJson,
   status = @status,
   submitted_at = @submittedAt,
   updated_at = @updatedAt,
@@ -274,6 +290,12 @@ WHERE id = @id
             ? existing.standards_snapshot_json
             : JSON.stringify(standardsSnapshot),
         environmentalSnapshotJson: JSON.stringify(environmentalSnapshot),
+        calibrationLocationSnapshotJson: JSON.stringify(
+          calibrationLocationSnapshot ?? null,
+        ),
+        calibrationPhaseSnapshotJson: JSON.stringify(
+          calibrationPhaseSnapshot ?? null,
+        ),
         status: nextStatus,
         submittedAt: nextStatus === "REVIEW" ? now : existing.submitted_at,
         updatedAt: now,
@@ -295,6 +317,8 @@ WHERE id = @id
       results: input.results ?? null,
       standardsSnapshot,
       environmentalSnapshot,
+      calibrationLocationSnapshot,
+      calibrationPhaseSnapshot,
       status: nextStatus,
     };
     if (existing.remote_id !== null) {
@@ -683,6 +707,10 @@ function toJobDetail(job: LocalJobRow) {
     assetSnapshot,
     standardsSnapshot: parseJson(job.standards_snapshot_json),
     environmentalSnapshot: parseJson(job.environmental_snapshot_json),
+    calibrationLocationSnapshot: parseJson(
+      job.calibration_location_snapshot_json,
+    ),
+    calibrationPhaseSnapshot: parseJson(job.calibration_phase_snapshot_json),
     dueDate: job.due_date,
     performedAt: job.performed_at,
     submittedAt: job.submitted_at,
@@ -1122,6 +1150,8 @@ type LocalJobRow = {
   asset_snapshot_json: string;
   standards_snapshot_json: string | null;
   environmental_snapshot_json: string | null;
+  calibration_location_snapshot_json: string | null;
+  calibration_phase_snapshot_json: string | null;
   data_json: string | null;
   results_json: string | null;
   status: LocalJobStatus;

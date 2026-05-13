@@ -9,6 +9,7 @@ import {
   asset,
   assetType,
   customer,
+  organization,
   service,
   referenceStandard,
   user,
@@ -22,6 +23,8 @@ import {
   type StandardSnapshot,
   type EnvironmentalSnapshot,
   type EnvironmentalLimitsSnapshot,
+  type CalibrationLocationSnapshot,
+  type CalibrationPhaseSnapshot,
 } from "@calibra-facil/db/schema";
 import {
   notifyJobSubmittedForReview,
@@ -247,6 +250,102 @@ function stripAssetSpecData(
   return Object.fromEntries(
     Object.entries(data).filter(([key]) => !assetSpecKeys.has(key)),
   );
+}
+
+function buildCalibrationLocationSnapshot(
+  input:
+    | {
+        type: "customer_site" | "lab" | "other";
+        addressText: string;
+        notes?: string | null;
+      }
+    | undefined,
+  existing: CalibrationLocationSnapshot | null | undefined,
+  actorUserId: string,
+): CalibrationLocationSnapshot | undefined {
+  if (!input) return existing ?? undefined;
+
+  return {
+    type: input.type,
+    addressText: input.addressText.trim(),
+    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+    recordedAt: new Date().toISOString(),
+    recordedBy: actorUserId,
+  };
+}
+
+function validateCalibrationLocationForSubmit(
+  snapshot: CalibrationLocationSnapshot | null | undefined,
+): string | null {
+  if (!snapshot) return "Local da calibração é obrigatório";
+  if (!["customer_site", "lab", "other"].includes(snapshot.type)) {
+    return "Tipo de local da calibração é inválido";
+  }
+  if (!snapshot.addressText.trim()) {
+    return "Endereço/local da calibração é obrigatório";
+  }
+  return null;
+}
+
+function buildCalibrationPhaseSnapshot(
+  input:
+    | {
+        blocks: Record<
+          string,
+          {
+            mode:
+              | "before_and_after"
+              | "before_only"
+              | "after_only"
+              | "not_performed";
+            reason?: string | null;
+          }
+        >;
+      }
+    | undefined,
+  existing: CalibrationPhaseSnapshot | null | undefined,
+  actorUserId: string,
+): CalibrationPhaseSnapshot | undefined {
+  if (!input) return existing ?? undefined;
+
+  const blocks: CalibrationPhaseSnapshot["blocks"] = {};
+  for (const [key, block] of Object.entries(input.blocks ?? {})) {
+    if (!key.trim()) continue;
+    if (!isCalibrationPhaseMode(block.mode)) continue;
+    blocks[key] = {
+      mode: block.mode,
+      ...(block.reason?.trim() ? { reason: block.reason.trim() } : {}),
+    };
+  }
+
+  return {
+    blocks,
+    recordedAt: new Date().toISOString(),
+    recordedBy: actorUserId,
+  };
+}
+
+function isCalibrationPhaseMode(
+  mode: unknown,
+): mode is CalibrationPhaseSnapshot["blocks"][string]["mode"] {
+  return (
+    mode === "before_and_after" ||
+    mode === "before_only" ||
+    mode === "after_only" ||
+    mode === "not_performed"
+  );
+}
+
+function validateCalibrationPhasesForSubmit(
+  snapshot: CalibrationPhaseSnapshot | null | undefined,
+): string | null {
+  for (const [blockKey, block] of Object.entries(snapshot?.blocks ?? {})) {
+    if (block.mode !== "not_performed") continue;
+    if (!block.reason?.trim()) {
+      return `Informe o motivo para não executar o bloco ${blockKey}`;
+    }
+  }
+  return null;
 }
 
 function createMethodExecutionEngine(): CalculationEngineLike {
@@ -490,6 +589,7 @@ function executeOfficialCompiledSnapshot(params: {
   assetSnapshot: AssetSnapshot;
   standardsSnapshot: StandardSnapshot[] | null | undefined;
   environmentalSnapshot: EnvironmentalSnapshot | null | undefined;
+  calibrationPhaseSnapshot: CalibrationPhaseSnapshot | null | undefined;
   requireSuccess?: boolean;
 }):
   | { ok: true; results: Record<string, unknown>; execution: null }
@@ -508,6 +608,7 @@ function executeOfficialCompiledSnapshot(params: {
     snapshot.compiledMethod,
     {
       inputs: buildOfficialExecutionInputs(params),
+      calibrationPhases: params.calibrationPhaseSnapshot ?? undefined,
     },
     { engine: createMethodExecutionEngine() },
   );
@@ -1103,6 +1204,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         results: calibrationJob.results,
         standardsSnapshot: calibrationJob.standardsSnapshot,
         environmentalSnapshot: calibrationJob.environmentalSnapshot,
+        calibrationLocationSnapshot: calibrationJob.calibrationLocationSnapshot,
+        calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
         assetSnapshot: calibrationJob.assetSnapshot,
         certificateUrl: calibrationJob.certificateUrl,
         labelUrl: calibrationJob.labelUrl,
@@ -1125,6 +1228,15 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         customerId: calibrationJob.customerId,
         customerName: customer.name,
         customerTaxId: customer.taxId,
+        customerAddress: customer.address,
+        labName: organization.name,
+        labStreet: organization.street,
+        labNumber: organization.number,
+        labComplement: organization.complement,
+        labNeighbourhood: organization.neighbourhood,
+        labCity: organization.city,
+        labState: organization.state,
+        labCep: organization.cep,
         assetId: calibrationJob.assetId,
         assetName: asset.name,
         assetTag: asset.tag,
@@ -1148,6 +1260,10 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       })
       .from(calibrationJob)
       .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
+      .leftJoin(
+        organization,
+        eq(calibrationJob.organizationId, organization.id),
+      )
       .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
       .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
       .leftJoin(service, eq(calibrationJob.serviceId, service.id))
@@ -1690,6 +1806,28 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           : standardsResult.snapshot;
       const nextEnvironmentalSnapshot =
         environmentalSnapshot ?? existing.environmentalSnapshot;
+      const nextCalibrationLocationSnapshot = buildCalibrationLocationSnapshot(
+        input.calibrationLocation,
+        existing.calibrationLocationSnapshot,
+        session.user.id,
+      );
+      const nextCalibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
+        input.calibrationPhases,
+        existing.calibrationPhaseSnapshot,
+        session.user.id,
+      );
+      const calibrationLocationError = validateCalibrationLocationForSubmit(
+        nextCalibrationLocationSnapshot,
+      );
+      if (calibrationLocationError) {
+        return c.json({ error: calibrationLocationError }, 400);
+      }
+      const calibrationPhaseError = validateCalibrationPhasesForSubmit(
+        nextCalibrationPhaseSnapshot,
+      );
+      if (calibrationPhaseError) {
+        return c.json({ error: calibrationPhaseError }, 400);
+      }
       const nextAssetSnapshot = assetSnapshotResult.snapshot;
       const nextData = stripAssetSpecData(
         normalizedData.data,
@@ -1702,6 +1840,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         assetSnapshot: nextAssetSnapshot,
         standardsSnapshot: nextStandardsSnapshot,
         environmentalSnapshot: nextEnvironmentalSnapshot,
+        calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
         requireSuccess: true,
       });
       if (!officialExecution.ok) {
@@ -1726,6 +1865,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
+          calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
+          calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
           status: "REVIEW",
           performedAt: new Date(),
         })
@@ -1762,6 +1903,18 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             ? {
                 old: existing.environmentalSnapshot,
                 new: environmentalSnapshot,
+              }
+            : undefined,
+          calibrationLocationSnapshot: input.calibrationLocation
+            ? {
+                old: existing.calibrationLocationSnapshot,
+                new: nextCalibrationLocationSnapshot,
+              }
+            : undefined,
+          calibrationPhaseSnapshot: input.calibrationPhases
+            ? {
+                old: existing.calibrationPhaseSnapshot,
+                new: nextCalibrationPhaseSnapshot,
               }
             : undefined,
           unitConversions:
@@ -1875,6 +2028,16 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           : standardsResult.snapshot;
       const nextEnvironmentalSnapshot =
         environmentalSnapshot ?? existing.environmentalSnapshot;
+      const nextCalibrationLocationSnapshot = buildCalibrationLocationSnapshot(
+        input.calibrationLocation,
+        existing.calibrationLocationSnapshot,
+        session.user.id,
+      );
+      const nextCalibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
+        input.calibrationPhases,
+        existing.calibrationPhaseSnapshot,
+        session.user.id,
+      );
       const nextAssetSnapshot = assetSnapshotResult.snapshot;
       const nextData = stripAssetSpecData(
         normalizedData.data,
@@ -1887,6 +2050,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         assetSnapshot: nextAssetSnapshot,
         standardsSnapshot: nextStandardsSnapshot,
         environmentalSnapshot: nextEnvironmentalSnapshot,
+        calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
         requireSuccess: false,
       });
       if (!officialExecution.ok) {
@@ -1915,6 +2079,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
           assetSnapshot: nextAssetSnapshot,
           standardsSnapshot: nextStandardsSnapshot,
           environmentalSnapshot: nextEnvironmentalSnapshot,
+          calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
+          calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
           status: newStatus,
         })
         .where(eq(calibrationJob.id, id))
@@ -1953,6 +2119,18 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             ? {
                 old: existing.environmentalSnapshot,
                 new: environmentalSnapshot,
+              }
+            : undefined,
+          calibrationLocationSnapshot: input.calibrationLocation
+            ? {
+                old: existing.calibrationLocationSnapshot,
+                new: nextCalibrationLocationSnapshot,
+              }
+            : undefined,
+          calibrationPhaseSnapshot: input.calibrationPhases
+            ? {
+                old: existing.calibrationPhaseSnapshot,
+                new: nextCalibrationPhaseSnapshot,
               }
             : undefined,
           unitConversions:

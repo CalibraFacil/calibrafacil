@@ -56,6 +56,7 @@ import { syncRouter } from "./routes/sync";
 import { customerSuccessRouter } from "./routes/customer-success";
 import { internalCustomerSuccessRouter } from "./routes/internal-customer-success";
 import { backofficeRouter } from "./routes/backoffice";
+import { organizationMediaRouter } from "./routes/organization-media";
 import { profileMediaRouter } from "./routes/profile-media";
 import { publicCommercialCheckoutRouter } from "./routes/public-commercial-checkout";
 import {
@@ -316,6 +317,7 @@ const routes = app
   .route("/api/customer-success", customerSuccessRouter)
   .route("/api/backoffice", backofficeRouter)
   .route("/api/internal/customer-success", internalCustomerSuccessRouter)
+  .route("/api/organization-media", organizationMediaRouter)
   .route("/api/profile-media", profileMediaRouter)
   .route("/api/public/commercial-checkout", publicCommercialCheckoutRouter)
   .route("/api/public/service-order-access", publicServiceOrderAccessRouter)

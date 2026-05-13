@@ -14,7 +14,7 @@ export interface MassCompositionConfig {
   optionSource?: 'certified_values' | 'composition_profiles'
   targetColumns?: MassCompositionTargetColumns
   uncertaintyMode?: 'expanded_rss'
-  quantityMode?: 'linear_per_item_then_rss'
+  quantityMode?: 'linear_per_item_then_rss' | 'profile_linear'
 }
 
 export interface MassCompositionItem {
@@ -35,6 +35,7 @@ export interface MassCompositionItem {
   compositionProfile?: boolean
   profileKey?: string | null
   profileClass?: string | null
+  profileQuantityAvailable?: number | null
 }
 
 export interface MassCompositionValue {
@@ -116,11 +117,13 @@ export function formatMassCompositionLabel(
 export function buildMassCompositionValue(
   items: MassCompositionItem[],
   targetUnit: MassUnit = 'g',
+  config: Pick<MassCompositionConfig, 'quantityMode'> = {},
 ): MassCompositionValue {
   const warnings: string[] = []
   let certifiedValue = 0
   let uncertaintySquares = 0
   let hasConversionWarning = false
+  const quantityMode = config.quantityMode ?? 'linear_per_item_then_rss'
 
   const unsupportedUnits = new Set<string>()
 
@@ -141,6 +144,20 @@ export function buildMassCompositionValue(
     certifiedValue += item.quantity * convertedValue
     const itemExpandedUncertainty = item.quantity * convertedUncertainty
     uncertaintySquares += itemExpandedUncertainty ** 2
+
+    if (
+      quantityMode === 'profile_linear' &&
+      item.compositionProfile === true &&
+      typeof item.profileQuantityAvailable === 'number' &&
+      Number.isFinite(item.profileQuantityAvailable) &&
+      item.quantity > item.profileQuantityAvailable
+    ) {
+      warnings.push(
+        `Quantidade ${item.quantity} excede a disponibilidade do perfil ${
+          item.profileKey ?? item.nominal
+        } (${item.profileQuantityAvailable}).`,
+      )
+    }
   }
 
   for (const unit of unsupportedUnits) {

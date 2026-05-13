@@ -50,8 +50,10 @@ import {
 } from '@/components/method-runtime/mass-composition-utils'
 import {
   convertMassValue,
+  denormalizeAssetSpecificationsForDisplay,
   denormalizeMethodDataForDisplay,
   denormalizeMethodResultsForDisplay,
+  denormalizeWeighingRangeSpecsForDisplay,
   formatCalibrationValue,
   isMassMeasurementUnit,
   normalizeMethodDataForStorage,
@@ -76,7 +78,9 @@ import {
   buildFormulaContext,
   createMethodCalculationEngine,
   evaluateFormulaScalar,
+  evaluateFormulaRows,
   evaluateStructuredValidation,
+  effectiveVariableBindings,
   normalizeMethodValidations,
   type FormulaContext,
   type FormulaScalar,
@@ -169,6 +173,45 @@ interface EnvironmentalSnapshotData {
   outOfLimitsJustification: string | null
 }
 
+type CalibrationLocationType = 'customer_site' | 'lab' | 'other'
+
+interface CalibrationLocationSnapshot {
+  type: CalibrationLocationType
+  addressText: string
+  notes?: string | null
+  recordedAt?: string
+  recordedBy?: string
+}
+
+type CalibrationPhaseMode =
+  | 'before_and_after'
+  | 'before_only'
+  | 'after_only'
+  | 'not_performed'
+type CalibrationPhase = 'before' | 'after'
+
+interface CalibrationPhaseSnapshot {
+  blocks: Record<
+    string,
+    {
+      mode: CalibrationPhaseMode
+      reason?: string | null
+    }
+  >
+  recordedAt?: string
+  recordedBy?: string
+}
+
+interface AddressData {
+  street?: string | null
+  number?: string | null
+  complement?: string | null
+  neighbourhood?: string | null
+  city?: string | null
+  state?: string | null
+  cep?: string | null
+}
+
 interface AssetSnapshot {
   assetId: number
   assetTypeId: number
@@ -198,6 +241,15 @@ interface JobData {
   jobId: string
   status: string
   customerName: string
+  customerAddress?: AddressData | null
+  labName?: string | null
+  labStreet?: string | null
+  labNumber?: string | null
+  labComplement?: string | null
+  labNeighbourhood?: string | null
+  labCity?: string | null
+  labState?: string | null
+  labCep?: string | null
   assetName: string
   assetTag: string
   unitId?: number | null
@@ -224,6 +276,8 @@ interface JobData {
   assetSnapshot?: AssetSnapshot | null
   standardsSnapshot?: StandardSnapshotItem[] | null
   environmentalSnapshot?: EnvironmentalSnapshotData | null
+  calibrationLocationSnapshot?: CalibrationLocationSnapshot | null
+  calibrationPhaseSnapshot?: CalibrationPhaseSnapshot | null
 }
 
 interface CompiledMethodSnapshot {
@@ -236,11 +290,13 @@ interface CompiledMethodSnapshot {
     key: string
     label?: string
     expression: string
+    scope?: MethodFormula['scope']
     normalizedFormula?: string
     formulaFingerprint?: string
     variables?: string[]
     outputUnit?: string
     reporting?: MethodFormula['reporting']
+    metadata?: Record<string, unknown>
   }>
   acceptanceCriteria?: Array<{
     key: string
@@ -250,6 +306,7 @@ interface CompiledMethodSnapshot {
     message: string
     normalizedFormula?: string
     criterionFingerprint?: string
+    metadata?: Record<string, unknown>
   }>
   measurementModels?: Array<unknown>
 }
@@ -273,7 +330,136 @@ const statusLabels: Record<string, string> = {
   CANCELED: 'Cancelado',
 }
 
+function previewFormulaErrorMessage(result: FormulaResult): string {
+  if (!result.error) return ''
+
+  if (result.errorCode === 'UNKNOWN_IDENTIFIER') {
+    return 'Aguardando entrada ou resultado dependente.'
+  }
+
+  if (/missing a required variable/i.test(result.error)) {
+    return 'Aguardando entrada ou resultado dependente.'
+  }
+
+  if (/allowed function whitelist/i.test(result.error)) {
+    return 'Função disponível apenas na execução oficial do método compilado.'
+  }
+
+  return result.error
+}
+
 const CIRCULAR_ECCENTRICITY_LOAD_POSITIONS = ['A', 'B', 'C', 'D', 'E']
+
+const DEFAULT_PHASE_MODE: CalibrationPhaseMode = 'before_and_after'
+
+function phaseModeLabel(mode: CalibrationPhaseMode) {
+  switch (mode) {
+    case 'before_only':
+      return 'Somente antes'
+    case 'after_only':
+      return 'Somente após'
+    case 'not_performed':
+      return 'Não executado'
+    case 'before_and_after':
+    default:
+      return 'Antes e após'
+  }
+}
+
+function phaseBlockKey(field: MethodInputField) {
+  return field.phaseBlockKey?.trim() || null
+}
+
+function phaseBlockLabel(field: MethodInputField) {
+  return field.phaseBlockLabel?.trim() || field.label
+}
+
+function collectPhaseBlocks(fields: MethodInputField[]) {
+  const blocks: Array<{ key: string; label: string }> = []
+  const seen = new Set<string>()
+  for (const field of fields) {
+    const key = phaseBlockKey(field)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    blocks.push({ key, label: phaseBlockLabel(field) })
+  }
+  return blocks
+}
+
+function defaultCalibrationPhases(
+  fields: MethodInputField[],
+  existing: CalibrationPhaseSnapshot | null | undefined,
+): CalibrationPhaseSnapshot {
+  const blocks: CalibrationPhaseSnapshot['blocks'] = {}
+  for (const block of collectPhaseBlocks(fields)) {
+    blocks[block.key] = {
+      mode: existing?.blocks?.[block.key]?.mode ?? DEFAULT_PHASE_MODE,
+      reason: existing?.blocks?.[block.key]?.reason ?? null,
+    }
+  }
+  return {
+    blocks,
+    recordedAt: existing?.recordedAt,
+    recordedBy: existing?.recordedBy,
+  }
+}
+
+function isPhaseActive(
+  metadata: Record<string, unknown> | undefined,
+  phases: CalibrationPhaseSnapshot,
+) {
+  const block = metadata?.phaseBlock
+  const phase = metadata?.phase
+  if (
+    typeof block === 'string' &&
+    phases.blocks[block]?.mode === 'not_performed'
+  ) {
+    return false
+  }
+  if (typeof block !== 'string' || (phase !== 'before' && phase !== 'after')) {
+    return true
+  }
+  return isBlockPhaseActive(phases.blocks[block]?.mode, phase)
+}
+
+function isBlockPhaseActive(
+  mode: CalibrationPhaseMode | undefined,
+  phase: CalibrationPhase,
+) {
+  const effectiveMode = mode ?? DEFAULT_PHASE_MODE
+  if (effectiveMode === 'before_and_after') return true
+  if (effectiveMode === 'before_only') return phase === 'before'
+  if (effectiveMode === 'after_only') return phase === 'after'
+  if (effectiveMode === 'not_performed') return false
+  return true
+}
+
+function formatAddress(address: AddressData | null | undefined) {
+  if (!address) return ''
+  return [
+    address.street,
+    address.number,
+    address.complement,
+    address.neighbourhood,
+    address.city,
+    address.state,
+    address.cep,
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
+function formatLabAddress(job: JobData) {
+  return formatAddress({
+    street: job.labStreet,
+    number: job.labNumber,
+    complement: job.labComplement,
+    neighbourhood: job.labNeighbourhood,
+    city: job.labCity,
+    state: job.labState,
+    cep: job.labCep,
+  })
+}
 
 function normalizeText(value: string | null | undefined) {
   return (value ?? '')
@@ -524,8 +710,37 @@ function ExecuteJobForm({
     humidity: job.environmentalSnapshot?.humidity ?? null,
     pressure: job.environmentalSnapshot?.pressure ?? null,
   }))
+  const [calibrationLocation, setCalibrationLocation] =
+    useState<CalibrationLocationSnapshot>(() => {
+      const existing = job.calibrationLocationSnapshot
+      if (existing?.addressText) return existing
+      const customerAddress = formatAddress(job.customerAddress)
+      const labAddress = formatLabAddress(job)
+      const type: CalibrationLocationType = customerAddress
+        ? 'customer_site'
+        : labAddress
+          ? 'lab'
+          : 'other'
+      return {
+        type,
+        addressText:
+          type === 'customer_site'
+            ? customerAddress
+            : type === 'lab'
+              ? labAddress
+              : '',
+      }
+    })
+  const [calibrationPhases, setCalibrationPhases] =
+    useState<CalibrationPhaseSnapshot>(() =>
+      defaultCalibrationPhases(
+        job.methodSnapshot.dataFields,
+        job.calibrationPhaseSnapshot,
+      ),
+    )
   const [sectionsOpen, setSectionsOpen] = useState({
-    standards: true,
+    standards: false,
+    location: true,
     environment: true,
     data: true,
     results: true,
@@ -548,6 +763,10 @@ function ExecuteJobForm({
       ),
     [job.methodSnapshot.dataFields],
   )
+  const phaseBlocks = useMemo(
+    () => collectPhaseBlocks(manualFields),
+    [manualFields],
+  )
   const displayManualFields = useMemo(
     () =>
       manualFields.map((field) =>
@@ -562,6 +781,48 @@ function ExecuteJobForm({
       ),
     [assetBaseMeasurementUnit, assetSpecFields],
   )
+  const displayAssetSpecificationDefinition = useMemo(
+    () =>
+      assetSpecFields
+        .filter(
+          (field) =>
+            field.assetSpecKey &&
+            (field.type === 'number' ||
+              field.type === 'text' ||
+              field.type === 'select'),
+        )
+        .map((field) => ({
+          key: field.assetSpecKey!,
+          type: field.type as 'number' | 'text' | 'select',
+          unit: field.unit,
+        })),
+    [assetSpecFields],
+  )
+  const displayAssetSpecifications = useMemo(() => {
+    const rawSpecifications = job.assetSnapshot?.specifications ?? null
+    const denormalized =
+      denormalizeAssetSpecificationsForDisplay(
+        rawSpecifications,
+        displayAssetSpecificationDefinition,
+        assetBaseMeasurementUnit,
+      ) ?? rawSpecifications
+
+    if (!denormalized || !assetBaseMeasurementUnit) {
+      return denormalized
+    }
+
+    return {
+      ...denormalized,
+      weighingRanges: denormalizeWeighingRangeSpecsForDisplay(
+        rawSpecifications?.weighingRanges,
+        assetBaseMeasurementUnit,
+      ),
+    }
+  }, [
+    assetBaseMeasurementUnit,
+    displayAssetSpecificationDefinition,
+    job.assetSnapshot?.specifications,
+  ])
 
   const hasMassCompositionColumns = useMemo(
     () =>
@@ -599,6 +860,9 @@ function ExecuteJobForm({
       const manualKeys = new Set(manualFields.map((field) => field.key))
       for (const [key, value] of Object.entries(data)) {
         const field = manualFields.find((candidate) => candidate.key === key)
+        const displayField = displayManualFields.find(
+          (candidate) => candidate.key === key,
+        )
         if (!manualKeys.has(key) || !field) {
           continue
         }
@@ -622,9 +886,9 @@ function ExecuteJobForm({
           normalized[key] =
             field.type === 'table'
               ? applyTableWeighingRangeResolvers(
-                  field,
+                  displayField ?? field,
                   normalizedRows as Array<Record<string, unknown>>,
-                  job.assetSnapshot?.specifications ?? null,
+                  displayAssetSpecifications,
                 )
               : normalizedRows
         } else if (typeof value === 'string' && /^-?\d*\.?\d+$/.test(value)) {
@@ -635,7 +899,7 @@ function ExecuteJobForm({
       }
       return normalized
     },
-    [job.assetSnapshot?.specifications, manualFields],
+    [displayAssetSpecifications, displayManualFields, manualFields],
   )
 
   const parsedFormData = useMemo(
@@ -692,7 +956,7 @@ function ExecuteJobForm({
     )
     const selectedStandards = selectedStandardIds
       .map((standardId) => standardsById.get(standardId))
-      .filter((standard): standard is StandardSnapshotItem => Boolean(standard))
+      .filter((standard): standard is ReferenceStandard => Boolean(standard))
       .map((standard) => ({
         id: standard.id,
         uncertainty:
@@ -752,19 +1016,30 @@ function ExecuteJobForm({
   const officialDiagnosticCount = Array.isArray(officialExecution?.diagnostics)
     ? officialExecution.diagnostics.length
     : 0
+  const hasOfficialResults = officialExecution !== null
   const calculationFormulas = useMemo<MethodFormula[]>(() => {
     const compiledFormulas = compiledMethod?.formulas
     if (compiledFormulas?.length) {
       return compiledFormulas.map((formula) => ({
         outputKey: formula.key,
         expression: formula.expression,
+        scope: formula.scope,
         label: formula.label,
         unit: formula.outputUnit,
         reporting: formula.reporting,
+        metadata: formula.metadata,
       }))
     }
     return job.methodSnapshot.formulas
   }, [compiledMethod, job.methodSnapshot.formulas])
+
+  const activeCalculationFormulas = useMemo(
+    () =>
+      calculationFormulas.filter((formula) =>
+        isPhaseActive(formula.metadata, calibrationPhases),
+      ),
+    [calculationFormulas, calibrationPhases],
+  )
 
   const calculationValidations = useMemo(() => {
     const compiledCriteria = compiledMethod?.acceptanceCriteria
@@ -774,15 +1049,31 @@ function ExecuteJobForm({
           {
             expression: criterion.expression,
             message: criterion.message,
-            severity: criterion.severity === 'blocking' ? 'error' : 'warning',
+            severity:
+              criterion.severity === 'blocking'
+                ? ('error' as const)
+                : ('warning' as const),
+            metadata: criterion.metadata,
           },
         ])[0],
         message: criterion.message,
-        severity: criterion.severity === 'blocking' ? 'error' : 'warning',
+        severity:
+          criterion.severity === 'blocking'
+            ? ('error' as const)
+            : ('warning' as const),
+        metadata: criterion.metadata,
       }))
     }
     return normalizeMethodValidations(job.methodSnapshot.validations)
   }, [compiledMethod, job.methodSnapshot.validations])
+
+  const activeCalculationValidations = useMemo(
+    () =>
+      calculationValidations.filter((validation) =>
+        isPhaseActive(validation.metadata, calibrationPhases),
+      ),
+    [calculationValidations, calibrationPhases],
+  )
 
   // Evaluate formulas
   const formulaResults = useMemo(() => {
@@ -790,19 +1081,38 @@ function ExecuteJobForm({
 
     const results: Record<string, FormulaResult> = {}
     const runningContext: FormulaContext = { ...context }
-    const rawResultValues: Record<string, FormulaScalar> = {}
+    const rawResultValues: Record<string, FormulaScalar | FormulaScalar[]> = {}
+    const arraySourceTables = new Map<string, string>()
 
-    for (const formula of calculationFormulas) {
-      const result = evaluateFormulaScalar(
-        engine,
-        formula.expression,
-        runningContext,
-      )
+    for (const binding of effectiveVariableBindings(job.methodSnapshot)) {
+      if (binding.source === 'table_column') {
+        arraySourceTables.set(binding.key, binding.fieldKey)
+      }
+    }
+
+    for (const formula of activeCalculationFormulas) {
+      const tableKey =
+        formula.scope?.kind === 'table_row' ? formula.scope.tableKey : null
+      const rows = tableKey ? normalizedFormData[tableKey] : null
+      const result =
+        tableKey && Array.isArray(rows)
+          ? evaluateFormulaRows(
+              engine,
+              formula.expression,
+              runningContext,
+              rows.length,
+              tableKey,
+              arraySourceTables,
+            )
+          : evaluateFormulaScalar(engine, formula.expression, runningContext)
 
       if (result.success) {
-        const rawValue = result.value
+        const rawValue = 'values' in result ? result.values : result.value
         rawResultValues[formula.outputKey] = rawValue
         runningContext[formula.outputKey] = rawValue
+        if (tableKey) {
+          arraySourceTables.set(formula.outputKey, tableKey)
+        }
       } else {
         results[formula.outputKey] = {
           error: result.error,
@@ -814,11 +1124,11 @@ function ExecuteJobForm({
     const displayResultValues =
       denormalizeMethodResultsForDisplay(
         rawResultValues,
-        calculationFormulas,
+        activeCalculationFormulas,
         assetBaseMeasurementUnit,
       ) ?? rawResultValues
 
-    for (const formula of calculationFormulas) {
+    for (const formula of activeCalculationFormulas) {
       const rawValue = rawResultValues[formula.outputKey]
       if (rawValue === undefined) {
         continue
@@ -835,7 +1145,63 @@ function ExecuteJobForm({
     }
 
     return results
-  }, [assetBaseMeasurementUnit, engine, job, context, calculationFormulas])
+  }, [
+    assetBaseMeasurementUnit,
+    engine,
+    job,
+    context,
+    normalizedFormData,
+    activeCalculationFormulas,
+  ])
+
+  const displayedFormulaResults = useMemo(() => {
+    if (!hasOfficialResults || !job.results) return formulaResults
+
+    const officialRawResults: Record<string, FormulaScalar | FormulaScalar[]> =
+      {}
+    for (const formula of activeCalculationFormulas) {
+      const value = job.results[formula.outputKey]
+      if (
+        typeof value === 'number' ||
+        typeof value === 'string' ||
+        (Array.isArray(value) &&
+          value.every(
+            (item) => typeof item === 'number' || typeof item === 'string',
+          ))
+      ) {
+        officialRawResults[formula.outputKey] = value
+      }
+    }
+
+    const officialDisplayResults =
+      denormalizeMethodResultsForDisplay(
+        officialRawResults,
+        activeCalculationFormulas,
+        assetBaseMeasurementUnit,
+      ) ?? officialRawResults
+
+    const results: Record<string, FormulaResult> = {}
+    for (const formula of activeCalculationFormulas) {
+      const rawValue = officialRawResults[formula.outputKey]
+      if (rawValue === undefined) continue
+
+      results[formula.outputKey] = {
+        value: rawValue,
+        displayValue: formatCalibrationValue(
+          officialDisplayResults[formula.outputKey] ?? rawValue,
+          { wrapArrays: true },
+        ),
+      }
+    }
+
+    return results
+  }, [
+    activeCalculationFormulas,
+    assetBaseMeasurementUnit,
+    formulaResults,
+    hasOfficialResults,
+    job.results,
+  ])
 
   // Evaluate validations
   const validationResults = useMemo((): ValidationResult[] => {
@@ -848,7 +1214,7 @@ function ExecuteJobForm({
       }
     }
 
-    return calculationValidations.map((validation) => {
+    return activeCalculationValidations.map((validation) => {
       const result = evaluateStructuredValidation(
         engine,
         validation,
@@ -865,7 +1231,7 @@ function ExecuteJobForm({
         errorCode: result.errorCode,
       }
     })
-  }, [engine, job, context, formulaResults, calculationValidations])
+  }, [engine, job, context, formulaResults, activeCalculationValidations])
 
   // Compute certified value options from all active standards
   const certifiedValueOptions = useMemo((): CertifiedValueOption[] => {
@@ -954,6 +1320,7 @@ function ExecuteJobForm({
             compositionProfile: true,
             profileKey,
             profileClass: cv.profileClass ?? null,
+            profileQuantityAvailable: cv.profileQuantityAvailable ?? null,
             optionLabel: `${profileKey} - perfil agregado`,
           })
           return
@@ -1001,6 +1368,43 @@ function ExecuteJobForm({
     }
     return environment
   }, [environment])
+  const calibrationLocationPayload = useMemo(
+    () => ({
+      type: calibrationLocation.type,
+      addressText: calibrationLocation.addressText,
+      notes: calibrationLocation.notes ?? null,
+    }),
+    [calibrationLocation],
+  )
+  const calibrationPhasesPayload = useMemo(
+    () =>
+      phaseBlocks.length > 0
+        ? {
+            blocks: Object.fromEntries(
+              phaseBlocks.map((block) => [
+                block.key,
+                {
+                  mode:
+                    calibrationPhases.blocks[block.key]?.mode ??
+                    DEFAULT_PHASE_MODE,
+                  reason: calibrationPhases.blocks[block.key]?.reason ?? null,
+                },
+              ]),
+            ),
+          }
+        : undefined,
+    [calibrationPhases, phaseBlocks],
+  )
+  const missingNotPerformedPhaseReasons = useMemo(
+    () =>
+      phaseBlocks.filter((block) => {
+        const snapshot = calibrationPhases.blocks[block.key]
+        return (
+          snapshot?.mode === 'not_performed' && !snapshot.reason?.trim()
+        )
+      }),
+    [calibrationPhases, phaseBlocks],
+  )
 
   const buildSelectedStandardPayload = useCallback(
     (normalizedData: Record<string, unknown>) =>
@@ -1011,6 +1415,26 @@ function ExecuteJobForm({
         ]),
       ),
     [selectedStandardIds],
+  )
+
+  const updateCalibrationPhase = useCallback(
+    (
+      blockKey: string,
+      patch: Partial<CalibrationPhaseSnapshot['blocks'][string]>,
+    ) => {
+      setCalibrationPhases((prev) => ({
+        ...prev,
+        blocks: {
+          ...prev.blocks,
+          [blockKey]: {
+            mode: prev.blocks[blockKey]?.mode ?? DEFAULT_PHASE_MODE,
+            reason: prev.blocks[blockKey]?.reason ?? null,
+            ...patch,
+          },
+        },
+      }))
+    },
+    [],
   )
 
   // Compute environment warnings
@@ -1067,6 +1491,8 @@ function ExecuteJobForm({
             .map(([k, r]) => [k, r.value]),
         ),
         environment: environmentPayload,
+        calibrationLocation: calibrationLocationPayload,
+        calibrationPhases: calibrationPhasesPayload,
       })
     },
     onSuccess: () => {
@@ -1084,6 +1510,11 @@ function ExecuteJobForm({
   // Submit for review mutation
   const submitMutation = useMutation({
     mutationFn: async () => {
+      if (missingNotPerformedPhaseReasons.length > 0) {
+        throw new Error(
+          'Informe o motivo dos blocos marcados como não executados.',
+        )
+      }
       return calibraApi.jobs.submitExecution(apiRouteParam(jobId), {
         selectedStandardIds: buildSelectedStandardPayload(parsedFormData),
         data: parsedFormData,
@@ -1093,6 +1524,8 @@ function ExecuteJobForm({
             .map(([k, r]) => [k, r.value]),
         ),
         environment: environmentPayload,
+        calibrationLocation: calibrationLocationPayload,
+        calibrationPhases: calibrationPhasesPayload,
       })
     },
     onSuccess: () => {
@@ -1118,12 +1551,77 @@ function ExecuteJobForm({
     const value = formData[field.key]
 
     if (field.type === 'table') {
+      const blockKey = phaseBlockKey(field)
+      const blockMode = blockKey
+        ? (calibrationPhases.blocks[blockKey]?.mode ?? DEFAULT_PHASE_MODE)
+        : DEFAULT_PHASE_MODE
       const tableRenderer = (
         <Field key={field.key}>
           <FieldLabel>
             {field.label}
             {field.required && <span className="text-red-500 ml-1">*</span>}
           </FieldLabel>
+          {blockKey && (
+            <div className="mb-3 grid gap-3 md:grid-cols-[220px_1fr]">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Etapas executadas
+                </label>
+                <Select
+                  value={blockMode}
+                  onValueChange={(mode) =>
+                    updateCalibrationPhase(blockKey, {
+                      mode: mode as CalibrationPhaseMode,
+                    })
+                  }
+                  disabled={!isEditable}
+                >
+                  <SelectTrigger>
+                    <span>{phaseModeLabel(blockMode)}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="before_and_after">
+                      Antes e após
+                    </SelectItem>
+                    <SelectItem value="before_only">Somente antes</SelectItem>
+                    <SelectItem value="after_only">Somente após</SelectItem>
+                    <SelectItem value="not_performed">
+                      Não executado
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {blockMode !== 'before_and_after' && (
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {blockMode === 'not_performed'
+                      ? 'Motivo do bloco não executado'
+                      : 'Motivo da etapa não aplicável'}
+                  </label>
+                  <Input
+                    value={calibrationPhases.blocks[blockKey]?.reason ?? ''}
+                    onChange={(event) =>
+                      updateCalibrationPhase(blockKey, {
+                        reason: event.target.value,
+                      })
+                    }
+                    disabled={!isEditable}
+                    placeholder={
+                      blockMode === 'not_performed'
+                        ? 'Ex.: equipamento em manutenção'
+                        : 'Ex.: equipamento já estava conforme'
+                    }
+                  />
+                  {blockMode === 'not_performed' &&
+                    !calibrationPhases.blocks[blockKey]?.reason?.trim() && (
+                      <p className="text-xs text-red-600">
+                        Motivo obrigatório para enviar à revisão.
+                      </p>
+                    )}
+                </div>
+              )}
+            </div>
+          )}
           <TableInputRenderer
             field={field}
             value={(value as Array<Record<string, unknown>>) || []}
@@ -1131,7 +1629,8 @@ function ExecuteJobForm({
             disabled={!isEditable}
             certifiedValueOptions={certifiedValueOptions}
             massCompositionOptions={massCompositionOptions}
-            assetSpecifications={job.assetSnapshot?.specifications ?? null}
+            assetSpecifications={displayAssetSpecifications}
+            phaseMode={blockMode}
           />
         </Field>
       )
@@ -1262,29 +1761,34 @@ function ExecuteJobForm({
     const hasRequiredFields = manualFields
       .filter((f) => f.required)
       .every((f) => {
+        const blockKey = phaseBlockKey(f)
+        if (
+          blockKey &&
+          calibrationPhases.blocks[blockKey]?.mode === 'not_performed'
+        ) {
+          return true
+        }
         const val = formData[f.key]
         return val !== undefined && val !== ''
       })
     const hasRequiredAssetSpecs = missingAssetSpecFields.length === 0
-    const hasNoFormulaErrors = Object.values(formulaResults).every(
-      (result) => !result.error,
-    )
-    const hasNoErrors = validationResults.every(
-      (v) => v.severity !== 'error' || v.passed === true,
-    )
+    const hasCalibrationLocation = calibrationLocation.addressText.trim() !== ''
+    const hasNotPerformedReasons =
+      missingNotPerformedPhaseReasons.length === 0
     return (
       hasRequiredFields &&
       hasRequiredAssetSpecs &&
-      hasNoFormulaErrors &&
-      hasNoErrors
+      hasCalibrationLocation &&
+      hasNotPerformedReasons
     )
   }, [
     job,
     manualFields,
     formData,
+    calibrationPhases,
     missingAssetSpecFields,
-    formulaResults,
-    validationResults,
+    calibrationLocation,
+    missingNotPerformedPhaseReasons,
   ])
 
   const isEditable = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
@@ -1301,7 +1805,10 @@ function ExecuteJobForm({
       result.error || (result.severity === 'error' && result.passed === false),
   ).length
   const totalIssueCount =
-    formulaIssueCount + acceptanceIssueCount + envWarnings.length
+    formulaIssueCount +
+    acceptanceIssueCount +
+    envWarnings.length +
+    missingNotPerformedPhaseReasons.length
   const environmentStatus =
     envWarnings.length > 0
       ? 'Fora do limite'
@@ -1542,6 +2049,97 @@ function ExecuteJobForm({
                       </button>
                     ))}
                   </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </Card>
+
+          {/* Calibration Location */}
+          <Card className="rounded-2xl border-0 py-0 shadow-[0_16px_50px_rgba(15,23,42,0.06),0_1px_0_rgba(15,23,42,0.04)] ring-1 ring-black/5 dark:ring-white/10">
+            <Collapsible
+              open={sectionsOpen.location}
+              onOpenChange={(open) =>
+                setSectionsOpen((s) => ({ ...s, location: open }))
+              }
+            >
+              <CollapsibleTrigger className="group w-full text-left outline-none">
+                <CardHeader className="min-h-16 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-balance text-base">
+                      Local da Calibração
+                      {calibrationLocation.addressText.trim() && (
+                        <Badge variant="secondary" className="ml-2">
+                          Registrado
+                        </Badge>
+                      )}
+                    </CardTitle>
+                    <HugeiconsIcon
+                      icon={ArrowDown01Icon}
+                      className={`h-4 w-4 transition-transform duration-200 ${sectionsOpen.location ? 'rotate-180' : ''}`}
+                    />
+                  </div>
+                  <CardDescription className="max-w-3xl text-pretty">
+                    Informe se a calibração foi realizada no cliente, no
+                    laboratório ou em outro local. O valor será congelado no
+                    certificado.
+                  </CardDescription>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="grid gap-4 px-5 pb-5 pt-0 md:grid-cols-[240px_minmax(0,1fr)]">
+                  <Field>
+                    <FieldLabel>Tipo</FieldLabel>
+                    <Select
+                      value={calibrationLocation.type}
+                      onValueChange={(value) => {
+                        const type = value as CalibrationLocationType
+                        const customerAddress = formatAddress(
+                          job.customerAddress,
+                        )
+                        const labAddress = formatLabAddress(job)
+                        setCalibrationLocation((current) => ({
+                          ...current,
+                          type,
+                          addressText:
+                            type === 'customer_site'
+                              ? customerAddress
+                              : type === 'lab'
+                                ? labAddress
+                                : '',
+                        }))
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <span>
+                          {calibrationLocation.type === 'customer_site'
+                            ? 'No cliente'
+                            : calibrationLocation.type === 'lab'
+                              ? 'No laboratório'
+                              : 'Outro'}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="customer_site">
+                          No cliente
+                        </SelectItem>
+                        <SelectItem value="lab">No laboratório</SelectItem>
+                        <SelectItem value="other">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field>
+                    <FieldLabel>Endereço/local</FieldLabel>
+                    <Input
+                      value={calibrationLocation.addressText}
+                      onChange={(event) =>
+                        setCalibrationLocation((current) => ({
+                          ...current,
+                          addressText: event.target.value,
+                        }))
+                      }
+                      placeholder="Endereço ou descrição do local"
+                    />
+                  </Field>
                 </CardContent>
               </CollapsibleContent>
             </Collapsible>
@@ -1857,9 +2455,14 @@ function ExecuteJobForm({
               <CollapsibleTrigger className="group w-full text-left outline-none">
                 <CardHeader className="min-h-14 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-balance text-base">
-                      Resultados ({calculationFormulas.length})
-                    </CardTitle>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <CardTitle className="text-balance text-base">
+                        Resultados ({activeCalculationFormulas.length})
+                      </CardTitle>
+                      <Badge variant={hasOfficialResults ? 'secondary' : 'outline'}>
+                        {hasOfficialResults ? 'Oficial' : 'Prévia local'}
+                      </Badge>
+                    </div>
                     <HugeiconsIcon
                       icon={ArrowDown01Icon}
                       className={`h-4 w-4 transition-transform duration-200 ${sectionsOpen.results ? 'rotate-180' : ''}`}
@@ -1869,8 +2472,8 @@ function ExecuteJobForm({
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <CardContent className="max-h-[560px] space-y-2 overflow-auto px-5 pb-5 pt-0">
-                  {calculationFormulas.map((formula) => {
-                    const result = formulaResults[formula.outputKey]
+                  {activeCalculationFormulas.map((formula) => {
+                    const result = displayedFormulaResults[formula.outputKey]
                     return (
                       <div
                         key={formula.outputKey}
@@ -1891,7 +2494,7 @@ function ExecuteJobForm({
                           </div>
                           {result?.error ? (
                             <p className="text-pretty text-xs text-red-600 dark:text-red-300">
-                              {result.error}
+                              {previewFormulaErrorMessage(result)}
                             </p>
                           ) : result?.value !== undefined ? (
                             <span className="block max-w-full overflow-hidden rounded-lg bg-background/80 px-2 py-1 font-mono text-sm leading-relaxed tabular-nums [overflow-wrap:anywhere]">

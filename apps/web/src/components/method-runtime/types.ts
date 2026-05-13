@@ -9,6 +9,8 @@ export type EccentricityIndicatorVariant = 'circular_platform' | 'road_scale'
 export interface EccentricityIndicatorConfig {
   enabled?: boolean
   variant?: EccentricityIndicatorVariant
+  pointColumn?: string
+  loadPoints?: string[]
 }
 
 export interface WeighingRangeResolverConfig {
@@ -42,7 +44,7 @@ export interface MassCompositionConfig {
     buoyancy?: string
   }
   uncertaintyMode?: 'expanded_rss'
-  quantityMode?: 'linear_per_item_then_rss'
+  quantityMode?: 'linear_per_item_then_rss' | 'profile_linear'
 }
 
 export interface MethodTableColumn {
@@ -51,6 +53,7 @@ export interface MethodTableColumn {
   type: 'text' | 'number'
   unit?: string
   role?: MethodTableColumnRole
+  phase?: 'before' | 'after' | 'always'
   massComposition?: MassCompositionConfig
 }
 
@@ -66,6 +69,8 @@ export interface MethodInputField {
   source?: MethodInputSource
   assetSpecKey?: string
   allowOverride?: boolean
+  phaseBlockKey?: string
+  phaseBlockLabel?: string
   eccentricityIndicator?: EccentricityIndicatorConfig
   weighingRangeResolver?: WeighingRangeResolverConfig
 }
@@ -85,9 +90,11 @@ export interface MethodFormulaReporting {
 export interface MethodFormula {
   outputKey: string
   expression: string
+  scope?: { kind: 'scalar' } | { kind: 'table_row'; tableKey: string }
   label?: string
   unit?: string
   reporting?: MethodFormulaReporting
+  metadata?: Record<string, unknown>
 }
 
 export interface MethodValidation {
@@ -96,6 +103,7 @@ export interface MethodValidation {
   rightExpression: string
   message: string
   severity: 'error' | 'warning'
+  metadata?: Record<string, unknown>
 }
 
 export type MethodVariableBinding =
@@ -206,7 +214,7 @@ export interface MethodData {
 }
 
 export interface FormulaResult {
-  value?: string | number
+  value?: string | number | Array<string | number>
   valueText?: string
   displayValue?: string
   error?: string

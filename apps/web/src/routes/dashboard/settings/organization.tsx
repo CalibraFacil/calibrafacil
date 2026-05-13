@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -14,7 +14,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 
 import { authClient, useActiveOrganization } from '@calibra-facil/auth/client'
 import { usePlanAccess } from '@/hooks/use-plan-access'
-import { calibraApi } from '@/utils/api'
+import { apiFetch, calibraApi } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -85,6 +85,7 @@ type ActiveOrganization = NonNullable<
   phone?: string | null
   email?: string | null
   website?: string | null
+  logo?: string | null
   technicalManagerName?: string | null
   technicalManagerTitle?: string | null
 }
@@ -237,6 +238,10 @@ function OrganizationSettingsPage({
   const [slug, setSlug] = useState(activeOrg.slug ?? '')
   const [isUpdating, setIsUpdating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const [organizationLogo, setOrganizationLogo] = useState(
+    activeOrg.logo ?? null,
+  )
 
   // ISO 17025 / RBC compliance fields
   const [cnpj, setCnpj] = useState(activeOrg.cnpj ?? '')
@@ -547,6 +552,68 @@ function OrganizationSettingsPage({
     },
   })
 
+  const logoUploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData()
+      formData.append('logo', file)
+
+      const res = await apiFetch('/api/organization-media/logo', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(
+          data && typeof data === 'object' && 'error' in data
+            ? String(data.error)
+            : 'Falha ao enviar logo',
+        )
+      }
+
+      return res.json() as Promise<{ logoUrl: string }>
+    },
+    onSuccess: async (data) => {
+      setOrganizationLogo(data.logoUrl)
+      toast.success('Logo da organização atualizado')
+      await queryClient.invalidateQueries()
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao enviar logo',
+      )
+    },
+  })
+
+  const logoDeleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch('/api/organization-media/logo', {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(
+          data && typeof data === 'object' && 'error' in data
+            ? String(data.error)
+            : 'Falha ao remover logo',
+        )
+      }
+
+      return res.json() as Promise<{ logoUrl: null }>
+    },
+    onSuccess: async () => {
+      setOrganizationLogo(null)
+      toast.success('Logo da organização removido')
+      await queryClient.invalidateQueries()
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao remover logo',
+      )
+    },
+  })
+
   const handleUpdateOrganization = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
@@ -616,6 +683,14 @@ function OrganizationSettingsPage({
     } finally {
       setIsUpdatingIso(false)
     }
+  }
+
+  const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    logoUploadMutation.mutate(file)
   }
 
   const handleInviteMember = async (e: React.FormEvent) => {
@@ -1101,6 +1176,75 @@ function OrganizationSettingsPage({
                   </div>
                 </FieldGroup>
               </form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Logotipo da Organização</CardTitle>
+              <CardDescription>
+                Usado na identificação do laboratório, portal e certificados.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
+                    {organizationLogo ? (
+                      <img
+                        src={organizationLogo}
+                        alt={`Logo de ${activeOrg.name}`}
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <HugeiconsIcon
+                        icon={Building06Icon}
+                        className="size-8 text-muted-foreground"
+                      />
+                    )}
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <p className="font-medium">
+                      {organizationLogo ? 'Logo configurado' : 'Sem logo'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      PNG, JPG, WebP ou SVG até 2MB.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    className="hidden"
+                    onChange={handleLogoFileChange}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      logoUploadMutation.isPending ||
+                      logoDeleteMutation.isPending
+                    }
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    {logoUploadMutation.isPending ? 'Enviando...' : 'Enviar'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      !organizationLogo ||
+                      logoUploadMutation.isPending ||
+                      logoDeleteMutation.isPending
+                    }
+                    onClick={() => logoDeleteMutation.mutate()}
+                  >
+                    {logoDeleteMutation.isPending ? 'Removendo...' : 'Remover'}
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

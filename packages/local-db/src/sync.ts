@@ -552,6 +552,8 @@ INSERT INTO calibration_jobs (
   asset_snapshot_json,
   standards_snapshot_json,
   environmental_snapshot_json,
+  calibration_location_snapshot_json,
+  calibration_phase_snapshot_json,
   data_json,
   results_json,
   status,
@@ -575,6 +577,8 @@ INSERT INTO calibration_jobs (
   @assetSnapshotJson,
   @standardsSnapshotJson,
   @environmentalSnapshotJson,
+  @calibrationLocationSnapshotJson,
+  @calibrationPhaseSnapshotJson,
   @dataJson,
   @resultsJson,
   @status,
@@ -587,6 +591,14 @@ INSERT INTO calibration_jobs (
 ON CONFLICT(id) DO UPDATE SET
   job_id = excluded.job_id,
   status = excluded.status,
+  method_snapshot_json = excluded.method_snapshot_json,
+  asset_snapshot_json = excluded.asset_snapshot_json,
+  standards_snapshot_json = excluded.standards_snapshot_json,
+  environmental_snapshot_json = excluded.environmental_snapshot_json,
+  calibration_location_snapshot_json = excluded.calibration_location_snapshot_json,
+  calibration_phase_snapshot_json = excluded.calibration_phase_snapshot_json,
+  data_json = excluded.data_json,
+  results_json = excluded.results_json,
   due_date = excluded.due_date,
   updated_at = excluded.updated_at,
   sync_state = excluded.sync_state
@@ -610,6 +622,12 @@ ON CONFLICT(id) DO UPDATE SET
           standardsSnapshotJson: JSON.stringify(row.standardsSnapshot ?? null),
           environmentalSnapshotJson: JSON.stringify(
             row.environmentalSnapshot ?? null,
+          ),
+          calibrationLocationSnapshotJson: JSON.stringify(
+            row.calibrationLocationSnapshot ?? null,
+          ),
+          calibrationPhaseSnapshotJson: JSON.stringify(
+            row.calibrationPhaseSnapshot ?? null,
           ),
           dataJson: JSON.stringify(row.data ?? null),
           resultsJson: JSON.stringify(row.results ?? null),

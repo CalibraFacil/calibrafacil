@@ -68,6 +68,7 @@ export const TableColumnSchema = z
     type: z.enum(["text", "number"]),
     unit: z.string().trim().optional(),
     role: z.enum(["standard_value", "mass_standard_composition"]).optional(),
+    phase: z.enum(["before", "after", "always"]).optional(),
     massComposition: z
       .object({
         targetUnit: z.enum(["mg", "g", "kg"]).optional(),
@@ -86,7 +87,9 @@ export const TableColumnSchema = z
           .strict()
           .optional(),
         uncertaintyMode: z.literal("expanded_rss").optional(),
-        quantityMode: z.literal("linear_per_item_then_rss").optional(),
+        quantityMode: z
+          .enum(["linear_per_item_then_rss", "profile_linear"])
+          .optional(),
       })
       .strict()
       .optional(),
@@ -309,6 +312,28 @@ export const MethodAcceptanceCriterionSchema = z
     expression: z.string().trim().min(1),
     severity: z.enum(["info", "warning", "blocking"]),
     message: z.string().trim().min(1),
+    metadata: SafeMetadataSchema.optional(),
+  })
+  .strict();
+
+const CalibrationPhaseSnapshotSchema = z
+  .object({
+    blocks: z.record(
+      z.string(),
+      z
+        .object({
+          mode: z.enum([
+            "before_and_after",
+            "before_only",
+            "after_only",
+            "not_performed",
+          ]),
+          reason: z.string().trim().optional().nullable(),
+        })
+        .strict(),
+    ),
+    recordedAt: z.string().optional(),
+    recordedBy: z.string().optional(),
   })
   .strict();
 
@@ -317,6 +342,7 @@ export const MethodPreviewScenarioSchema = z
     key: SafeKeySchema,
     label: z.string().trim().min(1),
     inputs: z.record(z.string(), z.unknown()),
+    calibrationPhases: CalibrationPhaseSnapshotSchema.optional(),
     expected: z
       .object({
         formulas: z

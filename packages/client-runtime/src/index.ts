@@ -91,6 +91,22 @@ export type JobsListInput = {
   status?: JobsListStatus;
 };
 
+function apiRouteParam(value: string | number): string {
+  let decodedValue = String(value);
+
+  for (let index = 0; index < 3; index += 1) {
+    try {
+      const nextValue = decodeURIComponent(decodedValue);
+      if (nextValue === decodedValue) break;
+      decodedValue = nextValue;
+    } catch {
+      break;
+    }
+  }
+
+  return encodeURIComponent(encodeURIComponent(decodedValue));
+}
+
 export type CreateJobInput = {
   assetId: number;
   serviceId: number;
@@ -3383,7 +3399,7 @@ export function createCloudApiClient(
       },
       async get<TJob = unknown>(jobId: string | number) {
         const response = await api.api.jobs[":id"].$get({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
         });
 
         if (!response.ok) {
@@ -3403,7 +3419,7 @@ export function createCloudApiClient(
       },
       async approve(jobId, input) {
         const response = await api.api.jobs[":id"].approve.$post({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
           json: input,
         });
 
@@ -3415,7 +3431,7 @@ export function createCloudApiClient(
       },
       async reject(jobId, reason) {
         const response = await api.api.jobs[":id"].reject.$post({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
           json: { reason },
         });
 
@@ -3427,7 +3443,7 @@ export function createCloudApiClient(
       },
       async cancel(jobId, reason) {
         const response = await api.api.jobs[":id"].$delete({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
           json: { reason },
         });
 
@@ -3439,7 +3455,7 @@ export function createCloudApiClient(
       },
       async assign(jobId, technicianId) {
         const response = await api.api.jobs[":id"].assign.$post({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
           json: { technicianId },
         });
 
@@ -3483,7 +3499,7 @@ export function createCloudApiClient(
       },
       async saveExecution(jobId, input) {
         const response = await api.api.jobs[":id"].execute.$post({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
           json: input,
         });
 
@@ -3495,7 +3511,7 @@ export function createCloudApiClient(
       },
       async submitExecution(jobId, input) {
         const response = await api.api.jobs[":id"].submit.$post({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
           json: input,
         });
 
@@ -3512,7 +3528,7 @@ export function createCloudApiClient(
       },
       async getCertificateDownloadUrl(jobId) {
         const response = await api.api.jobs[":id"].download.$get({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
         });
 
         if (!response.ok) {
@@ -3523,7 +3539,7 @@ export function createCloudApiClient(
       },
       async generateLabel(jobId) {
         const response = await api.api.jobs[":id"]["generate-label"].$post({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
         });
 
         if (!response.ok) {
@@ -3536,7 +3552,7 @@ export function createCloudApiClient(
       },
       async getLabelDownloadUrl(jobId) {
         const response = await api.api.jobs[":id"]["download-label"].$get({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
         });
 
         if (!response.ok) {
@@ -3547,7 +3563,7 @@ export function createCloudApiClient(
       },
       async amend(jobId, reason) {
         const response = await api.api.jobs[":id"].amend.$post({
-          param: { id: String(jobId) },
+          param: { id: apiRouteParam(jobId) },
           json: { reason },
         });
 
@@ -5034,10 +5050,7 @@ export function createDesktopApiClient(
       },
       async get<TJob = unknown>(jobId: string | number) {
         const response = await fetchImpl(
-          new URL(
-            `/api/jobs/${encodeURIComponent(String(jobId))}`,
-            options.baseUrl,
-          ),
+          new URL(`/api/jobs/${apiRouteParam(jobId)}`, options.baseUrl),
           {
             credentials: "include",
             headers: await createDesktopHeaders(options.tokenProvider),
@@ -5125,10 +5138,7 @@ export function createDesktopApiClient(
       },
       async saveExecution(jobId, input) {
         const response = await fetchImpl(
-          new URL(
-            `/api/jobs/${encodeURIComponent(String(jobId))}/execute`,
-            options.baseUrl,
-          ),
+          new URL(`/api/jobs/${apiRouteParam(jobId)}/execute`, options.baseUrl),
           {
             method: "POST",
             credentials: "include",
@@ -5147,10 +5157,7 @@ export function createDesktopApiClient(
       },
       async submitExecution(jobId, input) {
         const response = await fetchImpl(
-          new URL(
-            `/api/jobs/${encodeURIComponent(String(jobId))}/submit`,
-            options.baseUrl,
-          ),
+          new URL(`/api/jobs/${apiRouteParam(jobId)}/submit`, options.baseUrl),
           {
             method: "POST",
             credentials: "include",
@@ -5170,7 +5177,7 @@ export function createDesktopApiClient(
       async createCertificateDraft(jobId) {
         const response = await fetchImpl(
           new URL(
-            `/api/jobs/${encodeURIComponent(String(jobId))}/certificate-draft`,
+            `/api/jobs/${apiRouteParam(jobId)}/certificate-draft`,
             options.baseUrl,
           ),
           {

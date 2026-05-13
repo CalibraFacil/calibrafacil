@@ -210,6 +210,12 @@ function toCertificateJobData(
   const environmentalSnapshot = toRecordOrNull(
     job.environmentalSnapshot,
   ) as JobData["environmentalSnapshot"];
+  const calibrationLocationSnapshot = toRecordOrNull(
+    job.calibrationLocationSnapshot,
+  ) as JobData["calibrationLocationSnapshot"];
+  const calibrationPhaseSnapshot = toRecordOrNull(
+    job.calibrationPhaseSnapshot,
+  ) as JobData["calibrationPhaseSnapshot"];
 
   return {
     jobId: job.jobId,
@@ -219,6 +225,8 @@ function toCertificateJobData(
     performedAt: parseDate(job.updatedAt),
     approvedAt: null,
     environmentalSnapshot,
+    calibrationLocationSnapshot,
+    calibrationPhaseSnapshot,
     lab: {
       name: config.organizationId ?? "CalibraFacil",
     },

@@ -80,6 +80,53 @@ describe('mass composition utils', () => {
     )
   })
 
+  it('scales composition profile uncertainty linearly by quantity before RSS', () => {
+    const result = buildMassCompositionValue(
+      [
+        item({
+          quantity: 20,
+          value: 20000,
+          uncertainty: 0.08,
+          unit: 'g',
+          compositionProfile: true,
+          profileKey: '20kg-M1',
+        }),
+      ],
+      'g',
+      { quantityMode: 'profile_linear' },
+    )
+
+    expect(result.totals.certifiedValue).toBeCloseTo(400000)
+    expect(result.totals.expandedUncertainty).toBeCloseTo(1.6)
+  })
+
+  it('combines multiple linearly scaled composition profiles with RSS', () => {
+    const result = buildMassCompositionValue(
+      [
+        item({
+          quantity: 2,
+          uncertainty: 0.08,
+          unit: 'g',
+          compositionProfile: true,
+          profileKey: '20kg-M1',
+        }),
+        item({
+          quantity: 3,
+          uncertainty: 0.03,
+          unit: 'g',
+          compositionProfile: true,
+          profileKey: '10kg-M1',
+        }),
+      ],
+      'g',
+      { quantityMode: 'profile_linear' },
+    )
+
+    expect(result.totals.expandedUncertainty).toBeCloseTo(
+      Math.sqrt(0.16 ** 2 + 0.09 ** 2),
+    )
+  })
+
   it('calculates max error as a linear absolute sum when all items have metadata', () => {
     const result = buildMassCompositionValue(
       [
@@ -160,5 +207,22 @@ describe('mass composition utils', () => {
         pontos: [{ composicao: result }],
       }),
     ).toEqual([1, 2, 3])
+  })
+
+  it('warns when profile quantity exceeds the available profile count', () => {
+    const result = buildMassCompositionValue(
+      [
+        item({
+          quantity: 101,
+          compositionProfile: true,
+          profileKey: '20kg-M1',
+          profileQuantityAvailable: 100,
+        }),
+      ],
+      'kg',
+      { quantityMode: 'profile_linear' },
+    )
+
+    expect(result.warnings[0]).toContain('excede a disponibilidade')
   })
 })

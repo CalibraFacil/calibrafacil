@@ -55,6 +55,8 @@ export type LocalJobProjectionInput = {
   assetSnapshotJson?: string;
   standardsSnapshotJson?: string | null;
   environmentalSnapshotJson?: string | null;
+  calibrationLocationSnapshotJson?: string | null;
+  calibrationPhaseSnapshotJson?: string | null;
   dataJson?: string | null;
   resultsJson?: string | null;
   status: LocalJobStatus;
@@ -212,6 +214,8 @@ INSERT INTO calibration_jobs (
   asset_snapshot_json,
   standards_snapshot_json,
   environmental_snapshot_json,
+  calibration_location_snapshot_json,
+  calibration_phase_snapshot_json,
   data_json,
   results_json,
   status,
@@ -235,6 +239,8 @@ INSERT INTO calibration_jobs (
   @assetSnapshotJson,
   @standardsSnapshotJson,
   @environmentalSnapshotJson,
+  @calibrationLocationSnapshotJson,
+  @calibrationPhaseSnapshotJson,
   @dataJson,
   @resultsJson,
   @status,
@@ -255,6 +261,8 @@ ON CONFLICT(id) DO UPDATE SET
   asset_snapshot_json = excluded.asset_snapshot_json,
   standards_snapshot_json = excluded.standards_snapshot_json,
   environmental_snapshot_json = excluded.environmental_snapshot_json,
+  calibration_location_snapshot_json = excluded.calibration_location_snapshot_json,
+  calibration_phase_snapshot_json = excluded.calibration_phase_snapshot_json,
   data_json = excluded.data_json,
   results_json = excluded.results_json,
   status = excluded.status,
@@ -270,6 +278,9 @@ ON CONFLICT(id) DO UPDATE SET
       assetSnapshotJson: job.assetSnapshotJson ?? "{}",
       standardsSnapshotJson: job.standardsSnapshotJson ?? null,
       environmentalSnapshotJson: job.environmentalSnapshotJson ?? null,
+      calibrationLocationSnapshotJson:
+        job.calibrationLocationSnapshotJson ?? null,
+      calibrationPhaseSnapshotJson: job.calibrationPhaseSnapshotJson ?? null,
       dataJson: job.dataJson ?? null,
       resultsJson: job.resultsJson ?? null,
       dueDate: job.dueDate ?? null,

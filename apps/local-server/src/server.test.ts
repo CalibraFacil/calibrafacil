@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { compileMethodDraft } from "@calibra-facil/method-definition";
 import {
   applySyncBootstrap,
+  currentLocalDbSchemaVersion,
   openLocalDatabase,
   upsertLocalJobProjection,
 } from "@calibra-facil/local-db";
@@ -1611,7 +1612,7 @@ SELECT
     );
     expect(readiness.status).toBe(200);
     await expect(readiness.json()).resolves.toMatchObject({
-      dbSchemaVersion: 5,
+      dbSchemaVersion: currentLocalDbSchemaVersion,
       deviceId: "device-test",
       httpBaseUrl: "http://127.0.0.1:4317",
       localApiToken: null,
@@ -1644,7 +1645,7 @@ SELECT
         lastError: null,
       },
       database: {
-        schemaVersion: 5,
+        schemaVersion: currentLocalDbSchemaVersion,
         integrity: {
           ok: true,
           messages: ["ok"],
@@ -2452,6 +2453,10 @@ INSERT INTO environmental_limits (
             temperature: 20,
             humidity: 50,
             pressure: 1013,
+          },
+          calibrationLocation: {
+            type: "customer_site",
+            addressText: "Rua de Teste, 123",
           },
         }),
         headers: { "Content-Type": "application/json" },

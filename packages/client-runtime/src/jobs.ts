@@ -52,6 +52,24 @@ export type JobExecutionPayload = {
     humidity: number | null;
     pressure: number | null;
   };
+  calibrationLocation?: {
+    type: "customer_site" | "lab" | "other";
+    addressText: string;
+    notes?: string | null;
+  };
+  calibrationPhases?: {
+    blocks: Record<
+      string,
+      {
+        mode:
+          | "before_and_after"
+          | "before_only"
+          | "after_only"
+          | "not_performed";
+        reason?: string | null;
+      }
+    >;
+  };
 };
 
 export type ReferenceStandardsResponse<TStandard = unknown> = {

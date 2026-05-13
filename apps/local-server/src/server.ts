@@ -85,6 +85,120 @@ export type LocalServerInstance = {
   database: LocalDatabase;
 };
 
+type CalibrationLocationInput = {
+  type: "customer_site" | "lab" | "other";
+  addressText: string;
+  notes?: string | null;
+};
+
+type CalibrationPhaseInput = {
+  blocks: Record<
+    string,
+    {
+      mode:
+        | "before_and_after"
+        | "before_only"
+        | "after_only"
+        | "not_performed";
+      reason?: string | null;
+    }
+  >;
+};
+
+function buildCalibrationLocationSnapshot(
+  input: CalibrationLocationInput | undefined,
+  existing: Record<string, unknown> | null | undefined,
+  actorUserId: string,
+): Record<string, unknown> | null | undefined {
+  if (!input) return existing ?? undefined;
+
+  return {
+    type: input.type,
+    addressText: input.addressText.trim(),
+    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+    recordedAt: new Date().toISOString(),
+    recordedBy: actorUserId,
+  };
+}
+
+function buildCalibrationPhaseSnapshot(
+  input: CalibrationPhaseInput | undefined,
+  existing: Record<string, unknown> | null | undefined,
+  actorUserId: string,
+): Record<string, unknown> | null | undefined {
+  if (!input) return existing ?? undefined;
+
+  const blocks: Record<string, unknown> = {};
+  for (const [key, block] of Object.entries(input.blocks ?? {})) {
+    if (!key.trim()) continue;
+    if (!isCalibrationPhaseMode(block.mode)) continue;
+    blocks[key] = {
+      mode: block.mode,
+      ...(block.reason?.trim() ? { reason: block.reason.trim() } : {}),
+    };
+  }
+
+  return {
+    blocks,
+    recordedAt: new Date().toISOString(),
+    recordedBy: actorUserId,
+  };
+}
+
+function isCalibrationPhaseMode(mode: unknown) {
+  return (
+    mode === "before_and_after" ||
+    mode === "before_only" ||
+    mode === "after_only" ||
+    mode === "not_performed"
+  );
+}
+
+function validateCalibrationLocationForSubmit(
+  snapshot: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!snapshot) return "Local da calibração é obrigatório";
+  if (
+    snapshot.type !== "customer_site" &&
+    snapshot.type !== "lab" &&
+    snapshot.type !== "other"
+  ) {
+    return "Tipo de local da calibração é inválido";
+  }
+  if (
+    typeof snapshot.addressText !== "string" ||
+    !snapshot.addressText.trim()
+  ) {
+    return "Endereço/local da calibração é obrigatório";
+  }
+  return null;
+}
+
+function validateCalibrationPhasesForSubmit(
+  snapshot: Record<string, unknown> | null | undefined,
+): string | null {
+  const blocks = snapshot?.blocks;
+  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) {
+    return null;
+  }
+
+  for (const [blockKey, block] of Object.entries(blocks)) {
+    if (!block || typeof block !== "object" || Array.isArray(block)) {
+      continue;
+    }
+    const mode = (block as { mode?: unknown }).mode;
+    const reason = (block as { reason?: unknown }).reason;
+    if (
+      mode === "not_performed" &&
+      (typeof reason !== "string" || reason.trim() === "")
+    ) {
+      return `Informe o motivo para não executar o bloco ${blockKey}`;
+    }
+  }
+
+  return null;
+}
+
 export function createLocalServer(
   config: LocalServerConfig,
   database: LocalDatabase,
@@ -503,6 +617,8 @@ export function createLocalServer(
         humidity: number | null;
         pressure: number | null;
       };
+      calibrationLocation?: CalibrationLocationInput;
+      calibrationPhases?: CalibrationPhaseInput;
     };
     const current = getLocalJobDetail(database, routeId);
 
@@ -511,6 +627,16 @@ export function createLocalServer(
     }
 
     const context = getLocalRequestContext(config, database);
+    const calibrationLocationSnapshot = buildCalibrationLocationSnapshot(
+      input.calibrationLocation,
+      current.calibrationLocationSnapshot as Record<string, unknown> | null,
+      context.userId ?? "local",
+    );
+    const calibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
+      input.calibrationPhases,
+      current.calibrationPhaseSnapshot as Record<string, unknown> | null,
+      context.userId ?? "local",
+    );
     try {
       const results = executeLocalCompiledMethod({
         methodSnapshot: current.methodSnapshot as Record<string, unknown>,
@@ -518,6 +644,7 @@ export function createLocalServer(
         data: input.data ?? {},
         fallbackResults: input.results ?? null,
         environmentalSnapshot: input.environment,
+        calibrationPhaseSnapshot,
         requireSuccess: false,
       });
       const job = saveLocalJobExecution(database, {
@@ -526,6 +653,14 @@ export function createLocalServer(
         results,
         selectedStandardIds: input.selectedStandardIds,
         environment: input.environment,
+        calibrationLocationSnapshot: calibrationLocationSnapshot as Record<
+          string,
+          unknown
+        > | null,
+        calibrationPhaseSnapshot: calibrationPhaseSnapshot as Record<
+          string,
+          unknown
+        > | null,
         actorUserId: context.userId,
         deviceId: config.deviceId,
       });
@@ -553,6 +688,8 @@ export function createLocalServer(
         humidity: number | null;
         pressure: number | null;
       };
+      calibrationLocation?: CalibrationLocationInput;
+      calibrationPhases?: CalibrationPhaseInput;
     };
     const current = getLocalJobDetail(database, routeId);
 
@@ -561,6 +698,28 @@ export function createLocalServer(
     }
 
     const context = getLocalRequestContext(config, database);
+    const calibrationLocationSnapshot = buildCalibrationLocationSnapshot(
+      input.calibrationLocation,
+      current.calibrationLocationSnapshot as Record<string, unknown> | null,
+      context.userId ?? "local",
+    );
+    const calibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
+      input.calibrationPhases,
+      current.calibrationPhaseSnapshot as Record<string, unknown> | null,
+      context.userId ?? "local",
+    );
+    const calibrationLocationError = validateCalibrationLocationForSubmit(
+      calibrationLocationSnapshot,
+    );
+    if (calibrationLocationError) {
+      return c.json({ error: calibrationLocationError }, 400);
+    }
+    const calibrationPhaseError = validateCalibrationPhasesForSubmit(
+      calibrationPhaseSnapshot,
+    );
+    if (calibrationPhaseError) {
+      return c.json({ error: calibrationPhaseError }, 400);
+    }
     try {
       const results = executeLocalCompiledMethod({
         methodSnapshot: current.methodSnapshot as Record<string, unknown>,
@@ -568,6 +727,7 @@ export function createLocalServer(
         data: input.data ?? {},
         fallbackResults: input.results ?? null,
         environmentalSnapshot: input.environment,
+        calibrationPhaseSnapshot,
         requireSuccess: true,
       });
       const job = saveLocalJobExecution(database, {
@@ -576,6 +736,14 @@ export function createLocalServer(
         results,
         selectedStandardIds: input.selectedStandardIds,
         environment: input.environment,
+        calibrationLocationSnapshot: calibrationLocationSnapshot as Record<
+          string,
+          unknown
+        >,
+        calibrationPhaseSnapshot: calibrationPhaseSnapshot as Record<
+          string,
+          unknown
+        >,
         requireResults: true,
         actorUserId: context.userId,
         deviceId: config.deviceId,

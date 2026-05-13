@@ -313,11 +313,16 @@ function correctedStandardDeviation(
 ): number {
   const denominator = values.length - correction;
   if (denominator <= 0) return Number.NaN;
+  if (allValuesEqual(values)) return 0;
 
   const mean = values.reduce((sum, item) => sum + item, 0) / values.length;
   const variance =
     values.reduce((sum, item) => sum + (item - mean) ** 2, 0) / denominator;
   return Math.sqrt(variance);
+}
+
+function allValuesEqual(values: readonly number[]): boolean {
+  return values.every((value) => value === values[0]);
 }
 
 export function compareDecimalInputs(

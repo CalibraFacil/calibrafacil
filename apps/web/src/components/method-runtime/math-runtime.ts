@@ -12,7 +12,7 @@ import type {
 } from './types'
 
 export type FormulaScalar = number | string
-export type FormulaValue = FormulaScalar | number[]
+export type FormulaValue = FormulaScalar | FormulaScalar[]
 export type FormulaContext = Record<string, FormulaValue>
 
 interface StandardLike {
@@ -237,6 +237,42 @@ export function evaluateFormulaScalar(
   }
 }
 
+export function evaluateFormulaRows(
+  engine: CalculationEngine,
+  expression: string,
+  context: FormulaContext,
+  rowCount: number,
+  tableKey: string,
+  arraySourceTables: ReadonlyMap<string, string>,
+):
+  | { success: true; values: FormulaScalar[] }
+  | { success: false; error: string; errorCode?: string } {
+  const values: FormulaScalar[] = []
+
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const rowContext: FormulaContext = {}
+
+    for (const [key, value] of Object.entries(context)) {
+      if (Array.isArray(value)) {
+        if (arraySourceTables.get(key) === tableKey) {
+          if (value[rowIndex] === undefined) continue
+          rowContext[key] = value[rowIndex]
+        }
+        continue
+      }
+
+      rowContext[key] = value
+    }
+
+    const result = evaluateFormulaScalar(engine, expression, rowContext)
+    if (!result.success) return result
+
+    values[rowIndex] = result.value
+  }
+
+  return { success: true, values }
+}
+
 export function evaluateStructuredValidation(
   engine: CalculationEngine,
   validation: MethodValidation,
@@ -411,8 +447,12 @@ function prepareFormulaEvaluation(
 ): { expression: string; context: Record<string, FormulaScalar> } {
   const scalarContext = toEngineContext(context)
   let index = 0
-  const rewrittenExpression = expression.replace(
-    /\b(mean|std)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+  const expressionWithConditionals = rewriteRuntimeConditionals(
+    expression,
+    context,
+  )
+  const rewrittenExpression = expressionWithConditionals.replace(
+    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
     (match, functionName: string, argument: string, correction?: string) => {
       const values = resolveInlineNumericArguments(argument, context)
       if (!values.length) return match
@@ -420,7 +460,11 @@ function prepareFormulaEvaluation(
       const value =
         functionName === 'mean'
           ? sum(values) / values.length
-          : correctedStandardDeviation(values, Number(correction ?? 1))
+          : functionName === 'std'
+            ? correctedStandardDeviation(values, Number(correction ?? 1))
+            : functionName === 'min'
+              ? Math.min(...values)
+              : Math.max(...values)
       if (!Number.isFinite(value)) return match
 
       const key = `runtime_${index++}`
@@ -430,6 +474,88 @@ function prepareFormulaEvaluation(
   )
 
   return { expression: rewrittenExpression, context: scalarContext }
+}
+
+function rewriteRuntimeConditionals(
+  expression: string,
+  context: FormulaContext,
+): string {
+  let output = expression
+  let searchIndex = 0
+
+  while (searchIndex < output.length) {
+    const startIndex = output.indexOf('if_zero(', searchIndex)
+    if (startIndex < 0) break
+
+    const call = parseRuntimeFunctionCall(output, startIndex, 'if_zero')
+    if (!call || call.args.length !== 3) {
+      searchIndex = startIndex + 1
+      continue
+    }
+
+    const condition = resolveScalarNumericToken(call.args[0], context)
+    if (condition === null) {
+      searchIndex = startIndex + 1
+      continue
+    }
+
+    const branch = condition === 0 ? call.args[1] : call.args[2]
+    const replacement = `(${branch})`
+    output = `${output.slice(0, startIndex)}${replacement}${output.slice(call.endIndex)}`
+    searchIndex = startIndex + replacement.length
+  }
+
+  return output
+}
+
+function parseRuntimeFunctionCall(
+  expression: string,
+  startIndex: number,
+  functionName: string,
+): { args: string[]; endIndex: number } | null {
+  const prefix = `${functionName}(`
+  if (!expression.startsWith(prefix, startIndex)) return null
+
+  const args: string[] = []
+  const argumentStartIndex = startIndex + prefix.length
+  let currentArgumentStart = argumentStartIndex
+  let depth = 0
+
+  for (let index = argumentStartIndex; index < expression.length; index += 1) {
+    const char = expression[index]
+    if (char === '(') {
+      depth += 1
+      continue
+    }
+
+    if (char === ')') {
+      if (depth === 0) {
+        args.push(expression.slice(currentArgumentStart, index).trim())
+        return { args, endIndex: index + 1 }
+      }
+      depth -= 1
+      continue
+    }
+
+    if (char === ',' && depth === 0) {
+      args.push(expression.slice(currentArgumentStart, index).trim())
+      currentArgumentStart = index + 1
+    }
+  }
+
+  return null
+}
+
+function resolveScalarNumericToken(
+  token: string,
+  context: FormulaContext,
+): number | null {
+  const trimmed = token.trim()
+  const literal = toFiniteNumber(trimmed)
+  if (literal !== null) return literal
+
+  const value = context[trimmed]
+  return Array.isArray(value) ? null : toFiniteNumber(value)
 }
 
 function toEngineContext(
@@ -467,7 +593,11 @@ function resolveInlineNumericToken(
   if (literal !== null) return [literal]
 
   const value = context[token]
-  if (Array.isArray(value)) return value
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => toFiniteNumber(item))
+      .filter((item): item is number => item !== null)
+  }
 
   const scalar = toFiniteNumber(value)
   return scalar === null ? [] : [scalar]

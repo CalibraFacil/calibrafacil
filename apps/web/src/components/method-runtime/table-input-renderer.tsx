@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
@@ -54,6 +54,11 @@ interface TableInputRendererProps {
   certifiedValueOptions?: CertifiedValueOption[]
   massCompositionOptions?: MassCompositionOption[]
   assetSpecifications?: Record<string, unknown> | null
+  phaseMode?:
+    | 'before_and_after'
+    | 'before_only'
+    | 'after_only'
+    | 'not_performed'
 }
 
 /**
@@ -90,10 +95,25 @@ const COMPOSITION_TOTAL_TARGETS: Array<
 
 const PANEL_HIDDEN_COMPOSITION_TARGETS: Array<
   keyof MassCompositionTargetColumns
-> = ['expandedUncertainty', 'maxError', 'drift', 'buoyancy']
+> = [
+  'certifiedValue',
+  'compositionLabel',
+  'expandedUncertainty',
+  'maxError',
+  'drift',
+  'buoyancy',
+]
 
 type TableColumn = NonNullable<MethodInputField['columns']>[number]
 type MeasurementColumnGroup = 'before' | 'after' | 'other'
+
+const DEFAULT_ECCENTRICITY_LOAD_POINTS = {
+  circular_platform: ['A', 'B', 'C', 'D', 'E'],
+  road_scale: ['1', '2', '3', '4'],
+} satisfies Record<
+  NonNullable<MethodInputField['eccentricityIndicator']>['variant'] & string,
+  string[]
+>
 
 function normalizeColumnText(value: string) {
   return value
@@ -105,6 +125,9 @@ function normalizeColumnText(value: string) {
 function getMeasurementColumnGroup(
   column: TableColumn,
 ): MeasurementColumnGroup {
+  if (column.phase === 'before') return 'before'
+  if (column.phase === 'after') return 'after'
+
   const text = normalizeColumnText(`${column.key} ${column.label}`)
 
   if (text.includes('antes') && text.includes('leitura')) {
@@ -116,6 +139,78 @@ function getMeasurementColumnGroup(
   }
 
   return 'other'
+}
+
+function isColumnPhaseActive(
+  column: TableColumn,
+  phaseMode: NonNullable<TableInputRendererProps['phaseMode']>,
+) {
+  if (phaseMode === 'not_performed') return false
+  if (!column.phase || column.phase === 'always') return true
+  if (phaseMode === 'before_and_after') return true
+  if (phaseMode === 'before_only') return column.phase === 'before'
+  if (phaseMode === 'after_only') return column.phase === 'after'
+  return true
+}
+
+function getEccentricityPointColumn(field: MethodInputField) {
+  const configured = field.eccentricityIndicator?.pointColumn?.trim()
+  if (configured) return configured
+
+  return field.columns?.find((column) => {
+    const text = normalizeColumnText(`${column.key} ${column.label}`)
+    return text.includes('posicao') || text.includes('ponto')
+  })?.key
+}
+
+function getEccentricityLoadPoints(field: MethodInputField) {
+  const eccentricity = field.eccentricityIndicator
+  if (!eccentricity?.enabled) return null
+
+  const pointColumn = getEccentricityPointColumn(field)
+  if (!pointColumn) return null
+
+  const configuredPoints = eccentricity.loadPoints
+    ?.map((point) => point.trim())
+    .filter(Boolean)
+  const variant = eccentricity.variant ?? 'circular_platform'
+  const loadPoints =
+    configuredPoints && configuredPoints.length > 0
+      ? configuredPoints
+      : DEFAULT_ECCENTRICITY_LOAD_POINTS[variant]
+
+  return loadPoints.length > 0 ? { pointColumn, loadPoints } : null
+}
+
+function normalizePointValue(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+}
+
+function applyEccentricityLoadPoints(
+  field: MethodInputField,
+  rows: Array<Record<string, unknown>>,
+) {
+  const config = getEccentricityLoadPoints(field)
+  if (!config) return rows
+
+  const rowsByPoint = new Map<string, Record<string, unknown>>()
+  for (const row of rows) {
+    const point = normalizePointValue(row[config.pointColumn])
+    if (point && !rowsByPoint.has(point)) {
+      rowsByPoint.set(point, row)
+    }
+  }
+
+  return config.loadPoints.map((point, index) => {
+    const existing =
+      rowsByPoint.get(normalizePointValue(point)) ?? rows[index] ?? {}
+    return {
+      ...existing,
+      [config.pointColumn]: point,
+    }
+  })
 }
 
 function valuesMatch(current: unknown, expected: unknown): boolean {
@@ -208,48 +303,68 @@ function rowsAreEqual(
   })
 }
 
-export function applyTableWeighingRangeResolvers(
+function getWeighingRangeResolver(field: MethodInputField) {
+  return field.weighingRangeResolver?.enabled !== false
+    ? field.weighingRangeResolver
+    : undefined
+}
+
+function getConfiguredWeighingRanges(
   field: MethodInputField,
-  rows: Array<Record<string, unknown>>,
   assetSpecifications: Record<string, unknown> | null | undefined,
 ) {
-  const columns = field.columns || []
-  const weighingRangeResolver =
-    field.weighingRangeResolver?.enabled !== false
-      ? field.weighingRangeResolver
-      : undefined
+  const weighingRangeResolver = getWeighingRangeResolver(field)
 
-  if (!weighingRangeResolver || rows.length === 0) {
-    return rows
+  return weighingRangeResolver?.assetSpecKey
+    ? assetSpecifications?.[weighingRangeResolver.assetSpecKey]
+    : null
+}
+
+function resolveRowWeighingRange(
+  field: MethodInputField,
+  row: Record<string, unknown>,
+  assetSpecifications: Record<string, unknown> | null | undefined,
+): ResolvedWeighingRange | null {
+  const columns = field.columns || []
+  const weighingRangeResolver = getWeighingRangeResolver(field)
+
+  if (
+    !weighingRangeResolver?.assetSpecKey ||
+    !weighingRangeResolver.pointColumn
+  ) {
+    return null
   }
 
   const weighingRangePointColumn = columns.find(
     (col) => col.key === weighingRangeResolver.pointColumn,
   )
 
-  const resolveRowWeighingRange = (
-    row: Record<string, unknown>,
-  ): ResolvedWeighingRange | null => {
-    if (
-      !weighingRangeResolver.assetSpecKey ||
-      !weighingRangeResolver.pointColumn
-    ) {
-      return null
-    }
+  return resolveWeighingRange(
+    row[weighingRangeResolver.pointColumn],
+    weighingRangeResolver.pointUnit ?? weighingRangePointColumn?.unit,
+    assetSpecifications?.[weighingRangeResolver.assetSpecKey],
+  )
+}
 
-    return resolveWeighingRange(
-      row[weighingRangeResolver.pointColumn],
-      weighingRangeResolver.pointUnit ?? weighingRangePointColumn?.unit,
-      assetSpecifications?.[weighingRangeResolver.assetSpecKey],
-    )
+export function applyTableWeighingRangeResolvers(
+  field: MethodInputField,
+  rows: Array<Record<string, unknown>>,
+  assetSpecifications: Record<string, unknown> | null | undefined,
+) {
+  const columns = field.columns || []
+  const weighingRangeResolver = getWeighingRangeResolver(field)
+
+  if (!weighingRangeResolver || rows.length === 0) {
+    return rows
   }
 
   const applyResolver = (row: Record<string, unknown>) => {
-    const resolved = resolveRowWeighingRange(row)
+    const resolved = resolveRowWeighingRange(field, row, assetSpecifications)
     const targetColumns = weighingRangeResolver.targetColumns ?? {}
-    const configuredRanges = weighingRangeResolver.assetSpecKey
-      ? assetSpecifications?.[weighingRangeResolver.assetSpecKey]
-      : null
+    const configuredRanges = getConfiguredWeighingRanges(
+      field,
+      assetSpecifications,
+    )
     const hasConfiguredRanges =
       Array.isArray(configuredRanges) && configuredRanges.length > 0
     const resolutionSource =
@@ -342,13 +457,23 @@ export function TableInputRenderer({
   certifiedValueOptions = [],
   massCompositionOptions = [],
   assetSpecifications,
+  phaseMode = 'before_and_after',
 }: TableInputRendererProps) {
+  const eccentricityLoadPointConfig = getEccentricityLoadPoints(field)
+  const hasFixedLoadPoints = Boolean(eccentricityLoadPointConfig)
   const rows = applyTableWeighingRangeResolvers(
     field,
-    value || [],
+    applyEccentricityLoadPoints(field, value || []),
     assetSpecifications,
   )
   const columns = field.columns || []
+  const weighingRangeResolver = getWeighingRangeResolver(field)
+  const configuredRanges = getConfiguredWeighingRanges(
+    field,
+    assetSpecifications,
+  )
+  const hasConfiguredRanges =
+    Array.isArray(configuredRanges) && configuredRanges.length > 0
   const shouldUsePanelRows =
     columns.length > 5 ||
     columns.some((col) => col.role === 'mass_standard_composition')
@@ -372,14 +497,26 @@ export function TableInputRenderer({
     const targetColumns = column.massComposition?.targetColumns ?? {}
     for (const targetName of PANEL_HIDDEN_COMPOSITION_TARGETS) {
       const targetKey = targetColumns[targetName]
-      if (targetKey) {
+      if (targetKey && targetKey !== column.key) {
         panelHiddenColumnKeys.add(targetKey)
       }
+    }
+  }
+  for (const targetKey of Object.values(
+    weighingRangeResolver?.targetColumns ?? {},
+  )) {
+    if (targetKey && targetKey !== weighingRangeResolver?.pointColumn) {
+      panelHiddenColumnKeys.add(targetKey)
     }
   }
   const isPanelVisibleColumn = (column: TableColumn) =>
     !panelHiddenColumnKeys.has(column.key)
   const hasCertifiedValues = certifiedValueOptions.length > 0
+  useEffect(() => {
+    if (disabled || rowsAreEqual(value || [], rows)) return
+    onChange(rows)
+  }, [disabled, onChange, rows, value])
+
   const addRow = () => {
     const newRow: Record<string, unknown> = {}
     for (const col of columns) {
@@ -389,6 +526,7 @@ export function TableInputRenderer({
   }
 
   const removeRow = (index: number) => {
+    if (hasFixedLoadPoints) return
     onChange(rows.filter((_, i) => i !== index))
   }
 
@@ -466,7 +604,12 @@ export function TableInputRenderer({
     }
 
     const newRows = [...rows]
-    newRows[rowIndex] = applyWeighingRangeResolver(nextRow)
+    newRows[rowIndex] =
+      applyTableWeighingRangeResolvers(
+        field,
+        [nextRow],
+        assetSpecifications,
+      )[0] ?? nextRow
     onChange(newRows)
   }
 
@@ -493,12 +636,11 @@ export function TableInputRenderer({
       }
     }
 
-    const resolvedRange = resolveRowWeighingRange(row)
-    const configuredRanges = weighingRangeResolver?.assetSpecKey
-      ? assetSpecifications?.[weighingRangeResolver.assetSpecKey]
-      : null
-    const hasConfiguredRanges =
-      Array.isArray(configuredRanges) && configuredRanges.length > 0
+    const resolvedRange = resolveRowWeighingRange(
+      field,
+      row,
+      assetSpecifications,
+    )
     const resolutionFallback = !hasConfiguredRanges
       ? getAssetResolutionFallback(assetSpecifications)
       : null
@@ -524,6 +666,15 @@ export function TableInputRenderer({
     )
   }
 
+  if (phaseMode === 'not_performed') {
+    return (
+      <div className="rounded-md border border-dashed bg-muted/20 p-4 text-sm text-muted-foreground">
+        Bloco marcado como não executado. As leituras deste bloco não são
+        necessárias.
+      </div>
+    )
+  }
+
   const renderCellInput = (
     row: Record<string, unknown>,
     rowIndex: number,
@@ -531,6 +682,9 @@ export function TableInputRenderer({
     calculatedTargets: Set<string>,
   ) => {
     const isCalculatedTarget = calculatedTargets.has(col.key)
+    const isFixedLoadPoint =
+      eccentricityLoadPointConfig?.pointColumn === col.key
+    const isInactivePhaseColumn = !isColumnPhaseActive(col, phaseMode)
     const cellValue = row[col.key]
     const showPicker =
       col.type === 'number' &&
@@ -544,8 +698,20 @@ export function TableInputRenderer({
           onChange={(val) => updateMassComposition(rowIndex, col.key, val)}
           options={massCompositionOptions}
           config={col.massComposition}
-          disabled={disabled}
+          disabled={disabled || isInactivePhaseColumn}
           presentation={shouldUsePanelRows ? 'field' : 'cell'}
+        />
+      )
+    }
+
+    if (isInactivePhaseColumn) {
+      return (
+        <Input
+          type="text"
+          value="x"
+          disabled
+          className="h-8 w-full bg-muted/60 text-center text-muted-foreground"
+          title="Etapa não aplicável para esta calibração"
         />
       )
     }
@@ -590,10 +756,14 @@ export function TableInputRenderer({
               updateCell(rowIndex, col.key, null)
             }
           }}
-          disabled={disabled || isCalculatedTarget}
-          className={`h-8 w-full ${isCalculatedTarget ? 'bg-muted/50' : ''}`}
+          disabled={disabled || isCalculatedTarget || isFixedLoadPoint}
+          className={`h-8 w-full ${isCalculatedTarget || isFixedLoadPoint ? 'bg-muted/50' : ''}`}
           title={
-            isCalculatedTarget ? 'Valor calculado automaticamente' : undefined
+            isFixedLoadPoint
+              ? 'Ponto de carga definido pelo método'
+              : isCalculatedTarget
+                ? 'Valor calculado automaticamente'
+                : undefined
           }
         />
       )
@@ -610,10 +780,14 @@ export function TableInputRenderer({
               : ''
         }
         onChange={(e) => updateCell(rowIndex, col.key, e.target.value)}
-        disabled={disabled || isCalculatedTarget}
-        className={`h-8 w-full ${isCalculatedTarget ? 'bg-muted/50' : ''}`}
+        disabled={disabled || isCalculatedTarget || isFixedLoadPoint}
+        className={`h-8 w-full ${isCalculatedTarget || isFixedLoadPoint ? 'bg-muted/50' : ''}`}
         title={
-          isCalculatedTarget ? 'Valor calculado automaticamente' : undefined
+          isFixedLoadPoint
+            ? 'Ponto de carga definido pelo método'
+            : isCalculatedTarget
+              ? 'Valor calculado automaticamente'
+              : undefined
         }
       />
     )
@@ -632,7 +806,7 @@ export function TableInputRenderer({
         key={col.key}
         className={
           isComposition
-            ? 'min-w-0 space-y-1 md:col-span-2 xl:col-span-1'
+            ? 'min-w-0 space-y-1 md:col-span-2 xl:col-span-3'
             : 'min-w-0 space-y-1'
         }
       >
@@ -659,7 +833,7 @@ export function TableInputRenderer({
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {title}
         </p>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-2">
           {groupColumns.map((col) =>
             renderPanelColumn(row, rowIndex, col, calculatedTargets),
           )}
@@ -679,6 +853,9 @@ export function TableInputRenderer({
           <div className="space-y-3">
             {rows.map((row, rowIndex) => {
               const calculatedTargets = getCalculatedTargets(row)
+              const loadPoint = eccentricityLoadPointConfig
+                ? String(row[eccentricityLoadPointConfig.pointColumn] ?? '')
+                : ''
 
               return (
                 <div
@@ -691,18 +868,25 @@ export function TableInputRenderer({
                         {rowIndex + 1}
                       </span>
                       <span className="text-sm font-medium">
-                        Ponto {rowIndex + 1}
+                        {loadPoint
+                          ? `Ponto ${loadPoint}`
+                          : `Ponto ${rowIndex + 1}`}
                       </span>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeRow(rowIndex)}
-                      disabled={disabled}
-                      className="h-10 w-10 active:scale-[0.96]"
-                    >
-                      <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
-                    </Button>
+                    {!hasFixedLoadPoints && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeRow(rowIndex)}
+                        disabled={disabled}
+                        className="h-10 w-10 active:scale-[0.96]"
+                      >
+                        <HugeiconsIcon
+                          icon={Delete02Icon}
+                          className="h-4 w-4"
+                        />
+                      </Button>
+                    )}
                   </div>
 
                   {shouldGroupReadings ? (
@@ -719,7 +903,7 @@ export function TableInputRenderer({
                             : null,
                         )}
                       </div>
-                      <div className="grid gap-3 xl:grid-cols-2">
+                      <div className="grid gap-3 lg:grid-cols-2">
                         {renderReadingGroup(
                           'Antes do ajuste',
                           panelColumnGroups.before,
@@ -756,15 +940,17 @@ export function TableInputRenderer({
           </div>
         )}
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={addRow}
-          disabled={disabled}
-        >
-          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-          Adicionar Linha
-        </Button>
+        {!hasFixedLoadPoints && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addRow}
+            disabled={disabled}
+          >
+            <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+            Adicionar Linha
+          </Button>
+        )}
       </div>
     )
   }
@@ -821,18 +1007,20 @@ export function TableInputRenderer({
                       )
                     })}
                     <TableCell className="p-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeRow(rowIndex)}
-                        disabled={disabled}
-                        className="h-8 w-8"
-                      >
-                        <HugeiconsIcon
-                          icon={Delete02Icon}
-                          className="h-4 w-4"
-                        />
-                      </Button>
+                      {!hasFixedLoadPoints && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeRow(rowIndex)}
+                          disabled={disabled}
+                          className="h-8 w-8"
+                        >
+                          <HugeiconsIcon
+                            icon={Delete02Icon}
+                            className="h-4 w-4"
+                          />
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 )
@@ -841,10 +1029,17 @@ export function TableInputRenderer({
           </TableBody>
         </Table>
       </div>
-      <Button variant="outline" size="sm" onClick={addRow} disabled={disabled}>
-        <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-        Adicionar Linha
-      </Button>
+      {!hasFixedLoadPoints && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={addRow}
+          disabled={disabled}
+        >
+          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+          Adicionar Linha
+        </Button>
+      )}
     </div>
   )
 }

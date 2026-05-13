@@ -98,6 +98,24 @@ export type EngineMetadata = {
 export type SafeMetadataValue = string | number | boolean | null;
 export type SafeMetadata = Record<string, SafeMetadataValue>;
 
+export type CalibrationPhase = "before" | "after";
+export type CalibrationPhaseMode =
+  | "before_and_after"
+  | "before_only"
+  | "after_only"
+  | "not_performed";
+
+export type CalibrationPhaseBlockSnapshot = {
+  mode: CalibrationPhaseMode;
+  reason?: string | null;
+};
+
+export type CalibrationPhaseSnapshot = {
+  blocks: Record<string, CalibrationPhaseBlockSnapshot>;
+  recordedAt?: string;
+  recordedBy?: string;
+};
+
 export type MethodDraftStatus =
   | "draft"
   | "ready_for_review"
@@ -161,6 +179,7 @@ export type TableColumn = {
   type: "text" | "number";
   unit?: string;
   role?: "standard_value" | "mass_standard_composition";
+  phase?: CalibrationPhase | "always";
   massComposition?: {
     targetUnit?: "mg" | "g" | "kg";
     optionSource?: "certified_values" | "composition_profiles";
@@ -173,7 +192,7 @@ export type TableColumn = {
       buoyancy?: string;
     };
     uncertaintyMode?: "expanded_rss";
-    quantityMode?: "linear_per_item_then_rss";
+    quantityMode?: "linear_per_item_then_rss" | "profile_linear";
   };
   required?: boolean;
   metadata?: SafeMetadata;
@@ -339,12 +358,14 @@ export type MethodAcceptanceCriterion = {
   expression: string;
   severity: "info" | "warning" | "blocking";
   message: string;
+  metadata?: SafeMetadata;
 };
 
 export type MethodPreviewScenario = {
   key: string;
   label: string;
   inputs: Record<string, unknown>;
+  calibrationPhases?: CalibrationPhaseSnapshot;
   expected?: {
     formulas?: Record<string, string | number | readonly (string | number)[]>;
     measurementModels?: Record<
@@ -414,6 +435,7 @@ export type CompiledMeasurementModelDefinition = {
   coverageProbability?: number;
   coverageFactor?: string | number;
   options?: MethodMeasurementModel["options"];
+  metadata?: SafeMetadata;
 };
 
 export type CompiledMethod = {
@@ -465,6 +487,7 @@ export type MethodPreviewResult = {
 
 export type CompiledMethodExecutionInput = {
   inputs: Record<string, unknown>;
+  calibrationPhases?: CalibrationPhaseSnapshot;
 };
 
 export type CompiledMethodExecutionResult = {
@@ -506,6 +529,7 @@ export type CompileMethodResult =
 
 export type RunMethodPreviewOptions = {
   engine: CalculationEngineLike;
+  calibrationPhases?: CalibrationPhaseSnapshot;
 };
 
 export type ExecuteCompiledMethodOptions = {

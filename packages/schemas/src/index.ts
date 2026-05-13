@@ -493,7 +493,9 @@ export const MassCompositionConfigSchema = z.object({
     })
     .optional(),
   uncertaintyMode: z.enum(["expanded_rss"]).optional(),
-  quantityMode: z.enum(["linear_per_item_then_rss"]).optional(),
+  quantityMode: z
+    .enum(["linear_per_item_then_rss", "profile_linear"])
+    .optional(),
 });
 export type MassCompositionConfig = z.infer<typeof MassCompositionConfigSchema>;
 
@@ -509,6 +511,7 @@ export const MethodTableColumnSchema = z.object({
   type: z.enum(["text", "number"]),
   unit: z.string().optional(),
   role: MethodTableColumnRoleSchema.optional(),
+  phase: z.enum(["before", "after", "always"]).optional(),
   massComposition: MassCompositionConfigSchema.optional(),
 });
 
@@ -576,6 +579,8 @@ export const MethodInputFieldSchema = z
     source: MethodInputSourceSchema.optional().default("manual"),
     assetSpecKey: z.string().optional(),
     allowOverride: z.boolean().optional().default(false),
+    phaseBlockKey: z.string().optional(),
+    phaseBlockLabel: z.string().optional(),
     eccentricityIndicator: EccentricityIndicatorConfigSchema.optional(),
     weighingRangeResolver: WeighingRangeResolverConfigSchema.optional(),
   })
@@ -674,6 +679,7 @@ export const MethodFormulaSchema = z.object({
   label: z.string().optional(),
   unit: z.string().optional(),
   reporting: MethodFormulaReportingSchema.optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type MethodFormula = z.infer<typeof MethodFormulaSchema>;
@@ -735,6 +741,7 @@ const StructuredMethodValidationSchema = z.object({
   rightExpression: z.string().min(1, "Expressão direita é obrigatória"),
   message: z.string().min(1, "Mensagem é obrigatória"),
   severity: z.enum(["error", "warning"]),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type MethodValidation = z.infer<typeof StructuredMethodValidationSchema>;
@@ -744,6 +751,7 @@ const LegacyMethodValidationSchema = z
     expression: z.string().min(1, "Expressão é obrigatória"),
     message: z.string().min(1, "Mensagem é obrigatória"),
     severity: z.enum(["error", "warning"]),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .transform((validation) =>
     normalizeLegacyMethodValidationExpression(validation),
@@ -841,6 +849,7 @@ function normalizeLegacyMethodValidationExpression(validation: {
   expression: string;
   message: string;
   severity: "error" | "warning";
+  metadata?: Record<string, unknown>;
 }): MethodValidation {
   const match = validation.expression.match(
     /^\s*(.+?)\s*(<=|>=|==|!=|<|>)\s*(.+?)\s*$/,
@@ -852,6 +861,7 @@ function normalizeLegacyMethodValidationExpression(validation: {
     rightExpression: match?.[3]?.trim() || "0",
     message: validation.message,
     severity: validation.severity,
+    metadata: validation.metadata,
   };
 }
 
@@ -1282,6 +1292,41 @@ export const EnvironmentalDataSchema = z.object({
 
 export type EnvironmentalDataInput = z.infer<typeof EnvironmentalDataSchema>;
 
+export const CalibrationLocationTypeSchema = z.enum([
+  "customer_site",
+  "lab",
+  "other",
+]);
+
+export const CalibrationLocationInputSchema = z.object({
+  type: CalibrationLocationTypeSchema,
+  addressText: z.string().trim().min(1, "Local da calibração é obrigatório"),
+  notes: z.string().trim().optional().nullable(),
+});
+
+export type CalibrationLocationInput = z.infer<
+  typeof CalibrationLocationInputSchema
+>;
+
+export const CalibrationPhaseModeSchema = z.enum([
+  "before_and_after",
+  "before_only",
+  "after_only",
+  "not_performed",
+]);
+
+export const CalibrationPhaseInputSchema = z.object({
+  blocks: z.record(
+    z.string(),
+    z.object({
+      mode: CalibrationPhaseModeSchema,
+      reason: z.string().trim().optional().nullable(),
+    }),
+  ),
+});
+
+export type CalibrationPhaseInput = z.infer<typeof CalibrationPhaseInputSchema>;
+
 /**
  * Schema for submitting job for review
  */
@@ -1290,6 +1335,8 @@ export const SubmitForReviewSchema = z.object({
   data: z.record(z.string(), z.unknown()),
   results: z.record(z.string(), z.unknown()).optional(),
   environment: EnvironmentalDataSchema.optional(),
+  calibrationLocation: CalibrationLocationInputSchema.optional(),
+  calibrationPhases: CalibrationPhaseInputSchema.optional(),
 });
 
 export type SubmitForReviewInput = z.infer<typeof SubmitForReviewSchema>;
@@ -1381,6 +1428,8 @@ export const ExecuteJobSchema = z.object({
   data: z.record(z.string(), z.unknown()),
   results: z.record(z.string(), z.unknown()).optional(),
   environment: EnvironmentalDataSchema.optional(),
+  calibrationLocation: CalibrationLocationInputSchema.optional(),
+  calibrationPhases: CalibrationPhaseInputSchema.optional(),
 });
 
 export type ExecuteJobInput = z.infer<typeof ExecuteJobSchema>;

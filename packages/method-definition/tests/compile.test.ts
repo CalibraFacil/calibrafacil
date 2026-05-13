@@ -16,7 +16,9 @@ const fakeEngine: CalculationEngineLike = {
       ...new Set(
         expression
           .match(/[a-zA-Z][a-zA-Z0-9_]*/g)
-          ?.filter((token) => !["abs", "mean", "std"].includes(token)) ?? [],
+          ?.filter(
+            (token) => !["abs", "mean", "std", "min", "max"].includes(token),
+          ) ?? [],
       ),
     ].sort();
     return {
@@ -84,7 +86,7 @@ function evaluateTestExpression(
   if (absMatch?.[1])
     return Math.abs(evaluateTestExpression(absMatch[1], inputs));
 
-  const aggregateMatch = trimmed.match(/^(mean|std)\(([^)]+)\)$/);
+  const aggregateMatch = trimmed.match(/^(mean|std|min|max)\(([^)]+)\)$/);
   if (aggregateMatch?.[1] && aggregateMatch[2]) {
     const value = (inputs as Readonly<Record<string, unknown>>)[
       aggregateMatch[2]
@@ -95,6 +97,8 @@ function evaluateTestExpression(
     const numbers = value.map(Number);
     const mean = numbers.reduce((sum, item) => sum + item, 0) / numbers.length;
     if (aggregateMatch[1] === "mean") return mean;
+    if (aggregateMatch[1] === "min") return Math.min(...numbers);
+    if (aggregateMatch[1] === "max") return Math.max(...numbers);
     if (numbers.length < 2) return 0;
     const variance =
       numbers.reduce((sum, item) => sum + (item - mean) ** 2, 0) /
@@ -213,6 +217,226 @@ describe("compileMethodDraft", () => {
     expect(publishedResult.method.normalizedMethodJson).toBe(
       draftResult.method.normalizedMethodJson,
     );
+  });
+
+  it("skips inactive phase columns, formulas, and criteria during execution", () => {
+    const draft = validDraft({
+      inputs: [
+        {
+          kind: "table",
+          key: "points",
+          label: "Points",
+          required: true,
+          metadata: { phaseBlock: "indication" },
+          columns: [
+            { key: "nominal", label: "Nominal", type: "number" },
+            {
+              key: "before_reading",
+              label: "Before",
+              type: "number",
+              phase: "before",
+              required: true,
+            },
+            {
+              key: "after_reading",
+              label: "After",
+              type: "number",
+              phase: "after",
+              required: true,
+            },
+          ],
+        },
+      ],
+      formulas: [
+        {
+          key: "before_error",
+          label: "Before error",
+          scope: { kind: "table_row", tableKey: "points" },
+          expression: "before_reading - nominal",
+          required: true,
+          metadata: { phaseBlock: "indication", phase: "before" },
+        },
+        {
+          key: "after_error",
+          label: "After error",
+          scope: { kind: "table_row", tableKey: "points" },
+          expression: "after_reading - nominal",
+          required: true,
+          metadata: { phaseBlock: "indication", phase: "after" },
+        },
+      ],
+      acceptanceCriteria: [
+        {
+          key: "before_limit",
+          label: "Before limit",
+          expression: "max(before_error) <= 1",
+          severity: "blocking",
+          message: "Before failed",
+          metadata: { phaseBlock: "indication", phase: "before" },
+        },
+        {
+          key: "after_limit",
+          label: "After limit",
+          expression: "max(after_error) <= 1",
+          severity: "blocking",
+          message: "After failed",
+          metadata: { phaseBlock: "indication", phase: "after" },
+        },
+      ],
+      previewScenarios: [
+        {
+          key: "after_only",
+          label: "After only",
+          calibrationPhases: {
+            blocks: { indication: { mode: "after_only" } },
+          },
+          inputs: {
+            points: [{ nominal: 10, after_reading: 10.1 }],
+          },
+        },
+      ],
+    });
+    const compiled = compileMethodDraft(draft, {
+      engine: fakeEngine,
+      requirePublishable: true,
+    });
+
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+
+    const execution = executeCompiledMethod(
+      compiled.method,
+      {
+        inputs: { points: [{ nominal: 10, after_reading: 10.1 }] },
+        calibrationPhases: {
+          blocks: { indication: { mode: "after_only" } },
+        },
+      },
+      { engine: fakeEngine },
+    );
+
+    expect(execution.ok).toBe(true);
+    expect(execution.outputs.before_error).toBeUndefined();
+    expect(execution.outputs.after_error).toEqual([expect.any(Number)]);
+    expect(Number((execution.outputs.after_error as number[])[0])).toBeCloseTo(
+      0.1,
+    );
+    expect(execution.acceptanceCriteriaResults.map((item) => item.key)).toEqual(
+      ["after_limit"],
+    );
+  });
+
+  it("skips an entire not-performed phase block", () => {
+    const draft = validDraft({
+      inputs: [
+        {
+          kind: "table",
+          key: "repeatability",
+          label: "Repeatability",
+          required: true,
+          metadata: { phaseBlock: "repeatability" },
+          columns: [
+            {
+              key: "before_reading",
+              label: "Before",
+              type: "number",
+              phase: "before",
+              required: true,
+            },
+            {
+              key: "after_reading",
+              label: "After",
+              type: "number",
+              phase: "after",
+              required: true,
+            },
+          ],
+        },
+      ],
+      formulas: [
+        {
+          key: "before_repeatability",
+          label: "Before repeatability",
+          scope: { kind: "table_row", tableKey: "repeatability" },
+          expression: "before_reading",
+          required: true,
+          metadata: { phaseBlock: "repeatability", phase: "before" },
+        },
+        {
+          key: "after_repeatability",
+          label: "After repeatability",
+          scope: { kind: "table_row", tableKey: "repeatability" },
+          expression: "after_reading",
+          required: true,
+          metadata: { phaseBlock: "repeatability", phase: "after" },
+        },
+      ],
+      acceptanceCriteria: [
+        {
+          key: "before_repeatability_limit",
+          label: "Before repeatability limit",
+          expression: "max(before_repeatability) <= 1",
+          severity: "blocking",
+          message: "Before repeatability failed",
+          metadata: { phaseBlock: "repeatability", phase: "before" },
+        },
+        {
+          key: "after_repeatability_limit",
+          label: "After repeatability limit",
+          expression: "max(after_repeatability) <= 1",
+          severity: "blocking",
+          message: "After repeatability failed",
+          metadata: { phaseBlock: "repeatability", phase: "after" },
+        },
+      ],
+      previewScenarios: [
+        {
+          key: "not_performed",
+          label: "Not performed",
+          calibrationPhases: {
+            blocks: {
+              repeatability: {
+                mode: "not_performed",
+                reason: "Instrument under repair",
+              },
+            },
+          },
+          inputs: {},
+        },
+      ],
+    });
+
+    const compiled = compileMethodDraft(draft, {
+      engine: fakeEngine,
+      requirePublishable: true,
+    });
+
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    expect(compiled.previewResults[0]?.passed).toBe(true);
+    expect(compiled.previewResults[0]?.formulaResults).toEqual([]);
+    expect(compiled.previewResults[0]?.acceptanceCriteriaResults).toEqual([]);
+
+    const execution = executeCompiledMethod(
+      compiled.method,
+      {
+        inputs: {},
+        calibrationPhases: {
+          blocks: {
+            repeatability: {
+              mode: "not_performed",
+              reason: "Instrument under repair",
+            },
+          },
+        },
+      },
+      { engine: fakeEngine },
+    );
+
+    expect(execution.ok).toBe(true);
+    expect(execution.outputs.before_repeatability).toBeUndefined();
+    expect(execution.outputs.after_repeatability).toBeUndefined();
+    expect(execution.acceptanceCriteriaResults).toEqual([]);
   });
 
   it("allows formulas to aggregate repeated observation inputs", () => {
@@ -1204,7 +1428,7 @@ describe("compileMethodDraft", () => {
                     expandedUncertainty: "u",
                   },
                   uncertaintyMode: "expanded_rss",
-                  quantityMode: "linear_per_item_then_rss",
+                  quantityMode: "profile_linear",
                 },
               },
               { key: "u", label: "U", type: "number" },
@@ -1246,6 +1470,7 @@ describe("compileMethodDraft", () => {
               compositionLabel: "standard",
               expandedUncertainty: "u",
             },
+            quantityMode: "profile_linear",
           },
         },
         { key: "u" },
@@ -1993,6 +2218,57 @@ describe("compileMethodDraft", () => {
     );
 
     expect(result.ok).toBe(true);
+  });
+
+  it("evaluates inline-list aggregates from the current row in row formulas", () => {
+    const result = compileMethodDraft(
+      validDraft({
+        inputs: [
+          {
+            kind: "table",
+            key: "measurements",
+            label: "Measurements",
+            columns: [
+              { key: "reading_1", label: "Reading 1", type: "number" },
+              { key: "reading_2", label: "Reading 2", type: "number" },
+              { key: "reading_3", label: "Reading 3", type: "number" },
+            ],
+          },
+        ],
+        formulas: [
+          {
+            key: "row_stddev",
+            label: "Row standard deviation",
+            scope: { kind: "table_row", tableKey: "measurements" },
+            expression: "std([reading_1, reading_2, reading_3], 1)",
+            required: true,
+          },
+        ],
+        measurementModels: [],
+        acceptanceCriteria: [],
+        previewScenarios: [
+          {
+            key: "nominal",
+            label: "Nominal",
+            inputs: {
+              measurements: [
+                { reading_1: 10, reading_2: 10, reading_3: 10 },
+                { reading_1: 20, reading_2: 21, reading_3: 22 },
+                { reading_1: 1000.73, reading_2: 1000.73, reading_3: 1000.73 },
+              ],
+            },
+            expected: { formulas: { row_stddev: [0, 1, 0] } },
+          },
+        ],
+      }),
+      { engine: fakeEngine, requirePublishable: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.previewResults[0]?.formulaResults[0]?.value).toEqual([
+      0, 1, 0,
+    ]);
   });
 
   it("allows row formulas to aggregate cross-table bindings", () => {

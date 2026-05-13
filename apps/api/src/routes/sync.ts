@@ -22,6 +22,8 @@ import {
   assetAuditLog,
   assetType,
   type AssetSnapshot,
+  type CalibrationPhaseSnapshot,
+  type CalibrationLocationSnapshot,
   calibrationJob,
   calibrationMethod,
   customer,
@@ -265,6 +267,9 @@ export const syncRouter = new Hono<{
             assetSnapshot: calibrationJob.assetSnapshot,
             standardsSnapshot: calibrationJob.standardsSnapshot,
             environmentalSnapshot: calibrationJob.environmentalSnapshot,
+            calibrationLocationSnapshot:
+              calibrationJob.calibrationLocationSnapshot,
+            calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
             data: calibrationJob.data,
             results: calibrationJob.results,
             status: calibrationJob.status,
@@ -832,6 +837,8 @@ async function loadCloudSyncEventsSince(
         assetSnapshot: calibrationJob.assetSnapshot,
         standardsSnapshot: calibrationJob.standardsSnapshot,
         environmentalSnapshot: calibrationJob.environmentalSnapshot,
+        calibrationLocationSnapshot: calibrationJob.calibrationLocationSnapshot,
+        calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
         data: calibrationJob.data,
         results: calibrationJob.results,
         status: calibrationJob.status,
@@ -2212,6 +2219,18 @@ async function applyLocalJobExecution(
   const nextEnvironmentalSnapshot = hasOwn(payload, "environmentalSnapshot")
     ? getRecordOrNull(payload, "environmentalSnapshot")
     : existing.environmentalSnapshot;
+  const nextCalibrationLocationSnapshot = hasOwn(
+    payload,
+    "calibrationLocationSnapshot",
+  )
+    ? getRecordOrNull(payload, "calibrationLocationSnapshot")
+    : existing.calibrationLocationSnapshot;
+  const nextCalibrationPhaseSnapshot = hasOwn(
+    payload,
+    "calibrationPhaseSnapshot",
+  )
+    ? getRecordOrNull(payload, "calibrationPhaseSnapshot")
+    : existing.calibrationPhaseSnapshot;
   const standardsValidation = await validateDesktopExecutionStandardsSnapshot(
     nextStandardsSnapshot as StandardSnapshot[] | null,
     input.memberData,
@@ -2232,6 +2251,8 @@ async function applyLocalJobExecution(
     standardsSnapshot: nextStandardsSnapshot as StandardSnapshot[] | null,
     environmentalSnapshot:
       nextEnvironmentalSnapshot as EnvironmentalSnapshot | null,
+    calibrationPhaseSnapshot:
+      nextCalibrationPhaseSnapshot as CalibrationPhaseSnapshot | null,
   });
 
   if (!officialExecution.ok) {
@@ -2253,6 +2274,10 @@ async function applyLocalJobExecution(
       standardsSnapshot: nextStandardsSnapshot as StandardSnapshot[] | null,
       environmentalSnapshot:
         nextEnvironmentalSnapshot as EnvironmentalSnapshot | null,
+      calibrationLocationSnapshot:
+        nextCalibrationLocationSnapshot as CalibrationLocationSnapshot | null,
+      calibrationPhaseSnapshot:
+        nextCalibrationPhaseSnapshot as CalibrationPhaseSnapshot | null,
       status: nextStatus,
       performedAt: nextStatus === "REVIEW" ? new Date() : existing.performedAt,
       updatedAt: new Date(),
@@ -2291,6 +2316,14 @@ async function applyLocalJobExecution(
       environmentalSnapshot: {
         old: existing.environmentalSnapshot,
         new: nextEnvironmentalSnapshot,
+      },
+      calibrationLocationSnapshot: {
+        old: existing.calibrationLocationSnapshot,
+        new: nextCalibrationLocationSnapshot,
+      },
+      calibrationPhaseSnapshot: {
+        old: existing.calibrationPhaseSnapshot,
+        new: nextCalibrationPhaseSnapshot,
       },
     },
     performedBy: actorUserId,
@@ -2918,6 +2951,7 @@ async function executeOfficialDesktopSyncSnapshot(params: {
   assetSnapshot: AssetSnapshot | null;
   standardsSnapshot: StandardSnapshot[] | null;
   environmentalSnapshot: EnvironmentalSnapshot | null;
+  calibrationPhaseSnapshot: CalibrationPhaseSnapshot | null;
 }): Promise<
   | { ok: true; results: Record<string, unknown> }
   | {
@@ -2957,6 +2991,7 @@ async function executeOfficialDesktopSyncSnapshot(params: {
         methodSnapshot,
         assetSnapshot,
       }),
+      calibrationPhases: params.calibrationPhaseSnapshot ?? undefined,
     },
     { engine: await createMethodExecutionEngine() },
   );

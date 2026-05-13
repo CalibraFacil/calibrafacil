@@ -12,6 +12,7 @@ type ExecutionInput = {
   data: Record<string, unknown>
   fallbackResults?: Record<string, unknown> | null
   requireSuccess?: boolean
+  calibrationPhaseSnapshot?: Record<string, unknown> | null
 }
 
 export function executeLocalCompiledMethod(input: ExecutionInput) {
@@ -25,6 +26,11 @@ export function executeLocalCompiledMethod(input: ExecutionInput) {
     compiledMethod,
     {
       inputs: buildExecutionInputs(input),
+      calibrationPhases:
+        input.calibrationPhaseSnapshot &&
+        isCalibrationPhaseSnapshot(input.calibrationPhaseSnapshot)
+          ? input.calibrationPhaseSnapshot
+          : undefined,
     },
     {
       engine: createMethodDefinitionEngine(),
@@ -56,6 +62,28 @@ export function executeLocalCompiledMethod(input: ExecutionInput) {
       diagnostics: execution.diagnostics,
     },
   }
+}
+
+function isCalibrationPhaseSnapshot(
+  value: Record<string, unknown>,
+): value is {
+  blocks: Record<
+    string,
+    {
+      mode:
+        | "before_and_after"
+        | "before_only"
+        | "after_only"
+        | "not_performed";
+      reason?: string | null;
+    }
+  >;
+} {
+  return (
+    value.blocks !== null &&
+    typeof value.blocks === 'object' &&
+    !Array.isArray(value.blocks)
+  )
 }
 
 function buildExecutionInputs(input: ExecutionInput) {

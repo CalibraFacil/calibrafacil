@@ -78,8 +78,8 @@ importers:
         specifier: workspace:^
         version: link:../../packages/db
       '@calibra-facil/math-engine':
-        specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.0-rc.4
-        version: git+https://git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549
+        specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
+        version: git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
       '@calibra-facil/method-definition':
         specifier: workspace:^
         version: link:../../packages/method-definition
@@ -231,8 +231,8 @@ importers:
         specifier: workspace:^
         version: link:../../packages/local-db
       '@calibra-facil/math-engine':
-        specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.0-rc.4
-        version: git+https://git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549
+        specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
+        version: git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
       '@calibra-facil/method-definition':
         specifier: workspace:^
         version: link:../../packages/method-definition
@@ -395,8 +395,8 @@ importers:
         specifier: workspace:^
         version: link:../../packages/documents
       '@calibra-facil/math-engine':
-        specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.0-rc.4
-        version: git+https://git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549
+        specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
+        version: git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
       '@calibra-facil/schemas':
         specifier: workspace:^
         version: link:../../packages/schemas
@@ -717,6 +717,12 @@ importers:
 
   packages/db:
     dependencies:
+      '@calibra-facil/math-engine':
+        specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
+        version: git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
+      '@calibra-facil/method-definition':
+        specifier: workspace:^
+        version: link:../method-definition
       '@calibra-facil/shared':
         specifier: workspace:^
         version: link:../shared
@@ -748,6 +754,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20251230.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.9.0)(bun-types@1.3.5)(kysely@0.28.17)(pg@8.16.3)(postgres@3.4.7)
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -1436,9 +1445,9 @@ packages:
   '@better-fetch/fetch@1.1.21':
     resolution: {integrity: sha512-/ImESw0sskqlVR94jB+5+Pxjf+xBwDZF/N5+y2/q4EqD7IARUTSpPfIo8uf39SYpCxyOCtbyYpUrZ3F/k0zT4A==}
 
-  '@calibra-facil/math-engine@git+https://git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549':
-    resolution: {commit: dc9742140ec10824001b1cd316e43a5f30f22549, repo: git@github.com:CalibraFacil/math-engine.git, type: git}
-    version: 0.2.0-rc.4
+  '@calibra-facil/math-engine@git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751':
+    resolution: {commit: ce6afecd5d28dfc75b3a0048d3f0318f988ad751, repo: git@github.com:CalibraFacil/math-engine.git, type: git}
+    version: 0.2.4
     engines: {node: '>=20'}
 
   '@capsizecss/unpack@4.0.0':
@@ -10115,7 +10124,7 @@ snapshots:
 
   '@better-fetch/fetch@1.1.21': {}
 
-  '@calibra-facil/math-engine@git+https://git@github.com:CalibraFacil/math-engine.git#dc9742140ec10824001b1cd316e43a5f30f22549': {}
+  '@calibra-facil/math-engine@git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751': {}
 
   '@capsizecss/unpack@4.0.0':
     dependencies:

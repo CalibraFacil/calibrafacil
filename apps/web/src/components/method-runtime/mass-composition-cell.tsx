@@ -51,6 +51,28 @@ function formatNumber(value: number | null, unit: string): string {
   return `${Number(value.toPrecision(10))} ${unit}`
 }
 
+function formatCompositionItemLabel(item: MassCompositionItem): string {
+  return item.compositionProfile
+    ? (item.profileKey ?? item.nominal)
+    : `${item.nominal} ${item.standardName}`
+}
+
+function formatCompositionSummary(
+  composition: MassCompositionValue | null,
+  targetUnit: string,
+): { equation: string; total: string } | null {
+  if (!composition || composition.items.length === 0) return null
+
+  const equation = composition.items
+    .map((item) => `${item.quantity} × ${formatCompositionItemLabel(item)}`)
+    .join(' + ')
+
+  return {
+    equation,
+    total: formatNumber(composition.totals.certifiedValue, targetUnit),
+  }
+}
+
 function normalizeSearchText(value: string): string {
   return value
     .normalize('NFD')
@@ -101,13 +123,14 @@ export function MassCompositionCell({
     () => new Map(visibleOptions.map((option) => [optionKey(option), option])),
     [visibleOptions],
   )
+  const compositionSummary = formatCompositionSummary(composition, targetUnit)
   const optionCountLabel =
     visibleOptions.length === 1 ? '1 opção' : `${visibleOptions.length} opções`
 
   const commitItems = (nextItems: MassCompositionItem[]) => {
     onChange(
       nextItems.length > 0
-        ? buildMassCompositionValue(nextItems, targetUnit as MassUnit)
+        ? buildMassCompositionValue(nextItems, targetUnit as MassUnit, config)
         : null,
     )
   }
@@ -147,7 +170,7 @@ export function MassCompositionCell({
         className={cn(
           'min-w-0 justify-start overflow-hidden text-left active:scale-[0.96]',
           isFieldPresentation
-            ? 'h-8 w-full max-w-none px-2.5 font-normal'
+            ? 'h-auto min-h-14 w-full max-w-none whitespace-normal px-3 py-2 font-normal'
             : 'h-8 max-w-64 px-2',
         )}
         disabled={disabled}
@@ -159,14 +182,27 @@ export function MassCompositionCell({
         }}
         title={composition?.label || 'Compor pesos'}
       >
-        <span
-          className={cn(
-            'min-w-0 truncate',
-            !composition && isFieldPresentation && 'text-muted-foreground',
-          )}
-        >
-          {composition?.label || 'Compor pesos'}
-        </span>
+        {isFieldPresentation ? (
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              {composition ? 'Composição selecionada' : 'Composição dos pesos'}
+            </span>
+            <span
+              className={cn(
+                'min-w-0 text-sm leading-snug [overflow-wrap:anywhere]',
+                !composition && 'text-muted-foreground',
+              )}
+            >
+              {compositionSummary
+                ? `${compositionSummary.equation} = ${compositionSummary.total}`
+                : 'Compor pesos'}
+            </span>
+          </span>
+        ) : (
+          <span className="min-w-0 truncate">
+            {composition?.label || 'Compor pesos'}
+          </span>
+        )}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>

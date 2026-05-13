@@ -1753,6 +1753,39 @@ describe("desktop hybrid runtime adapter", () => {
     ]);
   });
 
+  it("keeps slash-bearing job identifiers in one API route segment", async () => {
+    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const fetchMock: typeof fetch = async (input, init) => {
+      fetchCalls.push([input, init]);
+      return Response.json({ ok: true, data: { jobId: "R-0001/2026" } });
+    };
+    const client = createDesktopApiClient({
+      baseUrl: "http://127.0.0.1:4317",
+      tokenProvider: () => "local-token",
+      fetch: fetchMock,
+    });
+
+    await client.jobs.get("R-0001/2026");
+    await client.jobs.get("R-0001%2F2026");
+    await client.jobs.saveExecution("R-0001/2026", {
+      status: "draft",
+      measurements: [],
+    } as unknown as JobExecutionPayload);
+    await client.jobs.submitExecution("R-0001%2F2026", {
+      status: "submitted",
+      measurements: [],
+    } as unknown as JobExecutionPayload);
+    await client.jobs.createCertificateDraft("R-0001/2026");
+
+    expect(fetchCalls.map(([input]) => String(input))).toEqual([
+      "http://127.0.0.1:4317/api/jobs/R-0001%252F2026",
+      "http://127.0.0.1:4317/api/jobs/R-0001%252F2026",
+      "http://127.0.0.1:4317/api/jobs/R-0001%252F2026/execute",
+      "http://127.0.0.1:4317/api/jobs/R-0001%252F2026/submit",
+      "http://127.0.0.1:4317/api/jobs/R-0001%252F2026/certificate-draft",
+    ]);
+  });
+
   it("routes supported offline command methods to the local outbox API", async () => {
     const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
     const fetchMock: typeof fetch = async (input, init) => {

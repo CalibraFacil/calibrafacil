@@ -37,7 +37,12 @@ import {
 
 export interface Env {
   CERTIFICATES_BUCKET: {
-    get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+    get(
+      key: string,
+    ): Promise<{
+      arrayBuffer(): Promise<ArrayBuffer>;
+      httpMetadata?: { contentType?: string };
+    } | null>;
     put(
       key: string,
       body: Buffer | Uint8Array | ArrayBuffer,
@@ -66,6 +71,9 @@ export interface MessageBatch<T> {
 }
 
 type Dateish = Date | string | null | undefined;
+
+const ORGANIZATION_LOGO_KEY_PREFIX = "organization-logos/";
+const ORGANIZATION_LOGO_URL_MARKER = "/api/organization-media/logo/";
 
 function encodeKeyPart(label: string, value: string): string {
   const trimmed = value.trim();
@@ -157,6 +165,8 @@ async function fetchJobData(
       cj.asset_snapshot,
       cj.standards_snapshot,
       cj.environmental_snapshot,
+      cj.calibration_location_snapshot,
+      cj.calibration_phase_snapshot,
       cj.certificate_template_id,
       cj.certificate_template_snapshot,
       cj.results,
@@ -183,6 +193,7 @@ async function fetchJobData(
       o.phone as lab_phone,
       o.email as lab_email,
       o.website as lab_website,
+      o.logo as lab_logo,
       o.technical_manager_name as lab_technical_manager_name,
       o.technical_manager_title as lab_technical_manager_title,
       -- Customer info (complete)
@@ -276,6 +287,12 @@ async function fetchJobData(
     );
   }
 
+  const labLogoUrl = await resolveOrganizationLogoDataUrl(
+    env,
+    row.lab_logo,
+    jobId,
+  );
+
   // Fetch approver's visual signature if exists
   let approverSignatureUrl: string | null = null;
   if (row.approved_by && row.organization_id) {
@@ -329,6 +346,7 @@ async function fetchJobData(
       phone: row.lab_phone,
       email: row.lab_email,
       website: row.lab_website,
+      logo: labLogoUrl,
       technicalManagerName: row.lab_technical_manager_name,
       technicalManagerTitle: row.lab_technical_manager_title,
     },
@@ -353,6 +371,8 @@ async function fetchJobData(
       inmetroRepairSealNumber: row.inmetro_repair_seal_number,
     },
     environmentalSnapshot: row.environmental_snapshot,
+    calibrationLocationSnapshot: row.calibration_location_snapshot,
+    calibrationPhaseSnapshot: row.calibration_phase_snapshot,
     certificateTemplateSnapshot,
     data: row.data,
     results: row.results,
@@ -366,6 +386,83 @@ async function fetchJobData(
     originalJobId: row.original_job_id,
     originalApprovedAt: row.original_approved_at,
   };
+}
+
+function decodeOrganizationLogoKey(value: string | null | undefined) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    const markerIndex = url.pathname.indexOf(ORGANIZATION_LOGO_URL_MARKER);
+    if (markerIndex === -1) return null;
+
+    const encodedKey = url.pathname.slice(
+      markerIndex + ORGANIZATION_LOGO_URL_MARKER.length,
+    );
+    const decoded = Buffer.from(encodedKey, "base64url").toString("utf8");
+    return decoded.startsWith(ORGANIZATION_LOGO_KEY_PREFIX) ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+function inferImageContentType(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  if (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return "image/png";
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+    return "image/jpeg";
+  }
+  if (
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+
+  const textStart = new TextDecoder("utf-8", { fatal: false })
+    .decode(bytes.slice(0, 256))
+    .trimStart();
+  if (textStart.startsWith("<svg") || textStart.startsWith("<?xml")) {
+    return "image/svg+xml";
+  }
+
+  return "application/octet-stream";
+}
+
+async function resolveOrganizationLogoDataUrl(
+  env: Env,
+  logoUrl: string | null | undefined,
+  jobId: number,
+) {
+  const key = decodeOrganizationLogoKey(logoUrl);
+  if (!key) return logoUrl ?? null;
+
+  try {
+    const logoObject = await env.CERTIFICATES_BUCKET.get(key);
+    if (!logoObject) return logoUrl ?? null;
+
+    const logoBuffer = await logoObject.arrayBuffer();
+    const contentType =
+      logoObject.httpMetadata?.contentType ?? inferImageContentType(logoBuffer);
+    const base64 = arrayBufferToBase64(logoBuffer);
+    return `data:${contentType};base64,${base64}`;
+  } catch (err) {
+    console.warn(`[JOB ${jobId}] Failed to fetch organization logo:`, err);
+    return logoUrl ?? null;
+  }
 }
 
 /**

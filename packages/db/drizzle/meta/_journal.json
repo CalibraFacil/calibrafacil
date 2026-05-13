@@ -127,6 +127,20 @@
       "when": 1778202000000,
       "tag": "0017_method_measurement_models",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778212800000,
+      "tag": "0018_calibration_location_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778220000000,
+      "tag": "0019_calibration_phase_snapshot",
+      "breakpoints": true
     }
   ]
 }

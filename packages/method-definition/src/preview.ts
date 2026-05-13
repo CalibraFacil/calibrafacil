@@ -3,6 +3,8 @@ import { buildMeasurementModelInput } from "./compile";
 import { errorDiagnostic } from "./diagnostics";
 import { fingerprintJson } from "./fingerprint";
 import type {
+  CalibrationPhase,
+  CalibrationPhaseSnapshot,
   CompiledFormulaDefinition,
   CompiledMethod,
   CompiledMeasurementModelDefinition,
@@ -31,13 +33,17 @@ export function runMethodPreview(
     [];
 
   const engine = options.engine;
+  const calibrationPhases =
+    options.calibrationPhases ?? scenario.calibrationPhases;
   const context = buildPreviewContext(
     method.inputs,
     scenario.inputs,
     diagnostics,
+    calibrationPhases,
   );
 
   for (const formula of method.formulas) {
+    if (!isPhaseActive(formula.metadata, calibrationPhases)) continue;
     try {
       if (formula.scope?.kind === "table_row") {
         const values = evaluateTableRowFormula(
@@ -101,6 +107,7 @@ export function runMethodPreview(
   }
 
   for (const model of method.measurementModels) {
+    if (!isPhaseActive(model.metadata, calibrationPhases)) continue;
     try {
       if (model.scope?.kind === "table_row") {
         const results = evaluateTableRowMeasurementModel(
@@ -178,6 +185,7 @@ export function runMethodPreview(
   }
 
   for (const criterion of method.acceptanceCriteria) {
+    if (!isPhaseActive(criterion.metadata, calibrationPhases)) continue;
     try {
       const compiled = compileCriterionExpression(
         criterion,
@@ -292,10 +300,11 @@ function evaluateTableRowFormula(
           inputs,
           formulas,
         );
-        const requiresRowAlignedValue = !isVariableUsedOnlyInArrayAggregator(
-          formula.expression,
-          variable,
-        );
+        const requiresRowAlignedValue =
+          !isVariableUsedOnlyInWholeArrayAggregate(
+            formula.expression,
+            variable,
+          );
         if (sourceTableKey === tableKey && requiresRowAlignedValue) {
           rowContext[variable] = value[rowIndex];
         } else if (sourceTableKey && requiresRowAlignedValue) {
@@ -569,10 +578,12 @@ function buildPreviewContext(
   inputs: readonly MethodInput[],
   values: Record<string, unknown>,
   diagnostics: MethodDiagnostic[],
+  calibrationPhases: CalibrationPhaseSnapshot | undefined,
 ): Record<string, NumericInput | readonly NumericInput[]> {
   const context: Record<string, NumericInput | readonly NumericInput[]> = {};
 
   for (const input of inputs) {
+    if (!isPhaseActive(input.metadata, calibrationPhases)) continue;
     if (
       input.kind === "scalar" &&
       input.metadata?.source === "variable_binding"
@@ -798,6 +809,9 @@ function buildPreviewContext(
         }
         const record = row as Record<string, unknown>;
         for (const column of input.columns) {
+          if (!isColumnPhaseActive(input, column.key, calibrationPhases)) {
+            continue;
+          }
           const cell = record[column.key];
           if (cell === undefined || cell === null || cell === "") {
             if (column.required) {
@@ -831,6 +845,59 @@ function buildPreviewContext(
   }
 
   return context;
+}
+
+function isColumnPhaseActive(
+  input: MethodInput & { kind: "table" },
+  columnKey: string,
+  calibrationPhases: CalibrationPhaseSnapshot | undefined,
+): boolean {
+  if (isPhaseBlockNotPerformed(input.metadata, calibrationPhases)) {
+    return false;
+  }
+  const column = input.columns.find((item) => item.key === columnKey);
+  const phase = column?.phase;
+  if (!phase || phase === "always") return true;
+  return isPhaseSelectionActive(input.metadata, phase, calibrationPhases);
+}
+
+function isPhaseActive(
+  metadata: Record<string, unknown> | undefined,
+  calibrationPhases: CalibrationPhaseSnapshot | undefined,
+): boolean {
+  if (isPhaseBlockNotPerformed(metadata, calibrationPhases)) return false;
+  const phase = metadata?.phase;
+  if (phase !== "before" && phase !== "after") return true;
+  return isPhaseSelectionActive(metadata, phase, calibrationPhases);
+}
+
+function isPhaseBlockNotPerformed(
+  metadata: Record<string, unknown> | undefined,
+  calibrationPhases: CalibrationPhaseSnapshot | undefined,
+): boolean {
+  const phaseBlock = metadata?.phaseBlock;
+  if (typeof phaseBlock !== "string" || phaseBlock.trim() === "") {
+    return false;
+  }
+  return calibrationPhases?.blocks?.[phaseBlock]?.mode === "not_performed";
+}
+
+function isPhaseSelectionActive(
+  metadata: Record<string, unknown> | undefined,
+  phase: CalibrationPhase,
+  calibrationPhases: CalibrationPhaseSnapshot | undefined,
+): boolean {
+  const phaseBlock = metadata?.phaseBlock;
+  if (typeof phaseBlock !== "string" || phaseBlock.trim() === "") {
+    return true;
+  }
+  const mode =
+    calibrationPhases?.blocks?.[phaseBlock]?.mode ?? "before_and_after";
+  if (mode === "before_and_after") return true;
+  if (mode === "before_only") return phase === "before";
+  if (mode === "after_only") return phase === "after";
+  if (mode === "not_performed") return false;
+  return true;
 }
 
 function resolveVariableBindingPreviewValue(
@@ -1033,6 +1100,7 @@ function sum(values: readonly number[]): number {
 }
 
 function sampleStandardDeviation(values: readonly number[]): number {
+  if (allValuesEqual(values)) return 0;
   const mean = sum(values) / values.length;
   const variance =
     values.reduce((acc, value) => acc + (value - mean) ** 2, 0) /
@@ -1093,9 +1161,10 @@ function prepareFormulaEvaluation(
   const consumedVariables = new Set<string>();
   const rewrittenExpression = rewriteArrayAggregates(
     expression,
-    options.aggregateContext ?? context,
+    context,
     aggregateInputs,
     consumedVariables,
+    options.aggregateContext ?? context,
   );
   const inputs = pickNumericContext(
     context,
@@ -1113,9 +1182,33 @@ function prepareFormulaEvaluation(
   };
 }
 
+function isVariableUsedOnlyInWholeArrayAggregate(
+  expression: string,
+  variable: string,
+): boolean {
+  return isVariableUsedOnlyInAggregateMatching(
+    expression,
+    variable,
+    (argument) => argument.trim() === variable,
+  );
+}
+
 function isVariableUsedOnlyInArrayAggregator(
   expression: string,
   variable: string,
+): boolean {
+  return isVariableUsedOnlyInAggregateMatching(
+    expression,
+    variable,
+    (argument) =>
+      aggregateVariableTokensFromExpression(argument).includes(variable),
+  );
+}
+
+function isVariableUsedOnlyInAggregateMatching(
+  expression: string,
+  variable: string,
+  matchesArgument: (argument: string) => boolean,
 ): boolean {
   const variablePattern = new RegExp(`\\b${escapeRegex(variable)}\\b`, "g");
   const allOccurrences = [...expression.matchAll(variablePattern)];
@@ -1127,7 +1220,7 @@ function isVariableUsedOnlyInArrayAggregator(
     .filter(
       (match) =>
         match[1] !== undefined &&
-        aggregateVariableTokensFromExpression(match[1]).includes(variable) &&
+        matchesArgument(match[1]) &&
         match.index !== undefined,
     )
     .map((match) => ({
@@ -1158,13 +1251,19 @@ function rewriteArrayAggregates(
   context: Record<string, NumericInput | readonly NumericInput[]>,
   aggregateInputs: Record<string, NumericInput>,
   consumedVariables: Set<string>,
+  aggregateContext: Record<string, NumericInput | readonly NumericInput[]>,
 ): string {
   const reserved = new Set(Object.keys(context));
   let index = Object.keys(aggregateInputs).length;
   return expression.replace(
     /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
     (match, functionName: string, argument: string, correction?: string) => {
-      const values = resolveInlineNumericArguments(argument, context);
+      const trimmedArgument = argument.trim();
+      const argumentContext =
+        trimmedArgument.startsWith("[") && trimmedArgument.endsWith("]")
+          ? context
+          : aggregateContext;
+      const values = resolveInlineNumericArguments(argument, argumentContext);
       if (!values.length) return match;
 
       const value = aggregateValues(functionName, values, correction);
@@ -1175,7 +1274,10 @@ function rewriteArrayAggregates(
         key = `cf_internal_preview_${index++}`;
       }
       aggregateInputs[key] = value;
-      for (const variable of aggregateVariableTokens(argument, context)) {
+      for (const variable of aggregateVariableTokens(
+        argument,
+        argumentContext,
+      )) {
         consumedVariables.add(variable);
       }
       return key;
@@ -1248,11 +1350,16 @@ function correctedStandardDeviation(
 ): number {
   const denominator = values.length - correction;
   if (denominator <= 0) return Number.NaN;
+  if (allValuesEqual(values)) return 0;
 
   const mean = sum(values) / values.length;
   const variance =
     values.reduce((acc, value) => acc + (value - mean) ** 2, 0) / denominator;
   return Math.sqrt(variance);
+}
+
+function allValuesEqual(values: readonly number[]): boolean {
+  return values.every((value) => value === values[0]);
 }
 
 function pickNumericContext(
@@ -1356,6 +1463,7 @@ function compiledModelToMeasurementModel(
     coverageProbability: model.coverageProbability,
     coverageFactor: model.coverageFactor,
     options: model.options,
+    metadata: model.metadata,
   };
 }
 

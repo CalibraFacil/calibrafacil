@@ -18,8 +18,9 @@ export function executeCompiledMethod(
       key: "official_execution",
       label: "Official execution",
       inputs: input.inputs,
+      calibrationPhases: input.calibrationPhases,
     },
-    { engine: options.engine },
+    { engine: options.engine, calibrationPhases: input.calibrationPhases },
   );
   const outputs: CompiledMethodExecutionResult["outputs"] = {};
 
@@ -34,12 +35,16 @@ export function executeCompiledMethod(
       : (modelResult as { value: string | number }).value;
   }
 
-  const inputFingerprint = fingerprintJson(input.inputs, "execution-input");
+  const executionInput = {
+    inputs: input.inputs,
+    calibrationPhases: input.calibrationPhases ?? null,
+  };
+  const inputFingerprint = fingerprintJson(executionInput, "execution-input");
   const calculationFingerprint = fingerprintJson(
     {
       methodFingerprint: method.methodFingerprint,
       inputFingerprint,
-      inputs: input.inputs,
+      ...executionInput,
       outputs,
     },
     "calculation",
@@ -48,6 +53,7 @@ export function executeCompiledMethod(
     methodFingerprint: method.methodFingerprint,
     engine: method.engine,
     inputFingerprint,
+    calibrationPhases: input.calibrationPhases ?? null,
     calculationFingerprint,
     formulaResults: preview.formulaResults,
     measurementModelResults: preview.measurementModelResults,
