@@ -50,3 +50,7 @@ packages/math-engine/docs/validation/latex/*.out
 packages/math-engine/docs/validation/latex/*.synctex.gz
 packages/math-engine/docs/validation/latex/*.jpg
 .todos/
+tmp/
+
+# Local client workbook samples must stay out of git.
+packages/documents/src/*.xlsx

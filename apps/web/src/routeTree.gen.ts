@@ -22,7 +22,7 @@ import { Route as BackofficeIndexRouteImport } from './routes/backoffice/index'
 import { Route as OnboardingOrganizationRouteImport } from './routes/onboarding/organization'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard/reports'
 import { Route as DashboardCustomerSuccessRouteImport } from './routes/dashboard/customer-success'
-import { Route as DashboardCertificateDesignerRouteImport } from './routes/dashboard/certificate-designer'
+import { Route as DashboardCertificateTemplatesRouteImport } from './routes/dashboard/certificate-templates'
 import { Route as CheckoutTokenRouteImport } from './routes/checkout/$token'
 import { Route as BackofficeUsersRouteImport } from './routes/backoffice/users'
 import { Route as BackofficeSupportRouteImport } from './routes/backoffice/support'
@@ -194,10 +194,10 @@ const DashboardCustomerSuccessRoute =
     path: '/customer-success',
     getParentRoute: () => DashboardRouteRoute,
   } as any)
-const DashboardCertificateDesignerRoute =
-  DashboardCertificateDesignerRouteImport.update({
-    id: '/certificate-designer',
-    path: '/certificate-designer',
+const DashboardCertificateTemplatesRoute =
+  DashboardCertificateTemplatesRouteImport.update({
+    id: '/certificate-templates',
+    path: '/certificate-templates',
     getParentRoute: () => DashboardRouteRoute,
   } as any)
 const CheckoutTokenRoute = CheckoutTokenRouteImport.update({
@@ -798,7 +798,7 @@ export interface FileRoutesByFullPath {
   '/backoffice/support': typeof BackofficeSupportRoute
   '/backoffice/users': typeof BackofficeUsersRoute
   '/checkout/$token': typeof CheckoutTokenRoute
-  '/dashboard/certificate-designer': typeof DashboardCertificateDesignerRoute
+  '/dashboard/certificate-templates': typeof DashboardCertificateTemplatesRoute
   '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
@@ -902,7 +902,7 @@ export interface FileRoutesByTo {
   '/backoffice/support': typeof BackofficeSupportRoute
   '/backoffice/users': typeof BackofficeUsersRoute
   '/checkout/$token': typeof CheckoutTokenRoute
-  '/dashboard/certificate-designer': typeof DashboardCertificateDesignerRoute
+  '/dashboard/certificate-templates': typeof DashboardCertificateTemplatesRoute
   '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
@@ -1018,7 +1018,7 @@ export interface FileRoutesById {
   '/backoffice/support': typeof BackofficeSupportRoute
   '/backoffice/users': typeof BackofficeUsersRoute
   '/checkout/$token': typeof CheckoutTokenRoute
-  '/dashboard/certificate-designer': typeof DashboardCertificateDesignerRoute
+  '/dashboard/certificate-templates': typeof DashboardCertificateTemplatesRoute
   '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
@@ -1140,7 +1140,7 @@ export interface FileRouteTypes {
     | '/backoffice/support'
     | '/backoffice/users'
     | '/checkout/$token'
-    | '/dashboard/certificate-designer'
+    | '/dashboard/certificate-templates'
     | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
@@ -1244,7 +1244,7 @@ export interface FileRouteTypes {
     | '/backoffice/support'
     | '/backoffice/users'
     | '/checkout/$token'
-    | '/dashboard/certificate-designer'
+    | '/dashboard/certificate-templates'
     | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
@@ -1359,7 +1359,7 @@ export interface FileRouteTypes {
     | '/backoffice/support'
     | '/backoffice/users'
     | '/checkout/$token'
-    | '/dashboard/certificate-designer'
+    | '/dashboard/certificate-templates'
     | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
@@ -1558,11 +1558,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardCustomerSuccessRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
-    '/dashboard/certificate-designer': {
-      id: '/dashboard/certificate-designer'
-      path: '/certificate-designer'
-      fullPath: '/dashboard/certificate-designer'
-      preLoaderRoute: typeof DashboardCertificateDesignerRouteImport
+    '/dashboard/certificate-templates': {
+      id: '/dashboard/certificate-templates'
+      path: '/certificate-templates'
+      fullPath: '/dashboard/certificate-templates'
+      preLoaderRoute: typeof DashboardCertificateTemplatesRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/checkout/$token': {
@@ -2742,7 +2742,7 @@ interface DashboardRouteRouteChildren {
   DashboardServicesRouteRoute: typeof DashboardServicesRouteRouteWithChildren
   DashboardSettingsRouteRoute: typeof DashboardSettingsRouteRouteWithChildren
   DashboardStandardsRouteRoute: typeof DashboardStandardsRouteRouteWithChildren
-  DashboardCertificateDesignerRoute: typeof DashboardCertificateDesignerRoute
+  DashboardCertificateTemplatesRoute: typeof DashboardCertificateTemplatesRoute
   DashboardCustomerSuccessRoute: typeof DashboardCustomerSuccessRoute
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
@@ -2765,7 +2765,7 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardServicesRouteRoute: DashboardServicesRouteRouteWithChildren,
   DashboardSettingsRouteRoute: DashboardSettingsRouteRouteWithChildren,
   DashboardStandardsRouteRoute: DashboardStandardsRouteRouteWithChildren,
-  DashboardCertificateDesignerRoute: DashboardCertificateDesignerRoute,
+  DashboardCertificateTemplatesRoute: DashboardCertificateTemplatesRoute,
   DashboardCustomerSuccessRoute: DashboardCustomerSuccessRoute,
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardIndexRoute: DashboardIndexRoute,

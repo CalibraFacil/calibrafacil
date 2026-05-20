@@ -706,7 +706,6 @@ export const certificateTemplate = pgTable(
     version: integer("version").default(1).notNull(),
     status: text("status").default("ACTIVE").notNull(),
     isDefault: boolean("is_default").default(false).notNull(),
-    config: jsonb("config").$type<Record<string, unknown>>().notNull(),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
@@ -724,6 +723,236 @@ export const certificateTemplate = pgTable(
       table.organizationId,
       table.slug,
     ),
+  ],
+);
+
+export type CertificateXlsxTemplateVersionStatus =
+  | "DRAFT"
+  | "VALIDATED"
+  | "PUBLISHED"
+  | "ARCHIVED";
+
+export type CertificateXlsxTemplateAssignmentStatus = "ACTIVE" | "ARCHIVED";
+export type CertificateXlsxTemplatePreviewStatus =
+  | "PENDING"
+  | "RENDERED"
+  | "FAILED"
+  | "EXPIRED";
+
+export type IssuedCertificateSnapshotStatus =
+  | "ISSUED"
+  | "SUPERSEDED"
+  | "VOIDED";
+
+export type CertificateXlsxRenderPolicy = {
+  formulas: "preserve" | "rejectVolatile";
+  macros: "reject";
+  externalLinks: "reject";
+  converter: "gotenberg-libreoffice";
+};
+
+export const certificateTemplateVersion = pgTable(
+  "certificate_template_version",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    templateId: integer("template_id")
+      .notNull()
+      .references(() => certificateTemplate.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    status: text("status")
+      .$type<CertificateXlsxTemplateVersionStatus>()
+      .default("DRAFT")
+      .notNull(),
+    xlsxR2Key: text("xlsx_r2_key").notNull(),
+    xlsxSha256: text("xlsx_sha256").notNull(),
+    bindingManifest: jsonb("binding_manifest")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    bindingManifestSha256: text("binding_manifest_sha256").notNull(),
+    renderPolicy: jsonb("render_policy")
+      .$type<CertificateXlsxRenderPolicy>()
+      .notNull(),
+    analysis: jsonb("analysis").$type<Record<string, unknown>>(),
+    validationResult:
+      jsonb("validation_result").$type<Record<string, unknown>>(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    publishedAt: timestamp("published_at"),
+    publishedBy: text("published_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("certificate_template_version_org_idx").on(table.organizationId),
+    index("certificate_template_version_template_idx").on(table.templateId),
+    index("certificate_template_version_status_idx").on(table.status),
+    uniqueIndex("certificate_template_version_template_version_uidx").on(
+      table.templateId,
+      table.version,
+    ),
+  ],
+);
+
+export const certificateTemplateAssignment = pgTable(
+  "certificate_template_assignment",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    templateId: integer("template_id")
+      .notNull()
+      .references(() => certificateTemplate.id, { onDelete: "cascade" }),
+    templateVersionId: integer("template_version_id")
+      .notNull()
+      .references(() => certificateTemplateVersion.id, {
+        onDelete: "restrict",
+      }),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "cascade",
+    }),
+    serviceId: integer("service_id").references(() => service.id, {
+      onDelete: "cascade",
+    }),
+    methodId: integer("method_id").references(() => calibrationMethod.id, {
+      onDelete: "cascade",
+    }),
+    certificateType: text("certificate_type").default("calibration").notNull(),
+    status: text("status")
+      .$type<CertificateXlsxTemplateAssignmentStatus>()
+      .default("ACTIVE")
+      .notNull(),
+    priority: integer("priority").default(0).notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("certificate_template_assignment_org_idx").on(table.organizationId),
+    index("certificate_template_assignment_template_idx").on(table.templateId),
+    index("certificate_template_assignment_version_idx").on(
+      table.templateVersionId,
+    ),
+    index("certificate_template_assignment_unit_idx").on(table.unitId),
+    index("certificate_template_assignment_service_idx").on(table.serviceId),
+    index("certificate_template_assignment_method_idx").on(table.methodId),
+    index("certificate_template_assignment_status_idx").on(table.status),
+  ],
+);
+
+export const certificateTemplatePreview = pgTable(
+  "certificate_template_preview",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    templateVersionId: integer("template_version_id")
+      .notNull()
+      .references(() => certificateTemplateVersion.id, {
+        onDelete: "cascade",
+      }),
+    sampleData: jsonb("sample_data").$type<Record<string, unknown>>(),
+    filledXlsxR2Key: text("filled_xlsx_r2_key"),
+    pdfR2Key: text("pdf_r2_key"),
+    pdfSha256: text("pdf_sha256"),
+    renderMetadata: jsonb("render_metadata").$type<Record<string, unknown>>(),
+    status: text("status")
+      .$type<CertificateXlsxTemplatePreviewStatus>()
+      .default("PENDING")
+      .notNull(),
+    error: text("error"),
+    requestedBy: text("requested_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("certificate_template_preview_org_idx").on(table.organizationId),
+    index("certificate_template_preview_version_idx").on(
+      table.templateVersionId,
+    ),
+    index("certificate_template_preview_status_idx").on(table.status),
+    index("certificate_template_preview_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
+export const issuedCertificateSnapshot = pgTable(
+  "issued_certificate_snapshot",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => calibrationJob.id, { onDelete: "restrict" }),
+    templateId: integer("template_id")
+      .notNull()
+      .references(() => certificateTemplate.id, { onDelete: "restrict" }),
+    templateVersionId: integer("template_version_id")
+      .notNull()
+      .references(() => certificateTemplateVersion.id, {
+        onDelete: "restrict",
+      }),
+    certificateNumber: text("certificate_number"),
+    filledXlsxR2Key: text("filled_xlsx_r2_key").notNull(),
+    filledXlsxSha256: text("filled_xlsx_sha256").notNull(),
+    pdfR2Key: text("pdf_r2_key").notNull(),
+    pdfSha256: text("pdf_sha256").notNull(),
+    bindingManifestSha256: text("binding_manifest_sha256").notNull(),
+    renderPolicy: jsonb("render_policy")
+      .$type<CertificateXlsxRenderPolicy>()
+      .notNull(),
+    renderMetadata: jsonb("render_metadata").$type<Record<string, unknown>>(),
+    inputDataSnapshot: jsonb("input_data_snapshot")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    status: text("status")
+      .$type<IssuedCertificateSnapshotStatus>()
+      .default("ISSUED")
+      .notNull(),
+    issuedBy: text("issued_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    issuedAt: timestamp("issued_at").defaultNow().notNull(),
+    supersededById: integer("superseded_by_id"),
+    voidedAt: timestamp("voided_at"),
+    voidedBy: text("voided_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    voidReason: text("void_reason"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("issued_certificate_snapshot_org_idx").on(table.organizationId),
+    uniqueIndex("issued_certificate_snapshot_job_uidx").on(table.jobId),
+    index("issued_certificate_snapshot_template_idx").on(table.templateId),
+    index("issued_certificate_snapshot_version_idx").on(
+      table.templateVersionId,
+    ),
+    index("issued_certificate_snapshot_status_idx").on(table.status),
   ],
 );
 
@@ -1297,6 +1526,10 @@ export const userRelations = relations(user, ({ many }) => ({
   ssoProviders: many(ssoProvider),
   customDomains: many(organizationCustomDomain),
   certificateTemplates: many(certificateTemplate),
+  certificateTemplateVersions: many(certificateTemplateVersion),
+  certificateTemplateAssignments: many(certificateTemplateAssignment),
+  certificateTemplatePreviews: many(certificateTemplatePreview),
+  issuedCertificateSnapshots: many(issuedCertificateSnapshot),
   apiKeyAuditLogs: many(organizationApiKeyAuditLog),
   successProfiles: many(organizationSuccessProfile),
   supportRequestsCreated: many(organizationSupportRequest, {
@@ -1334,6 +1567,10 @@ export const organizationRelations = relations(
     ssoProviders: many(ssoProvider),
     customDomain: one(organizationCustomDomain),
     certificateTemplates: many(certificateTemplate),
+    certificateTemplateVersions: many(certificateTemplateVersion),
+    certificateTemplateAssignments: many(certificateTemplateAssignment),
+    certificateTemplatePreviews: many(certificateTemplatePreview),
+    issuedCertificateSnapshots: many(issuedCertificateSnapshot),
     apiKeys: many(organizationApiKey),
     integrations: many(organizationIntegration),
     integrationConnections: many(integrationConnection),
@@ -1506,7 +1743,126 @@ export const certificateTemplateRelations = relations(
       fields: [certificateTemplate.createdBy],
       references: [user.id],
     }),
+    versions: many(certificateTemplateVersion),
+    assignments: many(certificateTemplateAssignment),
+    issuedSnapshots: many(issuedCertificateSnapshot),
     jobs: many(calibrationJob),
+  }),
+);
+
+export const certificateTemplateVersionRelations = relations(
+  certificateTemplateVersion,
+  ({ one, many }) => ({
+    organization: one(organization, {
+      fields: [certificateTemplateVersion.organizationId],
+      references: [organization.id],
+    }),
+    template: one(certificateTemplate, {
+      fields: [certificateTemplateVersion.templateId],
+      references: [certificateTemplate.id],
+    }),
+    createdByUser: one(user, {
+      fields: [certificateTemplateVersion.createdBy],
+      references: [user.id],
+      relationName: "certificateTemplateVersionCreator",
+    }),
+    publishedByUser: one(user, {
+      fields: [certificateTemplateVersion.publishedBy],
+      references: [user.id],
+      relationName: "certificateTemplateVersionPublisher",
+    }),
+    assignments: many(certificateTemplateAssignment),
+    previews: many(certificateTemplatePreview),
+    issuedSnapshots: many(issuedCertificateSnapshot),
+  }),
+);
+
+export const certificateTemplateAssignmentRelations = relations(
+  certificateTemplateAssignment,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [certificateTemplateAssignment.organizationId],
+      references: [organization.id],
+    }),
+    template: one(certificateTemplate, {
+      fields: [certificateTemplateAssignment.templateId],
+      references: [certificateTemplate.id],
+    }),
+    templateVersion: one(certificateTemplateVersion, {
+      fields: [certificateTemplateAssignment.templateVersionId],
+      references: [certificateTemplateVersion.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [certificateTemplateAssignment.unitId],
+      references: [organizationUnit.id],
+    }),
+    service: one(service, {
+      fields: [certificateTemplateAssignment.serviceId],
+      references: [service.id],
+    }),
+    method: one(calibrationMethod, {
+      fields: [certificateTemplateAssignment.methodId],
+      references: [calibrationMethod.id],
+    }),
+    createdByUser: one(user, {
+      fields: [certificateTemplateAssignment.createdBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const certificateTemplatePreviewRelations = relations(
+  certificateTemplatePreview,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [certificateTemplatePreview.organizationId],
+      references: [organization.id],
+    }),
+    templateVersion: one(certificateTemplateVersion, {
+      fields: [certificateTemplatePreview.templateVersionId],
+      references: [certificateTemplateVersion.id],
+    }),
+    requestedByUser: one(user, {
+      fields: [certificateTemplatePreview.requestedBy],
+      references: [user.id],
+    }),
+  }),
+);
+
+export const issuedCertificateSnapshotRelations = relations(
+  issuedCertificateSnapshot,
+  ({ one }) => ({
+    organization: one(organization, {
+      fields: [issuedCertificateSnapshot.organizationId],
+      references: [organization.id],
+    }),
+    job: one(calibrationJob, {
+      fields: [issuedCertificateSnapshot.jobId],
+      references: [calibrationJob.id],
+    }),
+    template: one(certificateTemplate, {
+      fields: [issuedCertificateSnapshot.templateId],
+      references: [certificateTemplate.id],
+    }),
+    templateVersion: one(certificateTemplateVersion, {
+      fields: [issuedCertificateSnapshot.templateVersionId],
+      references: [certificateTemplateVersion.id],
+    }),
+    issuedByUser: one(user, {
+      fields: [issuedCertificateSnapshot.issuedBy],
+      references: [user.id],
+      relationName: "issuedCertificateIssuer",
+    }),
+    supersededBy: one(issuedCertificateSnapshot, {
+      fields: [issuedCertificateSnapshot.supersededById],
+      references: [issuedCertificateSnapshot.id],
+      relationName: "issuedCertificateSupersession",
+    }),
+    voidedByUser: one(user, {
+      fields: [issuedCertificateSnapshot.voidedBy],
+      references: [user.id],
+      relationName: "issuedCertificateVoider",
+    }),
   }),
 );
 
@@ -2174,6 +2530,7 @@ export const calibrationMethodRelations = relations(
       relationName: "methodQualityApprover",
     }),
     auditLogs: many(methodAuditLog),
+    certificateTemplateAssignments: many(certificateTemplateAssignment),
   }),
 );
 
@@ -2300,6 +2657,7 @@ export const serviceRelations = relations(service, ({ one, many }) => ({
     references: [assetType.id],
   }),
   auditLogs: many(serviceAuditLog),
+  certificateTemplateAssignments: many(certificateTemplateAssignment),
 }));
 
 export const serviceAuditLogRelations = relations(
@@ -4024,6 +4382,10 @@ export const calibrationJobRelations = relations(
       fields: [calibrationJob.certificateTemplateId],
       references: [certificateTemplate.id],
     }),
+    issuedCertificateSnapshot: one(issuedCertificateSnapshot, {
+      fields: [calibrationJob.id],
+      references: [issuedCertificateSnapshot.jobId],
+    }),
     // Amendment tracking - ISO 17025:2017 Clause 7.8.4.1
     // The job that this one supersedes (original certificate being corrected)
     supersedes: one(calibrationJob, {
@@ -4275,6 +4637,7 @@ export const organizationUnitRelations = relations(
     calibrationRequests: many(calibrationRequest),
     assets: many(asset),
     eventLogs: many(organizationEventLog),
+    certificateTemplateAssignments: many(certificateTemplateAssignment),
   }),
 );
 
@@ -5273,7 +5636,8 @@ export type AppQueueJobType =
   | "SERVICE_ORDER_TAG"
   | "SERVICE_ORDER_QUOTE"
   | "SERVICE_ORDER_DELIVERY_RECEIPT"
-  | "INTEGRATION_SYNC";
+  | "INTEGRATION_SYNC"
+  | "CERTIFICATE_XLSX_PREVIEW";
 
 export type AppQueueJobStatus =
   | "PENDING"

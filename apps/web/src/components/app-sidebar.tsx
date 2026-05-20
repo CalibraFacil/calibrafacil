@@ -101,8 +101,8 @@ const data = {
       icon: <HugeiconsIcon icon={Files01Icon} />,
     },
     {
-      title: 'Editor de Certificados',
-      url: '/dashboard/certificate-designer',
+      title: 'Templates de Certificados',
+      url: '/dashboard/certificate-templates',
       icon: <HugeiconsIcon icon={FileEditIcon} />,
     },
     {

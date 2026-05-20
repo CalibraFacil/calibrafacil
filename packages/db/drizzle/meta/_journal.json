@@ -141,6 +141,20 @@
       "when": 1778220000000,
       "tag": "0019_calibration_phase_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1779115779169,
+      "tag": "0020_xlsx_certificate_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1779129000000,
+      "tag": "0021_remove_legacy_certificate_designer_config",
+      "breakpoints": true
     }
   ]
 }

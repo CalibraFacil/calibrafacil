@@ -97,6 +97,37 @@ export async function uploadToR2(
 }
 
 /**
+ * Download an object from R2.
+ */
+export async function downloadFromR2(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+): Promise<Uint8Array> {
+  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  const response = (await client.send(command)) as {
+    Body?: {
+      transformToByteArray?: () => Promise<Uint8Array>;
+      transformToString?: () => Promise<string>;
+    };
+  };
+
+  if (!response.Body) {
+    throw new Error(`R2 object not found: ${key}`);
+  }
+
+  if (typeof response.Body.transformToByteArray === "function") {
+    return response.Body.transformToByteArray();
+  }
+
+  if (typeof response.Body.transformToString === "function") {
+    return new TextEncoder().encode(await response.Body.transformToString());
+  }
+
+  throw new Error(`R2 object body is not readable: ${key}`);
+}
+
+/**
  * Delete a file from R2 bucket
  */
 export async function deleteFromR2(

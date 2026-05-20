@@ -4,7 +4,7 @@ export function isCloudOnlyDashboardPath(pathname: string) {
     /^\/dashboard\/requests(?:\/.*)?$/,
     /^\/dashboard\/nc(?:\/.*)?$/,
     /^\/dashboard\/capa(?:\/.*)?$/,
-    /^\/dashboard\/certificate-designer\/?$/,
+    /^\/dashboard\/certificate-templates\/?$/,
     /^\/dashboard\/finance(?:\/.*)?$/,
     /^\/dashboard\/settings(?:\/.*)?$/,
     /^\/dashboard\/customer-success\/?$/,

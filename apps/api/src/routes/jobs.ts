@@ -51,10 +51,10 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import {
-  type CertificateTemplateSnapshot,
   normalizeMethodDataForStorage,
   toCanonicalMassValue,
 } from "@calibra-facil/shared";
+import { type CertificateTemplateSnapshot } from "@calibra-facil/shared/certificate-templates";
 import { requirePlanLimit } from "../middleware/tier-guard";
 import { withCache, withInvalidation } from "../middleware/cache";
 import { selectEffectiveEnvironmentalLimits } from "../lib/unit-operational-settings";

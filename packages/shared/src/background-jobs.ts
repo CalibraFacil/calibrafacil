@@ -31,10 +31,18 @@ export type ScheduledNotificationsBackgroundJobMessage = {
   type: "SCHEDULED_NOTIFICATIONS";
 };
 
+export type CertificateXlsxPreviewBackgroundJobMessage = {
+  type: "CERTIFICATE_XLSX_PREVIEW";
+  previewId: number;
+  templateVersionId: number;
+  userId: string;
+};
+
 export type BackgroundJobMessage =
   | DocumentBackgroundJobMessage
   | IntegrationSyncBackgroundJobMessage
-  | ScheduledNotificationsBackgroundJobMessage;
+  | ScheduledNotificationsBackgroundJobMessage
+  | CertificateXlsxPreviewBackgroundJobMessage;
 
 export function isBackgroundJobMessage(
   value: unknown,
@@ -45,6 +53,14 @@ export function isBackgroundJobMessage(
   const type = message.type;
 
   if (type === "SCHEDULED_NOTIFICATIONS") return true;
+
+  if (type === "CERTIFICATE_XLSX_PREVIEW") {
+    return (
+      typeof message.previewId === "number" &&
+      typeof message.templateVersionId === "number" &&
+      typeof message.userId === "string"
+    );
+  }
 
   if (type === "INTEGRATION_SYNC") {
     return (

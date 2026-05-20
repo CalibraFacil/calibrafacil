@@ -39,8 +39,51 @@ function resolveApiBaseUrl(fallback: string): string {
   return readEnv("API_URL") ?? fallback;
 }
 
+function isLocalDevelopmentUrl(value: string | undefined): boolean {
+  if (!value) return false;
+
+  try {
+    const { hostname } = new URL(value);
+    return hostname === "localhost" || isPrivateIpv4(hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+function isProductionLikeUrl(value: string | undefined): boolean {
+  if (!value) return false;
+
+  try {
+    const { protocol, hostname } = new URL(value);
+    return protocol === "https:" && !isLocalDevelopmentUrl(value)
+      ? !hostname.endsWith(".local")
+      : false;
+  } catch {
+    return false;
+  }
+}
+
 function isProductionRuntime(): boolean {
-  return process.env.VERCEL_ENV === "production";
+  const vercelEnv = readEnv("VERCEL_ENV");
+  if (vercelEnv) {
+    return vercelEnv === "production";
+  }
+
+  const runtimeEnv = readEnv("NODE_ENV") ?? readEnv("APP_ENV");
+  if (runtimeEnv) {
+    return runtimeEnv === "production";
+  }
+
+  const configuredUrls = [readEnv("API_URL"), readEnv("APP_URL")];
+  if (configuredUrls.some(isLocalDevelopmentUrl)) {
+    return false;
+  }
+
+  if (configuredUrls.some(isProductionLikeUrl)) {
+    return true;
+  }
+
+  return false;
 }
 
 function createBaseUrlConfig(isProduction: boolean): string {
@@ -225,6 +268,7 @@ function createTrustedOrigins(
     if (
       requestOrigin &&
       (isVercelPreviewOrigin(requestOrigin) ||
+        (!isProduction && isPrivateDevWebOrigin(requestOrigin)) ||
         (await isActivePortalCustomOrigin(requestOrigin)))
     ) {
       origins.add(requestOrigin);
@@ -251,6 +295,19 @@ function createTrustedOrigins(
 
     return [...origins];
   };
+}
+
+function isPrivateDevWebOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return (
+      url.protocol === "http:" &&
+      (url.hostname === "localhost" || isPrivateIpv4(url.hostname)) &&
+      (url.port === "5173" || url.port === "5174")
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {

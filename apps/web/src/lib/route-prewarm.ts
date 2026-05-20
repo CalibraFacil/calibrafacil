@@ -591,7 +591,7 @@ function financeErpQuery() {
   })
 }
 
-function certificateDesignerTemplatesQuery() {
+function certificateTemplatesQuery() {
   return query({
     queryKey: ['certificate-templates'],
     queryFn: async () =>
@@ -1146,10 +1146,10 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
       prewarmQueries(queryClient, [financeContractDetailQuery(segment(match))]),
   },
   {
-    id: 'dashboard:certificate-designer',
-    match: /^\/dashboard\/certificate-designer\/?$/,
+    id: 'dashboard:certificate-templates',
+    match: /^\/dashboard\/certificate-templates\/?$/,
     prewarm: ({ queryClient }) =>
-      prewarmQueries(queryClient, [certificateDesignerTemplatesQuery()]),
+      prewarmQueries(queryClient, [certificateTemplatesQuery()]),
   },
   {
     id: 'dashboard:reports',

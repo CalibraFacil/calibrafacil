@@ -11,7 +11,7 @@ describe('isCloudOnlyDashboardPath', () => {
     '/dashboard/nc/42',
     '/dashboard/capa',
     '/dashboard/capa/new',
-    '/dashboard/certificate-designer',
+    '/dashboard/certificate-templates',
     '/dashboard/finance/contracts/9',
     '/dashboard/settings/organization',
     '/dashboard/customer-success',

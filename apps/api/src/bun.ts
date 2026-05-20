@@ -139,7 +139,9 @@ async function createEnv(): Promise<BunApiEnv> {
 
   if (!isProduction) {
     for (const [key, fallback] of Object.entries(localUrlDefaults)) {
-      env[key] = Bun.env[key]?.trim() || fallback;
+      const configuredValue =
+        typeof env[key] === "string" ? env[key].trim() : undefined;
+      env[key] = configuredValue || fallback;
     }
   }
 

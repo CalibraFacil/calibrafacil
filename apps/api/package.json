@@ -20,6 +20,7 @@
     "@aws-sdk/client-s3": "^3.990.0",
     "@aws-sdk/s3-request-presigner": "^3.990.0",
     "@calibra-facil/auth": "workspace:^",
+    "@calibra-facil/certificate-xlsx-template": "workspace:^",
     "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/math-engine": "git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4",

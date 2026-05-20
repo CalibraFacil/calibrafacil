@@ -12,6 +12,9 @@
       "@calibra-facil/auth/client": [
         "../../packages/auth/src/auth-client.ts"
       ],
+      "@calibra-facil/certificate-xlsx-template": [
+        "../../packages/certificate-xlsx-template/src/index.ts"
+      ],
       "@calibra-facil/db": ["../../packages/db/src/db.ts"],
       "@calibra-facil/db/*": ["../../packages/db/src/*"],
       "@calibra-facil/notifications": [

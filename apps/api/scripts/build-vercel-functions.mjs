@@ -31,6 +31,7 @@ await build({
   platform: "node",
   target: "node22",
   format: "esm",
+  external: ["@resvg/resvg-js"],
   splitting: false,
   sourcemap: false,
   minify: true,

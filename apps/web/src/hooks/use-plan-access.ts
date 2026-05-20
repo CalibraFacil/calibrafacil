@@ -7,13 +7,17 @@ import { isDesktopRuntime } from '@/runtime/desktop'
 
 export type { PlanAccessResponse }
 
-export function usePlanAccess({ enabled = true }: { enabled?: boolean } = {}) {
+export function usePlanAccess({
+  enabled = true,
+  refetchOnWindowFocus,
+}: { enabled?: boolean; refetchOnWindowFocus?: boolean } = {}) {
   const { data: activeOrg } = useActiveOrganization()
   const isDesktop = isDesktopRuntime()
 
   return useQuery({
     queryKey: ['billing', 'access', activeOrg?.id ?? 'no-org'],
     enabled: enabled && (isDesktop || Boolean(activeOrg?.id)),
+    refetchOnWindowFocus,
     queryFn: async () => calibraApi.access.getPlanAccess(),
   })
 }
