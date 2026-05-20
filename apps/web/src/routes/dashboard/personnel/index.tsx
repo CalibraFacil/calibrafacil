@@ -5,7 +5,7 @@ import { parseAsInteger, useQueryState } from 'nuqs'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon, UserIcon } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
   Empty,
@@ -69,16 +69,8 @@ function PersonnelPage() {
   // List view query
   const { data, isLoading, error } = useQuery({
     queryKey: ['competences', page, statusFilter],
-    queryFn: async () => {
-      const res = await api.api.competences.$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          status: statusFilter || undefined,
-        },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar competências')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.competences.list<{
         data: Array<CompetenceRow>
         pagination: {
           page: number
@@ -86,18 +78,19 @@ function PersonnelPage() {
           total: number
           totalPages: number
         }
-      }>
-    },
+      }>({
+        page,
+        limit,
+        status: statusFilter || undefined,
+      }),
     enabled: viewMode === 'list',
   })
 
   // Matrix view query
   const { data: matrixData, isLoading: matrixLoading } = useQuery({
     queryKey: ['competences-matrix'],
-    queryFn: async () => {
-      const res = await api.api.competences.matrix.$get()
-      if (!res.ok) throw new Error('Falha ao carregar matriz')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.competences.matrix<{
         technicians: Array<{ userId: string; userName: string; role: string }>
         assetTypes: Array<{ id: number; name: string }>
         competences: Array<{
@@ -107,8 +100,7 @@ function PersonnelPage() {
           status: CompetenceStatus
           expiresAt: string | null
         }>
-      }>
-    },
+      }>(),
     enabled: viewMode === 'matrix',
   })
 

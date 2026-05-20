@@ -33,7 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 type BillingDocumentListItem = {
   id: number
@@ -66,14 +66,9 @@ function FinanceDocumentsPage() {
   const documentsQuery = useQuery({
     queryKey: ['finance', 'documents', query],
     queryFn: async () => {
-      const response = await api.api.finance.documents.$get({
-        query: { query: query || undefined },
-      })
-      if (!response.ok) {
-        throw new Error('Erro ao carregar documentos')
-      }
-
-      return response.json() as Promise<{ data: BillingDocumentListItem[] }>
+      return calibraApi.finance.listDocuments<{
+        data: BillingDocumentListItem[]
+      }>({ query })
     },
   })
 

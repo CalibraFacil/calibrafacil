@@ -1,6 +1,9 @@
 import { Buffer } from "node:buffer";
 import { parseLocalServerBootstrapConfig } from "./bootstrap";
-import { createLocalServerFromConfig, createLocalServerFromEnv } from "./server";
+import {
+  createLocalServerFromConfig,
+  createLocalServerFromEnv,
+} from "./server";
 import { serve } from "@hono/node-server";
 
 void main().catch((error) => {

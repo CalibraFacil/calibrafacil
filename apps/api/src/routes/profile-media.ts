@@ -9,17 +9,10 @@ import {
   uploadToR2,
   type R2Env,
 } from "../lib/storage";
-import {
-  requireAuth,
-  type AuthVariables,
-} from "../middleware/permission";
+import { requireAuth, type AuthVariables } from "../middleware/permission";
 
 const MAX_AVATAR_FILE_SIZE = 2 * 1024 * 1024;
-const ALLOWED_AVATAR_CONTENT_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-];
+const ALLOWED_AVATAR_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const AVATAR_URL_EXPIRY = 300;
 
 function getAvatarApiUrl(): string {
@@ -116,9 +109,11 @@ export const profileMediaRouter = new Hono<{
 
     try {
       const r2Client = createR2Client(env);
-      await deleteFromR2(r2Client, env.R2_BUCKET_NAME, getAvatarKey(session.user.id)).catch(
-        () => undefined,
-      );
+      await deleteFromR2(
+        r2Client,
+        env.R2_BUCKET_NAME,
+        getAvatarKey(session.user.id),
+      ).catch(() => undefined);
 
       return c.json({ success: true });
     } catch (error) {

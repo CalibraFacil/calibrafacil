@@ -26,9 +26,9 @@ export function CTA() {
               Pronto para modernizar seu laboratório?
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground sm:text-lg">
-              Agende uma demonstração personalizada e descubra como o CalibraFácil
-              pode otimizar seus processos de calibração e preparar seu laboratório
-              para acreditação.
+              Agende uma demonstração personalizada e descubra como o
+              CalibraFácil pode otimizar seus processos de calibração e preparar
+              seu laboratório para acreditação.
             </p>
 
             <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
@@ -39,7 +39,10 @@ export function CTA() {
               >
                 <Button size="lg" className="text-sm">
                   Agendar Demonstração
-                  <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
+                  <HugeiconsIcon
+                    icon={ArrowRight01Icon}
+                    data-icon="inline-end"
+                  />
                 </Button>
               </a>
               <a
@@ -48,7 +51,10 @@ export function CTA() {
                 rel="noopener noreferrer"
               >
                 <Button variant="outline" size="lg" className="text-sm">
-                  <HugeiconsIcon icon={BookOpen01Icon} data-icon="inline-start" />
+                  <HugeiconsIcon
+                    icon={BookOpen01Icon}
+                    data-icon="inline-start"
+                  />
                   Ver Documentação
                 </Button>
               </a>

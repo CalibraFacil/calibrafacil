@@ -45,7 +45,9 @@ export function BrandLockup({
         aria-hidden="true"
         className={cn("size-8", markClassName)}
       />
-      <span className={cn("text-lg font-semibold tracking-tight", textClassName)}>
+      <span
+        className={cn("text-lg font-semibold tracking-tight", textClassName)}
+      >
         CalibraFácil
       </span>
     </div>

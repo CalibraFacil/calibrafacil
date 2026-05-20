@@ -14,13 +14,14 @@ Processes messages from the Postgres-backed `app_queue_job` table:
 
 ```typescript
 interface QueueMessage {
-  type: "CERTIFICATE" | "LABEL";  // Default: CERTIFICATE
+  type: "CERTIFICATE" | "LABEL"; // Default: CERTIFICATE
   jobId: number;
   userId: string;
 }
 ```
 
 **Certificate Generation:**
+
 1. Fetches calibration job data from database
 2. Renders `CertificateHtml` component to HTML string
 3. Generates PDF using Puppeteer/Chromium
@@ -29,6 +30,7 @@ interface QueueMessage {
 6. Records audit log entry
 
 **Label Generation:**
+
 1. Fetches label data (job_id, asset tag, lab name)
 2. Generates QR code (verification URL) as SVG
 3. Renders `LabelHtml` component (50mm × 30mm format)

@@ -107,7 +107,8 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
       const generated = createApiKeySecret();
-      const scopes = (input.scopes ?? DEFAULT_PUBLIC_API_SCOPES) as PublicApiScope[];
+      const scopes = (input.scopes ??
+        DEFAULT_PUBLIC_API_SCOPES) as PublicApiScope[];
       const keyId = crypto.randomUUID();
 
       await db.insert(organizationApiKey).values({

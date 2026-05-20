@@ -148,9 +148,9 @@ describe("resolveCommercialPublicState", () => {
   });
 
   it("returns boleto-ready when a boleto payment already exists", () => {
-    expect(
-      resolveCommercialPublicState(makeOffer(), makePayment()),
-    ).toBe("BOLETO_READY");
+    expect(resolveCommercialPublicState(makeOffer(), makePayment())).toBe(
+      "BOLETO_READY",
+    );
   });
 
   it("returns paid when the webhook status is confirmed", () => {

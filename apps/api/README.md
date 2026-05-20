@@ -20,24 +20,24 @@ The API runs at `http://localhost:3000`.
 
 ## Routes
 
-| Route | Description |
-|-------|-------------|
-| `/api/auth/lab/*` | Lab user authentication (Better Auth) |
-| `/api/auth/portal/*` | Portal/client authentication |
-| `/api/customers` | Customer CRUD operations |
-| `/api/assets` | Instrument/equipment management |
-| `/api/asset-types` | Dynamic asset type definitions |
-| `/api/methods` | Calibration method management |
-| `/api/services` | Calibration services catalog |
-| `/api/standards` | Reference standards management |
-| `/api/jobs` | Calibration job workflow |
-| `/api/dashboard` | Analytics and metrics |
-| `/api/billing/*` | Subscription and payments |
-| `/api/webhooks` | External service webhooks |
-| `/api/verify` | Public certificate verification |
-| `/api/invitations` | Team member invitations |
-| `/api/portal` | Portal-specific operations |
-| `/api/notifications` | Notification management |
+| Route                | Description                           |
+| -------------------- | ------------------------------------- |
+| `/api/auth/lab/*`    | Lab user authentication (Better Auth) |
+| `/api/auth/portal/*` | Portal/client authentication          |
+| `/api/customers`     | Customer CRUD operations              |
+| `/api/assets`        | Instrument/equipment management       |
+| `/api/asset-types`   | Dynamic asset type definitions        |
+| `/api/methods`       | Calibration method management         |
+| `/api/services`      | Calibration services catalog          |
+| `/api/standards`     | Reference standards management        |
+| `/api/jobs`          | Calibration job workflow              |
+| `/api/dashboard`     | Analytics and metrics                 |
+| `/api/billing/*`     | Subscription and payments             |
+| `/api/webhooks`      | External service webhooks             |
+| `/api/verify`        | Public certificate verification       |
+| `/api/invitations`   | Team member invitations               |
+| `/api/portal`        | Portal-specific operations            |
+| `/api/notifications` | Notification management               |
 
 ## Environment Variables
 

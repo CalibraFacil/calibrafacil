@@ -13,7 +13,8 @@ export async function activateOfferFromConfirmedPayment(
   offerId: string,
   paymentStatus: "CONFIRMED" | "RECEIVED",
 ) {
-  if (paymentStatus !== "CONFIRMED" && paymentStatus !== "RECEIVED") return null;
+  if (paymentStatus !== "CONFIRMED" && paymentStatus !== "RECEIVED")
+    return null;
 
   const offer = await tx.query.commercialOffer.findFirst({
     where: eq(commercialOffer.id, offerId),

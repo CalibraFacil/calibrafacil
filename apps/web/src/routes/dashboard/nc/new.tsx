@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
-import { api, calibraApi } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -93,18 +93,10 @@ function NewNCPage() {
       description: string
       detectedAt: string
       jobId?: number
-    }) => {
-      const res = await api.api.nc.$post({ json: payload })
-
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao registrar NC',
-        )
-      }
-
-      return res.json() as Promise<{ id: number; ncNumber: string }>
-    },
+    }) =>
+      calibraApi.nonConformances.create<{ id: number; ncNumber: string }>(
+        payload,
+      ),
     onSuccess: (result) => {
       toast.success(`NC ${result.ncNumber} registrada com sucesso`)
       navigate({ to: '/dashboard/nc/$id', params: { id: String(result.id) } })

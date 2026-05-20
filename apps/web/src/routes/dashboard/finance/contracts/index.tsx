@@ -30,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 type ContractListItem = {
   id: number
@@ -59,14 +59,9 @@ function FinanceContractsPage() {
   const contractsQuery = useQuery({
     queryKey: ['finance', 'contracts', query],
     queryFn: async () => {
-      const response = await api.api.finance.contracts.$get({
-        query: { query: query || undefined },
+      return calibraApi.finance.listContracts<{ data: ContractListItem[] }>({
+        query,
       })
-      if (!response.ok) {
-        throw new Error('Erro ao carregar contratos')
-      }
-
-      return response.json() as Promise<{ data: ContractListItem[] }>
     },
   })
 

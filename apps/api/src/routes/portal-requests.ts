@@ -23,7 +23,9 @@ import {
 } from "../middleware/permission";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 
-function getPortalHostOrigin(c: { req: { header: (name: string) => string | undefined } }) {
+function getPortalHostOrigin(c: {
+  req: { header: (name: string) => string | undefined };
+}) {
   return c.req.header("origin") ?? c.req.header("referer") ?? null;
 }
 
@@ -312,7 +314,9 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         : null;
 
       const request = await db.transaction(async (tx) => {
-        const lockAssetIds = [...input.assetIds].sort((left, right) => left - right);
+        const lockAssetIds = [...input.assetIds].sort(
+          (left, right) => left - right,
+        );
 
         for (const assetId of lockAssetIds) {
           await tx.execute(

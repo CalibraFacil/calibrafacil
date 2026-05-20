@@ -1,5 +1,10 @@
 // Shared layout and theme
-export { EmailLayout, StatusBox, theme, styles } from "./emails/components/email-layout";
+export {
+  EmailLayout,
+  StatusBox,
+  theme,
+  styles,
+} from "./emails/components/email-layout";
 
 // Email templates
 export { OrganizationInvitationEmail } from "./emails/organization-invitation-email";

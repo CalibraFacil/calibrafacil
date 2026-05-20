@@ -22,11 +22,7 @@ export type BillingDocumentExportStatus =
   | "EXPORTED"
   | "FAILED";
 
-export type ReceivableInstallmentStatus =
-  | "OPEN"
-  | "PAID"
-  | "OVERDUE"
-  | "VOID";
+export type ReceivableInstallmentStatus = "OPEN" | "PAID" | "OVERDUE" | "VOID";
 
 export type FinancialPaymentMethod =
   | "CREDIT_CARD"

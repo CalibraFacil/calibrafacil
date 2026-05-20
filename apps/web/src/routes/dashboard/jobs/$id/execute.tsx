@@ -1399,9 +1399,7 @@ function ExecuteJobForm({
     () =>
       phaseBlocks.filter((block) => {
         const snapshot = calibrationPhases.blocks[block.key]
-        return (
-          snapshot?.mode === 'not_performed' && !snapshot.reason?.trim()
-        )
+        return snapshot?.mode === 'not_performed' && !snapshot.reason?.trim()
       }),
     [calibrationPhases, phaseBlocks],
   )
@@ -1585,9 +1583,7 @@ function ExecuteJobForm({
                     </SelectItem>
                     <SelectItem value="before_only">Somente antes</SelectItem>
                     <SelectItem value="after_only">Somente após</SelectItem>
-                    <SelectItem value="not_performed">
-                      Não executado
-                    </SelectItem>
+                    <SelectItem value="not_performed">Não executado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1773,8 +1769,7 @@ function ExecuteJobForm({
       })
     const hasRequiredAssetSpecs = missingAssetSpecFields.length === 0
     const hasCalibrationLocation = calibrationLocation.addressText.trim() !== ''
-    const hasNotPerformedReasons =
-      missingNotPerformedPhaseReasons.length === 0
+    const hasNotPerformedReasons = missingNotPerformedPhaseReasons.length === 0
     return (
       hasRequiredFields &&
       hasRequiredAssetSpecs &&
@@ -2459,7 +2454,9 @@ function ExecuteJobForm({
                       <CardTitle className="text-balance text-base">
                         Resultados ({activeCalculationFormulas.length})
                       </CardTitle>
-                      <Badge variant={hasOfficialResults ? 'secondary' : 'outline'}>
+                      <Badge
+                        variant={hasOfficialResults ? 'secondary' : 'outline'}
+                      >
                         {hasOfficialResults ? 'Oficial' : 'Prévia local'}
                       </Badge>
                     </div>

@@ -30,7 +30,7 @@ import {
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
 import { useMountEffect } from '@/hooks/use-mount-effect'
-import { api, apiFetch } from '@/utils/api'
+import { apiFetch, calibraApi } from '@/utils/api'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/dashboard/certificate-templates')({
@@ -690,13 +690,8 @@ function CertificateTemplatesPage() {
     queryKey: ['certificate-templates'],
     enabled: !cloudOnlyUnavailable,
     refetchOnWindowFocus: false,
-    queryFn: async () => {
-      const res = await api.api['certificate-templates'].$get()
-      if (!res.ok) {
-        throw new Error('Falha ao carregar templates')
-      }
-      return res.json() as Promise<TemplateListResponse>
-    },
+    queryFn: async () =>
+      calibraApi.certificateTemplates.list<TemplateListResponse>(),
   })
 
   const templates = templatesQuery.data?.items ?? []
@@ -725,23 +720,10 @@ function CertificateTemplatesPage() {
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const res = await api.api.methods.$get({
-        query: {
-          page: '1',
-          limit: '100',
-        },
+      const data = await calibraApi.methods.list({
+        page: 1,
+        limit: 100,
       })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar métodos')
-      }
-      const data = (await res.json()) as {
-        data: Array<{
-          id: number
-          name: string
-          version: number
-          status: string
-        }>
-      }
 
       return data.data.map<XlsxAssignmentOption>((method) => ({
         id: method.id,
@@ -756,22 +738,10 @@ function CertificateTemplatesPage() {
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const res = await api.api.services.$get({
-        query: {
-          page: '1',
-          limit: '100',
-        },
+      const data = await calibraApi.services.list({
+        page: 1,
+        limit: 100,
       })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar serviços')
-      }
-      const data = (await res.json()) as {
-        data: Array<{
-          id: number
-          name: string
-          methodName: string | null
-        }>
-      }
 
       return data.data.map<XlsxAssignmentOption>((service) => ({
         id: service.id,
@@ -786,14 +756,8 @@ function CertificateTemplatesPage() {
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const res = await api.api.units.$get()
-      if (res.status === 403) return []
-      if (!res.ok) {
-        throw new Error('Falha ao carregar unidades')
-      }
-      const data = (await res.json()) as {
-        data: Array<{ id: number; name: string; role: string }>
-      }
+      const data = await calibraApi.units.getDashboardUnits()
+      if (!data) return []
 
       return data.data.map<XlsxAssignmentOption>((unit) => ({
         id: unit.id,
@@ -1202,22 +1166,9 @@ function CertificateTemplatesPage() {
   const createMutation = useMutation({
     mutationFn: async () => {
       const name = newTemplateName.trim()
-      const res = await api.api['certificate-templates'].$post({
-        json: {
-          name,
-        },
+      return calibraApi.certificateTemplates.create<{ item: TemplateItem }>({
+        name,
       })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao criar template',
-        )
-      }
-
-      return res.json() as Promise<{ item: TemplateItem }>
     },
     onSuccess: async (data) => {
       toast.success('Template criado')
@@ -1238,23 +1189,10 @@ function CertificateTemplatesPage() {
         throw new Error('Selecione um template editável')
       }
 
-      const res = await api.api['certificate-templates'][':id'].$put({
-        param: { id: String(selectedTemplate.id) },
-        json: {
-          name: draft.name.trim(),
-        },
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao atualizar template',
-        )
-      }
-
-      return res.json() as Promise<{ item: TemplateItem }>
+      return calibraApi.certificateTemplates.update<{ item: TemplateItem }>(
+        selectedTemplate.id,
+        { name: draft.name.trim() },
+      )
     },
     onSuccess: async (data) => {
       toast.success('Template salvo')
@@ -1274,22 +1212,9 @@ function CertificateTemplatesPage() {
         throw new Error('Selecione um template salvo para duplicar')
       }
 
-      const res = await api.api['certificate-templates'][':id'].duplicate.$post(
-        {
-          param: { id: String(selectedTemplate.id) },
-        },
-      )
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao duplicar template',
-        )
-      }
-
-      return res.json() as Promise<{ item: TemplateItem }>
+      return calibraApi.certificateTemplates.duplicate<{
+        item: TemplateItem
+      }>(selectedTemplate.id)
     },
     onSuccess: async (data) => {
       toast.success('Template duplicado')
@@ -1309,20 +1234,7 @@ function CertificateTemplatesPage() {
         throw new Error('Selecione um template salvo')
       }
 
-      const res = await api.api['certificate-templates'][':id'][
-        'set-default'
-      ].$post({
-        param: { id: String(selectedTemplate.id) },
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao definir template padrão',
-        )
-      }
+      await calibraApi.certificateTemplates.setDefault(selectedTemplate.id)
     },
     onSuccess: async () => {
       toast.success('Template padrão atualizado')

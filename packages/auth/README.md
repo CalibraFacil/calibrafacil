@@ -46,17 +46,18 @@ const canApprove = ac.hasPermission(userRole, "calibration", "approve");
 
 ## Roles
 
-| Role | Description |
-|------|-------------|
-| `owner` | Full admin control, can delete organization |
-| `admin` | Full operational control, can approve jobs |
-| `technician` | Execute calibrations, submit for review |
-| `member` | Read-only access (default) |
-| `client_user` | External portal access |
+| Role          | Description                                 |
+| ------------- | ------------------------------------------- |
+| `owner`       | Full admin control, can delete organization |
+| `admin`       | Full operational control, can approve jobs  |
+| `technician`  | Execute calibrations, submit for review     |
+| `member`      | Read-only access (default)                  |
+| `client_user` | External portal access                      |
 
 ## Permissions
 
 Resources and actions:
+
 - **calibration:** create, read, update, delete, submit, approve, reject
 - **template:** create, read, update, delete
 - **method:** create, read, update, delete
@@ -68,6 +69,7 @@ Resources and actions:
 ## ISO 17025 Workflow
 
 The permission system enforces ISO 17025 workflow requirements:
+
 - **Draft:** Technician can edit and submit
 - **Review:** Only admin/owner can approve, reject, or edit (with reason)
 - **Approved:** Immutable, read-only

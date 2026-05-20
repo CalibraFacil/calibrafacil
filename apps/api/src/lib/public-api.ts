@@ -1,8 +1,4 @@
-import {
-  createHash,
-  createHmac,
-  randomBytes,
-} from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { db } from "@calibra-facil/db";
 import {
   organizationApiKey,
@@ -18,10 +14,7 @@ import {
   type PublicApiResourceType,
   type PublicApiWebhookEvent,
 } from "@calibra-facil/shared";
-import {
-  decryptPassword,
-  encryptPassword,
-} from "@calibra-facil/signing";
+import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
 
 const DEFAULT_IDEMPOTENCY_TTL_DAYS = 7;
 

@@ -15,7 +15,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -57,19 +57,14 @@ function CompetenceDetailLayout() {
 
   const { data: competence, isLoading } = useQuery({
     queryKey: ['competence', id],
-    queryFn: async () => {
-      const res = await api.api.competences[':id'].$get({
-        param: { id },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar competência')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.competences.get<{
         id: number
         userName: string | null
         assetTypeName: string | null
         scopeDescription: string
         status: CompetenceStatus
-      }>
-    },
+      }>(id),
   })
 
   // Determine active tab: exact match for detail, prefix match for others
@@ -110,17 +105,19 @@ function CompetenceDetailLayout() {
                 {competence.userName ?? 'Técnico'}
               </h1>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>
-                  {competence.assetTypeName ?? 'Escopo geral'}
-                </span>
-                {competence.status && (() => {
-                  const badge = getStatusBadge(competence.status)
-                  return (
-                    <Badge variant={badge.variant} className={badge.className}>
-                      {badge.label}
-                    </Badge>
-                  )
-                })()}
+                <span>{competence.assetTypeName ?? 'Escopo geral'}</span>
+                {competence.status &&
+                  (() => {
+                    const badge = getStatusBadge(competence.status)
+                    return (
+                      <Badge
+                        variant={badge.variant}
+                        className={badge.className}
+                      >
+                        {badge.label}
+                      </Badge>
+                    )
+                  })()}
               </div>
             </>
           ) : (

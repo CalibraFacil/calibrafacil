@@ -28,10 +28,7 @@ import { DataTable } from '@/components/ui/data-table'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { type Client, clientsColumns } from './-components/columns'
 import { clientRouteId } from '@/lib/route-identifiers'
-import {
-  loadClientsIndexData,
-  useClientsListData,
-} from './-index.data'
+import { loadClientsIndexData, useClientsListData } from './-index.data'
 
 export const Route = createFileRoute('/dashboard/clients/')({
   loader: ({ context }) => loadClientsIndexData(context.queryClient),

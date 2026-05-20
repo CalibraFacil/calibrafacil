@@ -11,16 +11,16 @@ This inventory records the production Method Builder surface introduced in this 
 
 ## Ownership Map
 
-| Area | Files | Responsibility |
-| --- | --- | --- |
-| Method definition core | `packages/method-definition/**` | Pure TypeScript core for shape safety, schemas, normalization, formula compilation, preview execution, diagnostics, fingerprints, and immutable compiled artifacts. |
-| Method API | `apps/api/src/routes/methods.ts` | CRUD, workflow transitions, server-side compile/preview/publish, persisted compiled method artifacts, audit log integration, and route-level permissions. |
-| Method persistence | `packages/db/src/schema.ts`, `packages/db/drizzle/0016_method_definition.sql` | Stores editable method data plus compiled artifact metadata: compiled method JSON, method fingerprint, engine metadata, compile timestamp, and publication evidence. |
-| Method Builder UI | `apps/web/src/components/method-builder/**`, `apps/web/src/routes/dashboard/methods/**` | Production draft editor for identity, inputs, variables, formulas, validations, uncertainty components, certificate content, compile diagnostics, preview, and publish. |
-| Method runtime helpers | `apps/web/src/components/method-runtime/**` | Shared execution/display helpers for table inputs, mass composition, weighing ranges, and formula context evaluation used outside the builder UI. |
-| Job execution UI | `apps/web/src/routes/dashboard/jobs/$id/execute.tsx` | Captures technician inputs, environmental data, standards, table data, and local result display. |
-| Job backend | `apps/api/src/lib/jobs.ts`, `apps/api/src/routes/jobs.ts` | Creates method snapshots from published methods, validates required asset specs, and stores execution data/results/snapshots. |
-| Certificate rendering | `packages/documents/src/CertificateHtml.tsx` | Reads method snapshots, results, formula reporting metadata, and certificate content to render certificate sections. |
+| Area                   | Files                                                                                   | Responsibility                                                                                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Method definition core | `packages/method-definition/**`                                                         | Pure TypeScript core for shape safety, schemas, normalization, formula compilation, preview execution, diagnostics, fingerprints, and immutable compiled artifacts.     |
+| Method API             | `apps/api/src/routes/methods.ts`                                                        | CRUD, workflow transitions, server-side compile/preview/publish, persisted compiled method artifacts, audit log integration, and route-level permissions.               |
+| Method persistence     | `packages/db/src/schema.ts`, `packages/db/drizzle/0016_method_definition.sql`           | Stores editable method data plus compiled artifact metadata: compiled method JSON, method fingerprint, engine metadata, compile timestamp, and publication evidence.    |
+| Method Builder UI      | `apps/web/src/components/method-builder/**`, `apps/web/src/routes/dashboard/methods/**` | Production draft editor for identity, inputs, variables, formulas, validations, uncertainty components, certificate content, compile diagnostics, preview, and publish. |
+| Method runtime helpers | `apps/web/src/components/method-runtime/**`                                             | Shared execution/display helpers for table inputs, mass composition, weighing ranges, and formula context evaluation used outside the builder UI.                       |
+| Job execution UI       | `apps/web/src/routes/dashboard/jobs/$id/execute.tsx`                                    | Captures technician inputs, environmental data, standards, table data, and local result display.                                                                        |
+| Job backend            | `apps/api/src/lib/jobs.ts`, `apps/api/src/routes/jobs.ts`                               | Creates method snapshots from published methods, validates required asset specs, and stores execution data/results/snapshots.                                           |
+| Certificate rendering  | `packages/documents/src/CertificateHtml.tsx`                                            | Reads method snapshots, results, formula reporting metadata, and certificate content to render certificate sections.                                                    |
 
 ## Current Method Model
 

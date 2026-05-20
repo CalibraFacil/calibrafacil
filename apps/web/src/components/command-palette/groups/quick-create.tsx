@@ -66,7 +66,8 @@ export function QuickCreateGroup() {
       <CommandItem
         onSelect={() => {
           toast.info('Em breve', {
-            description: 'Relatórios de Não Conformidade serão implementados em breve.',
+            description:
+              'Relatórios de Não Conformidade serão implementados em breve.',
           })
           setOpen(false)
         }}

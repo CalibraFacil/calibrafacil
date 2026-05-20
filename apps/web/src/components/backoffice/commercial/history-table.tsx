@@ -56,14 +56,18 @@ export function CommercialOfferHistoryTable(props: {
       <TableBody>
         {props.offers.map((offer) => (
           <TableRow key={offer.id}>
-            <TableCell className="font-mono text-xs">{offer.id.slice(0, 8)}</TableCell>
+            <TableCell className="font-mono text-xs">
+              {offer.id.slice(0, 8)}
+            </TableCell>
             <TableCell>{offer.kind}</TableCell>
             <TableCell>
               <CommercialStatusBadge status={offer.status} />
             </TableCell>
             <TableCell>{formatMoney(offer.totalAmount)}</TableCell>
             <TableCell>
-              {offer.issuedAt ? new Date(offer.issuedAt).toLocaleDateString('pt-BR') : '—'}
+              {offer.issuedAt
+                ? new Date(offer.issuedAt).toLocaleDateString('pt-BR')
+                : '—'}
             </TableCell>
             <TableCell>
               {offer.offerExpiresAt
@@ -71,20 +75,34 @@ export function CommercialOfferHistoryTable(props: {
                 : '—'}
             </TableCell>
             <TableCell>
-              {offer.paidAt ? new Date(offer.paidAt).toLocaleDateString('pt-BR') : '—'}
+              {offer.paidAt
+                ? new Date(offer.paidAt).toLocaleDateString('pt-BR')
+                : '—'}
             </TableCell>
             <TableCell className="text-right">
               <div className="flex justify-end gap-2">
                 {offer.customerCheckoutUrl && (
-                  <Button size="sm" variant="outline" onClick={() => props.onCopyLink(offer)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => props.onCopyLink(offer)}
+                  >
                     Copiar link
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={() => props.onReissue(offer.id)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => props.onReissue(offer.id)}
+                >
                   Reemitir
                 </Button>
                 {offer.status !== 'PAID' && offer.status !== 'ACTIVATED' && (
-                  <Button size="sm" variant="outline" onClick={() => props.onCancel(offer.id)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => props.onCancel(offer.id)}
+                  >
                     Cancelar
                   </Button>
                 )}

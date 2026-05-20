@@ -3,7 +3,18 @@ import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { and, asc, desc, eq, ilike, inArray, like, not, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  like,
+  not,
+  or,
+  sql,
+} from "drizzle-orm";
 import { createBackofficeAuth, createLabAuth } from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
@@ -53,7 +64,11 @@ const BootstrapSchema = z.object({
 
 const CreatePlatformUserSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  email: z.string().trim().email().transform((value) => value.toLowerCase()),
+  email: z
+    .string()
+    .trim()
+    .email()
+    .transform((value) => value.toLowerCase()),
   role: z.enum(["platform_operator", "platform_admin"]),
 });
 
@@ -63,7 +78,13 @@ const ListBackofficeUsersQuerySchema = z.object({
   search: z.string().trim().optional(),
   organizationId: z.string().trim().optional(),
   platformRole: z
-    .enum(["all", "user", "platform_operator", "platform_admin", "platform_access"])
+    .enum([
+      "all",
+      "user",
+      "platform_operator",
+      "platform_admin",
+      "platform_access",
+    ])
     .optional(),
   membershipScope: z
     .enum(["all", "lab_members", "no_lab_membership", "backoffice_only"])
@@ -196,8 +217,8 @@ async function hasAnyPlatformAdmin() {
 
 function readBootstrapToken(c: { env?: unknown }) {
   const envToken =
-    (c.env as Record<string, unknown> | undefined)?.BACKOFFICE_BOOTSTRAP_TOKEN ??
-    process.env.BACKOFFICE_BOOTSTRAP_TOKEN;
+    (c.env as Record<string, unknown> | undefined)
+      ?.BACKOFFICE_BOOTSTRAP_TOKEN ?? process.env.BACKOFFICE_BOOTSTRAP_TOKEN;
 
   return typeof envToken === "string" ? envToken.trim() : "";
 }
@@ -234,9 +255,11 @@ function resolveAppUrl(c: {
   }
 
   const configuredAppUrl =
-    (c.env as Record<string, unknown> | undefined)?.APP_URL ?? process.env.APP_URL;
+    (c.env as Record<string, unknown> | undefined)?.APP_URL ??
+    process.env.APP_URL;
 
-  return typeof configuredAppUrl === "string" && configuredAppUrl.trim().length > 0
+  return typeof configuredAppUrl === "string" &&
+    configuredAppUrl.trim().length > 0
     ? configuredAppUrl.trim()
     : "https://localhost:5173";
 }
@@ -254,7 +277,10 @@ export const backofficeRouter = new Hono<{
       bootstrapAvailable =
         Boolean(readBootstrapToken(c)) && !(await hasAnyPlatformAdmin());
     } catch (error) {
-      console.error("Failed to resolve backoffice bootstrap availability", error);
+      console.error(
+        "Failed to resolve backoffice bootstrap availability",
+        error,
+      );
     }
 
     return c.json({
@@ -651,13 +677,19 @@ export const backofficeRouter = new Hono<{
       organizationIds.length === 0
         ? Promise.resolve([])
         : db.query.organizationSuccessProfile.findMany({
-            where: inArray(organizationSuccessProfile.organizationId, organizationIds),
+            where: inArray(
+              organizationSuccessProfile.organizationId,
+              organizationIds,
+            ),
           }),
       Promise.all(
-        organizationIds.map(async (organizationId) => [
-          organizationId,
-          await getOrganizationPlanAccess(organizationId),
-        ] as const),
+        organizationIds.map(
+          async (organizationId) =>
+            [
+              organizationId,
+              await getOrganizationPlanAccess(organizationId),
+            ] as const,
+        ),
       ),
     ]);
 
@@ -666,374 +698,387 @@ export const backofficeRouter = new Hono<{
     );
     const planAccessByOrg = new Map(planAccessEntries);
 
-    const data = rows.map((row) => {
-      const profile = profilesByOrg.get(row.organizationId);
-      const planAccess = planAccessByOrg.get(row.organizationId);
-      const effectiveSlaTier =
-        profile && planAccess
-          ? profile.slaTier === "PLAN_DEFAULT"
-            ? deriveDefaultSlaTier(planAccess.supportPolicy)
-            : profile.slaTier
-          : "PLAN_DEFAULT";
-      const goLiveStatus =
-        profile && planAccess
-          ? deriveGoLiveStatus({
-              currentStatus: profile.goLiveStatus,
-              goLiveActualDate: profile.goLiveActualDate,
-              goLiveTargetDate: profile.goLiveTargetDate,
+    const data = rows
+      .map((row) => {
+        const profile = profilesByOrg.get(row.organizationId);
+        const planAccess = planAccessByOrg.get(row.organizationId);
+        const effectiveSlaTier =
+          profile && planAccess
+            ? profile.slaTier === "PLAN_DEFAULT"
+              ? deriveDefaultSlaTier(planAccess.supportPolicy)
+              : profile.slaTier
+            : "PLAN_DEFAULT";
+        const goLiveStatus =
+          profile && planAccess
+            ? deriveGoLiveStatus({
+                currentStatus: profile.goLiveStatus,
+                goLiveActualDate: profile.goLiveActualDate,
+                goLiveTargetDate: profile.goLiveTargetDate,
+              })
+            : "NOT_SCHEDULED";
+        const dueSoonThresholdHours =
+          profile && planAccess
+            ? resolveDueSoonThresholdHours(
+                resolveEffectiveSlaHours(
+                  planAccess.supportPolicy.targetFirstResponseBusinessHours,
+                  effectiveSlaTier,
+                ),
+              )
+            : 4;
+        const healthStatus =
+          profile && planAccess
+            ? deriveHealthStatus({
+                currentStatus: profile.healthStatus,
+                onboardingStatus: profile.onboardingStatus,
+                migrationStatus: profile.migrationStatus,
+                goLiveStatus,
+                breachedRequestsCount:
+                  getSupportRequestSlaStatus({
+                    status: row.status,
+                    slaTargetAt: row.slaTargetAt,
+                    dueSoonThresholdHours,
+                  }) === "BREACHED"
+                    ? 1
+                    : 0,
+                dueSoonRequestsCount:
+                  getSupportRequestSlaStatus({
+                    status: row.status,
+                    slaTargetAt: row.slaTargetAt,
+                    dueSoonThresholdHours,
+                  }) === "DUE_SOON"
+                    ? 1
+                    : 0,
+              })
+            : "HEALTHY";
+        const slaStatus = getSupportRequestSlaStatus({
+          status: row.status,
+          slaTargetAt: row.slaTargetAt,
+          dueSoonThresholdHours,
+        });
+        const activeBlockers = getActiveCustomerSuccessBlockers(
+          profile?.blockers,
+        );
+        const nextActionStatus = profile
+          ? deriveNextActionStatus({
+              nextAction: profile.nextAction,
+              nextActionDueAt: profile.nextActionDueAt,
+              nextActionCompletedAt: profile.nextActionCompletedAt,
             })
-          : "NOT_SCHEDULED";
-      const dueSoonThresholdHours =
-        profile && planAccess
-          ? resolveDueSoonThresholdHours(
-              resolveEffectiveSlaHours(
-                planAccess.supportPolicy.targetFirstResponseBusinessHours,
-                effectiveSlaTier,
-              ),
-            )
-          : 4;
-      const healthStatus =
-        profile && planAccess
-          ? deriveHealthStatus({
-              currentStatus: profile.healthStatus,
-              onboardingStatus: profile.onboardingStatus,
-              migrationStatus: profile.migrationStatus,
-              goLiveStatus,
-              breachedRequestsCount:
-                getSupportRequestSlaStatus({
-                  status: row.status,
-                  slaTargetAt: row.slaTargetAt,
-                  dueSoonThresholdHours,
-                }) === "BREACHED"
-                  ? 1
-                  : 0,
-              dueSoonRequestsCount:
-                getSupportRequestSlaStatus({
-                  status: row.status,
-                  slaTargetAt: row.slaTargetAt,
-                  dueSoonThresholdHours,
-                }) === "DUE_SOON"
-                  ? 1
-                  : 0,
-            })
-          : "HEALTHY";
-      const slaStatus = getSupportRequestSlaStatus({
-        status: row.status,
-        slaTargetAt: row.slaTargetAt,
-        dueSoonThresholdHours,
-      });
-      const activeBlockers = getActiveCustomerSuccessBlockers(profile?.blockers);
-      const nextActionStatus = profile
-        ? deriveNextActionStatus({
-            nextAction: profile.nextAction,
-            nextActionDueAt: profile.nextActionDueAt,
-            nextActionCompletedAt: profile.nextActionCompletedAt,
-          })
-        : "NONE";
-      const prioritySupport =
-        (profile?.prioritySupport ?? false) ||
-        effectiveSlaTier !== "PLAN_DEFAULT" ||
-        (planAccess?.supportPolicy.hasPrioritySupport ?? false);
-      const needsEscalation = getSupportRequestNeedsEscalation({
-        status: row.status,
-        slaStatus,
-        priority: row.priority,
-        prioritySupport,
-        escalatedAt: row.escalatedAt,
-      });
-      const attentionScore = getSupportRequestAttentionScore({
-        status: row.status,
-        slaStatus,
-        priority: row.priority,
-        assignedToUserId: row.assignedToUserId,
-        prioritySupport,
-        escalatedAt: row.escalatedAt,
-      });
+          : "NONE";
+        const prioritySupport =
+          (profile?.prioritySupport ?? false) ||
+          effectiveSlaTier !== "PLAN_DEFAULT" ||
+          (planAccess?.supportPolicy.hasPrioritySupport ?? false);
+        const needsEscalation = getSupportRequestNeedsEscalation({
+          status: row.status,
+          slaStatus,
+          priority: row.priority,
+          prioritySupport,
+          escalatedAt: row.escalatedAt,
+        });
+        const attentionScore = getSupportRequestAttentionScore({
+          status: row.status,
+          slaStatus,
+          priority: row.priority,
+          assignedToUserId: row.assignedToUserId,
+          prioritySupport,
+          escalatedAt: row.escalatedAt,
+        });
 
-      return {
-        ...row,
-        slaStatus,
-        timeToSlaMs: row.slaTargetAt
-          ? row.slaTargetAt.getTime() - Date.now()
-          : null,
-        organizationHealth: healthStatus,
-        prioritySupport,
-        effectiveSlaTier,
-        needsEscalation,
-        attentionScore,
-        escalationReason: row.escalationReason,
-        nextActionStatus,
-        organizationBlockers: activeBlockers,
-        workflowDelays: buildWorkflowDelays({
+        return {
+          ...row,
+          slaStatus,
+          timeToSlaMs: row.slaTargetAt
+            ? row.slaTargetAt.getTime() - Date.now()
+            : null,
+          organizationHealth: healthStatus,
+          prioritySupport,
+          effectiveSlaTier,
+          needsEscalation,
+          attentionScore,
+          escalationReason: row.escalationReason,
           nextActionStatus,
-          goLiveStatus,
-          activeBlockersCount: activeBlockers.length,
-        }),
-      };
-    }).sort((left, right) => {
-      if (right.attentionScore !== left.attentionScore) {
-        return right.attentionScore - left.attentionScore;
-      }
+          organizationBlockers: activeBlockers,
+          workflowDelays: buildWorkflowDelays({
+            nextActionStatus,
+            goLiveStatus,
+            activeBlockersCount: activeBlockers.length,
+          }),
+        };
+      })
+      .sort((left, right) => {
+        if (right.attentionScore !== left.attentionScore) {
+          return right.attentionScore - left.attentionScore;
+        }
 
-      const leftSla = left.slaTargetAt
-        ? new Date(left.slaTargetAt).getTime()
-        : Number.POSITIVE_INFINITY;
-      const rightSla = right.slaTargetAt
-        ? new Date(right.slaTargetAt).getTime()
-        : Number.POSITIVE_INFINITY;
+        const leftSla = left.slaTargetAt
+          ? new Date(left.slaTargetAt).getTime()
+          : Number.POSITIVE_INFINITY;
+        const rightSla = right.slaTargetAt
+          ? new Date(right.slaTargetAt).getTime()
+          : Number.POSITIVE_INFINITY;
 
-      return leftSla - rightSla;
-    });
+        return leftSla - rightSla;
+      });
 
     return c.json({ data });
   })
-  .get("/users", zValidator("query", ListBackofficeUsersQuerySchema), async (c) => {
-    const input = c.req.valid("query");
-    const limit = input.limit ?? 100;
-    const offset = input.offset ?? 0;
-    const platformRole = input.platformRole ?? "all";
-    const membershipScope = input.membershipScope ?? "all";
+  .get(
+    "/users",
+    zValidator("query", ListBackofficeUsersQuerySchema),
+    async (c) => {
+      const input = c.req.valid("query");
+      const limit = input.limit ?? 100;
+      const offset = input.offset ?? 0;
+      const platformRole = input.platformRole ?? "all";
+      const membershipScope = input.membershipScope ?? "all";
 
-    const labMembershipSubquery = db
-      .select({ userId: member.userId })
-      .from(member)
-      .innerJoin(
-        organization,
-        and(
-          eq(member.organizationId, organization.id),
-          eq(organization.type, "LAB"),
-        ),
-      );
+      const labMembershipSubquery = db
+        .select({ userId: member.userId })
+        .from(member)
+        .innerJoin(
+          organization,
+          and(
+            eq(member.organizationId, organization.id),
+            eq(organization.type, "LAB"),
+          ),
+        );
 
-    const conditions = [];
+      const conditions = [];
 
-    if (input.search) {
-      const pattern = `%${input.search}%`;
-      conditions.push(
-        or(
-          ilike(userTable.name, pattern),
-          ilike(userTable.email, pattern),
-        )!,
-      );
-    }
+      if (input.search) {
+        const pattern = `%${input.search}%`;
+        conditions.push(
+          or(ilike(userTable.name, pattern), ilike(userTable.email, pattern))!,
+        );
+      }
 
-    if (input.organizationId) {
-      conditions.push(
-        inArray(
-          userTable.id,
-          db
-            .select({ userId: member.userId })
-            .from(member)
-            .where(eq(member.organizationId, input.organizationId)),
-        ),
-      );
-    }
+      if (input.organizationId) {
+        conditions.push(
+          inArray(
+            userTable.id,
+            db
+              .select({ userId: member.userId })
+              .from(member)
+              .where(eq(member.organizationId, input.organizationId)),
+          ),
+        );
+      }
 
-    if (platformRole === "user") {
-      conditions.push(eq(userTable.role, "user"));
-    } else if (platformRole === "platform_operator") {
-      conditions.push(eq(userTable.role, "platform_operator"));
-    } else if (platformRole === "platform_admin") {
-      conditions.push(eq(userTable.role, "platform_admin"));
-    } else if (platformRole === "platform_access") {
-      conditions.push(
-        or(
-          eq(userTable.role, "platform_operator"),
-          eq(userTable.role, "platform_admin"),
-        )!,
-      );
-    }
-
-    if (membershipScope === "lab_members") {
-      conditions.push(inArray(userTable.id, labMembershipSubquery));
-    } else if (membershipScope === "no_lab_membership") {
-      conditions.push(not(inArray(userTable.id, labMembershipSubquery)));
-    } else if (membershipScope === "backoffice_only") {
-      conditions.push(
-        and(
+      if (platformRole === "user") {
+        conditions.push(eq(userTable.role, "user"));
+      } else if (platformRole === "platform_operator") {
+        conditions.push(eq(userTable.role, "platform_operator"));
+      } else if (platformRole === "platform_admin") {
+        conditions.push(eq(userTable.role, "platform_admin"));
+      } else if (platformRole === "platform_access") {
+        conditions.push(
           or(
             eq(userTable.role, "platform_operator"),
             eq(userTable.role, "platform_admin"),
-          ),
-          not(inArray(userTable.id, labMembershipSubquery)),
-        )!,
-      );
-    }
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-    const [users, totalRows] = await Promise.all([
-      db.query.user.findMany({
-        where: whereClause,
-        orderBy: [asc(userTable.name), asc(userTable.email)],
-        limit,
-        offset,
-      }),
-      db
-        .select({
-          total: sql<number>`count(*)`,
-        })
-        .from(userTable)
-        .where(whereClause),
-    ]);
-
-    const userIds = users.map((user) => user.id);
-
-    const memberships = userIds.length
-      ? await db
-          .select({
-            userId: member.userId,
-            organizationId: organization.id,
-            organizationName: organization.name,
-            organizationSlug: organization.slug,
-            memberRole: member.role,
-          })
-          .from(member)
-          .innerJoin(
-            organization,
-            and(
-              eq(member.organizationId, organization.id),
-              eq(organization.type, "LAB"),
-            ),
-          )
-          .where(inArray(member.userId, userIds))
-          .orderBy(asc(organization.name))
-      : [];
-
-    const membershipsByUser = new Map<
-      string,
-      Array<{
-        organizationId: string;
-        organizationName: string;
-        organizationSlug: string;
-        memberRole: string;
-      }>
-    >();
-
-    for (const row of memberships) {
-      const current = membershipsByUser.get(row.userId) ?? [];
-      current.push({
-        organizationId: row.organizationId,
-        organizationName: row.organizationName,
-        organizationSlug: row.organizationSlug,
-        memberRole: row.memberRole,
-      });
-      membershipsByUser.set(row.userId, current);
-    }
-
-    return c.json({
-      users: users.map((user) => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        banned: user.banned,
-        createdAt: user.createdAt,
-        memberships: membershipsByUser.get(user.id) ?? [],
-      })),
-      total: totalRows[0]?.total ?? 0,
-      filters: {
-        limit,
-        offset,
-        search: input.search ?? "",
-        organizationId: input.organizationId ?? "",
-        platformRole,
-        membershipScope,
-      },
-    });
-  })
-  .post("/users", requirePlatformAdmin, zValidator("json", CreatePlatformUserSchema), async (c) => {
-    const auth = createBackofficeAuth() as any;
-    const session = c.get("session");
-    const input = c.req.valid("json");
-    const temporaryPassword = randomBytes(24).toString("base64url");
-    const appUrl = resolveAppUrl(c);
-
-    const createdUser = await auth.api.createUser({
-      body: {
-        name: input.name,
-        email: input.email,
-        password: temporaryPassword,
-        role: input.role,
-      },
-      headers: c.req.raw.headers,
-    });
-    const createdUserRecord =
-      createdUser && typeof createdUser === "object" && "user" in createdUser
-        ? (createdUser.user as { id: string; email: string; name: string })
-        : (createdUser as { id: string; email: string; name: string });
-
-    const resetResponse = await forwardLabAuthResponse({
-      c,
-      path: "/api/auth/lab/request-password-reset",
-      body: {
-        email: input.email,
-        redirectTo: `${appUrl}/reset-password`,
-      },
-    });
-
-    const resetPayload = resetResponse.ok ? null : await resetResponse.json().catch(() => null);
-
-    await logPlatformEvent({
-      actorUserId: session.user.id,
-      targetUserId: createdUserRecord.id,
-      action: "backoffice.user.created",
-      entityType: "user",
-      entityId: createdUserRecord.id,
-      details: {
-        email: input.email,
-        role: input.role,
-        passwordSetupRequested: resetResponse.ok,
-      },
-    });
-
-    return c.json({
-      user: createdUserRecord,
-      passwordSetupRequested: resetResponse.ok,
-      passwordSetupMessage: resetResponse.ok
-        ? "Email de definição de senha solicitado"
-        : extractErrorMessage(resetPayload, "Falha ao enviar email de definição de senha"),
-    });
-  })
-  .post(
-    "/users/:id/impersonate",
-    async (c) => {
-      const backofficeAuth = createBackofficeAuth() as any;
-      const session = c.get("session");
-      const targetUserId = c.req.param("id");
-      const targetUser = await db.query.user.findFirst({
-        where: eq(userTable.id, targetUserId),
-      });
-
-      if (!targetUser) {
-        return c.json({ error: "Usuário alvo não encontrado" }, 404);
+          )!,
+        );
       }
 
-      const handoff = await backofficeAuth.api.generateOneTimeToken({
-        headers: c.req.raw.headers,
-      });
+      if (membershipScope === "lab_members") {
+        conditions.push(inArray(userTable.id, labMembershipSubquery));
+      } else if (membershipScope === "no_lab_membership") {
+        conditions.push(not(inArray(userTable.id, labMembershipSubquery)));
+      } else if (membershipScope === "backoffice_only") {
+        conditions.push(
+          and(
+            or(
+              eq(userTable.role, "platform_operator"),
+              eq(userTable.role, "platform_admin"),
+            ),
+            not(inArray(userTable.id, labMembershipSubquery)),
+          )!,
+        );
+      }
 
-      await logPlatformEvent({
-        actorUserId: session.user.id,
-        targetUserId,
-        action: "backoffice.impersonation.handoff.started",
-        entityType: "user",
-        entityId: targetUserId,
-        details: {
-          email: targetUser.email,
-        },
-      });
+      const whereClause =
+        conditions.length > 0 ? and(...conditions) : undefined;
 
-      const bridgeSearch = new URLSearchParams({
-        token: handoff.token,
-        targetUserId,
-      });
+      const [users, totalRows] = await Promise.all([
+        db.query.user.findMany({
+          where: whereClause,
+          orderBy: [asc(userTable.name), asc(userTable.email)],
+          limit,
+          offset,
+        }),
+        db
+          .select({
+            total: sql<number>`count(*)`,
+          })
+          .from(userTable)
+          .where(whereClause),
+      ]);
+
+      const userIds = users.map((user) => user.id);
+
+      const memberships = userIds.length
+        ? await db
+            .select({
+              userId: member.userId,
+              organizationId: organization.id,
+              organizationName: organization.name,
+              organizationSlug: organization.slug,
+              memberRole: member.role,
+            })
+            .from(member)
+            .innerJoin(
+              organization,
+              and(
+                eq(member.organizationId, organization.id),
+                eq(organization.type, "LAB"),
+              ),
+            )
+            .where(inArray(member.userId, userIds))
+            .orderBy(asc(organization.name))
+        : [];
+
+      const membershipsByUser = new Map<
+        string,
+        Array<{
+          organizationId: string;
+          organizationName: string;
+          organizationSlug: string;
+          memberRole: string;
+        }>
+      >();
+
+      for (const row of memberships) {
+        const current = membershipsByUser.get(row.userId) ?? [];
+        current.push({
+          organizationId: row.organizationId,
+          organizationName: row.organizationName,
+          organizationSlug: row.organizationSlug,
+          memberRole: row.memberRole,
+        });
+        membershipsByUser.set(row.userId, current);
+      }
 
       return c.json({
-        redirectPath: `/api/backoffice/impersonation/bridge?${bridgeSearch.toString()}`,
+        users: users.map((user) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          banned: user.banned,
+          createdAt: user.createdAt,
+          memberships: membershipsByUser.get(user.id) ?? [],
+        })),
+        total: totalRows[0]?.total ?? 0,
+        filters: {
+          limit,
+          offset,
+          search: input.search ?? "",
+          organizationId: input.organizationId ?? "",
+          platformRole,
+          membershipScope,
+        },
       });
     },
   )
+  .post(
+    "/users",
+    requirePlatformAdmin,
+    zValidator("json", CreatePlatformUserSchema),
+    async (c) => {
+      const auth = createBackofficeAuth() as any;
+      const session = c.get("session");
+      const input = c.req.valid("json");
+      const temporaryPassword = randomBytes(24).toString("base64url");
+      const appUrl = resolveAppUrl(c);
+
+      const createdUser = await auth.api.createUser({
+        body: {
+          name: input.name,
+          email: input.email,
+          password: temporaryPassword,
+          role: input.role,
+        },
+        headers: c.req.raw.headers,
+      });
+      const createdUserRecord =
+        createdUser && typeof createdUser === "object" && "user" in createdUser
+          ? (createdUser.user as { id: string; email: string; name: string })
+          : (createdUser as { id: string; email: string; name: string });
+
+      const resetResponse = await forwardLabAuthResponse({
+        c,
+        path: "/api/auth/lab/request-password-reset",
+        body: {
+          email: input.email,
+          redirectTo: `${appUrl}/reset-password`,
+        },
+      });
+
+      const resetPayload = resetResponse.ok
+        ? null
+        : await resetResponse.json().catch(() => null);
+
+      await logPlatformEvent({
+        actorUserId: session.user.id,
+        targetUserId: createdUserRecord.id,
+        action: "backoffice.user.created",
+        entityType: "user",
+        entityId: createdUserRecord.id,
+        details: {
+          email: input.email,
+          role: input.role,
+          passwordSetupRequested: resetResponse.ok,
+        },
+      });
+
+      return c.json({
+        user: createdUserRecord,
+        passwordSetupRequested: resetResponse.ok,
+        passwordSetupMessage: resetResponse.ok
+          ? "Email de definição de senha solicitado"
+          : extractErrorMessage(
+              resetPayload,
+              "Falha ao enviar email de definição de senha",
+            ),
+      });
+    },
+  )
+  .post("/users/:id/impersonate", async (c) => {
+    const backofficeAuth = createBackofficeAuth() as any;
+    const session = c.get("session");
+    const targetUserId = c.req.param("id");
+    const targetUser = await db.query.user.findFirst({
+      where: eq(userTable.id, targetUserId),
+    });
+
+    if (!targetUser) {
+      return c.json({ error: "Usuário alvo não encontrado" }, 404);
+    }
+
+    const handoff = await backofficeAuth.api.generateOneTimeToken({
+      headers: c.req.raw.headers,
+    });
+
+    await logPlatformEvent({
+      actorUserId: session.user.id,
+      targetUserId,
+      action: "backoffice.impersonation.handoff.started",
+      entityType: "user",
+      entityId: targetUserId,
+      details: {
+        email: targetUser.email,
+      },
+    });
+
+    const bridgeSearch = new URLSearchParams({
+      token: handoff.token,
+      targetUserId,
+    });
+
+    return c.json({
+      redirectPath: `/api/backoffice/impersonation/bridge?${bridgeSearch.toString()}`,
+    });
+  })
   .use("/users/:id/request-password-reset", requirePlatformAdmin)
   .use("/users/:id/role", requirePlatformAdmin)
   .use("/users/:id/ban", requirePlatformAdmin)
@@ -1059,18 +1104,28 @@ export const backofficeRouter = new Hono<{
       },
     });
 
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        return c.json(
-          {
-            error: extractErrorMessage(
-              payload,
-              "Falha ao solicitar definição de senha",
-            ),
-          },
-          { status: response.status as 400 | 401 | 403 | 404 | 409 | 422 | 500 | 503 },
-        );
-      }
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      return c.json(
+        {
+          error: extractErrorMessage(
+            payload,
+            "Falha ao solicitar definição de senha",
+          ),
+        },
+        {
+          status: response.status as
+            | 400
+            | 401
+            | 403
+            | 404
+            | 409
+            | 422
+            | 500
+            | 503,
+        },
+      );
+    }
 
     await logPlatformEvent({
       actorUserId: session.user.id,

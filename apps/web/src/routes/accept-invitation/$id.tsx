@@ -1,8 +1,8 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { authClient, useSession } from "@calibra-facil/auth/client";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { authClient, useSession } from '@calibra-facil/auth/client'
+import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -10,100 +10,100 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/card'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
-export const Route = createFileRoute("/accept-invitation/$id")({
+export const Route = createFileRoute('/accept-invitation/$id')({
   head: () => ({
     meta: [
       {
-        title: "Convite para Organização | CalibraFácil",
-        name: "description",
-        content: "Aceitar convite para participar de uma organização",
+        title: 'Convite para Organização | CalibraFácil',
+        name: 'description',
+        content: 'Aceitar convite para participar de uma organização',
       },
     ],
   }),
   component: AcceptInvitationPage,
-});
+})
 
 type InvitationData = {
-  id: string;
-  email: string;
-  role: string;
-  status: string;
-  expiresAt: Date;
-  organizationId: string;
-  organizationName: string;
-  organizationSlug: string;
-  inviterEmail: string;
-};
+  id: string
+  email: string
+  role: string
+  status: string
+  expiresAt: Date
+  organizationId: string
+  organizationName: string
+  organizationSlug: string
+  inviterEmail: string
+}
 
 function AcceptInvitationPage() {
-  const { id } = Route.useParams();
-  const navigate = useNavigate();
-  const { data: session, isPending: isSessionLoading } = useSession();
-  const [isAccepting, setIsAccepting] = useState(false);
-  const [isRejecting, setIsRejecting] = useState(false);
+  const { id } = Route.useParams()
+  const navigate = useNavigate()
+  const { data: session, isPending: isSessionLoading } = useSession()
+  const [isAccepting, setIsAccepting] = useState(false)
+  const [isRejecting, setIsRejecting] = useState(false)
   const invitationQuery = useQuery({
-    queryKey: ["accept-invitation", id],
+    queryKey: ['accept-invitation', id],
     queryFn: async (): Promise<InvitationData> => {
       const { data, error } = await authClient.organization.getInvitation({
         query: { id },
-      });
+      })
 
       if (error) {
-        throw new Error(error.message || "Não foi possível carregar o convite.");
+        throw new Error(error.message || 'Não foi possível carregar o convite.')
       }
 
-      return data as InvitationData;
+      return data as InvitationData
     },
-  });
-  const invitation = invitationQuery.data;
+  })
+  const invitation = invitationQuery.data
   const error =
     invitationQuery.error instanceof Error
       ? invitationQuery.error.message
-      : null;
+      : null
 
   async function handleAccept() {
-    setIsAccepting(true);
+    setIsAccepting(true)
     const { error } = await authClient.organization.acceptInvitation({
       invitationId: id,
-    });
+    })
 
     if (error) {
-      toast.error(error.message || "Erro ao aceitar o convite.");
-      setIsAccepting(false);
-      return;
+      toast.error(error.message || 'Erro ao aceitar o convite.')
+      setIsAccepting(false)
+      return
     }
 
-    toast.success("Convite aceito com sucesso!");
-    navigate({ to: "/dashboard" });
+    toast.success('Convite aceito com sucesso!')
+    navigate({ to: '/dashboard' })
   }
 
   async function handleReject() {
-    setIsRejecting(true);
+    setIsRejecting(true)
     const { error } = await authClient.organization.rejectInvitation({
       invitationId: id,
-    });
+    })
 
     if (error) {
-      toast.error(error.message || "Erro ao rejeitar o convite.");
-      setIsRejecting(false);
-      return;
+      toast.error(error.message || 'Erro ao rejeitar o convite.')
+      setIsRejecting(false)
+      return
     }
 
-    toast.success("Convite rejeitado.");
-    navigate({ to: "/" });
+    toast.success('Convite rejeitado.')
+    navigate({ to: '/' })
   }
 
   const roleLabels: Record<string, string> = {
-    owner: "Proprietário",
-    admin: "Administrador",
-    operator: "Operador",
-    technician: "Técnico",
-    member: "Membro",
-  };
+    owner: 'Proprietário',
+    admin: 'Administrador',
+    operator: 'Operador',
+    technician: 'Técnico',
+    member: 'Membro',
+  }
 
   if (isSessionLoading || invitationQuery.isPending) {
     return (
@@ -117,7 +117,7 @@ function AcceptInvitationPage() {
           </CardHeader>
         </Card>
       </div>
-    );
+    )
   }
 
   if (error) {
@@ -129,16 +129,13 @@ function AcceptInvitationPage() {
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardFooter>
-            <Link
-              to="/"
-              className={cn(buttonVariants(), "w-full")}
-            >
+            <Link to="/" className={cn(buttonVariants(), 'w-full')}>
               Voltar para o início
             </Link>
           </CardFooter>
         </Card>
       </div>
-    );
+    )
   }
 
   if (!session) {
@@ -148,7 +145,7 @@ function AcceptInvitationPage() {
           <CardHeader>
             <CardTitle>Convite para Organização</CardTitle>
             <CardDescription>
-              Você foi convidado para participar de{" "}
+              Você foi convidado para participar de{' '}
               <strong>{invitation?.organizationName}</strong>. Faça login ou
               crie uma conta para aceitar o convite.
             </CardDescription>
@@ -179,44 +176,42 @@ function AcceptInvitationPage() {
             <Link
               to="/sign-in"
               search={{ redirect: `/accept-invitation/${id}` }}
-              className={cn(buttonVariants(), "flex-1")}
+              className={cn(buttonVariants(), 'flex-1')}
             >
               Entrar
             </Link>
             <Link
               to="/sign-up"
               search={{ redirect: `/accept-invitation/${id}` }}
-              className={cn(buttonVariants({ variant: "outline" }), "flex-1")}
+              className={cn(buttonVariants({ variant: 'outline' }), 'flex-1')}
             >
               Criar conta
             </Link>
           </CardFooter>
         </Card>
       </div>
-    );
+    )
   }
 
-  if (invitation?.status !== "pending") {
+  if (invitation?.status !== 'pending') {
     return (
       <div className="flex min-h-svh items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Convite Já Utilizado</CardTitle>
             <CardDescription>
-              Este convite já foi {invitation?.status === "accepted" ? "aceito" : "rejeitado"}.
+              Este convite já foi{' '}
+              {invitation?.status === 'accepted' ? 'aceito' : 'rejeitado'}.
             </CardDescription>
           </CardHeader>
           <CardFooter>
-            <Link
-              to="/dashboard"
-              className={cn(buttonVariants(), "w-full")}
-            >
+            <Link to="/dashboard" className={cn(buttonVariants(), 'w-full')}>
               Ir para o Dashboard
             </Link>
           </CardFooter>
         </Card>
       </div>
-    );
+    )
   }
 
   return (
@@ -257,7 +252,7 @@ function AcceptInvitationPage() {
             disabled={isAccepting || isRejecting}
             className="flex-1"
           >
-            {isAccepting ? "Aceitando..." : "Aceitar"}
+            {isAccepting ? 'Aceitando...' : 'Aceitar'}
           </Button>
           <Button
             onClick={handleReject}
@@ -265,10 +260,10 @@ function AcceptInvitationPage() {
             variant="outline"
             className="flex-1"
           >
-            {isRejecting ? "Rejeitando..." : "Rejeitar"}
+            {isRejecting ? 'Rejeitando...' : 'Rejeitar'}
           </Button>
         </CardFooter>
       </Card>
     </div>
-  );
+  )
 }

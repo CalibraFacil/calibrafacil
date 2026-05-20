@@ -1,5 +1,9 @@
 import { getAsaasClient } from "./client";
-import type { AsaasPayment, AsaasPaymentList, CreatePaymentInput } from "./types";
+import type {
+  AsaasPayment,
+  AsaasPaymentList,
+  CreatePaymentInput,
+} from "./types";
 
 export async function createPayment(
   input: CreatePaymentInput,

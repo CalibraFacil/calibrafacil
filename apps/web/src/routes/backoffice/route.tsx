@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice')({
   beforeLoad: async ({ location, preload }) => {
@@ -55,14 +55,8 @@ function BackofficeLayout() {
 
   const accessQuery = useQuery({
     queryKey: ['backoffice', 'access', 'layout'],
-    queryFn: async () => {
-      const res = await api.api.backoffice.access.$get()
-      if (!res.ok) {
-        throw new Error('Falha ao validar acesso ao backoffice')
-      }
-
-      return res.json() as Promise<{ allowed: boolean }>
-    },
+    queryFn: async () =>
+      calibraApi.backoffice.getAccess() as Promise<{ allowed: boolean }>,
     enabled: Boolean(session?.user) && !isAuthPage,
     retry: false,
   })

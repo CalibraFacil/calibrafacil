@@ -90,10 +90,9 @@ export async function assertPlanLimit(
     where: eq(organization.id, memberData.organizationId),
   });
 
-  const limit = getEffectivePlanLimits(
-    planId,
-    currentOrganization?.createdAt,
-  )[resource];
+  const limit = getEffectivePlanLimits(planId, currentOrganization?.createdAt)[
+    resource
+  ];
 
   // Get current usage (cached)
   const usage = await getCachedResourceUsage(

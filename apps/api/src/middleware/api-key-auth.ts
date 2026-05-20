@@ -50,7 +50,10 @@ export const requireApiKeyAuth = createMiddleware<{
     throw new HTTPException(401, { message: "API key inválida" });
   }
 
-  const hasApi = await organizationHasEntitlement(keyRecord.organizationId, "api");
+  const hasApi = await organizationHasEntitlement(
+    keyRecord.organizationId,
+    "api",
+  );
   if (!hasApi) {
     throw new HTTPException(403, {
       message: "API não disponível no plano atual",
@@ -77,14 +80,16 @@ export const requireApiKeyAuth = createMiddleware<{
 });
 
 export function requireApiScope(scope: PublicApiScope) {
-  return createMiddleware<{ Variables: ApiKeyAuthVariables }>(async (c, next) => {
-    const apiKey = c.get("apiKey");
-    if (!apiKey.scopes.includes(scope)) {
-      throw new HTTPException(403, {
-        message: `Escopo "${scope}" não permitido para esta chave`,
-      });
-    }
+  return createMiddleware<{ Variables: ApiKeyAuthVariables }>(
+    async (c, next) => {
+      const apiKey = c.get("apiKey");
+      if (!apiKey.scopes.includes(scope)) {
+        throw new HTTPException(403, {
+          message: `Escopo "${scope}" não permitido para esta chave`,
+        });
+      }
 
-    await next();
-  });
+      await next();
+    },
+  );
 }

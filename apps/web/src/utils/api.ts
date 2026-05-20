@@ -4,7 +4,7 @@ import {
   createRawCloudClient,
   isDesktopRuntime,
 } from '@calibra-facil/client-runtime'
-import type { AppType } from '@calibra-facil/api'
+import type { AppType } from '@calibra-facil/contracts'
 
 const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
 const DEFAULT_DESKTOP_LOCAL_API_URL = 'http://127.0.0.1:4317'
@@ -22,7 +22,7 @@ function getStoredActiveUnitId(): string | null {
 }
 
 export function getApiBaseURL(): string {
-  return getCloudApiBaseURL()
+  return getCloudApiBaseUrl()
 }
 
 function getLocalApiBaseURL(): string {
@@ -30,10 +30,10 @@ function getLocalApiBaseURL(): string {
     return import.meta.env.VITE_LOCAL_API_URL ?? DEFAULT_DESKTOP_LOCAL_API_URL
   }
 
-  return getCloudApiBaseURL()
+  return getCloudApiBaseUrl()
 }
 
-function getCloudApiBaseURL(): string {
+export function getCloudApiBaseUrl(): string {
   if (isDesktopRuntime()) {
     return import.meta.env.VITE_DESKTOP_AUTH_API_URL ?? DEFAULT_CLOUD_API_URL
   }
@@ -53,10 +53,18 @@ function getCloudApiBaseURL(): string {
   return DEFAULT_CLOUD_API_URL
 }
 
+export const getApiBaseUrl = getCloudApiBaseUrl
+
 export function resolveApiURL(): string
 export function resolveApiURL(pathOrUrl: string): string
 export function resolveApiURL(pathOrUrl?: string): string {
-  const baseUrl = getApiBaseURL()
+  return resolveCloudApiUrl(pathOrUrl)
+}
+
+export function resolveCloudApiUrl(): string
+export function resolveCloudApiUrl(pathOrUrl: string): string
+export function resolveCloudApiUrl(pathOrUrl?: string): string {
+  const baseUrl = getCloudApiBaseUrl()
 
   if (!pathOrUrl) {
     return baseUrl
@@ -69,7 +77,12 @@ export function resolveApiURL(pathOrUrl?: string): string {
   return new URL(pathOrUrl, baseUrl).toString()
 }
 
-export function apiFetch(input: RequestInfo | URL, init?: RequestInit) {
+export const resolveApiUrl = resolveCloudApiUrl
+
+export function authenticatedCloudFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) {
   const headers = new Headers(init?.headers)
   const activeUnitId = getStoredActiveUnitId()
 
@@ -84,16 +97,21 @@ export function apiFetch(input: RequestInfo | URL, init?: RequestInit) {
   })
 }
 
-export const api = createRawCloudClient<AppType>({
-  baseUrl: getCloudApiBaseURL(),
+export const calibraFetch = authenticatedCloudFetch
+export const apiFetch = authenticatedCloudFetch
+
+export const rawCloudClient = createRawCloudClient<AppType>({
+  baseUrl: getCloudApiBaseUrl(),
   activeUnitProvider: getStoredActiveUnitId,
   fetch: desktopCloudFetch,
 })
 
-export const calibraApi = isDesktopRuntime()
+export const api = rawCloudClient
+
+export const calibraClient = isDesktopRuntime()
   ? createDesktopHybridApiClient({
       cloud: {
-        baseUrl: getCloudApiBaseURL(),
+        baseUrl: getCloudApiBaseUrl(),
         activeUnitProvider: getStoredActiveUnitId,
         fetch: desktopCloudFetch,
       },
@@ -103,9 +121,11 @@ export const calibraApi = isDesktopRuntime()
       },
     })
   : createCloudApiClient({
-      baseUrl: getCloudApiBaseURL(),
+      baseUrl: getCloudApiBaseUrl(),
       activeUnitProvider: getStoredActiveUnitId,
     })
+
+export const calibraApi = calibraClient
 
 let desktopLocalApiTokenPromise: Promise<string | null> | null = null
 
@@ -151,7 +171,7 @@ function resolveApiFetchInput(input: RequestInfo | URL): RequestInfo | URL {
     return input
   }
 
-  return resolveApiURL(input)
+  return resolveCloudApiUrl(input)
 }
 
 async function encodeDesktopCloudRequestBody(request: Request) {

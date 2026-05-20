@@ -1,6 +1,11 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { EmailLayout, StatusBox, styles, theme } from "./components/email-layout";
+import {
+  EmailLayout,
+  StatusBox,
+  styles,
+  theme,
+} from "./components/email-layout";
 
 type NotificationVariant = "default" | "success" | "warning" | "error" | "info";
 
@@ -33,9 +38,7 @@ export function NotificationEmail({
         <p style={styles.paragraph}>Ola {recipientName},</p>
 
         {variant !== "default" ? (
-          <StatusBox variant={variant}>
-            {message}
-          </StatusBox>
+          <StatusBox variant={variant}>{message}</StatusBox>
         ) : (
           <p style={styles.paragraph}>{message}</p>
         )}

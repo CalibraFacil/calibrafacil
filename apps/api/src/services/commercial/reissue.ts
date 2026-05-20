@@ -37,21 +37,19 @@ export async function reissueCommercialOffer(
         ? terms.billingContactId
         : undefined,
     kind: current.kind,
-    basePlanId:
-      (input.overrides.basePlanId ?? current.basePlanId ?? undefined) as
-        | "STANDARD"
-        | "PROFESSIONAL"
-        | "ENTERPRISE"
-        | undefined,
-    billingCycle:
-      (input.overrides.billingCycle ?? current.billingCycle ?? undefined) as
-        | "MONTHLY"
-        | "YEARLY"
-        | undefined,
+    basePlanId: (input.overrides.basePlanId ??
+      current.basePlanId ??
+      undefined) as "STANDARD" | "PROFESSIONAL" | "ENTERPRISE" | undefined,
+    billingCycle: (input.overrides.billingCycle ??
+      current.billingCycle ??
+      undefined) as "MONTHLY" | "YEARLY" | undefined,
     contractTermMonths:
-      input.overrides.contractTermMonths ?? current.contractTermMonths ?? undefined,
+      input.overrides.contractTermMonths ??
+      current.contractTermMonths ??
+      undefined,
     negotiatedAmount:
-      input.overrides.negotiatedAmount ?? Number(terms.totalAmount ?? current.totalAmount),
+      input.overrides.negotiatedAmount ??
+      Number(terms.totalAmount ?? current.totalAmount),
     discountAmount: input.overrides.discountAmount ?? current.discountAmount,
     setupFeeAmount: input.overrides.setupFeeAmount ?? 0,
     dueDate:
@@ -59,12 +57,17 @@ export async function reissueCommercialOffer(
       (current.dueDate ? current.dueDate.toISOString() : undefined),
     offerExpiresAt:
       input.overrides.offerExpiresAt ??
-      (current.offerExpiresAt ? current.offerExpiresAt.toISOString() : undefined),
+      (current.offerExpiresAt
+        ? current.offerExpiresAt.toISOString()
+        : undefined),
     paymentMethods:
       input.overrides.paymentMethods ?? (current.paymentMethods as any[]),
     customerVisibleDescription:
-      input.overrides.customerVisibleDescription ?? current.customerVisibleDescription ?? undefined,
-    internalNotes: input.overrides.internalNotes ?? current.internalNotes ?? undefined,
+      input.overrides.customerVisibleDescription ??
+      current.customerVisibleDescription ??
+      undefined,
+    internalNotes:
+      input.overrides.internalNotes ?? current.internalNotes ?? undefined,
     items: resolveReissueItems(input.overrides, terms),
   };
 

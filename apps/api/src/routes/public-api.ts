@@ -38,9 +38,7 @@ export const publicApiRouter = new Hono<{ Variables: ApiKeyAuthVariables }>()
       const { page, limit, query } = c.req.valid("query");
       const offset = (page - 1) * limit;
 
-      const filters = [
-        eq(customer.labOrganizationId, apiKey.organizationId),
-      ];
+      const filters = [eq(customer.labOrganizationId, apiKey.organizationId)];
 
       if (query) {
         filters.push(ilike(customer.name, `%${query}%`));
@@ -151,47 +149,43 @@ export const publicApiRouter = new Hono<{ Variables: ApiKeyAuthVariables }>()
       return c.json({ data, page, limit });
     },
   )
-  .get(
-    "/jobs/:jobId",
-    requireApiScope("jobs:read"),
-    async (c) => {
-      const apiKey = c.get("apiKey");
-      const jobId = c.req.param("jobId");
+  .get("/jobs/:jobId", requireApiScope("jobs:read"), async (c) => {
+    const apiKey = c.get("apiKey");
+    const jobId = c.req.param("jobId");
 
-      const data = await db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          status: calibrationJob.status,
-          customerName: customer.name,
-          assetName: asset.name,
-          assetTag: asset.tag,
-          serviceName: service.name,
-          performedAt: calibrationJob.performedAt,
-          approvedAt: calibrationJob.approvedAt,
-          createdAt: calibrationJob.createdAt,
-          updatedAt: calibrationJob.updatedAt,
-          results: calibrationJob.results,
-        })
-        .from(calibrationJob)
-        .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
-        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .innerJoin(service, eq(calibrationJob.serviceId, service.id))
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            eq(calibrationJob.jobId, jobId),
-          ),
-        )
-        .limit(1);
+    const data = await db
+      .select({
+        id: calibrationJob.id,
+        jobId: calibrationJob.jobId,
+        status: calibrationJob.status,
+        customerName: customer.name,
+        assetName: asset.name,
+        assetTag: asset.tag,
+        serviceName: service.name,
+        performedAt: calibrationJob.performedAt,
+        approvedAt: calibrationJob.approvedAt,
+        createdAt: calibrationJob.createdAt,
+        updatedAt: calibrationJob.updatedAt,
+        results: calibrationJob.results,
+      })
+      .from(calibrationJob)
+      .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
+      .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+      .innerJoin(service, eq(calibrationJob.serviceId, service.id))
+      .where(
+        and(
+          eq(calibrationJob.organizationId, apiKey.organizationId),
+          eq(calibrationJob.jobId, jobId),
+        ),
+      )
+      .limit(1);
 
-      if (!data[0]) {
-        return c.json({ error: "Ordem de serviço não encontrada" }, 404);
-      }
+    if (!data[0]) {
+      return c.json({ error: "Ordem de serviço não encontrada" }, 404);
+    }
 
-      return c.json({ data: data[0] });
-    },
-  )
+    return c.json({ data: data[0] });
+  })
   .get(
     "/certificates",
     requireApiScope("certificates:read"),

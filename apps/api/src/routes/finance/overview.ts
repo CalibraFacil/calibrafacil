@@ -8,7 +8,10 @@ import {
   paymentReceipt,
   receivableInstallment,
 } from "@calibra-facil/db/schema";
-import { withLabPermission, type AuthVariables } from "../../middleware/permission";
+import {
+  withLabPermission,
+  type AuthVariables,
+} from "../../middleware/permission";
 import { requireFeature } from "../../middleware/tier-guard";
 import { withCache } from "../../middleware/cache";
 import { buildUnitScopeCondition } from "../../lib/units";
@@ -20,7 +23,9 @@ function getAgingBucketLabel(daysOverdue: number) {
   return "90_plus";
 }
 
-export const financeOverviewRouter = new Hono<{ Variables: AuthVariables }>().get(
+export const financeOverviewRouter = new Hono<{
+  Variables: AuthVariables;
+}>().get(
   "/",
   ...withLabPermission({ financial: ["read"] }),
   requireFeature("financial"),
@@ -59,7 +64,12 @@ export const financeOverviewRouter = new Hono<{ Variables: AuthVariables }>().ge
         and(
           eq(billingDocument.organizationId, member.organizationId),
           buildUnitScopeCondition(billingDocument.unitId, member),
-          inArray(billingDocument.status, ["DRAFT", "ISSUED", "PAID", "OVERDUE"]),
+          inArray(billingDocument.status, [
+            "DRAFT",
+            "ISSUED",
+            "PAID",
+            "OVERDUE",
+          ]),
         ),
       );
 
@@ -78,12 +88,20 @@ export const financeOverviewRouter = new Hono<{ Variables: AuthVariables }>().ge
       })
       .from(billingDocument)
       .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-      .innerJoin(organizationUnit, eq(billingDocument.unitId, organizationUnit.id))
+      .innerJoin(
+        organizationUnit,
+        eq(billingDocument.unitId, organizationUnit.id),
+      )
       .where(
         and(
           eq(billingDocument.organizationId, member.organizationId),
           buildUnitScopeCondition(billingDocument.unitId, member),
-          inArray(billingDocument.status, ["DRAFT", "ISSUED", "PAID", "OVERDUE"]),
+          inArray(billingDocument.status, [
+            "DRAFT",
+            "ISSUED",
+            "PAID",
+            "OVERDUE",
+          ]),
         ),
       )
       .orderBy(desc(billingDocument.createdAt))

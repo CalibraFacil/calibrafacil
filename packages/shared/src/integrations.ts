@@ -10,21 +10,14 @@ export type IntegrationSetupStatus =
   | "READY"
   | "ACTION_REQUIRED";
 
-export type IntegrationReadinessStatus =
-  | "NOT_READY"
-  | "READY"
-  | "DEGRADED";
+export type IntegrationReadinessStatus = "NOT_READY" | "READY" | "DEGRADED";
 
 export type IntegrationSyncTarget =
   | "customer"
   | "service_order"
   | "billing_document";
 
-export type IntegrationSyncTrigger =
-  | "manual"
-  | "event"
-  | "scheduled"
-  | "retry";
+export type IntegrationSyncTrigger = "manual" | "event" | "scheduled" | "retry";
 
 export type IntegrationRunMode = "disabled" | "manual_only" | "scheduled";
 
@@ -472,7 +465,9 @@ function normalizeMappingRule(
   return {
     id: typeof rule?.id === "string" && rule.id.trim() ? rule.id : fallbackId,
     destinationField:
-      typeof rule?.destinationField === "string" ? rule.destinationField.trim() : "",
+      typeof rule?.destinationField === "string"
+        ? rule.destinationField.trim()
+        : "",
     enabled: rule?.enabled ?? true,
     valueMode,
     sourceField:
@@ -505,12 +500,17 @@ function normalizeTargetMappingConfig(
   const fallback = defaultMappingRules(target);
   const normalizedFields =
     input?.fields?.map((rule, index) =>
-      normalizeMappingRule(rule, fallback[index]?.id ?? `${target}:field:${index}`),
+      normalizeMappingRule(
+        rule,
+        fallback[index]?.id ?? `${target}:field:${index}`,
+      ),
     ) ?? fallback;
 
   return {
     fields:
-      normalizedFields.length > 0 ? normalizedFields : defaultMappingRules(target),
+      normalizedFields.length > 0
+        ? normalizedFields
+        : defaultMappingRules(target),
   };
 }
 
@@ -564,7 +564,10 @@ export function normalizeGenericFinancialErpConfig(input: {
       ),
     },
     mappings: {
-      customer: normalizeTargetMappingConfig("customer", input.mappings?.customer),
+      customer: normalizeTargetMappingConfig(
+        "customer",
+        input.mappings?.customer,
+      ),
       service_order: normalizeTargetMappingConfig(
         "service_order",
         input.mappings?.service_order,
@@ -640,7 +643,9 @@ export function validateIntegrationMappings(
       }
     }
 
-    for (const requiredField of INTEGRATION_REQUIRED_DESTINATION_FIELDS[target]) {
+    for (const requiredField of INTEGRATION_REQUIRED_DESTINATION_FIELDS[
+      target
+    ]) {
       const enabledRule = config.fields.find(
         (field) =>
           field.enabled && field.destinationField.trim() === requiredField,

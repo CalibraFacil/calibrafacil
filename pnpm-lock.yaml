@@ -382,9 +382,6 @@ importers:
       '@base-ui/react':
         specifier: ^1.0.0
         version: 1.0.0(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@calibra-facil/api':
-        specifier: workspace:^
-        version: link:../api
       '@calibra-facil/auth':
         specifier: workspace:^
         version: link:../../packages/auth

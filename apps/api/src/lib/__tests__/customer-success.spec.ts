@@ -96,10 +96,7 @@ describe("customer success workflow policy", () => {
 
     expect(workflow.accountOwnershipStatus).toBe("AT_RISK");
     expect(workflow.violations.map((violation) => violation.code)).toEqual(
-      expect.arrayContaining([
-        "MISSING_INTERNAL_OWNER",
-        "MISSING_NEXT_ACTION",
-      ]),
+      expect.arrayContaining(["MISSING_INTERNAL_OWNER", "MISSING_NEXT_ACTION"]),
     );
   });
 

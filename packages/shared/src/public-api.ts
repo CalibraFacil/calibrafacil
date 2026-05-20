@@ -5,8 +5,7 @@ export const PUBLIC_API_RESOURCE_TYPES = [
   "job",
 ] as const;
 
-export type PublicApiResourceType =
-  (typeof PUBLIC_API_RESOURCE_TYPES)[number];
+export type PublicApiResourceType = (typeof PUBLIC_API_RESOURCE_TYPES)[number];
 
 export const PUBLIC_API_WEBHOOK_EVENTS = [
   "customer.created",
@@ -27,8 +26,7 @@ export const PUBLIC_API_WEBHOOK_EVENTS = [
   "certificate.available",
 ] as const;
 
-export type PublicApiWebhookEvent =
-  (typeof PUBLIC_API_WEBHOOK_EVENTS)[number];
+export type PublicApiWebhookEvent = (typeof PUBLIC_API_WEBHOOK_EVENTS)[number];
 
 export const PUBLIC_API_WEBHOOK_SUBSCRIPTION_STATUSES = [
   "ACTIVE",

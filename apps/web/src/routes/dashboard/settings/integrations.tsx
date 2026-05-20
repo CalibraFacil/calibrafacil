@@ -18,7 +18,10 @@ import type {
   IntegrationTargetCoverageSummary,
   IntegrationTargetSyncSummary,
 } from '@calibra-facil/shared'
-import { getDefaultIntegrationMappings, INTEGRATION_CANONICAL_FIELDS } from '@calibra-facil/shared'
+import {
+  getDefaultIntegrationMappings,
+  INTEGRATION_CANONICAL_FIELDS,
+} from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -198,7 +201,9 @@ const formatterOptions: Array<{
   { value: 'currency_major', label: 'Moeda em unidade' },
 ]
 
-function cloneMappings(mappings: IntegrationMappingsConfig): IntegrationMappingsConfig {
+function cloneMappings(
+  mappings: IntegrationMappingsConfig,
+): IntegrationMappingsConfig {
   return {
     customer: {
       fields: mappings.customer.fields.map((field) => ({ ...field })),
@@ -212,7 +217,9 @@ function cloneMappings(mappings: IntegrationMappingsConfig): IntegrationMappings
   }
 }
 
-function createEmptyMappingRule(target: SyncTarget): IntegrationFieldMappingRule {
+function createEmptyMappingRule(
+  target: SyncTarget,
+): IntegrationFieldMappingRule {
   return {
     id: crypto.randomUUID(),
     destinationField: '',
@@ -310,7 +317,9 @@ function runTriggerLabel(trigger: IntegrationRun['trigger']) {
   }
 }
 
-function fallbackTargetSummary(target: SyncTarget): IntegrationTargetSyncSummary {
+function fallbackTargetSummary(
+  target: SyncTarget,
+): IntegrationTargetSyncSummary {
   return {
     target,
     lastRunAt: null,
@@ -343,10 +352,7 @@ function fallbackTargetSummary(target: SyncTarget): IntegrationTargetSyncSummary
   }
 }
 
-function getTargetSummary(
-  integration: IntegrationSummary,
-  target: SyncTarget,
-) {
+function getTargetSummary(integration: IntegrationSummary, target: SyncTarget) {
   return (
     integration.overview.targets.find((item) => item.target === target) ??
     fallbackTargetSummary(target)
@@ -362,12 +368,15 @@ function buildChecklist(integration: IntegrationSummary) {
     {
       label: 'Endpoint configurado',
       done: Boolean(integration.connection.config?.baseUrl),
-      help: integration.connection.config?.baseUrl ?? 'Informe a Base URL do conector.',
+      help:
+        integration.connection.config?.baseUrl ??
+        'Informe a Base URL do conector.',
     },
     {
       label: 'Conexão validada',
       done:
-        Boolean(integration.lastValidatedAt) && !integration.lastValidationError,
+        Boolean(integration.lastValidatedAt) &&
+        !integration.lastValidationError,
       help: integration.lastValidationError
         ? integration.lastValidationError
         : integration.lastValidatedAt
@@ -421,8 +430,7 @@ function IntegrationsSettingsPage() {
       role?: string
     }
     return (
-      candidate.userId === currentUserId ||
-      candidate.user?.id === currentUserId
+      candidate.userId === currentUserId || candidate.user?.id === currentUserId
     )
   })
   const currentOrgRole =
@@ -450,7 +458,8 @@ function IntegrationsSettingsPage() {
   const getMappingDraft = (integration: IntegrationSummary) =>
     mappingDrafts[integration.id] ??
     cloneMappings(
-      integration.connection.config?.mappings ?? getDefaultIntegrationMappings(),
+      integration.connection.config?.mappings ??
+        getDefaultIntegrationMappings(),
     )
 
   const updateMappingDraft = (
@@ -517,7 +526,9 @@ function IntegrationsSettingsPage() {
       })
       setPreviewByKey((current) =>
         Object.fromEntries(
-          Object.entries(current).filter(([key]) => !key.startsWith(`${variables.id}:`)),
+          Object.entries(current).filter(
+            ([key]) => !key.startsWith(`${variables.id}:`),
+          ),
         ),
       )
       await refreshIntegrations()
@@ -530,13 +541,7 @@ function IntegrationsSettingsPage() {
   })
 
   const toggleMutation = useMutation({
-    mutationFn: async ({
-      id,
-      enabled,
-    }: {
-      id: string
-      enabled: boolean
-    }) => {
+    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
       return calibraApi.integrations.toggle(id, { enabled })
     },
     onSuccess: async () => {
@@ -581,13 +586,7 @@ function IntegrationsSettingsPage() {
   })
 
   const syncMutation = useMutation({
-    mutationFn: async ({
-      id,
-      target,
-    }: {
-      id: string
-      target: SyncTarget
-    }) => {
+    mutationFn: async ({ id, target }: { id: string; target: SyncTarget }) => {
       return calibraApi.integrations.sync(id, { target, limit: 50 })
     },
     onSuccess: async (data, variables) => {
@@ -631,13 +630,7 @@ function IntegrationsSettingsPage() {
   })
 
   const retryMutation = useMutation({
-    mutationFn: async ({
-      id,
-      runId,
-    }: {
-      id: string
-      runId: string
-    }) => {
+    mutationFn: async ({ id, runId }: { id: string; runId: string }) => {
       return calibraApi.integrations.retryRun(id, runId)
     },
     onSuccess: async () => {
@@ -696,9 +689,11 @@ function IntegrationsSettingsPage() {
   const activeSummaries = {
     total: payload.data.length,
     atRisk: payload.data.filter(
-      (integration) => integration.overview.readiness.readinessStatus !== 'READY',
+      (integration) =>
+        integration.overview.readiness.readinessStatus !== 'READY',
     ).length,
-    scheduledTargets: payload.data.flatMap((integration) => integration.overview.targets)
+    scheduledTargets: payload.data
+      .flatMap((integration) => integration.overview.targets)
       .filter((target) => target.schedule.mode === 'scheduled').length,
   }
 
@@ -725,9 +720,7 @@ function IntegrationsSettingsPage() {
               {activeSummaries.total} conector
               {activeSummaries.total === 1 ? '' : 'es'}
             </Badge>
-            <Badge variant="outline">
-              {activeSummaries.atRisk} em atenção
-            </Badge>
+            <Badge variant="outline">{activeSummaries.atRisk} em atenção</Badge>
             <Badge variant="outline">
               {activeSummaries.scheduledTargets} alvo
               {activeSummaries.scheduledTargets === 1 ? '' : 's'} agendado
@@ -896,7 +889,9 @@ function IntegrationsSettingsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge
                       variant={
-                        integration.status === 'ACTIVE' ? 'default' : 'secondary'
+                        integration.status === 'ACTIVE'
+                          ? 'default'
+                          : 'secondary'
                       }
                     >
                       {integration.status === 'ACTIVE' ? 'Ativa' : 'Desativada'}
@@ -906,7 +901,8 @@ function IntegrationsSettingsPage() {
                         integration.overview.readiness.readinessStatus,
                       )}
                     >
-                      {integration.overview.readiness.readinessStatus === 'READY'
+                      {integration.overview.readiness.readinessStatus ===
+                      'READY'
                         ? 'Pronta'
                         : integration.overview.readiness.readinessStatus ===
                             'DEGRADED'
@@ -962,7 +958,8 @@ function IntegrationsSettingsPage() {
                       <div className="space-y-1">
                         {dependencyWarnings.map((warning) => (
                           <p key={`${warning.target}:${warning.code}`}>
-                            {targetMeta[warning.target].label}: {warning.message}
+                            {targetMeta[warning.target].label}:{' '}
+                            {warning.message}
                           </p>
                         ))}
                       </div>
@@ -976,7 +973,9 @@ function IntegrationsSettingsPage() {
                     onClick={() => validateMutation.mutate(integration.id)}
                     disabled={!hasEntitlement || validateMutation.isPending}
                   >
-                    {validateMutation.isPending ? 'Validando...' : 'Validar conexão'}
+                    {validateMutation.isPending
+                      ? 'Validando...'
+                      : 'Validar conexão'}
                   </Button>
                   <Button
                     variant="outline"
@@ -1009,7 +1008,9 @@ function IntegrationsSettingsPage() {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-medium">{item.label}</span>
-                            <Badge variant={item.done ? 'default' : 'secondary'}>
+                            <Badge
+                              variant={item.done ? 'default' : 'secondary'}
+                            >
                               {item.done ? 'OK' : 'Pendente'}
                             </Badge>
                           </div>
@@ -1022,271 +1023,275 @@ function IntegrationsSettingsPage() {
                   </Card>
 
                   <div className="grid gap-4 lg:grid-cols-3">
-                    {(['customer', 'service_order', 'billing_document'] as const).map(
-                      (target) => {
-                        const summary = getTargetSummary(integration, target)
-                        const preview =
-                          previewByKey[`${integration.id}:${target}`] ?? null
-                        const targetMappings = draftMappings[target]
+                    {(
+                      ['customer', 'service_order', 'billing_document'] as const
+                    ).map((target) => {
+                      const summary = getTargetSummary(integration, target)
+                      const preview =
+                        previewByKey[`${integration.id}:${target}`] ?? null
+                      const targetMappings = draftMappings[target]
 
-                        return (
-                          <Card key={target}>
-                            <CardHeader>
-                              <CardTitle className="text-base">
-                                {targetMeta[target].label}
-                              </CardTitle>
-                              <CardDescription>
-                                {targetMeta[target].description}
-                              </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between text-sm">
-                                  <span>Cobertura remota</span>
-                                  <span>
-                                    {summary.coverage.linkedCount}/
-                                    {summary.coverage.localCount}
-                                  </span>
-                                </div>
-                                <Progress
-                                  value={coveragePercentage(summary.coverage)}
-                                  className="h-2"
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                  {summary.coverage.unlinkedCount} registros sem
-                                  vínculo remoto.
-                                </p>
+                      return (
+                        <Card key={target}>
+                          <CardHeader>
+                            <CardTitle className="text-base">
+                              {targetMeta[target].label}
+                            </CardTitle>
+                            <CardDescription>
+                              {targetMeta[target].description}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-sm">
+                                <span>Cobertura remota</span>
+                                <span>
+                                  {summary.coverage.linkedCount}/
+                                  {summary.coverage.localCount}
+                                </span>
                               </div>
+                              <Progress
+                                value={coveragePercentage(summary.coverage)}
+                                className="h-2"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                {summary.coverage.unlinkedCount} registros sem
+                                vínculo remoto.
+                              </p>
+                            </div>
 
-                              <div className="grid gap-2 text-sm">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Último status
-                                  </span>
-                                  <Badge variant="outline">
-                                    {summary.lastStatus ?? 'Sem execução'}
-                                  </Badge>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Trigger
-                                  </span>
-                                  <span>
-                                    {summary.lastTrigger
-                                      ? runTriggerLabel(summary.lastTrigger)
-                                      : 'Sem execução'}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Último sucesso
-                                  </span>
-                                  <span>
-                                    {formatDateTime(summary.lastSuccessfulRunAt)}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Última execução
-                                  </span>
-                                  <span>{formatDateTime(summary.lastRunAt)}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-muted-foreground">
-                                    Duração
-                                  </span>
-                                  <span>
-                                    {formatDuration(summary.lastRunDurationMs)}
-                                  </span>
-                                </div>
+                            <div className="grid gap-2 text-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">
+                                  Último status
+                                </span>
+                                <Badge variant="outline">
+                                  {summary.lastStatus ?? 'Sem execução'}
+                                </Badge>
                               </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">
+                                  Trigger
+                                </span>
+                                <span>
+                                  {summary.lastTrigger
+                                    ? runTriggerLabel(summary.lastTrigger)
+                                    : 'Sem execução'}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">
+                                  Último sucesso
+                                </span>
+                                <span>
+                                  {formatDateTime(summary.lastSuccessfulRunAt)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">
+                                  Última execução
+                                </span>
+                                <span>{formatDateTime(summary.lastRunAt)}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-muted-foreground">
+                                  Duração
+                                </span>
+                                <span>
+                                  {formatDuration(summary.lastRunDurationMs)}
+                                </span>
+                              </div>
+                            </div>
 
-                              <div className="rounded-md border p-3 text-sm">
+                            <div className="rounded-md border p-3 text-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium">Agendamento</span>
+                                <Badge
+                                  variant={scheduleStatusVariant(
+                                    summary.schedule.status,
+                                  )}
+                                >
+                                  {scheduleStatusLabel(summary.schedule.status)}
+                                </Badge>
+                              </div>
+                              <div className="mt-3 grid gap-2 text-sm">
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="font-medium">Agendamento</span>
-                                  <Badge
-                                    variant={scheduleStatusVariant(
-                                      summary.schedule.status,
+                                  <span className="text-muted-foreground">
+                                    Modo
+                                  </span>
+                                  <span>
+                                    {summary.schedule.mode === 'scheduled'
+                                      ? 'Automático'
+                                      : summary.schedule.mode === 'disabled'
+                                        ? 'Desligado'
+                                        : 'Manual'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Frequência
+                                  </span>
+                                  <span>
+                                    {summary.schedule.frequency === 'weekly'
+                                      ? 'Semanal'
+                                      : 'Diária'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Próxima execução
+                                  </span>
+                                  <span>
+                                    {formatDateTime(
+                                      summary.schedule.nextScheduledRunAt,
                                     )}
-                                  >
-                                    {scheduleStatusLabel(summary.schedule.status)}
-                                  </Badge>
+                                  </span>
                                 </div>
-                                <div className="mt-3 grid gap-2 text-sm">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-muted-foreground">
-                                      Modo
-                                    </span>
-                                    <span>
-                                      {summary.schedule.mode === 'scheduled'
-                                        ? 'Automático'
-                                        : summary.schedule.mode === 'disabled'
-                                          ? 'Desligado'
-                                          : 'Manual'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-muted-foreground">
-                                      Frequência
-                                    </span>
-                                    <span>
-                                      {summary.schedule.frequency === 'weekly'
-                                        ? 'Semanal'
-                                        : 'Diária'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-muted-foreground">
-                                      Próxima execução
-                                    </span>
-                                    <span>
-                                      {formatDateTime(
-                                        summary.schedule.nextScheduledRunAt,
-                                      )}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-muted-foreground">
-                                      Último schedule
-                                    </span>
-                                    <span>
-                                      {formatDateTime(
-                                        summary.schedule.lastScheduledRunAt,
-                                      )}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-muted-foreground">
-                                      Falhas consecutivas
-                                    </span>
-                                    <span>{summary.consecutiveFailures}</span>
-                                  </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Último schedule
+                                  </span>
+                                  <span>
+                                    {formatDateTime(
+                                      summary.schedule.lastScheduledRunAt,
+                                    )}
+                                  </span>
                                 </div>
-
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant={
-                                      summary.schedule.mode === 'manual_only'
-                                        ? 'default'
-                                        : 'outline'
-                                    }
-                                    onClick={() =>
-                                      scheduleMutation.mutate({
-                                        id: integration.id,
-                                        target,
-                                        mode: 'manual_only',
-                                      })
-                                    }
-                                    disabled={
-                                      !hasEntitlement ||
-                                      scheduleMutation.isPending
-                                    }
-                                  >
-                                    Manual
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant={
-                                      summary.schedule.mode === 'scheduled'
-                                      && summary.schedule.frequency === 'daily'
-                                        ? 'default'
-                                        : 'outline'
-                                    }
-                                    onClick={() =>
-                                      scheduleMutation.mutate({
-                                        id: integration.id,
-                                        target,
-                                        mode: 'scheduled',
-                                        frequency: 'daily',
-                                      })
-                                    }
-                                    disabled={
-                                      !hasEntitlement ||
-                                      scheduleMutation.isPending
-                                    }
-                                  >
-                                    Diário
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant={
-                                      summary.schedule.mode === 'scheduled'
-                                      && summary.schedule.frequency === 'weekly'
-                                        ? 'default'
-                                        : 'outline'
-                                    }
-                                    onClick={() =>
-                                      scheduleMutation.mutate({
-                                        id: integration.id,
-                                        target,
-                                        mode: 'scheduled',
-                                        frequency: 'weekly',
-                                      })
-                                    }
-                                    disabled={
-                                      !hasEntitlement ||
-                                      scheduleMutation.isPending
-                                    }
-                                  >
-                                    Semanal
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant={
-                                      summary.schedule.mode === 'disabled'
-                                        ? 'destructive'
-                                        : 'outline'
-                                    }
-                                    onClick={() =>
-                                      scheduleMutation.mutate({
-                                        id: integration.id,
-                                        target,
-                                        mode: 'disabled',
-                                      })
-                                    }
-                                    disabled={
-                                      !hasEntitlement ||
-                                      scheduleMutation.isPending
-                                    }
-                                  >
-                                    Desligar
-                                  </Button>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-muted-foreground">
+                                    Falhas consecutivas
+                                  </span>
+                                  <span>{summary.consecutiveFailures}</span>
                                 </div>
                               </div>
 
-                              {summary.warnings.length > 0 && (
-                                <div className="space-y-2">
-                                  {summary.warnings.map((warning) => (
-                                    <Alert
-                                      key={`${warning.target}:${warning.code}`}
-                                      variant={
-                                        warning.severity === 'error'
-                                          ? 'destructive'
-                                          : 'default'
-                                      }
-                                    >
-                                      <AlertDescription>
-                                        {warning.message}
-                                      </AlertDescription>
-                                    </Alert>
-                                  ))}
-                                </div>
-                              )}
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  variant={
+                                    summary.schedule.mode === 'manual_only'
+                                      ? 'default'
+                                      : 'outline'
+                                  }
+                                  onClick={() =>
+                                    scheduleMutation.mutate({
+                                      id: integration.id,
+                                      target,
+                                      mode: 'manual_only',
+                                    })
+                                  }
+                                  disabled={
+                                    !hasEntitlement ||
+                                    scheduleMutation.isPending
+                                  }
+                                >
+                                  Manual
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={
+                                    summary.schedule.mode === 'scheduled' &&
+                                    summary.schedule.frequency === 'daily'
+                                      ? 'default'
+                                      : 'outline'
+                                  }
+                                  onClick={() =>
+                                    scheduleMutation.mutate({
+                                      id: integration.id,
+                                      target,
+                                      mode: 'scheduled',
+                                      frequency: 'daily',
+                                    })
+                                  }
+                                  disabled={
+                                    !hasEntitlement ||
+                                    scheduleMutation.isPending
+                                  }
+                                >
+                                  Diário
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={
+                                    summary.schedule.mode === 'scheduled' &&
+                                    summary.schedule.frequency === 'weekly'
+                                      ? 'default'
+                                      : 'outline'
+                                  }
+                                  onClick={() =>
+                                    scheduleMutation.mutate({
+                                      id: integration.id,
+                                      target,
+                                      mode: 'scheduled',
+                                      frequency: 'weekly',
+                                    })
+                                  }
+                                  disabled={
+                                    !hasEntitlement ||
+                                    scheduleMutation.isPending
+                                  }
+                                >
+                                  Semanal
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={
+                                    summary.schedule.mode === 'disabled'
+                                      ? 'destructive'
+                                      : 'outline'
+                                  }
+                                  onClick={() =>
+                                    scheduleMutation.mutate({
+                                      id: integration.id,
+                                      target,
+                                      mode: 'disabled',
+                                    })
+                                  }
+                                  disabled={
+                                    !hasEntitlement ||
+                                    scheduleMutation.isPending
+                                  }
+                                >
+                                  Desligar
+                                </Button>
+                              </div>
+                            </div>
 
-                              <div className="space-y-3 rounded-md border p-3">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div>
-                                    <p className="font-medium">Mapeamento</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      Ajuste o payload enviado ao ERP para este alvo.
-                                    </p>
-                                  </div>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      updateMappingDraft(integration, (current) => ({
+                            {summary.warnings.length > 0 && (
+                              <div className="space-y-2">
+                                {summary.warnings.map((warning) => (
+                                  <Alert
+                                    key={`${warning.target}:${warning.code}`}
+                                    variant={
+                                      warning.severity === 'error'
+                                        ? 'destructive'
+                                        : 'default'
+                                    }
+                                  >
+                                    <AlertDescription>
+                                      {warning.message}
+                                    </AlertDescription>
+                                  </Alert>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="space-y-3 rounded-md border p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <p className="font-medium">Mapeamento</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Ajuste o payload enviado ao ERP para este
+                                    alvo.
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    updateMappingDraft(
+                                      integration,
+                                      (current) => ({
                                         ...current,
                                         [target]: {
                                           fields: [
@@ -1294,189 +1299,239 @@ function IntegrationsSettingsPage() {
                                             createEmptyMappingRule(target),
                                           ],
                                         },
-                                      }))
-                                    }
-                                  >
-                                    Adicionar campo
-                                  </Button>
-                                </div>
+                                      }),
+                                    )
+                                  }
+                                >
+                                  Adicionar campo
+                                </Button>
+                              </div>
 
-                                <div className="space-y-3">
-                                  {targetMappings.fields.map((field) => (
-                                    <div
-                                      key={field.id}
-                                      className="rounded-md border bg-muted/20 p-3"
-                                    >
-                                      <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2">
-                                          <Checkbox
-                                            checked={field.enabled}
-                                            onCheckedChange={(checked) =>
-                                              updateMappingDraft(integration, (current) => ({
+                              <div className="space-y-3">
+                                {targetMappings.fields.map((field) => (
+                                  <div
+                                    key={field.id}
+                                    className="rounded-md border bg-muted/20 p-3"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <Checkbox
+                                          checked={field.enabled}
+                                          onCheckedChange={(checked) =>
+                                            updateMappingDraft(
+                                              integration,
+                                              (current) => ({
                                                 ...current,
                                                 [target]: {
-                                                  fields: current[target].fields.map((item) =>
+                                                  fields: current[
+                                                    target
+                                                  ].fields.map((item) =>
                                                     item.id === field.id
                                                       ? {
                                                           ...item,
-                                                          enabled: checked === true,
+                                                          enabled:
+                                                            checked === true,
                                                         }
                                                       : item,
                                                   ),
                                                 },
-                                              }))
-                                            }
-                                          />
-                                          <span className="text-sm font-medium">
-                                            {field.destinationField || 'Novo campo'}
-                                          </span>
-                                        </div>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() =>
-                                            updateMappingDraft(integration, (current) => ({
+                                              }),
+                                            )
+                                          }
+                                        />
+                                        <span className="text-sm font-medium">
+                                          {field.destinationField ||
+                                            'Novo campo'}
+                                        </span>
+                                      </div>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() =>
+                                          updateMappingDraft(
+                                            integration,
+                                            (current) => ({
                                               ...current,
                                               [target]: {
-                                                fields: current[target].fields.filter(
-                                                  (item) => item.id !== field.id,
+                                                fields: current[
+                                                  target
+                                                ].fields.filter(
+                                                  (item) =>
+                                                    item.id !== field.id,
                                                 ),
                                               },
-                                            }))
-                                          }
-                                        >
-                                          Remover
-                                        </Button>
-                                      </div>
+                                            }),
+                                          )
+                                        }
+                                      >
+                                        Remover
+                                      </Button>
+                                    </div>
 
-                                      <div className="mt-3 grid gap-3">
-                                        <Field>
-                                          <FieldLabel>Destino</FieldLabel>
-                                          <Input
-                                            value={field.destinationField}
-                                            onChange={(e) =>
-                                              updateMappingDraft(integration, (current) => ({
+                                    <div className="mt-3 grid gap-3">
+                                      <Field>
+                                        <FieldLabel>Destino</FieldLabel>
+                                        <Input
+                                          value={field.destinationField}
+                                          onChange={(e) =>
+                                            updateMappingDraft(
+                                              integration,
+                                              (current) => ({
                                                 ...current,
                                                 [target]: {
-                                                  fields: current[target].fields.map((item) =>
+                                                  fields: current[
+                                                    target
+                                                  ].fields.map((item) =>
                                                     item.id === field.id
                                                       ? {
                                                           ...item,
-                                                          destinationField: e.target.value,
+                                                          destinationField:
+                                                            e.target.value,
                                                         }
                                                       : item,
                                                   ),
                                                 },
-                                              }))
-                                            }
-                                            placeholder="ex: externalCode"
-                                          />
-                                        </Field>
+                                              }),
+                                            )
+                                          }
+                                          placeholder="ex: externalCode"
+                                        />
+                                      </Field>
 
-                                        <div className="grid gap-3 md:grid-cols-3">
-                                          <Field>
-                                            <FieldLabel>Origem</FieldLabel>
-                                            <Select
-                                              value={field.valueMode}
-                                              onValueChange={(value) =>
-                                                updateMappingDraft(integration, (current) => ({
+                                      <div className="grid gap-3 md:grid-cols-3">
+                                        <Field>
+                                          <FieldLabel>Origem</FieldLabel>
+                                          <Select
+                                            value={field.valueMode}
+                                            onValueChange={(value) =>
+                                              updateMappingDraft(
+                                                integration,
+                                                (current) => ({
                                                   ...current,
                                                   [target]: {
-                                                    fields: current[target].fields.map((item) =>
+                                                    fields: current[
+                                                      target
+                                                    ].fields.map((item) =>
                                                       item.id === field.id
                                                         ? {
                                                             ...item,
                                                             valueMode:
-                                                              value === 'constant'
+                                                              value ===
+                                                              'constant'
                                                                 ? 'constant'
                                                                 : 'source',
                                                           }
                                                         : item,
                                                     ),
                                                   },
-                                                }))
+                                                }),
+                                              )
+                                            }
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="source">
+                                                Campo do CalibraFácil
+                                              </SelectItem>
+                                              <SelectItem value="constant">
+                                                Valor constante
+                                              </SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </Field>
+
+                                        {field.valueMode === 'source' ? (
+                                          <Field>
+                                            <FieldLabel>Campo fonte</FieldLabel>
+                                            <Select
+                                              value={field.sourceField ?? ''}
+                                              onValueChange={(value) =>
+                                                updateMappingDraft(
+                                                  integration,
+                                                  (current) => ({
+                                                    ...current,
+                                                    [target]: {
+                                                      fields: current[
+                                                        target
+                                                      ].fields.map((item) =>
+                                                        item.id === field.id
+                                                          ? {
+                                                              ...item,
+                                                              sourceField:
+                                                                value,
+                                                            }
+                                                          : item,
+                                                      ),
+                                                    },
+                                                  }),
+                                                )
                                               }
                                             >
                                               <SelectTrigger>
                                                 <SelectValue />
                                               </SelectTrigger>
                                               <SelectContent>
-                                                <SelectItem value="source">Campo do CalibraFácil</SelectItem>
-                                                <SelectItem value="constant">Valor constante</SelectItem>
+                                                {INTEGRATION_CANONICAL_FIELDS[
+                                                  target
+                                                ].map((sourceField) => (
+                                                  <SelectItem
+                                                    key={sourceField}
+                                                    value={sourceField}
+                                                  >
+                                                    {sourceField}
+                                                  </SelectItem>
+                                                ))}
                                               </SelectContent>
                                             </Select>
                                           </Field>
-
-                                          {field.valueMode === 'source' ? (
-                                            <Field>
-                                              <FieldLabel>Campo fonte</FieldLabel>
-                                              <Select
-                                                value={field.sourceField ?? ''}
-                                                onValueChange={(value) =>
-                                                  updateMappingDraft(integration, (current) => ({
-                                                    ...current,
-                                                    [target]: {
-                                                      fields: current[target].fields.map((item) =>
-                                                        item.id === field.id
-                                                          ? {
-                                                              ...item,
-                                                              sourceField: value,
-                                                            }
-                                                          : item,
-                                                      ),
-                                                    },
-                                                  }))
-                                                }
-                                              >
-                                                <SelectTrigger>
-                                                  <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                  {INTEGRATION_CANONICAL_FIELDS[target].map((sourceField) => (
-                                                    <SelectItem
-                                                      key={sourceField}
-                                                      value={sourceField}
-                                                    >
-                                                      {sourceField}
-                                                    </SelectItem>
-                                                  ))}
-                                                </SelectContent>
-                                              </Select>
-                                            </Field>
-                                          ) : (
-                                            <Field>
-                                              <FieldLabel>Valor constante</FieldLabel>
-                                              <Input
-                                                value={field.constantValue ?? ''}
-                                                onChange={(e) =>
-                                                  updateMappingDraft(integration, (current) => ({
-                                                    ...current,
-                                                    [target]: {
-                                                      fields: current[target].fields.map((item) =>
-                                                        item.id === field.id
-                                                          ? {
-                                                              ...item,
-                                                              constantValue: e.target.value,
-                                                            }
-                                                          : item,
-                                                      ),
-                                                    },
-                                                  }))
-                                                }
-                                                placeholder="ex: BRL"
-                                              />
-                                            </Field>
-                                          )}
-
+                                        ) : (
                                           <Field>
-                                            <FieldLabel>Formato</FieldLabel>
-                                            <Select
-                                              value={field.formatter}
-                                              onValueChange={(value) =>
-                                                updateMappingDraft(integration, (current) => ({
+                                            <FieldLabel>
+                                              Valor constante
+                                            </FieldLabel>
+                                            <Input
+                                              value={field.constantValue ?? ''}
+                                              onChange={(e) =>
+                                                updateMappingDraft(
+                                                  integration,
+                                                  (current) => ({
+                                                    ...current,
+                                                    [target]: {
+                                                      fields: current[
+                                                        target
+                                                      ].fields.map((item) =>
+                                                        item.id === field.id
+                                                          ? {
+                                                              ...item,
+                                                              constantValue:
+                                                                e.target.value,
+                                                            }
+                                                          : item,
+                                                      ),
+                                                    },
+                                                  }),
+                                                )
+                                              }
+                                              placeholder="ex: BRL"
+                                            />
+                                          </Field>
+                                        )}
+
+                                        <Field>
+                                          <FieldLabel>Formato</FieldLabel>
+                                          <Select
+                                            value={field.formatter}
+                                            onValueChange={(value) =>
+                                              updateMappingDraft(
+                                                integration,
+                                                (current) => ({
                                                   ...current,
                                                   [target]: {
-                                                    fields: current[target].fields.map((item) =>
+                                                    fields: current[
+                                                      target
+                                                    ].fields.map((item) =>
                                                       item.id === field.id
                                                         ? {
                                                             ...item,
@@ -1486,169 +1541,175 @@ function IntegrationsSettingsPage() {
                                                         : item,
                                                     ),
                                                   },
-                                                }))
-                                              }
-                                            >
-                                              <SelectTrigger>
-                                                <SelectValue />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                {formatterOptions.map((option) => (
+                                                }),
+                                              )
+                                            }
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {formatterOptions.map(
+                                                (option) => (
                                                   <SelectItem
                                                     key={option.value}
                                                     value={option.value}
                                                   >
                                                     {option.label}
                                                   </SelectItem>
-                                                ))}
-                                              </SelectContent>
-                                            </Select>
-                                          </Field>
-                                        </div>
+                                                ),
+                                              )}
+                                            </SelectContent>
+                                          </Select>
+                                        </Field>
                                       </div>
                                     </div>
-                                  ))}
-                                </div>
-
-                                <div className="flex flex-wrap gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      previewMutation.mutate({
-                                        id: integration.id,
-                                        target,
-                                        mappings: draftMappings,
-                                      })
-                                    }
-                                    disabled={
-                                      !hasEntitlement || previewMutation.isPending
-                                    }
-                                  >
-                                    {previewMutation.isPending
-                                      ? 'Validando...'
-                                      : 'Prévia do mapeamento'}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() =>
-                                      updateMutation.mutate({
-                                        id: integration.id,
-                                        mappings: draftMappings,
-                                      })
-                                    }
-                                    disabled={
-                                      !hasEntitlement || updateMutation.isPending
-                                    }
-                                  >
-                                    {updateMutation.isPending
-                                      ? 'Salvando...'
-                                      : 'Salvar mapeamento'}
-                                  </Button>
-                                </div>
+                                  </div>
+                                ))}
                               </div>
 
                               <div className="flex flex-wrap gap-2">
                                 <Button
                                   size="sm"
+                                  variant="outline"
                                   onClick={() =>
-                                    syncMutation.mutate({
+                                    previewMutation.mutate({
                                       id: integration.id,
                                       target,
+                                      mappings: draftMappings,
                                     })
                                   }
                                   disabled={
-                                    !hasEntitlement ||
-                                    syncMutation.isPending ||
-                                    summary.blocked
+                                    !hasEntitlement || previewMutation.isPending
                                   }
                                 >
-                                  {syncMutation.isPending
-                                    ? 'Sincronizando...'
-                                    : targetMeta[target].syncLabel}
+                                  {previewMutation.isPending
+                                    ? 'Validando...'
+                                    : 'Prévia do mapeamento'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() =>
+                                    updateMutation.mutate({
+                                      id: integration.id,
+                                      mappings: draftMappings,
+                                    })
+                                  }
+                                  disabled={
+                                    !hasEntitlement || updateMutation.isPending
+                                  }
+                                >
+                                  {updateMutation.isPending
+                                    ? 'Salvando...'
+                                    : 'Salvar mapeamento'}
                                 </Button>
                               </div>
+                            </div>
 
-                              {summary.lastBlockedAt && (
-                                <p className="text-xs text-muted-foreground">
-                                  Último bloqueio detectado em{' '}
-                                  {formatDateTime(summary.lastBlockedAt)}.
-                                </p>
-                              )}
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  syncMutation.mutate({
+                                    id: integration.id,
+                                    target,
+                                  })
+                                }
+                                disabled={
+                                  !hasEntitlement ||
+                                  syncMutation.isPending ||
+                                  summary.blocked
+                                }
+                              >
+                                {syncMutation.isPending
+                                  ? 'Sincronizando...'
+                                  : targetMeta[target].syncLabel}
+                              </Button>
+                            </div>
 
-                              {preview && (
-                                <>
-                                  <Separator />
-                                  <div className="space-y-3 text-sm">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="font-medium">Prévia</span>
-                                      <Badge
-                                        variant={
-                                          preview.blocked
-                                            ? 'destructive'
-                                            : 'secondary'
-                                        }
-                                      >
-                                        {preview.blocked ? 'Bloqueada' : 'Pronta'}
-                                      </Badge>
-                                    </div>
-                                    <p className="text-muted-foreground">
-                                      {preview.previewCount} registros avaliados
-                                      nesta prévia.
-                                    </p>
-                                    {preview.sampleRecords.length > 0 ? (
-                                      <div className="space-y-2">
-                                        {preview.sampleRecords.map((record) => (
-                                          <div
-                                            key={record.externalId}
-                                            className="rounded-md border p-2"
-                                          >
-                                            <p className="font-medium">
-                                              {record.label}
-                                            </p>
-                                            <p className="text-muted-foreground">
-                                              {record.subtitle ??
-                                                record.externalId}
-                                            </p>
-                                            {record.issues.length > 0 ? (
-                                              <div className="mt-2 space-y-1">
-                                                {record.issues.map((issue) => (
-                                                  <p
-                                                    key={`${record.externalId}:${issue}`}
-                                                    className="text-xs text-destructive"
-                                                  >
-                                                    {issue}
-                                                  </p>
-                                                ))}
-                                              </div>
-                                            ) : null}
-                                            <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-2 text-xs">
-                                              {formatPreviewPayload(record.mappedPayload)}
-                                            </pre>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <p className="text-muted-foreground">
-                                        Nenhum registro candidato neste momento.
-                                      </p>
-                                    )}
+                            {summary.lastBlockedAt && (
+                              <p className="text-xs text-muted-foreground">
+                                Último bloqueio detectado em{' '}
+                                {formatDateTime(summary.lastBlockedAt)}.
+                              </p>
+                            )}
+
+                            {preview && (
+                              <>
+                                <Separator />
+                                <div className="space-y-3 text-sm">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-medium">Prévia</span>
+                                    <Badge
+                                      variant={
+                                        preview.blocked
+                                          ? 'destructive'
+                                          : 'secondary'
+                                      }
+                                    >
+                                      {preview.blocked ? 'Bloqueada' : 'Pronta'}
+                                    </Badge>
                                   </div>
-                                </>
-                              )}
-                            </CardContent>
-                          </Card>
-                        )
-                      },
-                    )}
+                                  <p className="text-muted-foreground">
+                                    {preview.previewCount} registros avaliados
+                                    nesta prévia.
+                                  </p>
+                                  {preview.sampleRecords.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {preview.sampleRecords.map((record) => (
+                                        <div
+                                          key={record.externalId}
+                                          className="rounded-md border p-2"
+                                        >
+                                          <p className="font-medium">
+                                            {record.label}
+                                          </p>
+                                          <p className="text-muted-foreground">
+                                            {record.subtitle ??
+                                              record.externalId}
+                                          </p>
+                                          {record.issues.length > 0 ? (
+                                            <div className="mt-2 space-y-1">
+                                              {record.issues.map((issue) => (
+                                                <p
+                                                  key={`${record.externalId}:${issue}`}
+                                                  className="text-xs text-destructive"
+                                                >
+                                                  {issue}
+                                                </p>
+                                              ))}
+                                            </div>
+                                          ) : null}
+                                          <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-2 text-xs">
+                                            {formatPreviewPayload(
+                                              record.mappedPayload,
+                                            )}
+                                          </pre>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-muted-foreground">
+                                      Nenhum registro candidato neste momento.
+                                    </p>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
                   </div>
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-2">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Execuções recentes</CardTitle>
+                      <CardTitle className="text-base">
+                        Execuções recentes
+                      </CardTitle>
                       <CardDescription>
                         Histórico operacional das últimas sincronizações.
                       </CardDescription>
@@ -1701,7 +1762,9 @@ function IntegrationsSettingsPage() {
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
                               Limite: {run.summary?.requestedLimit ?? 50}
-                              {run.summary?.blocked ? ' · bloqueado por dependência' : ''}
+                              {run.summary?.blocked
+                                ? ' · bloqueado por dependência'
+                                : ''}
                               {run.summary?.retryOfRunId
                                 ? ` · retry de ${run.summary.retryOfRunId}`
                                 : ''}
@@ -1719,7 +1782,9 @@ function IntegrationsSettingsPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Eventos recentes</CardTitle>
+                      <CardTitle className="text-base">
+                        Eventos recentes
+                      </CardTitle>
                       <CardDescription>
                         Erros, validações e checkpoints recentes do conector.
                       </CardDescription>

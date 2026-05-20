@@ -223,9 +223,7 @@ function AssetDetailPage() {
           <p className="mt-2 text-pretty text-sm text-muted-foreground">
             Tag <span className="font-mono tabular-nums">{asset.tag}</span>
             {" · "}Série{" "}
-            <span className="font-mono tabular-nums">
-              {asset.serialNumber}
-            </span>
+            <span className="font-mono tabular-nums">{asset.serialNumber}</span>
           </p>
         </div>
 

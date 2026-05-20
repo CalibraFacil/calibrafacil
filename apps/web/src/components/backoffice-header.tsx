@@ -40,11 +40,10 @@ export function BackofficeHeader() {
       .filter((match) => match.routeId.startsWith('/backoffice'))
       .map((match) => {
         const path = normalizePath(match.pathname)
-        const fallbackLabel = path.replace('/backoffice', '').trim() || 'Backoffice'
+        const fallbackLabel =
+          path.replace('/backoffice', '').trim() || 'Backoffice'
         const label =
-          routeLabels[match.routeId] ??
-          routeLabels[path] ??
-          fallbackLabel
+          routeLabels[match.routeId] ?? routeLabels[path] ?? fallbackLabel
 
         return {
           key: `${match.routeId}:${path}`,

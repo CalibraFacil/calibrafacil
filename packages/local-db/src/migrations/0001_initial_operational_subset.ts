@@ -1,6 +1,6 @@
 export const migration0001InitialOperationalSubset = {
   id: 1,
-  name: 'initial_operational_subset',
+  name: "initial_operational_subset",
   sql: `
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
@@ -261,4 +261,4 @@ CREATE TABLE IF NOT EXISTS attachments (
   created_at TEXT NOT NULL
 );
 `,
-} as const
+} as const;

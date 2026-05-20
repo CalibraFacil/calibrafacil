@@ -5,16 +5,19 @@ import {
   isServiceOrderFinalStatus,
 } from "@calibra-facil/shared";
 
-import { calculatePricedItems, hashServiceOrderToken } from "../service-order-workflow";
+import {
+  calculatePricedItems,
+  hashServiceOrderToken,
+} from "../service-order-workflow";
 
 describe("service order workflow helpers", () => {
   it("allows only supported status transitions", () => {
     expect(
       canTransitionServiceOrderStatus("opened", "awaiting_tech_evaluation"),
     ).toBe(true);
-    expect(canTransitionServiceOrderStatus("closed", "repair_in_progress")).toBe(
-      false,
-    );
+    expect(
+      canTransitionServiceOrderStatus("closed", "repair_in_progress"),
+    ).toBe(false);
     expect(isServiceOrderFinalStatus("closed")).toBe(true);
     expect(isServiceOrderFinalStatus("ready_for_pickup")).toBe(false);
   });

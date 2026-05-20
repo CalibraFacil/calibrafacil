@@ -7,7 +7,10 @@ import {
   type NotificationPriority,
   type NotificationType,
 } from "@calibra-facil/db/schema";
-import { getRecipientsByRole, sendNotification } from "@calibra-facil/notifications";
+import {
+  getRecipientsByRole,
+  sendNotification,
+} from "@calibra-facil/notifications";
 import { eq } from "drizzle-orm";
 import type {
   CustomerSuccessAccountOwnershipStatus,
@@ -198,7 +201,8 @@ export function upsertCustomerSuccessBlocker(params: {
   const now = params.now ?? new Date();
   const normalized = normalizeCustomerSuccessBlockers(params.blockers);
   const next = normalized.filter(
-    (blocker) => !(blocker.scope === params.scope && blocker.status === "ACTIVE"),
+    (blocker) =>
+      !(blocker.scope === params.scope && blocker.status === "ACTIVE"),
   );
 
   next.unshift({
@@ -243,7 +247,8 @@ export function deriveGoLiveStatus(params: {
   if (params.goLiveActualDate) return "LIVE" as const;
   if (params.currentStatus === "AT_RISK") return "AT_RISK" as const;
   if (params.goLiveTargetDate) {
-    return params.goLiveTargetDate.getTime() < (params.now ?? new Date()).getTime()
+    return params.goLiveTargetDate.getTime() <
+      (params.now ?? new Date()).getTime()
       ? ("AT_RISK" as const)
       : ("SCHEDULED" as const);
   }
@@ -387,7 +392,10 @@ export function getOrganizationWorkstreams(params: {
 }) {
   const workstreams: string[] = [];
 
-  if (params.onboardingStatus !== "LIVE" && params.onboardingStatus !== "NOT_STARTED") {
+  if (
+    params.onboardingStatus !== "LIVE" &&
+    params.onboardingStatus !== "NOT_STARTED"
+  ) {
     workstreams.push("ONBOARDING");
   }
 
@@ -726,7 +734,8 @@ export async function getCustomerSuccessAutomationSnapshot(
     goLiveStatus,
     effectiveSlaTier,
     prioritySupport,
-    activeBlockersCount: getActiveCustomerSuccessBlockers(profile.blockers).length,
+    activeBlockersCount: getActiveCustomerSuccessBlockers(profile.blockers)
+      .length,
     dueSoonRequestsCount,
     breachedRequestsCount,
     escalatedRequestsCount,
@@ -888,7 +897,10 @@ export async function emitCustomerSuccessAutomationSignals(params: {
     },
     {
       entered:
-        !hasWorkflowViolation(params.previous.workflow, "MISSING_INTERNAL_OWNER") &&
+        !hasWorkflowViolation(
+          params.previous.workflow,
+          "MISSING_INTERNAL_OWNER",
+        ) &&
         hasWorkflowViolation(params.next.workflow, "MISSING_INTERNAL_OWNER"),
       action: "customer_success.owner.required",
       details: {

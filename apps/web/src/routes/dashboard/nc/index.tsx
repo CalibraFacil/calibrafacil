@@ -5,7 +5,7 @@ import { parseAsInteger, useQueryState } from 'nuqs'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon, AlertCircleIcon } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -58,22 +58,8 @@ function NCListPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['non-conformances', page, search, statusFilter, typeFilter],
     enabled: !cloudOnlyUnavailable,
-    queryFn: async () => {
-      const res = await api.api.nc.$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          query: search || undefined,
-          status: statusFilter || undefined,
-          type: typeFilter || undefined,
-        },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar não conformidades')
-      }
-
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.nonConformances.list<{
         data: Array<NonConformanceRow>
         pagination: {
           page: number
@@ -81,22 +67,24 @@ function NCListPage() {
           total: number
           totalPages: number
         }
-      }>
-    },
+      }>({
+        page,
+        limit,
+        query: search || undefined,
+        status: statusFilter || undefined,
+        type: typeFilter || undefined,
+      }),
   })
 
   const { data: summary } = useQuery({
     queryKey: ['non-conformances-summary'],
     enabled: !cloudOnlyUnavailable,
-    queryFn: async () => {
-      const res = await api.api.nc.summary.$get()
-      if (!res.ok) throw new Error('Falha ao carregar resumo')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.nonConformances.summary<{
         byStatus: Array<{ status: string; count: number }>
         byType: Array<{ type: string; count: number }>
         ageBrackets: { lessThan7Days: number; moreThan30Days: number }
-      }>
-    },
+      }>(),
   })
 
   const handleSearch = (e: React.FormEvent) => {

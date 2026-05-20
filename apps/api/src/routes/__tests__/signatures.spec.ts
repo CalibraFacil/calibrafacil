@@ -18,7 +18,7 @@ const ALLOWED_CONTENT_TYPES = ["image/png"];
  * PNG header format: 8 bytes magic + IHDR chunk (width at byte 16, height at byte 20)
  */
 function getPngDimensions(
-  buffer: ArrayBuffer
+  buffer: ArrayBuffer,
 ): { width: number; height: number } | null {
   const view = new DataView(buffer);
 

@@ -42,9 +42,7 @@ export const sessionsRouter = new Hono<{ Variables: AuthVariables }>().post(
       return c.json({ error: "Session not found" }, 404);
     }
 
-    await db
-      .delete(sessionTable)
-      .where(eq(sessionTable.id, targetSession.id));
+    await db.delete(sessionTable).where(eq(sessionTable.id, targetSession.id));
 
     return c.json({ status: true });
   },

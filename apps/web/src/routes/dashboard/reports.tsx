@@ -10,7 +10,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { useActiveOrganization } from '@calibra-facil/auth/client'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { useDashboardContextState } from './route'
 import { SectionCards } from './-components/section-cards'
 import { ChartCalibrations } from './-components/chart-calibrations'
@@ -192,25 +192,12 @@ function ConsolidatedReportsPage() {
     ],
     enabled: !isContextSwitching && canAccessReports && !cloudOnlyUnavailable,
     queryFn: async () => {
-      const res = await api.api.reports.consolidated['executive-overview'].$get(
+      return calibraApi.reports.getExecutiveOverview<ExecutiveOverviewResponse>(
         {
-          query: {
-            period,
-            unitIds: unitIdsParam,
-          },
+          period,
+          unitIds: unitIdsParam,
         },
       )
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao carregar visão executiva',
-        )
-      }
-
-      return res.json() as Promise<ExecutiveOverviewResponse>
     },
   })
 
@@ -224,23 +211,10 @@ function ConsolidatedReportsPage() {
     ],
     enabled: !isContextSwitching && canAccessReports && !cloudOnlyUnavailable,
     queryFn: async () => {
-      const res = await api.api.reports.consolidated.comparison.$get({
-        query: {
-          period,
-          unitIds: unitIdsParam,
-        },
+      return calibraApi.reports.getComparison<ComparisonResponse>({
+        period,
+        unitIds: unitIdsParam,
       })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao carregar comparativo consolidado',
-        )
-      }
-
-      return res.json() as Promise<ComparisonResponse>
     },
   })
 
@@ -254,23 +228,10 @@ function ConsolidatedReportsPage() {
     ],
     enabled: !isContextSwitching && canAccessReports && !cloudOnlyUnavailable,
     queryFn: async () => {
-      const res = await api.api.reports.consolidated.trend.$get({
-        query: {
-          period,
-          unitIds: unitIdsParam,
-        },
+      return calibraApi.reports.getTrend<TrendResponse>({
+        period,
+        unitIds: unitIdsParam,
       })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data && typeof data === 'object' && 'error' in data
-            ? String(data.error)
-            : 'Falha ao carregar tendência consolidada',
-        )
-      }
-
-      return res.json() as Promise<TrendResponse>
     },
   })
 

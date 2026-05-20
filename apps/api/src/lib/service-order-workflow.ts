@@ -311,7 +311,10 @@ export async function createInitialServiceOrderRecords(
         actorType: "lab_user",
         actorId: params.userId,
         eventType: "service_order.created",
-        newValue: { status: created.status, serviceOrderNumber: identity.number },
+        newValue: {
+          status: created.status,
+          serviceOrderNumber: identity.number,
+        },
         ipAddress: params.ipAddress,
         userAgent: params.userAgent,
       },
@@ -541,7 +544,10 @@ export async function createBillingDocumentFromServiceOrder(params: {
       entityType: "document",
       entityId: String(document.id),
       action: "create_from_service_order",
-      changes: { serviceOrderId: order.id, serviceOrderNumber: order.serviceOrderNumber },
+      changes: {
+        serviceOrderId: order.id,
+        serviceOrderNumber: order.serviceOrderNumber,
+      },
       performedBy: params.actorUserId,
     });
     await tx

@@ -22,7 +22,10 @@ export interface CacheOptions {
  * Read a typed value from KV cache.
  * Returns null on miss or if KV is unavailable (graceful degradation).
  */
-export async function kvGet<T>(kv: KVNamespace | undefined, key: string): Promise<T | null> {
+export async function kvGet<T>(
+  kv: KVNamespace | undefined,
+  key: string,
+): Promise<T | null> {
   if (!kv) return null;
   try {
     const raw = await kv.get(key, "text");
@@ -56,7 +59,10 @@ export async function kvPut(
 /**
  * Delete a single key from KV cache.
  */
-export async function kvDelete(kv: KVNamespace | undefined, key: string): Promise<void> {
+export async function kvDelete(
+  kv: KVNamespace | undefined,
+  key: string,
+): Promise<void> {
   if (!kv) return;
   try {
     await kv.delete(key);
@@ -153,7 +159,9 @@ export async function invalidateOrgCache(
 ): Promise<void> {
   if (!kv) return;
   await Promise.all(
-    resources.map((resource) => kvInvalidateByPrefix(kv, `org:${orgId}:${resource}`)),
+    resources.map((resource) =>
+      kvInvalidateByPrefix(kv, `org:${orgId}:${resource}`),
+    ),
   );
 }
 

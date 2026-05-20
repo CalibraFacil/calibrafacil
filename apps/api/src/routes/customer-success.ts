@@ -47,7 +47,10 @@ const CreateSupportRequestSchema = z.object({
   priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).default("NORMAL"),
 });
 
-async function listSupportRequests(organizationId: string, publicOnly: boolean) {
+async function listSupportRequests(
+  organizationId: string,
+  publicOnly: boolean,
+) {
   const [profile, planAccess] = await Promise.all([
     ensureSuccessProfile(organizationId),
     getOrganizationPlanAccess(organizationId),
@@ -82,7 +85,9 @@ async function listSupportRequests(organizationId: string, publicOnly: boolean) 
         organizationSupportRequestEvent.supportRequestId,
         requests.map((request) => request.id),
       ),
-      publicOnly ? eq(organizationSupportRequestEvent.publicVisible, true) : undefined,
+      publicOnly
+        ? eq(organizationSupportRequestEvent.publicVisible, true)
+        : undefined,
     ),
     with: {
       actorUser: true,
@@ -194,7 +199,8 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
         migrationStatus: profile.migrationStatus,
         goLiveStatus,
         nextActionStatus,
-        hasActiveBlockers: getActiveCustomerSuccessBlockers(profile.blockers).length > 0,
+        hasActiveBlockers:
+          getActiveCustomerSuccessBlockers(profile.blockers).length > 0,
       },
       supportPolicy: planAccess.supportPolicy,
       plan: {
@@ -309,7 +315,9 @@ export const customerSuccessRouter = new Hono<{ Variables: AuthVariables }>()
           lastTouchedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(organizationSuccessProfile.organizationId, member.organizationId));
+        .where(
+          eq(organizationSuccessProfile.organizationId, member.organizationId),
+        );
 
       const [requester] = await db
         .select({

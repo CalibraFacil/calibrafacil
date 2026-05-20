@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -150,25 +150,14 @@ function CAPADetailPage() {
   const { data: capa, isLoading } = useQuery({
     queryKey: ['capa', id],
     enabled: !cloudOnlyUnavailable,
-    queryFn: async () => {
-      const res = await api.api.capa[':id'].$get({
-        param: { id },
-      })
-      if (!res.ok) throw new Error('CAPA não encontrada')
-      return res.json() as Promise<CAPADetail>
-    },
+    queryFn: async () => calibraApi.capas.get<CAPADetail>(id),
   })
 
   const { data: auditLog } = useQuery({
     queryKey: ['capa-audit-log', id],
     enabled: !cloudOnlyUnavailable,
-    queryFn: async () => {
-      const res = await api.api.capa[':id']['audit-log'].$get({
-        param: { id },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar historico')
-      return res.json() as Promise<{ data: AuditLogEntry[] }>
-    },
+    queryFn: async () =>
+      calibraApi.capas.auditLog<{ data: AuditLogEntry[] }>(id),
   })
 
   const invalidate = () => {
@@ -180,17 +169,7 @@ function CAPADetailPage() {
 
   const implementMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.capa[':id'].implement.$post({
-        param: { id },
-        json: { implementationEvidence },
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao implementar',
-        )
-      }
-      return res.json()
+      return calibraApi.capas.implement(id, { implementationEvidence })
     },
     onSuccess: () => {
       toast.success('CAPA marcada como implementada')
@@ -202,17 +181,10 @@ function CAPADetailPage() {
 
   const verifyMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.capa[':id'].verify.$post({
-        param: { id },
-        json: { effectivenessConfirmed, verificationNotes },
+      return calibraApi.capas.verify(id, {
+        effectivenessConfirmed,
+        verificationNotes,
       })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao verificar',
-        )
-      }
-      return res.json()
     },
     onSuccess: () => {
       toast.success('Verificação de eficácia registrada')
@@ -225,17 +197,7 @@ function CAPADetailPage() {
 
   const closeMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.capa[':id'].close.$post({
-        param: { id },
-        json: { reason: closeReason || undefined },
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao fechar CAPA',
-        )
-      }
-      return res.json()
+      return calibraApi.capas.close(id, { reason: closeReason || undefined })
     },
     onSuccess: () => {
       toast.success('CAPA fechada com sucesso')

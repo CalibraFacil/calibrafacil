@@ -13,7 +13,8 @@ export const financeAccessRouter = new Hono<{ Variables: AuthVariables }>().get(
   async (c) => {
     const member = c.get("member");
     const access = await getOrganizationPlanAccess(member.organizationId);
-    const canManageFinancial = member.role === "owner" || member.role === "admin";
+    const canManageFinancial =
+      member.role === "owner" || member.role === "admin";
 
     return c.json({
       planId: access.planId,
@@ -21,7 +22,9 @@ export const financeAccessRouter = new Hono<{ Variables: AuthVariables }>().get(
       status: access.status,
       entitlements: access.entitlements,
       hasFinancialModule: access.entitlements.includes("financial"),
-      hasCustomIntegrations: access.entitlements.includes("custom_integrations"),
+      hasCustomIntegrations: access.entitlements.includes(
+        "custom_integrations",
+      ),
       canReadFinancial: canManageFinancial,
       canManageFinancial,
       canExportFinancial: canManageFinancial,

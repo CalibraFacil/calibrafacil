@@ -5,7 +5,7 @@ import { parseAsInteger, useQueryState } from 'nuqs'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon, AlertCircleIcon } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -103,23 +103,8 @@ function CAPAListPage() {
       categoryFilter,
     ],
     enabled: !cloudOnlyUnavailable,
-    queryFn: async () => {
-      const res = await api.api.capa.$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          query: search || undefined,
-          status: statusFilter || undefined,
-          severity: severityFilter || undefined,
-          category: categoryFilter || undefined,
-        },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar CAPAs')
-      }
-
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.capas.list<{
         data: Array<CAPARow>
         pagination: {
           page: number
@@ -127,25 +112,28 @@ function CAPAListPage() {
           total: number
           totalPages: number
         }
-      }>
-    },
+      }>({
+        page,
+        limit,
+        query: search || undefined,
+        status: statusFilter || undefined,
+        severity: severityFilter || undefined,
+        category: categoryFilter || undefined,
+      }),
   })
 
   const { data: summary } = useQuery({
     queryKey: ['capas-summary'],
     enabled: !cloudOnlyUnavailable,
-    queryFn: async () => {
-      const res = await api.api.capa.summary.$get()
-      if (!res.ok) throw new Error('Falha ao carregar resumo')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.capas.summary<{
         byStatus: Array<{ status: string; count: number }>
         bySeverity: Array<{ severity: string; count: number }>
         byCategory: Array<{ category: string; count: number }>
         overdue: number
         effectivenessRate: number
         totalClosed: number
-      }>
-    },
+      }>(),
   })
 
   const handleSearch = (e: React.FormEvent) => {

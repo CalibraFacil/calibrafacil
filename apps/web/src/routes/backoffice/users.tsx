@@ -40,7 +40,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { api, resolveApiURL } from '@/utils/api'
+import { calibraApi, resolveCloudApiUrl } from '@/utils/api'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
 export const Route = createFileRoute('/backoffice/users')({
@@ -85,7 +85,11 @@ type UserFilters = {
     | 'platform_operator'
     | 'platform_admin'
     | 'platform_access'
-  membershipScope: 'all' | 'lab_members' | 'no_lab_membership' | 'backoffice_only'
+  membershipScope:
+    | 'all'
+    | 'lab_members'
+    | 'no_lab_membership'
+    | 'backoffice_only'
 }
 
 type AssignablePlatformRole = 'user' | 'platform_operator' | 'platform_admin'
@@ -113,7 +117,9 @@ const membershipScopeOptions = [
 function getAssignablePlatformRole(
   role: BackofficeUser['role'],
 ): AssignablePlatformRole {
-  return role === 'platform_admin' || role === 'platform_operator' ? role : 'user'
+  return role === 'platform_admin' || role === 'platform_operator'
+    ? role
+    : 'user'
 }
 
 function getPlatformRoleLabel(role: BackofficeUser['role']) {
@@ -131,7 +137,9 @@ function getPlatformRoleHint(user: BackofficeUser) {
   const role = getAssignablePlatformRole(user.role)
 
   if (role === 'user') {
-    return user.memberships.length > 0 ? 'Opera apenas no LAB' : 'Conta sem acesso interno'
+    return user.memberships.length > 0
+      ? 'Opera apenas no LAB'
+      : 'Conta sem acesso interno'
   }
 
   return user.memberships.length > 0
@@ -200,12 +208,9 @@ function BackofficeUsersPage() {
   const organizationsQuery = useQuery({
     queryKey: ['backoffice', 'organizations', 'options'],
     queryFn: async () => {
-      const res = await api.api.backoffice.organizations.$get()
-      if (!res.ok) {
-        throw new Error('Falha ao carregar laboratórios')
-      }
-
-      const data = (await res.json()) as { data: OrganizationOption[] }
+      const data = await calibraApi.backoffice.listOrganizations<{
+        data: OrganizationOption[]
+      }>()
       return data.data
     },
   })
@@ -221,24 +226,16 @@ function BackofficeUsersPage() {
         membershipScope: filters.membershipScope,
       },
     ],
-    queryFn: async () => {
-      const res = await api.api.backoffice.users.$get({
-        query: {
-          search: deferredSearch || undefined,
-          organizationId: filters.organizationId || undefined,
-          platformRole: filters.platformRole,
-          membershipScope: filters.membershipScope,
-        },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar usuários')
-      }
-
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.backoffice.listUsers<{
         users: BackofficeUser[]
         total: number
-      }>
-    },
+      }>({
+        search: deferredSearch || undefined,
+        organizationId: filters.organizationId || undefined,
+        platformRole: filters.platformRole,
+        membershipScope: filters.membershipScope,
+      }),
   })
 
   const invalidateUsers = async () => {
@@ -255,14 +252,7 @@ function BackofficeUsersPage() {
       userId: string
       role: AssignablePlatformRole
     }) => {
-      const res = await api.api.backoffice.users[':id'].role.$post({
-        param: { id: userId },
-        json: { role },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao atualizar papel do usuário')
-      }
-      return res.json()
+      return calibraApi.backoffice.updateUserRole(userId, role)
     },
     onSuccess: async () => {
       toast.success('Papel de plataforma atualizado')
@@ -277,33 +267,22 @@ function BackofficeUsersPage() {
 
   const banMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const res = await api.api.backoffice.users[':id'].ban.$post({
-        param: { id: userId },
-        json: {},
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao banir usuário')
-      }
-      return res.json()
+      return calibraApi.backoffice.banUser(userId)
     },
     onSuccess: async () => {
       toast.success('Usuário banido')
       await invalidateUsers()
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao banir usuário')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao banir usuário',
+      )
     },
   })
 
   const unbanMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const res = await api.api.backoffice.users[':id'].unban.$post({
-        param: { id: userId },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao reabilitar usuário')
-      }
-      return res.json()
+      return calibraApi.backoffice.unbanUser(userId)
     },
     onSuccess: async () => {
       toast.success('Usuário reabilitado')
@@ -318,58 +297,28 @@ function BackofficeUsersPage() {
 
   const impersonateMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const res = await api.api.backoffice.users[':id'].impersonate.$post({
-        param: { id: userId },
-      })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null)
-        throw new Error(
-          data &&
-            typeof data === 'object' &&
-            'error' in data &&
-            typeof data.error === 'string'
-            ? data.error
-            : 'Falha ao iniciar impersonação',
-        )
-      }
-
-      const data = await res.json()
-      return data as { redirectPath: string }
+      return calibraApi.backoffice.impersonateUser<{ redirectPath: string }>(
+        userId,
+      )
     },
     onSuccess: (data) => {
-      window.location.assign(resolveApiURL(data.redirectPath))
+      window.location.assign(resolveCloudApiUrl(data.redirectPath))
     },
     onError: (error) => {
       toast.error(
-        error instanceof Error ? error.message : 'Falha ao iniciar impersonação',
+        error instanceof Error
+          ? error.message
+          : 'Falha ao iniciar impersonação',
       )
     },
   })
 
   const createUserMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api.backoffice.users.$post({
-        json: draft,
-      })
-
-      const data = await res.json().catch(() => null)
-
-      if (!res.ok) {
-        throw new Error(
-          data &&
-            typeof data === 'object' &&
-            'error' in data &&
-            typeof data.error === 'string'
-            ? data.error
-            : 'Falha ao criar usuário interno',
-        )
-      }
-
-      return data as {
+      return calibraApi.backoffice.createUser<{
         passwordSetupRequested: boolean
         passwordSetupMessage: string
-      }
+      }>(draft)
     },
     onSuccess: async (data) => {
       toast.success(
@@ -393,22 +342,7 @@ function BackofficeUsersPage() {
 
   const requestPasswordSetupMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const res = await api.api.backoffice.users[':id']['request-password-reset'].$post({
-        param: { id: userId },
-      })
-
-      const data = await res.json().catch(() => null)
-
-      if (!res.ok) {
-        throw new Error(
-          data &&
-            typeof data === 'object' &&
-            'error' in data &&
-            typeof data.error === 'string'
-            ? data.error
-            : 'Falha ao solicitar definição de senha',
-        )
-      }
+      return calibraApi.backoffice.requestUserPasswordReset(userId)
     },
     onSuccess: () => {
       toast.success('Email de definição de senha solicitado')
@@ -475,7 +409,9 @@ function BackofficeUsersPage() {
                 <span className="font-medium">{user.name}</span>
                 {isCurrentUser ? <Badge variant="outline">Você</Badge> : null}
               </div>
-              <span className="text-sm text-muted-foreground">{user.email}</span>
+              <span className="text-sm text-muted-foreground">
+                {user.email}
+              </span>
             </div>
           )
         },
@@ -575,7 +511,8 @@ function BackofficeUsersPage() {
       <div>
         <h1 className="text-2xl font-semibold">Usuários</h1>
         <p className="text-sm text-muted-foreground">
-          Gestão de usuários de plataforma com contexto operacional por laboratório.
+          Gestão de usuários de plataforma com contexto operacional por
+          laboratório.
         </p>
       </div>
 
@@ -584,8 +521,8 @@ function BackofficeUsersPage() {
           <CardHeader>
             <CardTitle>Criar usuário interno</CardTitle>
             <CardDescription>
-              O backoffice é invite-only. Após criar a conta, o sistema solicita a
-              definição de senha por email.
+              O backoffice é invite-only. Após criar a conta, o sistema solicita
+              a definição de senha por email.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -672,7 +609,8 @@ function BackofficeUsersPage() {
         <CardHeader>
           <CardTitle>Base de usuários</CardTitle>
           <CardDescription>
-            Visão compacta para acesso de plataforma, vínculo LAB e status da conta.
+            Visão compacta para acesso de plataforma, vínculo LAB e status da
+            conta.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
@@ -722,7 +660,9 @@ function BackofficeUsersPage() {
                       type="button"
                       size="xs"
                       variant={
-                        filters.platformRole === option.value ? 'default' : 'outline'
+                        filters.platformRole === option.value
+                          ? 'default'
+                          : 'outline'
                       }
                       onClick={() =>
                         setFilters((current) => ({
@@ -773,7 +713,9 @@ function BackofficeUsersPage() {
                   <Button
                     type="button"
                     size="xs"
-                    variant={filters.organizationId === '' ? 'default' : 'outline'}
+                    variant={
+                      filters.organizationId === '' ? 'default' : 'outline'
+                    }
                     onClick={() =>
                       setFilters((current) => ({
                         ...current,
@@ -811,8 +753,12 @@ function BackofficeUsersPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">{total} usuários encontrados</Badge>
-              <Badge variant="outline">{usersWithLabMembership} com vínculo LAB</Badge>
-              <Badge variant="outline">{backofficeOnlyUsers} somente backoffice</Badge>
+              <Badge variant="outline">
+                {usersWithLabMembership} com vínculo LAB
+              </Badge>
+              <Badge variant="outline">
+                {backofficeOnlyUsers} somente backoffice
+              </Badge>
             </div>
             <span className="text-sm text-muted-foreground">
               {filters.organizationId
@@ -825,7 +771,10 @@ function BackofficeUsersPage() {
             <Table className="min-w-[880px]">
               <TableHeader className="bg-muted/30">
                 {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id} className="hover:bg-transparent">
+                  <TableRow
+                    key={headerGroup.id}
+                    className="hover:bg-transparent"
+                  >
                     {headerGroup.headers.map((header) => (
                       <TableHead key={header.id}>
                         {header.isPlaceholder
@@ -878,14 +827,19 @@ function BackofficeUsersPage() {
                         banMutation={banMutation}
                         unbanMutation={unbanMutation}
                         impersonateMutation={impersonateMutation}
-                        requestPasswordSetupMutation={requestPasswordSetupMutation}
+                        requestPasswordSetupMutation={
+                          requestPasswordSetupMutation
+                        }
                         setRoleMutation={setRoleMutation}
                       />
                     )
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="h-28 text-center">
+                    <TableCell
+                      colSpan={columns.length}
+                      className="h-28 text-center"
+                    >
                       Nenhum usuário encontrado para esse recorte.
                     </TableCell>
                   </TableRow>
@@ -951,13 +905,17 @@ function UserTableRow({
                   </p>
                   <div className="mt-2 space-y-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Conta criada</span>
+                      <span className="text-muted-foreground">
+                        Conta criada
+                      </span>
                       <span className="font-medium">
                         {formatCreatedAt(user.createdAt)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Estado da conta</span>
+                      <span className="text-muted-foreground">
+                        Estado da conta
+                      </span>
                       <span className="font-medium">
                         {user.banned ? 'Banida' : 'Ativa'}
                       </span>
@@ -994,12 +952,16 @@ function UserTableRow({
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="font-medium">{membership.organizationName}</p>
+                            <p className="font-medium">
+                              {membership.organizationName}
+                            </p>
                             <p className="text-sm text-muted-foreground">
                               /{membership.organizationSlug}
                             </p>
                           </div>
-                          <Badge variant="outline">{membership.memberRole}</Badge>
+                          <Badge variant="outline">
+                            {membership.memberRole}
+                          </Badge>
                         </div>
                       </div>
                     ))}
@@ -1031,7 +993,9 @@ function UserTableRow({
                         }
                         disabled={!canManageRoles}
                       >
-                        <NativeSelectOption value="user">user</NativeSelectOption>
+                        <NativeSelectOption value="user">
+                          user
+                        </NativeSelectOption>
                         <NativeSelectOption value="platform_operator">
                           platform_operator
                         </NativeSelectOption>
@@ -1072,9 +1036,12 @@ function UserTableRow({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => requestPasswordSetupMutation.mutate(user.id)}
+                        onClick={() =>
+                          requestPasswordSetupMutation.mutate(user.id)
+                        }
                         disabled={
-                          !canManageRoles || requestPasswordSetupMutation.isPending
+                          !canManageRoles ||
+                          requestPasswordSetupMutation.isPending
                         }
                       >
                         Enviar setup

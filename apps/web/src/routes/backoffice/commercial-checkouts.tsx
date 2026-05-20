@@ -5,7 +5,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -95,32 +95,21 @@ function BackofficeCommercialCheckoutsPage() {
 
   const organizationsQuery = useQuery({
     queryKey: ['backoffice', 'commercial', 'organizations', searchTerm],
-    queryFn: async () => {
-      const res = await api.api.backoffice.commercial.organizations.$get({
-        query: searchTerm ? { search: searchTerm } : {},
-      })
-      if (!res.ok) throw new Error('Falha ao buscar organizações')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.backoffice.commercial.listOrganizations<{
         data: Array<{
           id: string
           name: string
           slug: string
           cnpj: string | null
         }>
-      }>
-    },
+      }>(searchTerm),
   })
 
   const contextQuery = useQuery({
     queryKey: ['backoffice', 'commercial', 'context', selectedOrganizationId],
-    queryFn: async () => {
-      const res = await api.api.backoffice.commercial.organizations[
-        ':organizationId'
-      ].context.$get({
-        param: { organizationId: selectedOrganizationId! },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar contexto comercial')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.backoffice.commercial.getContext<{
         organization: {
           id: string
           name: string
@@ -156,8 +145,7 @@ function BackofficeCommercialCheckoutsPage() {
           customerCheckoutUrl?: string | null
         }>
         deals: Array<{ id: string; title: string; status: string }>
-      }>
-    },
+      }>(selectedOrganizationId!),
     enabled: !!selectedOrganizationId,
   })
   const primaryBillingContact = contextQuery.data?.billingContacts.find(
@@ -170,27 +158,13 @@ function BackofficeCommercialCheckoutsPage() {
       const org = contextQuery.data?.organization
       if (!org) throw new Error('Selecione uma organização primeiro')
 
-      const res = await api.api.backoffice.commercial[
-        'billing-customer'
-      ].sync.$post({
-        json: {
-          organizationId: org.id,
-          name: org.name,
-          email: org.email ?? undefined,
-          phone: org.phone ?? undefined,
-          taxId: org.cnpj ?? undefined,
-        },
+      return calibraApi.backoffice.commercial.syncBillingCustomer({
+        organizationId: org.id,
+        name: org.name,
+        email: org.email ?? undefined,
+        phone: org.phone ?? undefined,
+        taxId: org.cnpj ?? undefined,
       })
-
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null)
-        throw new Error(
-          (payload as { error?: string } | null)?.error ||
-            'Falha ao sincronizar cliente',
-        )
-      }
-
-      return res.json()
     },
     onSuccess: () => {
       toast.success('Cliente de cobrança sincronizado')
@@ -214,23 +188,13 @@ function BackofficeCommercialCheckoutsPage() {
     mutationFn: async () => {
       if (!selectedOrganizationId) throw new Error('Selecione uma organização')
 
-      const res = await api.api.backoffice.commercial['billing-contacts'].$post(
-        {
-          json: {
-            organizationId: selectedOrganizationId,
-            ...newContact,
-            isPrimary: contextQuery.data?.billingContacts.length === 0,
-          },
-        },
-      )
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null)
-        throw new Error(
-          (payload as { error?: string } | null)?.error ||
-            'Falha ao criar contato',
-        )
-      }
-      return res.json() as Promise<{ contact: { id: number } }>
+      return calibraApi.backoffice.commercial.createBillingContact<{
+        contact: { id: number }
+      }>({
+        organizationId: selectedOrganizationId,
+        ...newContact,
+        isPrimary: contextQuery.data?.billingContacts.length === 0,
+      })
     },
     onSuccess: (data) => {
       setBillingContactId(data.contact.id)
@@ -255,15 +219,13 @@ function BackofficeCommercialCheckoutsPage() {
   const previewMutation = useMutation({
     mutationFn: async () => {
       if (!selectedOrganizationId) throw new Error('Selecione uma organização')
-      const res = await api.api.backoffice.commercial.offers.preview.$post({
-        json: buildOfferPayload(
+      return calibraApi.backoffice.commercial.previewOffer<CommercialOfferPreview>(
+        buildOfferPayload(
           selectedOrganizationId,
           resolvedBillingContactId,
           form,
         ),
-      })
-      if (!res.ok) throw new Error('Falha ao gerar prévia')
-      return res.json()
+      )
     },
     onSuccess: (data) => setPreview(data),
     onError: (error) => {
@@ -279,24 +241,16 @@ function BackofficeCommercialCheckoutsPage() {
     mutationFn: async () => {
       if (!selectedOrganizationId) throw new Error('Selecione uma organização')
 
-      const res = await api.api.backoffice.commercial.offers.$post({
-        json: {
-          ...buildOfferPayload(
-            selectedOrganizationId,
-            resolvedBillingContactId,
-            form,
-          ),
-          idempotencyKey: crypto.randomUUID(),
-        },
+      return calibraApi.backoffice.commercial.issueOffer<{
+        offer: IssuedOffer
+      }>({
+        ...buildOfferPayload(
+          selectedOrganizationId,
+          resolvedBillingContactId,
+          form,
+        ),
+        idempotencyKey: crypto.randomUUID(),
       })
-      const payload = await res.json().catch(() => null)
-      if (!res.ok) {
-        throw new Error(
-          (payload as { error?: string } | null)?.error ||
-            'Falha ao emitir oferta',
-        )
-      }
-      return payload as { offer: IssuedOffer }
     },
     onSuccess: (data) => {
       setIssuedOffer(data.offer)
@@ -319,14 +273,9 @@ function BackofficeCommercialCheckoutsPage() {
 
   const cancelMutation = useMutation({
     mutationFn: async (offerId: string) => {
-      const res = await api.api.backoffice.commercial.offers[
-        ':offerId'
-      ].cancel.$post({
-        param: { offerId },
-        json: { reason: 'Cancelada pelo operador comercial' },
+      return calibraApi.backoffice.commercial.cancelOffer(offerId, {
+        reason: 'Cancelada pelo operador comercial',
       })
-      if (!res.ok) throw new Error('Falha ao cancelar oferta')
-      return res.json()
     },
     onSuccess: () => {
       toast.success('Oferta cancelada')
@@ -348,21 +297,16 @@ function BackofficeCommercialCheckoutsPage() {
 
   const reissueMutation = useMutation({
     mutationFn: async (offerId: string) => {
-      const res = await api.api.backoffice.commercial.offers[
-        ':offerId'
-      ].reissue.$post({
-        param: { offerId },
-        json: {
-          idempotencyKey: crypto.randomUUID(),
-          overrides: buildOfferPayload(
-            selectedOrganizationId!,
-            resolvedBillingContactId,
-            form,
-          ),
-        },
+      return calibraApi.backoffice.commercial.reissueOffer<{
+        offer: IssuedOffer
+      }>(offerId, {
+        idempotencyKey: crypto.randomUUID(),
+        overrides: buildOfferPayload(
+          selectedOrganizationId!,
+          resolvedBillingContactId,
+          form,
+        ),
       })
-      if (!res.ok) throw new Error('Falha ao reemitir oferta')
-      return res.json()
     },
     onSuccess: (data) => {
       setIssuedOffer(data.offer)

@@ -147,7 +147,9 @@ function ServiceOrderDetailPage() {
     },
     onSuccess: async () => {
       toast.success("Orçamento aprovado.");
-      await queryClient.invalidateQueries({ queryKey: ["portal-service-order", id] });
+      await queryClient.invalidateQueries({
+        queryKey: ["portal-service-order", id],
+      });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Erro ao aprovar.");
@@ -171,7 +173,9 @@ function ServiceOrderDetailPage() {
     onSuccess: async () => {
       toast.success("Orçamento recusado.");
       setRejectionReason("");
-      await queryClient.invalidateQueries({ queryKey: ["portal-service-order", id] });
+      await queryClient.invalidateQueries({
+        queryKey: ["portal-service-order", id],
+      });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Erro ao recusar.");
@@ -184,7 +188,9 @@ function ServiceOrderDetailPage() {
   const canAnswerQuote = latestQuote?.status === "sent";
 
   if (orderQuery.isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Carregando OS...</div>;
+    return (
+      <div className="p-6 text-sm text-muted-foreground">Carregando OS...</div>
+    );
   }
 
   if (!order) {
@@ -209,10 +215,16 @@ function ServiceOrderDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <Button variant="ghost" size="sm" render={<Link to="/service-orders" />}>
+          <Button
+            variant="ghost"
+            size="sm"
+            render={<Link to="/service-orders" />}
+          >
             Voltar
           </Button>
-          <h1 className="mt-2 text-2xl font-semibold">{order.serviceOrderNumber}</h1>
+          <h1 className="mt-2 text-2xl font-semibold">
+            {order.serviceOrderNumber}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {statusLabels[order.status] ?? order.status} | Entrada em{" "}
             {formatDate(order.openedAt)}
@@ -230,12 +242,21 @@ function ServiceOrderDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
-              <Info label="Instrumento" value={order.assetSnapshot?.assetName} />
+              <Info
+                label="Instrumento"
+                value={order.assetSnapshot?.assetName}
+              />
               <Info label="Tipo" value={order.assetSnapshot?.assetType} />
-              <Info label="Fabricante" value={order.assetSnapshot?.manufacturer} />
+              <Info
+                label="Fabricante"
+                value={order.assetSnapshot?.manufacturer}
+              />
               <Info label="Modelo" value={order.assetSnapshot?.model} />
               <Info label="Série" value={order.assetSnapshot?.serialNumber} />
-              <Info label="Patrimônio" value={order.assetSnapshot?.patrimonyNumber} />
+              <Info
+                label="Patrimônio"
+                value={order.assetSnapshot?.patrimonyNumber}
+              />
             </CardContent>
           </Card>
 
@@ -261,8 +282,14 @@ function ServiceOrderDetailPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <Info label="Diagnóstico" value={latestEvaluation.diagnosis} />
-                <Info label="Problemas detectados" value={latestEvaluation.detectedIssues} />
-                <Info label="Observações" value={latestEvaluation.clientVisibleNotes} />
+                <Info
+                  label="Problemas detectados"
+                  value={latestEvaluation.detectedIssues}
+                />
+                <Info
+                  label="Observações"
+                  value={latestEvaluation.clientVisibleNotes}
+                />
               </CardContent>
             </Card>
           )}
@@ -293,7 +320,10 @@ function ServiceOrderDetailPage() {
 
                   <div className="space-y-3">
                     {latestQuote.items?.map((item) => (
-                      <div key={item.id} className="border-b pb-3 last:border-0">
+                      <div
+                        key={item.id}
+                        className="border-b pb-3 last:border-0"
+                      >
                         <p className="font-medium">{item.description}</p>
                         <p className="text-sm text-muted-foreground">
                           {item.quantity} {item.unit} x{" "}
@@ -315,20 +345,26 @@ function ServiceOrderDetailPage() {
                       <Button
                         className="w-full"
                         onClick={() => approveMutation.mutate(latestQuote.id)}
-                        disabled={approveMutation.isPending || rejectMutation.isPending}
+                        disabled={
+                          approveMutation.isPending || rejectMutation.isPending
+                        }
                       >
                         Aprovar orçamento
                       </Button>
                       <Textarea
                         value={rejectionReason}
-                        onChange={(event) => setRejectionReason(event.target.value)}
+                        onChange={(event) =>
+                          setRejectionReason(event.target.value)
+                        }
                         placeholder="Motivo da recusa, opcional"
                       />
                       <Button
                         variant="outline"
                         className="w-full"
                         onClick={() => rejectMutation.mutate(latestQuote.id)}
-                        disabled={approveMutation.isPending || rejectMutation.isPending}
+                        disabled={
+                          approveMutation.isPending || rejectMutation.isPending
+                        }
                       >
                         Recusar orçamento
                       </Button>
@@ -378,7 +414,9 @@ function ServiceOrderDetailPage() {
 function Info({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium uppercase text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-1 text-sm">{value?.trim() || "-"}</p>
     </div>
   );

@@ -334,7 +334,10 @@ function ServiceOrdersPage() {
                   </Button>
                 ) : (
                   <Button render={<Link to="/requests/new" />}>
-                    <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
+                    <HugeiconsIcon
+                      icon={PlusSignIcon}
+                      className="mr-2 size-4"
+                    />
                     Solicitar calibração
                   </Button>
                 )}

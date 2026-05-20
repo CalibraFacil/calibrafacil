@@ -87,11 +87,11 @@ export function useDashboardUnits() {
   const currentUnitLabel = data
     ? data.selectedUnitScope === 'all'
       ? 'Todas as unidades'
-      : data.activeUnitName ?? activeOrg?.slug ?? 'Nenhuma unidade'
-    : activeOrg?.slug ?? 'Nenhum selecionado'
+      : (data.activeUnitName ?? activeOrg?.slug ?? 'Nenhuma unidade')
+    : (activeOrg?.slug ?? 'Nenhum selecionado')
   const selectedUnit = data
     ? data.selectedUnitScope === 'unit'
-      ? data.data.find((unit) => unit.id === data.activeUnitId) ?? null
+      ? (data.data.find((unit) => unit.id === data.activeUnitId) ?? null)
       : null
     : canUseSingleUnitFallback && activeOrg
       ? {

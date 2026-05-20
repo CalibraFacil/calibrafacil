@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/dashboard/finance/contracts/$id')({
   head: () => ({
@@ -36,28 +36,13 @@ function FinanceContractDetailsPage() {
   const contractQuery = useQuery({
     queryKey: ['finance', 'contracts', id],
     queryFn: async () => {
-      const response = await api.api.finance.contracts[':id'].$get({
-        param: { id },
-      })
-      if (!response.ok) {
-        throw new Error('Erro ao carregar contrato')
-      }
-
-      return response.json()
+      return calibraApi.finance.getContract(id)
     },
   })
 
   const activateMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.api.finance.contracts[':id'].activate.$post({
-        param: { id },
-      })
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string }
-        throw new Error(error.error || 'Erro ao ativar contrato')
-      }
-
-      return response.json()
+      return calibraApi.finance.activateContract(id)
     },
     onSuccess: () => {
       toast.success('Contrato ativado')
@@ -68,15 +53,7 @@ function FinanceContractDetailsPage() {
 
   const cancelMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.api.finance.contracts[':id'].cancel.$post({
-        param: { id },
-      })
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string }
-        throw new Error(error.error || 'Erro ao cancelar contrato')
-      }
-
-      return response.json()
+      return calibraApi.finance.cancelContract(id)
     },
     onSuccess: () => {
       toast.success('Contrato cancelado')

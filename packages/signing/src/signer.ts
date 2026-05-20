@@ -23,7 +23,7 @@ import { SigningError } from "./types.js";
  */
 export function parsePkcs12(
   p12Buffer: Buffer,
-  password: string
+  password: string,
 ): CertificateInfo {
   try {
     // Decode PKCS#12
@@ -37,7 +37,7 @@ export function parsePkcs12(
     if (!certBagList || certBagList.length === 0) {
       throw new SigningError(
         "No certificates found in PKCS#12 file",
-        "INVALID_P12"
+        "INVALID_P12",
       );
     }
 
@@ -48,7 +48,7 @@ export function parsePkcs12(
     if (!keyBagList || keyBagList.length === 0) {
       throw new SigningError(
         "No private key found in PKCS#12 file",
-        "INVALID_P12"
+        "INVALID_P12",
       );
     }
 
@@ -58,7 +58,7 @@ export function parsePkcs12(
     if (!firstCertBag?.cert || !firstKeyBag?.key) {
       throw new SigningError(
         "Certificate or key not found in PKCS#12 file",
-        "INVALID_P12"
+        "INVALID_P12",
       );
     }
     const cert = firstCertBag.cert;
@@ -96,15 +96,12 @@ export function parsePkcs12(
       errorMsg.includes("PKCS#12 MAC") ||
       errorMsg.includes("decryption")
     ) {
-      throw new SigningError(
-        "Senha do certificado inválida",
-        "WRONG_PASSWORD"
-      );
+      throw new SigningError("Senha do certificado inválida", "WRONG_PASSWORD");
     }
 
     throw new SigningError(
       `Erro ao ler certificado PKCS#12: ${errorMsg}`,
-      "INVALID_P12"
+      "INVALID_P12",
     );
   }
 }
@@ -122,7 +119,7 @@ function extractCn(attributes: forge.pki.CertificateField[]): string {
  * ICP-Brasil certificates include CPF/CNPJ in specific OIDs
  */
 function extractCpfCnpj(
-  attributes: forge.pki.CertificateField[]
+  attributes: forge.pki.CertificateField[],
 ): string | null {
   // ICP-Brasil OIDs for CPF and CNPJ
   const OID_CPF = "2.16.76.1.3.1"; // OID for CPF in ICP-Brasil
@@ -162,7 +159,7 @@ function formatCpfCnpj(value: string): string {
     // CNPJ: 00.000.000/0000-00
     return value.replace(
       /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
-      "$1.$2.$3/$4-$5"
+      "$1.$2.$3/$4-$5",
     );
   }
   return value;
@@ -177,14 +174,14 @@ export function validateCertificateValidity(certInfo: CertificateInfo): void {
   if (now < certInfo.validFrom) {
     throw new SigningError(
       `Certificado ainda não é válido. Válido a partir de: ${certInfo.validFrom.toISOString()}`,
-      "CERTIFICATE_NOT_YET_VALID"
+      "CERTIFICATE_NOT_YET_VALID",
     );
   }
 
   if (now > certInfo.validUntil) {
     throw new SigningError(
       `Certificado expirado em: ${certInfo.validUntil.toISOString()}`,
-      "CERTIFICATE_EXPIRED"
+      "CERTIFICATE_EXPIRED",
     );
   }
 }
@@ -216,7 +213,7 @@ function calculateSha256(buffer: Uint8Array | Buffer): string {
  */
 export async function signPdf(
   pdfBuffer: Uint8Array | Buffer,
-  options: SigningOptions
+  options: SigningOptions,
 ): Promise<SigningResult> {
   // 1. Parse and validate certificate
   const certInfo = parsePkcs12(options.p12Buffer, options.password);
@@ -247,7 +244,7 @@ export async function signPdf(
   const signPdfInstance = new SignPdf();
   const signedPdfBuffer = await signPdfInstance.sign(
     Buffer.from(pdfWithPlaceholder),
-    signer
+    signer,
   );
 
   // 4. Calculate hash of signed PDF
@@ -275,7 +272,7 @@ export async function signPdf(
  */
 export function getCertificateInfo(
   p12Buffer: Buffer,
-  password: string
+  password: string,
 ): Omit<CertificateInfo, "certificate" | "privateKey" | "chain"> {
   const info = parsePkcs12(p12Buffer, password);
   return {

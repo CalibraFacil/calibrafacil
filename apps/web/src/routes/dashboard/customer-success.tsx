@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { useActiveOrganization } from '@calibra-facil/auth/client'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -228,13 +228,19 @@ const goLiveLabels: Record<GoLiveStatus, string> = {
   LIVE: 'Em produção',
 }
 
-const healthLabels: Record<SuccessProfileResponse['publicSummary']['healthStatus'], string> = {
+const healthLabels: Record<
+  SuccessProfileResponse['publicSummary']['healthStatus'],
+  string
+> = {
   HEALTHY: 'Saudável',
   ATTENTION: 'Atenção',
   CRITICAL: 'Crítico',
 }
 
-const nextActionLabels: Record<SuccessProfileResponse['publicSummary']['nextActionStatus'], string> = {
+const nextActionLabels: Record<
+  SuccessProfileResponse['publicSummary']['nextActionStatus'],
+  string
+> = {
   NONE: 'Sem próximo passo público',
   PENDING: 'Próximo passo em andamento',
   DUE_SOON: 'Próximo passo em vencimento',
@@ -285,19 +291,6 @@ const priorityLabels: Record<SupportRequest['priority'], string> = {
   URGENT: 'Urgente',
 }
 
-async function parseApiError(res: Response, fallback: string) {
-  const data = await res.json().catch(() => null)
-
-  if (data && typeof data === 'object') {
-    if ('error' in data && typeof data.error === 'string') return data.error
-    if ('message' in data && typeof data.message === 'string') {
-      return data.message
-    }
-  }
-
-  return fallback
-}
-
 function formatDate(value: string | null) {
   if (!value) return 'Não definido'
   return new Intl.DateTimeFormat('pt-BR', {
@@ -345,59 +338,30 @@ function CustomerSuccessPage() {
 
   const profileQuery = useQuery({
     queryKey: ['customer-success', 'profile'],
-    queryFn: async () => {
-      const res = await api.api['customer-success'].profile.$get()
-
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao carregar Customer Success'),
-        )
-      }
-
-      return res.json() as Promise<SuccessProfileResponse>
-    },
+    queryFn: async () =>
+      calibraApi.customerSuccess.getProfile<SuccessProfileResponse>(),
   })
 
   const requestsQuery = useQuery({
     queryKey: ['customer-success', 'requests'],
-    queryFn: async () => {
-      const res = await api.api['customer-success'].requests.$get()
-
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao carregar solicitações'),
-        )
-      }
-
-      return res.json() as Promise<SupportRequestsResponse>
-    },
+    queryFn: async () =>
+      calibraApi.customerSuccess.listRequests<SupportRequestsResponse>(),
   })
 
   const createRequestMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api['customer-success'].requests.$post({
-        json: {
-          category: draft.category as
-            | 'GENERAL'
-            | 'TRAINING'
-            | 'MIGRATION'
-            | 'INTEGRATION'
-            | 'BILLING'
-            | 'INCIDENT',
-          priority: draft.priority as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
-          subject: draft.subject,
-          description: draft.description,
-        },
-      })
-
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao abrir solicitação'),
-        )
-      }
-
-      return res.json()
-    },
+    mutationFn: async () =>
+      calibraApi.customerSuccess.createRequest({
+        category: draft.category as
+          | 'GENERAL'
+          | 'TRAINING'
+          | 'MIGRATION'
+          | 'INTEGRATION'
+          | 'BILLING'
+          | 'INCIDENT',
+        priority: draft.priority as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
+        subject: draft.subject,
+        description: draft.description,
+      }),
     onSuccess: async () => {
       toast.success('Solicitação criada')
       setDraft({
@@ -455,7 +419,6 @@ function CustomerSuccessPage() {
             laboratório.
           </p>
         </div>
-
       </div>
 
       <div className="grid gap-6 lg:grid-cols-4">
@@ -499,15 +462,21 @@ function CustomerSuccessPage() {
               </p>
               <p>
                 <strong>Onboarding assistido:</strong>{' '}
-                {payload.supportPolicy.includesAssistedOnboarding ? 'Sim' : 'Não'}
+                {payload.supportPolicy.includesAssistedOnboarding
+                  ? 'Sim'
+                  : 'Não'}
               </p>
               <p>
                 <strong>Migração assistida:</strong>{' '}
-                {payload.supportPolicy.includesAssistedMigration ? 'Sim' : 'Não'}
+                {payload.supportPolicy.includesAssistedMigration
+                  ? 'Sim'
+                  : 'Não'}
               </p>
               <p>
                 <strong>Owner interno exigido em workflow ativo:</strong>{' '}
-                {payload.policy.requiresInternalOwnerForActiveWorkflows ? 'Sim' : 'Não'}
+                {payload.policy.requiresInternalOwnerForActiveWorkflows
+                  ? 'Sim'
+                  : 'Não'}
               </p>
               <p>
                 <strong>Limiar de alerta de SLA:</strong>{' '}
@@ -515,7 +484,9 @@ function CustomerSuccessPage() {
               </p>
               <p>
                 <strong>Próxima ação exigida em workflow ativo:</strong>{' '}
-                {payload.policy.requiresNextActionForActiveWorkflows ? 'Sim' : 'Não'}
+                {payload.policy.requiresNextActionForActiveWorkflows
+                  ? 'Sim'
+                  : 'Não'}
               </p>
             </div>
           </CardContent>
@@ -552,7 +523,8 @@ function CustomerSuccessPage() {
                 <div className="rounded-lg border border-dashed bg-muted/40 p-3 text-xs text-muted-foreground">
                   Esses campos são geridos pela equipe da plataforma no
                   backoffice. Quando ainda não houver owner ou contato
-                  operacional definidos, esta área exibirá <strong>A definir</strong>.
+                  operacional definidos, esta área exibirá{' '}
+                  <strong>A definir</strong>.
                 </div>
               </>
             ) : null}
@@ -582,7 +554,11 @@ function CustomerSuccessPage() {
               <Badge variant="outline">
                 {nextActionLabels[payload.publicSummary.nextActionStatus]}
               </Badge>
-              <Badge variant={getWorkflowBadgeVariant(payload.workflow.accountOwnershipStatus)}>
+              <Badge
+                variant={getWorkflowBadgeVariant(
+                  payload.workflow.accountOwnershipStatus,
+                )}
+              >
                 {ownershipStatusLabels[payload.workflow.accountOwnershipStatus]}
               </Badge>
               {payload.publicSummary.hasActiveBlockers ? (
@@ -590,18 +566,31 @@ function CustomerSuccessPage() {
               ) : null}
             </div>
             <p className="text-sm text-muted-foreground">
-              Onboarding: {onboardingLabels[payload.publicSummary.onboardingStatus]} ·
+              Onboarding:{' '}
+              {onboardingLabels[payload.publicSummary.onboardingStatus]} ·
               Migração: {migrationLabels[payload.publicSummary.migrationStatus]}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Badge variant={getWorkflowBadgeVariant(payload.workflow.onboardingState)}>
-                Onboarding {workflowStateLabels[payload.workflow.onboardingState]}
+              <Badge
+                variant={getWorkflowBadgeVariant(
+                  payload.workflow.onboardingState,
+                )}
+              >
+                Onboarding{' '}
+                {workflowStateLabels[payload.workflow.onboardingState]}
               </Badge>
-              <Badge variant={getWorkflowBadgeVariant(payload.workflow.migrationState)}>
+              <Badge
+                variant={getWorkflowBadgeVariant(
+                  payload.workflow.migrationState,
+                )}
+              >
                 Migração {workflowStateLabels[payload.workflow.migrationState]}
               </Badge>
-              <Badge variant={getWorkflowBadgeVariant(payload.workflow.supportState)}>
-                Suporte {supportWorkflowStateLabels[payload.workflow.supportState]}
+              <Badge
+                variant={getWorkflowBadgeVariant(payload.workflow.supportState)}
+              >
+                Suporte{' '}
+                {supportWorkflowStateLabels[payload.workflow.supportState]}
               </Badge>
             </div>
             {payload.workflowViolations.length > 0 ? (
@@ -639,7 +628,9 @@ function CustomerSuccessPage() {
               <Badge variant="outline">
                 {goLiveLabels[payload.profile.goLiveStatus]}
               </Badge>
-              <Badge variant={getWorkflowBadgeVariant(payload.workflow.goLiveState)}>
+              <Badge
+                variant={getWorkflowBadgeVariant(payload.workflow.goLiveState)}
+              >
                 {workflowStateLabels[payload.workflow.goLiveState]}
               </Badge>
             </div>
@@ -648,7 +639,8 @@ function CustomerSuccessPage() {
               {formatDate(payload.profile.goLiveTargetDate)}
             </p>
             <p>
-              <strong>Real:</strong> {formatDate(payload.profile.goLiveActualDate)}
+              <strong>Real:</strong>{' '}
+              {formatDate(payload.profile.goLiveActualDate)}
             </p>
           </CardContent>
         </Card>
@@ -669,7 +661,9 @@ function CustomerSuccessPage() {
                 {onboardingSteps[payload.profile.onboardingStatus]}%
               </Badge>
             </div>
-            <Progress value={onboardingSteps[payload.profile.onboardingStatus]} />
+            <Progress
+              value={onboardingSteps[payload.profile.onboardingStatus]}
+            />
           </CardContent>
         </Card>
 
@@ -718,20 +712,20 @@ function CustomerSuccessPage() {
                         #{request.id} • {request.category}
                       </p>
                     </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">
-                      {requestStatusLabels[request.status]}
-                    </Badge>
-                    <Badge>{priorityLabels[request.priority]}</Badge>
-                    <Badge variant="outline">
-                      {slaStatusLabels[request.slaStatus]}
-                    </Badge>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline">
+                        {requestStatusLabels[request.status]}
+                      </Badge>
+                      <Badge>{priorityLabels[request.priority]}</Badge>
+                      <Badge variant="outline">
+                        {slaStatusLabels[request.slaStatus]}
+                      </Badge>
+                    </div>
                   </div>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {request.description}
-                </p>
-                <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-3">
+                  <p className="text-sm text-muted-foreground">
+                    {request.description}
+                  </p>
+                  <div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-3">
                     <span>
                       SLA alvo: {formatDate(request.slaTargetAt)} ·{' '}
                       {formatRelativeSla(request.timeToSlaMs)}

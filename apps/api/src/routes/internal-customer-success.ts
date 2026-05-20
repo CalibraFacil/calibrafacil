@@ -218,7 +218,9 @@ async function getTimelineForOrganization(organizationId: string) {
 
 function buildOperationalSummary(params: {
   profile: Awaited<ReturnType<typeof ensureSuccessProfile>>;
-  supportPolicy: Awaited<ReturnType<typeof getOrganizationPlanAccess>>["supportPolicy"];
+  supportPolicy: Awaited<
+    ReturnType<typeof getOrganizationPlanAccess>
+  >["supportPolicy"];
   openRequestsCount: number;
   urgentRequestsCount: number;
   dueSoonRequestsCount: number;
@@ -230,7 +232,9 @@ function buildOperationalSummary(params: {
     params.profile.slaTier === "PLAN_DEFAULT"
       ? deriveDefaultSlaTier(params.supportPolicy)
       : params.profile.slaTier;
-  const activeBlockers = getActiveCustomerSuccessBlockers(params.profile.blockers);
+  const activeBlockers = getActiveCustomerSuccessBlockers(
+    params.profile.blockers,
+  );
   const prioritySupport =
     params.profile.prioritySupport ||
     effectiveSlaTier !== "PLAN_DEFAULT" ||
@@ -441,7 +445,8 @@ async function listRequestsForOrganization(organizationId: string) {
       supportPolicy: planAccess.supportPolicy,
       openRequestsCount: openRequests.length,
       urgentRequestsCount: openRequests.filter(
-        (request) => request.priority === "URGENT" || request.priority === "HIGH",
+        (request) =>
+          request.priority === "URGENT" || request.priority === "HIGH",
       ).length,
       dueSoonRequestsCount: openRequests.filter(
         (request) => request.slaStatus === "DUE_SOON",
@@ -484,7 +489,10 @@ export const internalCustomerSuccessRouter = new Hono<{
             .select()
             .from(organizationSuccessProfile)
             .where(
-              inArray(organizationSuccessProfile.organizationId, organizationIds),
+              inArray(
+                organizationSuccessProfile.organizationId,
+                organizationIds,
+              ),
             ),
       organizationIds.length === 0
         ? Promise.resolve([])
@@ -498,12 +506,17 @@ export const internalCustomerSuccessRouter = new Hono<{
             })
             .from(organizationSupportRequest)
             .where(
-              inArray(organizationSupportRequest.organizationId, organizationIds),
+              inArray(
+                organizationSupportRequest.organizationId,
+                organizationIds,
+              ),
             ),
     ]);
 
     const successProfilesByOrg = new Map(
-      successProfiles.map((profile) => [profile.organizationId, profile] as const),
+      successProfiles.map(
+        (profile) => [profile.organizationId, profile] as const,
+      ),
     );
     const requestSummariesByOrg = new Map<
       string,
@@ -556,7 +569,8 @@ export const internalCustomerSuccessRouter = new Hono<{
     const planAccessByOrg = new Map(
       await Promise.all(
         organizations.map(
-          async (row) => [row.id, await getOrganizationPlanAccess(row.id)] as const,
+          async (row) =>
+            [row.id, await getOrganizationPlanAccess(row.id)] as const,
         ),
       ),
     );
@@ -598,73 +612,89 @@ export const internalCustomerSuccessRouter = new Hono<{
     );
 
     return c.json({
-      data: organizations.map((row) => {
-        const profile = profilesByOrg.get(row.id)!;
-        const planAccess = planAccessByOrg.get(row.id)!;
-        const requestSummary = requestSummariesByOrg.get(row.id);
-        const operationalSummary = buildOperationalSummary({
-          profile,
-          supportPolicy: planAccess.supportPolicy,
-          openRequestsCount: Number(requestSummary?.openRequestsCount ?? 0),
-          urgentRequestsCount: Number(requestSummary?.urgentRequestsCount ?? 0),
-          dueSoonRequestsCount: Number(requestSummary?.dueSoonRequestsCount ?? 0),
-          breachedRequestsCount: Number(requestSummary?.breachedRequestsCount ?? 0),
-          escalatedRequestsCount: Number(requestSummary?.escalatedRequestsCount ?? 0),
-          totalRequestsCount: Number(requestSummary?.totalRequestsCount ?? 0),
-        });
+      data: organizations
+        .map((row) => {
+          const profile = profilesByOrg.get(row.id)!;
+          const planAccess = planAccessByOrg.get(row.id)!;
+          const requestSummary = requestSummariesByOrg.get(row.id);
+          const operationalSummary = buildOperationalSummary({
+            profile,
+            supportPolicy: planAccess.supportPolicy,
+            openRequestsCount: Number(requestSummary?.openRequestsCount ?? 0),
+            urgentRequestsCount: Number(
+              requestSummary?.urgentRequestsCount ?? 0,
+            ),
+            dueSoonRequestsCount: Number(
+              requestSummary?.dueSoonRequestsCount ?? 0,
+            ),
+            breachedRequestsCount: Number(
+              requestSummary?.breachedRequestsCount ?? 0,
+            ),
+            escalatedRequestsCount: Number(
+              requestSummary?.escalatedRequestsCount ?? 0,
+            ),
+            totalRequestsCount: Number(requestSummary?.totalRequestsCount ?? 0),
+          });
 
-        return {
-          id: row.id,
-          name: row.name,
-          slug: row.slug,
-          type: row.type,
-          accountOwnerName: profile.accountOwnerName,
-          accountOwnerEmail: profile.accountOwnerEmail,
-          supportContactEmail: profile.supportContactEmail,
-          internalOwnerUser: profile.internalOwnerUserId
-            ? operatorsById.get(profile.internalOwnerUserId) ?? null
-            : null,
-          profile: {
-            onboardingStatus: profile.onboardingStatus,
-            migrationStatus: profile.migrationStatus,
-            goLiveStatus: operationalSummary.goLiveStatus,
-            healthStatus: operationalSummary.healthStatus,
-            nextAction: profile.nextAction,
-            nextActionDueAt: profile.nextActionDueAt,
-            nextActionCompletedAt: profile.nextActionCompletedAt,
-            lastTouchedAt: profile.lastTouchedAt,
-            goLiveTargetDate: profile.goLiveTargetDate,
-            goLiveActualDate: profile.goLiveActualDate,
-            prioritySupport: operationalSummary.prioritySupport,
-            slaTier: operationalSummary.effectiveSlaTier,
-            blockers: operationalSummary.blockers,
-          },
-          supportPolicy: planAccess.supportPolicy,
-          plan: {
-            id: planAccess.planId,
-            name: planAccess.planName,
-            status: planAccess.status,
-          },
-          operationalSummary,
-          workflow: operationalSummary.workflow,
-          workflowWarnings: operationalSummary.workflowWarnings,
-          workflowViolations: operationalSummary.workflowViolations,
-          policy: operationalSummary.policy,
-        };
-      }).sort((left, right) => {
-        if (right.operationalSummary.attentionScore !== left.operationalSummary.attentionScore) {
-          return right.operationalSummary.attentionScore - left.operationalSummary.attentionScore;
-        }
+          return {
+            id: row.id,
+            name: row.name,
+            slug: row.slug,
+            type: row.type,
+            accountOwnerName: profile.accountOwnerName,
+            accountOwnerEmail: profile.accountOwnerEmail,
+            supportContactEmail: profile.supportContactEmail,
+            internalOwnerUser: profile.internalOwnerUserId
+              ? (operatorsById.get(profile.internalOwnerUserId) ?? null)
+              : null,
+            profile: {
+              onboardingStatus: profile.onboardingStatus,
+              migrationStatus: profile.migrationStatus,
+              goLiveStatus: operationalSummary.goLiveStatus,
+              healthStatus: operationalSummary.healthStatus,
+              nextAction: profile.nextAction,
+              nextActionDueAt: profile.nextActionDueAt,
+              nextActionCompletedAt: profile.nextActionCompletedAt,
+              lastTouchedAt: profile.lastTouchedAt,
+              goLiveTargetDate: profile.goLiveTargetDate,
+              goLiveActualDate: profile.goLiveActualDate,
+              prioritySupport: operationalSummary.prioritySupport,
+              slaTier: operationalSummary.effectiveSlaTier,
+              blockers: operationalSummary.blockers,
+            },
+            supportPolicy: planAccess.supportPolicy,
+            plan: {
+              id: planAccess.planId,
+              name: planAccess.planName,
+              status: planAccess.status,
+            },
+            operationalSummary,
+            workflow: operationalSummary.workflow,
+            workflowWarnings: operationalSummary.workflowWarnings,
+            workflowViolations: operationalSummary.workflowViolations,
+            policy: operationalSummary.policy,
+          };
+        })
+        .sort((left, right) => {
+          if (
+            right.operationalSummary.attentionScore !==
+            left.operationalSummary.attentionScore
+          ) {
+            return (
+              right.operationalSummary.attentionScore -
+              left.operationalSummary.attentionScore
+            );
+          }
 
-        const leftDue = left.profile.nextActionDueAt
-          ? new Date(left.profile.nextActionDueAt).getTime()
-          : Number.POSITIVE_INFINITY;
-        const rightDue = right.profile.nextActionDueAt
-          ? new Date(right.profile.nextActionDueAt).getTime()
-          : Number.POSITIVE_INFINITY;
+          const leftDue = left.profile.nextActionDueAt
+            ? new Date(left.profile.nextActionDueAt).getTime()
+            : Number.POSITIVE_INFINITY;
+          const rightDue = right.profile.nextActionDueAt
+            ? new Date(right.profile.nextActionDueAt).getTime()
+            : Number.POSITIVE_INFINITY;
 
-        return leftDue - rightDue;
-      }),
+          return leftDue - rightDue;
+        }),
     });
   })
   .get("/organizations/:id/profile", async (c) => {
@@ -677,16 +707,19 @@ export const internalCustomerSuccessRouter = new Hono<{
       return c.json({ error: "Organização não encontrada" }, 404);
     }
 
-    const [profile, planAccess, requestsData, timeline, operators] = await Promise.all([
-      ensureSuccessProfile(org.id),
-      getOrganizationPlanAccess(org.id),
-      listRequestsForOrganization(org.id),
-      getTimelineForOrganization(org.id),
-      listInternalOperators(),
-    ]);
+    const [profile, planAccess, requestsData, timeline, operators] =
+      await Promise.all([
+        ensureSuccessProfile(org.id),
+        getOrganizationPlanAccess(org.id),
+        listRequestsForOrganization(org.id),
+        getTimelineForOrganization(org.id),
+        listInternalOperators(),
+      ]);
 
     const internalOwnerUser = profile.internalOwnerUserId
-      ? operators.find((operator) => operator.id === profile.internalOwnerUserId) ?? null
+      ? (operators.find(
+          (operator) => operator.id === profile.internalOwnerUserId,
+        ) ?? null)
       : null;
 
     return c.json({
@@ -727,7 +760,9 @@ export const internalCustomerSuccessRouter = new Hono<{
         return c.json({ error: "Organização não encontrada" }, 404);
       }
 
-      const previousAutomation = await getCustomerSuccessAutomationSnapshot(org.id);
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(
+        org.id,
+      );
       const existing = await ensureSuccessProfile(org.id);
       const nextInternalOwnerUserId =
         input.internalOwnerUserId !== undefined
@@ -804,7 +839,8 @@ export const internalCustomerSuccessRouter = new Hono<{
       const [updated] = await db
         .update(organizationSuccessProfile)
         .set({
-          accountOwnerUserId: input.accountOwnerUserId ?? existing.accountOwnerUserId,
+          accountOwnerUserId:
+            input.accountOwnerUserId ?? existing.accountOwnerUserId,
           accountOwnerName:
             input.accountOwnerName !== undefined
               ? normalizeNullableText(input.accountOwnerName)
@@ -836,7 +872,8 @@ export const internalCustomerSuccessRouter = new Hono<{
                 : null
               : existing.nextActionDueAt,
           nextActionCompletedAt:
-            input.nextAction !== undefined || input.nextActionDueAt !== undefined
+            input.nextAction !== undefined ||
+            input.nextActionDueAt !== undefined
               ? null
               : existing.nextActionCompletedAt,
           goLiveTargetDate:
@@ -873,7 +910,9 @@ export const internalCustomerSuccessRouter = new Hono<{
         entityId: String(updated?.id ?? existing.id),
         details: {
           internalOwnerUserId:
-            input.internalOwnerUserId !== undefined ? input.internalOwnerUserId : undefined,
+            input.internalOwnerUserId !== undefined
+              ? input.internalOwnerUserId
+              : undefined,
           prioritySupport: input.prioritySupport,
           slaTier: input.slaTier,
           onboardingStatus: input.onboardingStatus,
@@ -881,7 +920,9 @@ export const internalCustomerSuccessRouter = new Hono<{
           goLiveStatus: input.goLiveStatus,
           healthStatus: input.healthStatus,
           nextAction:
-            input.nextAction !== undefined ? normalizeNullableText(input.nextAction) : undefined,
+            input.nextAction !== undefined
+              ? normalizeNullableText(input.nextAction)
+              : undefined,
         },
       });
 
@@ -911,7 +952,9 @@ export const internalCustomerSuccessRouter = new Hono<{
         return c.json({ error: "Organização não encontrada" }, 404);
       }
 
-      const previousAutomation = await getCustomerSuccessAutomationSnapshot(org.id);
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(
+        org.id,
+      );
       const existing = await ensureSuccessProfile(org.id);
       const nextAction = input.markCompleted
         ? null
@@ -1002,7 +1045,9 @@ export const internalCustomerSuccessRouter = new Hono<{
         return c.json({ error: "Informe o motivo do bloqueio" }, 400);
       }
 
-      const previousAutomation = await getCustomerSuccessAutomationSnapshot(org.id);
+      const previousAutomation = await getCustomerSuccessAutomationSnapshot(
+        org.id,
+      );
       const existing = await ensureSuccessProfile(org.id);
       const blockers =
         input.mode === "ADD"
@@ -1182,7 +1227,9 @@ export const internalCustomerSuccessRouter = new Hono<{
         .update(organizationSupportRequest)
         .set({
           status: nextStatus,
-          publicResponse: input.publicVisible ? input.message : existing.publicResponse,
+          publicResponse: input.publicVisible
+            ? input.message
+            : existing.publicResponse,
           firstResponseAt: existing.firstResponseAt ?? new Date(),
           updatedAt: new Date(),
         })

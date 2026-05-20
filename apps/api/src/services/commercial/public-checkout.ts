@@ -165,13 +165,17 @@ export type PublicCheckoutStartResponse =
       type: "PIX_READY";
       state: "PIX_READY";
       paymentId: number;
-      pix: NonNullable<Extract<PublicCheckoutPresentation, { type: "PIX" }>["pix"]>;
+      pix: NonNullable<
+        Extract<PublicCheckoutPresentation, { type: "PIX" }>["pix"]
+      >;
     }
   | {
       type: "BOLETO_READY";
       state: "BOLETO_READY";
       paymentId: number;
-      boleto: NonNullable<Extract<PublicCheckoutPresentation, { type: "BOLETO" }>["boleto"]>;
+      boleto: NonNullable<
+        Extract<PublicCheckoutPresentation, { type: "BOLETO" }>["boleto"]
+      >;
     }
   | {
       type: "REDIRECT";
@@ -193,13 +197,19 @@ function isPublicTokenFormat(token: string) {
 }
 
 function getPaymentMethod(offer: OfferRow): CommercialPaymentMethod {
-  return (offer.paymentMethods[0] as CommercialPaymentMethod | undefined) ?? "BOLETO";
+  return (
+    (offer.paymentMethods[0] as CommercialPaymentMethod | undefined) ?? "BOLETO"
+  );
 }
 
 function getRecurringAmount(offer: OfferRow) {
   const terms = (offer.termsSnapshot ?? {}) as Record<string, unknown>;
   const value = terms.recurringAmount;
-  return typeof value === "number" ? value : offer.kind === "PLAN_RECURRING" ? offer.totalAmount : null;
+  return typeof value === "number"
+    ? value
+    : offer.kind === "PLAN_RECURRING"
+      ? offer.totalAmount
+      : null;
 }
 
 function getPaymentPresentationStatus(payment: PaymentRecordRow | null) {
@@ -267,7 +277,10 @@ function getProviderSnapshotValue<T>(
   payment: PaymentRecordRow | null,
   key: string,
 ): T | null {
-  if (!payment?.providerSnapshot || typeof payment.providerSnapshot !== "object") {
+  if (
+    !payment?.providerSnapshot ||
+    typeof payment.providerSnapshot !== "object"
+  ) {
     return null;
   }
 
@@ -307,11 +320,15 @@ function buildPresentation(
 
   const paymentMethod = getPaymentMethod(offer);
   const paymentId = latestPayment?.id ?? null;
-  const dueDate = latestPayment?.dueDate?.toISOString() ?? offer.dueDate?.toISOString() ?? null;
+  const dueDate =
+    latestPayment?.dueDate?.toISOString() ??
+    offer.dueDate?.toISOString() ??
+    null;
 
   if (paymentMethod === "PIX" && latestPayment) {
     const qrCodeImage = normalizePixImage(
-      latestPayment.pixQrCodeUrl ?? getSnapshotPixValue(latestPayment, "qrCode"),
+      latestPayment.pixQrCodeUrl ??
+        getSnapshotPixValue(latestPayment, "qrCode"),
     );
     const payload =
       latestPayment.pixPayload ??
@@ -337,12 +354,15 @@ function buildPresentation(
       type: "BOLETO" as const,
       paymentId,
       providerPaymentId: latestPayment.providerPaymentId ?? null,
-      providerUrl: latestPayment.bankSlipUrl ?? latestPayment.invoiceUrl ?? null,
+      providerUrl:
+        latestPayment.bankSlipUrl ?? latestPayment.invoiceUrl ?? null,
       pix: null,
       boleto: {
         bankSlipUrl: latestPayment.bankSlipUrl ?? null,
-        identificationField:
-          getProviderSnapshotValue<string>(latestPayment, "identificationField"),
+        identificationField: getProviderSnapshotValue<string>(
+          latestPayment,
+          "identificationField",
+        ),
         dueDate,
         amount: latestPayment.amount,
       },
@@ -368,7 +388,10 @@ function buildPresentation(
 function serializeSnapshot(
   context: OfferContext,
 ): ValidPublicCheckoutSnapshotResponse {
-  const state = resolveCommercialPublicState(context.offer, context.latestPayment);
+  const state = resolveCommercialPublicState(
+    context.offer,
+    context.latestPayment,
+  );
 
   return {
     state,
@@ -406,24 +429,32 @@ function serializeSnapshot(
       },
       payer: {
         name:
-          typeof (context.offer.customerSnapshot as Record<string, unknown> | null)?.name ===
-          "string"
-            ? ((context.offer.customerSnapshot as Record<string, unknown>).name as string)
+          typeof (
+            context.offer.customerSnapshot as Record<string, unknown> | null
+          )?.name === "string"
+            ? ((context.offer.customerSnapshot as Record<string, unknown>)
+                .name as string)
             : null,
         email:
-          typeof (context.offer.customerSnapshot as Record<string, unknown> | null)?.email ===
-          "string"
-            ? ((context.offer.customerSnapshot as Record<string, unknown>).email as string)
+          typeof (
+            context.offer.customerSnapshot as Record<string, unknown> | null
+          )?.email === "string"
+            ? ((context.offer.customerSnapshot as Record<string, unknown>)
+                .email as string)
             : null,
         phone:
-          typeof (context.offer.customerSnapshot as Record<string, unknown> | null)?.phone ===
-          "string"
-            ? ((context.offer.customerSnapshot as Record<string, unknown>).phone as string)
+          typeof (
+            context.offer.customerSnapshot as Record<string, unknown> | null
+          )?.phone === "string"
+            ? ((context.offer.customerSnapshot as Record<string, unknown>)
+                .phone as string)
             : null,
         taxId:
-          typeof (context.offer.customerSnapshot as Record<string, unknown> | null)?.cpfCnpj ===
-          "string"
-            ? ((context.offer.customerSnapshot as Record<string, unknown>).cpfCnpj as string)
+          typeof (
+            context.offer.customerSnapshot as Record<string, unknown> | null
+          )?.cpfCnpj === "string"
+            ? ((context.offer.customerSnapshot as Record<string, unknown>)
+                .cpfCnpj as string)
             : null,
       },
     },
@@ -442,21 +473,21 @@ async function loadOfferContextById(executor: typeof db, offerId: string) {
 
   const [items, organizationRecord, billingCustomerRecord, latestPayment] =
     await Promise.all([
-    executor.query.commercialOfferItem.findMany({
-      where: eq(commercialOfferItem.offerId, offer.id),
-      orderBy: [commercialOfferItem.id],
-    }),
-    executor.query.organization.findFirst({
-      where: eq(organization.id, offer.organizationId),
-    }),
-    executor.query.billingCustomer.findFirst({
-      where: eq(billingCustomer.id, offer.billingCustomerId),
-    }),
-    executor.query.paymentRecord.findFirst({
-      where: eq(paymentRecord.commercialOfferId, offer.id),
-      orderBy: [desc(paymentRecord.createdAt)],
-    }),
-  ]);
+      executor.query.commercialOfferItem.findMany({
+        where: eq(commercialOfferItem.offerId, offer.id),
+        orderBy: [commercialOfferItem.id],
+      }),
+      executor.query.organization.findFirst({
+        where: eq(organization.id, offer.organizationId),
+      }),
+      executor.query.billingCustomer.findFirst({
+        where: eq(billingCustomer.id, offer.billingCustomerId),
+      }),
+      executor.query.paymentRecord.findFirst({
+        where: eq(paymentRecord.commercialOfferId, offer.id),
+        orderBy: [desc(paymentRecord.createdAt)],
+      }),
+    ]);
 
   if (!organizationRecord || !billingCustomerRecord) {
     throw new Error("Dados vinculados à oferta pública não encontrados");
@@ -496,7 +527,10 @@ async function recordOfferAccess(
   offerId: string,
   meta: PublicRequestMeta,
   eventType: typeof commercialOfferAccessLog.$inferInsert.eventType,
-  publicState: Exclude<CommercialPublicCheckoutState, "INVALID" | "REDIRECTING">,
+  publicState: Exclude<
+    CommercialPublicCheckoutState,
+    "INVALID" | "REDIRECTING"
+  >,
   markViewed = false,
   metadata?: Record<string, unknown> | null,
 ) {
@@ -520,7 +554,10 @@ async function recordOfferAccess(
   });
 }
 
-function buildPreviewFromOffer(offer: OfferRow, items: OfferItemRow[]): CommercialOfferPreviewResult {
+function buildPreviewFromOffer(
+  offer: OfferRow,
+  items: OfferItemRow[],
+): CommercialOfferPreviewResult {
   const normalizedItems: CommercialOfferPreviewResult["normalizedSnapshot"]["items"] =
     items.length > 0
       ? items.map((item) => ({
@@ -551,7 +588,11 @@ function buildPreviewFromOffer(offer: OfferRow, items: OfferItemRow[]): Commerci
     warnings: [],
     normalizedSnapshot: {
       kind: offer.kind,
-      basePlanId: offer.basePlanId as "STANDARD" | "PROFESSIONAL" | "ENTERPRISE" | undefined,
+      basePlanId: offer.basePlanId as
+        | "STANDARD"
+        | "PROFESSIONAL"
+        | "ENTERPRISE"
+        | undefined,
       billingCycle: offer.billingCycle as "MONTHLY" | "YEARLY" | undefined,
       contractTermMonths: offer.contractTermMonths,
       paymentMethods: offer.paymentMethods as CommercialPaymentMethod[],
@@ -592,7 +633,10 @@ async function createLazyArtifactForOffer(params: {
   const description =
     preview.normalizedSnapshot.customerVisibleDescription ??
     buildOfferDescription(preview);
-  const callbacks = buildProviderReturnUrls(params.publicAppUrl, params.publicToken);
+  const callbacks = buildProviderReturnUrls(
+    params.publicAppUrl,
+    params.publicToken,
+  );
 
   if (params.offer.providerMode === "CHECKOUT") {
     const checkout = await createCheckout({
@@ -637,7 +681,10 @@ async function createLazyArtifactForOffer(params: {
           description,
           callbacks,
         },
-        providerResponseSnapshot: checkout as unknown as Record<string, unknown>,
+        providerResponseSnapshot: checkout as unknown as Record<
+          string,
+          unknown
+        >,
       },
       paymentValues: null,
       paymentStatus: null,
@@ -662,7 +709,9 @@ async function createLazyArtifactForOffer(params: {
       externalReference,
     });
 
-    const payments = await getSubscriptionPayments(subscriptionResult.id, { limit: 1 });
+    const payments = await getSubscriptionPayments(subscriptionResult.id, {
+      limit: 1,
+    });
     const firstPayment = payments.data[0];
 
     if (!firstPayment) {
@@ -684,10 +733,7 @@ async function createLazyArtifactForOffer(params: {
         callbacks,
       },
       providerSubscriptionId: subscriptionResult.id,
-      checkoutUrl:
-        firstPayment.invoiceUrl ??
-        firstPayment.bankSlipUrl ??
-        null,
+      checkoutUrl: firstPayment.invoiceUrl ?? firstPayment.bankSlipUrl ?? null,
     });
   }
 
@@ -721,8 +767,8 @@ async function createLazyArtifactForOffer(params: {
     providerSubscriptionId: payment.subscription ?? null,
     checkoutUrl:
       paymentMethod === "CREDIT_CARD"
-        ? payment.invoiceUrl ?? null
-        : payment.invoiceUrl ?? payment.bankSlipUrl ?? null,
+        ? (payment.invoiceUrl ?? null)
+        : (payment.invoiceUrl ?? payment.bankSlipUrl ?? null),
   });
 }
 
@@ -759,7 +805,8 @@ async function buildPaymentArtifactResult(params: {
 
   if (params.paymentMethod === "BOLETO") {
     const identificationField = await getPaymentBoletoLine(params.payment.id);
-    paymentSnapshot.identificationField = identificationField.identificationField;
+    paymentSnapshot.identificationField =
+      identificationField.identificationField;
     paymentSnapshot.nossoNumero = identificationField.nossoNumero;
     paymentSnapshot.barCode = identificationField.barCode;
   }
@@ -785,13 +832,14 @@ async function buildPaymentArtifactResult(params: {
       paymentMethod: params.paymentMethod,
       status: params.payment.status,
       dueDate: params.payment.dueDate ? new Date(params.payment.dueDate) : null,
-      paidAt: params.payment.paymentDate ? new Date(params.payment.paymentDate) : null,
+      paidAt: params.payment.paymentDate
+        ? new Date(params.payment.paymentDate)
+        : null,
       invoiceUrl: params.payment.invoiceUrl ?? null,
       bankSlipUrl: params.payment.bankSlipUrl ?? null,
       pixQrCodeUrl,
       pixPayload,
-      cardLast4:
-        params.payment.creditCard?.creditCardNumber?.slice(-4) ?? null,
+      cardLast4: params.payment.creditCard?.creditCardNumber?.slice(-4) ?? null,
       cardBrand: params.payment.creditCard?.creditCardBrand ?? null,
       providerSnapshot: paymentSnapshot,
     },
@@ -806,8 +854,11 @@ async function buildPaymentArtifactResult(params: {
               qrCodeImage: pixQrCodeUrl,
               payload: pixPayload,
               expirationDate:
-                (paymentSnapshot.pixTransaction as Record<string, unknown> | undefined)
-                  ?.expirationDate as string | null | undefined ?? null,
+                ((
+                  paymentSnapshot.pixTransaction as
+                    | Record<string, unknown>
+                    | undefined
+                )?.expirationDate as string | null | undefined) ?? null,
             },
           } satisfies PublicCheckoutStartResponse)
         : params.paymentMethod === "BOLETO"
@@ -818,11 +869,11 @@ async function buildPaymentArtifactResult(params: {
               boleto: {
                 bankSlipUrl: params.payment.bankSlipUrl ?? null,
                 identificationField:
-                  (paymentSnapshot.identificationField as string | undefined) ?? null,
-                dueDate:
-                  params.payment.dueDate
-                    ? new Date(params.payment.dueDate).toISOString()
-                    : null,
+                  (paymentSnapshot.identificationField as string | undefined) ??
+                  null,
+                dueDate: params.payment.dueDate
+                  ? new Date(params.payment.dueDate).toISOString()
+                  : null,
                 amount: Math.round(params.payment.value * 100),
               },
             } satisfies PublicCheckoutStartResponse)
@@ -874,7 +925,9 @@ function coerceStartResponse(
     };
   }
 
-  throw new Error("A oferta ainda não possui uma apresentação pública iniciada");
+  throw new Error(
+    "A oferta ainda não possui uma apresentação pública iniciada",
+  );
 }
 
 export function getPublicRequestMeta(request: Request): PublicRequestMeta {
@@ -895,7 +948,9 @@ export async function getCommercialPublicCheckout(
     return { state: "INVALID", offer: null, presentation: null };
   }
 
-  const context = await loadOfferContextByTokenHash(hashCommercialPublicToken(token));
+  const context = await loadOfferContextByTokenHash(
+    hashCommercialPublicToken(token),
+  );
   if (!context) {
     return { state: "INVALID", offer: null, presentation: null };
   }
@@ -921,13 +976,25 @@ export async function getCommercialPublicCheckoutStatus(
     return { state: "INVALID" };
   }
 
-  const context = await loadOfferContextByTokenHash(hashCommercialPublicToken(token));
+  const context = await loadOfferContextByTokenHash(
+    hashCommercialPublicToken(token),
+  );
   if (!context) {
     return { state: "INVALID" };
   }
 
-  const state = resolveCommercialPublicState(context.offer, context.latestPayment);
-  await recordOfferAccess(db, context.offer.id, meta, "STATUS_CHECKED", state, false);
+  const state = resolveCommercialPublicState(
+    context.offer,
+    context.latestPayment,
+  );
+  await recordOfferAccess(
+    db,
+    context.offer.id,
+    meta,
+    "STATUS_CHECKED",
+    state,
+    false,
+  );
 
   return {
     state,
@@ -1019,7 +1086,10 @@ export async function startCommercialPublicCheckout(params: {
       publicAppUrl: params.publicAppUrl,
     });
 
-    if (!createdArtifact.offerValues.providerCheckoutId && !createdArtifact.offerValues.providerPaymentId) {
+    if (
+      !createdArtifact.offerValues.providerCheckoutId &&
+      !createdArtifact.offerValues.providerPaymentId
+    ) {
       throw new Error("Falha ao iniciar o artefato público de pagamento");
     }
 
@@ -1027,8 +1097,10 @@ export async function startCommercialPublicCheckout(params: {
       .update(commercialOffer)
       .set({
         checkoutUrl: createdArtifact.offerValues.checkoutUrl ?? null,
-        providerCheckoutId: createdArtifact.offerValues.providerCheckoutId ?? null,
-        providerPaymentId: createdArtifact.offerValues.providerPaymentId ?? null,
+        providerCheckoutId:
+          createdArtifact.offerValues.providerCheckoutId ?? null,
+        providerPaymentId:
+          createdArtifact.offerValues.providerPaymentId ?? null,
         providerSubscriptionId:
           createdArtifact.offerValues.providerSubscriptionId ?? null,
         providerRequestSnapshot:
@@ -1049,7 +1121,8 @@ export async function startCommercialPublicCheckout(params: {
           provider: "ASAAS",
           providerCheckoutId: createdArtifact.paymentValues.providerCheckoutId,
           providerPaymentId: createdArtifact.paymentValues.providerPaymentId,
-          providerSubscriptionId: createdArtifact.paymentValues.providerSubscriptionId,
+          providerSubscriptionId:
+            createdArtifact.paymentValues.providerSubscriptionId,
           externalReference: createdArtifact.paymentValues.externalReference,
           amount: createdArtifact.paymentValues.amount,
           netAmount: createdArtifact.paymentValues.netAmount,
