@@ -28,7 +28,6 @@
 
 ## API / Client Architecture Rules
 
-- Do not migrate the API framework inside ordinary refactors.
 - Frontend apps must not import from `@calibra-facil/api` or from `apps/api/*`. Use `@calibra-facil/contracts` and `@calibra-facil/client-runtime`.
 - `packages/contracts` must not import `apps/api/*`. Contracts are the stable client-facing boundary, not a type alias back to the server implementation.
 - Do not set `AppType` to `any`. The Hono RPC app type lives in `packages/contracts/src/api-app.ts` and must remain server-free.
