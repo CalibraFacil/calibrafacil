@@ -204,9 +204,7 @@ function toCertificateJobData(
   config: LocalServerConfig,
 ): JobData {
   const assetSnapshot = toRecord(job.assetSnapshot);
-  const methodSnapshot = toRecord(
-    job.methodSnapshot,
-  ) as JobData["methodSnapshot"];
+  const methodSnapshot = toCertificateMethodSnapshot(job.methodSnapshot);
   const environmentalSnapshot = toRecordOrNull(
     job.environmentalSnapshot,
   ) as JobData["environmentalSnapshot"];
@@ -302,6 +300,38 @@ function toRecord(value: unknown): Record<string, unknown> {
 function toRecordOrNull(value: unknown): Record<string, unknown> | null {
   const record = toRecord(value);
   return Object.keys(record).length > 0 ? record : null;
+}
+
+function toCertificateMethodSnapshot(
+  value: unknown,
+): JobData["methodSnapshot"] {
+  const methodSnapshot = toRecord(value) as JobData["methodSnapshot"] & {
+    formulas?: unknown[];
+  };
+
+  return {
+    ...methodSnapshot,
+    formulas: Array.isArray(methodSnapshot.formulas)
+      ? methodSnapshot.formulas.map(toCertificateFormula)
+      : [],
+  };
+}
+
+function toCertificateFormula(value: unknown) {
+  const formula = toRecord(value);
+  const outputKey =
+    getString(formula, "outputKey") ?? getString(formula, "key");
+
+  return {
+    ...formula,
+    outputKey: outputKey ?? "",
+    expression: getString(formula, "expression") ?? "",
+    label: getString(formula, "label") ?? outputKey ?? undefined,
+    unit:
+      getNullableString(formula, "unit") ??
+      getNullableString(formula, "outputUnit") ??
+      undefined,
+  };
 }
 
 function getString(row: Record<string, unknown>, key: string) {
