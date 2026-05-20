@@ -8,7 +8,7 @@ import {
   getStoredDashboardOrganizationId,
   prewarmRouteQueries,
 } from '@/lib/route-data'
-import { api, calibraApi } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { isDesktopRuntime } from '@/runtime/desktop'
 
 const PREWARM_COOLDOWN_MS = 3_000
@@ -39,18 +39,6 @@ function query(options: PrewarmQuery) {
     staleTime: DEFAULT_PREWARM_STALE_TIME_MS,
     ...options,
   }
-}
-
-function apiQuery<T extends Record<string, unknown>>(value: T) {
-  return value as never
-}
-
-async function jsonOrThrow(response: Response, message: string) {
-  if (!response.ok) {
-    throw new Error(message)
-  }
-
-  return response.json() as Promise<unknown>
 }
 
 function prewarmQueries(
@@ -314,30 +302,19 @@ function calibrationRequestsListQuery(organizationId: string, url: URL) {
   return query({
     queryKey: ['calibration-requests', organizationId, page, search, status],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api['calibration-requests'].$get({
-          query: apiQuery({
-            page: String(page),
-            limit: String(DEFAULT_LIST_LIMIT),
-            query: search || undefined,
-            status: status || undefined,
-          }),
-        }),
-        'Failed to load calibration requests',
-      ),
+      calibraApi.calibrationRequests.list({
+        page,
+        limit: DEFAULT_LIST_LIMIT,
+        query: search || undefined,
+        status: status || undefined,
+      }),
   })
 }
 
 function calibrationRequestDetailQuery(id: string) {
   return query({
     queryKey: ['calibration-request', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api['calibration-requests'][':id'].$get({
-          param: { id },
-        }),
-        'Failed to load calibration request',
-      ),
+    queryFn: async () => calibraApi.calibrationRequests.get(id),
   })
 }
 
@@ -348,38 +325,25 @@ function personnelListQuery(url: URL) {
   return query({
     queryKey: ['competences', page, status],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.competences.$get({
-          query: apiQuery({
-            page: String(page),
-            limit: String(DEFAULT_LIST_LIMIT),
-            status: status || undefined,
-          }),
-        }),
-        'Failed to load competences',
-      ),
+      calibraApi.competences.list({
+        page,
+        limit: DEFAULT_LIST_LIMIT,
+        status: status || undefined,
+      }),
   })
 }
 
 function competenceDetailQuery(id: string) {
   return query({
     queryKey: ['competence', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.competences[':id'].$get({ param: { id } }),
-        'Failed to load competence',
-      ),
+    queryFn: async () => calibraApi.competences.get(id),
   })
 }
 
 function competenceAuditQuery(id: string) {
   return query({
     queryKey: ['competence-audit', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.competences[':id']['audit-log'].$get({ param: { id } }),
-        'Failed to load competence audit log',
-      ),
+    queryFn: async () => calibraApi.competences.auditLog(id),
   })
 }
 
@@ -392,51 +356,34 @@ function ncListQuery(url: URL) {
   return query({
     queryKey: ['non-conformances', page, search, status, type],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.nc.$get({
-          query: apiQuery({
-            page: String(page),
-            limit: String(DEFAULT_LIST_LIMIT),
-            query: search || undefined,
-            status: status || undefined,
-            type: type || undefined,
-          }),
-        }),
-        'Failed to load non-conformances',
-      ),
+      calibraApi.nonConformances.list({
+        page,
+        limit: DEFAULT_LIST_LIMIT,
+        query: search || undefined,
+        status: status || undefined,
+        type: type || undefined,
+      }),
   })
 }
 
 function ncSummaryQuery() {
   return query({
     queryKey: ['non-conformances-summary'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.nc.summary.$get(),
-        'Failed to load non-conformance summary',
-      ),
+    queryFn: async () => calibraApi.nonConformances.summary(),
   })
 }
 
 function ncDetailQuery(id: string) {
   return query({
     queryKey: ['non-conformance', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.nc[':id'].$get({ param: { id } }),
-        'Failed to load non-conformance',
-      ),
+    queryFn: async () => calibraApi.nonConformances.get(id),
   })
 }
 
 function ncAuditQuery(id: string) {
   return query({
     queryKey: ['non-conformance-audit', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.nc[':id']['audit-log'].$get({ param: { id } }),
-        'Failed to load non-conformance audit log',
-      ),
+    queryFn: async () => calibraApi.nonConformances.auditLog(id),
   })
 }
 
@@ -450,52 +397,35 @@ function capaListQuery(url: URL) {
   return query({
     queryKey: ['capas', page, search, status, severity, category],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.capa.$get({
-          query: apiQuery({
-            page: String(page),
-            limit: String(DEFAULT_LIST_LIMIT),
-            query: search || undefined,
-            status: status || undefined,
-            severity: severity || undefined,
-            category: category || undefined,
-          }),
-        }),
-        'Failed to load CAPAs',
-      ),
+      calibraApi.capas.list({
+        page,
+        limit: DEFAULT_LIST_LIMIT,
+        query: search || undefined,
+        status: status || undefined,
+        severity: severity || undefined,
+        category: category || undefined,
+      }),
   })
 }
 
 function capaSummaryQuery() {
   return query({
     queryKey: ['capas-summary'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.capa.summary.$get(),
-        'Failed to load CAPA summary',
-      ),
+    queryFn: async () => calibraApi.capas.summary(),
   })
 }
 
 function capaDetailQuery(id: string) {
   return query({
     queryKey: ['capa', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.capa[':id'].$get({ param: { id } }),
-        'Failed to load CAPA',
-      ),
+    queryFn: async () => calibraApi.capas.get(id),
   })
 }
 
 function capaAuditQuery(id: string) {
   return query({
     queryKey: ['capa-audit-log', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.capa[':id']['audit-log'].$get({ param: { id } }),
-        'Failed to load CAPA audit log',
-      ),
+    queryFn: async () => calibraApi.capas.auditLog(id),
   })
 }
 
@@ -509,11 +439,7 @@ function techniciansQuery(key: readonly unknown[] = ['jobs', 'technicians']) {
 function financeOverviewQuery() {
   return query({
     queryKey: ['finance', 'overview'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.finance.overview.$get(),
-        'Failed to load finance overview',
-      ),
+    queryFn: async () => calibraApi.finance.getOverview(),
   })
 }
 
@@ -523,23 +449,14 @@ function financeDocumentsQuery(url: URL) {
   return query({
     queryKey: ['finance', 'documents', search],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.finance.documents.$get({
-          query: { query: search || undefined },
-        }),
-        'Failed to load finance documents',
-      ),
+      calibraApi.finance.listDocuments({ query: search || undefined }),
   })
 }
 
 function financeDocumentDetailQuery(id: string) {
   return query({
     queryKey: ['finance', 'documents', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.finance.documents[':id'].$get({ param: { id } }),
-        'Failed to load finance document',
-      ),
+    queryFn: async () => calibraApi.finance.getDocument(id),
   })
 }
 
@@ -549,102 +466,63 @@ function financeContractsQuery(url: URL) {
   return query({
     queryKey: ['finance', 'contracts', search],
     queryFn: async () =>
-      jsonOrThrow(
-        await api.api.finance.contracts.$get({
-          query: { query: search || undefined },
-        }),
-        'Failed to load finance contracts',
-      ),
+      calibraApi.finance.listContracts({ query: search || undefined }),
   })
 }
 
 function financeContractDetailQuery(id: string) {
   return query({
     queryKey: ['finance', 'contracts', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.finance.contracts[':id'].$get({ param: { id } }),
-        'Failed to load finance contract',
-      ),
+    queryFn: async () => calibraApi.finance.getContract(id),
   })
 }
 
 function financeReceiptsQuery() {
   return query({
     queryKey: ['finance', 'receipts'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.finance.receipts.$get(),
-        'Failed to load finance receipts',
-      ),
+    queryFn: async () => calibraApi.finance.listReceipts(),
   })
 }
 
 function financeErpQuery() {
   return query({
     queryKey: ['finance', 'erp'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.finance.erp.exports.$get(),
-        'Failed to load ERP exports',
-      ),
+    queryFn: async () => calibraApi.finance.listErpExports(),
   })
 }
 
 function certificateTemplatesQuery() {
   return query({
     queryKey: ['certificate-templates'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api['certificate-templates'].$get(),
-        'Failed to load certificate templates',
-      ),
+    queryFn: async () => calibraApi.certificateTemplates.list(),
   })
 }
 
 function executiveReportQuery() {
   return query({
     queryKey: ['reports', 'executive'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.reports.consolidated['executive-overview'].$get({
-          query: {},
-        }),
-        'Failed to load executive report',
-      ),
+    queryFn: async () => calibraApi.reports.getExecutiveOverview(),
   })
 }
 
 function comparisonReportQuery() {
   return query({
     queryKey: ['reports', 'comparison'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.reports.consolidated.comparison.$get({ query: {} }),
-        'Failed to load comparison report',
-      ),
+    queryFn: async () => calibraApi.reports.getComparison(),
   })
 }
 
 function trendReportQuery() {
   return query({
     queryKey: ['reports', 'trend'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.reports.consolidated.trend.$get({ query: {} }),
-        'Failed to load trend report',
-      ),
+    queryFn: async () => calibraApi.reports.getTrend(),
   })
 }
 
 function backofficeAccessQuery(scope: string) {
   return query({
     queryKey: ['backoffice', 'access', scope],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.backoffice.access.$get(),
-        'Failed to load backoffice access',
-      ),
+    queryFn: async () => calibraApi.backoffice.getAccess(),
     staleTime: 30_000,
   })
 }
@@ -652,33 +530,21 @@ function backofficeAccessQuery(scope: string) {
 function backofficeOrganizationsQuery(queryKey: readonly unknown[]) {
   return query({
     queryKey,
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.backoffice.organizations.$get(),
-        'Failed to load backoffice organizations',
-      ),
+    queryFn: async () => calibraApi.backoffice.listOrganizations(),
   })
 }
 
 function backofficeOrganizationDetailQuery(id: string) {
   return query({
     queryKey: ['backoffice', 'organizations', id],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.backoffice.organizations[':id'].$get({ param: { id } }),
-        'Failed to load backoffice organization',
-      ),
+    queryFn: async () => calibraApi.backoffice.getOrganization(id),
   })
 }
 
 function backofficeSupportQueueQuery(queryKey: readonly unknown[]) {
   return query({
     queryKey,
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.backoffice.support.queue.$get(),
-        'Failed to load backoffice support queue',
-      ),
+    queryFn: async () => calibraApi.backoffice.getSupportQueue(),
   })
 }
 
@@ -702,30 +568,14 @@ function invitationQuery(id: string) {
 function checkoutSnapshotQuery(token: string) {
   return query({
     queryKey: ['public-commercial-checkout', token, 'snapshot'],
-    queryFn: async () =>
-      jsonOrThrow(
-        await api.api.public['commercial-checkout'][':token'].$get({
-          param: { token },
-        }),
-        'Failed to load checkout snapshot',
-      ),
+    queryFn: async () => calibraApi.publicCheckout.getSnapshot(token),
   })
 }
 
 function checkoutStatusQuery(token: string) {
   return query({
     queryKey: ['public-commercial-checkout', token, 'status'],
-    queryFn: async () => {
-      const response = await api.api.public['commercial-checkout'][
-        ':token'
-      ].status.$get({ param: { token } })
-
-      if (response.status === 404) {
-        return { state: 'INVALID' }
-      }
-
-      return jsonOrThrow(response, 'Failed to load checkout status')
-    },
+    queryFn: async () => calibraApi.publicCheckout.getStatus(token),
   })
 }
 
@@ -897,12 +747,9 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
         query({
           queryKey: ['finance', 'documents', 'eligible-jobs', 'single', ''],
           queryFn: async () =>
-            jsonOrThrow(
-              await api.api.finance.documents['eligible-jobs'].$get({
-                query: { mode: 'single' },
-              }),
-              'Failed to load eligible jobs',
-            ),
+            calibraApi.finance.listEligibleJobs({
+              mode: 'single',
+            }),
         }),
       ]),
   },

@@ -8,9 +8,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, or } from "drizzle-orm";
 import type { AsaasPayment, AsaasWebhookPayload } from "../../services/asaas";
-import {
-  activateOfferFromConfirmedPayment,
-} from "./activation";
+import { activateOfferFromConfirmedPayment } from "./activation";
 import {
   createCommercialExternalReference,
   invalidateCommercialPublicToken,
@@ -22,9 +20,9 @@ import {
 function isUniqueConstraintError(error: unknown): boolean {
   return Boolean(
     error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: string }).code === "23505",
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: string }).code === "23505",
   );
 }
 
@@ -33,10 +31,14 @@ function mapPaymentStatus(status: string): PaymentStatus {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
-function getExistingPixSnapshot(existing: typeof paymentRecord.$inferSelect | null) {
+function getExistingPixSnapshot(
+  existing: typeof paymentRecord.$inferSelect | null,
+) {
   const providerSnapshot = asRecord(existing?.providerSnapshot);
   const pixTransaction = asRecord(providerSnapshot?.pixTransaction);
 
@@ -143,7 +145,8 @@ async function upsertPaymentFromWebhook(
       ...(payment.pixTransaction?.expirationDate || existingPix.expirationDate
         ? {
             expirationDate:
-              payment.pixTransaction?.expirationDate ?? existingPix.expirationDate,
+              payment.pixTransaction?.expirationDate ??
+              existingPix.expirationDate,
           }
         : {}),
     },
@@ -155,7 +158,8 @@ async function upsertPaymentFromWebhook(
     provider: "ASAAS" as const,
     providerCheckoutId: offer.providerCheckoutId,
     providerPaymentId: payment.id,
-    providerSubscriptionId: payment.subscription ?? offer.providerSubscriptionId,
+    providerSubscriptionId:
+      payment.subscription ?? offer.providerSubscriptionId,
     externalReference:
       payment.externalReference ?? createCommercialExternalReference(offer.id),
     amount: Math.round(payment.value * 100),
@@ -247,14 +251,22 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
     );
 
     if (payload.payment) {
-      const payment = await upsertPaymentFromWebhook(tx, offer, payload.payment, eventId);
+      const payment = await upsertPaymentFromWebhook(
+        tx,
+        offer,
+        payload.payment,
+        eventId,
+      );
 
       let nextOfferStatus = offer.status;
       if (payment.status === "CONFIRMED" || payment.status === "RECEIVED") {
         nextOfferStatus = "PAID";
       } else if (payment.status === "OVERDUE") {
         nextOfferStatus = "FAILED";
-      } else if (payment.status === "REFUNDED" || payment.status === "DELETED") {
+      } else if (
+        payment.status === "REFUNDED" ||
+        payment.status === "DELETED"
+      ) {
         nextOfferStatus = "FAILED";
       }
 
@@ -265,7 +277,7 @@ export async function reconcileCommercialWebhook(payload: AsaasWebhookPayload) {
             status: nextOfferStatus,
             paidAt:
               nextOfferStatus === "PAID"
-                ? payment.paidAt ?? new Date()
+                ? (payment.paidAt ?? new Date())
                 : offer.paidAt,
           })
           .where(eq(commercialOffer.id, offer.id));

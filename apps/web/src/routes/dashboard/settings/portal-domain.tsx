@@ -15,11 +15,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from '@/components/ui/field'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -40,7 +36,9 @@ function formatDateTime(value: string | Date | null) {
   })
 }
 
-function statusVariant(status: PortalDomainResponse['statusSummary']['status']) {
+function statusVariant(
+  status: PortalDomainResponse['statusSummary']['status'],
+) {
   switch (status) {
     case 'active':
       return 'default'
@@ -94,7 +92,9 @@ function PortalDomainSettingsPage() {
       await refresh()
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao salvar domínio')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao salvar domínio',
+      )
     },
   })
 
@@ -251,8 +251,7 @@ function PortalDomainSettingsPage() {
                 disabled={!hasCustomDomain || createMutation.isPending}
               />
               <FieldDescription>
-                Use apenas o hostname do portal. Exemplo:
-                {' '}
+                Use apenas o hostname do portal. Exemplo:{' '}
                 <code>portal.suaempresa.com.br</code>
               </FieldDescription>
             </Field>
@@ -320,7 +319,8 @@ function PortalDomainSettingsPage() {
 
                   <div>
                     <p className="text-muted-foreground">TXT observados</p>
-                    {payload.statusSummary.diagnostics.observedValues.length > 0 ? (
+                    {payload.statusSummary.diagnostics.observedValues.length >
+                    0 ? (
                       <div className="mt-2 space-y-2">
                         {payload.statusSummary.diagnostics.observedValues.map(
                           (value) => (
@@ -387,13 +387,7 @@ function PortalDomainSettingsPage() {
   )
 }
 
-function StatusMetric({
-  label,
-  value,
-}: {
-  label: string
-  value: string
-}) {
+function StatusMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border p-3">
       <p className="text-xs uppercase tracking-wide text-muted-foreground">

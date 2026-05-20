@@ -9,7 +9,10 @@ import {
 } from "../../lib/finance";
 import type { IntegrationsEnv } from "../../lib/integrations";
 import { withInvalidation } from "../../middleware/cache";
-import { withLabPermission, type AuthVariables } from "../../middleware/permission";
+import {
+  withLabPermission,
+  type AuthVariables,
+} from "../../middleware/permission";
 import { requireFeature } from "../../middleware/tier-guard";
 import { buildUnitScopeCondition } from "../../lib/units";
 
@@ -50,7 +53,9 @@ export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
         billing: {
           planId: access.planId,
           planName: access.planName,
-          hasCustomIntegrations: access.entitlements.includes("custom_integrations"),
+          hasCustomIntegrations: access.entitlements.includes(
+            "custom_integrations",
+          ),
         },
         data: documents,
       });
@@ -82,7 +87,10 @@ export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
         member.selectedUnitScope !== "all" &&
         payload.unitId !== member.activeUnitId
       ) {
-        return c.json({ error: "Documento fora do escopo da unidade ativa" }, 403);
+        return c.json(
+          { error: "Documento fora do escopo da unidade ativa" },
+          403,
+        );
       }
 
       try {
@@ -97,7 +105,9 @@ export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json(
           {
             error:
-              error instanceof Error ? error.message : "Falha ao exportar documento",
+              error instanceof Error
+                ? error.message
+                : "Falha ao exportar documento",
           },
           502,
         );

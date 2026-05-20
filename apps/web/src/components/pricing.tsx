@@ -70,8 +70,8 @@ const Pricing: React.FC = () => {
             Planos para diferentes estágios da operação
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            A base técnica permanece consistente. O que evolui é a governança,
-            a extensibilidade e o nível de suporte para o laboratório.
+            A base técnica permanece consistente. O que evolui é a governança, a
+            extensibilidade e o nível de suporte para o laboratório.
           </p>
         </div>
 

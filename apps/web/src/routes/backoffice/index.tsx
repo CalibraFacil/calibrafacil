@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice/')({
   component: BackofficeIndexPage,
@@ -18,32 +18,20 @@ export const Route = createFileRoute('/backoffice/')({
 function BackofficeIndexPage() {
   const organizationsQuery = useQuery({
     queryKey: ['backoffice', 'organizations', 'summary'],
-    queryFn: async () => {
-      const res = await api.api.backoffice.organizations.$get()
-      if (!res.ok) {
-        throw new Error('Falha ao carregar organizações')
-      }
-
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.backoffice.listOrganizations<{
         data: Array<{
           id: string
           openRequestsCount: number
           integrationsCount: number
         }>
-      }>
-    },
+      }>(),
   })
 
   const supportQuery = useQuery({
     queryKey: ['backoffice', 'support', 'queue', 'summary'],
-    queryFn: async () => {
-      const res = await api.api.backoffice.support.queue.$get()
-      if (!res.ok) {
-        throw new Error('Falha ao carregar fila de suporte')
-      }
-
-      return res.json() as Promise<{ data: Array<unknown> }>
-    },
+    queryFn: async () =>
+      calibraApi.backoffice.getSupportQueue<{ data: Array<unknown> }>(),
   })
 
   const orgsCount = organizationsQuery.data?.data.length ?? 0
@@ -121,7 +109,10 @@ function SummaryCard(props: {
         ) : (
           <p className="text-3xl font-semibold">{props.value}</p>
         )}
-        <Link to={props.to} className="text-sm text-primary underline-offset-4 hover:underline">
+        <Link
+          to={props.to}
+          className="text-sm text-primary underline-offset-4 hover:underline"
+        >
           Abrir área
         </Link>
       </CardContent>

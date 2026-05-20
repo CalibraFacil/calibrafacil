@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 type SelectOption = {
   id: number
@@ -72,28 +72,21 @@ function NewFinanceContractPage() {
   const customersQuery = useQuery({
     queryKey: ['finance', 'contract-form', 'customers'],
     queryFn: async () => {
-      const response = await api.api.customers.$get({
-        query: { page: '1', limit: '100' },
-      })
-      if (!response.ok) {
-        throw new Error('Erro ao carregar clientes')
-      }
-
-      return response.json() as Promise<{ data: SelectOption[] }>
+      return calibraApi.customers.list({
+        page: 1,
+        limit: 100,
+      }) as Promise<{ data: SelectOption[] }>
     },
   })
 
   const servicesQuery = useQuery({
     queryKey: ['finance', 'contract-form', 'services'],
     queryFn: async () => {
-      const response = await api.api.services.$get({
-        query: { page: '1', limit: '100', isActive: 'true' },
-      })
-      if (!response.ok) {
-        throw new Error('Erro ao carregar serviços')
-      }
-
-      return response.json() as Promise<{
+      return calibraApi.services.list({
+        page: 1,
+        limit: 100,
+        isActive: true,
+      }) as Promise<{
         data: Array<{
           id: number
           name: string
@@ -121,34 +114,25 @@ function NewFinanceContractPage() {
         throw new Error('Selecione um cliente para o contrato')
       }
 
-      const response = await api.api.finance.contracts.$post({
-        json: {
-          customerId: Number(customerId),
-          title,
-          agreementCode: agreementCode || undefined,
-          currency,
-          effectiveFrom: new Date(effectiveFrom).toISOString(),
-          effectiveTo: effectiveTo
-            ? new Date(effectiveTo).toISOString()
-            : undefined,
-          defaultPaymentTermDays: Number(defaultPaymentTermDays) || 28,
-          notes: notes || undefined,
-          unitIds: [],
-          serviceTerms: serviceTerms.map((term) => ({
-            serviceId: Number(term.serviceId),
-            priceCents: parseFinanceCurrencyInputToCents(term.priceAmount),
-            currency: FINANCE_CURRENCY,
-            isActive: true,
-          })),
-        },
+      return calibraApi.finance.createContract<{ data: { id: number } }>({
+        customerId: Number(customerId),
+        title,
+        agreementCode: agreementCode || undefined,
+        currency,
+        effectiveFrom: new Date(effectiveFrom).toISOString(),
+        effectiveTo: effectiveTo
+          ? new Date(effectiveTo).toISOString()
+          : undefined,
+        defaultPaymentTermDays: Number(defaultPaymentTermDays) || 28,
+        notes: notes || undefined,
+        unitIds: [],
+        serviceTerms: serviceTerms.map((term) => ({
+          serviceId: Number(term.serviceId),
+          priceCents: parseFinanceCurrencyInputToCents(term.priceAmount),
+          currency: FINANCE_CURRENCY,
+          isActive: true,
+        })),
       })
-
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string }
-        throw new Error(error.error || 'Erro ao criar contrato')
-      }
-
-      return response.json() as Promise<{ data: { id: number } }>
     },
     onSuccess: (result) => {
       toast.success('Contrato comercial criado')

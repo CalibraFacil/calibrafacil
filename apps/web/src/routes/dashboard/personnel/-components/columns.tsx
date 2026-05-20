@@ -39,12 +39,32 @@ export interface CompetenceRow {
 
 const statusConfig: Record<
   CompetenceStatus,
-  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }
+  {
+    label: string
+    variant: 'default' | 'secondary' | 'destructive' | 'outline'
+    className?: string
+  }
 > = {
-  REQUESTED: { label: 'Solicitada', variant: 'outline', className: 'border-blue-500 text-blue-600' },
-  TRAINING_ASSIGNED: { label: 'Treinamento Atribuído', variant: 'outline', className: 'border-amber-500 text-amber-600' },
-  IN_TRAINING: { label: 'Em Treinamento', variant: 'outline', className: 'border-yellow-500 text-yellow-600' },
-  PENDING_EVALUATION: { label: 'Aguardando Avaliação', variant: 'outline', className: 'border-purple-500 text-purple-600' },
+  REQUESTED: {
+    label: 'Solicitada',
+    variant: 'outline',
+    className: 'border-blue-500 text-blue-600',
+  },
+  TRAINING_ASSIGNED: {
+    label: 'Treinamento Atribuído',
+    variant: 'outline',
+    className: 'border-amber-500 text-amber-600',
+  },
+  IN_TRAINING: {
+    label: 'Em Treinamento',
+    variant: 'outline',
+    className: 'border-yellow-500 text-yellow-600',
+  },
+  PENDING_EVALUATION: {
+    label: 'Aguardando Avaliação',
+    variant: 'outline',
+    className: 'border-purple-500 text-purple-600',
+  },
   ACTIVE: { label: 'Ativa', variant: 'default' },
   SUSPENDED: { label: 'Suspensa', variant: 'destructive' },
   EXPIRED: { label: 'Expirada', variant: 'destructive' },
@@ -57,7 +77,9 @@ function formatDate(dateString: string | null): string {
 }
 
 export function getStatusBadge(status: CompetenceStatus) {
-  return statusConfig[status] ?? { label: status, variant: 'secondary' as const }
+  return (
+    statusConfig[status] ?? { label: status, variant: 'secondary' as const }
+  )
 }
 
 export const competenceColumns: ColumnDef<CompetenceRow>[] = [
@@ -78,9 +100,7 @@ export const competenceColumns: ColumnDef<CompetenceRow>[] = [
     accessorKey: 'assetTypeName',
     header: 'Tipo de Instrumento',
     cell: ({ row }) => (
-      <span className="text-sm">
-        {row.original.assetTypeName || 'Geral'}
-      </span>
+      <span className="text-sm">{row.original.assetTypeName || 'Geral'}</span>
     ),
   },
   {
@@ -104,12 +124,18 @@ export const competenceColumns: ColumnDef<CompetenceRow>[] = [
     header: 'Expira em',
     cell: ({ row }) => {
       const expiresAt = row.original.expiresAt
-      if (!expiresAt) return <span className="text-sm text-muted-foreground">-</span>
+      if (!expiresAt)
+        return <span className="text-sm text-muted-foreground">-</span>
       const isExpiringSoon =
         new Date(expiresAt).getTime() - Date.now() < 30 * 24 * 60 * 60 * 1000 &&
         row.original.status === 'ACTIVE'
       return (
-        <span className={cn('text-sm', isExpiringSoon && 'text-destructive font-medium')}>
+        <span
+          className={cn(
+            'text-sm',
+            isExpiringSoon && 'text-destructive font-medium',
+          )}
+        >
           {formatDate(expiresAt)}
         </span>
       )

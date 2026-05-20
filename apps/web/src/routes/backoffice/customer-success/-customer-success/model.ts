@@ -1,7 +1,3 @@
-import type { InferResponseType } from 'hono/client'
-
-import { api } from '@/utils/api'
-
 export type HealthStatus = 'HEALTHY' | 'ATTENTION' | 'CRITICAL'
 export type GoLiveStatus = 'NOT_SCHEDULED' | 'SCHEDULED' | 'AT_RISK' | 'LIVE'
 export type OnboardingStatus =
@@ -248,14 +244,43 @@ export type ProfileDraft = {
   internalNotes: string
 }
 
-export type RequestsPayload = InferResponseType<
-  (typeof api.api.backoffice)['customer-success']['organizations'][':id']['requests']['$get'],
-  200
->
-export type SupportQueueResponse = InferResponseType<
-  typeof api.api.backoffice.support.queue.$get,
-  200
->
+export type SupportRequest = {
+  id: number
+  organizationId?: string | null
+  subject: string
+  description: string | null
+  category: string
+  status: SupportRequestStatus
+  priority: SupportPriority
+  slaStatus: SupportSlaStatus
+  timeToSlaMs: number | null
+  needsEscalation: boolean
+  escalationReason: string | null
+  organizationHealth: HealthStatus
+  attentionScore: number
+  organization?: {
+    id: string
+    name: string
+    slug?: string
+  } | null
+  assignedToUser: Operator | null
+  events: Array<{
+    message: string
+    createdAt: string
+    publicVisible: boolean
+    actorUser: {
+      id: string
+      name: string
+      email?: string | null
+    } | null
+  }>
+}
+export type RequestsPayload = {
+  data: SupportRequest[]
+}
+export type SupportQueueResponse = {
+  data: SupportRequest[]
+}
 export type SupportQueueItem = SupportQueueResponse['data'][number]
 
 export type OrganizationFilter =
@@ -463,18 +488,6 @@ export const supportBoardColumns: SupportBoardColumn[] = [
     description: 'Fora do fluxo corrente.',
   },
 ]
-
-export async function parseApiError(res: Response, fallback: string) {
-  const data = await res.json().catch(() => null)
-
-  if (data && typeof data === 'object') {
-    if ('error' in data && typeof data.error === 'string') return data.error
-    if ('message' in data && typeof data.message === 'string')
-      return data.message
-  }
-
-  return fallback
-}
 
 export function formatDateTime(value: string | null) {
   if (!value) return 'Não definido'

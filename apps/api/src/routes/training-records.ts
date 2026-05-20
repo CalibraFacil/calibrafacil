@@ -102,58 +102,54 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET /:id - Single training record
   // =========================================================================
-  .get(
-    "/:id",
-    ...withLabPermission({ competence: ["read"] }),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = parseInt(c.req.param("id"), 10);
+  .get("/:id", ...withLabPermission({ competence: ["read"] }), async (c) => {
+    const memberData = c.get("member");
+    const id = parseInt(c.req.param("id"), 10);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
+    if (isNaN(id)) {
+      return c.json({ error: "ID inválido" }, 400);
+    }
 
-      const [record] = await db
-        .select({
-          id: trainingRecord.id,
-          organizationId: trainingRecord.organizationId,
-          userId: trainingRecord.userId,
-          userName: user.name,
-          competenceId: trainingRecord.competenceId,
-          title: trainingRecord.title,
-          type: trainingRecord.type,
-          status: trainingRecord.status,
-          provider: trainingRecord.provider,
-          description: trainingRecord.description,
-          startDate: trainingRecord.startDate,
-          endDate: trainingRecord.endDate,
-          hoursCompleted: trainingRecord.hoursCompleted,
-          certificateR2Key: trainingRecord.certificateR2Key,
-          certificateFileName: trainingRecord.certificateFileName,
-          score: trainingRecord.score,
-          passingScore: trainingRecord.passingScore,
-          passed: trainingRecord.passed,
-          createdAt: trainingRecord.createdAt,
-          updatedAt: trainingRecord.updatedAt,
-        })
-        .from(trainingRecord)
-        .innerJoin(user, eq(trainingRecord.userId, user.id))
-        .where(
-          and(
-            eq(trainingRecord.id, id),
-            eq(trainingRecord.organizationId, memberData.organizationId),
-            isNull(trainingRecord.deletedAt),
-          ),
-        )
-        .limit(1);
+    const [record] = await db
+      .select({
+        id: trainingRecord.id,
+        organizationId: trainingRecord.organizationId,
+        userId: trainingRecord.userId,
+        userName: user.name,
+        competenceId: trainingRecord.competenceId,
+        title: trainingRecord.title,
+        type: trainingRecord.type,
+        status: trainingRecord.status,
+        provider: trainingRecord.provider,
+        description: trainingRecord.description,
+        startDate: trainingRecord.startDate,
+        endDate: trainingRecord.endDate,
+        hoursCompleted: trainingRecord.hoursCompleted,
+        certificateR2Key: trainingRecord.certificateR2Key,
+        certificateFileName: trainingRecord.certificateFileName,
+        score: trainingRecord.score,
+        passingScore: trainingRecord.passingScore,
+        passed: trainingRecord.passed,
+        createdAt: trainingRecord.createdAt,
+        updatedAt: trainingRecord.updatedAt,
+      })
+      .from(trainingRecord)
+      .innerJoin(user, eq(trainingRecord.userId, user.id))
+      .where(
+        and(
+          eq(trainingRecord.id, id),
+          eq(trainingRecord.organizationId, memberData.organizationId),
+          isNull(trainingRecord.deletedAt),
+        ),
+      )
+      .limit(1);
 
-      if (!record) {
-        return c.json({ error: "Registro de treinamento não encontrado" }, 404);
-      }
+    if (!record) {
+      return c.json({ error: "Registro de treinamento não encontrado" }, 404);
+    }
 
-      return c.json(record);
-    },
-  )
+    return c.json(record);
+  })
 
   // =========================================================================
   // POST / - Create training record
@@ -180,10 +176,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
         .limit(1);
 
       if (!targetMember) {
-        return c.json(
-          { error: "Usuário não é membro desta organização" },
-          400,
-        );
+        return c.json({ error: "Usuário não é membro desta organização" }, 400);
       }
 
       // Validate competenceId belongs to the same org if provided
@@ -194,10 +187,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(
             and(
               eq(personnelCompetence.id, input.competenceId),
-              eq(
-                personnelCompetence.organizationId,
-                memberData.organizationId,
-              ),
+              eq(personnelCompetence.organizationId, memberData.organizationId),
               isNull(personnelCompetence.deletedAt),
             ),
           )
@@ -307,10 +297,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
       if (input.passed !== undefined) updateData.passed = input.passed;
 
       if (Object.keys(updateData).length === 0) {
-        return c.json(
-          { error: "Nenhum campo para atualizar fornecido" },
-          400,
-        );
+        return c.json({ error: "Nenhum campo para atualizar fornecido" }, 400);
       }
 
       const [updated] = await db

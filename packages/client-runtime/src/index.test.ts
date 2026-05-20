@@ -121,6 +121,91 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "getOverview",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listDocuments",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getDocument",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updateDocument",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "issueDocument",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "voidDocument",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listEligibleJobs",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createDocument",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listContracts",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getContract",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createContract",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "activateContract",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "cancelContract",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listReceipts",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "receiveInstallment",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listErpExports",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "exportErpDocument",
+          "namespace": "finance",
+          "policy": "cloud-only",
+        },
+        {
           "method": "getSubscription",
           "namespace": "billing",
           "policy": "cloud-only",
@@ -132,6 +217,61 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "getAccess",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "bootstrap",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listOrganizations",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getOrganization",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getSupportQueue",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listUsers",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updateUserRole",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "banUser",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "unbanUser",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "impersonateUser",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createUser",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "requestUserPasswordReset",
           "namespace": "backoffice",
           "policy": "cloud-only",
         },
@@ -718,6 +858,256 @@ describe("client runtime data policy registry", () => {
         {
           "method": "delete",
           "namespace": "environmentalLimits",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getExecutiveOverview",
+          "namespace": "reports",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getComparison",
+          "namespace": "reports",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getTrend",
+          "namespace": "reports",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getSnapshot",
+          "namespace": "publicCheckout",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getStatus",
+          "namespace": "publicCheckout",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "start",
+          "namespace": "publicCheckout",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "list",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "summary",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "get",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "auditLog",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "create",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "setDisposition",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "resolve",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "escalateToCapa",
+          "namespace": "nonConformances",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "list",
+          "namespace": "capas",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "summary",
+          "namespace": "capas",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "get",
+          "namespace": "capas",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "auditLog",
+          "namespace": "capas",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "create",
+          "namespace": "capas",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "update",
+          "namespace": "capas",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "implement",
+          "namespace": "capas",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "verify",
+          "namespace": "capas",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "close",
+          "namespace": "capas",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "list",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "create",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "update",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "duplicate",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "setDefault",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "list",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "matrix",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "get",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "auditLog",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "create",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "transition",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "evaluate",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "renew",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "cancel",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "delete",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "assignTraining",
+          "namespace": "competences",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "list",
+          "namespace": "trainingRecords",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "create",
+          "namespace": "trainingRecords",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getProfile",
+          "namespace": "customerSuccess",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "listRequests",
+          "namespace": "customerSuccess",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createRequest",
+          "namespace": "customerSuccess",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "list",
+          "namespace": "calibrationRequests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "get",
+          "namespace": "calibrationRequests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "review",
+          "namespace": "calibrationRequests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "approve",
+          "namespace": "calibrationRequests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "reject",
+          "namespace": "calibrationRequests",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "convert",
+          "namespace": "calibrationRequests",
           "policy": "cloud-only",
         },
         {
@@ -2323,7 +2713,7 @@ describe("desktop hybrid runtime adapter", () => {
     });
 
     await expect(client.standards.list({ page: 1, limit: 20 })).rejects.toThrow(
-      "Falha ao carregar padrões",
+      "Unauthorized",
     );
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([

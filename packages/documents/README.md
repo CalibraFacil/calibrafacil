@@ -26,9 +26,11 @@ const html = renderToString(
     lab: { name: "Lab XYZ", accreditationNumber: "..." },
     customer: { name: "Customer ABC" },
     asset: { name: "Balança", serialNumber: "123" },
-    results: { /* calibration results */ },
-    approverName: "John Doe"
-  })
+    results: {
+      /* calibration results */
+    },
+    approverName: "John Doe",
+  }),
 );
 ```
 
@@ -39,6 +41,7 @@ const html = renderToString(
 Full calibration certificate in A4 format.
 
 **Props:**
+
 - `jobId` - Certificate number
 - `performedAt` - Calibration date
 - `approvedAt` - Approval date
@@ -55,6 +58,7 @@ Full calibration certificate in A4 format.
 Thermal printer label (50mm × 30mm format).
 
 **Props:**
+
 - `jobId` - Certificate reference
 - `labName` - Laboratory name
 - `assetTag` - Equipment tag/ID

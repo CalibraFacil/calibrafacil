@@ -156,9 +156,12 @@ function RequestDetailPage() {
           </div>
           {data.status === "REJECTED" && (
             <div className="sm:col-span-2">
-              <div className="text-sm text-muted-foreground">Motivo da rejeição</div>
+              <div className="text-sm text-muted-foreground">
+                Motivo da rejeição
+              </div>
               <div className="font-medium">
-                {data.rejectionReason?.trim() || "Solicitação rejeitada sem motivo informado."}
+                {data.rejectionReason?.trim() ||
+                  "Solicitação rejeitada sem motivo informado."}
               </div>
               {data.rejectedAt && (
                 <p className="mt-1 text-sm text-muted-foreground">

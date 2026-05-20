@@ -1,9 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@calibra-facil/db";
-import {
-  customer,
-  organizationCustomDomain,
-} from "@calibra-facil/db/schema";
+import { customer, organizationCustomDomain } from "@calibra-facil/db/schema";
 import {
   isLocalHostname,
   normalizeHostname,
@@ -78,9 +75,8 @@ export async function getActivePortalDomainForOrganization(
 export async function getPortalBaseUrlForLabOrganization(
   organizationId: string,
 ): Promise<string> {
-  const customDomain = await getActivePortalDomainForOrganization(
-    organizationId,
-  );
+  const customDomain =
+    await getActivePortalDomainForOrganization(organizationId);
   if (customDomain) {
     return `https://${customDomain.hostname}`;
   }
@@ -142,9 +138,8 @@ export async function isAllowedPortalOrigin(origin: string): Promise<boolean> {
   if (!normalizedOrigin) return false;
 
   const { hostname } = new URL(normalizedOrigin);
-  const labOrganizationId = await resolveLabOrganizationIdByPortalHostname(
-    hostname,
-  );
+  const labOrganizationId =
+    await resolveLabOrganizationIdByPortalHostname(hostname);
 
   return Boolean(labOrganizationId);
 }

@@ -1,6 +1,11 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { EmailLayout, StatusBox, styles, theme } from "./components/email-layout";
+import {
+  EmailLayout,
+  StatusBox,
+  styles,
+  theme,
+} from "./components/email-layout";
 
 type NCNotificationType = "created" | "escalated";
 
@@ -74,9 +79,7 @@ export function NCNotificationEmail({
             width: "64px",
             height: "64px",
             backgroundColor:
-              type === "created"
-                ? theme.colors.warningBg
-                : theme.colors.infoBg,
+              type === "created" ? theme.colors.warningBg : theme.colors.infoBg,
             borderRadius: "50%",
             display: "inline-flex",
             alignItems: "center",

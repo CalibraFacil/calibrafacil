@@ -33,7 +33,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 type ReceiptRow = {
   installmentId: number
@@ -80,12 +80,7 @@ function FinanceReceiptsPage() {
   const receiptsQuery = useQuery({
     queryKey: ['finance', 'receipts'],
     queryFn: async () => {
-      const response = await api.api.finance.receipts.$get()
-      if (!response.ok) {
-        throw new Error('Erro ao carregar recebimentos')
-      }
-
-      return response.json() as Promise<{ data: ReceiptRow[] }>
+      return calibraApi.finance.listReceipts<{ data: ReceiptRow[] }>()
     },
   })
 
@@ -95,23 +90,13 @@ function FinanceReceiptsPage() {
         throw new Error('Selecione uma parcela para baixa')
       }
 
-      const response = await api.api.finance.installments[':id'].receive.$post({
-        param: { id: String(selectedRow.installmentId) },
-        json: {
-          amountCents: selectedRow.amountCents,
-          paymentMethod,
-          reference: reference || undefined,
-          notes: notes || undefined,
-          receivedAt: new Date(receivedAt).toISOString(),
-        },
+      return calibraApi.finance.receiveInstallment(selectedRow.installmentId, {
+        amountCents: selectedRow.amountCents,
+        paymentMethod,
+        reference: reference || undefined,
+        notes: notes || undefined,
+        receivedAt: new Date(receivedAt).toISOString(),
       })
-
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string }
-        throw new Error(error.error || 'Erro ao registrar recebimento')
-      }
-
-      return response.json()
     },
     onSuccess: () => {
       toast.success('Baixa registrada')

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ClipboardIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -108,20 +108,7 @@ function RequestsPage() {
       !isContextSwitching &&
       !cloudOnlyUnavailable,
     queryFn: async () => {
-      const res = await api.api['calibration-requests'].$get({
-        query: {
-          page: String(page),
-          limit: String(limit),
-          query: deferredSearch || undefined,
-          status: statusFilter || undefined,
-        },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar solicitações')
-      }
-
-      return res.json() as Promise<{
+      return calibraApi.calibrationRequests.list<{
         data: Array<CalibrationRequest>
         pagination: {
           page: number
@@ -129,7 +116,12 @@ function RequestsPage() {
           total: number
           totalPages: number
         }
-      }>
+      }>({
+        page,
+        limit,
+        query: deferredSearch || undefined,
+        status: statusFilter || undefined,
+      })
     },
   })
 

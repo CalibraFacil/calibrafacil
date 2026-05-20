@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -110,24 +110,14 @@ function NCDetailPage() {
   } = useQuery({
     queryKey: ['non-conformance', id],
     enabled: !cloudOnlyUnavailable,
-    queryFn: async () => {
-      const res = await api.api.nc[':id'].$get({
-        param: { id },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar NC')
-      return res.json()
-    },
+    queryFn: async () => calibraApi.nonConformances.get(id),
   })
 
   const { data: auditLog } = useQuery({
     queryKey: ['non-conformance-audit', id],
     enabled: !cloudOnlyUnavailable,
-    queryFn: async () => {
-      const res = await api.api.nc[':id']['audit-log'].$get({
-        param: { id },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar historico')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.nonConformances.auditLog<{
         data: Array<{
           id: number
           action: string
@@ -136,31 +126,18 @@ function NCDetailPage() {
           performedAt: string
           reason: string | null
         }>
-      }>
-    },
+      }>(id),
   })
 
   // Disposition mutation
   const dispositionMutation = useMutation({
-    mutationFn: async (data: {
-      disposition: string
-      justification?: string
-    }) => {
-      const res = await api.api.nc[':id'].disposition.$put({
-        param: { id },
-        json: data as {
+    mutationFn: async (data: { disposition: string; justification?: string }) =>
+      calibraApi.nonConformances.setDisposition(id, {
+        ...(data as {
           disposition: 'rework' | 'scrap' | 'use_as_is' | 'concession'
           justification?: string
-        },
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao definir disposicao',
-        )
-      }
-      return res.json()
-    },
+        }),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['non-conformance', id] })
       queryClient.invalidateQueries({ queryKey: ['non-conformance-audit', id] })
@@ -174,15 +151,7 @@ function NCDetailPage() {
   // Resolve mutation
   const resolveMutation = useMutation({
     mutationFn: async (data: { correctionTaken: string }) => {
-      const res = await api.api.nc[':id'].resolve.$post({
-        param: { id },
-        json: data,
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error((err as { error?: string }).error || 'Erro ao resolver')
-      }
-      return res.json()
+      return calibraApi.nonConformances.resolve(id, data)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['non-conformance', id] })
@@ -199,19 +168,7 @@ function NCDetailPage() {
     mutationFn: async (data: {
       rootCauseAnalysis?: string
       actionPlan?: string
-    }) => {
-      const res = await api.api.nc[':id']['escalate-to-capa'].$post({
-        param: { id },
-        json: data,
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao escalar para CAPA',
-        )
-      }
-      return res.json()
-    },
+    }) => calibraApi.nonConformances.escalateToCapa(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['non-conformance', id] })
       queryClient.invalidateQueries({ queryKey: ['non-conformance-audit', id] })

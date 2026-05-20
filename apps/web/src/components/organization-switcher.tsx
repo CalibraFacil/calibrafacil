@@ -198,7 +198,9 @@ export function OrganizationSwitcher() {
 
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => navigate({ to: '/dashboard/settings/organization' })}
+              onClick={() =>
+                navigate({ to: '/dashboard/settings/organization' })
+              }
             >
               <HugeiconsIcon icon={Settings05Icon} className="size-4" />
               Gerenciar organização e unidades

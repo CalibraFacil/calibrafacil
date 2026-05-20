@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 type ErpExportsResponse = {
   billing: {
@@ -58,26 +58,13 @@ function FinanceErpPage() {
   const exportsQuery = useQuery({
     queryKey: ['finance', 'erp'],
     queryFn: async () => {
-      const response = await api.api.finance.erp.exports.$get()
-      if (!response.ok) {
-        throw new Error('Erro ao carregar fila ERP')
-      }
-
-      return response.json() as Promise<ErpExportsResponse>
+      return calibraApi.finance.listErpExports<ErpExportsResponse>()
     },
   })
 
   const exportMutation = useMutation({
     mutationFn: async (documentId: number) => {
-      const response = await api.api.finance.erp.documents[':id'].export.$post({
-        param: { id: String(documentId) },
-      })
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string }
-        throw new Error(error.error || 'Erro ao exportar documento')
-      }
-
-      return response.json()
+      return calibraApi.finance.exportErpDocument(documentId)
     },
     onSuccess: () => {
       toast.success('Exportação ERP concluída')

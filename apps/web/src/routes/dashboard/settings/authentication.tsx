@@ -19,7 +19,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { useSettings } from '@/contexts/settings-context'
-import { calibraApi, resolveApiURL } from '@/utils/api'
+import { calibraApi, resolveCloudApiUrl } from '@/utils/api'
 import {
   Card,
   CardContent,
@@ -137,7 +137,7 @@ function ApiKeysCard() {
   const accessQuery = usePlanAccess()
   const [name, setName] = useState('')
   const [latestSecret, setLatestSecret] = useState<string | null>(null)
-  const apiReferenceUrl = resolveApiURL('/api/public/v2/reference')
+  const apiReferenceUrl = resolveCloudApiUrl('/api/public/v2/reference')
 
   const apiKeysQuery = useQuery({
     queryKey: ['api-keys'],
@@ -153,7 +153,9 @@ function ApiKeysCard() {
       await queryClient.invalidateQueries({ queryKey: ['api-keys'] })
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao criar API key')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao criar API key',
+      )
     },
   })
 
@@ -206,8 +208,7 @@ function ApiKeysCard() {
       <CardContent className="space-y-6">
         {!hasApi && (
           <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            O entitlement de API está disponível a partir do plano
-            Professional.
+            O entitlement de API está disponível a partir do plano Professional.
           </div>
         )}
 
@@ -265,8 +266,8 @@ function ApiKeysCard() {
               disabled={!hasApi || createMutation.isPending}
             />
             <FieldDescription>
-              A chave nasce com escopos de leitura para clientes, ativos,
-              ordens e certificados.
+              A chave nasce com escopos de leitura para clientes, ativos, ordens
+              e certificados.
             </FieldDescription>
           </Field>
           <Button

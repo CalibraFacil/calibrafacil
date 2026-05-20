@@ -51,7 +51,9 @@ async function fetchTxtAnswers(hostname: string): Promise<string[]> {
     .map(stripTxtQuotes);
 }
 
-function serializeDomain(record: typeof organizationCustomDomain.$inferSelect | null) {
+function serializeDomain(
+  record: typeof organizationCustomDomain.$inferSelect | null,
+) {
   if (!record) return null;
 
   return {
@@ -126,7 +128,8 @@ function buildPortalDomainStatusSummary(params: {
       status: "ready_to_verify" as const,
       readiness: "not_ready" as const,
       canActivate: false,
-      message: "TXT encontrado. Confirme a verificação para liberar a ativação.",
+      message:
+        "TXT encontrado. Confirme a verificação para liberar a ativação.",
       diagnostics: {
         host,
         expectedValue,
@@ -153,7 +156,8 @@ function buildPortalDomainStatusSummary(params: {
     status: "token_mismatch" as const,
     readiness: "not_ready" as const,
     canActivate: false,
-    message: "O DNS respondeu, mas o TXT encontrado não corresponde ao token esperado.",
+    message:
+      "O DNS respondeu, mas o TXT encontrado não corresponde ao token esperado.",
     diagnostics: {
       host,
       expectedValue,
@@ -170,7 +174,9 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       member.organizationId,
     );
     const observedTxtValues = record
-      ? await fetchTxtAnswers(buildPortalDomainVerificationHost(record.hostname))
+      ? await fetchTxtAnswers(
+          buildPortalDomainVerificationHost(record.hostname),
+        )
       : [];
 
     return c.json({
@@ -196,7 +202,10 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       const hostname = sanitizePortalHostname(input.hostname);
 
       if (!hostname) {
-        return c.json({ error: "Hostname inválido para domínio personalizado" }, 400);
+        return c.json(
+          { error: "Hostname inválido para domínio personalizado" },
+          400,
+        );
       }
 
       const collision = await db.query.organizationCustomDomain.findFirst({
@@ -207,7 +216,10 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       });
 
       if (collision) {
-        return c.json({ error: "Este domínio já está em uso por outra organização" }, 409);
+        return c.json(
+          { error: "Este domínio já está em uso por outra organização" },
+          409,
+        );
       }
 
       const existing = await getOrganizationCustomDomain(member.organizationId);
@@ -238,7 +250,9 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
             entityId: updated.id,
             details: {
               hostname: updated.hostname,
-              verificationHost: buildPortalDomainVerificationHost(updated.hostname),
+              verificationHost: buildPortalDomainVerificationHost(
+                updated.hostname,
+              ),
               previousHostname: existing.hostname,
             },
           });
@@ -268,7 +282,9 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
           entityId: created.id,
           details: {
             hostname: created.hostname,
-            verificationHost: buildPortalDomainVerificationHost(created.hostname),
+            verificationHost: buildPortalDomainVerificationHost(
+              created.hostname,
+            ),
           },
         });
       }
@@ -328,7 +344,9 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
           entityId: updated.id,
           details: {
             hostname: updated.hostname,
-            verificationHost: buildPortalDomainVerificationHost(updated.hostname),
+            verificationHost: buildPortalDomainVerificationHost(
+              updated.hostname,
+            ),
           },
         });
       }

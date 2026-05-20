@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
   AuditTimeline,
   buildAuditTimelineEvents,
@@ -26,12 +26,8 @@ function AuditTab() {
 
   const { data: logs, isLoading } = useQuery({
     queryKey: ['competence-audit', id],
-    queryFn: async () => {
-      const res = await api.api.competences[':id']['audit-log'].$get({
-        param: { id },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar histórico')
-      return res.json() as Promise<
+    queryFn: async () =>
+      calibraApi.competences.auditLog<
         Array<{
           id: number
           action: string
@@ -41,8 +37,7 @@ function AuditTab() {
           performedAt: string
           reason: string | null
         }>
-      >
-    },
+      >(id),
   })
 
   if (isLoading) {

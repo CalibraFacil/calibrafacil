@@ -141,8 +141,13 @@ export function previewCommercialOffer(
   const subtotalAmount = items.reduce((acc, item) => acc + item.totalAmount, 0);
   const discountAmount = input.discountAmount ?? 0;
   const totalAmount = Math.max(0, subtotalAmount - discountAmount);
-  const providerMode = resolveProviderMode(input.kind, input.paymentMethods, warnings);
-  const dueDate = parseDateInput(input.dueDate) ?? new Date(Date.now() + 3 * 86400000);
+  const providerMode = resolveProviderMode(
+    input.kind,
+    input.paymentMethods,
+    warnings,
+  );
+  const dueDate =
+    parseDateInput(input.dueDate) ?? new Date(Date.now() + 3 * 86400000);
   const offerExpiresAt = parseDateInput(input.offerExpiresAt);
   const recurringAmount =
     input.kind === "PLAN_RECURRING" ? input.negotiatedAmount : null;

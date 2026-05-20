@@ -38,9 +38,7 @@ export function CommercialOfferSummaryCard(props: {
     <Card>
       <CardHeader>
         <CardTitle>Resumo comercial</CardTitle>
-        <CardDescription>
-          Snapshot validado antes da emissão.
-        </CardDescription>
+        <CardDescription>Snapshot validado antes da emissão.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <div className="rounded-lg border p-4">
@@ -107,7 +105,11 @@ export function CommercialOfferSummaryCard(props: {
               <CommercialStatusBadge status={props.issuedOffer.status} />
             </div>
             {props.issuedOffer.customerCheckoutUrl && props.onCopyLink && (
-              <Button className="mt-3 w-full" variant="outline" onClick={props.onCopyLink}>
+              <Button
+                className="mt-3 w-full"
+                variant="outline"
+                onClick={props.onCopyLink}
+              >
                 Copiar link do cliente
               </Button>
             )}

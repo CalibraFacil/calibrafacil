@@ -41,7 +41,9 @@ describe("shared plan contracts", () => {
 
     expect(professionalPlan.recommendedFor).toContain("ISO 17025");
     expect(professionalPlan.isPopular).toBe(true);
-    expect(PLANS.ENTERPRISE.description).toBe("Para grandes operações e redes.");
+    expect(PLANS.ENTERPRISE.description).toBe(
+      "Para grandes operações e redes.",
+    );
     expect(ENTITLEMENT_METADATA.approval_workflow.name).toBe(
       "Fluxo de Aprovação",
     );

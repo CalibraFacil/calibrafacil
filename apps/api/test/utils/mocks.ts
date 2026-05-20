@@ -52,7 +52,9 @@ export function mockFetchWithRetries(
   return vi.fn().mockImplementation(() => {
     callCount++;
     if (callCount <= failCount) {
-      return Promise.resolve(mockFetchResponse({ error: "Temporary error" }, failStatus));
+      return Promise.resolve(
+        mockFetchResponse({ error: "Temporary error" }, failStatus),
+      );
     }
     return Promise.resolve(mockFetchResponse(successData));
   });
@@ -62,7 +64,9 @@ export function mockFetchWithRetries(
 // ASAAS RESPONSE FACTORIES
 // =============================================================================
 
-export function createMockCustomer(overrides: Partial<AsaasCustomer> = {}): AsaasCustomer {
+export function createMockCustomer(
+  overrides: Partial<AsaasCustomer> = {},
+): AsaasCustomer {
   return {
     id: "cus_000005113026",
     name: "Test Organization",
@@ -89,7 +93,9 @@ export function createMockSubscription(
   };
 }
 
-export function createMockPayment(overrides: Partial<AsaasPayment> = {}): AsaasPayment {
+export function createMockPayment(
+  overrides: Partial<AsaasPayment> = {},
+): AsaasPayment {
   return {
     id: "pay_abc123def456",
     customer: "cus_000005113026",
@@ -117,10 +123,14 @@ export function createMockPaymentList(
   };
 }
 
-export function createMockPixQrCode(overrides: Partial<AsaasPixQrCode> = {}): AsaasPixQrCode {
+export function createMockPixQrCode(
+  overrides: Partial<AsaasPixQrCode> = {},
+): AsaasPixQrCode {
   return {
-    encodedImage: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-    payload: "00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-426614174000",
+    encodedImage:
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    payload:
+      "00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-426614174000",
     expirationDate: "2024-02-15T23:59:59Z",
     ...overrides,
   };
@@ -128,7 +138,8 @@ export function createMockPixQrCode(overrides: Partial<AsaasPixQrCode> = {}): As
 
 export function createMockBoletoLine() {
   return {
-    identificationField: "23793.38128 60000.000003 00000.000400 1 84340000010000",
+    identificationField:
+      "23793.38128 60000.000003 00000.000400 1 84340000010000",
     nossoNumero: "1234567",
     barCode: "23791843400000100003381286000000000000000040",
   };
@@ -149,7 +160,9 @@ export function createMockTokenizeResponse(
 // DATABASE MOCK FACTORIES
 // =============================================================================
 
-export function createMockOrganization(overrides: Record<string, unknown> = {}) {
+export function createMockOrganization(
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id: "org_test123",
     name: "Test Organization",
@@ -171,7 +184,9 @@ export function createMockMember(overrides: Record<string, unknown> = {}) {
   };
 }
 
-export function createMockDbSubscription(overrides: Record<string, unknown> = {}) {
+export function createMockDbSubscription(
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id: 1,
     organizationId: "org_test123",
@@ -189,7 +204,9 @@ export function createMockDbSubscription(overrides: Record<string, unknown> = {}
   };
 }
 
-export function createMockPaymentHistory(overrides: Record<string, unknown> = {}) {
+export function createMockPaymentHistory(
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id: 1,
     commercialOfferId: "offer_abc123def456",

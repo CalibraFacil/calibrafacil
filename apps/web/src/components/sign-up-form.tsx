@@ -16,11 +16,7 @@ interface SignUpFormProps extends React.ComponentProps<'form'> {
   redirect?: string
 }
 
-export function SignUpForm({
-  className,
-  redirect,
-  ...props
-}: SignUpFormProps) {
+export function SignUpForm({ className, redirect, ...props }: SignUpFormProps) {
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')

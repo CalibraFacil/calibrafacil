@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -12,7 +12,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Field, FieldGroup, FieldLabel, FieldError } from '@/components/ui/field'
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldError,
+} from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
@@ -38,15 +43,12 @@ function NewCompetencePage() {
   // Fetch org members (technicians/admins/owners)
   const { data: matrixData } = useQuery({
     queryKey: ['competences-matrix'],
-    queryFn: async () => {
-      const res = await api.api.competences.matrix.$get()
-      if (!res.ok) throw new Error('Falha ao carregar dados')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.competences.matrix<{
         technicians: Array<{ userId: string; userName: string; role: string }>
         assetTypes: Array<{ id: number; name: string }>
         competences: Array<unknown>
-      }>
-    },
+      }>(),
   })
 
   const createMutation = useMutation({
@@ -54,16 +56,7 @@ function NewCompetencePage() {
       userId: string
       assetTypeId?: number
       scopeDescription: string
-    }) => {
-      const res = await api.api.competences.$post({ json: payload })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao criar solicitação',
-        )
-      }
-      return res.json() as Promise<{ id: number }>
-    },
+    }) => calibraApi.competences.create<{ id: number }>(payload),
     onSuccess: (result) => {
       toast.success('Solicitação de competência criada')
       navigate({
@@ -110,8 +103,8 @@ function NewCompetencePage() {
         <CardHeader>
           <CardTitle>Nova Solicitação de Competência</CardTitle>
           <CardDescription>
-            ISO 17025 Cláusula 6.2.3 - Solicite a qualificação de um técnico para
-            um tipo de instrumento
+            ISO 17025 Cláusula 6.2.3 - Solicite a qualificação de um técnico
+            para um tipo de instrumento
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -120,9 +113,15 @@ function NewCompetencePage() {
               {/* Technician */}
               <Field>
                 <FieldLabel>Técnico *</FieldLabel>
-                <Select value={userId} onValueChange={(v) => setUserId(v ?? '')}>
+                <Select
+                  value={userId}
+                  onValueChange={(v) => setUserId(v ?? '')}
+                >
                   <SelectTrigger>
-                    <span className="flex flex-1 text-left line-clamp-1" data-slot="select-value">
+                    <span
+                      className="flex flex-1 text-left line-clamp-1"
+                      data-slot="select-value"
+                    >
                       {selectedTechnician
                         ? selectedTechnician.userName
                         : 'Selecione o técnico'}
@@ -147,7 +146,10 @@ function NewCompetencePage() {
                   onValueChange={(v) => setAssetTypeId(v ?? '')}
                 >
                   <SelectTrigger>
-                    <span className="flex flex-1 text-left line-clamp-1" data-slot="select-value">
+                    <span
+                      className="flex flex-1 text-left line-clamp-1"
+                      data-slot="select-value"
+                    >
                       {selectedAssetType
                         ? selectedAssetType.name
                         : 'Escopo geral'}
@@ -191,9 +193,7 @@ function NewCompetencePage() {
                 Cancelar
               </Button>
               <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending
-                  ? 'Criando...'
-                  : 'Criar Solicitação'}
+                {createMutation.isPending ? 'Criando...' : 'Criar Solicitação'}
               </Button>
             </div>
           </form>

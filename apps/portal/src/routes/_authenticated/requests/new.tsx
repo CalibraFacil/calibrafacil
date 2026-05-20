@@ -218,8 +218,9 @@ function NewRequestPage() {
               {data && data.pagination.totalPages > 1 && (
                 <div className="flex items-center justify-between border-t pt-3">
                   <span className="text-sm text-muted-foreground">
-                    Página {data.pagination.page} de {data.pagination.totalPages} ·{" "}
-                    {data.pagination.total} ativo(s)
+                    Página {data.pagination.page} de{" "}
+                    {data.pagination.totalPages} · {data.pagination.total}{" "}
+                    ativo(s)
                   </span>
                   <div className="flex gap-2">
                     <Button

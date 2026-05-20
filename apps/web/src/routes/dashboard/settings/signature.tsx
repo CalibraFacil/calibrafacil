@@ -90,7 +90,7 @@ function SignatureSettingsPage() {
       // Upload
       uploadMutation.mutate(file)
     },
-    [uploadMutation]
+    [uploadMutation],
   )
 
   // Drag and drop handlers
@@ -114,7 +114,7 @@ function SignatureSettingsPage() {
         handleFileSelect(file)
       }
     },
-    [handleFileSelect]
+    [handleFileSelect],
   )
 
   const handleInputChange = useCallback(
@@ -124,7 +124,7 @@ function SignatureSettingsPage() {
         handleFileSelect(file)
       }
     },
-    [handleFileSelect]
+    [handleFileSelect],
   )
 
   if (isLoading) {
@@ -155,7 +155,7 @@ function SignatureSettingsPage() {
               isDragOver && 'border-primary bg-primary/5 scale-[1.01]',
               !isDragOver && !signatureUrl && 'border-muted-foreground/25',
               signatureUrl && 'border-primary/50',
-              isUploading && 'opacity-70 pointer-events-none'
+              isUploading && 'opacity-70 pointer-events-none',
             )}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -218,7 +218,7 @@ function SignatureSettingsPage() {
                   className={cn(
                     'size-16 rounded-2xl flex items-center justify-center mb-4 transition-all duration-300',
                     'bg-muted group-hover:bg-primary/10 group-hover:scale-110',
-                    isDragOver && 'bg-primary/20 scale-110'
+                    isDragOver && 'bg-primary/20 scale-110',
                   )}
                 >
                   <HugeiconsIcon
@@ -226,7 +226,7 @@ function SignatureSettingsPage() {
                     className={cn(
                       'size-8 transition-colors',
                       'text-muted-foreground group-hover:text-primary',
-                      isDragOver && 'text-primary'
+                      isDragOver && 'text-primary',
                     )}
                   />
                 </div>
@@ -279,7 +279,10 @@ function SignatureSettingsPage() {
                   onClick={() => deleteMutation.mutate()}
                   disabled={isDeleting || isUploading}
                 >
-                  <HugeiconsIcon icon={Delete02Icon} className="size-4 mr-1.5" />
+                  <HugeiconsIcon
+                    icon={Delete02Icon}
+                    className="size-4 mr-1.5"
+                  />
                   {isDeleting ? 'Removendo...' : 'Remover'}
                 </Button>
               )}

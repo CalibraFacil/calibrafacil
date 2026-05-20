@@ -24,14 +24,14 @@ Calibra Fácil helps calibration laboratories manage their operations with full 
                      └─────────────┘ └─────────────┘
 ```
 
-| Component | Description | Platform |
-|-----------|-------------|----------|
-| **Web** | Lab dashboard for technicians and administrators | Vercel |
-| **Portal** | Client-facing portal for certificate access | Vercel |
-| **API** | REST API backend | Vercel Functions |
+| Component           | Description                                              | Platform              |
+| ------------------- | -------------------------------------------------------- | --------------------- |
+| **Web**             | Lab dashboard for technicians and administrators         | Vercel                |
+| **Portal**          | Client-facing portal for certificate access              | Vercel                |
+| **API**             | REST API backend                                         | Vercel Functions      |
 | **Background jobs** | PDF generation, compliance checks, and integration syncs | Vercel Queue and Cron |
-| **Database** | PostgreSQL with Drizzle ORM | Neon |
-| **Object storage** | Certificate PDFs and runtime assets | Cloudflare R2 |
+| **Database**        | PostgreSQL with Drizzle ORM                              | Neon                  |
+| **Object storage**  | Certificate PDFs and runtime assets                      | Cloudflare R2         |
 
 ## Monorepo Structure
 
@@ -75,6 +75,7 @@ calibra-facil/
 ### Setup
 
 1. Clone and install dependencies:
+
    ```bash
    git clone https://github.com/CalibraFacil/calibra-facil.git
    cd calibra-facil
@@ -82,6 +83,7 @@ calibra-facil/
    ```
 
 2. Configure environment:
+
    ```bash
    cp apps/api/.env.example apps/api/.env
    cp apps/worker/.env.example apps/worker/.env
@@ -89,12 +91,14 @@ calibra-facil/
    ```
 
 3. Run database migrations:
+
    ```bash
    cd packages/db
    pnpm db:migrate
    ```
 
 4. Start development:
+
    ```bash
    pnpm dev
    ```

@@ -431,12 +431,8 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
               ilike(service.name, `%${query}%`),
             )
           : undefined,
-        dateFrom
-          ? sql`${approvedAtPortalDate} >= ${dateFrom}`
-          : undefined,
-        dateTo
-          ? sql`${approvedAtPortalDate} <= ${dateTo}`
-          : undefined,
+        dateFrom ? sql`${approvedAtPortalDate} >= ${dateFrom}` : undefined,
+        dateTo ? sql`${approvedAtPortalDate} <= ${dateTo}` : undefined,
       );
 
       // Count total certificates

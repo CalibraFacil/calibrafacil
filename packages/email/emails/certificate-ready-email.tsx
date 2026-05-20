@@ -1,6 +1,11 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { EmailLayout, StatusBox, styles, theme } from "./components/email-layout";
+import {
+  EmailLayout,
+  StatusBox,
+  styles,
+  theme,
+} from "./components/email-layout";
 
 interface CertificateReadyEmailProps {
   recipientName: string;

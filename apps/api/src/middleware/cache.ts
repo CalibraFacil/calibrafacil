@@ -32,7 +32,9 @@ export function withCache(resource: string, ttl: number) {
       return;
     }
 
-    const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
+    const kv = (c.env as Record<string, unknown>).CACHE as
+      | KVNamespace
+      | undefined;
     if (!kv) {
       await next();
       return;
@@ -104,7 +106,9 @@ export function withInvalidation(resource: string) {
 
     // Only invalidate on successful mutations
     if (c.res.status >= 200 && c.res.status < 300) {
-      const kv = (c.env as Record<string, unknown>).CACHE as KVNamespace | undefined;
+      const kv = (c.env as Record<string, unknown>).CACHE as
+        | KVNamespace
+        | undefined;
       const member = c.get("member");
       if (kv && member) {
         // Fire-and-forget — don't block the response

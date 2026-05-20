@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@calibra-facil/db";
-import {
-  commercialOffer,
-  commercialOfferItem,
-} from "@calibra-facil/db/schema";
+import { commercialOffer, commercialOfferItem } from "@calibra-facil/db/schema";
 import type { CommercialOfferPreviewInput } from "@calibra-facil/schemas";
 import { previewCommercialOffer } from "./preview";
 import {
@@ -23,7 +20,8 @@ export async function issueCommercialOffer(
   const preview = previewCommercialOffer(input);
   if (!preview.issueable) {
     throw new Error(
-      preview.warnings[0] ?? "A oferta não pode ser emitida com a configuração atual",
+      preview.warnings[0] ??
+        "A oferta não pode ser emitida com a configuração atual",
     );
   }
 

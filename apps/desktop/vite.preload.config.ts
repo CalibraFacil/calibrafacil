@@ -1,18 +1,18 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from "vite";
 
 export default defineConfig({
   build: {
     emptyOutDir: false,
     lib: {
-      entry: 'src/preload/preload.ts',
-      formats: ['cjs'],
-      fileName: () => 'preload.cjs',
+      entry: "src/preload/preload.ts",
+      formats: ["cjs"],
+      fileName: () => "preload.cjs",
     },
-    outDir: 'dist/preload',
+    outDir: "dist/preload",
     rollupOptions: {
-      external: ['electron'],
+      external: ["electron"],
     },
     sourcemap: true,
-    target: 'node20',
+    target: "node20",
   },
-})
+});

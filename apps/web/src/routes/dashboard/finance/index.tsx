@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 type FinanceOverviewResponse = {
   totals: {
@@ -77,12 +77,7 @@ function FinanceOverviewPage() {
   const overviewQuery = useQuery({
     queryKey: ['finance', 'overview'],
     queryFn: async () => {
-      const response = await api.api.finance.overview.$get()
-      if (!response.ok) {
-        throw new Error('Erro ao carregar visão geral financeira')
-      }
-
-      return response.json() as Promise<FinanceOverviewResponse>
+      return calibraApi.finance.getOverview<FinanceOverviewResponse>()
     },
   })
 

@@ -8,14 +8,17 @@ import {
 
 function resolvePublicAppUrl(c: { env?: unknown }) {
   const configured =
-    (c.env as Record<string, unknown> | undefined)?.APP_URL ?? process.env.APP_URL;
+    (c.env as Record<string, unknown> | undefined)?.APP_URL ??
+    process.env.APP_URL;
 
   return typeof configured === "string" && configured.trim().length > 0
     ? configured.trim().replace(/\/$/, "")
     : "https://calibrafacil.com";
 }
 
-function withPublicCheckoutHeaders(c: { header(name: string, value: string): void }) {
+function withPublicCheckoutHeaders(c: {
+  header(name: string, value: string): void;
+}) {
   c.header("Cache-Control", "private, no-store, max-age=0");
   c.header("Pragma", "no-cache");
   c.header("X-Robots-Tag", "noindex, nofollow");

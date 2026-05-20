@@ -2,23 +2,23 @@ import {
   createCalculationEngine,
   type CalculationEngineOptions,
   type MeasurementModelInput,
-} from '@calibra-facil/math-engine'
+} from "@calibra-facil/math-engine";
 import type {
   CalculationEngineLike,
   MeasurementModelInputLike,
-} from '@calibra-facil/method-definition'
+} from "@calibra-facil/method-definition";
 
 export const localMethodEngineOptions = {
-  numericMode: 'decimal',
+  numericMode: "decimal",
   rejectUnusedInputs: true,
   maxExponentMagnitude: 12,
   maxSignificantDigits: 24,
-} satisfies CalculationEngineOptions
+} satisfies CalculationEngineOptions;
 
 export function createMethodDefinitionEngine(
   options: CalculationEngineOptions = localMethodEngineOptions,
 ): CalculationEngineLike {
-  const engine = createCalculationEngine(options)
+  const engine = createCalculationEngine(options);
 
   return {
     options: engine.options,
@@ -32,5 +32,5 @@ export function createMethodDefinitionEngine(
       ),
     evaluateMeasurementModel: (input: MeasurementModelInputLike) =>
       engine.evaluateMeasurementModel(input as MeasurementModelInput),
-  }
+  };
 }

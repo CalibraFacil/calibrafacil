@@ -44,7 +44,9 @@ describe("PDF Signing", () => {
       const { parsePkcs12 } = await import("./signer");
       const invalidBuffer = Buffer.from("not a valid pkcs12 file");
 
-      expect(() => parsePkcs12(invalidBuffer, "password")).toThrow(SigningError);
+      expect(() => parsePkcs12(invalidBuffer, "password")).toThrow(
+        SigningError,
+      );
       try {
         parsePkcs12(invalidBuffer, "password");
       } catch (error) {
@@ -60,7 +62,7 @@ describe("PDF Signing", () => {
       const invalidBuffer = Buffer.from("invalid data");
 
       expect(() => getCertificateInfo(invalidBuffer, "password")).toThrow(
-        SigningError
+        SigningError,
       );
     });
   });

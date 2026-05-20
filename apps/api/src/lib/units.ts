@@ -63,7 +63,10 @@ export function getDefaultUnitRole(role: RoleName): MemberUnitRole {
   return "member";
 }
 
-export function isUnitScopedManagementRole(role: RoleName, unitRole?: string | null) {
+export function isUnitScopedManagementRole(
+  role: RoleName,
+  unitRole?: string | null,
+) {
   return GLOBAL_MULTI_UNIT_ROLES.has(role) || unitRole === "unit_admin";
 }
 
@@ -75,7 +78,8 @@ export function getUnitGovernanceAccess(
   member: UnitGovernanceMember,
 ): UnitGovernanceAccess {
   const isGlobalManager = isGlobalUnitManager(member.role);
-  const canManageAssignments = isGlobalManager || member.unitRole === "unit_admin";
+  const canManageAssignments =
+    isGlobalManager || member.unitRole === "unit_admin";
 
   return {
     isGlobalManager,
@@ -175,7 +179,10 @@ export async function resolveMemberUnitScope(params: {
   const wantsAll = requestedScope === "all";
 
   if (GLOBAL_MULTI_UNIT_ROLES.has(params.memberRole)) {
-    await ensureDefaultUnitForOrganization(params.organizationId, params.userId);
+    await ensureDefaultUnitForOrganization(
+      params.organizationId,
+      params.userId,
+    );
 
     const units = await db
       .select({
@@ -201,19 +208,19 @@ export async function resolveMemberUnitScope(params: {
       requestedScope && requestedScope !== "all"
         ? Number.parseInt(requestedScope, 10)
         : Number.NaN;
-    const activeUnit =
-      wantsAll
-        ? null
-        : !hasExplicitScope
-          ? accessibleUnits[0] ?? null
-          : Number.isInteger(requestedUnitId) &&
-              accessibleUnitIds.includes(requestedUnitId)
-            ? accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null
-            : null;
+    const activeUnit = wantsAll
+      ? null
+      : !hasExplicitScope
+        ? (accessibleUnits[0] ?? null)
+        : Number.isInteger(requestedUnitId) &&
+            accessibleUnitIds.includes(requestedUnitId)
+          ? (accessibleUnits.find((unit) => unit.id === requestedUnitId) ??
+            null)
+          : null;
 
     return {
-      activeUnitId: wantsAll ? null : activeUnit?.id ?? null,
-      activeUnitName: wantsAll ? null : activeUnit?.name ?? null,
+      activeUnitId: wantsAll ? null : (activeUnit?.id ?? null),
+      activeUnitName: wantsAll ? null : (activeUnit?.name ?? null),
       accessibleUnitIds,
       accessibleUnits,
       canAccessAllUnits: true,
@@ -230,7 +237,10 @@ export async function resolveMemberUnitScope(params: {
       role: memberUnitAssignment.role,
     })
     .from(memberUnitAssignment)
-    .innerJoin(organizationUnit, eq(memberUnitAssignment.unitId, organizationUnit.id))
+    .innerJoin(
+      organizationUnit,
+      eq(memberUnitAssignment.unitId, organizationUnit.id),
+    )
     .where(
       and(
         eq(memberUnitAssignment.organizationId, params.organizationId),
@@ -276,13 +286,12 @@ export async function resolveMemberUnitScope(params: {
   const requestedUnitId = requestedScope
     ? Number.parseInt(requestedScope, 10)
     : Number.NaN;
-  const activeUnit =
-    !hasExplicitScope
-      ? accessibleUnits[0] ?? null
-      : Number.isInteger(requestedUnitId) &&
-          accessibleUnitIds.includes(requestedUnitId)
-        ? accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null
-        : null;
+  const activeUnit = !hasExplicitScope
+    ? (accessibleUnits[0] ?? null)
+    : Number.isInteger(requestedUnitId) &&
+        accessibleUnitIds.includes(requestedUnitId)
+      ? (accessibleUnits.find((unit) => unit.id === requestedUnitId) ?? null)
+      : null;
 
   return {
     activeUnitId: activeUnit?.id ?? null,

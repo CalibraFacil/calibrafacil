@@ -27,24 +27,29 @@ if (!result.success) {
 ## Available Schemas
 
 ### Customer Management
+
 - `CreateCustomerSchema` - name, taxId, email, phone, address
 - `UpdateCustomerSchema` - partial fields
 - `ListCustomersQuerySchema` - pagination and search
 
 ### Portal Users
+
 - `CreatePortalInvitationSchema` - email, role
 - `UpdateMemberRoleSchema`
 
 ### Compliance
+
 - `QualificationStatusSchema` - pending/qualified/suspended/expired
 - `CustomerComplianceSchema` - compliance tracking fields
 - `UpdateComplianceSchema` - with reason field for audit
 
 ### Assets
+
 - `AssetTypeFieldDefinition` - key, label, type, unit, required
 - Asset creation/update schemas
 
 ### Jobs
+
 - `CreateJobSchema` - asset, customer, method, service, data
 - `ExecuteJobSchema` - formula context, readings
 - `SubmitForReviewSchema` - job submission
@@ -52,5 +57,6 @@ if (!result.success) {
 - `RejectJobSchema` - rejection with reason
 
 ### Other
+
 - `TaskSchema` - basic task model
 - `AuditLogQuerySchema` - pagination for audit logs

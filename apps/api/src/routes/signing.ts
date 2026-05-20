@@ -313,14 +313,14 @@ export const signingRouter = new Hono<{
           .set({ isDefault: false })
           .where(
             and(
-                  eq(
-                    organizationSigningCertificate.organizationId,
-                    memberData.organizationId,
-                  ),
-                  eq(organizationSigningCertificate.unitId, unit.unitId),
-                  eq(organizationSigningCertificate.isDefault, true),
-                ),
-              );
+              eq(
+                organizationSigningCertificate.organizationId,
+                memberData.organizationId,
+              ),
+              eq(organizationSigningCertificate.unitId, unit.unitId),
+              eq(organizationSigningCertificate.isDefault, true),
+            ),
+          );
 
         await tx
           .update(organizationSigningCertificate)

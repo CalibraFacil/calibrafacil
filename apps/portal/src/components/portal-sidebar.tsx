@@ -1,9 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  Book02Icon,
-  Settings05Icon,
-} from "@hugeicons/core-free-icons";
+import { Book02Icon, Settings05Icon } from "@hugeicons/core-free-icons";
 
 import { PortalOrgSwitcher } from "./portal-org-switcher";
 import { PortalNavMain } from "./portal-nav-main";

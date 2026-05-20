@@ -245,11 +245,7 @@ function CertificatesPage() {
       {
         accessorKey: "status",
         header: "Status",
-        cell: () => (
-          <Badge variant="default">
-            Aprovado
-          </Badge>
-        ),
+        cell: () => <Badge variant="default">Aprovado</Badge>,
       },
       {
         id: "actions",

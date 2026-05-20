@@ -18,7 +18,7 @@ import type {
  * Create a subscription with Boleto or PIX (no card data needed)
  */
 export async function createSubscription(
-  input: CreateSubscriptionInput
+  input: CreateSubscriptionInput,
 ): Promise<AsaasSubscription> {
   const client = getAsaasClient();
   return client.post<AsaasSubscription>("/subscriptions", input);
@@ -31,7 +31,7 @@ export async function createSubscription(
  * only occurs on nextDueDate.
  */
 export async function createCreditCardSubscription(
-  input: CreateCreditCardSubscriptionInput
+  input: CreateCreditCardSubscriptionInput,
 ): Promise<AsaasSubscription> {
   const client = getAsaasClient();
   return client.post<AsaasSubscription>("/subscriptions", input);
@@ -44,7 +44,7 @@ export async function createCreditCardSubscription(
  * transiently. The returned token can then be used for subscriptions/payments.
  */
 export async function tokenizeCreditCard(
-  input: TokenizeCreditCardInput
+  input: TokenizeCreditCardInput,
 ): Promise<TokenizeCreditCardResponse> {
   const client = getAsaasClient();
   return client.post<TokenizeCreditCardResponse>("/creditCard/tokenize", input);
@@ -54,7 +54,7 @@ export async function tokenizeCreditCard(
  * Get a subscription by ID
  */
 export async function getSubscription(
-  subscriptionId: string
+  subscriptionId: string,
 ): Promise<AsaasSubscription> {
   const client = getAsaasClient();
   return client.get<AsaasSubscription>(`/subscriptions/${subscriptionId}`);
@@ -68,7 +68,7 @@ export async function getSubscription(
 export async function updateSubscription(
   subscriptionId: string,
   input: Partial<CreateSubscriptionInput>,
-  updatePendingPayments = false
+  updatePendingPayments = false,
 ): Promise<AsaasSubscription> {
   const client = getAsaasClient();
   return client.put<AsaasSubscription>(`/subscriptions/${subscriptionId}`, {
@@ -81,7 +81,7 @@ export async function updateSubscription(
  * Cancel/Inactivate a subscription
  */
 export async function cancelSubscription(
-  subscriptionId: string
+  subscriptionId: string,
 ): Promise<AsaasSubscription> {
   const client = getAsaasClient();
   return client.delete<AsaasSubscription>(`/subscriptions/${subscriptionId}`);
@@ -96,7 +96,7 @@ export async function getSubscriptionPayments(
     offset?: number;
     limit?: number;
     status?: string;
-  }
+  },
 ): Promise<AsaasPaymentList> {
   const client = getAsaasClient();
   return client.get<AsaasPaymentList>(
@@ -105,7 +105,7 @@ export async function getSubscriptionPayments(
       offset: options?.offset,
       limit: options?.limit,
       status: options?.status,
-    }
+    },
   );
 }
 
@@ -127,7 +127,7 @@ export async function getPayment(paymentId: string): Promise<AsaasPayment> {
  * Note: Only available for payments with billingType = PIX
  */
 export async function getPaymentPixQrCode(
-  paymentId: string
+  paymentId: string,
 ): Promise<AsaasPixQrCode> {
   const client = getAsaasClient();
   return client.get<AsaasPixQrCode>(`/payments/${paymentId}/pixQrCode`);
@@ -139,8 +139,12 @@ export async function getPaymentPixQrCode(
  * Note: Only available for payments with billingType = BOLETO
  */
 export async function getPaymentBoletoLine(
-  paymentId: string
-): Promise<{ identificationField: string; nossoNumero: string; barCode: string }> {
+  paymentId: string,
+): Promise<{
+  identificationField: string;
+  nossoNumero: string;
+  barCode: string;
+}> {
   const client = getAsaasClient();
   return client.get(`/payments/${paymentId}/identificationField`);
 }
@@ -176,7 +180,7 @@ export function formatAsaasDate(date: Date): string {
  */
 export function calculateNextBillingDate(
   startDate: Date,
-  cycle: "MONTHLY" | "YEARLY"
+  cycle: "MONTHLY" | "YEARLY",
 ): Date {
   const next = new Date(startDate);
   if (cycle === "MONTHLY") {
@@ -192,7 +196,7 @@ export function calculateNextBillingDate(
  */
 export function calculatePeriodEnd(
   startDate: Date,
-  cycle: "MONTHLY" | "YEARLY"
+  cycle: "MONTHLY" | "YEARLY",
 ): Date {
   const end = new Date(startDate);
   if (cycle === "MONTHLY") {

@@ -2,9 +2,8 @@ import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import {
-  parseApiError,
   type BlockerScope,
   type HealthStatus,
   type OrganizationQueueItem,
@@ -19,12 +18,7 @@ export function useCustomerSuccessAccess() {
   return useQuery({
     queryKey: ['backoffice', 'access'],
     queryFn: async () => {
-      const res = await api.api.backoffice.access.$get()
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Acesso ao backoffice negado'))
-      }
-
-      return res.json() as Promise<{ allowed: boolean }>
+      return calibraApi.backoffice.getAccess() as Promise<{ allowed: boolean }>
     },
     retry: false,
   })
@@ -34,13 +28,9 @@ export function useCustomerSuccessOrganizations(enabled = true) {
   return useQuery({
     queryKey: ['backoffice', 'customer-success', 'organizations'],
     queryFn: async () => {
-      const res =
-        await api.api.backoffice['customer-success'].organizations.$get()
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao carregar contas'))
-      }
-
-      return res.json() as Promise<{ data: OrganizationQueueItem[] }>
+      return calibraApi.backoffice.customerSuccess.listOrganizations<{
+        data: OrganizationQueueItem[]
+      }>()
     },
     enabled,
   })
@@ -50,14 +40,7 @@ export function useSupportQueue(enabled = true) {
   return useQuery({
     queryKey: ['backoffice', 'support', 'queue', 'customer-success'],
     queryFn: async () => {
-      const res = await api.api.backoffice.support.queue.$get()
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao carregar fila de tickets'),
-        )
-      }
-
-      return res.json() as Promise<SupportQueueResponse>
+      return calibraApi.backoffice.getSupportQueue<SupportQueueResponse>()
     },
     enabled,
   })
@@ -67,19 +50,9 @@ export function useOrganizationProfile(organizationId: string, enabled = true) {
   return useQuery({
     queryKey: ['backoffice', 'customer-success', 'profile', organizationId],
     queryFn: async () => {
-      const res = await api.api.backoffice['customer-success'].organizations[
-        ':id'
-      ].profile.$get({
-        param: { id: organizationId },
-      })
-
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao carregar detalhe da conta'),
-        )
-      }
-
-      return res.json() as Promise<ProfilePayload>
+      return calibraApi.backoffice.customerSuccess.getProfile<ProfilePayload>(
+        organizationId,
+      )
     },
     enabled: Boolean(organizationId) && enabled,
   })
@@ -92,19 +65,9 @@ export function useOrganizationRequests(
   return useQuery({
     queryKey: ['backoffice', 'customer-success', 'requests', organizationId],
     queryFn: async () => {
-      const res = await api.api.backoffice['customer-success'].organizations[
-        ':id'
-      ].requests.$get({
-        param: { id: organizationId },
-      })
-
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao carregar tickets da conta'),
-        )
-      }
-
-      return res.json() as Promise<RequestsPayload>
+      return calibraApi.backoffice.customerSuccess.getRequests<RequestsPayload>(
+        organizationId,
+      )
     },
     enabled: Boolean(organizationId) && enabled,
   })
@@ -165,18 +128,10 @@ export function useUpdateAccountHealth() {
       organizationId: string
       healthStatus: HealthStatus
     }) => {
-      const res = await api.api.backoffice['customer-success'].organizations[
-        ':id'
-      ].profile.$put({
-        param: { id: organizationId },
-        json: { healthStatus },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao atualizar saúde'))
-      }
-
-      return res.json()
+      return calibraApi.backoffice.customerSuccess.updateProfile(
+        organizationId,
+        { healthStatus },
+      )
     },
     onSuccess: async () => {
       toast.success('Saúde da conta atualizada')
@@ -202,18 +157,10 @@ export function useUpdateRequestStatus(organizationId?: string) {
       requestId: number
       status: SupportRequestStatus
     }) => {
-      const res = await api.api.backoffice['customer-success'].requests[
-        ':id'
-      ].status.$post({
-        param: { id: String(requestId) },
-        json: { status },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao atualizar status'))
-      }
-
-      return res.json()
+      return calibraApi.backoffice.customerSuccess.updateRequestStatus(
+        requestId,
+        { status },
+      )
     },
     onSuccess: async () => {
       toast.success('Status atualizado')
@@ -239,18 +186,9 @@ export function useAssignRequest(organizationId?: string) {
       requestId: number
       assignedToUserId: string | null
     }) => {
-      const res = await api.api.backoffice['customer-success'].requests[
-        ':id'
-      ].assign.$post({
-        param: { id: String(requestId) },
-        json: { assignedToUserId },
+      return calibraApi.backoffice.customerSuccess.assignRequest(requestId, {
+        assignedToUserId,
       })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao atribuir ticket'))
-      }
-
-      return res.json()
     },
     onSuccess: async () => {
       toast.success('Atribuição atualizada')
@@ -281,21 +219,10 @@ export function useRespondRequest(organizationId?: string) {
         throw new Error('Informe uma resposta antes de enviar')
       }
 
-      const res = await api.api.backoffice['customer-success'].requests[
-        ':id'
-      ].respond.$post({
-        param: { id: String(requestId) },
-        json: {
-          message,
-          publicVisible: true,
-        },
+      return calibraApi.backoffice.customerSuccess.respondRequest(requestId, {
+        message,
+        publicVisible: true,
       })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao responder'))
-      }
-
-      return res.json()
     },
     onSuccess: async (_, variables) => {
       toast.success(`Resposta enviada para o ticket #${variables.requestId}`)
@@ -320,18 +247,9 @@ export function useEscalateRequest(organizationId?: string) {
       requestId: number
       reason: string
     }) => {
-      const res = await api.api.backoffice['customer-success'].requests[
-        ':id'
-      ].escalate.$post({
-        param: { id: String(requestId) },
-        json: { reason },
+      return calibraApi.backoffice.customerSuccess.escalateRequest(requestId, {
+        reason,
       })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao escalar ticket'))
-      }
-
-      return res.json()
     },
     onSuccess: async () => {
       toast.success('Ticket escalado')
@@ -350,11 +268,9 @@ export function useUpdateProfile(organizationId: string) {
 
   return useMutation({
     mutationFn: async (profileDraft: ProfileDraft) => {
-      const res = await api.api.backoffice['customer-success'].organizations[
-        ':id'
-      ].profile.$put({
-        param: { id: organizationId },
-        json: {
+      return calibraApi.backoffice.customerSuccess.updateProfile(
+        organizationId,
+        {
           accountOwnerName: profileDraft.accountOwnerName,
           accountOwnerEmail: profileDraft.accountOwnerEmail || null,
           supportContactEmail: profileDraft.supportContactEmail || null,
@@ -374,15 +290,7 @@ export function useUpdateProfile(organizationId: string) {
           publicStatusNote: profileDraft.publicStatusNote || null,
           internalNotes: profileDraft.internalNotes || null,
         },
-      })
-
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao atualizar perfil operacional'),
-        )
-      }
-
-      return res.json()
+      )
     },
     onSuccess: async () => {
       toast.success('Conta operacional atualizada')
@@ -411,11 +319,9 @@ export function useNextAction(organizationId: string) {
       nextActionDueAt: string
       markCompleted?: boolean
     }) => {
-      const res = await api.api.backoffice['customer-success'].organizations[
-        ':id'
-      ]['next-action'].$post({
-        param: { id: organizationId },
-        json: {
+      return calibraApi.backoffice.customerSuccess.updateNextAction(
+        organizationId,
+        {
           nextAction: markCompleted ? null : nextAction || null,
           nextActionDueAt:
             markCompleted || !nextActionDueAt
@@ -423,15 +329,7 @@ export function useNextAction(organizationId: string) {
               : new Date(nextActionDueAt).toISOString(),
           markCompleted,
         },
-      })
-
-      if (!res.ok) {
-        throw new Error(
-          await parseApiError(res, 'Falha ao atualizar próxima ação'),
-        )
-      }
-
-      return res.json()
+      )
     },
     onSuccess: async (_, variables) => {
       toast.success(
@@ -464,22 +362,14 @@ export function useBlocker(organizationId: string) {
       mode: 'ADD' | 'RESOLVE'
       reason?: string
     }) => {
-      const res = await api.api.backoffice['customer-success'].organizations[
-        ':id'
-      ].block.$post({
-        param: { id: organizationId },
-        json: {
+      return calibraApi.backoffice.customerSuccess.updateBlocker(
+        organizationId,
+        {
           scope,
           mode,
           reason: mode === 'ADD' ? reason : undefined,
         },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao atualizar bloqueio'))
-      }
-
-      return res.json()
+      )
     },
     onSuccess: async (_, variables) => {
       toast.success(
@@ -504,20 +394,12 @@ export function useTakeOwnership(organizationId: string, userId?: string) {
         throw new Error('Sessão inválida para assumir a conta')
       }
 
-      const res = await api.api.backoffice['customer-success'].organizations[
-        ':id'
-      ].profile.$put({
-        param: { id: organizationId },
-        json: {
+      return calibraApi.backoffice.customerSuccess.updateProfile(
+        organizationId,
+        {
           internalOwnerUserId: userId,
         },
-      })
-
-      if (!res.ok) {
-        throw new Error(await parseApiError(res, 'Falha ao assumir a conta'))
-      }
-
-      return res.json()
+      )
     },
     onSuccess: async () => {
       toast.success('Conta atribuída ao operador atual')

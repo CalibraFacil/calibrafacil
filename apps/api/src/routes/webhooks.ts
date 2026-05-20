@@ -13,7 +13,9 @@ export function verifyWebhookToken(request: Request): boolean {
   const webhookToken = process.env.ASAAS_WEBHOOK_TOKEN;
 
   if (!webhookToken) {
-    console.warn("ASAAS_WEBHOOK_TOKEN not configured - rejecting webhook request");
+    console.warn(
+      "ASAAS_WEBHOOK_TOKEN not configured - rejecting webhook request",
+    );
     return false;
   }
 
@@ -34,7 +36,10 @@ export function verifyWebhookToken(request: Request): boolean {
 
 export const webhooksRouter = new Hono().post("/asaas", async (c) => {
   const contentLength = Number(c.req.header("content-length") ?? "0");
-  if (Number.isFinite(contentLength) && contentLength > MAX_WEBHOOK_BODY_BYTES) {
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_WEBHOOK_BODY_BYTES
+  ) {
     return c.json({ error: "Payload too large" }, 413);
   }
 

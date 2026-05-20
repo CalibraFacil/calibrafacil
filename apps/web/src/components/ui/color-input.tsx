@@ -102,7 +102,9 @@ export function ColorInput({
             positionY={positionY}
             onChange={(nextSaturation, nextBrightness) => {
               onChange(
-                Color.hsv(hue ?? 0, nextSaturation, nextBrightness).hex().toUpperCase(),
+                Color.hsv(hue ?? 0, nextSaturation, nextBrightness)
+                  .hex()
+                  .toUpperCase(),
               )
             }}
           />
@@ -156,7 +158,9 @@ export function ColorInput({
                     onClick={() => onChange(normalized)}
                     className={cn(
                       'size-7 rounded-full border transition-transform hover:scale-105',
-                      isActive ? 'ring-2 ring-primary/30 ring-offset-2' : 'ring-0',
+                      isActive
+                        ? 'ring-2 ring-primary/30 ring-offset-2'
+                        : 'ring-0',
                     )}
                     style={{ backgroundColor: normalized }}
                     aria-label={`Selecionar ${normalized}`}
@@ -168,7 +172,12 @@ export function ColorInput({
         </PopoverContent>
       </Popover>
 
-      <ColorHexInput key={value} value={value} onChange={onChange} disabled={disabled} />
+      <ColorHexInput
+        key={value}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+      />
     </div>
   )
 }

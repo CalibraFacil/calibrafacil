@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { AsaasClient, AsaasError, getAsaasClient, resetAsaasClient } from "../client";
+import {
+  AsaasClient,
+  AsaasError,
+  getAsaasClient,
+  resetAsaasClient,
+} from "../client";
 import {
   mockFetchResponse,
   mockFetch,
@@ -75,7 +80,11 @@ describe("AsaasClient", () => {
       global.fetch = mockFetch(mockFetchResponse({ data: [] }));
 
       const client = new AsaasClient("test-api-key", "sandbox");
-      await client.get("/customers", { limit: 10, offset: 0, status: undefined });
+      await client.get("/customers", {
+        limit: 10,
+        offset: 0,
+        status: undefined,
+      });
 
       expect(global.fetch).toHaveBeenCalledWith(
         "https://sandbox.asaas.com/api/v3/customers?limit=10&offset=0",
@@ -175,14 +184,21 @@ describe("AsaasClient", () => {
 
       const client = new AsaasClient("test-api-key", "sandbox");
 
-      await expect(client.get("/customers/invalid")).rejects.toThrow(AsaasError);
+      await expect(client.get("/customers/invalid")).rejects.toThrow(
+        AsaasError,
+      );
       expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
     it("should exhaust retries and throw error", async () => {
-      global.fetch = vi.fn().mockResolvedValue(
-        mockFetchResponse({ errors: [{ code: "server_error", description: "Server error" }] }, 500),
-      );
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(
+          mockFetchResponse(
+            { errors: [{ code: "server_error", description: "Server error" }] },
+            500,
+          ),
+        );
 
       const client = new AsaasClient("test-api-key", "sandbox");
 
@@ -273,7 +289,9 @@ describe("AsaasClient", () => {
       const originalEnv = process.env.ASAAS_API_KEY;
       delete process.env.ASAAS_API_KEY;
 
-      expect(() => getAsaasClient()).toThrow("ASAAS_API_KEY environment variable is required for billing operations");
+      expect(() => getAsaasClient()).toThrow(
+        "ASAAS_API_KEY environment variable is required for billing operations",
+      );
 
       process.env.ASAAS_API_KEY = originalEnv;
     });

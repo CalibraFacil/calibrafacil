@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
-import { api, calibraApi } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -194,17 +194,9 @@ function CalibrationRequestTriagePanel({
 
   const reviewMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api['calibration-requests'][':id'].review.$post({
-        param: { id: requestId },
-        json: { internalNotes: internalNotes || undefined },
+      await calibraApi.calibrationRequests.review(requestId, {
+        internalNotes: internalNotes || undefined,
       })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao revisar',
-        )
-      }
     },
     onSuccess: async () => {
       await onInvalidate()
@@ -215,17 +207,9 @@ function CalibrationRequestTriagePanel({
 
   const approveMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api['calibration-requests'][':id'].approve.$post({
-        param: { id: requestId },
-        json: { internalNotes: internalNotes || undefined },
+      await calibraApi.calibrationRequests.approve(requestId, {
+        internalNotes: internalNotes || undefined,
       })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao aprovar',
-        )
-      }
     },
     onSuccess: async () => {
       await onInvalidate()
@@ -236,20 +220,10 @@ function CalibrationRequestTriagePanel({
 
   const rejectMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api['calibration-requests'][':id'].reject.$post({
-        param: { id: requestId },
-        json: {
-          reason: rejectionReason,
-          internalNotes: internalNotes || undefined,
-        },
+      await calibraApi.calibrationRequests.reject(requestId, {
+        reason: rejectionReason,
+        internalNotes: internalNotes || undefined,
       })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao rejeitar',
-        )
-      }
     },
     onSuccess: async () => {
       await onInvalidate()
@@ -273,17 +247,9 @@ function CalibrationRequestTriagePanel({
         }
       })
 
-      const res = await api.api['calibration-requests'][':id'].convert.$post({
-        param: { id: requestId },
-        json: { items: payload },
+      await calibraApi.calibrationRequests.convert(requestId, {
+        items: payload,
       })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(
-          (error as { error?: string }).error || 'Erro ao converter',
-        )
-      }
     },
     onSuccess: async () => {
       await onInvalidate()
@@ -580,17 +546,8 @@ function CalibrationRequestDetailPage() {
       Boolean(activeOrganizationId) &&
       !isContextSwitching &&
       !cloudOnlyUnavailable,
-    queryFn: async () => {
-      const res = await api.api['calibration-requests'][':id'].$get({
-        param: { id },
-      })
-
-      if (!res.ok) {
-        throw new Error('Falha ao carregar solicitação')
-      }
-
-      return res.json() as Promise<CalibrationRequestDetail>
-    },
+    queryFn: async () =>
+      calibraApi.calibrationRequests.get<CalibrationRequestDetail>(id),
   })
 
   const servicesQuery = useQuery({

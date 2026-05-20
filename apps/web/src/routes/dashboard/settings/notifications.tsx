@@ -51,7 +51,9 @@ type NotificationPreference = {
   email: boolean
 }
 
-type NotificationPreferencesMap = Partial<Record<NotificationType, NotificationPreference>>
+type NotificationPreferencesMap = Partial<
+  Record<NotificationType, NotificationPreference>
+>
 
 interface NotificationSetting {
   id: NotificationType
@@ -101,7 +103,8 @@ const notificationSettings: NotificationSetting[] = [
   {
     id: 'CUSTOMER_SUCCESS_WORKFLOW_BLOCKED',
     title: 'Workflow bloqueado',
-    description: 'Quando onboarding, migração ou go-live entra em bloqueio ativo',
+    description:
+      'Quando onboarding, migração ou go-live entra em bloqueio ativo',
     category: 'operational',
   },
   {
@@ -249,29 +252,41 @@ function NotificationsSettingsPage() {
     }) => calibraApi.notifications.updatePreferences(data),
     onMutate: async (newData) => {
       // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['notification-preferences'] })
+      await queryClient.cancelQueries({
+        queryKey: ['notification-preferences'],
+      })
 
       // Snapshot previous value
-      const previousData = queryClient.getQueryData(['notification-preferences'])
+      const previousData = queryClient.getQueryData([
+        'notification-preferences',
+      ])
 
       // Optimistically update
-      queryClient.setQueryData(['notification-preferences'], (old: typeof prefsData) => {
-        if (!old) return old
-        return {
-          ...old,
-          ...(newData.emailEnabled !== undefined && { emailEnabled: newData.emailEnabled }),
-          ...(newData.preferences && {
-            preferences: { ...old.preferences, ...newData.preferences },
-          }),
-        }
-      })
+      queryClient.setQueryData(
+        ['notification-preferences'],
+        (old: typeof prefsData) => {
+          if (!old) return old
+          return {
+            ...old,
+            ...(newData.emailEnabled !== undefined && {
+              emailEnabled: newData.emailEnabled,
+            }),
+            ...(newData.preferences && {
+              preferences: { ...old.preferences, ...newData.preferences },
+            }),
+          }
+        },
+      )
 
       return { previousData }
     },
     onError: (_err, _newData, context) => {
       // Rollback on error
       if (context?.previousData) {
-        queryClient.setQueryData(['notification-preferences'], context.previousData)
+        queryClient.setQueryData(
+          ['notification-preferences'],
+          context.previousData,
+        )
       }
       toast.error('Erro ao atualizar preferências')
     },
@@ -289,7 +304,10 @@ function NotificationsSettingsPage() {
     notificationType: NotificationType,
     channel: 'inApp' | 'email',
   ) => {
-    const current = preferences[notificationType] ?? { inApp: true, email: true }
+    const current = preferences[notificationType] ?? {
+      inApp: true,
+      email: true,
+    }
     const updated = {
       ...current,
       [channel]: !current[channel],
@@ -391,7 +409,8 @@ function NotificationsSettingsPage() {
                 Notificar minhas próprias ações
               </label>
               <p className="text-sm text-muted-foreground">
-                Receber notificações quando você atribui uma calibração para si mesmo
+                Receber notificações quando você atribui uma calibração para si
+                mesmo
               </p>
             </div>
             <Switch
@@ -415,7 +434,10 @@ function NotificationsSettingsPage() {
         <CardContent>
           <div className="space-y-4">
             {operationalSettings.map((setting, index) => {
-              const pref = preferences[setting.id] ?? { inApp: true, email: true }
+              const pref = preferences[setting.id] ?? {
+                inApp: true,
+                email: true,
+              }
               return (
                 <div key={setting.id}>
                   {index > 0 && <Separator className="my-4" />}
@@ -473,7 +495,10 @@ function NotificationsSettingsPage() {
         <CardContent>
           <div className="space-y-4">
             {complianceSettings.map((setting, index) => {
-              const pref = preferences[setting.id] ?? { inApp: true, email: true }
+              const pref = preferences[setting.id] ?? {
+                inApp: true,
+                email: true,
+              }
               return (
                 <div key={setting.id}>
                   {index > 0 && <Separator className="my-4" />}
@@ -525,13 +550,17 @@ function NotificationsSettingsPage() {
         <CardHeader>
           <CardTitle>Qualidade</CardTitle>
           <CardDescription>
-            Notificações de não conformidades e ações corretivas (ISO 17025 Cláusula 8.7)
+            Notificações de não conformidades e ações corretivas (ISO 17025
+            Cláusula 8.7)
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {qualitySettings.map((setting, index) => {
-              const pref = preferences[setting.id] ?? { inApp: true, email: true }
+              const pref = preferences[setting.id] ?? {
+                inApp: true,
+                email: true,
+              }
               return (
                 <div key={setting.id}>
                   {index > 0 && <Separator className="my-4" />}
@@ -589,7 +618,10 @@ function NotificationsSettingsPage() {
         <CardContent>
           <div className="space-y-4">
             {billingSettings.map((setting, index) => {
-              const pref = preferences[setting.id] ?? { inApp: true, email: true }
+              const pref = preferences[setting.id] ?? {
+                inApp: true,
+                email: true,
+              }
               return (
                 <div key={setting.id}>
                   {index > 0 && <Separator className="my-4" />}

@@ -321,57 +321,51 @@ function RequestsPage() {
             </div>
           )}
 
-          {!error &&
-            !isLoading &&
-            (data?.data.length ?? 0) === 0 && (
-              <Empty className="border">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <HugeiconsIcon icon={Notebook01Icon} />
-                  </EmptyMedia>
-                  <EmptyTitle>Nenhuma solicitação encontrada</EmptyTitle>
-                  <EmptyDescription>
-                    {deferredSearch || statusFilter
-                      ? "Nenhuma solicitação corresponde aos filtros aplicados."
-                      : "Envie sua primeira solicitação de calibração para começar."}
-                  </EmptyDescription>
-                </EmptyHeader>
-                <EmptyContent>
-                  {deferredSearch || statusFilter ? (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSearch("");
-                        setStatusFilter("");
-                        setPage(1);
-                      }}
-                    >
-                      Limpar filtros
-                    </Button>
-                  ) : (
-                    <Button render={<Link to="/requests/new" />}>
-                      <HugeiconsIcon
-                        icon={Add01Icon}
-                        className="mr-2 size-4"
-                      />
-                      Criar Solicitação
-                    </Button>
-                  )}
-                </EmptyContent>
-              </Empty>
-            )}
+          {!error && !isLoading && (data?.data.length ?? 0) === 0 && (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={Notebook01Icon} />
+                </EmptyMedia>
+                <EmptyTitle>Nenhuma solicitação encontrada</EmptyTitle>
+                <EmptyDescription>
+                  {deferredSearch || statusFilter
+                    ? "Nenhuma solicitação corresponde aos filtros aplicados."
+                    : "Envie sua primeira solicitação de calibração para começar."}
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                {deferredSearch || statusFilter ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearch("");
+                      setStatusFilter("");
+                      setPage(1);
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                ) : (
+                  <Button render={<Link to="/requests/new" />}>
+                    <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
+                    Criar Solicitação
+                  </Button>
+                )}
+              </EmptyContent>
+            </Empty>
+          )}
 
-          {!error &&
-            ((data?.data.length ?? 0) > 0 || isLoading) && (
-              <DataTable
-                columns={columns}
-                data={data?.data ?? []}
-                isLoading={isLoading}
-                pagination={data?.pagination}
-                onPageChange={setPage}
-                itemName="solicitações"
-              />
-            )}
+          {!error && ((data?.data.length ?? 0) > 0 || isLoading) && (
+            <DataTable
+              columns={columns}
+              data={data?.data ?? []}
+              isLoading={isLoading}
+              pagination={data?.pagination}
+              onPageChange={setPage}
+              itemName="solicitações"
+            />
+          )}
         </CardContent>
       </Card>
     </div>

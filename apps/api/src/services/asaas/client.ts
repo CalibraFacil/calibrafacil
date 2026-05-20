@@ -171,8 +171,7 @@ export class AsaasClient {
 
     // All retries exhausted
     throw (
-      lastError ||
-      new Error("Asaas API request failed after maximum retries")
+      lastError || new Error("Asaas API request failed after maximum retries")
     );
   }
 

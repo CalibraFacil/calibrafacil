@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -118,10 +118,8 @@ function CompetenceDetailPage() {
     error,
   } = useQuery({
     queryKey: ['competence', id],
-    queryFn: async () => {
-      const res = await api.api.competences[':id'].$get({ param: { id } })
-      if (!res.ok) throw new Error('Falha ao carregar competência')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.competences.get<{
         id: number
         organizationId: string
         userId: string
@@ -152,8 +150,7 @@ function CompetenceDetailPage() {
           startDate: string
           endDate: string | null
         }>
-      }>
-    },
+      }>(id),
   })
 
   const invalidateAll = () => {
@@ -168,16 +165,7 @@ function CompetenceDetailPage() {
       action,
     }: {
       action: 'start-training' | 'complete-training' | 'suspend'
-    }) => {
-      const res = await api.api.competences[':id'][action].$post({
-        param: { id },
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error((err as { error?: string }).error || 'Erro na operação')
-      }
-      return res.json()
-    },
+    }) => calibraApi.competences.transition(id, action),
     onSuccess: () => {
       invalidateAll()
       toast.success('Status atualizado')
@@ -192,17 +180,7 @@ function CompetenceDetailPage() {
       notes?: string
       qualifiedAt?: string
       expiresAt?: string
-    }) => {
-      const res = await api.api.competences[':id'].evaluate.$post({
-        param: { id },
-        json: data,
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error((err as { error?: string }).error || 'Erro na avaliação')
-      }
-      return res.json()
-    },
+    }) => calibraApi.competences.evaluate(id, data),
     onSuccess: () => {
       invalidateAll()
       toast.success('Avaliação registrada')
@@ -218,17 +196,7 @@ function CompetenceDetailPage() {
       notes?: string
       qualifiedAt?: string
       expiresAt?: string
-    }) => {
-      const res = await api.api.competences[':id'].renew.$post({
-        param: { id },
-        json: data,
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error((err as { error?: string }).error || 'Erro na renovação')
-      }
-      return res.json()
-    },
+    }) => calibraApi.competences.renew(id, data),
     onSuccess: () => {
       invalidateAll()
       toast.success('Competência renovada')
@@ -238,19 +206,8 @@ function CompetenceDetailPage() {
   })
 
   const cancelMutation = useMutation({
-    mutationFn: async (notes?: string) => {
-      const res = await api.api.competences[':id'].cancel.$post({
-        param: { id },
-        json: { notes },
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao cancelar competência',
-        )
-      }
-      return res.json()
-    },
+    mutationFn: async (notes?: string) =>
+      calibraApi.competences.cancel(id, { notes }),
     onSuccess: () => {
       invalidateAll()
       toast.success('Competência cancelada')
@@ -261,18 +218,7 @@ function CompetenceDetailPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.api.competences[':id'].$delete({
-        param: { id },
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao excluir competência',
-        )
-      }
-      return res.json()
-    },
+    mutationFn: async () => calibraApi.competences.delete(id),
     onSuccess: async () => {
       invalidateAll()
       toast.success('Competência excluída')
@@ -560,7 +506,8 @@ function CompetenceDetailPage() {
                     <DialogHeader>
                       <DialogTitle>Avaliar Competência</DialogTitle>
                       <DialogDescription>
-                        Avalie se o técnico está qualificado para esta atividade.
+                        Avalie se o técnico está qualificado para esta
+                        atividade.
                       </DialogDescription>
                     </DialogHeader>
                     <EvaluateForm
@@ -617,9 +564,9 @@ function CompetenceDetailPage() {
                     <DialogHeader>
                       <DialogTitle>Excluir Competência</DialogTitle>
                       <DialogDescription>
-                        Esta ação remove a competência da visualização principal.
-                        O registro será mantido como exclusão lógica para fins
-                        internos.
+                        Esta ação remove a competência da visualização
+                        principal. O registro será mantido como exclusão lógica
+                        para fins internos.
                       </DialogDescription>
                     </DialogHeader>
 
@@ -695,17 +642,12 @@ function AssignTrainingDialog({
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['training-records', 'assignable', userId],
-    queryFn: async () => {
-      const res = await api.api['training-records'].$get({
-        query: {
-          page: '1',
-          limit: '100',
-          userId,
-        },
-      })
-      if (!res.ok) throw new Error('Falha ao carregar treinamentos')
-      return res.json() as Promise<{ data: Array<TrainingRecordOption> }>
-    },
+    queryFn: async () =>
+      calibraApi.trainingRecords.list<{ data: Array<TrainingRecordOption> }>({
+        page: 1,
+        limit: 100,
+        userId,
+      }),
     enabled: open,
   })
 
@@ -717,19 +659,10 @@ function AssignTrainingDialog({
     ) ?? []
 
   const assignTrainingMutation = useMutation({
-    mutationFn: async (trainingRecordIds: number[]) => {
-      const res = await api.api.competences[':id']['assign-training'].$post({
-        param: { id: competenceId },
-        json: { trainingRecordIds },
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao atribuir treinamento',
-        )
-      }
-      return res.json()
-    },
+    mutationFn: async (trainingRecordIds: number[]) =>
+      calibraApi.competences.assignTraining(competenceId, {
+        trainingRecordIds,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['training-records'] })
       onAssigned()
@@ -742,43 +675,19 @@ function AssignTrainingDialog({
 
   const createTrainingMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.api['training-records'].$post({
-        json: {
-          userId,
-          title: title.trim(),
-          type,
-          provider: provider.trim() || undefined,
-          description: description.trim() || undefined,
-          startDate: toISOStringFromDateInput(startDate),
-          endDate: endDate ? toISOStringFromDateInput(endDate) : undefined,
-        },
+      const created = await calibraApi.trainingRecords.create<{ id: number }>({
+        userId,
+        title: title.trim(),
+        type,
+        provider: provider.trim() || undefined,
+        description: description.trim() || undefined,
+        startDate: toISOStringFromDateInput(startDate),
+        endDate: endDate ? toISOStringFromDateInput(endDate) : undefined,
       })
 
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error ||
-            'Erro ao criar registro de treinamento',
-        )
-      }
-
-      const created = (await res.json()) as { id: number }
-
-      const assignRes = await api.api.competences[':id']['assign-training'].$post(
-        {
-          param: { id: competenceId },
-          json: { trainingRecordIds: [created.id] },
-        },
-      )
-
-      if (!assignRes.ok) {
-        const err = await assignRes.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao atribuir treinamento',
-        )
-      }
-
-      return assignRes.json()
+      return calibraApi.competences.assignTraining(competenceId, {
+        trainingRecordIds: [created.id],
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['training-records'] })
@@ -793,7 +702,8 @@ function AssignTrainingDialog({
   const isSubmitting =
     assignTrainingMutation.isPending || createTrainingMutation.isPending
   const showCreateForm =
-    createMode || (!isLoading && !error && availableTrainingRecords.length === 0)
+    createMode ||
+    (!isLoading && !error && availableTrainingRecords.length === 0)
 
   const toggleTraining = (trainingId: number, checked: boolean) => {
     setSelectedTrainingIds((current) => {
@@ -1114,11 +1024,7 @@ function EvaluateForm({
           disabled={isLoading}
           className="flex-1"
         >
-          {isLoading
-            ? 'Processando...'
-            : isRenewal
-              ? 'Renovar'
-              : 'Aprovar'}
+          {isLoading ? 'Processando...' : isRenewal ? 'Renovar' : 'Aprovar'}
         </Button>
       </div>
     </div>

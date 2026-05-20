@@ -2,7 +2,10 @@ import { Badge } from '@/components/ui/badge'
 
 const STATUS_MAP: Record<
   string,
-  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
+  {
+    label: string
+    variant: 'default' | 'secondary' | 'destructive' | 'outline'
+  }
 > = {
   DRAFT: { label: 'Rascunho', variant: 'secondary' },
   ISSUED: { label: 'Emitida', variant: 'secondary' },
@@ -18,7 +21,11 @@ const STATUS_MAP: Record<
   PAST_DUE: { label: 'Inadimplente', variant: 'destructive' },
 }
 
-export function CommercialStatusBadge({ status }: { status: string | null | undefined }) {
+export function CommercialStatusBadge({
+  status,
+}: {
+  status: string | null | undefined
+}) {
   const mapped = STATUS_MAP[status || ''] || {
     label: status || 'Desconhecido',
     variant: 'outline' as const,

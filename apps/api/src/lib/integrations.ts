@@ -12,10 +12,7 @@ import {
   organizationUnit,
   service,
 } from "@calibra-facil/db/schema";
-import {
-  decryptPassword,
-  encryptPassword,
-} from "@calibra-facil/signing";
+import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
 import {
   applyIntegrationMappings,
   DEFAULT_INTEGRATION_SCHEDULE_FREQUENCY,
@@ -83,7 +80,7 @@ export const INTEGRATION_TARGETS = [
 export const DEFAULT_INTEGRATION_SYNC_LIMIT = 50;
 
 function formatCustomerAddress(
-  address: typeof customer.$inferSelect["address"],
+  address: (typeof customer.$inferSelect)["address"],
 ): string | null {
   if (!address) return null;
 
@@ -252,8 +249,8 @@ export async function validateGenericConnection(
   const result = await callRemoteJson(
     `${normalizedConfig.baseUrl}${normalizedConfig.healthPath}`,
     {
-    method: "GET",
-    headers: buildAuthHeaders(secret),
+      method: "GET",
+      headers: buildAuthHeaders(secret),
     },
   );
 
@@ -548,15 +545,19 @@ async function countLinkedTargetRecords(
 
 function hasRemoteValidation(record: GenericConnectionRecord) {
   return Boolean(
-    record.integration.lastValidatedAt && !record.integration.lastValidationError,
+    record.integration.lastValidatedAt &&
+    !record.integration.lastValidationError,
   );
 }
 
 function buildDependencyWarnings(params: {
   target: IntegrationSyncTarget;
-  integrationStatus: typeof organizationIntegration.$inferSelect["status"];
+  integrationStatus: (typeof organizationIntegration.$inferSelect)["status"];
   validated: boolean;
-  coverageByTarget: Record<IntegrationSyncTarget, IntegrationTargetCoverageSummary>;
+  coverageByTarget: Record<
+    IntegrationSyncTarget,
+    IntegrationTargetCoverageSummary
+  >;
 }) {
   const warnings: IntegrationDependencyWarning[] = [];
 
@@ -750,9 +751,7 @@ function buildMappedTargetPayload(params: {
   );
 }
 
-function isSuccessfulRun(
-  run: typeof integrationSyncRun.$inferSelect,
-): boolean {
+function isSuccessfulRun(run: typeof integrationSyncRun.$inferSelect): boolean {
   return (
     run.status === "COMPLETED" ||
     (run.status === "PARTIAL" && run.successCount > 0)
@@ -760,7 +759,9 @@ function isSuccessfulRun(
 }
 
 function isFailingRun(run: typeof integrationSyncRun.$inferSelect): boolean {
-  return run.status === "FAILED" || (run.status === "PARTIAL" && run.errorCount > 0);
+  return (
+    run.status === "FAILED" || (run.status === "PARTIAL" && run.errorCount > 0)
+  );
 }
 
 function getRunDurationMs(run: typeof integrationSyncRun.$inferSelect) {
@@ -768,7 +769,9 @@ function getRunDurationMs(run: typeof integrationSyncRun.$inferSelect) {
   return Math.max(run.finishedAt.getTime() - run.startedAt.getTime(), 0);
 }
 
-function getConsecutiveFailures(runs: typeof integrationSyncRun.$inferSelect[]) {
+function getConsecutiveFailures(
+  runs: (typeof integrationSyncRun.$inferSelect)[],
+) {
   let streak = 0;
 
   for (const run of runs) {
@@ -787,7 +790,7 @@ function getConsecutiveFailures(runs: typeof integrationSyncRun.$inferSelect[]) 
   return streak;
 }
 
-function getLastBlockedAt(runs: typeof integrationSyncRun.$inferSelect[]) {
+function getLastBlockedAt(runs: (typeof integrationSyncRun.$inferSelect)[]) {
   for (const run of runs) {
     const summary =
       run.summary && typeof run.summary === "object"
@@ -828,7 +831,9 @@ export async function buildIntegrationOverview(
   record: GenericConnectionRecord,
 ): Promise<IntegrationOverview> {
   const now = new Date();
-  const normalizedConfig = normalizeGenericFinancialErpConfig(record.connection.config);
+  const normalizedConfig = normalizeGenericFinancialErpConfig(
+    record.connection.config,
+  );
   const [recentRuns, recentErrorEvent] = await Promise.all([
     db.query.integrationSyncRun.findMany({
       where: eq(integrationSyncRun.integrationId, record.integration.id),
@@ -873,55 +878,55 @@ export async function buildIntegrationOverview(
   const validated = hasRemoteValidation(record);
   const targets: IntegrationTargetSyncSummary[] = INTEGRATION_TARGETS.map(
     (target) => {
-    const targetRuns = recentRuns.filter((run) => run.target === target);
-    const lastRun = targetRuns[0] ?? null;
-    const lastSuccessfulRun = targetRuns.find(isSuccessfulRun) ?? null;
-    const warnings = buildDependencyWarnings({
-      target,
-      integrationStatus: record.integration.status,
-      validated,
-      coverageByTarget,
-    });
-    const scheduleConfig = getTargetScheduleConfig(normalizedConfig, target);
-    const hasActiveRun = targetRuns.some(
-      (run) => run.status === "PENDING" || run.status === "RUNNING",
-    );
-    const consecutiveFailures = getConsecutiveFailures(targetRuns);
-    const blocked = warnings.some((warning) => warning.severity === "error");
-    const schedule: IntegrationTargetScheduleSummary = {
-      target,
-      mode: scheduleConfig.mode,
-      frequency: scheduleConfig.frequency,
-      status: buildScheduleStatus({
+      const targetRuns = recentRuns.filter((run) => run.target === target);
+      const lastRun = targetRuns[0] ?? null;
+      const lastSuccessfulRun = targetRuns.find(isSuccessfulRun) ?? null;
+      const warnings = buildDependencyWarnings({
+        target,
+        integrationStatus: record.integration.status,
+        validated,
+        coverageByTarget,
+      });
+      const scheduleConfig = getTargetScheduleConfig(normalizedConfig, target);
+      const hasActiveRun = targetRuns.some(
+        (run) => run.status === "PENDING" || run.status === "RUNNING",
+      );
+      const consecutiveFailures = getConsecutiveFailures(targetRuns);
+      const blocked = warnings.some((warning) => warning.severity === "error");
+      const schedule: IntegrationTargetScheduleSummary = {
+        target,
         mode: scheduleConfig.mode,
+        frequency: scheduleConfig.frequency,
+        status: buildScheduleStatus({
+          mode: scheduleConfig.mode,
+          nextScheduledRunAt: scheduleConfig.nextScheduledRunAt,
+          hasActiveRun,
+          blocked,
+          consecutiveFailures,
+          now,
+        }),
         nextScheduledRunAt: scheduleConfig.nextScheduledRunAt,
-        hasActiveRun,
-        blocked,
-        consecutiveFailures,
-        now,
-      }),
-      nextScheduledRunAt: scheduleConfig.nextScheduledRunAt,
-      lastScheduledRunAt: scheduleConfig.lastScheduledRunAt,
-    };
+        lastScheduledRunAt: scheduleConfig.lastScheduledRunAt,
+      };
 
-    return {
-      target,
-      lastRunAt: toIsoDate(lastRun?.createdAt) ?? null,
-      lastSuccessfulRunAt: toIsoDate(lastSuccessfulRun?.finishedAt) ?? null,
-      lastStatus: lastRun?.status ?? null,
-      lastTrigger: lastRun?.trigger ?? null,
-      processedCount: lastRun?.processedCount ?? 0,
-      successCount: lastRun?.successCount ?? 0,
-      errorCount: lastRun?.errorCount ?? 0,
-      blocked,
-      warnings,
-      coverage: coverageByTarget[target],
-      schedule,
-      lastRunDurationMs: lastRun ? getRunDurationMs(lastRun) : null,
-      consecutiveFailures,
-      lastBlockedAt: getLastBlockedAt(targetRuns),
-      hasActiveRun,
-    };
+      return {
+        target,
+        lastRunAt: toIsoDate(lastRun?.createdAt) ?? null,
+        lastSuccessfulRunAt: toIsoDate(lastSuccessfulRun?.finishedAt) ?? null,
+        lastStatus: lastRun?.status ?? null,
+        lastTrigger: lastRun?.trigger ?? null,
+        processedCount: lastRun?.processedCount ?? 0,
+        successCount: lastRun?.successCount ?? 0,
+        errorCount: lastRun?.errorCount ?? 0,
+        blocked,
+        warnings,
+        coverage: coverageByTarget[target],
+        schedule,
+        lastRunDurationMs: lastRun ? getRunDurationMs(lastRun) : null,
+        consecutiveFailures,
+        lastBlockedAt: getLastBlockedAt(targetRuns),
+        hasActiveRun,
+      };
     },
   );
 
@@ -942,7 +947,8 @@ export async function buildIntegrationOverview(
     }),
     validationRequired: !validated,
     canSync,
-    lastValidatedAt: record.integration.lastValidatedAt?.toISOString?.() ?? null,
+    lastValidatedAt:
+      record.integration.lastValidatedAt?.toISOString?.() ?? null,
     lastValidationError: record.integration.lastValidationError,
     dependencyWarnings,
   };
@@ -968,17 +974,15 @@ export async function previewIntegrationSync(params: {
   limit: number;
   mappings?: Partial<IntegrationMappingsConfig>;
 }) {
-  const normalizedConfig = normalizeGenericFinancialErpConfig(
-    {
-      ...params.record.connection.config,
-      mappings: params.mappings
-        ? {
-            ...params.record.connection.config.mappings,
-            ...params.mappings,
-          }
-        : params.record.connection.config.mappings,
-    },
-  );
+  const normalizedConfig = normalizeGenericFinancialErpConfig({
+    ...params.record.connection.config,
+    mappings: params.mappings
+      ? {
+          ...params.record.connection.config.mappings,
+          ...params.mappings,
+        }
+      : params.record.connection.config.mappings,
+  });
   assertValidMappings(normalizedConfig, params.target);
 
   const overview = await buildIntegrationOverview(params.record);
@@ -1202,7 +1206,7 @@ export async function runIntegrationSync(params: {
   target: IntegrationSyncTarget;
   limit: number;
   env: IntegrationsEnv;
-}) : Promise<IntegrationRunExecutionResult> {
+}): Promise<IntegrationRunExecutionResult> {
   const record = await getIntegrationRecord(
     params.organizationId,
     params.integrationId,

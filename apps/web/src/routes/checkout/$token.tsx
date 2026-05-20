@@ -15,11 +15,7 @@ import {
 import { toast } from 'sonner'
 
 import { BrandLockup } from '@/components/brand'
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -33,7 +29,7 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 type ProviderOutcome = 'success' | 'cancel' | 'expired'
 
@@ -213,20 +209,17 @@ const STATE_LABELS: Record<CheckoutState, string> = {
 }
 
 const STATE_BADGE_CLASS: Record<CheckoutState, string> = {
-  INVALID:
-    'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
+  INVALID: 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300',
   EXPIRED:
     'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  REVOKED:
-    'border-zinc-500/20 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300',
+  REVOKED: 'border-zinc-500/20 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300',
   AWAITING_PAYMENT:
     'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300',
   PIX_READY:
     'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   BOLETO_READY:
     'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  PAID:
-    'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  PAID: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   OVERDUE:
     'border-orange-500/20 bg-orange-500/10 text-orange-700 dark:text-orange-300',
   REFUNDED:
@@ -239,7 +232,8 @@ function formatPhone(value: string | null | undefined): string | null {
   if (!value) return null
 
   const digits = value.replace(/\D/g, '')
-  const localDigits = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits
+  const localDigits =
+    digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits
   const trimmed = localDigits.slice(0, 11)
 
   if (trimmed.length < 10) {
@@ -286,15 +280,7 @@ function PublicCheckoutPage() {
   const snapshotQuery = useQuery({
     queryKey: ['public-commercial-checkout', token, 'snapshot'],
     queryFn: async () => {
-      const response = await api.api.public['commercial-checkout'][':token'].$get({
-        param: { token },
-      })
-
-      if (!response.ok) {
-        throw new Error('Falha ao carregar a oferta comercial')
-      }
-
-      return response.json() as Promise<SnapshotResponse>
+      return calibraApi.publicCheckout.getSnapshot<SnapshotResponse>(token)
     },
   })
 
@@ -308,19 +294,9 @@ function PublicCheckoutPage() {
   const statusQuery = useQuery({
     queryKey: ['public-commercial-checkout', token, 'status'],
     queryFn: async () => {
-      const response = await api.api.public['commercial-checkout'][':token'].status.$get({
-        param: { token },
-      })
-
-      if (response.status === 404) {
-        return { state: 'INVALID' as const }
-      }
-
-      if (!response.ok) {
-        throw new Error('Falha ao verificar o status do pagamento')
-      }
-
-      return response.json() as Promise<StatusResponse | { state: 'INVALID' }>
+      return calibraApi.publicCheckout.getStatus<
+        StatusResponse | { state: 'INVALID' }
+      >(token)
     },
     enabled: shouldPoll,
     refetchInterval: (query) => {
@@ -344,19 +320,7 @@ function PublicCheckoutPage() {
 
   const startMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.api.public['commercial-checkout'][':token'].start.$post({
-        param: { token },
-      })
-
-      const payload = await response.json().catch(() => null)
-      if (!response.ok) {
-        throw new Error(
-          (payload as { error?: string } | null)?.error ??
-            'Falha ao iniciar o pagamento',
-        )
-      }
-
-      return payload as StartResponse
+      return calibraApi.publicCheckout.start<StartResponse>(token)
     },
     onMutate: () => {
       setStartError(null)
@@ -386,12 +350,12 @@ function PublicCheckoutPage() {
   const liveState =
     statusQuery.data && statusQuery.data.state !== 'INVALID'
       ? statusQuery.data.state
-      : effectiveSnapshot?.state ?? 'AWAITING_PAYMENT'
+      : (effectiveSnapshot?.state ?? 'AWAITING_PAYMENT')
 
   const livePresentation =
     statusQuery.data && statusQuery.data.state !== 'INVALID'
       ? statusQuery.data.presentation
-      : effectiveSnapshot?.presentation ?? null
+      : (effectiveSnapshot?.presentation ?? null)
 
   const offer = effectiveSnapshot?.offer
 
@@ -463,7 +427,10 @@ function PublicCheckoutPage() {
               <div className="relative flex flex-col gap-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-3">
-                    <Badge variant="outline" className="border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                    <Badge
+                      variant="outline"
+                      className="border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                    >
                       Proposta comercial emitida
                     </Badge>
                     <div className="space-y-2">
@@ -526,7 +493,9 @@ function PublicCheckoutPage() {
                       className="flex items-start justify-between gap-4 rounded-2xl border border-border/70 bg-muted/40 p-4"
                     >
                       <div className="space-y-1">
-                        <p className="font-medium text-foreground">{item.label}</p>
+                        <p className="font-medium text-foreground">
+                          {item.label}
+                        </p>
                         {item.description ? (
                           <p className="text-sm leading-6 text-muted-foreground">
                             {item.description}
@@ -626,9 +595,11 @@ function PublicCheckoutPage() {
                 {showTerminalState ? (
                   <TerminalStateDetails
                     state={liveState}
-                    paidAt={statusQuery.data && statusQuery.data.state !== 'INVALID'
-                      ? statusQuery.data.paidAt
-                      : offer.paidAt}
+                    paidAt={
+                      statusQuery.data && statusQuery.data.state !== 'INVALID'
+                        ? statusQuery.data.paidAt
+                        : offer.paidAt
+                    }
                   />
                 ) : (
                   <>
@@ -647,7 +618,8 @@ function PublicCheckoutPage() {
                       )}
                     </Button>
 
-                    {offer.paymentMethod === 'PIX' && livePresentation?.type === 'PIX' ? (
+                    {offer.paymentMethod === 'PIX' &&
+                    livePresentation?.type === 'PIX' ? (
                       <PixInstructions
                         presentation={livePresentation}
                         copied={copiedPix}
@@ -703,9 +675,15 @@ function PublicCheckoutPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <SupportRow label="Time responsável" value={offer.seller.name} />
+                <SupportRow
+                  label="Time responsável"
+                  value={offer.seller.name}
+                />
                 <SupportRow label="Email" value={offer.seller.email} />
-                <SupportRow label="Telefone" value={formatPhone(offer.seller.phone)} />
+                <SupportRow
+                  label="Telefone"
+                  value={formatPhone(offer.seller.phone)}
+                />
                 <SupportRow
                   label="Observação"
                   value="Este checkout é somente leitura para preservar o snapshot emitido."
@@ -728,7 +706,10 @@ function CheckoutFrame({ children }: { children: React.ReactNode }) {
           <Link to="/" className="inline-flex items-center">
             <BrandLockup textClassName="text-foreground" />
           </Link>
-          <Badge variant="outline" className="border-border bg-background/70 text-foreground">
+          <Badge
+            variant="outline"
+            className="border-border bg-background/70 text-foreground"
+          >
             Checkout público
           </Badge>
         </div>
@@ -766,7 +747,9 @@ function CenteredStateCard(props: {
       <Card className="max-w-xl border-border/70 bg-card/95 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
         <CardHeader className="text-center">
           <CardDescription>{props.eyebrow}</CardDescription>
-          <CardTitle className="text-3xl tracking-tight">{props.title}</CardTitle>
+          <CardTitle className="text-3xl tracking-tight">
+            {props.title}
+          </CardTitle>
         </CardHeader>
         <CardContent className="text-center text-sm leading-7 text-muted-foreground">
           {props.description}
@@ -825,9 +808,13 @@ function InfoPill(props: {
     <div className="rounded-2xl border border-border/70 bg-background/60 p-4">
       <div className="flex items-center gap-2 text-muted-foreground">
         <HugeiconsIcon icon={props.icon} className="size-4" />
-        <span className="text-xs uppercase tracking-[0.18em]">{props.label}</span>
+        <span className="text-xs uppercase tracking-[0.18em]">
+          {props.label}
+        </span>
       </div>
-      <p className="mt-3 text-sm font-semibold text-foreground">{props.value}</p>
+      <p className="mt-3 text-sm font-semibold text-foreground">
+        {props.value}
+      </p>
     </div>
   )
 }
@@ -857,7 +844,9 @@ function PixInstructions(props: {
   return (
     <div className="space-y-4 rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4">
       <div className="space-y-1">
-        <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Pix pronto para pagamento</p>
+        <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+          Pix pronto para pagamento
+        </p>
         <p className="text-sm leading-6 text-emerald-700/80 dark:text-emerald-200/80">
           Escaneie o QR Code ou copie o código abaixo. O status é atualizado
           automaticamente.
@@ -924,9 +913,12 @@ function BoletoInstructions(props: {
   return (
     <div className="space-y-4 rounded-3xl border border-amber-500/20 bg-amber-500/10 p-4">
       <div className="space-y-1">
-        <p className="text-sm font-medium text-amber-700 dark:text-amber-300">Boleto emitido</p>
+        <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+          Boleto emitido
+        </p>
         <p className="text-sm leading-6 text-amber-700/80 dark:text-amber-200/80">
-          Use a linha digitável no seu banco ou abra o boleto em PDF no provedor.
+          Use a linha digitável no seu banco ou abra o boleto em PDF no
+          provedor.
         </p>
       </div>
 
@@ -935,7 +927,8 @@ function BoletoInstructions(props: {
           Linha digitável
         </p>
         <p className="mt-3 break-all font-mono text-xs leading-6 text-foreground/85">
-          {props.presentation.boleto.identificationField ?? 'Linha não disponível'}
+          {props.presentation.boleto.identificationField ??
+            'Linha não disponível'}
         </p>
       </div>
 
@@ -950,7 +943,11 @@ function BoletoInstructions(props: {
         <Button
           onClick={() => {
             if (props.presentation.boleto.bankSlipUrl) {
-              window.open(props.presentation.boleto.bankSlipUrl, '_blank', 'noopener,noreferrer')
+              window.open(
+                props.presentation.boleto.bankSlipUrl,
+                '_blank',
+                'noopener,noreferrer',
+              )
             }
           }}
           disabled={!props.presentation.boleto.bankSlipUrl}
@@ -1026,10 +1023,16 @@ function TerminalStateDetails(props: {
   )
 }
 
-function SupportRow(props: { label: string; value: string | null | undefined }) {
+function SupportRow(props: {
+  label: string
+  value: string | null | undefined
+}) {
   return (
     <div className="flex items-start gap-3 rounded-2xl border border-border/70 bg-muted/35 p-3">
-      <HugeiconsIcon icon={CustomerSupportIcon} className="mt-0.5 size-4 text-muted-foreground" />
+      <HugeiconsIcon
+        icon={CustomerSupportIcon}
+        className="mt-0.5 size-4 text-muted-foreground"
+      />
       <div>
         <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
           {props.label}

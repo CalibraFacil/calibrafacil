@@ -3,7 +3,12 @@
 // =============================================================================
 
 // Client
-export { AsaasClient, AsaasError, getAsaasClient, resetAsaasClient } from "./client";
+export {
+  AsaasClient,
+  AsaasError,
+  getAsaasClient,
+  resetAsaasClient,
+} from "./client";
 
 // Customer operations
 export {
@@ -16,11 +21,7 @@ export {
 } from "./customers";
 
 // Subscription operations
-export {
-  createCheckout,
-  getCheckout,
-  cancelCheckout,
-} from "./checkouts";
+export { createCheckout, getCheckout, cancelCheckout } from "./checkouts";
 
 export {
   createPayment,

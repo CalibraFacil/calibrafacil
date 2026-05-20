@@ -73,7 +73,8 @@ function SecuritySettingsPage() {
       setNewPassword('')
       setConfirmPassword('')
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Falha ao alterar senha'
+      const message =
+        err instanceof Error ? err.message : 'Falha ao alterar senha'
       toast.error(message)
     } finally {
       setIsChangingPassword(false)

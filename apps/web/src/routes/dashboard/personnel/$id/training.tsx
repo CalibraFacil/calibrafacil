@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -45,7 +45,10 @@ const statusLabels: Record<string, string> = {
   failed: 'Reprovado',
 }
 
-const statusVariants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+const statusVariants: Record<
+  string,
+  'default' | 'secondary' | 'destructive' | 'outline'
+> = {
   planned: 'outline',
   in_progress: 'secondary',
   completed: 'default',
@@ -57,10 +60,8 @@ function TrainingTab() {
 
   const { data: comp, isLoading } = useQuery({
     queryKey: ['competence', id],
-    queryFn: async () => {
-      const res = await api.api.competences[':id'].$get({ param: { id } })
-      if (!res.ok) throw new Error('Falha ao carregar')
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.competences.get<{
         status: CompetenceStatus
         trainingRecords: Array<{
           id: number
@@ -76,8 +77,7 @@ function TrainingTab() {
           passingScore: number | null
           passed: boolean | null
         }>
-      }>
-    },
+      }>(id),
   })
 
   if (isLoading) {
@@ -100,7 +100,9 @@ function TrainingTab() {
           <CardTitle>Registros de Treinamento</CardTitle>
           <CardDescription>
             Treinamentos vinculados a esta competência.
-            {competenceBadge ? ` Competência atual: ${competenceBadge.label}.` : ''}
+            {competenceBadge
+              ? ` Competência atual: ${competenceBadge.label}.`
+              : ''}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -125,7 +127,9 @@ function TrainingTab() {
         <CardDescription>
           {trainings.length} treinamento{trainings.length !== 1 ? 's' : ''}{' '}
           vinculado{trainings.length !== 1 ? 's' : ''}.
-          {competenceBadge ? ` Competência atual: ${competenceBadge.label}.` : ''}
+          {competenceBadge
+            ? ` Competência atual: ${competenceBadge.label}.`
+            : ''}
         </CardDescription>
         <p className="text-sm text-muted-foreground">
           O status da competência é independente do status dos treinamentos
@@ -134,10 +138,7 @@ function TrainingTab() {
       </CardHeader>
       <CardContent className="space-y-4">
         {trainings.map((tr) => (
-          <div
-            key={tr.id}
-            className="rounded-lg border p-4 space-y-3"
-          >
+          <div key={tr.id} className="rounded-lg border p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="font-medium">{tr.title}</h4>
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -156,16 +157,12 @@ function TrainingTab() {
                 <p className="text-sm">{formatDate(tr.startDate)}</p>
               </div>
               <div>
-                <Label className="text-muted-foreground text-xs">
-                  Término
-                </Label>
+                <Label className="text-muted-foreground text-xs">Término</Label>
                 <p className="text-sm">{formatDate(tr.endDate)}</p>
               </div>
               <div>
                 <Label className="text-muted-foreground text-xs">Horas</Label>
-                <p className="text-sm">
-                  {tr.hoursCompleted ?? 0}h
-                </p>
+                <p className="text-sm">{tr.hoursCompleted ?? 0}h</p>
               </div>
             </div>
             {tr.provider && (
@@ -178,12 +175,12 @@ function TrainingTab() {
             )}
             {tr.score != null && (
               <div>
-                <Label className="text-muted-foreground text-xs">
-                  Nota
-                </Label>
+                <Label className="text-muted-foreground text-xs">Nota</Label>
                 <p className="text-sm">
                   {tr.score}
-                  {tr.passingScore != null ? ` (mínimo: ${tr.passingScore})` : ''}
+                  {tr.passingScore != null
+                    ? ` (mínimo: ${tr.passingScore})`
+                    : ''}
                   {tr.passed != null && (
                     <Badge
                       variant={tr.passed ? 'default' : 'destructive'}

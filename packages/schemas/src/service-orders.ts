@@ -137,7 +137,12 @@ const ServiceOrderInputBaseSchema = z.object({
   clientContactSnapshot: z.record(z.string(), z.unknown()).optional(),
   assetId: z.coerce.number().int().positive(),
   intakeType: ServiceOrderIntakeTypeSchema.default("counter"),
-  sourceServiceOrderId: z.coerce.number().int().positive().optional().nullable(),
+  sourceServiceOrderId: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .nullable(),
   priority: ServiceOrderPrioritySchema.default("normal"),
   responsibleTechnicianId: z.string().trim().min(1).optional().nullable(),
   claimedDefect: z.string().trim().min(1).max(5000),

@@ -1,6 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import type { InferResponseType } from 'hono/client'
 
 import {
   Card,
@@ -12,33 +11,32 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice/organizations/$id')({
   component: BackofficeOrganizationDetailPage,
 })
 
-type OrganizationDetailRequest =
-  (typeof api.api.backoffice.organizations)[':id']['$get']
-type OrganizationDetailResponse = InferResponseType<
-  OrganizationDetailRequest,
-  200
->
+type OrganizationDetailResponse = {
+  organization: { id: string; name: string; slug: string; cnpj: string | null }
+  plan: { planName: string; status: string }
+  successProfile: {
+    onboardingStatus?: string | null
+    migrationStatus?: string | null
+    accountOwnerName?: string | null
+    supportContactEmail?: string | null
+  } | null
+  support: { open: number; total: number }
+  integrations: Array<{ id: number; name: string; status: string }>
+  units: Array<{ id: number; name: string; slug: string; status: string }>
+}
 
 function BackofficeOrganizationDetailPage() {
   const { id } = Route.useParams()
   const organizationQuery = useQuery({
     queryKey: ['backoffice', 'organizations', id],
-    queryFn: async () => {
-      const res = await api.api.backoffice.organizations[':id'].$get({
-        param: { id },
-      })
-      if (!res.ok) {
-        throw new Error('Falha ao carregar organização')
-      }
-
-      return res.json() as Promise<OrganizationDetailResponse>
-    },
+    queryFn: async () =>
+      calibraApi.backoffice.getOrganization<OrganizationDetailResponse>(id),
   })
 
   const data = organizationQuery.data
@@ -87,16 +85,23 @@ function BackofficeOrganizationDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Conta</CardTitle>
-                <CardDescription>Identidade global da organização.</CardDescription>
+                <CardDescription>
+                  Identidade global da organização.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <p>CNPJ: {data.organization.cnpj || 'Não definido'}</p>
                 <p>
-                  Onboarding: {data.successProfile?.onboardingStatus || 'NOT_STARTED'}
+                  Onboarding:{' '}
+                  {data.successProfile?.onboardingStatus || 'NOT_STARTED'}
                 </p>
-                <p>Migração: {data.successProfile?.migrationStatus || 'NOT_REQUIRED'}</p>
                 <p>
-                  Owner interno: {data.successProfile?.accountOwnerName || 'A definir'}
+                  Migração:{' '}
+                  {data.successProfile?.migrationStatus || 'NOT_REQUIRED'}
+                </p>
+                <p>
+                  Owner interno:{' '}
+                  {data.successProfile?.accountOwnerName || 'A definir'}
                 </p>
               </CardContent>
             </Card>
@@ -110,7 +115,8 @@ function BackofficeOrganizationDetailPage() {
                 <p>{data.support.open} solicitações abertas</p>
                 <p>{data.support.total} solicitações registradas</p>
                 <p>
-                  Contato: {data.successProfile?.supportContactEmail || 'A definir'}
+                  Contato:{' '}
+                  {data.successProfile?.supportContactEmail || 'A definir'}
                 </p>
               </CardContent>
             </Card>
@@ -118,7 +124,9 @@ function BackofficeOrganizationDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Integrações</CardTitle>
-                <CardDescription>Conexões configuradas para a conta.</CardDescription>
+                <CardDescription>
+                  Conexões configuradas para a conta.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <p>{data.integrations.length} integração(ões)</p>
@@ -141,21 +149,29 @@ function BackofficeOrganizationDetailPage() {
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
               <div className="rounded-lg border p-4">
-                <p className="text-sm text-muted-foreground">Cobertura operacional</p>
-                <p className="mt-2 text-2xl font-semibold">{data.units.length}</p>
+                <p className="text-sm text-muted-foreground">
+                  Cobertura operacional
+                </p>
+                <p className="mt-2 text-2xl font-semibold">
+                  {data.units.length}
+                </p>
                 <p className="text-sm text-muted-foreground">
                   unidade(s) cadastrada(s)
                 </p>
               </div>
               <div className="rounded-lg border p-4">
                 <p className="text-sm text-muted-foreground">Unidades ativas</p>
-                <p className="mt-2 text-2xl font-semibold">{activeUnitsCount}</p>
+                <p className="mt-2 text-2xl font-semibold">
+                  {activeUnitsCount}
+                </p>
                 <p className="text-sm text-muted-foreground">
                   {archivedUnitsCount} arquivada(s)
                 </p>
               </div>
               <div className="rounded-lg border p-4">
-                <p className="text-sm text-muted-foreground">Capacidade operacional</p>
+                <p className="text-sm text-muted-foreground">
+                  Capacidade operacional
+                </p>
                 <p className="mt-2 text-2xl font-semibold">
                   {data.integrations.length + data.support.open}
                 </p>
@@ -179,11 +195,13 @@ function BackofficeOrganizationDetailPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-medium">{unit.name}</p>
-                      <p className="text-muted-foreground">
-                        Slug {unit.slug}
-                      </p>
+                      <p className="text-muted-foreground">Slug {unit.slug}</p>
                     </div>
-                    <Badge variant={unit.status === 'ACTIVE' ? 'default' : 'secondary'}>
+                    <Badge
+                      variant={
+                        unit.status === 'ACTIVE' ? 'default' : 'secondary'
+                      }
+                    >
                       {unit.status === 'ACTIVE' ? 'Ativa' : 'Arquivada'}
                     </Badge>
                   </div>

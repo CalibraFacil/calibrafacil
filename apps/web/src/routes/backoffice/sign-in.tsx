@@ -1,4 +1,9 @@
-import { Link, Navigate, createFileRoute, useNavigate } from '@tanstack/react-router'
+import {
+  Link,
+  Navigate,
+  createFileRoute,
+  useNavigate,
+} from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
 import { BrandLockup } from '@/components/brand'
@@ -16,7 +21,7 @@ import {
   getBackofficeSession,
   useBackofficeSession,
 } from '@calibra-facil/auth/client'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
 type BackofficeSignInSearch = {
@@ -24,7 +29,9 @@ type BackofficeSignInSearch = {
 }
 
 export const Route = createFileRoute('/backoffice/sign-in')({
-  validateSearch: (search: Record<string, unknown>): BackofficeSignInSearch => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): BackofficeSignInSearch => ({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
   }),
   beforeLoad: async () => {
@@ -46,17 +53,11 @@ function BackofficeSignInPage() {
   const { data: session } = useBackofficeSession()
   const accessQuery = useQuery({
     queryKey: ['backoffice', 'access', 'sign-in'],
-    queryFn: async () => {
-      const res = await api.api.backoffice.access.$get()
-      if (!res.ok) {
-        throw new Error('Falha ao validar acesso ao backoffice')
-      }
-
-      return res.json() as Promise<{
+    queryFn: async () =>
+      calibraApi.backoffice.getAccess() as Promise<{
         allowed: boolean
         bootstrapAvailable: boolean
-      }>
-    },
+      }>,
     enabled: Boolean(session?.user),
     retry: false,
   })
@@ -83,7 +84,10 @@ function BackofficeSignInPage() {
         </div>
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-sm space-y-4">
-            <SignInForm redirect={redirectTo || '/backoffice'} mode="backoffice" />
+            <SignInForm
+              redirect={redirectTo || '/backoffice'}
+              mode="backoffice"
+            />
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Acesso separado</CardTitle>
@@ -93,7 +97,10 @@ function BackofficeSignInPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
-                <Button variant="outline" onClick={() => navigate({ to: '/sign-in' })}>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate({ to: '/sign-in' })}
+                >
                   Ir para o login do laboratório
                 </Button>
               </CardContent>
@@ -119,8 +126,8 @@ function BackofficeSignInPage() {
 
         <div className="relative z-10 rounded-xl border bg-background/80 p-6 backdrop-blur">
           <p className="text-sm text-muted-foreground">
-            Use impersonação apenas para suporte e troubleshooting. A operação do
-            cliente continua no dashboard do laboratório.
+            Use impersonação apenas para suporte e troubleshooting. A operação
+            do cliente continua no dashboard do laboratório.
           </p>
         </div>
       </div>

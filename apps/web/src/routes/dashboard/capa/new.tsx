@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
-import { api, calibraApi } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -163,18 +163,7 @@ function NewCAPAPage() {
       rootCauseAnalysis?: string
       rootCauseAnalysisMethod?: '5_whys' | 'fishbone' | 'pareto' | 'other'
       preventiveMeasures?: string
-    }) => {
-      const res = await api.api.capa.$post({ json: payload })
-
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(
-          (err as { error?: string }).error || 'Erro ao criar CAPA',
-        )
-      }
-
-      return res.json() as Promise<{ id: number; capaNumber: string }>
-    },
+    }) => calibraApi.capas.create<{ id: number; capaNumber: string }>(payload),
     onSuccess: (result) => {
       toast.success(`${result.capaNumber} criada com sucesso`)
       navigate({

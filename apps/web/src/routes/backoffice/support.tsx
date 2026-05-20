@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice/support')({
   component: BackofficeSupportPage,
@@ -31,14 +31,8 @@ type SupportQueueItem = {
 function BackofficeSupportPage() {
   const queueQuery = useQuery({
     queryKey: ['backoffice', 'support', 'queue'],
-    queryFn: async () => {
-      const res = await api.api.backoffice.support.queue.$get()
-      if (!res.ok) {
-        throw new Error('Falha ao carregar fila de suporte')
-      }
-
-      return res.json() as Promise<{ data: SupportQueueItem[] }>
-    },
+    queryFn: async () =>
+      calibraApi.backoffice.getSupportQueue<{ data: SupportQueueItem[] }>(),
   })
 
   return (
@@ -58,35 +52,35 @@ function BackofficeSupportPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {queueQuery.isPending ? (
-            Array.from({ length: 5 }).map((_, index) => (
-              <Skeleton key={index} className="h-24 w-full" />
-            ))
-          ) : (
-            queueQuery.data?.data.map((request) => (
-              <div key={request.id} className="rounded-lg border p-4">
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                  <div className="space-y-1">
-                    <p className="font-medium">{request.subject}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {request.organization?.name ?? 'Organização desconhecida'} ·{' '}
-                      {request.category}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Solicitante: {request.requestedByUser?.email ?? 'N/D'}
-                    </p>
+          {queueQuery.isPending
+            ? Array.from({ length: 5 }).map((_, index) => (
+                <Skeleton key={index} className="h-24 w-full" />
+              ))
+            : queueQuery.data?.data.map((request) => (
+                <div key={request.id} className="rounded-lg border p-4">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-1">
+                      <p className="font-medium">{request.subject}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {request.organization?.name ??
+                          'Organização desconhecida'}{' '}
+                        · {request.category}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Solicitante: {request.requestedByUser?.email ?? 'N/D'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline">{request.priority}</Badge>
+                      <Badge>{request.status}</Badge>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{request.priority}</Badge>
-                    <Badge>{request.status}</Badge>
-                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Atribuído para:{' '}
+                    {request.assignedToUser?.email ?? 'Não atribuído'}
+                  </p>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Atribuído para: {request.assignedToUser?.email ?? 'Não atribuído'}
-                </p>
-              </div>
-            ))
-          )}
+              ))}
         </CardContent>
       </Card>
     </div>

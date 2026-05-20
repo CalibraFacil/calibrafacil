@@ -36,7 +36,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 type BillingDocumentDetails = {
   id: number
@@ -106,14 +106,9 @@ function FinanceDocumentDetailsPage() {
   const documentQuery = useQuery({
     queryKey: ['finance', 'documents', id],
     queryFn: async () => {
-      const response = await api.api.finance.documents[':id'].$get({
-        param: { id },
-      })
-      if (!response.ok) {
-        throw new Error('Erro ao carregar documento')
-      }
-
-      return response.json() as Promise<{ data: BillingDocumentDetails }>
+      return calibraApi.finance.getDocument<{ data: BillingDocumentDetails }>(
+        id,
+      )
     },
   })
 
@@ -125,23 +120,13 @@ function FinanceDocumentDetailsPage() {
       discountCents: string
       notes: string
     }) => {
-      const response = await api.api.finance.documents[':id'].$put({
-        param: { id },
-        json: {
-          dueDate: draft.dueDate
-            ? new Date(draft.dueDate).toISOString()
-            : undefined,
-          notes: draft.notes,
-          discountCents: Number(draft.discountCents) || 0,
-        },
+      return calibraApi.finance.updateDocument(id, {
+        dueDate: draft.dueDate
+          ? new Date(draft.dueDate).toISOString()
+          : undefined,
+        notes: draft.notes,
+        discountCents: Number(draft.discountCents) || 0,
       })
-
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string }
-        throw new Error(error.error || 'Erro ao atualizar documento')
-      }
-
-      return response.json()
     },
     onSuccess: () => {
       toast.success('Documento atualizado')
@@ -154,15 +139,7 @@ function FinanceDocumentDetailsPage() {
 
   const issueMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.api.finance.documents[':id'].issue.$post({
-        param: { id },
-      })
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string }
-        throw new Error(error.error || 'Erro ao emitir documento')
-      }
-
-      return response.json()
+      return calibraApi.finance.issueDocument(id)
     },
     onSuccess: () => {
       toast.success('Documento emitido')
@@ -176,16 +153,7 @@ function FinanceDocumentDetailsPage() {
 
   const voidMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.api.finance.documents[':id'].void.$post({
-        param: { id },
-        json: { reason: voidReason },
-      })
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string }
-        throw new Error(error.error || 'Erro ao anular documento')
-      }
-
-      return response.json()
+      return calibraApi.finance.voidDocument(id, { reason: voidReason })
     },
     onSuccess: () => {
       toast.success('Documento anulado')
@@ -201,15 +169,7 @@ function FinanceDocumentDetailsPage() {
 
   const exportMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.api.finance.erp.documents[':id'].export.$post({
-        param: { id },
-      })
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string }
-        throw new Error(error.error || 'Erro ao exportar documento')
-      }
-
-      return response.json()
+      return calibraApi.finance.exportErpDocument(id)
     },
     onSuccess: () => {
       toast.success('Documento exportado para o ERP')

@@ -207,7 +207,10 @@ async function resolveApplicableAgreement(
       and(
         eq(commercialAgreement.organizationId, params.organizationId),
         eq(commercialAgreement.customerId, params.customerId),
-        eq(commercialAgreement.status, "ACTIVE" satisfies CommercialAgreementStatus),
+        eq(
+          commercialAgreement.status,
+          "ACTIVE" satisfies CommercialAgreementStatus,
+        ),
         lte(commercialAgreement.effectiveFrom, referenceDate),
         or(
           isNull(commercialAgreement.effectiveTo),
@@ -215,7 +218,10 @@ async function resolveApplicableAgreement(
         ),
       ),
     )
-    .orderBy(desc(commercialAgreement.effectiveFrom), desc(commercialAgreement.id));
+    .orderBy(
+      desc(commercialAgreement.effectiveFrom),
+      desc(commercialAgreement.id),
+    );
 
   for (const agreement of agreements) {
     const scopedUnits = await executor
@@ -284,7 +290,10 @@ export async function loadCustomerActiveCommercialAgreement(
       and(
         eq(commercialAgreement.organizationId, organizationId),
         eq(commercialAgreement.customerId, customerId),
-        eq(commercialAgreement.status, "ACTIVE" satisfies CommercialAgreementStatus),
+        eq(
+          commercialAgreement.status,
+          "ACTIVE" satisfies CommercialAgreementStatus,
+        ),
         lte(commercialAgreement.effectiveFrom, now),
         or(
           isNull(commercialAgreement.effectiveTo),
@@ -292,7 +301,10 @@ export async function loadCustomerActiveCommercialAgreement(
         ),
       ),
     )
-    .orderBy(desc(commercialAgreement.effectiveFrom), desc(commercialAgreement.id))
+    .orderBy(
+      desc(commercialAgreement.effectiveFrom),
+      desc(commercialAgreement.id),
+    )
     .limit(1);
 
   if (!agreement) {
@@ -337,7 +349,8 @@ export function syncComplianceWithActiveAgreement(
     };
   }
 
-  const agreementChanged = baseCompliance.contractAgreementId !== activeAgreement.id;
+  const agreementChanged =
+    baseCompliance.contractAgreementId !== activeAgreement.id;
 
   return {
     ...baseCompliance,
@@ -417,7 +430,8 @@ export async function ensureJobCommercialSnapshot(
       agreementId: agreementResolution?.agreement.id ?? null,
       sourceType: agreementResolution ? "AGREEMENT" : "SERVICE_CATALOG",
       serviceName: serviceData.name,
-      priceCents: agreementResolution?.term?.priceCents ?? serviceData.price ?? null,
+      priceCents:
+        agreementResolution?.term?.priceCents ?? serviceData.price ?? null,
       currency: agreementResolution?.term?.currency ?? serviceData.currency,
       paymentTermDays:
         agreementResolution?.agreement.defaultPaymentTermDays ??
@@ -451,7 +465,11 @@ export async function ensureJobCommercialSnapshot(
 }
 
 export async function ensureJobCommercialSnapshotFromJob(
-  params: { actorUserId?: string | null; jobId: number; organizationId: string },
+  params: {
+    actorUserId?: string | null;
+    jobId: number;
+    organizationId: string;
+  },
   executor?: FinanceDbExecutor,
 ) {
   const runner = executor ?? db;
@@ -618,8 +636,7 @@ async function getNextBillingDocumentSequence(
   executor: FinanceDbExecutor,
 ) {
   const prefix = `FIN-${year}-`;
-  const sequenceSql =
-    sql<number>`coalesce(cast(substring(${billingDocument.documentNumber} from '[0-9]+$') as integer), 0)`;
+  const sequenceSql = sql<number>`coalesce(cast(substring(${billingDocument.documentNumber} from '[0-9]+$') as integer), 0)`;
 
   await executor.execute(
     sql`select pg_advisory_xact_lock(hashtext(${organizationId}), ${year} + 1000)`,
@@ -676,7 +693,10 @@ export async function loadBillingDocumentExportPayload(
     })
     .from(billingDocument)
     .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-    .innerJoin(organizationUnit, eq(billingDocument.unitId, organizationUnit.id))
+    .innerJoin(
+      organizationUnit,
+      eq(billingDocument.unitId, organizationUnit.id),
+    )
     .where(
       and(
         eq(billingDocument.id, documentId),
@@ -855,7 +875,9 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
       },
     });
 
-    throw new Error(`Falha ao exportar documento: remoto respondeu ${response.status}`);
+    throw new Error(
+      `Falha ao exportar documento: remoto respondeu ${response.status}`,
+    );
   }
 
   const remoteEntityId = extractRemoteId(response.data);

@@ -34,12 +34,14 @@ const faqItems = [
       'A infraestrutura do CalibraFácil utiliza criptografia em trânsito e em repouso, backups automáticos, controle de acesso baseado em funções (RBAC) e trilha de auditoria imutável. Todas as alterações em certificados e dados críticos são registradas com identificação do usuário, data e hora, garantindo a integridade e a rastreabilidade exigidas pelos organismos de acreditação.',
   },
   {
-    question: 'É possível personalizar os certificados com a identidade visual do meu laboratório?',
+    question:
+      'É possível personalizar os certificados com a identidade visual do meu laboratório?',
     answer:
       'Sim. Os certificados podem ser personalizados com o logotipo do laboratório, informações de contato, escopo de acreditação e layout customizado. O sistema gera certificados em formato PDF com aparência profissional, incluindo todas as informações obrigatórias segundo as normas vigentes, como identificação do instrumento, condições ambientais, resultados de medição e declaração de incerteza.',
   },
   {
-    question: 'O CalibraFácil gerencia padrões de referência e rastreabilidade?',
+    question:
+      'O CalibraFácil gerencia padrões de referência e rastreabilidade?',
     answer:
       'Sim. A plataforma permite cadastrar todos os padrões de referência do laboratório, registrar seus certificados de calibração, controlar intervalos de recalibração e manter a cadeia de rastreabilidade metrológica. Quando um certificado é emitido, os padrões utilizados são automaticamente vinculados, garantindo a rastreabilidade completa exigida para acreditação.',
   },

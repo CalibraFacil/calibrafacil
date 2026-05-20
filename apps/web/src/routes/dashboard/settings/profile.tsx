@@ -91,7 +91,9 @@ function ProfileSettingsForm({
       toast.success('Avatar atualizado')
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : 'Falha ao enviar avatar')
+      toast.error(
+        error instanceof Error ? error.message : 'Falha ao enviar avatar',
+      )
     },
   })
 
@@ -189,7 +191,10 @@ function ProfileSettingsForm({
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         {user.image ? (
                           <>
-                            <HugeiconsIcon icon={Tick02Icon} className="size-4" />
+                            <HugeiconsIcon
+                              icon={Tick02Icon}
+                              className="size-4"
+                            />
                             Avatar configurado
                           </>
                         ) : (
@@ -219,7 +224,10 @@ function ProfileSettingsForm({
                       disabled={isUpdating || uploadMutation.isPending}
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      <HugeiconsIcon icon={CloudUploadIcon} className="size-4" />
+                      <HugeiconsIcon
+                        icon={CloudUploadIcon}
+                        className="size-4"
+                      />
                       {user.image ? 'Trocar avatar' : 'Enviar avatar'}
                     </Button>
                     <Button

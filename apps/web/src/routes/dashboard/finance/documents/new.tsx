@@ -29,7 +29,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { api } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 type EligibleJob = {
   id: number
@@ -67,18 +67,11 @@ function NewFinanceDocumentPage() {
   const eligibleJobsQuery = useQuery({
     queryKey: ['finance', 'documents', 'eligible-jobs', mode, eligibleQuery],
     queryFn: async () => {
-      const response = await api.api.finance.documents['eligible-jobs'].$get({
-        query: {
-          mode,
-          query: eligibleQuery || undefined,
-          limit: '100',
-        },
+      return calibraApi.finance.listEligibleJobs<{ data: EligibleJob[] }>({
+        mode,
+        query: eligibleQuery || undefined,
+        limit: 100,
       })
-      if (!response.ok) {
-        throw new Error('Erro ao carregar OS elegíveis')
-      }
-
-      return response.json() as Promise<{ data: EligibleJob[] }>
     },
   })
 
@@ -96,22 +89,13 @@ function NewFinanceDocumentPage() {
         throw new Error('Selecione pelo menos uma OS elegível')
       }
 
-      const response = await api.api.finance.documents.$post({
-        json: {
-          mode,
-          jobIds: selectedJobIds,
-          dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
-          notes: notes || undefined,
-          discountCents: parseFinanceCurrencyInputToCents(discountAmount),
-        },
+      return calibraApi.finance.createDocument<{ data: { id: number } }>({
+        mode,
+        jobIds: selectedJobIds,
+        dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+        notes: notes || undefined,
+        discountCents: parseFinanceCurrencyInputToCents(discountAmount),
       })
-
-      if (!response.ok) {
-        const error = (await response.json()) as { error?: string }
-        throw new Error(error.error || 'Erro ao criar documento')
-      }
-
-      return response.json() as Promise<{ data: { id: number } }>
     },
     onSuccess: (result) => {
       toast.success('Documento financeiro criado')

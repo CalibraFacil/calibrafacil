@@ -78,7 +78,9 @@ export const assetsColumns: ColumnDef<Asset>[] = [
     accessorKey: "serialNumber",
     header: "N. Série",
     cell: ({ row }) => (
-      <span className="font-mono tabular-nums">{row.original.serialNumber}</span>
+      <span className="font-mono tabular-nums">
+        {row.original.serialNumber}
+      </span>
     ),
   },
   {

@@ -15,12 +15,7 @@ import {
   Wrench01Icon,
 } from "@hugeicons/core-free-icons";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
@@ -69,7 +64,11 @@ function CertificateDetailPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const { data: certificate, isLoading, error } = useQuery({
+  const {
+    data: certificate,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["portal-certificate", id],
     queryFn: async (): Promise<Certificate> => {
       const response = await fetch(
@@ -174,7 +173,10 @@ function CertificateDetailPage() {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 space-y-3">
               <Badge className="gap-1.5">
-                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3" />
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  className="size-3"
+                />
                 Certificado aprovado
               </Badge>
               <div className="space-y-1">

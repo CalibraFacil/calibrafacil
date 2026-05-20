@@ -86,8 +86,7 @@ function CertificatesSettingsPage() {
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false)
   const [certToRevoke, setCertToRevoke] = useState<Certificate | null>(null)
 
-  const { isCheckingAccess, isConsolidated, selectedUnit } =
-    useDashboardUnits()
+  const { isCheckingAccess, isConsolidated, selectedUnit } = useDashboardUnits()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
@@ -166,8 +165,8 @@ function CertificatesSettingsPage() {
         <CardContent>
           {isConsolidated ? (
             <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              A visão consolidada está ativa. Selecione uma unidade específica no
-              switcher para revisar, enviar ou trocar o certificado padrão
+              A visão consolidada está ativa. Selecione uma unidade específica
+              no switcher para revisar, enviar ou trocar o certificado padrão
               daquela unidade.
             </div>
           ) : selectedUnit ? (
@@ -185,132 +184,138 @@ function CertificatesSettingsPage() {
 
       {!selectedUnit ? null : (
         <>
-      {/* Header card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Certificados ICP-Brasil</CardTitle>
-          <CardDescription>
-            Gerencie os certificados digitais A1 para assinatura de
-            certificados de calibração conforme NIT-DICLA-083.
-          </CardDescription>
-          <CardAction>
-            <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-              <DialogTrigger render={<Button size="sm" />}>
-                <HugeiconsIcon icon={Add01Icon} className="size-4 mr-1.5" />
-                Adicionar certificado
-              </DialogTrigger>
-              <UploadCertificateDialog
-                onSuccess={() => {
-                  setIsUploadOpen(false)
-                  queryClient.invalidateQueries({
-                    queryKey: ['signing-certificates', selectedUnit.id],
-                  })
-                }}
-              />
-            </Dialog>
-          </CardAction>
-        </CardHeader>
-
-        <CardContent>
-          {certificates.length === 0 ? (
-            <Empty className="py-8">
-              <EmptyMedia>
-                <div className="size-16 rounded-2xl bg-muted flex items-center justify-center">
-                  <HugeiconsIcon
-                    icon={Certificate01Icon}
-                    className="size-8 text-muted-foreground"
+          {/* Header card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Certificados ICP-Brasil</CardTitle>
+              <CardDescription>
+                Gerencie os certificados digitais A1 para assinatura de
+                certificados de calibração conforme NIT-DICLA-083.
+              </CardDescription>
+              <CardAction>
+                <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+                  <DialogTrigger render={<Button size="sm" />}>
+                    <HugeiconsIcon icon={Add01Icon} className="size-4 mr-1.5" />
+                    Adicionar certificado
+                  </DialogTrigger>
+                  <UploadCertificateDialog
+                    onSuccess={() => {
+                      setIsUploadOpen(false)
+                      queryClient.invalidateQueries({
+                        queryKey: ['signing-certificates', selectedUnit.id],
+                      })
+                    }}
                   />
+                </Dialog>
+              </CardAction>
+            </CardHeader>
+
+            <CardContent>
+              {certificates.length === 0 ? (
+                <Empty className="py-8">
+                  <EmptyMedia>
+                    <div className="size-16 rounded-2xl bg-muted flex items-center justify-center">
+                      <HugeiconsIcon
+                        icon={Certificate01Icon}
+                        className="size-8 text-muted-foreground"
+                      />
+                    </div>
+                  </EmptyMedia>
+                  <EmptyHeader>
+                    <EmptyTitle>Nenhum certificado cadastrado</EmptyTitle>
+                    <EmptyDescription>
+                      Adicione um certificado ICP-Brasil A1 para assinar seus
+                      certificados de calibração digitalmente nesta unidade.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <div className="space-y-3">
+                  {certificates.map((cert) => (
+                    <CertificateCard
+                      key={cert.id}
+                      certificate={cert}
+                      onView={() => setSelectedCert(cert)}
+                      onSetDefault={() => setDefaultMutation.mutate(cert.id)}
+                      onRevoke={() => {
+                        setCertToRevoke(cert)
+                        setRevokeDialogOpen(true)
+                      }}
+                      isSettingDefault={setDefaultMutation.isPending}
+                    />
+                  ))}
                 </div>
-              </EmptyMedia>
-              <EmptyHeader>
-                <EmptyTitle>Nenhum certificado cadastrado</EmptyTitle>
-                <EmptyDescription>
-                  Adicione um certificado ICP-Brasil A1 para assinar seus
-                  certificados de calibração digitalmente nesta unidade.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <div className="space-y-3">
-              {certificates.map((cert) => (
-                <CertificateCard
-                  key={cert.id}
-                  certificate={cert}
-                  onView={() => setSelectedCert(cert)}
-                  onSetDefault={() => setDefaultMutation.mutate(cert.id)}
-                  onRevoke={() => {
-                    setCertToRevoke(cert)
-                    setRevokeDialogOpen(true)
-                  }}
-                  isSettingDefault={setDefaultMutation.isPending}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              )}
+            </CardContent>
+          </Card>
 
-      {/* Info card */}
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle className="text-sm">Sobre assinatura digital</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 text-sm text-muted-foreground sm:grid-cols-2">
-            <div className="flex items-start gap-3">
-              <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <HugeiconsIcon
-                  icon={ShieldKeyIcon}
-                  className="size-4 text-primary"
-                />
+          {/* Info card */}
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle className="text-sm">
+                Sobre assinatura digital
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 text-sm text-muted-foreground sm:grid-cols-2">
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <HugeiconsIcon
+                      icon={ShieldKeyIcon}
+                      className="size-4 text-primary"
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Conformidade RBC
+                    </p>
+                    <p className="mt-0.5 text-xs">
+                      Atende NIT-DICLA-083 para certificados eletrônicos
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <HugeiconsIcon
+                      icon={Certificate01Icon}
+                      className="size-4 text-primary"
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">
+                      Certificado A1
+                    </p>
+                    <p className="mt-0.5 text-xs">
+                      Arquivo PKCS#12 (.p12 ou .pfx) com validade de 1 ano
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="font-medium text-foreground">Conformidade RBC</p>
-                <p className="mt-0.5 text-xs">
-                  Atende NIT-DICLA-083 para certificados eletrônicos
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <HugeiconsIcon
-                  icon={Certificate01Icon}
-                  className="size-4 text-primary"
-                />
-              </div>
-              <div>
-                <p className="font-medium text-foreground">Certificado A1</p>
-                <p className="mt-0.5 text-xs">
-                  Arquivo PKCS#12 (.p12 ou .pfx) com validade de 1 ano
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      {/* Certificate detail dialog */}
-      <Dialog
-        open={!!selectedCert}
-        onOpenChange={(open) => !open && setSelectedCert(null)}
-      >
-        {selectedCert && (
-          <CertificateDetailDialog certificate={selectedCert} />
-        )}
-      </Dialog>
+          {/* Certificate detail dialog */}
+          <Dialog
+            open={!!selectedCert}
+            onOpenChange={(open) => !open && setSelectedCert(null)}
+          >
+            {selectedCert && (
+              <CertificateDetailDialog certificate={selectedCert} />
+            )}
+          </Dialog>
 
-      {/* Revoke confirmation dialog */}
-      <RevokeDialog
-        certificate={certToRevoke}
-        open={revokeDialogOpen}
-        onOpenChange={setRevokeDialogOpen}
-        onConfirm={(reason) => {
-          if (certToRevoke) {
-            revokeMutation.mutate({ id: certToRevoke.id, reason })
-          }
-        }}
-        isLoading={revokeMutation.isPending}
-      />
+          {/* Revoke confirmation dialog */}
+          <RevokeDialog
+            certificate={certToRevoke}
+            open={revokeDialogOpen}
+            onOpenChange={setRevokeDialogOpen}
+            onConfirm={(reason) => {
+              if (certToRevoke) {
+                revokeMutation.mutate({ id: certToRevoke.id, reason })
+              }
+            }}
+            isLoading={revokeMutation.isPending}
+          />
         </>
       )}
     </div>
@@ -357,7 +362,7 @@ function CertificateCard({
   const status = statusConfig[certificate.status]
   const validUntil = new Date(certificate.validUntil)
   const daysUntilExpiry = Math.ceil(
-    (validUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    (validUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
   )
 
   return (
@@ -366,7 +371,7 @@ function CertificateCard({
         'group relative rounded-xl border p-4 transition-all',
         'hover:border-primary/30 hover:shadow-sm',
         certificate.isDefault && 'border-primary/50 bg-primary/[0.02]',
-        certificate.status === 'revoked' && 'opacity-60'
+        certificate.status === 'revoked' && 'opacity-60',
       )}
     >
       {/* Default badge */}
@@ -387,9 +392,7 @@ function CertificateCard({
         <div
           className={cn(
             'size-12 rounded-xl flex items-center justify-center shrink-0',
-            certificate.status === 'valid'
-              ? 'bg-primary/10'
-              : 'bg-muted'
+            certificate.status === 'valid' ? 'bg-primary/10' : 'bg-muted',
           )}
         >
           <HugeiconsIcon
@@ -398,7 +401,7 @@ function CertificateCard({
               'size-6',
               certificate.status === 'valid'
                 ? 'text-primary'
-                : 'text-muted-foreground'
+                : 'text-muted-foreground',
             )}
           />
         </div>
@@ -409,7 +412,10 @@ function CertificateCard({
             <h3 className="font-medium text-foreground truncate">
               {certificate.name}
             </h3>
-            <Badge variant="outline" className={cn('shrink-0', status.className)}>
+            <Badge
+              variant="outline"
+              className={cn('shrink-0', status.className)}
+            >
               <HugeiconsIcon icon={status.icon} className="size-3 mr-1" />
               {status.label}
             </Badge>
@@ -453,7 +459,10 @@ function CertificateCard({
           )}
           {certificate.status === 'valid' && (
             <Button variant="ghost" size="icon-sm" onClick={onRevoke}>
-              <HugeiconsIcon icon={Delete02Icon} className="size-4 text-destructive" />
+              <HugeiconsIcon
+                icon={Delete02Icon}
+                className="size-4 text-destructive"
+              />
             </Button>
           )}
         </div>
@@ -570,9 +579,7 @@ function UploadCertificateDialog({ onSuccess }: { onSuccess: () => void }) {
               <Checkbox
                 id="set-default"
                 checked={setAsDefault}
-                onCheckedChange={(checked) =>
-                  setSetAsDefault(checked === true)
-                }
+                onCheckedChange={(checked) => setSetAsDefault(checked === true)}
                 disabled={uploadMutation.isPending}
               />
               <FieldLabel htmlFor="set-default" className="cursor-pointer">
@@ -586,7 +593,9 @@ function UploadCertificateDialog({ onSuccess }: { onSuccess: () => void }) {
 
         <DialogFooter>
           <DialogClose
-            render={<Button variant="outline" disabled={uploadMutation.isPending} />}
+            render={
+              <Button variant="outline" disabled={uploadMutation.isPending} />
+            }
           >
             Cancelar
           </DialogClose>
@@ -635,7 +644,7 @@ function CertificateDetailDialog({
         label: 'Revogado em',
         value: new Date(certificate.revokedAt).toLocaleDateString('pt-BR'),
       },
-      { label: 'Motivo da revogação', value: certificate.revokedReason || '-' }
+      { label: 'Motivo da revogação', value: certificate.revokedReason || '-' },
     )
   }
 
@@ -696,9 +705,7 @@ function RevokeDialog({
 
         <div className="py-2">
           <Field>
-            <FieldLabel htmlFor="revoke-reason">
-              Motivo da revogação
-            </FieldLabel>
+            <FieldLabel htmlFor="revoke-reason">Motivo da revogação</FieldLabel>
             <Textarea
               id="revoke-reason"
               value={reason}

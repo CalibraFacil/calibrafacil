@@ -95,11 +95,7 @@ type CalibrationPhaseInput = {
   blocks: Record<
     string,
     {
-      mode:
-        | "before_and_after"
-        | "before_only"
-        | "after_only"
-        | "not_performed";
+      mode: "before_and_after" | "before_only" | "after_only" | "not_performed";
       reason?: string | null;
     }
   >;

@@ -15,7 +15,10 @@ import {
   syncComplianceWithActiveAgreement,
 } from "../../lib/finance";
 import { withInvalidation } from "../../middleware/cache";
-import { withLabPermission, type AuthVariables } from "../../middleware/permission";
+import {
+  withLabPermission,
+  type AuthVariables,
+} from "../../middleware/permission";
 import { requireFeature } from "../../middleware/tier-guard";
 
 const COMMERCIAL_AGREEMENT_STATUSES = [
@@ -417,9 +420,15 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
       });
 
       if ((input.status ?? existing.status) === "ACTIVE") {
-        const customerIdsToSync = new Set([existing.customerId, input.customerId]);
+        const customerIdsToSync = new Set([
+          existing.customerId,
+          input.customerId,
+        ]);
         for (const customerId of customerIdsToSync) {
-          await syncCustomerComplianceContract(member.organizationId, customerId);
+          await syncCustomerComplianceContract(
+            member.organizationId,
+            customerId,
+          );
         }
       }
 
