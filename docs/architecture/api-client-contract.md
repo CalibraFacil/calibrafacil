@@ -1,9 +1,8 @@
 # API Client Contract Boundary
 
-This repository keeps the API framework as Hono. The client-facing API contract
-must stay separate from the API implementation so frontend packages do not pull
-server runtime code, database access, worker bindings, or route handler
-dependencies into their type graph.
+The client-facing API contract must stay separate from the API implementation
+so frontend packages do not pull server runtime code, database access, worker
+bindings, or route handler dependencies into their type graph.
 
 ## Package Boundaries
 
@@ -48,22 +47,6 @@ and deployment-specific runtime assumptions.
 For this codebase, `contracts -> apps/api` is the wrong dependency direction.
 The server may depend on shared contracts, but contracts must not depend on the
 server implementation.
-
-## Why Not Elysia / Eden Treaty?
-
-Elysia with Eden Treaty can provide a good Bun-first type-safe RPC experience,
-but it does not remove the underlying architecture tradeoff. End-to-end RPC type
-safety still needs one of these sources of truth:
-
-- client imports the server app type;
-- a shared contract package owns route/schema definitions;
-- generated clients/types from OpenAPI or another spec;
-- a manually maintained SDK layer.
-
-Eden Treaty primarily optimizes the first model. This repository currently
-chooses the second and fourth models: stable contracts plus `client-runtime`.
-Migrating from Hono to Elysia is therefore a separate architecture decision, not
-a safe incidental refactor.
 
 ## Change Checklist
 
