@@ -26,6 +26,16 @@
 - Use `camelCase` for variables/functions, `PascalCase` for components/types.
 - Formatting: Prettier; linting: oxlint. Run `pnpm format` and `pnpm lint` before PRs.
 
+## API / Client Architecture Rules
+
+- Keep Hono. Do not migrate the API framework, for example to Elysia, inside ordinary refactors.
+- Frontend apps must not import from `@calibra-facil/api` or from `apps/api/*`. Use `@calibra-facil/contracts` and `@calibra-facil/client-runtime`.
+- `packages/contracts` must not import `apps/api/*`. Contracts are the stable client-facing boundary, not a type alias back to the server implementation.
+- Do not set `AppType` to `any`. The Hono RPC app type lives in `packages/contracts/src/api-app.ts` and must remain server-free.
+- If a browser-facing raw Hono route is added, removed, or renamed, update the route list in `packages/contracts/src/api-app.ts` in the same change.
+- Raw Hono RPC calls should stay inside `packages/client-runtime`. Frontend code should prefer product-level methods such as `calibraClient.jobs.approve(...)`.
+- See `docs/architecture/api-client-contract.md` before changing API/client package boundaries.
+
 ## Testing Guidelines
 
 - Test runner: Vitest (see package-level scripts).
