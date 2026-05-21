@@ -76,6 +76,10 @@ import {
   type ReviewFormula,
   type ReviewMethodField,
 } from '@/features/jobs/detail-model'
+import {
+  buildJobApprovalInput,
+  isJobApprovalBlockedByEnvironment,
+} from '@/features/jobs/approval-model'
 
 type JobDetailPageProps = {
   id: string
@@ -124,10 +128,10 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
       if (runtime.isDesktop) {
         throw desktopCloudActionError()
       }
-      return calibraApi.jobs.approve(apiJobId, {
-        reason: 'Aprovado',
-        environmentalJustification: envJustification || undefined,
-      })
+      return calibraApi.jobs.approve(
+        apiJobId,
+        buildJobApprovalInput(envJustification),
+      )
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
@@ -1432,10 +1436,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
               onClick={() => approveMutation.mutate()}
               disabled={
                 approveMutation.isPending ||
-                (!!job?.environmentalSnapshot &&
-                  !job.environmentalSnapshot.withinLimits &&
-                  !job.environmentalSnapshot.outOfLimitsJustification &&
-                  !envJustification.trim())
+                isJobApprovalBlockedByEnvironment(job, envJustification)
               }
             >
               {approveMutation.isPending && <Spinner className="mr-2" />}
