@@ -371,26 +371,27 @@ export function withFeature(feature: FeatureFlag) {
 }
 
 function getCacheNamespace(env: unknown): KVNamespace | undefined {
-  const cache = toRecord(env).CACHE;
+  const cache = readProperty(env, "CACHE");
   return isKvNamespace(cache) ? cache : undefined;
 }
 
 function isKvNamespace(value: unknown): value is KVNamespace {
-  const candidate = toRecord(value);
-
   return (
-    typeof candidate.get === "function" &&
-    typeof candidate.put === "function" &&
-    typeof candidate.delete === "function"
+    typeof readProperty(value, "get") === "function" &&
+    typeof readProperty(value, "put") === "function" &&
+    typeof readProperty(value, "delete") === "function"
   );
 }
 
-function toRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
+function readProperty(value: unknown, key: string): unknown {
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return undefined;
   }
 
-  return Object.fromEntries(Object.entries(value));
+  return Reflect.get(value, key);
 }
 
 function toPlanId(value: unknown): PlanId {

@@ -131,6 +131,17 @@ function recordFromUnknown(value: unknown): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value));
 }
 
+function readProperty(value: unknown, key: string): unknown {
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return undefined;
+  }
+
+  return Reflect.get(value, key);
+}
+
 function isDate(value: unknown): value is Date {
   return value instanceof Date;
 }
@@ -882,7 +893,7 @@ export const requireInternalOperator = createMiddleware<{
 }>(async (c, next) => {
   const session = c.get("session");
   const envAllowlist =
-    recordFromUnknown(c.env).INTERNAL_OPERATOR_EMAILS ??
+    readProperty(c.env, "INTERNAL_OPERATOR_EMAILS") ??
     process.env.INTERNAL_OPERATOR_EMAILS;
 
   if (
