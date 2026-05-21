@@ -226,6 +226,15 @@ pnpm check-types
 pnpm lint
 ```
 
+When the change touches login, redirects, dashboard bootstrap, desktop/cloud
+runtime behavior, certificate download/issue flows, sync conflicts, or method
+execution, add or update a browser-level Playwright spec under
+`apps/web/e2e` and run:
+
+```bash
+pnpm --dir apps/web test:e2e
+```
+
 For cross-package changes, also run:
 
 ```bash

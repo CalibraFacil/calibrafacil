@@ -85,9 +85,15 @@ pnpm dev          # Development server
 pnpm build        # Production build
 pnpm preview      # Preview production build
 pnpm test         # Run tests
+pnpm test:e2e     # Run Playwright browser tests
 pnpm lint         # Lint with oxlint
 pnpm check-types  # TypeScript check
 ```
+
+Playwright tests live in `e2e/` and run against a local Vite server. By
+default, the config points browser-side API calls at `http://127.0.0.1:3000`
+and individual specs should route/mock the API calls they own. Set
+`PLAYWRIGHT_BASE_URL` to reuse an already running web server.
 
 ## Project Structure
 
@@ -118,6 +124,8 @@ src/
   use `calibraApi`/`calibraClient` product-level methods.
 - Regulated workflows should validate payloads with Zod schemas from
   `@calibra-facil/schemas` or a feature `forms.ts` parser before mutation.
+- Browser E2E specs belong in `e2e/`. Cover cross-route/auth/runtime workflows
+  there when a component or feature-level Vitest test is too narrow.
 - Dashboard organization/unit persistence uses
   `features/dashboard/dashboard-scope-storage.ts`; do not read those storage
   keys directly from new code.

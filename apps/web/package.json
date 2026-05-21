@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "deploy": "pnpm dlx vercel deploy --prod",
     "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "lint": "oxlint",
     "format": "prettier",
     "check": "prettier --write . && oxlint --fix"
@@ -72,6 +74,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.60.0",
     "@repo/typescript-config": "workspace:^",
     "@tanstack/devtools-vite": "0.3.12",
     "@testing-library/dom": "^10.4.0",
