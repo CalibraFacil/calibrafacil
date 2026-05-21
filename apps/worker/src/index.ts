@@ -50,6 +50,7 @@ import {
   isMassMeasurementUnit,
   type MassUnit,
 } from "@calibra-facil/shared/mass-units";
+import { notifyCertificateReady } from "@calibra-facil/notifications";
 
 export interface Env {
   CERTIFICATES_BUCKET: {
@@ -66,13 +67,19 @@ export interface Env {
   RUNTIME_ASSETS_BUCKET?: {
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
   };
-  HYPERDRIVE: { connectionString: string };
+  DATABASE_URL: string;
   CHROME_EXECUTABLE_PATH?: string;
   CHROMIUM_PACK_R2_KEY?: string;
   CHROMIUM_PACK_URL?: string;
   GOTENBERG_URL?: string;
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
   INTEGRATIONS_MASTER_KEY?: string;
+  RESEND_API_KEY?: string;
+  RESEND_FROM_EMAIL?: string;
+  EMAIL_FROM?: string;
+  EMAIL_LOGO_URL?: string;
+  WEB_URL?: string;
+  APP_URL?: string;
 }
 
 type CustomerAddress = {
@@ -1421,6 +1428,17 @@ async function updateJobWithCertificate(
       now,
     ],
   );
+
+  if (!isSuperseded) {
+    try {
+      await notifyCertificateReady(jobId);
+    } catch (error) {
+      console.error(
+        `[JOB ${jobId}] Failed to send certificate ready notification:`,
+        error,
+      );
+    }
+  }
 }
 
 async function signPdfWithUnitCertificate(
@@ -2259,7 +2277,7 @@ async function withDbClient<T>(
   operation: (client: Client) => Promise<T>,
 ): Promise<T> {
   const client = new Client({
-    connectionString: env.HYPERDRIVE.connectionString,
+    connectionString: env.DATABASE_URL,
   });
   await client.connect();
   try {

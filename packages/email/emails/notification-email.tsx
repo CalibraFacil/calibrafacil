@@ -1,10 +1,14 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
 import {
+  ActionButton,
+  EmailCard,
   EmailLayout,
+  Eyebrow,
+  LinkFallback,
+  Paragraph,
   StatusBox,
-  styles,
-  theme,
+  Title,
 } from "./components/email-layout";
 
 type NotificationVariant = "default" | "success" | "warning" | "error" | "info";
@@ -17,62 +21,40 @@ interface NotificationEmailProps {
   actionLabel?: string;
   footer?: string;
   variant?: NotificationVariant;
+  logoSrc?: string;
 }
 
 export function NotificationEmail({
-  recipientName = "Usuario",
-  title = "Notificacao do CalibraFacil",
-  message = "Voce tem uma nova notificacao.",
+  recipientName = "Usuário",
+  title = "Notificação do CalibraFácil",
+  message = "Você tem uma nova notificação.",
   actionUrl,
-  actionLabel = "Ver Detalhes",
+  actionLabel = "Ver detalhes",
   footer,
   variant = "default",
+  logoSrc,
 }: NotificationEmailProps) {
-  const previewText = title;
-
   return (
-    <EmailLayout previewText={previewText} footerNote={footer}>
-      <div style={styles.body}>
-        <h1 style={styles.title}>{title}</h1>
+    <EmailLayout previewText={title} footerNote={footer} logoSrc={logoSrc}>
+      <EmailCard logoSrc={logoSrc}>
+        <Eyebrow>Atualização</Eyebrow>
+        <Title>{title}</Title>
 
-        <p style={styles.paragraph}>Ola {recipientName},</p>
+        <Paragraph>Olá, {recipientName},</Paragraph>
 
         {variant !== "default" ? (
           <StatusBox variant={variant}>{message}</StatusBox>
         ) : (
-          <p style={styles.paragraph}>{message}</p>
+          <Paragraph>{message}</Paragraph>
         )}
 
         {actionUrl && (
           <>
-            <a href={actionUrl} style={styles.button}>
-              {actionLabel}
-            </a>
-
-            <p
-              style={{
-                ...styles.paragraph,
-                marginTop: "24px",
-                marginBottom: "0",
-                fontSize: "13px",
-              }}
-            >
-              Caso o botao nao funcione, copie e cole o link abaixo no
-              navegador:
-            </p>
-            <p
-              style={{
-                fontSize: "11px",
-                color: "#94a3b8",
-                wordBreak: "break-all" as const,
-                margin: "8px 0 0",
-              }}
-            >
-              {actionUrl}
-            </p>
+            <ActionButton href={actionUrl}>{actionLabel}</ActionButton>
+            <LinkFallback url={actionUrl} />
           </>
         )}
-      </div>
+      </EmailCard>
     </EmailLayout>
   );
 }

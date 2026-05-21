@@ -46,7 +46,13 @@ import {
 } from "../middleware/permission";
 import { assertPlanLimit } from "../middleware/tier-guard";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
-import { notifyJobAssigned } from "@calibra-facil/notifications";
+import {
+  notifyCalibrationRequestApproved,
+  notifyCalibrationRequestConverted,
+  notifyCalibrationRequestRejected,
+  notifyCalibrationRequestUnderReview,
+  notifyJobAssigned,
+} from "@calibra-facil/notifications";
 import { buildUnitScopeCondition } from "../lib/units";
 
 const submitterUser = alias(user, "calibrationRequestSubmitter");
@@ -446,6 +452,15 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: result.error.body }, result.error.status);
       }
 
+      try {
+        await notifyCalibrationRequestUnderReview(id, session.user.id);
+      } catch (error) {
+        console.error(
+          "[Calibration Requests] Failed to send review notification:",
+          error,
+        );
+      }
+
       return c.json({ success: true });
     },
   )
@@ -551,6 +566,15 @@ export const calibrationRequestsRouter = new Hono<{
 
       if ("error" in result) {
         return c.json({ error: result.error.body }, result.error.status);
+      }
+
+      try {
+        await notifyCalibrationRequestApproved(id, session.user.id);
+      } catch (error) {
+        console.error(
+          "[Calibration Requests] Failed to send approval notification:",
+          error,
+        );
       }
 
       return c.json({ success: true });
@@ -668,6 +692,19 @@ export const calibrationRequestsRouter = new Hono<{
 
       if ("error" in result) {
         return c.json({ error: result.error.body }, result.error.status);
+      }
+
+      try {
+        await notifyCalibrationRequestRejected(
+          id,
+          session.user.id,
+          input.reason,
+        );
+      } catch (error) {
+        console.error(
+          "[Calibration Requests] Failed to send rejection notification:",
+          error,
+        );
       }
 
       return c.json({ success: true });
@@ -942,6 +979,19 @@ export const calibrationRequestsRouter = new Hono<{
             notificationResult.reason,
           );
         }
+      }
+
+      try {
+        await notifyCalibrationRequestConverted(
+          id,
+          session.user.id,
+          result.createdJobs.map((job) => job.jobCode),
+        );
+      } catch (error) {
+        console.error(
+          "[Calibration Requests] Failed to send conversion notification:",
+          error,
+        );
       }
 
       return c.json({

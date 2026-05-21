@@ -15,6 +15,7 @@ import {
   CreateCalibrationRequestSchema,
   ListCalibrationRequestsQuerySchema,
 } from "@calibra-facil/schemas";
+import { notifyCalibrationRequestSubmitted } from "@calibra-facil/notifications";
 import { and, count, desc, eq, inArray, isNull, ilike, sql } from "drizzle-orm";
 import {
   requirePermission,
@@ -394,6 +395,15 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json(
           { error: "Um ou mais ativos ja possuem uma solicitacao ativa" },
           400,
+        );
+      }
+
+      try {
+        await notifyCalibrationRequestSubmitted(request.id);
+      } catch (error) {
+        console.error(
+          "[Portal Requests] Failed to send request submission notification:",
+          error,
         );
       }
 

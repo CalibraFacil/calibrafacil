@@ -10,7 +10,13 @@ import { magicLink } from "better-auth/plugins/magic-link";
 import { oneTimeToken } from "better-auth/plugins/one-time-token";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
-import { OrganizationInvitationEmail } from "@calibra-facil/email";
+import {
+  EmailConfirmationEmail,
+  OrganizationInvitationEmail,
+  PasswordResetEmail,
+  PortalInvitationEmail,
+  PortalMagicLinkEmail,
+} from "@calibra-facil/email";
 import { hasEntitlement } from "@calibra-facil/shared";
 import {
   PORTAL_ACCESS_ROLES,
@@ -33,6 +39,16 @@ function getRequiredEnv(name: string): string {
     throw new Error(`${name} environment variable is required`);
   }
   return value;
+}
+
+function getEmailLogoSrc(): string {
+  const explicitLogoUrl = readEnv("EMAIL_LOGO_URL");
+  if (explicitLogoUrl) return explicitLogoUrl;
+
+  const appUrl = readEnv("APP_URL") ?? readEnv("WEB_URL");
+  if (appUrl) return `${appUrl.replace(/\/$/, "")}/logo192.png`;
+
+  return "https://calibrafacil.com/logo192.png";
 }
 
 function resolveApiBaseUrl(fallback: string): string {
@@ -163,7 +179,7 @@ const PROD_TRUSTED_ORIGINS = [
   "app://calibra-facil",
   "https://calibrafacil.com",
   "https://www.calibrafacil.com",
-  "https://portal.calibrafacil.com",
+  "https://calibrafacil.com/portal",
   "https://*.vercel.app",
 ];
 
@@ -338,15 +354,6 @@ async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {
   }
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 function sanitizeMailHeader(value: string): string {
   return value.replace(/[\r\n]+/g, " ").trim();
 }
@@ -407,6 +414,7 @@ async function findPendingPortalInvitation(
       id: schema.invitation.id,
       email: schema.invitation.email,
       role: schema.invitation.role,
+      organizationId: schema.organization.id,
       organizationName: schema.organization.name,
     })
     .from(schema.invitation)
@@ -418,6 +426,26 @@ async function findPendingPortalInvitation(
     .limit(1);
 
   return pendingInvitation ?? null;
+}
+
+async function findLabNameForClientOrganization(
+  clientOrganizationId: string,
+): Promise<string | null> {
+  const [customerData] = await getDb()
+    .select({ labOrganizationId: schema.customer.labOrganizationId })
+    .from(schema.customer)
+    .where(eq(schema.customer.authOrganizationId, clientOrganizationId))
+    .limit(1);
+
+  if (!customerData?.labOrganizationId) return null;
+
+  const [labOrganization] = await getDb()
+    .select({ name: schema.organization.name })
+    .from(schema.organization)
+    .where(eq(schema.organization.id, customerData.labOrganizationId))
+    .limit(1);
+
+  return labOrganization?.name ?? null;
 }
 
 async function hasExistingPortalAccess(email: string): Promise<boolean> {
@@ -466,7 +494,7 @@ async function sendPortalMagicLink(
   const apiKey = process.env.RESEND_API_KEY;
   const subject = pendingInvitation
     ? sanitizeMailHeader(`Convite para ${pendingInvitation.organizationName}`)
-    : "Acesse o Portal CalibraFacil";
+    : "Acesse o Portal CalibraFácil";
   let magicLinkUrl = data.url;
 
   if (pendingInvitation && !invitationId && callbackURL) {
@@ -481,6 +509,9 @@ async function sendPortalMagicLink(
       magicLinkUrl = data.url;
     }
   }
+  const labName = pendingInvitation
+    ? await findLabNameForClientOrganization(pendingInvitation.organizationId)
+    : null;
 
   if (!apiKey) {
     if (isProductionRuntime()) {
@@ -497,49 +528,26 @@ async function sendPortalMagicLink(
   const fromEmail =
     process.env.RESEND_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
-    "Calibra Facil <noreply@calibrafacil.com>";
-  const escapedUrl = escapeHtml(magicLinkUrl);
-  const escapedOrgName = pendingInvitation
-    ? escapeHtml(pendingInvitation.organizationName)
-    : null;
+    "Calibra Fácil <noreply@calibrafacil.com>";
 
   await resend.emails.send({
     from: fromEmail,
     to: normalizedEmail,
     subject,
-    html: pendingInvitation
-      ? `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-          <h2>Acesse o portal do cliente</h2>
-          <p>Voce recebeu um convite para acessar <strong>${escapedOrgName}</strong> no Calibra Facil.</p>
-          <p>
-            <a
-              href="${escapedUrl}"
-              style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;"
-            >
-              Aceitar convite
-            </a>
-          </p>
-          <p>Este link expira em poucos minutos. Se voce nao esperava este convite, ignore esta mensagem.</p>
-          <p><small>Se o botao nao funcionar, copie e cole este link no navegador:</small><br />${escapedUrl}</p>
-        </div>
-      `
-      : `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-          <h2>Acesse o Portal Calibra Facil</h2>
-          <p>Use o link abaixo para entrar no portal do cliente.</p>
-          <p>
-            <a
-              href="${escapedUrl}"
-              style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;"
-            >
-              Entrar no portal
-            </a>
-          </p>
-          <p>Este link expira em poucos minutos. Se voce nao solicitou acesso, ignore esta mensagem.</p>
-          <p><small>Se o botao nao funcionar, copie e cole este link no navegador:</small><br />${escapedUrl}</p>
-        </div>
-      `,
+    react: pendingInvitation
+      ? PortalInvitationEmail({
+          recipientName: normalizedEmail,
+          organizationName: pendingInvitation.organizationName,
+          labName,
+          role: pendingInvitation.role ?? undefined,
+          inviteUrl: magicLinkUrl,
+          logoSrc: getEmailLogoSrc(),
+        })
+      : PortalMagicLinkEmail({
+          recipientName: normalizedEmail,
+          magicLinkUrl,
+          logoSrc: getEmailLogoSrc(),
+        }),
     text: pendingInvitation
       ? [
           `Convite para ${pendingInvitation.organizationName}`,
@@ -547,15 +555,15 @@ async function sendPortalMagicLink(
           "Use o link abaixo para aceitar o convite e acessar o portal:",
           magicLinkUrl,
           "",
-          "Se voce nao esperava este convite, ignore esta mensagem.",
+          "Se você não esperava este convite, ignore esta mensagem.",
         ].join("\n")
       : [
-          "Acesse o Portal Calibra Facil",
+          "Acesse o Portal CalibraFácil",
           "",
           "Use o link abaixo para entrar no portal:",
           magicLinkUrl,
           "",
-          "Se voce nao solicitou acesso, ignore esta mensagem.",
+          "Se você não solicitou acesso, ignore esta mensagem.",
         ].join("\n"),
   });
 }
@@ -575,7 +583,7 @@ function createOrganizationPlugin() {
             defaultValue: "LAB",
             input: true,
           },
-          // ISO 17025 / RBC compliance fields
+          // Lab profile fields
           cnpj: { type: "string", input: true },
           accreditationNumber: { type: "string", input: true },
           accreditationBody: { type: "string", input: true },
@@ -606,7 +614,7 @@ function createOrganizationPlugin() {
 
           if (!serviceUserId) {
             throw new APIError("BAD_REQUEST", {
-              message: "PORTAL_SERVICE_USER_ID nao configurado",
+              message: "PORTAL_SERVICE_USER_ID não configurado",
             });
           }
 
@@ -642,6 +650,7 @@ function createOrganizationPlugin() {
           organizationName: data.organization.name,
           inviteLink,
           role: data.role,
+          logoSrc: getEmailLogoSrc(),
         }),
       });
     },
@@ -672,6 +681,7 @@ function createSharedConfig() {
     }),
     emailAndPassword: {
       enabled: true,
+      requireEmailVerification: true,
       sendResetPassword: async ({
         user,
         url,
@@ -702,22 +712,11 @@ function createSharedConfig() {
           from: fromEmail,
           to: user.email,
           subject: "Defina sua senha no CalibraFácil",
-          html: `
-            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-              <h2>Defina sua senha</h2>
-              <p>Recebemos uma solicitação para definir ou redefinir a sua senha no CalibraFácil.</p>
-              <p>
-                <a
-                  href="${url}"
-                  style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;"
-                >
-                  Definir senha
-                </a>
-              </p>
-              <p>Se você não esperava este email, ignore esta mensagem.</p>
-              <p><small>Se o botão não funcionar, copie e cole este link no navegador:</small><br />${url}</p>
-            </div>
-          `,
+          react: PasswordResetEmail({
+            recipientName: user.email,
+            resetUrl: url,
+            logoSrc: getEmailLogoSrc(),
+          }),
           text: [
             "Defina sua senha no CalibraFácil",
             "",
@@ -729,6 +728,60 @@ function createSharedConfig() {
         });
       },
       resetPasswordTokenExpiresIn: 60 * 60,
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: true,
+      autoSignInAfterVerification: true,
+      expiresIn: 60 * 60 * 24,
+      sendVerificationEmail: async ({
+        user,
+        url,
+      }: {
+        user: { email: string; name?: string | null };
+        url: string;
+        token: string;
+      }) => {
+        const apiKey = process.env.RESEND_API_KEY;
+
+        if (!apiKey) {
+          if (isProduction) {
+            throw new Error(
+              "RESEND_API_KEY is required to send verification emails",
+            );
+          }
+
+          console.info(
+            `[Better Auth] Email verification link for ${user.email}: ${url}`,
+          );
+          return;
+        }
+
+        const resend = new Resend(apiKey);
+        const fromEmail =
+          process.env.RESEND_FROM_EMAIL ||
+          process.env.EMAIL_FROM ||
+          "Calibra Fácil <noreply@calibrafacil.com>";
+
+        await resend.emails.send({
+          from: fromEmail,
+          to: user.email,
+          subject: "Confirme seu e-mail no CalibraFácil",
+          react: EmailConfirmationEmail({
+            recipientName: user.name ?? user.email,
+            confirmationUrl: url,
+            logoSrc: getEmailLogoSrc(),
+          }),
+          text: [
+            "Confirme seu e-mail no CalibraFácil",
+            "",
+            "Use o link abaixo para confirmar seu endereço de e-mail:",
+            url,
+            "",
+            "Se você não criou uma conta, ignore esta mensagem.",
+          ].join("\n"),
+        });
+      },
     },
     user: {
       deleteUser: {
