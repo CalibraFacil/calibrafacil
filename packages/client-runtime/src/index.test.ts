@@ -709,6 +709,16 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "uploadCertificateDocument",
+          "namespace": "standards",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getCertificateDocumentDownloadUrl",
+          "namespace": "standards",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "jobs",
           "policy": "local-first-read-through-sync",

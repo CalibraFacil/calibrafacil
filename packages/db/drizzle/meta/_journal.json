@@ -155,6 +155,20 @@
       "when": 1779129000000,
       "tag": "0021_remove_legacy_certificate_designer_config",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1779292800000,
+      "tag": "0022_reference_standard_metrology_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1779379200000,
+      "tag": "0023_reference_standard_certificate_documents",
+      "breakpoints": true
     }
   ]
 }

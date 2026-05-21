@@ -212,6 +212,8 @@ type ApiRoutePath =
   | "/api/standards"
   | "/api/standards/:id"
   | "/api/standards/:id/audit-log"
+  | "/api/standards/:id/certificate-document"
+  | "/api/standards/:id/certificate-document/download"
   | "/api/standards/:id/renew"
   | "/api/training-records"
   | "/api/units"

@@ -227,9 +227,6 @@ importers:
       '@calibra-facil/contracts':
         specifier: workspace:^
         version: link:../../packages/contracts
-      '@calibra-facil/documents':
-        specifier: workspace:^
-        version: link:../../packages/documents
       '@calibra-facil/local-db':
         specifier: workspace:^
         version: link:../../packages/local-db
@@ -248,22 +245,10 @@ importers:
       hono:
         specifier: ^4.12.4
         version: 4.12.5
-      react:
-        specifier: ^19.2.3
-        version: 19.2.3
-      react-dom:
-        specifier: ^19.2.3
-        version: 19.2.3(react@19.2.3)
     devDependencies:
       '@repo/typescript-config':
         specifier: workspace:^
         version: link:../../packages/typescript-config
-      '@types/react':
-        specifier: ^19.2.7
-        version: 19.2.7
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.7)
       tsx:
         specifier: ^4.21.0
         version: 4.21.0

@@ -1588,6 +1588,12 @@ export function createDesktopApiClient(
 
         return readDesktopJson<unknown>(response);
       },
+      async uploadCertificateDocument() {
+        throw desktopUnsupportedAuthAction("Certificado de padrão");
+      },
+      async getCertificateDocumentDownloadUrl() {
+        throw desktopUnsupportedAuthAction("Certificado de padrão");
+      },
     },
     jobs: {
       async list(input) {

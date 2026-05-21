@@ -12,6 +12,7 @@ import {
   organization,
   service,
   referenceStandard,
+  referenceStandardCertificateDocument,
   user,
   member,
   memberUnitAssignment,
@@ -68,6 +69,8 @@ import {
   gte,
   inArray,
   isNull,
+  like,
+  not,
   or,
   sql,
 } from "drizzle-orm";
@@ -527,6 +530,26 @@ function normalizeStandardsForOfficialExecution(
   });
 }
 
+function standardCertificateDocumentSnapshot(
+  document: typeof referenceStandardCertificateDocument.$inferSelect,
+) {
+  return {
+    documentId: document.id,
+    r2Key: document.r2Key,
+    fileName: document.fileName,
+    fileSize: document.fileSize,
+    sha256: document.sha256,
+    uploadedAt: document.uploadedAt,
+    certificateNumber: document.certificateNumber,
+    calibrationDate: document.calibrationDate,
+    nextCalibrationDate: document.nextCalibrationDate,
+  };
+}
+
+function finalizedStandardCertificateDocumentCondition() {
+  return not(like(referenceStandardCertificateDocument.r2Key, "pending/%"));
+}
+
 function jobExecutionDiagnostic(
   code: string,
   message: string,
@@ -887,12 +910,40 @@ async function buildStandardsSnapshot(
     (id) => standardsById.get(id)!,
   );
 
+  const currentDocuments = await db
+    .select()
+    .from(referenceStandardCertificateDocument)
+    .where(
+      and(
+        eq(referenceStandardCertificateDocument.isCurrent, true),
+        finalizedStandardCertificateDocumentCondition(),
+        or(
+          ...orderedStandards.map((standard) =>
+            and(
+              eq(referenceStandardCertificateDocument.standardId, standard.id),
+              eq(
+                referenceStandardCertificateDocument.certificateNumber,
+                standard.certificateNumber,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  const documentsByStandardId = new Map(
+    currentDocuments.map((document) => [
+      document.standardId,
+      standardCertificateDocumentSnapshot(document),
+    ]),
+  );
+
   return {
     ok: true,
     snapshot: orderedStandards.map((s) => ({
       id: s.id,
       name: s.name,
       type: s.type,
+      kind: s.kind,
       certificateNumber: s.certificateNumber,
       calibratedBy: s.calibratedBy,
       calibrationDate: s.calibrationDate,
@@ -903,6 +954,8 @@ async function buildStandardsSnapshot(
       distribution: s.distribution,
       drift: s.drift,
       certifiedValues: s.certifiedValues,
+      metrologyData: s.metrologyData,
+      certificateDocument: documentsByStandardId.get(s.id) ?? null,
     })),
   };
 }

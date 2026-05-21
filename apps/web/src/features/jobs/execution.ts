@@ -43,6 +43,8 @@ import {
 export interface ReferenceStandard {
   id: number
   name: string
+  kind?: string
+  type?: string | null
   serialNumber: string
   certificateNumber: string
   calibrationDate: string
@@ -54,6 +56,7 @@ export interface ReferenceStandard {
   drift: number | null
   certifiedValues: Array<{
     nominal: string
+    authentication?: string | null
     value: number
     uncertainty: number
     unit: string
@@ -66,15 +69,58 @@ export interface ReferenceStandard {
     profileClass?: string | null
     profileQuantityAvailable?: number | null
   }> | null
+  metrologyData?: {
+    version: 1
+    channels: Array<{
+      key: string
+      label: string
+      quantity: string
+      value?: number | null
+      correction?: number | null
+      uncertainty?: number | null
+      unit: string
+      coverageFactor?: number | null
+      drift?: number | null
+      notes?: string | null
+      points?: Array<{
+        reference?: number | null
+        indication?: number | null
+        meanReading?: number | null
+        correction?: number | null
+        uncertainty?: number | null
+        unit: string
+        coverageFactor?: number | null
+        degreesOfFreedom?: number | null
+        degreesOfFreedomOperator?: 'exact' | 'greater_than' | 'infinity'
+        repeatability?: number | null
+        metadata?: Record<string, unknown>
+      }>
+    }>
+    massValues: Array<{
+      nominal: string
+      authentication?: string | null
+      value: number
+      uncertainty: number
+      unit: string
+      maxError?: number | null
+      drift?: number | null
+      buoyancy?: number | null
+      coverageFactor?: number | null
+    }>
+    compositionProfiles: Array<unknown>
+    notes?: string | null
+  } | null
   status: string
   isExpired: boolean
   daysUntilExpiry: number
+  certificateDocument?: ReferenceStandardCertificateDocument | null
 }
 
 export interface StandardSnapshotItem {
   id: number
   name: string
   type?: string | null
+  kind?: string
   certificateNumber: string
   calibrationDate: string
   uncertainty: number | null
@@ -83,6 +129,20 @@ export interface StandardSnapshotItem {
   distribution: string
   drift: number | null
   certifiedValues: ReferenceStandard['certifiedValues']
+  metrologyData?: ReferenceStandard['metrologyData']
+  certificateDocument?: ReferenceStandardCertificateDocument | null
+}
+
+export interface ReferenceStandardCertificateDocument {
+  documentId: number
+  r2Key: string
+  fileName: string
+  fileSize: number
+  sha256: string
+  uploadedAt: string | Date
+  certificateNumber: string
+  calibrationDate: string | Date
+  nextCalibrationDate: string | Date
 }
 
 export interface EnvironmentalSnapshotData {
@@ -293,7 +353,9 @@ function toOfficialCompiledExecution(
         ? record.methodFingerprint
         : undefined,
     engineVersion:
-      typeof record.engineVersion === 'string' ? record.engineVersion : undefined,
+      typeof record.engineVersion === 'string'
+        ? record.engineVersion
+        : undefined,
     engineOptionsFingerprint:
       typeof record.engineOptionsFingerprint === 'string'
         ? record.engineOptionsFingerprint
@@ -683,6 +745,7 @@ export function buildExecutionFormulaContext({
     .filter((standard): standard is ReferenceStandard => Boolean(standard))
     .map((standard) => ({
       id: standard.id,
+      metrologyData: standard.metrologyData ?? null,
       uncertainty:
         standard.uncertainty != null &&
         isMassMeasurementUnit(standard.uncertaintyUnit)
@@ -704,6 +767,7 @@ export function buildExecutionFormulaContext({
       certifiedValues:
         standard.certifiedValues?.map((certifiedValue) => ({
           nominal: certifiedValue.nominal,
+          authentication: certifiedValue.authentication,
           value: isMassMeasurementUnit(certifiedValue.unit)
             ? (convertMassValue(
                 certifiedValue.value,
@@ -1060,10 +1124,11 @@ export function buildMassCompositionOptions({
         profileOptions.set(key, {
           standardId: standardIds[0] ?? standard.id,
           standardIds,
-          standardName: 'Perfil agregado',
+          standardName: 'Perfil de composição',
           certificateNumber: 'Rastreabilidade via padrões selecionados',
           certifiedValueIndex,
           nominal: certifiedValue.nominal,
+          authentication: certifiedValue.authentication,
           value:
             typeof displayValue === 'number'
               ? displayValue
@@ -1084,7 +1149,7 @@ export function buildMassCompositionOptions({
           profileClass: certifiedValue.profileClass ?? null,
           profileQuantityAvailable:
             certifiedValue.profileQuantityAvailable ?? null,
-          optionLabel: `${profileKey} - perfil agregado`,
+          optionLabel: `${profileKey} - perfil de composição`,
         })
         return
       }
@@ -1095,6 +1160,7 @@ export function buildMassCompositionOptions({
         certificateNumber: standard.certificateNumber,
         certifiedValueIndex,
         nominal: certifiedValue.nominal,
+        authentication: certifiedValue.authentication,
         value:
           typeof displayValue === 'number'
             ? displayValue

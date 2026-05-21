@@ -2546,72 +2546,9 @@ INSERT INTO environmental_limits (
       { method: "POST" },
     );
     const draftBody = recordFromUnknown(await draftResponse.json());
-    const draftId = stringFromRecord(draftBody, "id");
-    const draftFileUrl = stringFromRecord(draftBody, "fileUrl");
-    const draftLocalPath = stringFromRecord(draftBody, "localPath");
-    expect(draftResponse.status, JSON.stringify(draftBody)).toBe(201);
-    expect(draftBody).toMatchObject({
-      contentType: "text/html",
-      draftKind: "local_certificate_draft",
-      published: false,
-      fileUrl: `/api/jobs/${createdId}/certificate-draft/file`,
-    });
-    expect(draftLocalPath).toMatch(/^certificates\/.+\.html$/);
-
-    const draftFileResponse = await app.request(draftFileUrl);
-    expect(draftFileResponse.status).toBe(200);
-    expect(draftFileResponse.headers.get("content-type")).toContain(
-      "text/html",
-    );
-    const draftHtml = await draftFileResponse.text();
-    expect(draftHtml).toContain("<!DOCTYPE html>");
-    expect(draftHtml).toContain("Rascunho local");
-    expect(draftHtml).toContain("Pendente de sincronização");
-    expect(draftHtml).toContain("Não publicado");
-    expect(draftHtml).toContain(createdJobId);
-
-    database
-      .prepare(
-        "UPDATE certificate_drafts SET local_path = '../../outside.html' WHERE id = @id",
-      )
-      .run({ id: draftId });
-    const unsafeDraftFileResponse = await app.request(draftFileUrl);
-    expect(unsafeDraftFileResponse.status).toBe(400);
-    database
-      .prepare(
-        "UPDATE certificate_drafts SET local_path = @path WHERE id = @id",
-      )
-      .run({ id: draftId, path: draftLocalPath });
-
-    const pdfResponse = await app.request(
-      `/api/jobs/${createdId}/certificate-draft/${encodeURIComponent(
-        draftId,
-      )}/pdf`,
-      {
-        method: "POST",
-        body: new Blob(["%PDF-1.7 local draft"], {
-          type: "application/pdf",
-        }),
-      },
-    );
-    const pdfBody = recordFromUnknown(await pdfResponse.json());
-    const pdfMetadata = recordFromUnknown(pdfBody.metadata);
-    expect(pdfResponse.status, JSON.stringify(pdfBody)).toBe(200);
-    expect(pdfBody).toMatchObject({
-      id: draftId,
-      status: "pdf_generated",
-      draftKind: "local_certificate_draft",
-      published: false,
-      metadata: {
-        pdfContentType: "application/pdf",
-        pdfSizeBytes: "%PDF-1.7 local draft".length,
-      },
-    });
-    expect(stringFromRecord(pdfMetadata, "pdfPath")).toMatch(
-      /^certificates\/.+\.pdf$/,
-    );
-    expect(stringFromRecord(pdfMetadata, "pdfContentHash")).toMatch(
-      /^[a-f0-9]{64}$/,
+    expect(draftResponse.status, JSON.stringify(draftBody)).toBe(400);
+    expect(stringFromRecord(draftBody, "error")).toContain(
+      "certificados agora exigem template XLSX publicado",
     );
 
     const attachmentForm = new FormData();
@@ -2712,16 +2649,9 @@ INSERT INTO environmental_limits (
           nextCalibrationDate: "2027-01-15T00:00:00.000Z",
         },
       ],
-      localCertificatePath: expect.stringMatching(/^certificates\/.+\.pdf$/),
+      localCertificatePath: null,
       syncState: "local",
     });
-
-    const reopenedDraftFileResponse = await app.request(draftFileUrl);
-    expect(reopenedDraftFileResponse.status).toBe(200);
-    const reopenedDraftHtml = await reopenedDraftFileResponse.text();
-    expect(reopenedDraftHtml).toContain("Rascunho local");
-    expect(reopenedDraftHtml).toContain("Pendente de sincronização");
-    expect(reopenedDraftHtml).toContain("Não publicado");
 
     const reopenedAttachmentListResponse = await app.request(
       `/api/attachments?entityType=calibration_job&entityId=${createdId}`,
@@ -2768,7 +2698,7 @@ WHERE status != 'synced'
         .get(),
     );
     expect(numberFromRecord(pendingOutbox, "total")).toBe(0);
-    const syncedCertificate = recordFromUnknown(
+    const syncedJob = recordFromUnknown(
       database
         .prepare(
           `
@@ -2776,20 +2706,18 @@ SELECT
   calibration_jobs.job_id,
   calibration_jobs.status,
   calibration_jobs.certificate_url,
-  certificate_drafts.sync_state AS draft_sync_state
+  calibration_jobs.sync_state
 FROM calibration_jobs
-INNER JOIN certificate_drafts ON certificate_drafts.job_id = calibration_jobs.id
-WHERE certificate_drafts.id = @draftId
+WHERE calibration_jobs.remote_id = @remoteId
 `,
         )
-        .get({ draftId }),
+        .get({ remoteId: 12345 }),
     );
-    expect(syncedCertificate).toEqual({
+    expect(syncedJob).toEqual({
       job_id: "CAL-2026-0001",
-      status: "APPROVED",
-      certificate_url:
-        "https://certificates.calibrafacil.com/org/org-1/2026/jobs/CAL-1/desktop.pdf",
-      draft_sync_state: "synced",
+      status: "REVIEW",
+      certificate_url: null,
+      sync_state: "synced",
     });
 
     database.close();

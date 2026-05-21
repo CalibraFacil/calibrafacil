@@ -9,6 +9,7 @@ import {
   asset,
   assetType,
   service,
+  referenceStandardCertificateDocument,
 } from "@calibra-facil/db/schema";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
 import {
@@ -16,6 +17,8 @@ import {
   and,
   inArray,
   desc,
+  like,
+  not,
   count,
   isNull,
   ilike,
@@ -37,6 +40,200 @@ import {
 } from "../lib/storage";
 import { denormalizeAssetSpecificationsForResponse } from "../lib/asset-measurement";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
+
+type PortalReferenceStandardDocument = {
+  documentId: number;
+  r2Key: string;
+  fileName: string;
+  fileSize: number;
+  sha256: string;
+  uploadedAt: string | Date;
+  certificateNumber: string;
+  calibrationDate: string | Date;
+  nextCalibrationDate: string | Date;
+};
+
+function finalizedStandardCertificateDocumentCondition() {
+  return not(like(referenceStandardCertificateDocument.r2Key, "pending/%"));
+}
+
+type PortalReferenceStandardSnapshot = {
+  id: number;
+  name: string;
+  type?: string | null;
+  certificateNumber: string;
+  calibratedBy?: string | null;
+  calibrationDate: string | Date;
+  nextCalibrationDate: string | Date | null;
+  certificateDocument?: PortalReferenceStandardDocument | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function getString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function getNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizePortalDocument(
+  value: unknown,
+): PortalReferenceStandardDocument | null {
+  if (!isRecord(value)) return null;
+  const documentId = getNumber(value.documentId);
+  const r2Key = getString(value.r2Key);
+  const fileName = getString(value.fileName);
+  const fileSize = getNumber(value.fileSize);
+  const sha256 = getString(value.sha256);
+  const certificateNumber = getString(value.certificateNumber);
+  const calibrationDate =
+    getString(value.calibrationDate) ??
+    (value.calibrationDate instanceof Date ? value.calibrationDate : null);
+  const nextCalibrationDate =
+    getString(value.nextCalibrationDate) ??
+    (value.nextCalibrationDate instanceof Date
+      ? value.nextCalibrationDate
+      : null);
+  const uploadedAt =
+    getString(value.uploadedAt) ??
+    (value.uploadedAt instanceof Date ? value.uploadedAt : null);
+
+  if (
+    documentId === null ||
+    !r2Key ||
+    r2Key.startsWith("pending/") ||
+    !fileName ||
+    fileSize === null ||
+    !sha256 ||
+    !certificateNumber ||
+    !calibrationDate ||
+    !nextCalibrationDate ||
+    !uploadedAt
+  ) {
+    return null;
+  }
+
+  return {
+    documentId,
+    r2Key,
+    fileName,
+    fileSize,
+    sha256,
+    uploadedAt,
+    certificateNumber,
+    calibrationDate,
+    nextCalibrationDate,
+  };
+}
+
+function normalizePortalReferenceStandards(
+  value: unknown,
+): PortalReferenceStandardSnapshot[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const id = getNumber(item.id);
+    const name = getString(item.name);
+    const certificateNumber = getString(item.certificateNumber);
+    const calibrationDate =
+      getString(item.calibrationDate) ??
+      (item.calibrationDate instanceof Date ? item.calibrationDate : null);
+    const nextCalibrationDate =
+      getString(item.nextCalibrationDate) ??
+      (item.nextCalibrationDate instanceof Date
+        ? item.nextCalibrationDate
+        : null);
+
+    if (id === null || !name || !certificateNumber || !calibrationDate) {
+      return [];
+    }
+
+    return [
+      {
+        id,
+        name,
+        type: getString(item.type),
+        certificateNumber,
+        calibratedBy: getString(item.calibratedBy),
+        calibrationDate,
+        nextCalibrationDate,
+        certificateDocument: normalizePortalDocument(item.certificateDocument),
+      },
+    ];
+  });
+}
+
+function portalStandardDocumentResponse(
+  document: typeof referenceStandardCertificateDocument.$inferSelect,
+): PortalReferenceStandardDocument {
+  return {
+    documentId: document.id,
+    r2Key: document.r2Key,
+    fileName: document.fileName,
+    fileSize: document.fileSize,
+    sha256: document.sha256,
+    uploadedAt: document.uploadedAt,
+    certificateNumber: document.certificateNumber,
+    calibrationDate: document.calibrationDate,
+    nextCalibrationDate: document.nextCalibrationDate,
+  };
+}
+
+async function withMatchingPortalStandardDocuments(
+  referenceStandards: PortalReferenceStandardSnapshot[],
+): Promise<PortalReferenceStandardSnapshot[]> {
+  const missingDocumentStandards = referenceStandards.filter(
+    (standard) => !standard.certificateDocument,
+  );
+
+  if (missingDocumentStandards.length === 0) {
+    return referenceStandards;
+  }
+
+  const conditions = missingDocumentStandards.map((standard) =>
+    and(
+      eq(referenceStandardCertificateDocument.standardId, standard.id),
+      eq(referenceStandardCertificateDocument.isCurrent, true),
+      eq(
+        referenceStandardCertificateDocument.certificateNumber,
+        standard.certificateNumber,
+      ),
+      finalizedStandardCertificateDocumentCondition(),
+    ),
+  );
+
+  const documents = await db
+    .select()
+    .from(referenceStandardCertificateDocument)
+    .where(or(...conditions))
+    .orderBy(
+      desc(referenceStandardCertificateDocument.isCurrent),
+      desc(referenceStandardCertificateDocument.uploadedAt),
+    );
+
+  const documentsByKey = new Map<string, PortalReferenceStandardDocument>();
+  for (const document of documents) {
+    const key = `${document.standardId}:${document.certificateNumber}`;
+    if (!documentsByKey.has(key)) {
+      documentsByKey.set(key, portalStandardDocumentResponse(document));
+    }
+  }
+
+  return referenceStandards.map((standard) => {
+    if (standard.certificateDocument) return standard;
+    return {
+      ...standard,
+      certificateDocument:
+        documentsByKey.get(`${standard.id}:${standard.certificateNumber}`) ??
+        null,
+    };
+  });
+}
 
 function getPortalHostOrigin(c: {
   req: { header: (name: string) => string | undefined };
@@ -557,6 +754,7 @@ export const portalRouter = new Hono<{
           certificateUrl: calibrationJob.certificateUrl,
           verificationToken: calibrationJob.verificationToken,
           methodSnapshot: calibrationJob.methodSnapshot,
+          standardsSnapshot: calibrationJob.standardsSnapshot,
           results: calibrationJob.results,
           assetId: calibrationJob.assetId,
           assetName: asset.name,
@@ -588,7 +786,15 @@ export const portalRouter = new Hono<{
         return c.json({ error: "Certificado nao encontrado" }, 404);
       }
 
-      return c.json(certificate);
+      const referenceStandards = await withMatchingPortalStandardDocuments(
+        normalizePortalReferenceStandards(certificate.standardsSnapshot),
+      );
+
+      return c.json({
+        ...certificate,
+        standardsSnapshot: undefined,
+        referenceStandards,
+      });
     } catch (error) {
       console.error("Error fetching portal certificate:", error);
       return c.json({ error: "Erro ao buscar certificado" }, 500);
@@ -684,7 +890,135 @@ export const portalRouter = new Hono<{
       console.error("Error generating certificate download URL:", error);
       return c.json({ error: "Erro ao gerar link de download" }, 500);
     }
-  });
+  })
+
+  // =========================================================================
+  // GET /certificates/:id/reference-standards/:standardId/certificate/download
+  // =========================================================================
+  .get(
+    "/certificates/:id/reference-standards/:standardId/certificate/download",
+    requirePortalAuth,
+    async (c) => {
+      const session = c.get("session");
+      const portalLabScope = await getPortalLabScope(c);
+      const id = parseInt(c.req.param("id"));
+      const standardId = parseInt(c.req.param("standardId"));
+
+      if (isNaN(id) || isNaN(standardId)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
+
+      try {
+        const userOrgs = await db
+          .select({ orgId: member.organizationId })
+          .from(member)
+          .innerJoin(organization, eq(member.organizationId, organization.id))
+          .where(
+            and(
+              eq(member.userId, session.user.id),
+              eq(organization.type, "CLIENT"),
+              inArray(member.role, PORTAL_ACCESS_ROLES),
+            ),
+          );
+
+        if (userOrgs.length === 0) {
+          return c.json({ error: "Certificado nao encontrado" }, 404);
+        }
+
+        const customers = await db
+          .select({ id: customer.id })
+          .from(customer)
+          .where(
+            and(
+              inArray(
+                customer.authOrganizationId,
+                userOrgs.map((org) => org.orgId),
+              ),
+              portalLabScope
+                ? eq(customer.labOrganizationId, portalLabScope)
+                : undefined,
+            ),
+          );
+
+        if (customers.length === 0) {
+          return c.json({ error: "Certificado nao encontrado" }, 404);
+        }
+
+        const [certificate] = await db
+          .select({
+            standardsSnapshot: calibrationJob.standardsSnapshot,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              inArray(
+                calibrationJob.customerId,
+                customers.map((cust) => cust.id),
+              ),
+              eq(calibrationJob.status, "APPROVED"),
+            ),
+          )
+          .limit(1);
+
+        if (!certificate) {
+          return c.json({ error: "Certificado nao encontrado" }, 404);
+        }
+
+        const standard = normalizePortalReferenceStandards(
+          certificate.standardsSnapshot,
+        ).find((item) => item.id === standardId);
+
+        if (!standard) {
+          return c.json({ error: "Padrão não encontrado" }, 404);
+        }
+
+        let document = standard.certificateDocument;
+        if (!document) {
+          const [matchingDocument] = await db
+            .select()
+            .from(referenceStandardCertificateDocument)
+            .where(
+              and(
+                eq(referenceStandardCertificateDocument.standardId, standardId),
+                eq(referenceStandardCertificateDocument.isCurrent, true),
+                eq(
+                  referenceStandardCertificateDocument.certificateNumber,
+                  standard.certificateNumber,
+                ),
+                finalizedStandardCertificateDocumentCondition(),
+              ),
+            )
+            .orderBy(
+              desc(referenceStandardCertificateDocument.isCurrent),
+              desc(referenceStandardCertificateDocument.uploadedAt),
+            )
+            .limit(1);
+
+          document = matchingDocument
+            ? portalStandardDocumentResponse(matchingDocument)
+            : null;
+        }
+
+        if (!document) {
+          return c.json({ error: "Certificado do padrão não disponível" }, 404);
+        }
+
+        const env = c.env;
+        const client = createR2Client(env);
+        const url = await generatePresignedUrl(
+          client,
+          env.R2_BUCKET_NAME,
+          document.r2Key,
+        );
+
+        return c.json({ url, filename: document.fileName });
+      } catch (error) {
+        console.error("Error generating standard certificate URL:", error);
+        return c.json({ error: "Erro ao gerar link de download" }, 500);
+      }
+    },
+  );
 
 function sanitizeCertificateFilename(value: string) {
   const sanitized = value

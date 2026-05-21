@@ -2332,6 +2332,19 @@ export type MethodVariableBinding =
       source: "standard";
       standardId?: number;
       valueKey: string;
+    }
+  | {
+      key: string;
+      label?: string;
+      source: "standard_channel";
+      standardId?: number;
+      channelKey: string;
+      property:
+        | "value"
+        | "correction"
+        | "uncertainty"
+        | "coverageFactor"
+        | "drift";
     };
 
 /**
@@ -2684,6 +2697,7 @@ export const serviceAuditLogRelations = relations(
  */
 export type CertifiedValue = {
   nominal: string; // Display label, e.g., "100g"
+  authentication?: string | null; // Certificate row/code, e.g., "JP03-2.1"
   value: number; // Actual certified value, e.g., 100.005
   uncertainty: number; // Uncertainty for this specific value
   unit: string; // Unit, e.g., "g", "mg"
@@ -2711,6 +2725,97 @@ export type ReferenceStandardStatus =
  */
 export type UncertaintyDistribution = "normal" | "rectangular";
 
+export type ReferenceStandardKind =
+  | "mass_single"
+  | "mass_set"
+  | "thermohygrometer"
+  | "thermometer"
+  | "hygrometer"
+  | "barometer"
+  | "manometer"
+  | "dimensional"
+  | "electrical"
+  | "time_frequency"
+  | "volume"
+  | "force_torque"
+  | "rpm"
+  | "generic_scalar"
+  | "generic_multi_channel";
+
+export type ReferenceStandardMetrologyPoint = {
+  reference?: number | null;
+  indication?: number | null;
+  meanReading?: number | null;
+  correction?: number | null;
+  uncertainty?: number | null;
+  unit: string;
+  coverageFactor?: number | null;
+  degreesOfFreedom?: number | null;
+  degreesOfFreedomOperator?: "exact" | "greater_than" | "infinity";
+  repeatability?: number | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReferenceStandardMetrologyChannel = {
+  key: string;
+  label: string;
+  quantity: string;
+  value?: number | null;
+  correction?: number | null;
+  uncertainty?: number | null;
+  unit: string;
+  coverageFactor?: number | null;
+  drift?: number | null;
+  notes?: string | null;
+  points?: ReferenceStandardMetrologyPoint[];
+};
+
+export type ReferenceStandardMassValue = {
+  nominal: string;
+  authentication?: string | null;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
+};
+
+export type ReferenceStandardCompositionProfile = {
+  profileKey: string;
+  profileClass?: string | null;
+  nominal: string;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
+  quantityAvailable?: number | null;
+};
+
+export type ReferenceStandardMetrologyData = {
+  version: 1;
+  channels: ReferenceStandardMetrologyChannel[];
+  massValues: ReferenceStandardMassValue[];
+  compositionProfiles: ReferenceStandardCompositionProfile[];
+  notes?: string | null;
+};
+
+export type ReferenceStandardCertificateDocumentSnapshot = {
+  documentId: number;
+  r2Key: string;
+  fileName: string;
+  fileSize: number;
+  sha256: string;
+  uploadedAt: Date | string;
+  certificateNumber: string;
+  calibrationDate: Date | string;
+  nextCalibrationDate: Date | string;
+};
+
 /**
  * Reference Standard table - Lab's own master instruments for calibrations.
  * These are the "Truth" used to calibrate client equipment.
@@ -2732,6 +2837,10 @@ export const referenceStandard = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(), // e.g., "Conjunto de Pesos E2"
+    kind: text("kind")
+      .$type<ReferenceStandardKind>()
+      .default("generic_scalar")
+      .notNull(),
     type: text("type"), // Optional category: "Peso", "Bloco Padrão", etc.
     serialNumber: text("serial_number").notNull(),
     manufacturer: text("manufacturer"),
@@ -2753,6 +2862,8 @@ export const referenceStandard = pgTable(
     drift: real("drift"),
     // Multi-value metrology data (for sets like weight sets, gauge blocks)
     certifiedValues: jsonb("certified_values").$type<CertifiedValue[]>(),
+    metrologyData:
+      jsonb("metrology_data").$type<ReferenceStandardMetrologyData>(),
     // Status
     status: text("status")
       .$type<ReferenceStandardStatus>()
@@ -2774,6 +2885,44 @@ export const referenceStandard = pgTable(
     index("standard_organization_id_idx").on(table.organizationId),
     index("standard_status_idx").on(table.status),
     index("standard_next_cal_date_idx").on(table.nextCalibrationDate),
+  ],
+);
+
+export const referenceStandardCertificateDocument = pgTable(
+  "reference_standard_certificate_document",
+  {
+    id: serial("id").primaryKey(),
+    standardId: integer("standard_id")
+      .notNull()
+      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    unitId: integer("unit_id")
+      .notNull()
+      .references(() => organizationUnit.id, { onDelete: "restrict" }),
+    certificateNumber: text("certificate_number").notNull(),
+    calibrationDate: timestamp("calibration_date").notNull(),
+    nextCalibrationDate: timestamp("next_calibration_date").notNull(),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").notNull(),
+    fileSize: integer("file_size").notNull(),
+    sha256: text("sha256").notNull(),
+    r2Key: text("r2_key").notNull(),
+    isCurrent: boolean("is_current").default(true).notNull(),
+    uploadedBy: text("uploaded_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("standard_certificate_document_standard_idx").on(table.standardId),
+    index("standard_certificate_document_org_idx").on(table.organizationId),
+    index("standard_certificate_document_unit_idx").on(table.unitId),
+    index("standard_certificate_document_current_idx").on(
+      table.standardId,
+      table.isCurrent,
+    ),
   ],
 );
 
@@ -2828,6 +2977,29 @@ export const referenceStandardRelations = relations(
       references: [user.id],
     }),
     auditLogs: many(referenceStandardAuditLog),
+    certificateDocuments: many(referenceStandardCertificateDocument),
+  }),
+);
+
+export const referenceStandardCertificateDocumentRelations = relations(
+  referenceStandardCertificateDocument,
+  ({ one }) => ({
+    standard: one(referenceStandard, {
+      fields: [referenceStandardCertificateDocument.standardId],
+      references: [referenceStandard.id],
+    }),
+    organization: one(organization, {
+      fields: [referenceStandardCertificateDocument.organizationId],
+      references: [organization.id],
+    }),
+    unit: one(organizationUnit, {
+      fields: [referenceStandardCertificateDocument.unitId],
+      references: [organizationUnit.id],
+    }),
+    uploadedByUser: one(user, {
+      fields: [referenceStandardCertificateDocument.uploadedBy],
+      references: [user.id],
+    }),
   }),
 );
 
@@ -2920,6 +3092,7 @@ export type StandardSnapshot = {
   id: number;
   name: string;
   type?: string | null;
+  kind?: ReferenceStandardKind;
   certificateNumber: string;
   calibratedBy?: string | null;
   calibrationDate: Date;
@@ -2930,6 +3103,8 @@ export type StandardSnapshot = {
   distribution: UncertaintyDistribution;
   drift: number | null;
   certifiedValues: CertifiedValue[] | null;
+  metrologyData?: ReferenceStandardMetrologyData | null;
+  certificateDocument?: ReferenceStandardCertificateDocumentSnapshot | null;
 };
 
 export type EnvironmentalLimitsSnapshot = {

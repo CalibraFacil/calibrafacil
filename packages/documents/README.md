@@ -1,10 +1,10 @@
 # @calibra-facil/documents
 
-Document templates for PDF certificate and label generation.
+Document templates for label and service-order document generation.
 
 ## Overview
 
-This package provides React-based HTML templates that are rendered and converted to PDF by the worker using Puppeteer.
+This package provides React-based HTML templates that are rendered and converted to PDF by the worker using Puppeteer. Calibration certificates are issued from XLSX workbook templates, not from this package.
 
 ## Installation
 
@@ -15,43 +15,22 @@ pnpm add @calibra-facil/documents
 ## Usage
 
 ```typescript
-import { CertificateHtml, LabelHtml } from "@calibra-facil/documents";
+import { LabelHtml } from "@calibra-facil/documents";
 import { renderToString } from "react-dom/server";
 
-// Render certificate HTML
+// Render label HTML
 const html = renderToString(
-  CertificateHtml({
+  LabelHtml({
     jobId: "CAL-2024-0001",
-    performedAt: new Date(),
-    lab: { name: "Lab XYZ", accreditationNumber: "..." },
-    customer: { name: "Customer ABC" },
-    asset: { name: "Balança", serialNumber: "123" },
-    results: {
-      /* calibration results */
-    },
-    approverName: "John Doe",
+    labName: "Lab XYZ",
+    assetTag: "BAL-001",
+    calibrationDate: new Date(),
+    qrCodeDataUrl: "data:image/svg+xml;base64,...",
   }),
 );
 ```
 
 ## Document Types
-
-### CertificateHtml
-
-Full calibration certificate in A4 format.
-
-**Props:**
-
-- `jobId` - Certificate number
-- `performedAt` - Calibration date
-- `approvedAt` - Approval date
-- `lab` - Laboratory info (name, accreditation, address)
-- `customer` - Customer info
-- `asset` - Calibrated instrument
-- `methodSnapshot` - Method used (frozen at approval)
-- `standardsSnapshot` - Standards used (frozen at approval)
-- `results` - Calibration results with uncertainties
-- `approverName` - Name of approver
 
 ### LabelHtml
 
@@ -68,4 +47,3 @@ Thermal printer label (50mm × 30mm format).
 ## Exports
 
 - `@calibra-facil/documents` - Main exports
-- `@calibra-facil/documents/certificate` - Certificate template

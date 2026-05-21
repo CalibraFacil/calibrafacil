@@ -20,6 +20,28 @@ interface StandardLike {
   uncertainty?: number | null
   coverageFactor?: number | null
   drift?: number | null
+  metrologyData?: {
+    channels?: Array<{
+      key: string
+      value?: number | null
+      correction?: number | null
+      uncertainty?: number | null
+      coverageFactor?: number | null
+      drift?: number | null
+      points?: Array<{
+        reference?: number | null
+        indication?: number | null
+        meanReading?: number | null
+        correction?: number | null
+        uncertainty?: number | null
+        unit: string
+        coverageFactor?: number | null
+        degreesOfFreedom?: number | null
+        degreesOfFreedomOperator?: 'exact' | 'greater_than' | 'infinity'
+        repeatability?: number | null
+      }>
+    }>
+  } | null
   certifiedValues?: Array<{
     nominal: string
     value: number
@@ -314,6 +336,8 @@ function resolveBindingValue(
       return toFormulaScalar(source.environment?.[binding.field])
     case 'standard':
       return resolveStandardValue(binding, source.standards ?? [])
+    case 'standard_channel':
+      return resolveStandardChannelValue(binding, source.standards ?? [])
   }
 }
 
@@ -401,6 +425,23 @@ function resolveStandardValue(
   return null
 }
 
+function resolveStandardChannelValue(
+  binding: Extract<MethodVariableBinding, { source: 'standard_channel' }>,
+  standards: StandardLike[],
+): FormulaScalar | null {
+  const standard = binding.standardId
+    ? standards.find((item) => item.id === binding.standardId)
+    : standards[0]
+  if (!standard) return null
+
+  const channel = standard.metrologyData?.channels?.find(
+    (item) => item.key === binding.channelKey,
+  )
+  if (!channel) return null
+
+  return toFormulaScalar(channel[binding.property])
+}
+
 function addStandardCompatibilityVariables(
   context: FormulaContext,
   standards: StandardLike[],
@@ -427,6 +468,30 @@ function addStandardCompatibilityVariables(
         context,
         `${prefix}_${nominalKey}_u`,
         certifiedValue.uncertainty,
+      )
+    }
+
+    for (const channel of standard.metrologyData?.channels ?? []) {
+      assignContextScalar(context, `${prefix}_${channel.key}`, channel.value)
+      assignContextScalar(
+        context,
+        `${prefix}_${channel.key}_correction`,
+        channel.correction,
+      )
+      assignContextScalar(
+        context,
+        `${prefix}_${channel.key}_u`,
+        channel.uncertainty,
+      )
+      assignContextScalar(
+        context,
+        `${prefix}_${channel.key}_k`,
+        channel.coverageFactor,
+      )
+      assignContextScalar(
+        context,
+        `${prefix}_${channel.key}_drift`,
+        channel.drift,
       )
     }
   }
@@ -638,6 +703,7 @@ function isBindingCompatible(
       )
     case 'environment':
     case 'standard':
+    case 'standard_channel':
       return true
   }
 }

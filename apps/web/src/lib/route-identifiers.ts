@@ -16,8 +16,12 @@ export function methodRouteId(method: {
   return `${slugifyRouteIdentifier(method.name)}-v${method.version}`
 }
 
-export function standardRouteId(standard: { serialNumber: string }): string {
-  return slugifyRouteIdentifier(standard.serialNumber)
+export function standardRouteId(standard: {
+  id: string | number
+  name: string
+  serialNumber?: string | null
+}): string {
+  return `${slugifyRouteIdentifier(standard.name)}-${standard.id}`
 }
 
 function decodeRouteIdentifier(value: string): string {

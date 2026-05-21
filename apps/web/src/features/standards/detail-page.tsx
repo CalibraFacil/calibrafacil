@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { metrologyKindDefinition } from '@/features/standards/metrology-kinds'
+import { StandardCertificateDocumentPanel } from '@/features/standards/components/standard-certificate-document-panel'
 
 interface CertifiedValue {
   nominal: string
@@ -31,6 +33,35 @@ interface CertifiedValue {
   drift?: number | null
   buoyancy?: number | null
   coverageFactor?: number | null
+  compositionProfile?: boolean
+  profileKey?: string | null
+  profileClass?: string | null
+  profileQuantityAvailable?: number | null
+}
+
+interface MetrologyChannel {
+  key: string
+  label: string
+  quantity: string
+  value?: number | null
+  correction?: number | null
+  uncertainty?: number | null
+  unit: string
+  coverageFactor?: number | null
+  drift?: number | null
+  points?: Array<{
+    reference?: number | null
+    indication?: number | null
+    meanReading?: number | null
+    correction?: number | null
+    uncertainty?: number | null
+    unit: string
+    coverageFactor?: number | null
+    degreesOfFreedom?: number | null
+    degreesOfFreedomOperator?: 'exact' | 'greater_than' | 'infinity'
+    repeatability?: number | null
+    metadata?: Record<string, unknown>
+  }>
 }
 
 const statusConfig: Record<
@@ -62,6 +93,17 @@ function formatDateTime(dateString: string | Date): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function formatDegreesOfFreedom(
+  point: NonNullable<MetrologyChannel['points']>[number],
+) {
+  if (point.degreesOfFreedomOperator === 'infinity') return 'Infinity'
+  if (point.degreesOfFreedom == null) return '-'
+  if (point.degreesOfFreedomOperator === 'greater_than') {
+    return `>${point.degreesOfFreedom}`
+  }
+  return point.degreesOfFreedom
 }
 
 function getCalibrationBadge(daysUntilExpiry: number, isExpired: boolean) {
@@ -182,20 +224,57 @@ export function StandardDetailPage({ id }: { id: string }) {
   }
 
   const statusInfo = statusConfig[standard.status]
+  const kindLabel = metrologyKindDefinition(standard.kind).label
   const calibrationBadge = getCalibrationBadge(
     standard.daysUntilExpiry,
     standard.isExpired,
   )
-  const hasCertifiedValues =
-    standard.certifiedValues && standard.certifiedValues.length > 0
-  const hasAdvancedCertifiedValues = !!standard.certifiedValues?.some(
+  const metrologyData = standard.metrologyData
+  const channels = metrologyData?.channels ?? []
+  const legacyCertifiedValues = standard.certifiedValues ?? []
+  const certificateValues =
+    metrologyData?.massValues.length === 0
+      ? legacyCertifiedValues.filter(
+          (value) => value.compositionProfile !== true,
+        )
+      : (metrologyData?.massValues ??
+        legacyCertifiedValues.filter(
+          (value) => value.compositionProfile !== true,
+        ))
+  const compositionProfiles =
+    metrologyData?.compositionProfiles.length === 0
+      ? legacyCertifiedValues.filter(
+          (value) => value.compositionProfile === true,
+        )
+      : (metrologyData?.compositionProfiles.map((profile) => ({
+          nominal: profile.nominal,
+          value: profile.value,
+          uncertainty: profile.uncertainty,
+          unit: profile.unit,
+          maxError: profile.maxError,
+          drift: profile.drift,
+          buoyancy: profile.buoyancy,
+          coverageFactor: profile.coverageFactor,
+          compositionProfile: true,
+          profileKey: profile.profileKey,
+          profileClass: profile.profileClass,
+          profileQuantityAvailable: profile.quantityAvailable,
+        })) ??
+        legacyCertifiedValues.filter(
+          (value) => value.compositionProfile === true,
+        ))
+  const hasCertifiedValues = certificateValues.length > 0
+  const hasChannels = channels.length > 0
+  const hasAdvancedCertifiedValues = [
+    ...certificateValues,
+    ...compositionProfiles,
+  ].some(
     (cv) =>
       cv.maxError != null ||
       cv.drift != null ||
       cv.buoyancy != null ||
       cv.coverageFactor != null,
   )
-  const certifiedValues = standard.certifiedValues ?? []
   const uncertaintyUnit = standard.uncertaintyUnit
     ? ` ${standard.uncertaintyUnit}`
     : ''
@@ -275,13 +354,27 @@ export function StandardDetailPage({ id }: { id: string }) {
           className="border-b border-border/70 xl:border-r xl:border-b-0"
         />
         <SummaryItem
-          label={hasCertifiedValues ? 'Valores certificados' : 'Valor nominal'}
-          value={
-            hasCertifiedValues
-              ? certifiedValues.length
-              : `${standard.referenceValue ?? '-'}${uncertaintyUnit}`
+          label={
+            hasChannels
+              ? 'Canais'
+              : hasCertifiedValues
+                ? 'Valores certificados'
+                : 'Valor nominal'
           }
-          detail={hasCertifiedValues ? 'Pontos cadastrados' : 'Referência base'}
+          value={
+            hasChannels
+              ? channels.length
+              : hasCertifiedValues
+                ? certificateValues.length
+                : `${standard.referenceValue ?? '-'}${uncertaintyUnit}`
+          }
+          detail={
+            hasChannels
+              ? 'Grandezas instrumentais'
+              : hasCertifiedValues
+                ? `${compositionProfiles.length} perfis de composição`
+                : 'Referência base'
+          }
           mono
           className="border-b border-border/70 sm:border-r sm:border-b-0"
         />
@@ -305,6 +398,7 @@ export function StandardDetailPage({ id }: { id: string }) {
           >
             <dl className="grid gap-x-8 border-t border-border/70 sm:grid-cols-2">
               <DetailItem label="Nome" value={standard.name} />
+              <DetailItem label="Grandeza" value={kindLabel} />
               <DetailItem label="Tipo" value={standard.type || '-'} />
               <DetailItem
                 label="Número de série"
@@ -334,11 +428,28 @@ export function StandardDetailPage({ id }: { id: string }) {
             title="Dados metrológicos"
             description="Valores certificados, incerteza e parâmetros usados nos cálculos."
           >
+            {hasChannels && (
+              <div className="mb-6">
+                <ChannelsTable channels={channels} />
+              </div>
+            )}
+
             {hasCertifiedValues ? (
-              <CertifiedValuesTable
-                values={certifiedValues}
-                showAdvanced={hasAdvancedCertifiedValues}
-              />
+              <div className="space-y-6">
+                <CertifiedValuesTable
+                  title="Valores do certificado"
+                  values={certificateValues}
+                  showAdvanced={hasAdvancedCertifiedValues}
+                />
+                {compositionProfiles.length > 0 && (
+                  <CertifiedValuesTable
+                    title="Perfis de composição"
+                    values={compositionProfiles}
+                    showAdvanced={hasAdvancedCertifiedValues}
+                    profileTable
+                  />
+                )}
+              </div>
             ) : (
               <dl className="grid gap-x-8 border-t border-border/70 sm:grid-cols-3">
                 <DetailItem
@@ -389,6 +500,9 @@ export function StandardDetailPage({ id }: { id: string }) {
             title="Certificado"
             description="Rastreabilidade e ciclo de calibração."
           >
+            <div className="mb-4">
+              <StandardCertificateDocumentPanel standard={standard} />
+            </div>
             <dl className="border-t border-border/70">
               <DetailItem
                 label="Número do certificado"
@@ -581,83 +695,264 @@ function DetailItem({
 }
 
 function CertifiedValuesTable({
+  title,
   values,
   showAdvanced,
+  profileTable = false,
 }: {
+  title: string
   values: CertifiedValue[]
   showAdvanced: boolean
+  profileTable?: boolean
 }) {
+  if (values.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
+        Nenhum {profileTable ? 'perfil' : 'valor certificado'} cadastrado.
+      </div>
+    )
+  }
+
   return (
-    <div className="overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
-      <table className="w-full min-w-[44rem] text-sm">
-        <thead>
-          <tr className="border-b border-border/70 bg-muted/35">
-            <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
-              Nominal
-            </th>
-            <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
-              Valor certificado
-            </th>
-            <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
-              Incerteza (U)
-            </th>
-            <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
-              Unidade
-            </th>
-            {showAdvanced && (
-              <>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
-                  Erro máximo
+    <div className="space-y-2">
+      <h3 className="text-sm font-medium">{title}</h3>
+      <div className="overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+        <table className="w-full min-w-[44rem] text-sm">
+          <thead>
+            <tr className="border-b border-border/70 bg-muted/35">
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
+                {profileTable ? 'Perfil' : 'Nominal'}
+              </th>
+              {profileTable && (
+                <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
+                  Classe
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
-                  Deriva
-                </th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
-                  Empuxo
-                </th>
-                <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
-                  k
-                </th>
-              </>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {values.map((cv, index) => (
-            <tr
-              key={`${cv.nominal}-${index}`}
-              className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/35"
-            >
-              <td className="px-3 py-2.5 font-mono tabular-nums">
-                {cv.nominal}
-              </td>
-              <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                {cv.value}
-              </td>
-              <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                +/-{cv.uncertainty}
-              </td>
-              <td className="px-3 py-2.5">{cv.unit}</td>
+              )}
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Valor
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Incerteza (U)
+              </th>
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
+                Unidade
+              </th>
               {showAdvanced && (
                 <>
-                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                    {cv.maxError ?? '-'}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                    {cv.drift ?? '-'}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                    {cv.buoyancy ?? '-'}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                    {cv.coverageFactor ?? '-'}
-                  </td>
+                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                    Erro máximo
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                    Deriva
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                    Empuxo
+                  </th>
+                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                    k
+                  </th>
                 </>
               )}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {values.map((cv, index) => (
+              <tr
+                key={`${cv.nominal}-${index}`}
+                className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/35"
+              >
+                <td className="px-3 py-2.5 font-mono tabular-nums">
+                  {profileTable ? (cv.profileKey ?? cv.nominal) : cv.nominal}
+                </td>
+                {profileTable && (
+                  <td className="px-3 py-2.5">
+                    {cv.profileClass ? (
+                      <Badge variant="secondary">{cv.profileClass}</Badge>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                )}
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {cv.value}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  +/-{cv.uncertainty}
+                </td>
+                <td className="px-3 py-2.5">{cv.unit}</td>
+                {showAdvanced && (
+                  <>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                      {cv.maxError ?? '-'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                      {cv.drift ?? '-'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                      {cv.buoyancy ?? '-'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                      {cv.coverageFactor ?? '-'}
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function ChannelsTable({ channels }: { channels: MetrologyChannel[] }) {
+  if (channels.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="space-y-5">
+      <h3 className="text-sm font-medium">Canais metrológicos</h3>
+      <div className="overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+        <table className="w-full min-w-[42rem] text-sm">
+          <thead>
+            <tr className="border-b border-border/70 bg-muted/35">
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
+                Canal
+              </th>
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
+                Chave
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Valor
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Correção
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Incerteza
+              </th>
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
+                Unidade
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                k
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Pontos
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {channels.map((channel) => (
+              <tr
+                key={channel.key}
+                className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/35"
+              >
+                <td className="px-3 py-2.5">{channel.label}</td>
+                <td className="px-3 py-2.5 font-mono text-xs">{channel.key}</td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {channel.value ?? '-'}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {channel.correction ?? '-'}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {channel.uncertainty ?? '-'}
+                </td>
+                <td className="px-3 py-2.5">{channel.unit}</td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {channel.coverageFactor ?? '-'}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {channel.points?.length ?? 0}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {channels
+        .filter((channel) => (channel.points?.length ?? 0) > 0)
+        .map((channel) => (
+          <ChannelPointsTable key={channel.key} channel={channel} />
+        ))}
+    </div>
+  )
+}
+
+function ChannelPointsTable({ channel }: { channel: MetrologyChannel }) {
+  const points = channel.points ?? []
+  if (points.length === 0) return null
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-medium">
+        {channel.label}: pontos calibrados
+      </h4>
+      <div className="overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(0,0,0,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]">
+        <table className="w-full min-w-[44rem] text-sm">
+          <thead>
+            <tr className="border-b border-border/70 bg-muted/35">
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Referência
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Indicação
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Média
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Tendência
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                U
+              </th>
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">
+                Unidade
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                k
+              </th>
+              <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">
+                Graus de liberdade
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {points.map((point, index) => (
+              <tr
+                key={`${channel.key}-${index}`}
+                className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/35"
+              >
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {point.reference ?? '-'}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {point.indication ?? '-'}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {point.meanReading ?? '-'}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {point.correction ?? '-'}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {point.uncertainty ?? '-'}
+                </td>
+                <td className="px-3 py-2.5">{point.unit}</td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {point.coverageFactor ?? '-'}
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {formatDegreesOfFreedom(point)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

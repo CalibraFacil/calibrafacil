@@ -82,6 +82,17 @@ export function VariableEditor({
       return
     }
 
+    if (source === 'standard_channel') {
+      onChange({
+        key: variable.key,
+        label: variable.label,
+        source,
+        channelKey: 'temperature',
+        property: 'value',
+      })
+      return
+    }
+
     if (source === 'table_column' || source === 'table_statistic') {
       const fieldKey = tableInputs[0]?.key ?? ''
       const columnKey = tableInputs[0]?.columns?.[0]?.key ?? ''
@@ -150,6 +161,7 @@ export function VariableEditor({
               <SelectItem value="table_statistic">table_statistic</SelectItem>
               <SelectItem value="environment">environment</SelectItem>
               <SelectItem value="standard">standard</SelectItem>
+              <SelectItem value="standard_channel">standard_channel</SelectItem>
             </SelectContent>
           </Select>
         </Field>
@@ -260,6 +272,45 @@ export function VariableEditor({
               }
             />
           </Field>
+        )}
+        {variable.source === 'standard_channel' && (
+          <>
+            <Field label="Canal">
+              <Input
+                value={variable.channelKey}
+                onChange={(event) =>
+                  onChange({ ...variable, channelKey: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Propriedade">
+              <Select
+                value={variable.property}
+                onValueChange={(property) => {
+                  if (
+                    property === 'value' ||
+                    property === 'correction' ||
+                    property === 'uncertainty' ||
+                    property === 'coverageFactor' ||
+                    property === 'drift'
+                  ) {
+                    onChange({ ...variable, property })
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <span>{variable.property}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="value">value</SelectItem>
+                  <SelectItem value="correction">correction</SelectItem>
+                  <SelectItem value="uncertainty">uncertainty</SelectItem>
+                  <SelectItem value="coverageFactor">coverageFactor</SelectItem>
+                  <SelectItem value="drift">drift</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </>
         )}
       </div>
     </div>

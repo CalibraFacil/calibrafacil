@@ -1,10 +1,13 @@
 import { Hono } from "hono";
+import { createHash, randomUUID } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
   referenceStandard,
   referenceStandardAuditLog,
+  referenceStandardCertificateDocument,
+  user,
 } from "@calibra-facil/db/schema";
 import {
   CreateReferenceStandardSchema,
@@ -17,12 +20,35 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { withCache, withInvalidation } from "../middleware/cache";
-import { eq, and, or, ilike, desc, count, isNull, lte, gte } from "drizzle-orm";
+import {
+  eq,
+  and,
+  or,
+  ilike,
+  desc,
+  like,
+  not,
+  count,
+  isNull,
+  lte,
+  gte,
+  inArray,
+} from "drizzle-orm";
 import { buildUnitScopeCondition } from "../lib/units";
 import {
   parseLegacyNumericIdentifier,
   slugifyRouteIdentifier,
 } from "../lib/route-identifiers";
+import {
+  createR2Client,
+  generatePresignedUrl,
+  uploadToR2,
+  type R2Env,
+} from "../lib/storage";
+
+const MAX_STANDARD_CERTIFICATE_FILE_SIZE = 25 * 1024 * 1024;
+const STANDARD_CERTIFICATE_CONTENT_TYPE = "application/pdf";
+const STANDARD_CERTIFICATE_URL_EXPIRY = 900;
 
 const CommandPaletteStandardSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -33,7 +59,10 @@ async function resolveStandardRouteId(
   identifier: string,
   member: AuthVariables["member"],
 ): Promise<number | null> {
-  const legacyId = parseLegacyNumericIdentifier(identifier);
+  const stableId =
+    parseLegacyNumericIdentifier(identifier) ??
+    parseTrailingNumericRouteIdentifier(identifier);
+  const canMatchSerialNumber = !isPlaceholderSerialIdentifier(identifier);
 
   const directConditions = [
     eq(referenceStandard.organizationId, member.organizationId),
@@ -49,14 +78,20 @@ async function resolveStandardRouteId(
     .where(
       and(
         ...directConditions,
-        legacyId
+        stableId
           ? or(
-              eq(referenceStandard.id, legacyId),
-              eq(referenceStandard.serialNumber, identifier),
+              eq(referenceStandard.id, stableId),
+              ...(canMatchSerialNumber
+                ? [eq(referenceStandard.serialNumber, identifier)]
+                : []),
+              eq(referenceStandard.name, identifier),
               eq(referenceStandard.certificateNumber, identifier),
             )
           : or(
-              eq(referenceStandard.serialNumber, identifier),
+              ...(canMatchSerialNumber
+                ? [eq(referenceStandard.serialNumber, identifier)]
+                : []),
+              eq(referenceStandard.name, identifier),
               eq(referenceStandard.certificateNumber, identifier),
             ),
       ),
@@ -68,6 +103,7 @@ async function resolveStandardRouteId(
   const standards = await db
     .select({
       id: referenceStandard.id,
+      name: referenceStandard.name,
       serialNumber: referenceStandard.serialNumber,
     })
     .from(referenceStandard)
@@ -76,8 +112,95 @@ async function resolveStandardRouteId(
   return (
     standards.find(
       (standard) =>
-        slugifyRouteIdentifier(standard.serialNumber) === identifier,
+        (!isPlaceholderSerialIdentifier(standard.serialNumber) &&
+          slugifyRouteIdentifier(standard.serialNumber) === identifier) ||
+        slugifyRouteIdentifier(standard.name) === identifier,
     )?.id ?? null
+  );
+}
+
+function parseTrailingNumericRouteIdentifier(
+  identifier: string,
+): number | null {
+  const match = /-(\d+)$/.exec(identifier);
+  if (!match?.[1]) return null;
+  const value = Number(match[1]);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function isPlaceholderSerialIdentifier(value: string | null | undefined) {
+  if (!value) return true;
+  const normalized = slugifyRouteIdentifier(value);
+  return normalized === "n-a" || normalized === "na";
+}
+
+function sanitizeStandardCertificateFileName(value: string) {
+  const trimmed = value.trim() || "certificado.pdf";
+  const withoutPath = trimmed.split(/[\\/]/).pop() ?? "certificado.pdf";
+  const normalized = withoutPath
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return normalized.toLowerCase().endsWith(".pdf")
+    ? normalized
+    : `${normalized || "certificado"}.pdf`;
+}
+
+function buildStandardCertificateR2Key(params: {
+  organizationId: string;
+  standardId: number;
+  documentId: number;
+  fileName: string;
+}) {
+  return `org/${params.organizationId}/standards/${params.standardId}/certificates/${params.documentId}-${params.fileName}`;
+}
+
+function isFinalizedCertificateDocumentCondition() {
+  return not(like(referenceStandardCertificateDocument.r2Key, "pending/%"));
+}
+
+function standardCertificateDocumentResponse(
+  document: typeof referenceStandardCertificateDocument.$inferSelect,
+) {
+  return {
+    documentId: document.id,
+    r2Key: document.r2Key,
+    fileName: document.fileName,
+    fileSize: document.fileSize,
+    sha256: document.sha256,
+    uploadedAt: document.uploadedAt,
+    certificateNumber: document.certificateNumber,
+    calibrationDate: document.calibrationDate,
+    nextCalibrationDate: document.nextCalibrationDate,
+  };
+}
+
+async function currentCertificateDocumentsByStandardId(standardIds: number[]) {
+  if (standardIds.length === 0) {
+    return new Map<
+      number,
+      ReturnType<typeof standardCertificateDocumentResponse>
+    >();
+  }
+
+  const documents = await db
+    .select()
+    .from(referenceStandardCertificateDocument)
+    .where(
+      and(
+        inArray(referenceStandardCertificateDocument.standardId, standardIds),
+        eq(referenceStandardCertificateDocument.isCurrent, true),
+        isFinalizedCertificateDocumentCondition(),
+      ),
+    );
+
+  return new Map(
+    documents.map((document) => [
+      document.standardId,
+      standardCertificateDocumentResponse(document),
+    ]),
   );
 }
 
@@ -99,7 +222,10 @@ async function resolveStandardRouteId(
  * - DELETE /:id: standard:delete (admin, owner - LAB only) - soft delete
  * - POST /:id/renew: standard:renew (admin, owner - LAB only) - certificate renewal
  */
-export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
+export const standardsRouter = new Hono<{
+  Variables: AuthVariables;
+  Bindings: R2Env;
+}>()
   // =========================================================================
   // GET /search - Lightweight search for command palette
   // =========================================================================
@@ -202,6 +328,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
         .select({
           id: referenceStandard.id,
           name: referenceStandard.name,
+          kind: referenceStandard.kind,
           type: referenceStandard.type,
           serialNumber: referenceStandard.serialNumber,
           manufacturer: referenceStandard.manufacturer,
@@ -217,6 +344,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           distribution: referenceStandard.distribution,
           drift: referenceStandard.drift,
           certifiedValues: referenceStandard.certifiedValues,
+          metrologyData: referenceStandard.metrologyData,
           status: referenceStandard.status,
           createdAt: referenceStandard.createdAt,
           updatedAt: referenceStandard.updatedAt,
@@ -229,8 +357,13 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Add computed field: isExpired
       const now = new Date();
+      const certificateDocuments =
+        await currentCertificateDocumentsByStandardId(
+          standards.map((standard) => standard.id),
+        );
       const standardsWithExpiry = standards.map((s) => ({
         ...s,
+        certificateDocument: certificateDocuments.get(s.id) ?? null,
         isExpired: s.nextCalibrationDate < now,
         daysUntilExpiry: Math.ceil(
           (s.nextCalibrationDate.getTime() - now.getTime()) /
@@ -318,8 +451,12 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
 
     // Add computed fields
     const now = new Date();
+    const certificateDocuments = await currentCertificateDocumentsByStandardId([
+      found.id,
+    ]);
     const result = {
       ...found,
+      certificateDocument: certificateDocuments.get(found.id) ?? null,
       isExpired: found.nextCalibrationDate < now,
       daysUntilExpiry: Math.ceil(
         (found.nextCalibrationDate.getTime() - now.getTime()) /
@@ -329,6 +466,239 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
 
     return c.json(result);
   })
+
+  // =========================================================================
+  // POST /:id/certificate-document - Upload original certificate PDF
+  // =========================================================================
+  .post(
+    "/:id/certificate-document",
+    ...withLabPermission({ standard: ["update"] }),
+    withInvalidation("standards"),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const env = c.env;
+      const id = await resolveStandardRouteId(c.req.param("id"), member);
+
+      if (id === null) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
+      }
+
+      try {
+        const [standard] = await db
+          .select()
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.id, id),
+              eq(referenceStandard.organizationId, member.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, member),
+              isNull(referenceStandard.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!standard) {
+          return c.json({ error: "Padrão não encontrado" }, 404);
+        }
+
+        const formData = await c.req.formData();
+        const file = formData.get("certificate");
+
+        if (!(file instanceof File)) {
+          return c.json({ error: "Nenhum arquivo enviado" }, 400);
+        }
+
+        const safeFileName = sanitizeStandardCertificateFileName(file.name);
+        if (!safeFileName.toLowerCase().endsWith(".pdf")) {
+          return c.json({ error: "Apenas arquivos PDF são permitidos" }, 400);
+        }
+
+        if (file.type && file.type !== STANDARD_CERTIFICATE_CONTENT_TYPE) {
+          return c.json({ error: "Apenas arquivos PDF são permitidos" }, 400);
+        }
+
+        if (file.size > MAX_STANDARD_CERTIFICATE_FILE_SIZE) {
+          return c.json(
+            {
+              error: `Arquivo muito grande. Máximo ${MAX_STANDARD_CERTIFICATE_FILE_SIZE / 1024 / 1024}MB.`,
+            },
+            400,
+          );
+        }
+
+        const buffer = await file.arrayBuffer();
+        const header = new TextDecoder().decode(buffer.slice(0, 4));
+        if (header !== "%PDF") {
+          return c.json({ error: "Arquivo PDF inválido" }, 400);
+        }
+
+        const sha256 = createHash("sha256")
+          .update(Buffer.from(buffer))
+          .digest("hex");
+
+        const [created] = await db
+          .insert(referenceStandardCertificateDocument)
+          .values({
+            standardId: standard.id,
+            organizationId: standard.organizationId,
+            unitId: standard.unitId,
+            certificateNumber: standard.certificateNumber,
+            calibrationDate: standard.calibrationDate,
+            nextCalibrationDate: standard.nextCalibrationDate,
+            fileName: safeFileName,
+            contentType: STANDARD_CERTIFICATE_CONTENT_TYPE,
+            fileSize: file.size,
+            sha256,
+            r2Key: `pending/standards/${standard.id}/${randomUUID()}.pdf`,
+            isCurrent: false,
+            uploadedBy: session.user.id,
+          })
+          .returning();
+
+        if (!created) {
+          return c.json({ error: "Falha ao registrar certificado" }, 500);
+        }
+
+        const r2Key = buildStandardCertificateR2Key({
+          organizationId: standard.organizationId,
+          standardId: standard.id,
+          documentId: created.id,
+          fileName: safeFileName,
+        });
+
+        const r2Client = createR2Client(env);
+        await uploadToR2(
+          r2Client,
+          env.R2_BUCKET_NAME,
+          r2Key,
+          buffer,
+          STANDARD_CERTIFICATE_CONTENT_TYPE,
+        );
+
+        const [previousDocument] = await db
+          .select()
+          .from(referenceStandardCertificateDocument)
+          .where(
+            and(
+              eq(referenceStandardCertificateDocument.standardId, standard.id),
+              eq(referenceStandardCertificateDocument.isCurrent, true),
+              isFinalizedCertificateDocumentCondition(),
+            ),
+          )
+          .limit(1);
+
+        const [updated] = await db.transaction(async (tx) => {
+          await tx
+            .update(referenceStandardCertificateDocument)
+            .set({ isCurrent: false })
+            .where(
+              and(
+                eq(
+                  referenceStandardCertificateDocument.standardId,
+                  standard.id,
+                ),
+                eq(referenceStandardCertificateDocument.isCurrent, true),
+              ),
+            );
+
+          return tx
+            .update(referenceStandardCertificateDocument)
+            .set({ r2Key, isCurrent: true })
+            .where(eq(referenceStandardCertificateDocument.id, created.id))
+            .returning();
+        });
+
+        if (!updated) {
+          return c.json({ error: "Falha ao ativar certificado" }, 500);
+        }
+
+        await db.insert(referenceStandardAuditLog).values({
+          standardId: standard.id,
+          action: "certificate_document_upload",
+          changes: {
+            certificateDocument: {
+              old: previousDocument
+                ? standardCertificateDocumentResponse(previousDocument)
+                : null,
+              new: standardCertificateDocumentResponse(updated),
+            },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        return c.json({
+          message: "Certificado enviado com sucesso",
+          document: standardCertificateDocumentResponse(updated),
+        });
+      } catch (error) {
+        console.error("Error uploading standard certificate:", error);
+        return c.json({ error: "Erro ao enviar certificado" }, 500);
+      }
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/certificate-document/download - Download current certificate PDF
+  // =========================================================================
+  .get(
+    "/:id/certificate-document/download",
+    ...withLabPermission({ standard: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      const env = c.env;
+      const id = await resolveStandardRouteId(c.req.param("id"), member);
+
+      if (id === null) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
+      }
+
+      try {
+        const [document] = await db
+          .select({
+            fileName: referenceStandardCertificateDocument.fileName,
+            r2Key: referenceStandardCertificateDocument.r2Key,
+          })
+          .from(referenceStandardCertificateDocument)
+          .innerJoin(
+            referenceStandard,
+            eq(
+              referenceStandardCertificateDocument.standardId,
+              referenceStandard.id,
+            ),
+          )
+          .where(
+            and(
+              eq(referenceStandard.id, id),
+              eq(referenceStandard.organizationId, member.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, member),
+              isNull(referenceStandard.deletedAt),
+              eq(referenceStandardCertificateDocument.isCurrent, true),
+              isFinalizedCertificateDocumentCondition(),
+            ),
+          )
+          .limit(1);
+
+        if (!document) {
+          return c.json({ error: "Certificado não encontrado" }, 404);
+        }
+
+        const r2Client = createR2Client(env);
+        const url = await generatePresignedUrl(
+          r2Client,
+          env.R2_BUCKET_NAME,
+          document.r2Key,
+          STANDARD_CERTIFICATE_URL_EXPIRY,
+        );
+
+        return c.json({ url, filename: document.fileName });
+      } catch (error) {
+        console.error("Error downloading standard certificate:", error);
+        return c.json({ error: "Erro ao gerar link de download" }, 500);
+      }
+    },
+  )
 
   // =========================================================================
   // POST / - Create new reference standard
@@ -357,6 +727,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           unitId: member.activeUnitId,
           organizationId: member.organizationId,
           name: input.name,
+          kind: input.kind,
           type: input.type || null,
           serialNumber: input.serialNumber,
           manufacturer: input.manufacturer || null,
@@ -372,6 +743,7 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
           distribution: input.distribution,
           drift: input.drift ?? null,
           certifiedValues: input.certifiedValues ?? null,
+          metrologyData: input.metrologyData ?? null,
           status: input.status,
           createdBy: session.user.id,
         })
@@ -450,6 +822,10 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
       if (input.type !== undefined && input.type !== existing.type) {
         changes.type = { old: existing.type, new: input.type };
         updateData.type = input.type;
+      }
+      if (input.kind !== undefined && input.kind !== existing.kind) {
+        changes.kind = { old: existing.kind, new: input.kind };
+        updateData.kind = input.kind;
       }
       if (
         input.serialNumber !== undefined &&
@@ -579,6 +955,17 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
             new: input.certifiedValues,
           };
           updateData.certifiedValues = input.certifiedValues;
+        }
+      }
+      if (input.metrologyData !== undefined) {
+        const oldJson = JSON.stringify(existing.metrologyData);
+        const newJson = JSON.stringify(input.metrologyData);
+        if (oldJson !== newJson) {
+          changes.metrologyData = {
+            old: existing.metrologyData,
+            new: input.metrologyData,
+          };
+          updateData.metrologyData = input.metrologyData;
         }
       }
       if (input.status !== undefined && input.status !== existing.status) {
@@ -773,6 +1160,13 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
         };
         updateData.certifiedValues = input.certifiedValues;
       }
+      if (input.metrologyData !== undefined) {
+        changes.metrologyData = {
+          old: existing.metrologyData,
+          new: input.metrologyData,
+        };
+        updateData.metrologyData = input.metrologyData;
+      }
 
       // If standard was OUT_OF_TOLERANCE or SENT_FOR_CALIBRATION, set back to ACTIVE
       if (
@@ -840,8 +1234,19 @@ export const standardsRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Get audit logs
       const logs = await db
-        .select()
+        .select({
+          id: referenceStandardAuditLog.id,
+          standardId: referenceStandardAuditLog.standardId,
+          action: referenceStandardAuditLog.action,
+          changes: referenceStandardAuditLog.changes,
+          performedBy: referenceStandardAuditLog.performedBy,
+          performedByName: user.name,
+          performedAt: referenceStandardAuditLog.performedAt,
+          ipAddress: referenceStandardAuditLog.ipAddress,
+          reason: referenceStandardAuditLog.reason,
+        })
         .from(referenceStandardAuditLog)
+        .leftJoin(user, eq(referenceStandardAuditLog.performedBy, user.id))
         .where(eq(referenceStandardAuditLog.standardId, id))
         .orderBy(desc(referenceStandardAuditLog.performedAt));
 

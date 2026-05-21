@@ -368,6 +368,68 @@ export type StandardStatus =
 
 export type CertifiedValue = {
   nominal: string;
+  authentication?: string | null;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
+  compositionProfile?: boolean;
+  profileKey?: string | null;
+  profileClass?: string | null;
+  profileQuantityAvailable?: number | null;
+};
+
+export type ReferenceStandardKind =
+  | "mass_single"
+  | "mass_set"
+  | "thermohygrometer"
+  | "thermometer"
+  | "hygrometer"
+  | "barometer"
+  | "manometer"
+  | "dimensional"
+  | "electrical"
+  | "time_frequency"
+  | "volume"
+  | "force_torque"
+  | "rpm"
+  | "generic_scalar"
+  | "generic_multi_channel";
+
+export type ReferenceStandardMetrologyPoint = {
+  reference?: number | null;
+  indication?: number | null;
+  meanReading?: number | null;
+  correction?: number | null;
+  uncertainty?: number | null;
+  unit: string;
+  coverageFactor?: number | null;
+  degreesOfFreedom?: number | null;
+  degreesOfFreedomOperator?: "exact" | "greater_than" | "infinity";
+  repeatability?: number | null;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReferenceStandardMetrologyChannel = {
+  key: string;
+  label: string;
+  quantity: string;
+  value?: number | null;
+  correction?: number | null;
+  uncertainty?: number | null;
+  unit: string;
+  coverageFactor?: number | null;
+  drift?: number | null;
+  notes?: string | null;
+  points?: ReferenceStandardMetrologyPoint[];
+};
+
+export type ReferenceStandardMassValue = {
+  nominal: string;
+  authentication?: string | null;
   value: number;
   uncertainty: number;
   unit: string;
@@ -377,9 +439,44 @@ export type CertifiedValue = {
   coverageFactor?: number | null;
 };
 
+export type ReferenceStandardCompositionProfile = {
+  profileKey: string;
+  profileClass?: string | null;
+  nominal: string;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
+  quantityAvailable?: number | null;
+};
+
+export type ReferenceStandardMetrologyData = {
+  version: 1;
+  channels: ReferenceStandardMetrologyChannel[];
+  massValues: ReferenceStandardMassValue[];
+  compositionProfiles: ReferenceStandardCompositionProfile[];
+  notes?: string | null;
+};
+
+export type ReferenceStandardCertificateDocument = {
+  documentId: number;
+  r2Key: string;
+  fileName: string;
+  fileSize: number;
+  sha256: string;
+  uploadedAt: string | Date;
+  certificateNumber: string;
+  calibrationDate: string | Date;
+  nextCalibrationDate: string | Date;
+};
+
 export type StandardData = {
   id: number;
   name: string;
+  kind: ReferenceStandardKind;
   type: string | null;
   serialNumber: string;
   manufacturer: string | null;
@@ -395,6 +492,8 @@ export type StandardData = {
   distribution: "normal" | "rectangular";
   drift: number | null;
   certifiedValues: CertifiedValue[] | null;
+  metrologyData: ReferenceStandardMetrologyData | null;
+  certificateDocument?: ReferenceStandardCertificateDocument | null;
   status: StandardStatus;
   isExpired: boolean;
   daysUntilExpiry: number;
@@ -425,6 +524,16 @@ export type StandardAuditLogData<TRecord = unknown> = {
   data: TRecord[];
 };
 
+export type StandardCertificateDocumentUploadResponse = {
+  message: string;
+  document: ReferenceStandardCertificateDocument;
+};
+
+export type StandardCertificateDocumentDownloadResponse = {
+  url: string;
+  filename: string;
+};
+
 export interface StandardsApi {
   list(input?: StandardsListInput): Promise<StandardsListData>;
   get(id: string | number): Promise<StandardData>;
@@ -435,6 +544,14 @@ export interface StandardsApi {
   update(id: string | number, input: StandardWriteInput): Promise<StandardData>;
   delete(id: string | number): Promise<unknown>;
   renew(id: string | number, input: StandardWriteInput): Promise<unknown>;
+  uploadCertificateDocument(
+    id: string | number,
+    file: Blob,
+    input?: { fileName?: string },
+  ): Promise<StandardCertificateDocumentUploadResponse>;
+  getCertificateDocumentDownloadUrl(
+    id: string | number,
+  ): Promise<StandardCertificateDocumentDownloadResponse>;
 }
 
 export type CustomersListInput = {

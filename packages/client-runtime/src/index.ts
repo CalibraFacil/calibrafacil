@@ -738,7 +738,7 @@ export function createCloudApiClient(
     integrations: createIntegrationsApi(rawCloudClient),
     services: createServicesApi(rawCloudClient),
     methods: createMethodsApi(rawCloudClient),
-    standards: createStandardsApi(rawCloudClient),
+    standards: createStandardsApi(rawCloudClient, options),
     jobs: createJobsApi(rawCloudClient),
     serviceOrders: createServiceOrdersApi(rawCloudClient),
     sync: createCloudSyncApi(),

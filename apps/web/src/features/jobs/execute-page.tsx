@@ -125,7 +125,9 @@ function toAssetSpecificationFieldDefinition(
 ): Array<AssetSpecificationFieldLike> {
   if (
     !field.assetSpecKey ||
-    (field.type !== 'number' && field.type !== 'text' && field.type !== 'select')
+    (field.type !== 'number' &&
+      field.type !== 'text' &&
+      field.type !== 'select')
   ) {
     return []
   }
@@ -486,6 +488,18 @@ function ExecuteJobForm({
       }),
     [assetSpecFields, job.assetSnapshot],
   )
+
+  const selectedStandardsMissingCertificatePdf = useMemo(() => {
+    const standardsById = new Map(
+      standardsData.map((standard) => [standard.id, standard]),
+    )
+    return selectedStandardIds
+      .map((standardId) => standardsById.get(standardId))
+      .filter((standard): standard is ReferenceStandard => {
+        if (!standard) return false
+        return !standard.certificateDocument
+      })
+  }, [selectedStandardIds, standardsData])
 
   // Build scalar context for the hardened math engine.
   const context = useMemo(
@@ -1156,6 +1170,13 @@ function ExecuteJobForm({
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <CardContent className="px-5 pb-5 pt-0">
+                  {selectedStandardsMissingCertificatePdf.length > 0 && (
+                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                      {selectedStandardsMissingCertificatePdf.length === 1
+                        ? `O padrão ${selectedStandardsMissingCertificatePdf[0]?.name} ainda não possui PDF do certificado original.`
+                        : `${selectedStandardsMissingCertificatePdf.length} padrões selecionados ainda não possuem PDF do certificado original.`}
+                    </div>
+                  )}
                   <div className="grid gap-2 lg:grid-cols-2">
                     {standardsData.map((std) => (
                       <button
@@ -1176,6 +1197,7 @@ function ExecuteJobForm({
                             </span>
                             <p className="mt-1 truncate text-xs text-muted-foreground tabular-nums">
                               Cert: {std.certificateNumber}
+                              {!std.certificateDocument && ' | PDF pendente'}
                               {std.uncertainty != null &&
                                 ` | U: ${formatCalibrationValue(
                                   convertValueToDisplayUnit(

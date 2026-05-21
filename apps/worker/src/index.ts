@@ -3,8 +3,6 @@ import { createHash, randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { renderToString } from "react-dom/server";
 import {
-  CertificateHtml,
-  type JobData,
   LabelHtml,
   type LabelData,
   ServiceOrderDeliveryReceiptHtml,
@@ -50,6 +48,7 @@ import {
 import {
   convertMassValue,
   isMassMeasurementUnit,
+  type MassUnit,
 } from "@calibra-facil/shared/mass-units";
 
 export interface Env {
@@ -75,6 +74,246 @@ export interface Env {
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
   INTEGRATIONS_MASTER_KEY?: string;
 }
+
+type CustomerAddress = {
+  cep?: string;
+  number?: string;
+  street?: string;
+  complement?: string;
+  neighbourhood?: string;
+  city?: string;
+  state?: string;
+};
+
+type MethodInputField = {
+  key: string;
+  label: string;
+  type: "text" | "number" | "select" | "table";
+  unit?: string;
+  required?: boolean;
+  options?: string[];
+  defaultValue?: string | number;
+  source?: "manual" | "asset_spec";
+  assetSpecKey?: string;
+  allowOverride?: boolean;
+  phaseBlockKey?: string;
+  phaseBlockLabel?: string;
+  eccentricityIndicator?: {
+    enabled?: boolean;
+    variant?: "circular_platform" | "road_scale";
+  };
+  weighingRangeResolver?: {
+    enabled?: boolean;
+    assetSpecKey?: string;
+    pointColumn?: string;
+    pointUnit?: "mg" | "g" | "kg";
+    targetColumns?: {
+      rangeLabel?: string;
+      rangeMin?: string;
+      rangeMax?: string;
+      rangeUnit?: string;
+      resolution?: string;
+      resolutionUnit?: string;
+    };
+  };
+  columns?: Array<{
+    key: string;
+    label: string;
+    type: "text" | "number";
+    unit?: string;
+    role?: "standard_value" | "mass_standard_composition";
+    phase?: "before" | "after" | "always";
+    massComposition?: {
+      targetUnit?: "mg" | "g" | "kg";
+      optionSource?: "certified_values" | "composition_profiles";
+      targetColumns?: {
+        certifiedValue?: string;
+        compositionLabel?: string;
+        expandedUncertainty?: string;
+        maxError?: string;
+        drift?: string;
+        buoyancy?: string;
+      };
+    };
+  }>;
+};
+
+type MethodFormulaReporting = {
+  includeInCertificate?: boolean;
+  role?:
+    | "primary_result"
+    | "expanded_uncertainty"
+    | "coverage_factor"
+    | "conformity_margin"
+    | "uncertainty_component"
+    | "auxiliary";
+  group?: "calibration_result" | "uncertainty_budget" | "raw_calculation";
+};
+
+type MethodFormula = {
+  outputKey: string;
+  expression: string;
+  label?: string;
+  unit?: string;
+  reporting?: MethodFormulaReporting;
+};
+
+type MethodCertificateContent = {
+  procedureCode?: string;
+  referenceStandards?: string[];
+  certifiedValuesDisplay?: "full" | "hidden";
+  massCompositionDisplay?: "full" | "hidden";
+  uncertaintyBudgetDisplay?: "full" | "hidden";
+};
+
+type MethodSnapshot = {
+  methodId: number;
+  methodName: string;
+  methodVersion: number;
+  dataFields?: MethodInputField[];
+  formulas?: MethodFormula[];
+  certificateContent?: MethodCertificateContent | null;
+};
+
+type CertifiedValue = {
+  nominal: string;
+  authentication?: string | null;
+  value: number;
+  uncertainty: number;
+  unit: string;
+  maxError?: number | null;
+  drift?: number | null;
+  buoyancy?: number | null;
+  coverageFactor?: number | null;
+  compositionProfile?: boolean;
+  profileKey?: string | null;
+  profileClass?: string | null;
+};
+
+type StandardSnapshot = {
+  id: number;
+  name: string;
+  type?: string | null;
+  certificateNumber: string;
+  calibratedBy?: string | null;
+  calibrationDate: Date | string;
+  nextCalibrationDate?: Date | string | null;
+  uncertainty: number | null;
+  uncertaintyUnit: string | null;
+  coverageFactor: number;
+  certifiedValues?: CertifiedValue[] | null;
+};
+
+type EnvironmentalSnapshot = {
+  temperature: number | null;
+  humidity: number | null;
+  pressure: number | null;
+  recordedAt: string;
+  recordedBy: string;
+  limits: Record<string, unknown> | null;
+  withinLimits: boolean;
+  outOfLimitsJustification: string | null;
+};
+
+type CalibrationLocationSnapshot = {
+  type: "customer_site" | "lab" | "other";
+  addressText: string;
+  notes?: string | null;
+  recordedAt?: string;
+  recordedBy?: string;
+};
+
+type CalibrationPhaseSnapshot = {
+  blocks: Record<
+    string,
+    {
+      mode: "before_and_after" | "before_only" | "after_only" | "not_performed";
+      reason?: string | null;
+    }
+  >;
+  recordedAt?: string;
+  recordedBy?: string;
+};
+
+type AssetSnapshot = {
+  assetId: number;
+  assetTypeId: number;
+  assetTypeName: string;
+  assetTypeSlug: string;
+  baseMeasurementUnit?: MassUnit | null;
+  name: string;
+  tag: string;
+  serialNumber: string;
+  manufacturer: string | null;
+  model: string | null;
+  specifications: Record<string, unknown> | null;
+  capturedAt: string;
+};
+
+type JobData = {
+  jobId: string;
+  certificateName?: string | null;
+  organizationId?: string | null;
+  unitId?: number | null;
+  performedAt: Date | null;
+  approvedAt: Date | null;
+  environmentalSnapshot?: EnvironmentalSnapshot | null;
+  calibrationLocationSnapshot?: CalibrationLocationSnapshot | null;
+  calibrationPhaseSnapshot?: CalibrationPhaseSnapshot | null;
+  lab: {
+    name: string;
+    cnpj?: string | null;
+    accreditationNumber?: string | null;
+    accreditationBody?: string | null;
+    street?: string | null;
+    number?: string | null;
+    complement?: string | null;
+    neighbourhood?: string | null;
+    city?: string | null;
+    state?: string | null;
+    cep?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    website?: string | null;
+    logo?: string | null;
+    technicalManagerName?: string | null;
+    technicalManagerTitle?: string | null;
+  };
+  customer: {
+    name: string;
+    taxId?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address: CustomerAddress | null;
+  };
+  asset: {
+    name: string;
+    serialNumber: string;
+    tag: string;
+    model: string | null;
+    manufacturer: string | null;
+  };
+  methodSnapshot: MethodSnapshot;
+  assetSnapshot?: AssetSnapshot | null;
+  standardsSnapshot: StandardSnapshot[] | null;
+  serviceOrder?: {
+    inmetroRepairSealNumber?: string | null;
+  } | null;
+  data: Record<string, unknown> | null;
+  results: Record<string, unknown> | null;
+  approverName: string | null;
+  certificateTemplateSnapshot?: Record<string, unknown> | null;
+  approverSignatureUrl?: string | null;
+  supersedesId?: number | null;
+  supersededById?: number | null;
+  amendmentNumber?: number | null;
+  amendmentReason?: string | null;
+  originalJobId?: string | null;
+  originalApprovedAt?: Date | null;
+};
+
+const CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE =
+  "Certificate generation requires a published XLSX certificate template assignment";
 
 function createXlsxToPdfConverter(env: Env): XlsxToPdfConverter {
   if (env.GOTENBERG_URL) {
@@ -348,21 +587,29 @@ async function resolveXlsxImageBinding(
 }
 
 function workbookImageFromDataUrl(value: string): WorkbookImage | null {
-  const match = /^data:([^;,]+)(?:;[^,]*)?(;base64)?,([\s\S]+)$/i.exec(
-    value.trim(),
-  );
-  if (!match?.[1] || !match[3]) {
+  const trimmed = value.trim();
+  if (!trimmed.toLowerCase().startsWith("data:")) {
     return null;
   }
 
-  const contentType = match[1].toLowerCase();
+  const commaIndex = trimmed.indexOf(",");
+  if (commaIndex === -1) return null;
+
+  const metadata = trimmed.slice("data:".length, commaIndex).split(";");
+  const contentType = metadata[0]?.toLowerCase();
+  const payload = trimmed.slice(commaIndex + 1);
+  if (!contentType || !payload) return null;
+
   if (!contentType.startsWith("image/")) {
     return null;
   }
 
-  const bytes = match[2]
-    ? new Uint8Array(Buffer.from(match[3], "base64"))
-    : new TextEncoder().encode(decodeURIComponent(match[3]));
+  const isBase64 = metadata
+    .slice(1)
+    .some((item) => item.toLowerCase() === "base64");
+  const bytes = isBase64
+    ? new Uint8Array(Buffer.from(payload, "base64"))
+    : new TextEncoder().encode(decodeURIComponent(payload));
 
   if (contentType === "image/svg+xml") {
     try {
@@ -2286,6 +2533,7 @@ async function processJob(
   jobId: number,
   userId: string,
 ): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
+  void page;
   const totalStart = performance.now();
   console.log(`[JOB ${jobId}] Starting`);
 
@@ -2316,123 +2564,14 @@ async function processJob(
       );
     }
 
-    // 2. Render HTML
-    const renderStart = performance.now();
-    const html = renderToString(React.createElement(CertificateHtml, { job }));
-    console.log(
-      `[JOB ${jobId}] renderToString: ${Math.round(performance.now() - renderStart)}ms`,
-    );
-
-    // 3. Generate PDF (reusing existing page)
-    const pdfStart = performance.now();
-    let pdfBuffer = await generatePdfFromHtml(page, html);
-    console.log(
-      `[JOB ${jobId}] generatePdf: ${Math.round(performance.now() - pdfStart)}ms (${pdfBuffer.length} bytes)`,
-    );
-
-    // 4. Sign PDF with ICP-Brasil certificate (if available)
-    let signatureMetadata: SignatureMetadata | undefined;
-    if (env.SIGNING_MASTER_KEY) {
-      const signStart = performance.now();
-      const organizationId = job.organizationId;
-      const unitId = job.unitId;
-      if (!organizationId) {
-        console.warn(`[JOB ${jobId}] Missing organization_id for signing`);
-      }
-      if (!unitId) {
-        console.warn(`[JOB ${jobId}] Missing unit_id for signing`);
-      }
-      const signingCert =
-        organizationId && unitId
-          ? await withDbClient(env, (client) =>
-              fetchSigningCertificate(client, organizationId, unitId),
-            )
-          : null;
-
-      if (signingCert) {
-        try {
-          // Decrypt password
-          const password = decryptPassword(
-            signingCert.encryptedPassword,
-            signingCert.passwordIv,
-            env.SIGNING_MASTER_KEY,
-          );
-          const p12Buffer = decryptBinary(
-            signingCert.encryptedP12,
-            env.SIGNING_MASTER_KEY,
-          );
-
-          // Sign the PDF
-          const result = await signPdf(pdfBuffer, {
-            p12Buffer,
-            password,
-            reason: "Certificado de Calibracao - CalibraFacil",
-            location: "Brasil",
-            enableLtv: false,
-          });
-
-          pdfBuffer = result.signedPdf;
-          signatureMetadata = result.metadata;
-          console.log(
-            `[JOB ${jobId}] signPdf: ${Math.round(performance.now() - signStart)}ms (signed by ${signingCert.subjectCn})`,
-          );
-        } catch (signError) {
-          console.error(
-            `[JOB ${jobId}] PDF signing failed (continuing without signature):`,
-            signError,
-          );
-          // Continue without signature - don't fail the job
-        }
-      } else {
-        console.log(`[JOB ${jobId}] No signing certificate available`);
-      }
-    }
-
-    // 5. Upload to R2
-    const r2Start = performance.now();
-    const orgId = job.organizationId;
-    if (!orgId) {
-      throw new Error("Missing organization_id for certificate generation");
-    }
-    const year = getYearFromDateish(
-      job.approvedAt ?? job.performedAt,
-      "approvedAt/performedAt",
-    );
-    const key = buildR2Key({
-      orgId,
-      jobId: job.jobId,
-      year,
-      type: "CERTIFICATE",
-    });
-    await env.CERTIFICATES_BUCKET.put(key, pdfBuffer, {
-      httpMetadata: { contentType: "application/pdf" },
-    });
-    console.log(
-      `[JOB ${jobId}] R2 upload: ${Math.round(performance.now() - r2Start)}ms`,
-    );
-
-    // 6. Build public URL
-    const certificateUrl = `https://certificates.calibrafacil.com/${key}`;
-
-    // 7. Update DB with certificate URL and signature metadata
-    const dbUpdateStart = performance.now();
-    await withDbClient(env, (client) =>
-      updateJobWithCertificate(
-        client,
-        jobId,
-        certificateUrl,
-        userId,
-        signatureMetadata,
-      ),
-    );
-    console.log(
-      `[JOB ${jobId}] updateDB: ${Math.round(performance.now() - dbUpdateStart)}ms`,
-    );
-
     const totalMs = Math.round(performance.now() - totalStart);
-    console.log(`[JOB ${jobId}] DONE in ${totalMs}ms: ${certificateUrl}`);
-
-    return { success: true, certificateUrl };
+    console.warn(
+      `[JOB ${jobId}] ${CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE} (${totalMs}ms)`,
+    );
+    return {
+      success: false,
+      error: CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE,
+    };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error(`[JOB ${jobId}] Error:`, errorMsg);
@@ -2895,6 +3034,28 @@ function formatMethodValueForXlsx(
   return formatNumberForXlsx(numeric);
 }
 
+function isEffectiveDegreesOfFreedomKey(key: string): boolean {
+  return key === "veff" || key.startsWith("veff_");
+}
+
+function formatEffectiveDegreesOfFreedomForXlsx(value: unknown): unknown {
+  if (value === null || value === undefined || value === "") return "";
+  if (Array.isArray(value)) {
+    return value.map((item) => formatEffectiveDegreesOfFreedomForXlsx(item));
+  }
+
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (raw.toLowerCase() === "infinito" || raw === "Infinity") {
+    return "infinito";
+  }
+
+  const numeric = asFiniteNumber(value);
+  if (numeric === null) return value;
+  return numeric >= 1_000_000_000
+    ? "infinito"
+    : formatNumberForXlsx(numeric, 0);
+}
+
 function formatAssetMeasurementForXlsx(
   job: JobData,
   value: unknown,
@@ -3000,7 +3161,9 @@ function normalizeMethodResultsDisplayForXlsx(job: JobData) {
       .filter(([key]) => !key.startsWith("__"))
       .map(([key, value]) => [
         key,
-        formatResultValue(value, formulaUnits.get(key)),
+        isEffectiveDegreesOfFreedomKey(key)
+          ? formatEffectiveDegreesOfFreedomForXlsx(value)
+          : formatResultValue(value, formulaUnits.get(key)),
       ]),
   );
 }
@@ -3506,6 +3669,23 @@ export async function processBackgroundJob(
 
   if (await processXlsxCertificateMessageIfSelected(env, message)) {
     return;
+  }
+
+  if (isCalibrationCertificateMessage(message)) {
+    await withDbClient(env, (client) =>
+      setJobError(
+        client,
+        message.jobId,
+        CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE,
+        message.userId,
+      ),
+    ).catch((dbError) => {
+      console.error(
+        `[JOB ${message.jobId}] Failed to record missing XLSX template error:`,
+        dbError,
+      );
+    });
+    throw new Error(CERTIFICATE_XLSX_TEMPLATE_REQUIRED_MESSAGE);
   }
 
   const browserStart = performance.now();

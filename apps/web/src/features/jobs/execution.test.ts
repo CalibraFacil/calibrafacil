@@ -644,8 +644,8 @@ describe('job execution feature model', () => {
       {
         standardId: 1,
         standardIds: [1, 2],
-        standardName: 'Perfil agregado',
-        optionLabel: 'F1 - perfil agregado',
+        standardName: 'Perfil de composição',
+        optionLabel: 'F1 - perfil de composição',
       },
     ])
   })

@@ -24,6 +24,7 @@ export interface MassCompositionItem {
   certificateNumber: string
   certifiedValueIndex: number
   nominal: string
+  authentication?: string | null
   quantity: number
   value: number
   uncertainty: number

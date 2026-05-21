@@ -1,14 +1,42 @@
 import type {
   StandardAuditLogData,
+  StandardCertificateDocumentDownloadResponse,
+  StandardCertificateDocumentUploadResponse,
   StandardData,
   StandardsApi,
   StandardsListData,
   StandardsListInput,
   StandardWriteInput,
 } from "../types";
+import type { CreateCloudApiClientOptions } from "../transport/cloud";
+import { createCloudHeaders } from "../transport/cloud";
+import { appendNamedBlob } from "../transport/form-data";
 import { readJsonResponse } from "../transport/response";
 
-export function createStandardsApi(rawCloudClient: any): StandardsApi {
+export function createStandardsApi(
+  rawCloudClient: any,
+  options: CreateCloudApiClientOptions,
+): StandardsApi {
+  const fetchJson = async <TResponse>(
+    path: string,
+    init: RequestInit,
+    fallback: string,
+  ) => {
+    const headers = createCloudHeaders(options.activeUnitProvider);
+    if (init.body && !(init.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    return readJsonResponse<TResponse>(
+      await (options.fetch ?? fetch)(new URL(path, options.baseUrl), {
+        ...init,
+        credentials: "include",
+        headers,
+      }),
+      fallback,
+    );
+  };
+
   return {
     async list(input: StandardsListInput = {}) {
       return readJsonResponse<StandardsListData>(
@@ -69,6 +97,23 @@ export function createStandardsApi(rawCloudClient: any): StandardsApi {
           json: input,
         }),
         "Erro ao renovar certificado",
+      );
+    },
+    async uploadCertificateDocument(id, file, input) {
+      const formData = new FormData();
+      appendNamedBlob(formData, "certificate", file, input?.fileName);
+
+      return fetchJson<StandardCertificateDocumentUploadResponse>(
+        `/api/standards/${encodeURIComponent(String(id))}/certificate-document`,
+        { method: "POST", body: formData },
+        "Erro ao enviar certificado do padrão",
+      );
+    },
+    async getCertificateDocumentDownloadUrl(id) {
+      return fetchJson<StandardCertificateDocumentDownloadResponse>(
+        `/api/standards/${encodeURIComponent(String(id))}/certificate-document/download`,
+        { method: "GET" },
+        "Falha ao gerar link do certificado do padrão",
       );
     },
   };

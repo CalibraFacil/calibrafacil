@@ -52,9 +52,17 @@ function formatNumber(value: number | null, unit: string): string {
 }
 
 function formatCompositionItemLabel(item: MassCompositionItem): string {
-  return item.compositionProfile
-    ? (item.profileKey ?? item.nominal)
-    : `${item.nominal} ${item.standardName}`
+  if (!item.compositionProfile) {
+    return `${item.nominal} ${item.standardName}`
+  }
+
+  const profile = item.profileKey ?? item.nominal
+  const profileClass =
+    item.profileClass && !profile.includes(item.profileClass)
+      ? ` (${item.profileClass})`
+      : ''
+
+  return `Perfil ${profile}${profileClass}`
 }
 
 function formatCompositionSummary(
@@ -220,7 +228,7 @@ export function MassCompositionCell({
             {visibleOptions.length === 0 ? (
               <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
                 {optionSource === 'composition_profiles'
-                  ? 'Nenhum perfil agregado de composição disponível.'
+                  ? 'Nenhum perfil de composição disponível.'
                   : 'Nenhum padrão ativo com valores certificados disponível.'}
               </div>
             ) : (
@@ -230,7 +238,7 @@ export function MassCompositionCell({
                     <label className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
                       <span>
                         {optionSource === 'composition_profiles'
-                          ? 'Perfil agregado'
+                          ? 'Perfil de composição'
                           : 'Valor certificado'}
                       </span>
                       <span className="font-normal">{optionCountLabel}</span>
@@ -316,7 +324,7 @@ export function MassCompositionCell({
                                   </div>
                                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
                                     {option?.compositionProfile
-                                      ? 'Perfil agregado'
+                                      ? 'Perfil de composição'
                                       : option?.standardName}
                                     {option?.certificateNumber
                                       ? ` · Cert. ${option.certificateNumber}`
@@ -404,9 +412,7 @@ export function MassCompositionCell({
                             Padrão
                           </p>
                           <p className="break-words text-sm font-medium">
-                            {item.compositionProfile
-                              ? (item.profileKey ?? item.nominal)
-                              : `${item.nominal} - ${item.standardName}`}
+                            {formatCompositionItemLabel(item)}
                           </p>
                         </div>
                         <div className="space-y-1">

@@ -19,20 +19,15 @@
   },
   "dependencies": {
     "@calibra-facil/contracts": "workspace:^",
-    "@calibra-facil/documents": "workspace:^",
     "@calibra-facil/local-db": "workspace:^",
     "@calibra-facil/math-engine": "git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4",
     "@calibra-facil/method-definition": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@hono/node-server": "^1.19.10",
-    "hono": "^4.12.4",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "hono": "^4.12.4"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.7",

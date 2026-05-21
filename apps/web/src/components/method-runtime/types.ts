@@ -141,6 +141,19 @@ export type MethodVariableBinding =
       standardId?: number
       valueKey: string
     }
+  | {
+      key: string
+      label?: string
+      source: 'standard_channel'
+      standardId?: number
+      channelKey: string
+      property:
+        | 'value'
+        | 'correction'
+        | 'uncertainty'
+        | 'coverageFactor'
+        | 'drift'
+    }
 
 export interface MethodTypeBComponent {
   name: string

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { apiRouteParam, jobRouteId } from './route-identifiers'
+import { apiRouteParam, jobRouteId, standardRouteId } from './route-identifiers'
 
 describe('apiRouteParam', () => {
   it('preserves slashes through Hono client path interpolation', () => {
@@ -28,5 +28,13 @@ describe('jobRouteId', () => {
   it('normalizes already encoded job identifiers before building dashboard routes', () => {
     expect(jobRouteId({ jobId: 'R-0001%2F2026' })).toBe('R-0001%2F2026')
     expect(jobRouteId({ jobId: 'R-0001%252F2026' })).toBe('R-0001%2F2026')
+  })
+})
+
+describe('standardRouteId', () => {
+  it('uses a readable slug plus the stable id to avoid name collisions', () => {
+    expect(standardRouteId({ id: 42, name: 'JP06 - 10kg' })).toBe(
+      'jp06-10kg-42',
+    )
   })
 })

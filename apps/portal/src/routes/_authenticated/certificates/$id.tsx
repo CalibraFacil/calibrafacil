@@ -47,6 +47,24 @@ type Certificate = {
   serviceName: string;
   labName: string;
   labLogo: string | null;
+  referenceStandards: Array<{
+    id: number;
+    name: string;
+    type?: string | null;
+    certificateNumber: string;
+    calibratedBy?: string | null;
+    calibrationDate: string | Date;
+    nextCalibrationDate: string | Date | null;
+    certificateDocument: {
+      documentId: number;
+      fileName: string;
+      fileSize: number;
+      uploadedAt: string | Date;
+      certificateNumber: string;
+      calibrationDate: string | Date;
+      nextCalibrationDate: string | Date;
+    } | null;
+  }>;
 };
 
 function formatDate(date: string | null | undefined): string {
@@ -62,6 +80,9 @@ function formatDate(date: string | null | undefined): string {
 function CertificateDetailPage() {
   const { id } = Route.useParams();
   const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadingStandardId, setDownloadingStandardId] = useState<
+    number | null
+  >(null);
   const [copied, setCopied] = useState(false);
 
   const {
@@ -81,6 +102,8 @@ function CertificateDetailPage() {
       return response.json();
     },
   });
+
+  const referenceStandards = certificate?.referenceStandards ?? [];
 
   const handleDownload = async () => {
     if (isDownloading || !certificate?.certificateUrl) return;
@@ -118,6 +141,35 @@ function CertificateDetailPage() {
     await navigator.clipboard.writeText(verifyUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleStandardCertificateDownload = async (standardId: number) => {
+    if (downloadingStandardId) return;
+
+    setDownloadingStandardId(standardId);
+    try {
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/portal/certificates/${id}/reference-standards/${standardId}/certificate/download`,
+        { credentials: "include" },
+      );
+
+      if (!response.ok) throw new Error("Falha ao baixar");
+
+      const { url, filename } = await response.json();
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Standard certificate download error:", error);
+    } finally {
+      setDownloadingStandardId(null);
+    }
   };
 
   if (isLoading) {
@@ -275,6 +327,65 @@ function CertificateDetailPage() {
               </dl>
             </section>
           </div>
+
+          <Separator />
+
+          <section className="space-y-4">
+            <SectionHeading
+              icon={File01Icon}
+              title="Padrões de referência"
+              description="Certificados originais usados na rastreabilidade"
+            />
+            {referenceStandards.length > 0 ? (
+              <div className="grid gap-3">
+                {referenceStandards.map((standard) => (
+                  <div
+                    key={standard.id}
+                    className="flex flex-col gap-3 rounded-md bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {standard.name}
+                      </p>
+                      <p className="mt-1 truncate text-sm text-muted-foreground">
+                        Certificado {standard.certificateNumber}
+                        {standard.calibratedBy
+                          ? ` · ${standard.calibratedBy}`
+                          : ""}
+                      </p>
+                    </div>
+                    {standard.certificateDocument ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          handleStandardCertificateDownload(standard.id)
+                        }
+                        disabled={downloadingStandardId === standard.id}
+                        className="gap-2"
+                      >
+                        {downloadingStandardId === standard.id ? (
+                          <Spinner className="size-4" />
+                        ) : (
+                          <HugeiconsIcon
+                            icon={Download04Icon}
+                            className="size-4"
+                          />
+                        )}
+                        Baixar PDF
+                      </Button>
+                    ) : (
+                      <Badge variant="outline">PDF indisponível</Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-md bg-muted/40 p-3 text-sm text-muted-foreground">
+                Nenhum padrão de referência registrado neste certificado.
+              </div>
+            )}
+          </section>
 
           <Separator />
 

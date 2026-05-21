@@ -20,7 +20,7 @@ This inventory records the production Method Builder surface introduced in this 
 | Method runtime helpers | `apps/web/src/components/method-runtime/**`                                             | Shared execution/display helpers for table inputs, mass composition, weighing ranges, and formula context evaluation used outside the builder UI.                       |
 | Job execution UI       | `apps/web/src/routes/dashboard/jobs/$id/execute.tsx`                                    | Captures technician inputs, environmental data, standards, table data, and local result display.                                                                        |
 | Job backend            | `apps/api/src/lib/jobs.ts`, `apps/api/src/routes/jobs.ts`                               | Creates method snapshots from published methods, validates required asset specs, and stores execution data/results/snapshots.                                           |
-| Certificate rendering  | `packages/documents/src/CertificateHtml.tsx`                                            | Reads method snapshots, results, formula reporting metadata, and certificate content to render certificate sections.                                                    |
+| Certificate rendering  | `packages/certificate-xlsx-template` and `apps/worker/src/index.ts`                     | Fills assigned XLSX workbook templates from job snapshots/results and converts the filled workbook to the issued PDF.                                                   |
 
 ## Current Method Model
 

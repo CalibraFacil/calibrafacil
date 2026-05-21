@@ -218,6 +218,8 @@ export const calibraApiPolicyRegistry = {
     update: "cloud-only",
     delete: "cloud-only",
     renew: "cloud-only",
+    uploadCertificateDocument: "cloud-only",
+    getCertificateDocumentDownloadUrl: "cloud-only",
   },
   jobs: {
     list: "local-first-read-through-sync",

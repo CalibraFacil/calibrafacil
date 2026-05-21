@@ -150,7 +150,9 @@ function resolveLocalStandardRow(
   database: LocalDatabase,
   identifier: string,
 ): LocalStandardRow | null {
-  const numericIdentifier = Number(identifier);
+  const numericIdentifier =
+    parseNumericIdentifier(identifier) ??
+    parseTrailingNumericIdentifier(identifier);
   const params: Record<string, string | number> = { identifier };
   const directConditions = [
     "id = @identifier",
@@ -159,7 +161,7 @@ function resolveLocalStandardRow(
     "certificate_number = @identifier",
   ];
 
-  if (Number.isInteger(numericIdentifier)) {
+  if (numericIdentifier !== null) {
     directConditions.push("remote_id = @numericIdentifier");
     params.numericIdentifier = numericIdentifier;
   }
@@ -206,7 +208,7 @@ WHERE sync_state != 'deleted'
     )
     .all();
 
-  if (Number.isInteger(numericIdentifier)) {
+  if (numericIdentifier !== null) {
     const stableMatch = rows.find(
       (row) => stableLocalNumericId(row.id) === numericIdentifier,
     );
@@ -225,6 +227,19 @@ WHERE sync_state != 'deleted'
       );
     }) ?? null
   );
+}
+
+function parseNumericIdentifier(identifier: string): number | null {
+  if (!/^\d+$/.test(identifier)) return null;
+  const value = Number(identifier);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function parseTrailingNumericIdentifier(identifier: string): number | null {
+  const match = /-(\d+)$/.exec(identifier);
+  if (!match?.[1]) return null;
+  const value = Number(match[1]);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
 function toLocalStandard(row: LocalStandardRow): LocalStandard {

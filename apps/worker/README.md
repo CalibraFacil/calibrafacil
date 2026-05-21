@@ -1,10 +1,10 @@
 # @calibra-facil/worker
 
-Background job processor for PDF generation and scheduled compliance checks.
+Background job processor for XLSX certificate rendering, PDF generation, and scheduled compliance checks.
 
 ## Overview
 
-The worker handles asynchronous tasks that are too heavy for the main API, including PDF certificate generation using Puppeteer and daily compliance notification checks.
+The worker handles asynchronous tasks that are too heavy for the main API, including XLSX workbook certificate rendering, PDF generation using LibreOffice/Gotenberg/Puppeteer where appropriate, and daily compliance notification checks.
 
 ## Features
 
@@ -23,11 +23,12 @@ interface QueueMessage {
 **Certificate Generation:**
 
 1. Fetches calibration job data from database
-2. Renders `CertificateHtml` component to HTML string
-3. Generates PDF using Puppeteer/Chromium
-4. Uploads to R2 bucket using scoped keys (`org/{orgId}/{YYYY}/jobs/{jobId}/cert.pdf`)
-5. Updates job status to APPROVED with `certificate_url`
-6. Records audit log entry
+2. Resolves the published XLSX certificate template assignment
+3. Fills the workbook with job snapshots/results
+4. Converts the filled workbook to PDF
+5. Uploads the filled XLSX/PDF to R2 using scoped issued-certificate keys
+6. Updates job status to APPROVED with `certificate_url`
+7. Records audit log entry
 
 **Label Generation:**
 
