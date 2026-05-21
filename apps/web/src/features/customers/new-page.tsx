@@ -300,9 +300,11 @@ export function NewClientPage() {
                     name="postalCode"
                     maskOptions={cepMask}
                     value={formData.address.cep}
-                    onInput={(e) =>
-                      updateAddressField('cep', e.currentTarget.value)
-                    }
+                    onInput={(e) => {
+                      const nextCep = e.currentTarget.value
+                      updateAddressField('cep', nextCep)
+                      cepLookup.lookupCep(nextCep)
+                    }}
                     placeholder="Ex.: 00000-000…"
                     disabled={createMutation.isPending}
                     autoComplete="postal-code"

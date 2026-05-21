@@ -361,9 +361,11 @@ function ClientInfoForm({
                         inputMode="numeric"
                         maskOptions={cepMask}
                         value={address.cep || ''}
-                        onInput={(e) =>
-                          updateAddress('cep', e.currentTarget.value)
-                        }
+                        onInput={(e) => {
+                          const nextCep = e.currentTarget.value
+                          updateAddress('cep', nextCep)
+                          cepLookup.lookupCep(nextCep)
+                        }}
                         disabled={updateMutation.isPending}
                         placeholder="Ex.: 00000-000…"
                         aria-describedby={

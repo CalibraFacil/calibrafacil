@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
@@ -512,10 +512,6 @@ export function TableInputRenderer({
   const isPanelVisibleColumn = (column: TableColumn) =>
     !panelHiddenColumnKeys.has(column.key)
   const hasCertifiedValues = certifiedValueOptions.length > 0
-  useEffect(() => {
-    if (disabled || rowsAreEqual(value || [], rows)) return
-    onChange(rows)
-  }, [disabled, onChange, rows, value])
 
   const addRow = () => {
     const newRow: Record<string, unknown> = {}

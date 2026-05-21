@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
 import { CustomerSuccessAccountTimeline } from '@/components/customer-success-account-timeline'
@@ -79,6 +79,8 @@ export function AccountWorkspace(props: {
   const respondMutation = useRespondRequest(props.organizationId)
   const updateStatusMutation = useUpdateRequestStatus(props.organizationId)
   const escalateMutation = useEscalateRequest(props.organizationId)
+  const [profileDraftSource, setProfileDraftSource] =
+    useState<typeof profileQuery.data>(undefined)
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(
     DEFAULT_PROFILE_DRAFT,
   )
@@ -89,11 +91,10 @@ export function AccountWorkspace(props: {
     useState<BlockerScope>('ONBOARDING')
   const [blockerReasonDraft, setBlockerReasonDraft] = useState('')
 
-  useEffect(() => {
-    if (profileQuery.data) {
-      setProfileDraft(createProfileDraft(profileQuery.data))
-    }
-  }, [profileQuery.data])
+  if (profileQuery.data && profileQuery.data !== profileDraftSource) {
+    setProfileDraftSource(profileQuery.data)
+    setProfileDraft(createProfileDraft(profileQuery.data))
+  }
 
   if (profileQuery.isLoading) {
     return (

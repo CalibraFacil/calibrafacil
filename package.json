@@ -13,6 +13,7 @@
     "test:desktop-release-seed-planner": "node scripts/plan-desktop-release-seed.test.mjs",
     "test:desktop-release-local-gates": "pnpm test:desktop-cloud-release-smoke && pnpm test:desktop-release-data-probe && pnpm test:desktop-release-seed-planner && pnpm test:desktop-release-gate && pnpm test:offline-release-signoff",
     "check:blocked-deps": "node scripts/check-blocked-deps.mjs",
+    "check:no-use-effect": "node scripts/check-no-use-effect.mjs",
     "dev": "turbo run dev --filter=!@calibra-facil/email --filter=!@calibra-facil/worker",
     "dev:all": "turbo run dev",
     "dev:desktop": "turbo run dev --filter=@calibra-facil/web --filter=@calibra-facil/desktop",
@@ -36,7 +37,7 @@
     "deploy:web": "pnpm --dir apps/web deploy",
     "deploy:portal": "pnpm --dir apps/portal deploy",
     "deploy:docs": "pnpm --dir apps/docs deploy",
-    "lint": "turbo run lint",
+    "lint": "pnpm check:no-use-effect && turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"
   },

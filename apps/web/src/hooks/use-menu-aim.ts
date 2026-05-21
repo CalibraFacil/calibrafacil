@@ -1,5 +1,7 @@
 import * as React from 'react'
 
+import { useMountEffect } from './use-mount-effect'
+
 type Point = {
   x: number
   y: number
@@ -77,8 +79,13 @@ export function useMenuAim<
   const flyoutRef = React.useRef<TFlyout | null>(null)
   const closeTimerRef = React.useRef<number | null>(null)
   const pointerHistoryRef = React.useRef<Array<Point>>([])
+  const openRef = React.useRef(open)
   const onCloseRef = React.useRef(onClose)
+  const handlePointerMoveRef = React.useRef<(event: PointerEvent) => void>(
+    () => undefined,
+  )
 
+  openRef.current = open
   onCloseRef.current = onClose
 
   const clearCloseTimer = React.useCallback(() => {
@@ -212,21 +219,25 @@ export function useMenuAim<
     ],
   )
 
-  React.useEffect(() => {
-    if (!open) {
-      clearCloseTimer()
-      return
+  handlePointerMoveRef.current = handlePointerMove
+
+  useMountEffect(() => {
+    const handleDocumentPointerMove = (event: PointerEvent) => {
+      if (!openRef.current) {
+        clearCloseTimer()
+        return
+      }
+
+      handlePointerMoveRef.current(event)
     }
 
-    document.addEventListener('pointermove', handlePointerMove)
+    document.addEventListener('pointermove', handleDocumentPointerMove)
 
     return () => {
-      document.removeEventListener('pointermove', handlePointerMove)
+      document.removeEventListener('pointermove', handleDocumentPointerMove)
       clearCloseTimer()
     }
-  }, [clearCloseTimer, handlePointerMove, open])
-
-  React.useEffect(() => clearCloseTimer, [clearCloseTimer])
+  })
 
   const getPointerHandlers = React.useCallback(
     () => ({

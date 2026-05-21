@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 
 import {
@@ -66,15 +66,18 @@ export function AccountBoard(props: {
       })),
     [props.organizations],
   )
-  const [boardData, setBoardData] = useState<AccountBoardItem[]>([])
+  const [boardSourceSnapshot, setBoardSourceSnapshot] =
+    useState<AccountBoardItem[]>(boardSource)
+  const [boardData, setBoardData] = useState<AccountBoardItem[]>(boardSource)
   const [dragOrigin, setDragOrigin] = useState<{
     itemId: string
     column: HealthStatus
   } | null>(null)
 
-  useEffect(() => {
+  if (boardSource !== boardSourceSnapshot) {
+    setBoardSourceSnapshot(boardSource)
     setBoardData(boardSource)
-  }, [boardSource])
+  }
 
   const handleDragEnd = (event: KanbanDragEndEvent) => {
     const activeItem = boardData.find(
@@ -286,15 +289,18 @@ export function TicketBoard(props: {
       })),
     [props.requests],
   )
-  const [boardData, setBoardData] = useState<SupportBoardItem[]>([])
+  const [boardSourceSnapshot, setBoardSourceSnapshot] =
+    useState<SupportBoardItem[]>(boardSource)
+  const [boardData, setBoardData] = useState<SupportBoardItem[]>(boardSource)
   const [dragOrigin, setDragOrigin] = useState<{
     itemId: string
     column: SupportRequestStatus
   } | null>(null)
 
-  useEffect(() => {
+  if (boardSource !== boardSourceSnapshot) {
+    setBoardSourceSnapshot(boardSource)
     setBoardData(boardSource)
-  }, [boardSource])
+  }
 
   const handleDragEnd = (event: KanbanDragEndEvent) => {
     const activeItem = boardData.find(
