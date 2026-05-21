@@ -27,6 +27,7 @@ import {
   DashboardOnboardingState,
   DashboardRestrictedState,
 } from './dashboard-access-states'
+import { getDashboardBootstrapState } from './dashboard-bootstrap-model'
 
 export function DashboardLayout() {
   const location = useLocation()
@@ -36,46 +37,35 @@ export function DashboardLayout() {
   const { data: activeOrg, isPending: activeOrgLoading } =
     useActiveOrganization()
 
-  const labOrganizations =
-    organizations?.filter((org) => org.type !== 'CLIENT') ?? []
   const storedOrgId = getStoredDashboardOrganizationId()
-  const storedLabOrg = storedOrgId
-    ? (labOrganizations.find((org) => org.id === storedOrgId) ?? null)
-    : null
-  const activeLabOrg =
-    activeOrg?.type !== 'CLIENT'
-      ? (labOrganizations.find((org) => org.id === activeOrg?.id) ?? null)
-      : null
-
   const pathname = location.pathname
-  const isDashboardHome =
-    pathname === '/dashboard' || pathname === '/dashboard/'
-  const hasLabAccess = labOrganizations.length > 0
-  const hasAnyOrganizations = (organizations?.length ?? 0) > 0
-  const hasLoadedOrganizations = !organizationsLoading
-  const preferredDashboardOrg =
-    storedLabOrg ?? activeLabOrg ?? labOrganizations[0] ?? null
-  const needsDashboardOrgSwitch =
-    hasLoadedOrganizations &&
-    !activeOrgLoading &&
-    hasLabAccess &&
-    Boolean(preferredDashboardOrg) &&
-    activeOrg?.id !== preferredDashboardOrg?.id
-  const isBootstrappingContext =
-    !hasLoadedOrganizations || activeOrgLoading || needsDashboardOrgSwitch
-  const isContextSwitching = isBootstrappingContext
-  const shouldBlockChildRoutes = !isDashboardHome && isContextSwitching
+  const bootstrapState = getDashboardBootstrapState({
+    activeOrganization: activeOrg,
+    activeOrganizationLoading: activeOrgLoading,
+    organizations,
+    organizationsLoading,
+    pathname,
+    storedOrganizationId: storedOrgId,
+  })
+  const {
+    effectiveActiveOrganizationId,
+    isContextSwitching,
+    needsDashboardOrgSwitch,
+    preferredDashboardOrganization,
+    shouldBlockChildRoutes,
+    shouldShowOnboarding,
+    shouldShowRestricted,
+  } = bootstrapState
   const shouldBlockCloudOnlyRoute =
     !shouldBlockChildRoutes &&
     cloudOnlyUnavailable &&
     isCloudOnlyDashboardPath(pathname)
-  const effectiveActiveOrganizationId = activeLabOrg?.id ?? null
 
-  if (!isBootstrappingContext && !hasLabAccess && !hasAnyOrganizations) {
+  if (shouldShowOnboarding) {
     return <DashboardOnboardingState />
   }
 
-  if (!isBootstrappingContext && !hasLabAccess) {
+  if (shouldShowRestricted) {
     return <DashboardRestrictedState />
   }
 
@@ -87,16 +77,16 @@ export function DashboardLayout() {
       }}
     >
       <DashboardLayoutMountMarker />
-      {preferredDashboardOrg ? (
+      {preferredDashboardOrganization ? (
         <PersistDashboardOrgSelection
-          key={`persist-${preferredDashboardOrg.id}`}
-          organizationId={preferredDashboardOrg.id}
+          key={`persist-${preferredDashboardOrganization.id}`}
+          organizationId={preferredDashboardOrganization.id}
         />
       ) : null}
-      {needsDashboardOrgSwitch && preferredDashboardOrg ? (
+      {needsDashboardOrgSwitch && preferredDashboardOrganization ? (
         <DashboardOrgSwitcher
-          key={`switch-${preferredDashboardOrg.id}`}
-          organizationId={preferredDashboardOrg.id}
+          key={`switch-${preferredDashboardOrganization.id}`}
+          organizationId={preferredDashboardOrganization.id}
         />
       ) : null}
       {!isContextSwitching ? <DashboardReadyMarker /> : null}

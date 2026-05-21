@@ -1,15 +1,22 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { lazy, Suspense } from 'react'
 import { toast } from 'sonner'
 
 import { calibraApi } from '@/utils/api'
 import { methodRouteId } from '@/lib/route-identifiers'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
-  MethodBuilder,
   draftToMethodSavePayload,
   methodDataToDraft,
-  type MethodDraft,
-} from '@/components/method-builder'
+} from '@/components/method-builder/adapters'
+import type { MethodDraft } from '@/components/method-builder/types'
+
+const MethodBuilder = lazy(() =>
+  import('@/components/method-builder/method-builder').then((module) => ({
+    default: module.MethodBuilder,
+  })),
+)
 
 export function NewMethodPage() {
   const navigate = useNavigate()
@@ -40,13 +47,27 @@ export function NewMethodPage() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 min-h-0">
-        <MethodBuilder
-          initialDraft={methodDataToDraft()}
-          onSave={(data) => createMutation.mutateAsync(data)}
-          onCancel={() => navigate({ to: '/dashboard/methods' })}
-          isSaving={createMutation.isPending}
-          isNew
-        />
+        <Suspense fallback={<MethodBuilderSkeleton />}>
+          <MethodBuilder
+            initialDraft={methodDataToDraft()}
+            onSave={(data) => createMutation.mutateAsync(data)}
+            onCancel={() => navigate({ to: '/dashboard/methods' })}
+            isSaving={createMutation.isPending}
+            isNew
+          />
+        </Suspense>
+      </div>
+    </div>
+  )
+}
+
+function MethodBuilderSkeleton() {
+  return (
+    <div className="space-y-4 p-6">
+      <Skeleton className="h-8 w-48" />
+      <div className="flex gap-4">
+        <Skeleton className="h-150 w-1/2" />
+        <Skeleton className="h-150 w-1/2" />
       </div>
     </div>
   )

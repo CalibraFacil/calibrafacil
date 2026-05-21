@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { lazy, Suspense } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
@@ -9,11 +10,16 @@ import { useMethodEditData } from '@/features/methods/queries'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  MethodBuilder,
   draftToMethodSavePayload,
   methodDataToDraft,
-  type MethodDraft,
-} from '@/components/method-builder'
+} from '@/components/method-builder/adapters'
+import type { MethodDraft } from '@/components/method-builder/types'
+
+const MethodBuilder = lazy(() =>
+  import('@/components/method-builder/method-builder').then((module) => ({
+    default: module.MethodBuilder,
+  })),
+)
 
 export function EditMethodPage({ id }: { id: string }) {
   const navigate = useNavigate()
@@ -87,16 +93,30 @@ export function EditMethodPage({ id }: { id: string }) {
       </div>
 
       <div className="flex-1 min-h-0">
-        <MethodBuilder
-          initialDraft={methodDataToDraft(method)}
-          onSave={(data) => updateMutation.mutateAsync(data)}
-          onCancel={() => navigate({ to: '/dashboard/methods' })}
-          onPublished={() => {
-            queryClient.invalidateQueries({ queryKey: ['methods'] })
-            navigate({ to: '/dashboard/methods' })
-          }}
-          isSaving={updateMutation.isPending}
-        />
+        <Suspense fallback={<MethodBuilderSkeleton />}>
+          <MethodBuilder
+            initialDraft={methodDataToDraft(method)}
+            onSave={(data) => updateMutation.mutateAsync(data)}
+            onCancel={() => navigate({ to: '/dashboard/methods' })}
+            onPublished={() => {
+              queryClient.invalidateQueries({ queryKey: ['methods'] })
+              navigate({ to: '/dashboard/methods' })
+            }}
+            isSaving={updateMutation.isPending}
+          />
+        </Suspense>
+      </div>
+    </div>
+  )
+}
+
+function MethodBuilderSkeleton() {
+  return (
+    <div className="space-y-4 p-6">
+      <Skeleton className="h-8 w-48" />
+      <div className="flex gap-4">
+        <Skeleton className="h-150 w-1/2" />
+        <Skeleton className="h-150 w-1/2" />
       </div>
     </div>
   )
