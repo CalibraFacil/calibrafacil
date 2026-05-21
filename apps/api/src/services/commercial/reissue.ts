@@ -16,7 +16,20 @@ export function resolveReissueItems(
   const originalItems = Array.isArray(termsSnapshot.items)
     ? termsSnapshot.items.flatMap((item) => {
         const parsed = CommercialOfferItemSchema.safeParse(item);
-        return parsed.success ? [parsed.data] : [];
+        if (!parsed.success) {
+          return [];
+        }
+
+        const totalAmount =
+          item && typeof item === "object" && !Array.isArray(item)
+            ? Object.fromEntries(Object.entries(item)).totalAmount
+            : null;
+
+        return [
+          typeof totalAmount === "number"
+            ? { ...parsed.data, totalAmount }
+            : parsed.data,
+        ];
       })
     : [];
 
