@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { MaskitoOptions } from '@maskito/core'
 
 import { brazilPhoneMask, cepMask, cnpjMask, cpfCnpjMask } from './input-masks'
 
@@ -14,28 +15,16 @@ describe('input masks', () => {
   })
 
   it('switches CPF/CNPJ by digit count', () => {
-    expect(
-      Array.isArray(cpfCnpjMask.mask)
-        ? cpfCnpjMask.mask
-        : cpfCnpjMask.mask({ value: '12345678901', selection: [0, 0] }),
-    ).toHaveLength(14)
-    expect(
-      Array.isArray(cpfCnpjMask.mask)
-        ? cpfCnpjMask.mask
-        : cpfCnpjMask.mask({ value: '12345678901234', selection: [0, 0] }),
-    ).toHaveLength(18)
+    expect(resolveMask(cpfCnpjMask.mask, '12345678901')).toHaveLength(14)
+    expect(resolveMask(cpfCnpjMask.mask, '12345678901234')).toHaveLength(18)
   })
 
   it('switches phone mask by digit count', () => {
-    expect(
-      Array.isArray(brazilPhoneMask.mask)
-        ? brazilPhoneMask.mask
-        : brazilPhoneMask.mask({ value: '1133334444', selection: [0, 0] }),
-    ).toHaveLength(15)
-    expect(
-      Array.isArray(brazilPhoneMask.mask)
-        ? brazilPhoneMask.mask
-        : brazilPhoneMask.mask({ value: '11999994444', selection: [0, 0] }),
-    ).toHaveLength(15)
+    expect(resolveMask(brazilPhoneMask.mask, '1133334444')).toHaveLength(15)
+    expect(resolveMask(brazilPhoneMask.mask, '11999994444')).toHaveLength(15)
   })
 })
+
+function resolveMask(mask: MaskitoOptions['mask'], value: string) {
+  return typeof mask === 'function' ? mask({ value, selection: [0, 0] }) : mask
+}

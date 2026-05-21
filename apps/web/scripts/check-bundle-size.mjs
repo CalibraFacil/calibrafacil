@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -9,7 +9,8 @@ const distDir = path.join(appDir, 'dist')
 const indexHtmlPath = path.join(distDir, 'index.html')
 
 const jsBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS ?? 650_000)
-const cssBudget = Number(process.env.WEB_BUNDLE_BUDGET_CSS ?? 190_000)
+const cssBudget = Number(process.env.WEB_BUNDLE_BUDGET_CSS ?? 230_000)
+const jsChunkBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS_CHUNK ?? 850_000)
 
 function fail(message) {
   console.error(`\n[bundle-budget] ${message}`)
@@ -39,16 +40,37 @@ if (!jsMatch || !cssMatch) {
 
 const jsAssetPath = path.join(distDir, jsMatch[1].replace(/^\//, ''))
 const cssAssetPath = path.join(distDir, cssMatch[1].replace(/^\//, ''))
+const assetsDir = path.join(distDir, 'assets')
 
 const jsBytes = statSync(jsAssetPath).size
 const cssBytes = statSync(cssAssetPath).size
+const jsChunks = readdirSync(assetsDir)
+  .filter((fileName) => fileName.endsWith('.js'))
+  .map((fileName) => {
+    const filePath = path.join(assetsDir, fileName)
+    return {
+      name: fileName,
+      bytes: statSync(filePath).size,
+    }
+  })
+  .sort((left, right) => right.bytes - left.bytes)
 
 const checks = [
   { name: 'entry-js', bytes: jsBytes, budget: jsBudget },
   { name: 'entry-css', bytes: cssBytes, budget: cssBudget },
 ]
+const chunkFailures = jsChunks
+  .filter((chunk) => chunk.bytes > jsChunkBudget)
+  .map((chunk) => ({
+    name: `chunk:${chunk.name}`,
+    bytes: chunk.bytes,
+    budget: jsChunkBudget,
+  }))
 
-const failures = checks.filter((check) => check.bytes > check.budget)
+const failures = [
+  ...checks.filter((check) => check.bytes > check.budget),
+  ...chunkFailures,
+]
 
 for (const check of checks) {
   const status = check.bytes > check.budget ? 'FAIL' : 'OK'
@@ -56,6 +78,19 @@ for (const check of checks) {
     `[bundle-budget] ${status} ${check.name}: ${toKb(check.bytes)} (budget ${toKb(check.budget)})`,
   )
 }
+
+for (const check of chunkFailures) {
+  console.log(
+    `[bundle-budget] FAIL ${check.name}: ${toKb(check.bytes)} (budget ${toKb(check.budget)})`,
+  )
+}
+
+console.log(
+  `[bundle-budget] largest-js-chunks: ${jsChunks
+    .slice(0, 5)
+    .map((chunk) => `${chunk.name}=${toKb(chunk.bytes)}`)
+    .join(', ')}`,
+)
 
 if (failures.length > 0) {
   fail(

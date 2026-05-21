@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 
-import { TicketBoard } from './-customer-success/boards'
+import { TicketBoard } from '@/features/backoffice/customer-success/boards'
 import {
   useSupportQueue,
   useUpdateRequestStatus,
-} from './-customer-success/hooks'
-import type { SupportQueueItem, TicketFilter } from './-customer-success/model'
+} from '@/features/backoffice/customer-success/hooks'
+import type {
+  SupportQueueItem,
+  TicketFilter,
+} from '@/features/backoffice/customer-success/model'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBackofficeSession } from '@calibra-facil/auth/client'

@@ -3,61 +3,39 @@ import type {
   ApiKeysApi,
   ApiKeysListResponse,
 } from "../types";
-import { readApiError } from "../transport/response";
+import { readJsonResponse } from "../transport/response";
 
 export function createApiKeysApi(rawCloudClient: any): ApiKeysApi {
   return {
     async list() {
-      const response = await rawCloudClient.api["api-keys"].$get();
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao carregar API keys"),
-        );
-      }
-
-      return response.json() as Promise<ApiKeysListResponse>;
+      return readJsonResponse<ApiKeysListResponse>(
+        await rawCloudClient.api["api-keys"].$get(),
+        "Falha ao carregar API keys",
+      );
     },
     async create(input) {
-      const response = await rawCloudClient.api["api-keys"].$post({
-        json: input,
-      });
-
-      if (!response.ok) {
-        throw new Error(await readApiError(response, "Falha ao criar API key"));
-      }
-
-      return response.json() as Promise<ApiKeySecretResponse>;
+      return readJsonResponse<ApiKeySecretResponse>(
+        await rawCloudClient.api["api-keys"].$post({
+          json: input,
+        }),
+        "Falha ao criar API key",
+      );
     },
     async rotate(id) {
-      const response = await rawCloudClient.api["api-keys"][":id"].rotate.$post(
-        {
+      return readJsonResponse<ApiKeySecretResponse>(
+        await rawCloudClient.api["api-keys"][":id"].rotate.$post({
           param: { id },
-        },
+        }),
+        "Falha ao rotacionar API key",
       );
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao rotacionar API key"),
-        );
-      }
-
-      return response.json() as Promise<ApiKeySecretResponse>;
     },
     async revoke(id) {
-      const response = await rawCloudClient.api["api-keys"][":id"].revoke.$post(
-        {
+      return readJsonResponse<{ success: boolean }>(
+        await rawCloudClient.api["api-keys"][":id"].revoke.$post({
           param: { id },
-        },
+        }),
+        "Falha ao revogar API key",
       );
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao revogar API key"),
-        );
-      }
-
-      return response.json() as Promise<{ success: boolean }>;
     },
   };
 }

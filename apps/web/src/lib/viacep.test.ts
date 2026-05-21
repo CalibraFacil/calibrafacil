@@ -61,14 +61,6 @@ describe('ViaCEP helpers', () => {
   })
 
   it('replaces address fields when the CEP changes', () => {
-    const firstLookup = {
-      cep: '92025-340',
-      street: 'Rua Um',
-      neighbourhood: 'Bairro Um',
-      city: 'Canoas',
-      state: 'RS',
-    }
-
     const secondLookup = {
       cep: '92200-000',
       street: 'Rua Dois',

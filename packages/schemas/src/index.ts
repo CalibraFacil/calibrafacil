@@ -1,5 +1,6 @@
 import { z } from "zod";
 export * from "./commercial";
+export * from "./quality";
 export * from "./service-orders";
 
 export const TaskSchema = z.object({

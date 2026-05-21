@@ -56,6 +56,25 @@ if (!result.success) {
 - `ApproveJobSchema` - approval with signature
 - `RejectJobSchema` - rejection with reason
 
+### Quality
+
+- `CreateNonConformanceSchema` - type, description, detected timestamp, optional job
+- `CreateCapaSchema` - CAPA classification, responsible user, dates, and action plan
+
+## Schema-First Forms
+
+Frontend forms should validate regulated workflow payloads with these schemas
+before calling API mutations. Keep UI-only state, such as split date/time
+controls, in feature form parsers and validate the final API payload shape here.
+
+When adding a schema:
+
+1. Export it from `src/index.ts`.
+2. Add focused tests for valid payloads and operationally important invalid
+   states.
+3. Keep backend payload semantics stable unless the API contract changes in the
+   same PR.
+
 ### Other
 
 - `TaskSchema` - basic task model

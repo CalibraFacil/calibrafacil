@@ -20,6 +20,7 @@
     "@base-ui/react": "^1.0.0",
     "@calibra-facil/auth": "workspace:^",
     "@calibra-facil/client-runtime": "workspace:^",
+    "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/documents": "workspace:^",
     "@calibra-facil/math-engine": "git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4",

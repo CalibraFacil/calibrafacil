@@ -15,6 +15,7 @@ export async function readApiError(response: Response, fallback: string) {
 export async function readJsonResponse<TResponse>(
   response: Response,
   fallback: string,
+  options: { allowDiagnosticsResponse?: boolean } = {},
 ) {
   if (response.ok) {
     return response.json() as Promise<TResponse>;
@@ -25,6 +26,16 @@ export async function readJsonResponse<TResponse>(
     payload = await response.json();
   } catch {
     payload = null;
+  }
+
+  if (
+    options.allowDiagnosticsResponse &&
+    typeof payload === "object" &&
+    payload !== null &&
+    "diagnostics" in payload &&
+    Array.isArray((payload as { diagnostics?: unknown }).diagnostics)
+  ) {
+    return payload as TResponse;
   }
 
   const message =

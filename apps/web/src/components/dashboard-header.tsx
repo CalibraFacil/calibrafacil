@@ -1,5 +1,5 @@
 import { Link, useMatches } from '@tanstack/react-router'
-import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 import { Fragment, useMemo } from 'react'
 
 import {
@@ -13,8 +13,18 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { NotificationBell } from '@/components/notifications/notification-bell'
-import { calibraApi } from '@/utils/api'
-import { apiRouteParam } from '@/lib/route-identifiers'
+import {
+  useAssetLabelData,
+  useCapaLabelData,
+  useCompetenceLabelData,
+  useCustomerLabelData,
+  useJobLabelData,
+  useMethodLabelData,
+  useNonConformanceLabelData,
+  useServiceLabelData,
+  useServiceOrderLabelData,
+  useStandardLabelData,
+} from '@/features/entity-labels/queries'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 import {
   DesktopDataSourceIndicator,
@@ -120,14 +130,6 @@ const routeLabels: Record<string, string> = {
   '/dashboard/personnel/$id/audit': 'Histórico',
 }
 
-const LABEL_STALE_TIME = 5 * 60 * 1000
-
-type EntityLabelData = {
-  name?: string | null
-  jobId?: string | null
-  serviceOrderNumber?: string | null
-}
-
 function getCachedLabel(
   queryClient: { getQueryData: (queryKey: readonly unknown[]) => unknown },
   queryKeys: ReadonlyArray<readonly unknown[]>,
@@ -164,6 +166,7 @@ function extractEntityIds(pathname: string): {
     methodId?: string
     jobId?: string
     serviceId?: string
+    serviceOrderId?: string
     standardId?: string
     ncId?: string
     capaId?: string
@@ -365,194 +368,94 @@ export function DashboardHeader({
     queryKey: ['competence', competenceId],
   })
 
-  // Reactive queries for entity labels
-  const { data: customerLabel } = useQuery({
-    queryKey: ['customers', customerId, 'label'],
-    queryFn: async () => {
-      if (customerCachedLabel) return customerCachedLabel
-
-      try {
-        const customer = await calibraApi.customers.get<EntityLabelData>(
-          customerId!,
-        )
-        return customer.name ?? null
-      } catch {
-        return null
-      }
-    },
+  const { data: customerLabel } = useCustomerLabelData({
+    id: customerId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!customerId &&
       !customerCachedLabel &&
       customerDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: assetLabel } = useQuery({
-    queryKey: ['assets', assetId, 'label'],
-    queryFn: async () => {
-      if (assetCachedLabel) return assetCachedLabel
-
-      try {
-        const asset = await calibraApi.assets.get<EntityLabelData>(assetId!)
-        return asset.name ?? null
-      } catch {
-        return null
-      }
-    },
+  const { data: assetLabel } = useAssetLabelData({
+    id: assetId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!assetId &&
       !assetCachedLabel &&
       assetDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: methodLabel } = useQuery({
-    queryKey: ['methods', methodId, 'label'],
-    queryFn: async () => {
-      if (methodCachedLabel) return methodCachedLabel
-
-      try {
-        const method = await calibraApi.methods.get(methodId!)
-        return method.name ?? null
-      } catch {
-        return null
-      }
-    },
+  const { data: methodLabel } = useMethodLabelData({
+    id: methodId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!methodId &&
       !methodCachedLabel &&
       methodDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: jobLabel } = useQuery({
-    queryKey: ['jobs', jobId, 'label'],
-    queryFn: async () => {
-      if (jobCachedLabel) return jobCachedLabel
-
-      try {
-        const job = await calibraApi.jobs.get<EntityLabelData>(
-          apiRouteParam(jobId!),
-        )
-        return job.jobId ?? null
-      } catch {
-        return null
-      }
-    },
+  const { data: jobLabel } = useJobLabelData({
+    id: jobId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!jobId &&
       !jobCachedLabel &&
       jobDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: serviceLabel } = useQuery({
-    queryKey: ['services', serviceId, 'label'],
-    queryFn: async () => {
-      if (serviceCachedLabel) return serviceCachedLabel
-
-      try {
-        const service = await calibraApi.services.get(serviceId!)
-        return service.name ?? null
-      } catch {
-        return null
-      }
-    },
+  const { data: serviceLabel } = useServiceLabelData({
+    id: serviceId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!serviceId &&
       !serviceCachedLabel &&
       serviceDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: serviceOrderLabel } = useQuery({
-    queryKey: ['service-orders', serviceOrderId, 'label'],
-    queryFn: async () => {
-      if (serviceOrderCachedLabel) return serviceOrderCachedLabel
-
-      try {
-        const serviceOrder = await calibraApi.serviceOrders.get(serviceOrderId!)
-        return serviceOrder.serviceOrderNumber ?? null
-      } catch {
-        return null
-      }
-    },
+  const { data: serviceOrderLabel } = useServiceOrderLabelData({
+    id: serviceOrderId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!serviceOrderId &&
       !serviceOrderCachedLabel &&
       serviceOrderDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: standardLabel } = useQuery({
-    queryKey: ['standards', standardId, 'label'],
-    queryFn: async () => {
-      if (standardCachedLabel) return standardCachedLabel
-
-      try {
-        const standard = await calibraApi.standards.get(standardId!)
-        return standard.name ?? null
-      } catch {
-        return null
-      }
-    },
+  const { data: standardLabel } = useStandardLabelData({
+    id: standardId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!standardId &&
       !standardCachedLabel &&
       standardDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: ncLabel } = useQuery({
-    queryKey: ['non-conformance', ncId, 'label'],
-    queryFn: async () => {
-      if (ncCachedLabel) return ncCachedLabel
-
-      return calibraApi.entityLabels.getNonConformance(ncId!)
-    },
+  const { data: ncLabel } = useNonConformanceLabelData({
+    id: ncId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!ncId &&
       !ncCachedLabel &&
       ncDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: capaLabel } = useQuery({
-    queryKey: ['capa', capaId, 'label'],
-    queryFn: async () => {
-      if (capaCachedLabel) return capaCachedLabel
-
-      return calibraApi.entityLabels.getCapa(capaId!)
-    },
+  const { data: capaLabel } = useCapaLabelData({
+    id: capaId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!capaId &&
       !capaCachedLabel &&
       capaDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
-  const { data: competenceLabel } = useQuery({
-    queryKey: ['competence', competenceId, 'label'],
-    queryFn: async () => {
-      if (competenceCachedLabel) return competenceCachedLabel
-
-      return calibraApi.entityLabels.getCompetence(competenceId!)
-    },
+  const { data: competenceLabel } = useCompetenceLabelData({
+    id: competenceId ?? '',
     enabled:
       !suspendEntityQueries &&
       !!competenceId &&
       !competenceCachedLabel &&
       competenceDetailFetchCount === 0,
-    staleTime: LABEL_STALE_TIME,
   })
 
   // Build entity name lookup

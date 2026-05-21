@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Navigate, createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { useBackofficeSession } from '@calibra-facil/auth/client'
+import { useBackofficeAccessData } from '@/features/backoffice/queries'
 import { BrandLockup } from '@/components/brand'
 import { Button } from '@/components/ui/button'
 import {
@@ -30,15 +31,9 @@ function BackofficeBootstrapPage() {
   const [token, setToken] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const accessQuery = useQuery({
-    queryKey: ['backoffice', 'access', 'bootstrap'],
-    queryFn: async () =>
-      calibraApi.backoffice.getAccess() as Promise<{
-        allowed: boolean
-        bootstrapAvailable: boolean
-      }>,
+  const accessQuery = useBackofficeAccessData({
+    scope: 'bootstrap',
     enabled: Boolean(session?.user),
-    retry: false,
   })
 
   if (accessQuery.data?.allowed) {

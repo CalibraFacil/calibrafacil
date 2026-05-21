@@ -152,6 +152,10 @@ export const calibraApiPolicyRegistry = {
     uploadAvatar: "cloud-only",
     deleteAvatar: "cloud-only",
   },
+  organizationMedia: {
+    uploadLogo: "cloud-only",
+    deleteLogo: "cloud-only",
+  },
   signingCertificates: {
     list: "cloud-only",
     upload: "cloud-only",
@@ -201,6 +205,10 @@ export const calibraApiPolicyRegistry = {
     technicalReview: "cloud-only",
     qualityApprove: "cloud-only",
     returnToDraft: "cloud-only",
+    compileDraft: "cloud-only",
+    previewDraft: "cloud-only",
+    publishDraft: "cloud-only",
+    requestApproval: "cloud-only",
   },
   standards: {
     list: "local-first-read-through-sync",
@@ -298,6 +306,14 @@ export const calibraApiPolicyRegistry = {
     update: "cloud-only",
     duplicate: "cloud-only",
     setDefault: "cloud-only",
+    getXlsxVersion: "cloud-only",
+    uploadXlsx: "cloud-only",
+    validateXlsx: "cloud-only",
+    updateXlsxBindings: "cloud-only",
+    createXlsxPreview: "cloud-only",
+    getXlsxPreview: "cloud-only",
+    publishXlsx: "cloud-only",
+    createXlsxAssignment: "cloud-only",
   },
   competences: {
     list: "cloud-only",

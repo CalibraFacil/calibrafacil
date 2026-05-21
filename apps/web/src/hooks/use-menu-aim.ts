@@ -75,9 +75,7 @@ export function useMenuAim<
 >({ open, onClose, closeDelay = 200 }: UseMenuAimOptions) {
   const parentRef = React.useRef<TParent | null>(null)
   const flyoutRef = React.useRef<TFlyout | null>(null)
-  const closeTimerRef = React.useRef<ReturnType<
-    typeof window.setTimeout
-  > | null>(null)
+  const closeTimerRef = React.useRef<number | null>(null)
   const pointerHistoryRef = React.useRef<Array<Point>>([])
   const onCloseRef = React.useRef(onClose)
 

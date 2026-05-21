@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo, useState } from 'react'
 import { ArrowDown01Icon, ArrowUp01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   type ColumnDef,
   type ExpandedState,
@@ -18,6 +18,16 @@ import { toast } from 'sonner'
 
 import { parsePlatformRoles } from '@calibra-facil/auth/access'
 import { useBackofficeSession } from '@calibra-facil/auth/client'
+import {
+  loadBackofficeUsersData,
+  useBackofficeOrganizationOptionsData,
+  useBackofficeUsersData,
+} from '@/features/backoffice/queries'
+import type {
+  AssignablePlatformRole,
+  BackofficeUser,
+  BackofficeUserFilters,
+} from '@/features/backoffice/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -50,49 +60,9 @@ export const Route = createFileRoute('/backoffice/users')({
         ? search.impersonationError
         : undefined,
   }),
+  loader: ({ context }) => loadBackofficeUsersData(context.queryClient),
   component: BackofficeUsersPage,
 })
-
-type BackofficeUserMembership = {
-  organizationId: string
-  organizationName: string
-  organizationSlug: string
-  memberRole: string
-}
-
-type BackofficeUser = {
-  id: string
-  name: string
-  email: string
-  role?: string | null
-  banned?: boolean | null
-  createdAt?: string | Date | null
-  memberships: BackofficeUserMembership[]
-}
-
-type OrganizationOption = {
-  id: string
-  name: string
-  slug: string
-}
-
-type UserFilters = {
-  search: string
-  organizationId: string
-  platformRole:
-    | 'all'
-    | 'user'
-    | 'platform_operator'
-    | 'platform_admin'
-    | 'platform_access'
-  membershipScope:
-    | 'all'
-    | 'lab_members'
-    | 'no_lab_membership'
-    | 'backoffice_only'
-}
-
-type AssignablePlatformRole = 'user' | 'platform_operator' | 'platform_admin'
 
 type EntityMutation<TVariables> = {
   isPending: boolean
@@ -184,7 +154,7 @@ function BackofficeUsersPage() {
     email: '',
     role: 'platform_operator' as 'platform_operator' | 'platform_admin',
   })
-  const [filters, setFilters] = useState<UserFilters>({
+  const [filters, setFilters] = useState<BackofficeUserFilters>({
     search: '',
     organizationId: '',
     platformRole: 'all',
@@ -205,37 +175,12 @@ function BackofficeUsersPage() {
   )
   const canManageRoles = currentPlatformRoles.includes('platform_admin')
 
-  const organizationsQuery = useQuery({
-    queryKey: ['backoffice', 'organizations', 'options'],
-    queryFn: async () => {
-      const data = await calibraApi.backoffice.listOrganizations<{
-        data: OrganizationOption[]
-      }>()
-      return data.data
-    },
-  })
-
-  const usersQuery = useQuery({
-    queryKey: [
-      'backoffice',
-      'users',
-      {
-        search: deferredSearch,
-        organizationId: filters.organizationId,
-        platformRole: filters.platformRole,
-        membershipScope: filters.membershipScope,
-      },
-    ],
-    queryFn: async () =>
-      calibraApi.backoffice.listUsers<{
-        users: BackofficeUser[]
-        total: number
-      }>({
-        search: deferredSearch || undefined,
-        organizationId: filters.organizationId || undefined,
-        platformRole: filters.platformRole,
-        membershipScope: filters.membershipScope,
-      }),
+  const organizationsQuery = useBackofficeOrganizationOptionsData()
+  const usersQuery = useBackofficeUsersData({
+    search: deferredSearch,
+    organizationId: filters.organizationId,
+    platformRole: filters.platformRole,
+    membershipScope: filters.membershipScope,
   })
 
   const invalidateUsers = async () => {
@@ -725,7 +670,7 @@ function BackofficeUsersPage() {
                   >
                     Todos os laboratórios
                   </Button>
-                  {(organizationsQuery.data ?? []).map((organization) => (
+                  {(organizationsQuery.data?.data ?? []).map((organization) => (
                     <Button
                       key={organization.id}
                       type="button"

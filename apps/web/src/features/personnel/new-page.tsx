@@ -1,0 +1,211 @@
+import { useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
+import { useMutation } from '@tanstack/react-query'
+import { toast } from 'sonner'
+
+import { calibraApi } from '@/utils/api'
+import { useNewCompetenceMatrixData } from '@/features/personnel/queries'
+import {
+  parseCompetenceRequestForm,
+  type CompetenceRequestFormData,
+  type CompetenceRequestFormField,
+} from '@/features/personnel/forms'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldError,
+} from '@/components/ui/field'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
+
+export function NewCompetencePage() {
+  const navigate = useNavigate()
+  const [formData, setFormData] = useState<CompetenceRequestFormData>({
+    userId: '',
+    assetTypeId: '',
+    scopeDescription: '',
+  })
+  const [errors, setErrors] = useState<
+    Partial<Record<CompetenceRequestFormField, string>>
+  >({})
+
+  // Fetch org members (technicians/admins/owners)
+  const { data: matrixData } = useNewCompetenceMatrixData()
+
+  const createMutation = useMutation({
+    mutationFn: async (payload: {
+      userId: string
+      assetTypeId?: number
+      scopeDescription: string
+    }) => calibraApi.competences.create<{ id: number }>(payload),
+    onSuccess: (result) => {
+      toast.success('Solicitação de competência criada')
+      navigate({
+        to: '/dashboard/personnel/$id',
+        params: { id: String(result.id) },
+      })
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const parsed = parseCompetenceRequestForm(formData)
+    if (!parsed.success) {
+      setErrors(
+        Object.fromEntries(
+          parsed.fieldErrors.map((error) => [error.field, error.message]),
+        ),
+      )
+      toast.error(parsed.message)
+      return
+    }
+
+    setErrors({})
+    createMutation.mutate(parsed.data)
+  }
+
+  const selectedTechnician = matrixData?.technicians.find(
+    (t) => t.userId === formData.userId,
+  )
+  const selectedAssetType = matrixData?.assetTypes.find(
+    (at) => String(at.id) === formData.assetTypeId,
+  )
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <Card>
+        <CardHeader>
+          <CardTitle>Nova Solicitação de Competência</CardTitle>
+          <CardDescription>
+            ISO 17025 Cláusula 6.2.3 - Solicite a qualificação de um técnico
+            para um tipo de instrumento
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <FieldGroup>
+              {/* Technician */}
+              <Field>
+                <FieldLabel>Técnico *</FieldLabel>
+                <Select
+                  value={formData.userId}
+                  onValueChange={(v) =>
+                    setFormData((current) => ({
+                      ...current,
+                      userId: v ?? '',
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <span
+                      className="flex flex-1 text-left line-clamp-1"
+                      data-slot="select-value"
+                    >
+                      {selectedTechnician
+                        ? selectedTechnician.userName
+                        : 'Selecione o técnico'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {matrixData?.technicians.map((tech) => (
+                      <SelectItem key={tech.userId} value={tech.userId}>
+                        {tech.userName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.userId && <FieldError>{errors.userId}</FieldError>}
+              </Field>
+
+              {/* Asset Type */}
+              <Field>
+                <FieldLabel>Tipo de Instrumento (opcional)</FieldLabel>
+                <Select
+                  value={formData.assetTypeId}
+                  onValueChange={(v) =>
+                    setFormData((current) => ({
+                      ...current,
+                      assetTypeId: v ?? '',
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <span
+                      className="flex flex-1 text-left line-clamp-1"
+                      data-slot="select-value"
+                    >
+                      {selectedAssetType
+                        ? selectedAssetType.name
+                        : 'Escopo geral'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Escopo geral</SelectItem>
+                    {matrixData?.assetTypes.map((at) => (
+                      <SelectItem key={at.id} value={String(at.id)}>
+                        {at.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Deixe vazio para uma competência de escopo geral.
+                </p>
+              </Field>
+
+              {/* Scope Description */}
+              <Field>
+                <FieldLabel>Descrição do Escopo *</FieldLabel>
+                <Textarea
+                  value={formData.scopeDescription}
+                  onChange={(e) =>
+                    setFormData((current) => ({
+                      ...current,
+                      scopeDescription: e.target.value,
+                    }))
+                  }
+                  placeholder="Ex: Calibração de Balanças Analíticas até 220g"
+                  rows={3}
+                />
+                {errors.scopeDescription && (
+                  <FieldError>{errors.scopeDescription}</FieldError>
+                )}
+              </Field>
+            </FieldGroup>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate({ to: '/dashboard/personnel' })}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? 'Criando...' : 'Criar Solicitação'}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

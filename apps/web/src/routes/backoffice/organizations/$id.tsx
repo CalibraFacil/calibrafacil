@@ -1,6 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 
+import {
+  loadBackofficeOrganizationDetailData,
+  useBackofficeOrganizationDetailData,
+} from '@/features/backoffice/queries'
 import {
   Card,
   CardContent,
@@ -11,33 +14,16 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice/organizations/$id')({
+  loader: ({ context, params }) =>
+    loadBackofficeOrganizationDetailData(context.queryClient, params.id),
   component: BackofficeOrganizationDetailPage,
 })
 
-type OrganizationDetailResponse = {
-  organization: { id: string; name: string; slug: string; cnpj: string | null }
-  plan: { planName: string; status: string }
-  successProfile: {
-    onboardingStatus?: string | null
-    migrationStatus?: string | null
-    accountOwnerName?: string | null
-    supportContactEmail?: string | null
-  } | null
-  support: { open: number; total: number }
-  integrations: Array<{ id: number; name: string; status: string }>
-  units: Array<{ id: number; name: string; slug: string; status: string }>
-}
-
 function BackofficeOrganizationDetailPage() {
   const { id } = Route.useParams()
-  const organizationQuery = useQuery({
-    queryKey: ['backoffice', 'organizations', id],
-    queryFn: async () =>
-      calibraApi.backoffice.getOrganization<OrganizationDetailResponse>(id),
-  })
+  const organizationQuery = useBackofficeOrganizationDetailData(id)
 
   const data = organizationQuery.data
   const activeUnitsCount =

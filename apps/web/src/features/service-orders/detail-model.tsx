@@ -1,0 +1,327 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import {
+  CheckmarkCircle02Icon,
+  File02Icon,
+  PackageProcessIcon,
+  UserCheck01Icon,
+  Wrench01Icon,
+} from '@hugeicons/core-free-icons'
+
+import { ServiceOrderIntakeDocumentHtml } from '@calibra-facil/documents'
+import type { EventTimelineItem } from '@/components/event-timeline'
+import type {
+  ServiceOrderDetail,
+  ServiceOrderExecutionResult,
+  ServiceOrderItemType,
+  ServiceOrderRecommendedAction,
+} from './types'
+
+export type QuoteDraftItem = {
+  id: string
+  type: ServiceOrderItemType
+  description: string
+  quantity: string
+  unit: string
+  unitPrice: string
+}
+
+export const ITEM_TYPE_LABELS: Record<ServiceOrderItemType, string> = {
+  service: 'Serviço',
+  part: 'Peça',
+  external_service: 'Serviço externo',
+  freight: 'Frete',
+  discount: 'Desconto',
+  evaluation_fee: 'Taxa de avaliação',
+  other: 'Outro',
+}
+
+export const QUOTE_STATUS_LABELS: Record<string, string> = {
+  draft: 'Rascunho',
+  sent: 'Enviado',
+  approved: 'Aprovado',
+  rejected: 'Recusado',
+  expired: 'Expirado',
+  canceled: 'Cancelado',
+  superseded: 'Substituído',
+}
+
+export const RECOMMENDED_ACTION_LABELS: Record<
+  ServiceOrderRecommendedAction,
+  string
+> = {
+  repair: 'Reparo',
+  calibration_only: 'Somente calibração',
+  return_without_repair: 'Devolver sem reparo',
+  condemned: 'Condenado',
+  warranty_service: 'Atendimento em garantia',
+  external_service_required: 'Serviço externo',
+}
+
+export const EXECUTION_RESULT_LABELS: Record<
+  ServiceOrderExecutionResult,
+  string
+> = {
+  repaired: 'Reparado',
+  not_repaired: 'Não reparado',
+  condemned: 'Condenado',
+  returned_without_service: 'Devolvido sem serviço',
+  sent_to_third_party: 'Enviado a terceiro',
+}
+
+export const DELIVERY_METHOD_LABELS = {
+  pickup_at_lab: 'Retirada no laboratório',
+  ship_to_client: 'Envio ao cliente',
+  third_party_pickup: 'Retirada por terceiro',
+} as const
+
+export const WORKFLOW_TABS = [
+  {
+    value: 'evaluation',
+    label: 'Avaliação técnica',
+    icon: CheckmarkCircle02Icon,
+  },
+  {
+    value: 'quote',
+    label: 'Orçamento',
+    icon: File02Icon,
+  },
+  {
+    value: 'execution',
+    label: 'Execução',
+    icon: Wrench01Icon,
+  },
+  {
+    value: 'delivery',
+    label: 'Entrega',
+    icon: PackageProcessIcon,
+  },
+] as const
+
+export const SERVICE_ORDER_EVENT_LABELS: Record<string, string> = {
+  'service_order.created': 'OS criada',
+  'service_order.intake_document_issued': 'Comprovante emitido',
+  'service_order.tag_printed': 'Etiqueta gerada',
+  'service_order.status_changed': 'Status alterado',
+  'service_order.technician_assigned': 'Técnico atribuído',
+  'service_order.evaluation_completed': 'Avaliação concluída',
+  'service_order.quote_created': 'Orçamento criado',
+  'service_order.quote_sent': 'Orçamento enviado',
+  'service_order.quote_approved_by_client': 'Orçamento aprovado pelo cliente',
+  'service_order.quote_approved_manually': 'Orçamento aprovado manualmente',
+  'service_order.quote_rejected_by_client': 'Orçamento recusado pelo cliente',
+  'service_order.repair_started': 'Execução iniciada',
+  'service_order.repair_finished': 'Execução finalizada',
+  'service_order.delivery_document_issued': 'Comprovante de entrega emitido',
+  'service_order.repair_seal_updated': 'Selo de reparado atualizado',
+  'service_order.ready_for_pickup': 'Disponível para retirada',
+  'service_order.delivered': 'Entregue ao cliente',
+  'service_order.closed': 'OS encerrada',
+  'service_order.canceled': 'OS cancelada',
+  'service_order.certificate_linked': 'Calibração vinculada',
+}
+
+export function money(cents: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(cents / 100)
+}
+
+export function formatDateTime(value?: string | null) {
+  if (!value) return 'Não informado'
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
+
+export function parseMoneyToCents(value: string) {
+  const normalized = value.replace(/\./g, '').replace(',', '.')
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : Number.NaN
+}
+
+export function createEmptyQuoteItem(
+  type: ServiceOrderItemType = 'service',
+): QuoteDraftItem {
+  return {
+    id: crypto.randomUUID(),
+    type,
+    description: '',
+    quantity: '1',
+    unit: 'un',
+    unitPrice: '',
+  }
+}
+
+export function quoteItemsTotal(items: QuoteDraftItem[]) {
+  return items.reduce((total, item) => {
+    const quantity = Number(item.quantity.replace(',', '.'))
+    const cents = parseMoneyToCents(item.unitPrice)
+    if (!Number.isFinite(quantity) || !Number.isFinite(cents)) return total
+    return total + Math.round(quantity * cents)
+  }, 0)
+}
+
+export function toApiItems(items: QuoteDraftItem[]) {
+  return items.map((item) => {
+    const quantity = Number(item.quantity.replace(',', '.'))
+    const unitPriceCents = parseMoneyToCents(item.unitPrice)
+    if (!item.description.trim()) {
+      throw new Error('Informe a descrição de todos os itens.')
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new Error('Informe uma quantidade válida para todos os itens.')
+    }
+    if (!Number.isFinite(unitPriceCents)) {
+      throw new Error('Informe um valor válido para todos os itens.')
+    }
+    return {
+      type: item.type,
+      description: item.description.trim(),
+      quantity,
+      unit: item.unit.trim() || 'un',
+      unitPriceCents,
+      taxable: true,
+      warrantyCovered: false,
+    }
+  })
+}
+
+export function buildServiceOrderTimelineItems(
+  events: ServiceOrderDetail['events'],
+): EventTimelineItem[] {
+  return events.map((event) => {
+    const isDocument = event.eventType.includes('document')
+    const isExecution =
+      event.eventType.includes('repair') ||
+      event.eventType.includes('execution')
+    const isApproval = event.eventType.includes('approved')
+    const isDelivery =
+      event.eventType.includes('delivered') ||
+      event.eventType.includes('ready_for_pickup')
+    return {
+      id: String(event.id),
+      title: SERVICE_ORDER_EVENT_LABELS[event.eventType] ?? event.eventType,
+      timestamp: event.createdAt,
+      actor:
+        event.actorName ??
+        (event.actorType === 'system'
+          ? 'Sistema'
+          : event.actorType === 'portal_user'
+            ? 'Cliente no portal'
+            : event.actorType === 'public_token'
+              ? 'Link público'
+              : null),
+      icon: isDocument
+        ? File02Icon
+        : isExecution
+          ? Wrench01Icon
+          : isApproval
+            ? UserCheck01Icon
+            : isDelivery
+              ? PackageProcessIcon
+              : CheckmarkCircle02Icon,
+      dotClassName:
+        'border-primary/20 bg-background text-primary shadow-[inset_0_0_0_0.5rem_hsl(var(--primary)/0.12)]',
+      status: 'completed' as const,
+    }
+  })
+}
+
+export function buildServiceOrderIntakeHtml(
+  order: ServiceOrderDetail,
+  publicOrigin = globalThis.location?.origin,
+) {
+  const snapshot = order.assetSnapshot
+  const publicUrl = publicOrigin
+    ? `${publicOrigin}/dashboard/service-orders/${order.id}`
+    : null
+  const organizationAddress = [
+    order.organizationStreet,
+    order.organizationNumber,
+    order.organizationNeighbourhood,
+    order.organizationCity,
+    order.organizationState,
+    order.organizationCep,
+  ]
+    .filter(Boolean)
+    .join(', ')
+
+  return `<!doctype html>${renderToStaticMarkup(
+    <ServiceOrderIntakeDocumentHtml
+      data={{
+        serviceOrderNumber: order.serviceOrderNumber,
+        openedAt: order.openedAt,
+        requestedServices:
+          order.priority === 'warranty'
+            ? ['Garantia']
+            : ['Orçamento', 'Manutenção corretiva'],
+        lab: {
+          name: order.organizationName ?? 'Laboratório',
+          email: order.organizationEmail ?? null,
+          phone: order.organizationPhone ?? null,
+          cnpj: order.organizationCnpj ?? null,
+          address: organizationAddress || null,
+        },
+        unit: { name: order.unitName ?? null },
+        customer: {
+          name: order.customerName,
+          email: order.customerEmail ?? null,
+          phone: order.customerPhone ?? null,
+          taxId: order.customerTaxId ?? null,
+          address: null,
+        },
+        asset: {
+          name: snapshot?.assetName ?? order.assetName,
+          type: snapshot?.assetType ?? null,
+          manufacturer: snapshot?.manufacturer ?? null,
+          model: snapshot?.model ?? null,
+          serialNumber:
+            snapshot?.serialNumber ?? order.assetSerialNumber ?? null,
+          patrimonyNumber: snapshot?.patrimonyNumber ?? order.assetTag ?? null,
+          tag: order.assetTag ?? null,
+          capacity: snapshot?.capacity ?? null,
+          resolution: snapshot?.resolution ?? null,
+          observedIdentification: snapshot?.observedIdentification ?? null,
+        },
+        intake: {
+          claimedDefect: order.claimedDefect,
+          intakeCondition: order.intakeCondition,
+          accessories: order.accessories ?? null,
+          invoiceRemittanceNumber: order.invoiceRemittanceNumber ?? null,
+          invoiceRemittanceKey: order.invoiceRemittanceKey ?? null,
+          carrierName: order.carrierName ?? null,
+          thirdPartyName: order.thirdPartyName ?? null,
+          oldSealNumber: order.oldSealNumber ?? null,
+          newSealNumber: order.newSealNumber ?? null,
+          inmetroRepairSealNumber: order.inmetroRepairSealNumber ?? null,
+          clientVisibleNotes: order.clientVisibleNotes ?? null,
+          internalNotes: order.internalNotes ?? null,
+          terms: null,
+        },
+        publicUrl,
+        qrCodeDataUrl: null,
+      }}
+    />,
+  )}`
+}
+
+export function getPublicUrl(result: unknown) {
+  if (!result || typeof result !== 'object') return null
+  const record = result as Record<string, unknown>
+  if (typeof record.publicUrl === 'string') return record.publicUrl
+  const data = record.data
+  if (!data || typeof data !== 'object') return null
+  const nested = data as Record<string, unknown>
+  return typeof nested.publicUrl === 'string' ? nested.publicUrl : null
+}
+
+export function buildServiceOrderDetailFormKey(order: ServiceOrderDetail) {
+  return [
+    order.id,
+    order.evaluations[0]?.id ?? 'no-evaluation',
+    order.execution?.id ?? 'no-execution',
+    order.deliveryDocuments[0]?.id ?? 'no-delivery-document',
+  ].join(':')
+}

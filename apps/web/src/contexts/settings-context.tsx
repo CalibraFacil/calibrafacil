@@ -18,7 +18,6 @@ interface User {
 
 interface SessionInfo {
   id: string
-  token: string
   expiresAt: Date
   createdAt: Date
   updatedAt: Date
@@ -98,7 +97,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       const result = await authClient.listSessions()
       return (result.data ?? []).map((s) => ({
         id: s.id,
-        token: s.token,
         expiresAt: new Date(s.expiresAt),
         createdAt: new Date(s.createdAt),
         updatedAt: new Date(s.updatedAt),
@@ -272,7 +270,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       session: sessionData?.session
         ? {
             id: sessionData.session.id,
-            token: sessionData.session.token,
             expiresAt: new Date(sessionData.session.expiresAt),
             createdAt: new Date(sessionData.session.createdAt),
             updatedAt: new Date(sessionData.session.updatedAt),

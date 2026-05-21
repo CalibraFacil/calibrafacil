@@ -3,10 +3,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { setStoredDashboardActiveUnitIdForOrganization } from '@/features/dashboard/dashboard-scope-storage'
 import { useDashboardUnits } from '@/hooks/use-dashboard-units'
 import { cn } from '@/lib/utils'
-
-const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
 
 type GovernanceViewer = {
   viewer: {
@@ -77,10 +76,7 @@ export function UnitScopeBanner() {
   }
 
   const handleChange = async (value: string) => {
-    window.localStorage.setItem(
-      `${DASHBOARD_UNIT_KEY_PREFIX}${activeOrg.id}`,
-      value,
-    )
+    setStoredDashboardActiveUnitIdForOrganization(activeOrg.id, value)
 
     await queryClient.invalidateQueries()
   }

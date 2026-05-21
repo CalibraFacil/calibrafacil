@@ -1,5 +1,5 @@
 import type { FinanceApi } from "../types";
-import { readApiError } from "../transport/response";
+import { readJsonResponse } from "../transport/response";
 
 type FinanceId = string | number;
 
@@ -16,13 +16,13 @@ type ListEligibleJobsInput = {
 export function createFinanceApi(rawCloudClient: any): FinanceApi {
   return {
     async getOverview<TResponse = unknown>() {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.overview.$get(),
         "Erro ao carregar visão geral financeira",
       );
     },
     async listDocuments<TResponse = unknown>(input: FinanceSearchInput = {}) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.documents.$get({
           query: { query: input.query || undefined },
         }),
@@ -30,7 +30,7 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
     async getDocument<TResponse = unknown>(id: FinanceId) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.documents[":id"].$get({
           param: { id: String(id) },
         }),
@@ -38,7 +38,7 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
     async updateDocument<TResponse = unknown>(id: FinanceId, input: unknown) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.documents[":id"].$put({
           param: { id: String(id) },
           json: input,
@@ -47,7 +47,7 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
     async issueDocument<TResponse = unknown>(id: FinanceId) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.documents[":id"].issue.$post({
           param: { id: String(id) },
         }),
@@ -58,7 +58,7 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       id: FinanceId,
       input: { reason: string },
     ) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.documents[":id"].void.$post({
           param: { id: String(id) },
           json: input,
@@ -67,7 +67,7 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
     async listEligibleJobs<TResponse = unknown>(input: ListEligibleJobsInput) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.documents["eligible-jobs"].$get({
           query: {
             mode: input.mode,
@@ -79,13 +79,13 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
     async createDocument<TResponse = unknown>(input: unknown) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.documents.$post({ json: input }),
         "Erro ao criar documento",
       );
     },
     async listContracts<TResponse = unknown>(input: FinanceSearchInput = {}) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.contracts.$get({
           query: { query: input.query || undefined },
         }),
@@ -93,7 +93,7 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
     async getContract<TResponse = unknown>(id: FinanceId) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.contracts[":id"].$get({
           param: { id: String(id) },
         }),
@@ -101,13 +101,13 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
     async createContract<TResponse = unknown>(input: unknown) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.contracts.$post({ json: input }),
         "Erro ao criar contrato",
       );
     },
     async activateContract<TResponse = unknown>(id: FinanceId) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.contracts[":id"].activate.$post({
           param: { id: String(id) },
         }),
@@ -115,7 +115,7 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
     async cancelContract<TResponse = unknown>(id: FinanceId) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.contracts[":id"].cancel.$post({
           param: { id: String(id) },
         }),
@@ -123,7 +123,7 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
     async listReceipts<TResponse = unknown>() {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.receipts.$get(),
         "Erro ao carregar recebimentos",
       );
@@ -132,7 +132,7 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       id: FinanceId,
       input: unknown,
     ) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.installments[":id"].receive.$post({
           param: { id: String(id) },
           json: input,
@@ -141,13 +141,13 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
     async listErpExports<TResponse = unknown>() {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.erp.exports.$get(),
         "Erro ao carregar fila ERP",
       );
     },
     async exportErpDocument<TResponse = unknown>(id: FinanceId) {
-      return readFinanceResponse<TResponse>(
+      return readJsonResponse<TResponse>(
         await rawCloudClient.api.finance.erp.documents[":id"].export.$post({
           param: { id: String(id) },
         }),
@@ -155,15 +155,4 @@ export function createFinanceApi(rawCloudClient: any): FinanceApi {
       );
     },
   };
-}
-
-async function readFinanceResponse<TResponse>(
-  response: Response,
-  fallback: string,
-) {
-  if (!response.ok) {
-    throw new Error(await readApiError(response, fallback));
-  }
-
-  return response.json() as Promise<TResponse>;
 }

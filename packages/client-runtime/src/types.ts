@@ -209,7 +209,7 @@ export type ServiceDetailData = ServicesListData["data"][number] & {
 };
 
 export type CreateServiceInput = {
-  name: string;
+  name?: string;
   description?: string | null;
   methodId?: number | null;
   assetTypeId?: number | null;
@@ -289,7 +289,37 @@ export type MethodDetailData = MethodsListData["data"][number] & {
   archivedAt?: string | null;
 };
 
-export type MethodWriteInput = Record<string, unknown>;
+export type MethodWriteInput = {
+  name?: string;
+  description?: string | null;
+  assetTypeId?: number | null;
+  dataFields?: unknown[];
+  variableBindings?: unknown[];
+  formulas?: unknown[];
+  measurementModels?: unknown[];
+  validations?: unknown[];
+  uncertaintyParams?: unknown[];
+  certificateContent?: unknown;
+  reason?: string;
+};
+
+export type MethodCompileDraftInput = {
+  draft: unknown;
+};
+
+export type MethodPreviewDraftInput = {
+  draft: unknown;
+  sampleData: Record<string, unknown>;
+};
+
+export type MethodPublishDraftInput = {
+  sampleData: Record<string, unknown>;
+  reasonForChange?: string;
+};
+
+export type MethodRequestApprovalInput = {
+  sampleData: Record<string, unknown>;
+};
 
 export type MethodAuditLogData<TRecord = unknown> = {
   data: TRecord[];
@@ -314,6 +344,20 @@ export interface MethodsApi {
     input?: MethodWriteInput,
   ): Promise<unknown>;
   returnToDraft(id: string | number, reason: string): Promise<unknown>;
+  compileDraft<TResponse = unknown>(
+    input: MethodCompileDraftInput,
+  ): Promise<TResponse>;
+  previewDraft<TResponse = unknown>(
+    input: MethodPreviewDraftInput,
+  ): Promise<TResponse>;
+  publishDraft<TResponse = unknown>(
+    id: string | number,
+    input: MethodPublishDraftInput,
+  ): Promise<TResponse>;
+  requestApproval<TResponse = unknown>(
+    id: string | number,
+    input: MethodRequestApprovalInput,
+  ): Promise<TResponse>;
 }
 
 export type StandardStatus =
@@ -683,6 +727,11 @@ export type CreateNonConformanceInput = {
   jobId?: number;
 };
 
+export type CreateNonConformanceResult = {
+  id: number;
+  ncNumber: string;
+};
+
 export type NonConformanceDispositionInput = {
   disposition: "rework" | "scrap" | "use_as_is" | "concession";
   justification?: string;
@@ -704,9 +753,7 @@ export interface NonConformancesApi {
   summary<TResponse = unknown>(): Promise<TResponse>;
   get<TResponse = unknown>(id: string | number): Promise<TResponse>;
   auditLog<TResponse = unknown>(id: string | number): Promise<TResponse>;
-  create<TResponse = unknown>(
-    input: CreateNonConformanceInput,
-  ): Promise<TResponse>;
+  create(input: CreateNonConformanceInput): Promise<CreateNonConformanceResult>;
   setDisposition<TResponse = unknown>(
     id: string | number,
     input: NonConformanceDispositionInput,
@@ -809,6 +856,14 @@ export type CertificateTemplateUpdateInput = {
   name?: string;
 };
 
+export type CertificateTemplateXlsxAssignmentInput = {
+  certificateType: "calibration";
+  priority: number;
+  unitId?: number;
+  serviceId?: number;
+  methodId?: number;
+};
+
 export interface CertificateTemplatesApi {
   list<TResponse = unknown>(): Promise<TResponse>;
   create<TResponse = unknown>(
@@ -820,6 +875,43 @@ export interface CertificateTemplatesApi {
   ): Promise<TResponse>;
   duplicate<TResponse = unknown>(id: string | number): Promise<TResponse>;
   setDefault<TResponse = unknown>(id: string | number): Promise<TResponse>;
+  getXlsxVersion<TResponse = unknown>(
+    templateId: string | number,
+    versionId: string | number,
+  ): Promise<TResponse>;
+  uploadXlsx<TResponse = unknown>(
+    templateId: string | number,
+    file: Blob,
+    input?: { fileName?: string },
+  ): Promise<TResponse>;
+  validateXlsx<TResponse = unknown>(
+    templateId: string | number,
+    versionId: string | number,
+  ): Promise<TResponse>;
+  updateXlsxBindings<TResponse = unknown>(
+    templateId: string | number,
+    versionId: string | number,
+    input: { manifest: unknown },
+  ): Promise<TResponse>;
+  createXlsxPreview<TResponse = unknown>(
+    templateId: string | number,
+    versionId: string | number,
+    input: { sampleData: unknown },
+  ): Promise<TResponse>;
+  getXlsxPreview<TResponse = unknown>(
+    templateId: string | number,
+    versionId: string | number,
+    previewId: string | number,
+  ): Promise<TResponse>;
+  publishXlsx<TResponse = unknown>(
+    templateId: string | number,
+    versionId: string | number,
+  ): Promise<TResponse>;
+  createXlsxAssignment<TResponse = unknown>(
+    templateId: string | number,
+    versionId: string | number,
+    input: CertificateTemplateXlsxAssignmentInput,
+  ): Promise<TResponse>;
 }
 
 export type CompetenceListInput = {
@@ -1720,6 +1812,22 @@ export interface ProfileMediaApi {
   deleteAvatar(): Promise<ProfileAvatarDeleteResponse>;
 }
 
+export type OrganizationLogoUploadResponse = {
+  logoUrl: string;
+};
+
+export type OrganizationLogoDeleteResponse = {
+  logoUrl: null;
+};
+
+export interface OrganizationMediaApi {
+  uploadLogo(
+    file: Blob,
+    input?: { fileName?: string },
+  ): Promise<OrganizationLogoUploadResponse>;
+  deleteLogo(): Promise<OrganizationLogoDeleteResponse>;
+}
+
 export type SigningCertificateStatus =
   | "valid"
   | "expired"
@@ -1804,6 +1912,7 @@ export interface CalibraApi {
   notifications: NotificationsApi;
   signatures: SignaturesApi;
   profileMedia: ProfileMediaApi;
+  organizationMedia: OrganizationMediaApi;
   signingCertificates: SigningCertificatesApi;
   customers: CustomersApi;
   assets: AssetsApi;

@@ -4,8 +4,8 @@ import {
   createFileRoute,
   useNavigate,
 } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 
+import { useBackofficeAccessData } from '@/features/backoffice/queries'
 import { BrandLockup } from '@/components/brand'
 import { SignInForm } from '@/components/sign-in-form'
 import { Button } from '@/components/ui/button'
@@ -21,7 +21,6 @@ import {
   getBackofficeSession,
   useBackofficeSession,
 } from '@calibra-facil/auth/client'
-import { calibraApi } from '@/utils/api'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
 type BackofficeSignInSearch = {
@@ -51,15 +50,9 @@ function BackofficeSignInPage() {
   const navigate = useNavigate()
   const { redirect: redirectTo } = Route.useSearch()
   const { data: session } = useBackofficeSession()
-  const accessQuery = useQuery({
-    queryKey: ['backoffice', 'access', 'sign-in'],
-    queryFn: async () =>
-      calibraApi.backoffice.getAccess() as Promise<{
-        allowed: boolean
-        bootstrapAvailable: boolean
-      }>,
+  const accessQuery = useBackofficeAccessData({
+    scope: 'sign-in',
     enabled: Boolean(session?.user),
-    retry: false,
   })
 
   if (session?.user && accessQuery.data?.allowed) {

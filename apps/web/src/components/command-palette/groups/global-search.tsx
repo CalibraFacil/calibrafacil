@@ -1,5 +1,4 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ClipboardIcon,
@@ -10,7 +9,15 @@ import {
 
 import { useCommandPalette } from '../command-context'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
-import { calibraApi } from '@/utils/api'
+import {
+  getSearchModeFromPage,
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_MIN_LENGTH,
+  useCommandSearchAssetsData,
+  useCommandSearchClientsData,
+  useCommandSearchJobsData,
+  useCommandSearchStandardsData,
+} from '@/features/command-palette/global-search'
 import {
   CommandGroup,
   CommandItem,
@@ -21,57 +28,6 @@ import {
   clientRouteId,
   jobRouteId,
 } from '@/lib/route-identifiers'
-
-type SearchMode = 'assets' | 'clients' | 'standards' | 'jobs' | null
-
-type AssetSearchResult = {
-  id: number
-  tag: string
-  serialNumber: string
-  assetTypeName: string
-  customerName: string
-  customerTaxId: string | null
-}
-
-type ClientSearchResult = {
-  id: number
-  name: string
-  email: string | null
-  taxId: string | null
-}
-
-type StandardSearchResult = {
-  id: number
-  name: string
-  serialNumber: string
-  manufacturer: string | null
-}
-
-type JobSearchResult = {
-  id: number
-  jobId: string
-  status: string
-}
-
-const SEARCH_DEBOUNCE_MS = 150
-const SEARCH_MIN_LENGTH = 2
-const SEARCH_RESULT_LIMIT = 5
-
-// Derive search mode from active page
-function getSearchModeFromPage(activePage: string): SearchMode {
-  switch (activePage) {
-    case 'search-assets':
-      return 'assets'
-    case 'search-clients':
-      return 'clients'
-    case 'search-standards':
-      return 'standards'
-    case 'search-jobs':
-      return 'jobs'
-    default:
-      return null
-  }
-}
 
 export function GlobalSearchGroup({
   searchValue,
@@ -94,109 +50,40 @@ export function GlobalSearchGroup({
   // Derive search mode from active page
   const searchMode = getSearchModeFromPage(activePage)
 
-  // Asset search
   const {
     data: assetResults,
     isLoading: assetsLoading,
     isFetching: assetsFetching,
-  } = useQuery<Array<AssetSearchResult>>({
-    queryKey: ['command-search', 'assets', debouncedSearch],
-    queryFn: async () => {
-      if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
-      const result = await calibraApi.assets.list({
-        page: 1,
-        limit: SEARCH_RESULT_LIMIT,
-        query: debouncedSearch,
-      })
-      return result.data.map((asset) => ({
-        id: asset.id,
-        tag: asset.tag,
-        serialNumber: asset.serialNumber,
-        assetTypeName: asset.assetTypeName,
-        customerName: asset.customerName,
-        customerTaxId: asset.customerTaxId ?? null,
-      }))
-    },
+  } = useCommandSearchAssetsData({
+    query: debouncedSearch,
     enabled: searchMode === 'assets' && hasMinimumQuery,
-    staleTime: 30000,
-    placeholderData: (previousData) => previousData,
   })
 
-  // Client search
   const {
     data: clientResults,
     isLoading: clientsLoading,
     isFetching: clientsFetching,
-  } = useQuery<Array<ClientSearchResult>>({
-    queryKey: ['command-search', 'clients', debouncedSearch],
-    queryFn: async () => {
-      if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
-      const result = await calibraApi.customers.list({
-        page: 1,
-        limit: SEARCH_RESULT_LIMIT,
-        query: debouncedSearch,
-      })
-      return result.data.map((customer) => ({
-        id: customer.id,
-        name: customer.name,
-        email: customer.email,
-        taxId: customer.taxId,
-      }))
-    },
+  } = useCommandSearchClientsData({
+    query: debouncedSearch,
     enabled: searchMode === 'clients' && hasMinimumQuery,
-    staleTime: 30000,
-    placeholderData: (previousData) => previousData,
   })
 
-  // Standards search
   const {
     data: standardResults,
     isLoading: standardsLoading,
     isFetching: standardsFetching,
-  } = useQuery<Array<StandardSearchResult>>({
-    queryKey: ['command-search', 'standards', debouncedSearch],
-    queryFn: async () => {
-      if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
-      const result = await calibraApi.standards.list({
-        page: 1,
-        limit: SEARCH_RESULT_LIMIT,
-        query: debouncedSearch,
-      })
-      return result.data.map((standard) => ({
-        id: standard.id,
-        name: standard.name,
-        serialNumber: standard.serialNumber,
-        manufacturer: standard.manufacturer,
-      }))
-    },
+  } = useCommandSearchStandardsData({
+    query: debouncedSearch,
     enabled: searchMode === 'standards' && hasMinimumQuery,
-    staleTime: 30000,
-    placeholderData: (previousData) => previousData,
   })
 
-  // Jobs search
   const {
     data: jobResults,
     isLoading: jobsLoading,
     isFetching: jobsFetching,
-  } = useQuery<Array<JobSearchResult>>({
-    queryKey: ['command-search', 'jobs', debouncedSearch],
-    queryFn: async () => {
-      if (debouncedSearch.length < SEARCH_MIN_LENGTH) return []
-      const result = await calibraApi.jobs.list({
-        page: 1,
-        limit: SEARCH_RESULT_LIMIT,
-        query: debouncedSearch,
-      })
-      return result.data.map((job) => ({
-        id: job.id,
-        jobId: job.jobId,
-        status: job.status,
-      }))
-    },
+  } = useCommandSearchJobsData({
+    query: debouncedSearch,
     enabled: searchMode === 'jobs' && hasMinimumQuery,
-    staleTime: 30000,
-    placeholderData: (previousData) => previousData,
   })
 
   // Asset results view

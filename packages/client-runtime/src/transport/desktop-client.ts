@@ -439,6 +439,14 @@ export function createDesktopApiClient(
         throw desktopUnsupportedProfileMediaAction("Avatar");
       },
     },
+    organizationMedia: {
+      async uploadLogo() {
+        throw desktopUnsupportedProfileMediaAction("Logo da organização");
+      },
+      async deleteLogo() {
+        throw desktopUnsupportedProfileMediaAction("Logo da organização");
+      },
+    },
     signingCertificates: {
       async list() {
         return { certificates: [] };
@@ -976,6 +984,30 @@ export function createDesktopApiClient(
       async setDefault() {
         throw desktopUnsupportedAuthAction("Templates de certificado");
       },
+      async getXlsxVersion() {
+        throw desktopUnsupportedAuthAction("Templates de certificado");
+      },
+      async uploadXlsx() {
+        throw desktopUnsupportedAuthAction("Templates de certificado");
+      },
+      async validateXlsx() {
+        throw desktopUnsupportedAuthAction("Templates de certificado");
+      },
+      async updateXlsxBindings() {
+        throw desktopUnsupportedAuthAction("Templates de certificado");
+      },
+      async createXlsxPreview() {
+        throw desktopUnsupportedAuthAction("Templates de certificado");
+      },
+      async getXlsxPreview() {
+        throw desktopUnsupportedAuthAction("Templates de certificado");
+      },
+      async publishXlsx() {
+        throw desktopUnsupportedAuthAction("Templates de certificado");
+      },
+      async createXlsxAssignment() {
+        throw desktopUnsupportedAuthAction("Templates de certificado");
+      },
     },
     competences: {
       async list() {
@@ -1381,6 +1413,18 @@ export function createDesktopApiClient(
           { reason },
           "Erro ao retornar para rascunho",
         );
+      },
+      async compileDraft() {
+        throw desktopUnsupportedAuthAction("Compilação de método");
+      },
+      async previewDraft() {
+        throw desktopUnsupportedAuthAction("Preview de método");
+      },
+      async publishDraft() {
+        throw desktopUnsupportedAuthAction("Publicação de método");
+      },
+      async requestApproval() {
+        throw desktopUnsupportedAuthAction("Solicitação de aprovação");
       },
     },
     standards: {

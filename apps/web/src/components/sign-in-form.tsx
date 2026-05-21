@@ -5,6 +5,7 @@ import {
   backofficeSignOut,
   signIn,
 } from '@calibra-facil/auth/client'
+import { getBackofficeAccess } from '@/features/backoffice/queries'
 import { calibraApi } from '@/utils/api'
 import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
 import { cn } from '@/lib/utils'
@@ -55,7 +56,7 @@ export function SignInForm({
       clearDesktopSignedOut()
 
       if (mode === 'backoffice') {
-        const access = await calibraApi.backoffice.getAccess()
+        const access = await getBackofficeAccess()
 
         if (access.allowed) {
           navigate({ to: redirect || '/backoffice' })

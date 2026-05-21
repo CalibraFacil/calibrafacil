@@ -35,9 +35,10 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
-
-const DASHBOARD_ORG_KEY = 'dashboard-active-org'
-const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
+import {
+  setStoredDashboardActiveUnitIdForOrganization,
+  setStoredDashboardOrganizationId,
+} from '@/features/dashboard/dashboard-scope-storage'
 
 export function OrganizationSwitcher() {
   const navigate = useNavigate()
@@ -60,17 +61,14 @@ export function OrganizationSwitcher() {
 
   const handleSetActiveOrganization = async (orgId: string) => {
     await organization.setActive({ organizationId: orgId })
-    localStorage.setItem(DASHBOARD_ORG_KEY, orgId)
+    setStoredDashboardOrganizationId(orgId)
     await queryClient.invalidateQueries()
   }
 
   const handleSetActiveUnit = async (value: string) => {
     if (!activeOrg?.id) return
 
-    window.localStorage.setItem(
-      `${DASHBOARD_UNIT_KEY_PREFIX}${activeOrg.id}`,
-      value,
-    )
+    setStoredDashboardActiveUnitIdForOrganization(activeOrg.id, value)
 
     await queryClient.invalidateQueries()
   }

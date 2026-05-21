@@ -2,9 +2,13 @@ import { useMemo, useState } from 'react'
 import { HelpCircleIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
+import {
+  useBackofficeCommercialContextData,
+  useBackofficeCommercialOrganizationsData,
+} from '@/features/backoffice/queries'
 import { calibraApi } from '@/utils/api'
 import { Button } from '@/components/ui/button'
 import {
@@ -93,61 +97,11 @@ function BackofficeCommercialCheckoutsPage() {
     notes: '',
   })
 
-  const organizationsQuery = useQuery({
-    queryKey: ['backoffice', 'commercial', 'organizations', searchTerm],
-    queryFn: async () =>
-      calibraApi.backoffice.commercial.listOrganizations<{
-        data: Array<{
-          id: string
-          name: string
-          slug: string
-          cnpj: string | null
-        }>
-      }>(searchTerm),
-  })
-
-  const contextQuery = useQuery({
-    queryKey: ['backoffice', 'commercial', 'context', selectedOrganizationId],
-    queryFn: async () =>
-      calibraApi.backoffice.commercial.getContext<{
-        organization: {
-          id: string
-          name: string
-          cnpj: string | null
-          email: string | null
-          phone: string | null
-        }
-        subscription: {
-          planId: string
-          status: string
-          billingCycle: string | null
-        } | null
-        billingCustomer: {
-          id: number
-          name: string
-          email: string | null
-          phone: string | null
-        } | null
-        billingContacts: Array<{
-          id: number
-          name: string
-          email: string
-          isPrimary: boolean
-        }>
-        recentOffers: Array<{
-          id: string
-          kind: string
-          status: string
-          totalAmount: number
-          issuedAt?: string | null
-          offerExpiresAt?: string | null
-          paidAt?: string | null
-          customerCheckoutUrl?: string | null
-        }>
-        deals: Array<{ id: string; title: string; status: string }>
-      }>(selectedOrganizationId!),
-    enabled: !!selectedOrganizationId,
-  })
+  const organizationsQuery =
+    useBackofficeCommercialOrganizationsData(searchTerm)
+  const contextQuery = useBackofficeCommercialContextData(
+    selectedOrganizationId,
+  )
   const primaryBillingContact = contextQuery.data?.billingContacts.find(
     (contact) => contact.isPrimary,
   )
