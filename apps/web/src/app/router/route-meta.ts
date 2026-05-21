@@ -36,6 +36,11 @@ export type DashboardRouteMeta = {
   cloudOnly?: boolean | 'prefix'
 }
 
+export type DashboardRedirectRouteMeta = {
+  from: string
+  to: string
+}
+
 export const dashboardRouteMeta = [
   { path: '/dashboard/reports', cloudOnly: true },
   { path: '/dashboard/requests', cloudOnly: 'prefix' },
@@ -47,6 +52,13 @@ export const dashboardRouteMeta = [
   { path: '/dashboard/customer-success', cloudOnly: true },
   { path: '/dashboard/internal', cloudOnly: 'prefix' },
 ] satisfies DashboardRouteMeta[]
+
+export const dashboardRedirectRouteMeta = [
+  {
+    from: '/dashboard/settings/branding',
+    to: '/dashboard/certificate-templates',
+  },
+] satisfies DashboardRedirectRouteMeta[]
 
 export const dashboardPrimaryNavItems = [
   {
@@ -208,6 +220,13 @@ export function isDashboardCloudOnlyPath(pathname: string) {
 
     return pathname === route.path || pathname === `${route.path}/`
   })
+}
+
+export function getDashboardRedirectPath(pathname: string) {
+  return (
+    dashboardRedirectRouteMeta.find((route) => route.from === pathname)?.to ??
+    null
+  )
 }
 
 export function filterDashboardNavItems(

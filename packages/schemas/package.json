@@ -15,11 +15,16 @@
       "default": "./src/quality.ts"
     }
   },
-  "scripts": {},
+  "scripts": {
+    "test": "vitest run --passWithNoTests"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.17"
   }
 }

@@ -11,6 +11,10 @@ const indexHtmlPath = path.join(distDir, 'index.html')
 const jsBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS ?? 650_000)
 const cssBudget = Number(process.env.WEB_BUNDLE_BUDGET_CSS ?? 230_000)
 const jsChunkBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS_CHUNK ?? 850_000)
+const appChunkBudget = Number(
+  process.env.WEB_BUNDLE_BUDGET_APP_CHUNK ?? 180_000,
+)
+const failAppChunkBudget = process.env.WEB_BUNDLE_FAIL_APP_CHUNKS === 'true'
 
 function fail(message) {
   console.error(`\n[bundle-budget] ${message}`)
@@ -44,6 +48,7 @@ const assetsDir = path.join(distDir, 'assets')
 
 const jsBytes = statSync(jsAssetPath).size
 const cssBytes = statSync(cssAssetPath).size
+const entryJsFileName = path.basename(jsAssetPath)
 const jsChunks = readdirSync(assetsDir)
   .filter((fileName) => fileName.endsWith('.js'))
   .map((fileName) => {
@@ -53,6 +58,10 @@ const jsChunks = readdirSync(assetsDir)
       bytes: statSync(filePath).size,
     }
   })
+  .sort((left, right) => right.bytes - left.bytes)
+const appChunks = jsChunks
+  .filter((chunk) => chunk.name !== entryJsFileName)
+  .filter((chunk) => !chunk.name.startsWith('vendor-'))
   .sort((left, right) => right.bytes - left.bytes)
 
 const checks = [
@@ -66,10 +75,18 @@ const chunkFailures = jsChunks
     bytes: chunk.bytes,
     budget: jsChunkBudget,
   }))
+const appChunkFailures = appChunks
+  .filter((chunk) => chunk.bytes > appChunkBudget)
+  .map((chunk) => ({
+    name: `app-chunk:${chunk.name}`,
+    bytes: chunk.bytes,
+    budget: appChunkBudget,
+  }))
 
 const failures = [
   ...checks.filter((check) => check.bytes > check.budget),
   ...chunkFailures,
+  ...(failAppChunkBudget ? appChunkFailures : []),
 ]
 
 for (const check of checks) {
@@ -85,9 +102,21 @@ for (const check of chunkFailures) {
   )
 }
 
+for (const check of appChunkFailures) {
+  console.log(
+    `[bundle-budget] ${failAppChunkBudget ? 'FAIL' : 'WARN'} ${check.name}: ${toKb(check.bytes)} (budget ${toKb(check.budget)})`,
+  )
+}
+
 console.log(
   `[bundle-budget] largest-js-chunks: ${jsChunks
     .slice(0, 5)
+    .map((chunk) => `${chunk.name}=${toKb(chunk.bytes)}`)
+    .join(', ')}`,
+)
+console.log(
+  `[bundle-budget] largest-app-route-chunks: ${appChunks
+    .slice(0, 10)
     .map((chunk) => `${chunk.name}=${toKb(chunk.bytes)}`)
     .join(', ')}`,
 )

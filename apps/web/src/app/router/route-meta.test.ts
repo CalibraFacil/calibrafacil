@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   dashboardPrimaryNavItems,
   filterDashboardNavItems,
+  getDashboardRedirectPath,
   isDashboardCloudOnlyPath,
 } from './route-meta'
 
@@ -27,5 +28,12 @@ describe('dashboard route metadata', () => {
       false,
     )
     expect(withFinance.some((item) => item.title === 'Financeiro')).toBe(true)
+  })
+
+  it('keeps legacy dashboard redirects in route metadata', () => {
+    expect(getDashboardRedirectPath('/dashboard/settings/branding')).toBe(
+      '/dashboard/certificate-templates',
+    )
+    expect(getDashboardRedirectPath('/dashboard/settings/profile')).toBeNull()
   })
 })

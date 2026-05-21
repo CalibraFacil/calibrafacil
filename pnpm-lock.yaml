@@ -82,7 +82,7 @@ importers:
         version: link:../../packages/db
       '@calibra-facil/math-engine':
         specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
-        version: git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
+        version: git+https://github.com/CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
       '@calibra-facil/method-definition':
         specifier: workspace:^
         version: link:../../packages/method-definition
@@ -235,7 +235,7 @@ importers:
         version: link:../../packages/local-db
       '@calibra-facil/math-engine':
         specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
-        version: git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
+        version: git+https://github.com/CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
       '@calibra-facil/method-definition':
         specifier: workspace:^
         version: link:../../packages/method-definition
@@ -399,7 +399,7 @@ importers:
         version: link:../../packages/documents
       '@calibra-facil/math-engine':
         specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
-        version: git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
+        version: git+https://github.com/CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
       '@calibra-facil/schemas':
         specifier: workspace:^
         version: link:../../packages/schemas
@@ -768,7 +768,7 @@ importers:
     dependencies:
       '@calibra-facil/math-engine':
         specifier: git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4
-        version: git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
+        version: git+https://github.com/CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751
       '@calibra-facil/method-definition':
         specifier: workspace:^
         version: link:../method-definition
@@ -937,6 +937,10 @@ importers:
       zod:
         specifier: ^4.2.1
         version: 4.2.1
+    devDependencies:
+      vitest:
+        specifier: ^4.0.17
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@25.0.3)(jiti@2.6.1)(jsdom@27.3.0)(lightningcss@1.30.2)(msw@2.12.4(@types/node@25.0.3)(typescript@5.9.3))(terser@5.47.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/shared: {}
 
@@ -1494,8 +1498,8 @@ packages:
   '@better-fetch/fetch@1.1.21':
     resolution: {integrity: sha512-/ImESw0sskqlVR94jB+5+Pxjf+xBwDZF/N5+y2/q4EqD7IARUTSpPfIo8uf39SYpCxyOCtbyYpUrZ3F/k0zT4A==}
 
-  '@calibra-facil/math-engine@git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751':
-    resolution: {commit: ce6afecd5d28dfc75b3a0048d3f0318f988ad751, repo: git@github.com:CalibraFacil/math-engine.git, type: git}
+  '@calibra-facil/math-engine@git+https://github.com/CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751':
+    resolution: {commit: ce6afecd5d28dfc75b3a0048d3f0318f988ad751, repo: https://github.com/CalibraFacil/math-engine.git, type: git}
     version: 0.2.4
     engines: {node: '>=20'}
 
@@ -10253,7 +10257,7 @@ snapshots:
 
   '@better-fetch/fetch@1.1.21': {}
 
-  '@calibra-facil/math-engine@git+https://git@github.com:CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751': {}
+  '@calibra-facil/math-engine@git+https://github.com/CalibraFacil/math-engine.git#ce6afecd5d28dfc75b3a0048d3f0318f988ad751': {}
 
   '@capsizecss/unpack@4.0.0':
     dependencies:
