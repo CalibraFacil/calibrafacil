@@ -1,12 +1,12 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
+import { readBundleMetricsFromDist } from './bundle-metrics.mjs'
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const appDir = path.resolve(scriptDir, '..')
 const distDir = path.join(appDir, 'dist')
-const indexHtmlPath = path.join(distDir, 'index.html')
 
 const jsBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS ?? 650_000)
 const cssBudget = Number(process.env.WEB_BUNDLE_BUDGET_CSS ?? 230_000)
@@ -25,44 +25,16 @@ function toKb(bytes) {
   return `${(bytes / 1024).toFixed(1)} KiB`
 }
 
-let html
-
+let metrics
 try {
-  html = readFileSync(indexHtmlPath, 'utf8')
-} catch {
+  metrics = readBundleMetricsFromDist(distDir)
+} catch (error) {
   fail(
-    'Missing apps/web/dist/index.html. Run `pnpm --filter @calibra-facil/web build` first.',
+    `${error instanceof Error ? error.message : 'Could not read bundle metrics.'} Run \`pnpm --filter @calibra-facil/web build\` first.`,
   )
 }
 
-const jsMatch = html.match(/<script[^>]+src="([^"]+\.js)"/)
-const cssMatch = html.match(/<link[^>]+href="([^"]+\.css)"/)
-
-if (!jsMatch || !cssMatch) {
-  fail('Could not detect entry JS/CSS assets in dist/index.html.')
-}
-
-const jsAssetPath = path.join(distDir, jsMatch[1].replace(/^\//, ''))
-const cssAssetPath = path.join(distDir, cssMatch[1].replace(/^\//, ''))
-const assetsDir = path.join(distDir, 'assets')
-
-const jsBytes = statSync(jsAssetPath).size
-const cssBytes = statSync(cssAssetPath).size
-const entryJsFileName = path.basename(jsAssetPath)
-const jsChunks = readdirSync(assetsDir)
-  .filter((fileName) => fileName.endsWith('.js'))
-  .map((fileName) => {
-    const filePath = path.join(assetsDir, fileName)
-    return {
-      name: fileName,
-      bytes: statSync(filePath).size,
-    }
-  })
-  .sort((left, right) => right.bytes - left.bytes)
-const appChunks = jsChunks
-  .filter((chunk) => chunk.name !== entryJsFileName)
-  .filter((chunk) => !chunk.name.startsWith('vendor-'))
-  .sort((left, right) => right.bytes - left.bytes)
+const { jsBytes, cssBytes, jsChunks, appChunks } = metrics
 
 const checks = [
   { name: 'entry-js', bytes: jsBytes, budget: jsBudget },
