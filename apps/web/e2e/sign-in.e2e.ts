@@ -1,4 +1,6 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+
+import { expectRequestPayload, routeJson } from './helpers'
 
 test.describe('sign-in', () => {
   test('keeps failed lab credentials on the sign-in page', async ({ page }) => {
@@ -20,8 +22,7 @@ test.describe('sign-in', () => {
     await page.getByLabel('Senha').fill('senha-incorreta')
     await page.getByRole('button', { name: 'Entrar', exact: true }).click()
 
-    await expect.poll(() => signInRequests.length).toBe(1)
-    expect(signInRequests[0]).toMatchObject({
+    await expectRequestPayload(signInRequests, {
       email: 'tecnico@lab.test',
       password: 'senha-incorreta',
     })
@@ -50,8 +51,7 @@ test.describe('sign-in', () => {
     await page.getByLabel('Email corporativo').fill('tecnico@lab.test')
     await page.getByRole('button', { name: 'Entrar com SSO' }).click()
 
-    await expect.poll(() => ssoRequests.length).toBe(1)
-    expect(ssoRequests[0]).toMatchObject({
+    await expectRequestPayload(ssoRequests, {
       organizationSlug: 'lab-acreditado',
       email: 'tecnico@lab.test',
       redirectPath: '/dashboard/jobs',
@@ -59,35 +59,3 @@ test.describe('sign-in', () => {
     await expect(page.getByText('Falha ao iniciar login via SSO')).toBeVisible()
   })
 })
-
-async function routeJson(
-  page: Page,
-  url: string,
-  options: {
-    status: number
-    body: unknown
-    onRequest?: (payload: Record<string, unknown>) => void
-  },
-) {
-  await page.route(url, async (route) => {
-    const payload = await readJsonPayload(route.request().postData())
-    options.onRequest?.(payload)
-
-    await route.fulfill({
-      status: options.status,
-      contentType: 'application/json',
-      body: JSON.stringify(options.body),
-    })
-  })
-}
-
-async function readJsonPayload(data: string | null) {
-  if (!data) return {}
-
-  const parsed = JSON.parse(data)
-  return isRecord(parsed) ? parsed : {}
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
