@@ -115,9 +115,11 @@ function buildMappedTargetPayload(
   target: IntegrationSyncTarget,
   payload: SyncPayload,
 ) {
+  const payloadRecord = Object.fromEntries(Object.entries(payload));
+
   return applyIntegrationMappings(
     target,
-    payload as unknown as Record<string, unknown>,
+    payloadRecord,
     config.mappings[target],
   );
 }
@@ -645,8 +647,8 @@ async function callRemoteJson(url: string, init: RequestInit) {
 }
 
 function extractRemoteId(data: unknown): string | null {
-  if (!data || typeof data !== "object") return null;
-  const record = data as Record<string, unknown>;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const record = Object.fromEntries(Object.entries(data));
   if (typeof record.remoteId === "string" && record.remoteId.trim()) {
     return record.remoteId;
   }
@@ -934,26 +936,36 @@ export async function processIntegrationSync(
 
       const validated =
         Boolean(runtime.lastValidatedAt) && !runtime.lastValidationError;
-      const coverageByTarget = Object.fromEntries(
-        await Promise.all(
-          INTEGRATION_TARGETS.map(async (target) => {
-            const [localCount, linkedCount] = await Promise.all([
-              countLocalTargetRecords(client, message.organizationId, target),
-              countLinkedTargetRecords(client, message.integrationId, target),
-            ]);
+      const coverageSummaries = await Promise.all(
+        INTEGRATION_TARGETS.map(async (target) => {
+          const [localCount, linkedCount] = await Promise.all([
+            countLocalTargetRecords(client, message.organizationId, target),
+            countLinkedTargetRecords(client, message.integrationId, target),
+          ]);
 
-            return [
-              target,
-              {
-                target,
-                localCount,
-                linkedCount,
-                unlinkedCount: Math.max(localCount - linkedCount, 0),
-              } satisfies IntegrationTargetCoverageSummary,
-            ] as const;
-          }),
-        ),
-      ) as Record<IntegrationSyncTarget, IntegrationTargetCoverageSummary>;
+          return {
+            target,
+            localCount,
+            linkedCount,
+            unlinkedCount: Math.max(localCount - linkedCount, 0),
+          } satisfies IntegrationTargetCoverageSummary;
+        }),
+      );
+      const getCoverage = (target: IntegrationSyncTarget) =>
+        coverageSummaries.find((summary) => summary.target === target) ?? {
+          target,
+          localCount: 0,
+          linkedCount: 0,
+          unlinkedCount: 0,
+        };
+      const coverageByTarget = {
+        customer: getCoverage("customer"),
+        service_order: getCoverage("service_order"),
+        billing_document: getCoverage("billing_document"),
+      } satisfies Record<
+        IntegrationSyncTarget,
+        IntegrationTargetCoverageSummary
+      >;
       const blockingWarnings = buildDependencyWarnings({
         target: message.target,
         validated,

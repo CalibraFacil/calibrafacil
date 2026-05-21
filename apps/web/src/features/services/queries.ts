@@ -6,6 +6,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
+import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   type PublishedMethodsData,
   type ServiceAssetTypesData,
@@ -20,17 +21,8 @@ import {
 
 export const SERVICES_LIST_LIMIT = 20
 
-function pageFromUrl(url?: URL) {
-  const page = Number(url?.searchParams.get('page') ?? 1)
-  return Number.isFinite(page) && page > 0 ? page : 1
-}
-
 function statusFromUrl(url?: URL): ServicesListStatus | '' {
-  const status = url?.searchParams.get('status') ?? ''
-
-  return SERVICES_LIST_STATUSES.includes(status as ServicesListStatus)
-    ? (status as ServicesListStatus)
-    : ''
+  return optionFromUrl(SERVICES_LIST_STATUSES, url?.searchParams.get('status'))
 }
 
 export function servicesListQueryInputFromUrl(
@@ -55,7 +47,7 @@ export function servicesListQueryOptions(input: ServicesListQueryInput) {
       input.search,
       input.statusFilter,
     ],
-    queryFn: () =>
+    queryFn: (): Promise<ServicesListData> =>
       calibraApi.services.list({
         page: input.page,
         limit: input.limit,
@@ -66,43 +58,49 @@ export function servicesListQueryOptions(input: ServicesListQueryInput) {
             : input.statusFilter === 'inactive'
               ? false
               : undefined,
-      }) as Promise<ServicesListData>,
+      }),
   })
 }
 
 export function serviceDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['services', id],
-    queryFn: () => calibraApi.services.get(id) as Promise<ServiceDetail>,
+    queryFn: (): Promise<ServiceDetail> => calibraApi.services.get(id),
   })
 }
 
 export function serviceAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['services', id, 'audit-log'],
-    queryFn: () =>
-      calibraApi.services.auditLog<ServiceAuditLogRecord>(
-        id,
-      ) as Promise<ServiceAuditLogData>,
+    queryFn: (): Promise<ServiceAuditLogData> =>
+      calibraApi.services.auditLog<ServiceAuditLogRecord>(id),
   })
 }
 
 export function publishedMethodsQueryOptions() {
   return queryOptions({
     queryKey: ['methods', 'published'],
-    queryFn: () =>
+    queryFn: (): Promise<PublishedMethodsData> =>
       calibraApi.methods.list({
         status: 'PUBLISHED',
         limit: 100,
-      }) as Promise<PublishedMethodsData>,
+      }),
   })
 }
 
 export function serviceAssetTypesQueryOptions() {
   return queryOptions({
     queryKey: ['asset-types'],
-    queryFn: () =>
-      calibraApi.assetTypes.list() as Promise<ServiceAssetTypesData>,
+    queryFn: async (): Promise<ServiceAssetTypesData> => {
+      const result = await calibraApi.assetTypes.list()
+      return {
+        data: result.data.map((assetType) => ({
+          id: assetType.id,
+          name: assetType.name,
+          slug: assetType.slug ?? String(assetType.id),
+        })),
+      }
+    },
   })
 }
 

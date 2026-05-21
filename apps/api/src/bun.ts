@@ -131,11 +131,11 @@ async function createEnv(): Promise<BunApiEnv> {
         RESEND_FROM_EMAIL: "Calibra Facil <noreply@calibrafacil.com>",
       };
 
-  const env = {
+  const env: Record<string, unknown> = {
     ...defaults,
     ...localEnv,
     ...Bun.env,
-  } as Record<string, unknown>;
+  };
 
   if (!isProduction) {
     for (const [key, fallback] of Object.entries(localUrlDefaults)) {
@@ -177,9 +177,10 @@ async function createEnv(): Promise<BunApiEnv> {
     }
   }
 
-  const apiEnv = env as BunApiEnv;
-
-  apiEnv.CACHE = createLocalKv();
+  const apiEnv: BunApiEnv = {
+    ...env,
+    CACHE: createLocalKv(),
+  };
 
   for (const [key, value] of Object.entries(apiEnv)) {
     if (typeof value === "string") {

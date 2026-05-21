@@ -209,6 +209,14 @@ function sha256Hex(bytes: Uint8Array | ArrayBuffer): string {
   return createHash("sha256").update(new Uint8Array(bytes)).digest("hex");
 }
 
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
 type EccentricityIndicatorVariant = "circular_platform" | "road_scale";
 type EccentricityIndicatorPosition =
   | "top"
@@ -393,14 +401,39 @@ function parseSignatureMetadata(value: unknown): SignatureMetadata | undefined {
 
   if (typeof value === "string") {
     try {
-      const parsed = JSON.parse(value) as unknown;
+      const parsed: unknown = JSON.parse(value);
       return parseSignatureMetadata(parsed);
     } catch {
       return undefined;
     }
   }
 
-  return typeof value === "object" ? (value as SignatureMetadata) : undefined;
+  const metadata = recordFromUnknown(value);
+  const signedAt = metadata.signedAt;
+  const signerCertificateSerial = metadata.signerCertificateSerial;
+  const signerName = metadata.signerName;
+  const signerCpfCnpj = metadata.signerCpfCnpj;
+  const pdfHash = metadata.pdfHash;
+  const ltvEnabled = metadata.ltvEnabled;
+  if (
+    typeof signedAt !== "string" ||
+    typeof signerCertificateSerial !== "string" ||
+    typeof signerName !== "string" ||
+    (signerCpfCnpj !== null && typeof signerCpfCnpj !== "string") ||
+    typeof pdfHash !== "string" ||
+    typeof ltvEnabled !== "boolean"
+  ) {
+    return undefined;
+  }
+
+  return {
+    signedAt,
+    signerCertificateSerial,
+    signerName,
+    signerCpfCnpj,
+    pdfHash,
+    ltvEnabled,
+  };
 }
 
 function renderEccentricityIndicatorPng(
@@ -461,14 +494,22 @@ function resolveEccentricityIndicatorPosition(
     ) ??
     getPathValue(data, "data.eccentricityIndicatorPosition") ??
     getPathValue(data, "graphics.eccentricityIndicatorPosition");
+  return typeof value === "string" &&
+    isEccentricityIndicatorPosition(value, variant)
+    ? value
+    : null;
+}
+
+function isEccentricityIndicatorPosition(
+  value: string,
+  variant: EccentricityIndicatorVariant,
+): value is EccentricityIndicatorPosition {
   const allowed =
     variant === "road_scale"
       ? ROAD_SCALE_ECCENTRICITY_INDICATOR_POSITIONS
       : CIRCULAR_ECCENTRICITY_INDICATOR_POSITIONS;
 
-  return typeof value === "string" && allowed.has(value)
-    ? (value as EccentricityIndicatorPosition)
-    : null;
+  return allowed.has(value);
 }
 
 function resolveCircularEccentricityLoadPositions(
@@ -478,10 +519,11 @@ function resolveCircularEccentricityLoadPositions(
   const field = job?.methodSnapshot?.dataFields?.find(
     (item) => item.eccentricityIndicator?.enabled,
   );
+  const configuredRows = field ? job?.data?.[field.key] : undefined;
   const rows =
-    field && Array.isArray(job?.data?.[field.key])
-      ? (job.data[field.key] as unknown[])
-      : (getPathValue(data, "dataDisplay.excentricidade") as unknown);
+    field && Array.isArray(configuredRows)
+      ? configuredRows
+      : getPathValue(data, "dataDisplay.excentricidade");
 
   if (!field?.columns || !Array.isArray(rows)) {
     return CIRCULAR_ECCENTRICITY_LOAD_POINTS;
@@ -500,9 +542,7 @@ function resolveCircularEccentricityLoadPositions(
   for (const row of rows) {
     if (!row || typeof row !== "object") continue;
 
-    const value = String(
-      (row as Record<string, unknown>)[positionColumn.key] ?? "",
-    )
+    const value = String(recordFromUnknown(row)[positionColumn.key] ?? "")
       .trim()
       .toUpperCase();
     if (
@@ -604,7 +644,7 @@ function getPathValue(data: Record<string, unknown>, path: string): unknown {
       return current[Number.parseInt(segment, 10)];
     }
     if (typeof current === "object") {
-      return (current as Record<string, unknown>)[segment];
+      return Reflect.get(current, segment);
     }
     return undefined;
   }, data);
@@ -1474,14 +1514,11 @@ async function processServiceOrderIntakeDocument(
     );
     const pdfBuffer = await generatePdfFromHtml(page, html);
     const year = getYearFromDateish(data.openedAt, "openedAt");
+    const orgId = await withDbClient(env, (client) =>
+      fetchServiceOrderOrganizationId(client, serviceOrderId),
+    );
     const key = buildServiceOrderR2Key({
-      orgId: (await withDbClient(env, async (client) => {
-        const result = await client.query(
-          `SELECT organization_id FROM service_order WHERE id = $1`,
-          [serviceOrderId],
-        );
-        return result.rows[0]?.organization_id;
-      })) as string,
+      orgId,
       serviceOrderNumber: data.serviceOrderNumber,
       year,
       type: "INTAKE",
@@ -1512,6 +1549,22 @@ async function processServiceOrderIntakeDocument(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+async function fetchServiceOrderOrganizationId(
+  client: Client,
+  serviceOrderId: number,
+) {
+  const result = await client.query<{ organization_id: string }>(
+    `SELECT organization_id FROM service_order WHERE id = $1`,
+    [serviceOrderId],
+  );
+  const organizationId = result.rows[0]?.organization_id;
+  if (!organizationId) {
+    throw new Error("Service order organization not found");
+  }
+
+  return organizationId;
 }
 
 async function processServiceOrderTag(
@@ -1649,13 +1702,9 @@ async function processServiceOrderQuote(
     );
     const pdfBuffer = await generatePdfFromHtml(page, html);
     const year = getYearFromDateish(base.openedAt, "openedAt");
-    const orgId = await withDbClient(env, async (client) => {
-      const result = await client.query(
-        `SELECT organization_id FROM service_order WHERE id = $1`,
-        [serviceOrderId],
-      );
-      return result.rows[0]?.organization_id as string;
-    });
+    const orgId = await withDbClient(env, (client) =>
+      fetchServiceOrderOrganizationId(client, serviceOrderId),
+    );
     const key = buildServiceOrderR2Key({
       orgId,
       serviceOrderNumber: base.serviceOrderNumber,
@@ -2037,7 +2086,7 @@ function readTarString(bytes: Uint8Array, start: number, length: number) {
 }
 
 function readTarSize(bytes: Uint8Array, start: number) {
-  const rawSize = readTarString(bytes, start, 12).replace(/\0/g, "").trim();
+  const rawSize = readTarString(bytes, start, 12).replaceAll("\0", "").trim();
   if (!rawSize) return 0;
 
   const size = Number.parseInt(rawSize, 8);
@@ -2165,7 +2214,7 @@ async function launchBrowser(env: Env): Promise<Browser> {
       executablePath: env.CHROME_EXECUTABLE_PATH,
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    }) as Promise<Browser>;
+    });
   }
 
   if (process.env.VERCEL) {
@@ -2182,7 +2231,7 @@ async function launchBrowser(env: Env): Promise<Browser> {
         "--no-sandbox",
         "--disable-setuid-sandbox",
       ],
-    }) as Promise<Browser>;
+    });
   }
 
   throw new Error(
@@ -2401,6 +2450,12 @@ function isDocumentMessage(
   );
 }
 
+function isIntegrationSyncMessage(
+  message: BackgroundJobMessage,
+): message is IntegrationSyncQueueMessage {
+  return message.type === "INTEGRATION_SYNC";
+}
+
 function isServiceOrderDocumentMessage(
   message: DocumentBackgroundJobMessage,
 ): message is Extract<
@@ -2431,17 +2486,10 @@ function isCalibrationCertificateMessage(
   if (!isDocumentMessage(message)) return false;
   if (isServiceOrderDocumentMessage(message)) return false;
 
-  const calibrationMessage = message as {
-    type?: string;
-    jobId?: unknown;
-    userId?: unknown;
-  };
-
   return (
-    (calibrationMessage.type === undefined ||
-      calibrationMessage.type === "CERTIFICATE") &&
-    typeof calibrationMessage.jobId === "number" &&
-    typeof calibrationMessage.userId === "string"
+    (message.type === undefined || message.type === "CERTIFICATE") &&
+    typeof message.jobId === "number" &&
+    typeof message.userId === "string"
   );
 }
 
@@ -2509,40 +2557,22 @@ async function processDocumentMessage(
     return;
   }
 
-  const calibrationBody = body as {
-    type?: "CERTIFICATE" | "LABEL";
-    jobId: number;
-    userId: string;
-  };
-  const messageType = calibrationBody.type || "CERTIFICATE";
+  const messageType = body.type || "CERTIFICATE";
   const result =
     messageType === "LABEL"
-      ? await processLabelJob(
-          env,
-          page,
-          calibrationBody.jobId,
-          calibrationBody.userId,
-        )
-      : await processJob(
-          env,
-          page,
-          calibrationBody.jobId,
-          calibrationBody.userId,
-        );
+      ? await processLabelJob(env, page, body.jobId, body.userId)
+      : await processJob(env, page, body.jobId, body.userId);
 
   if (!result.success && messageType !== "LABEL") {
     await withDbClient(env, (client) =>
       setJobError(
         client,
-        calibrationBody.jobId,
+        body.jobId,
         result.error || "Unknown error",
-        calibrationBody.userId,
+        body.userId,
       ),
     ).catch((dbError) => {
-      console.error(
-        `[JOB ${calibrationBody.jobId}] Failed to record error:`,
-        dbError,
-      );
+      console.error(`[JOB ${body.jobId}] Failed to record error:`, dbError);
     });
   }
 
@@ -2891,9 +2921,12 @@ function getFirstWeighingRangeSpec(
   job: JobData,
 ): Record<string, unknown> | undefined {
   const ranges = job.assetSnapshot?.specifications?.weighingRanges;
-  return Array.isArray(ranges) && ranges[0] && typeof ranges[0] === "object"
-    ? (ranges[0] as Record<string, unknown>)
-    : undefined;
+  if (!Array.isArray(ranges)) {
+    return undefined;
+  }
+
+  const firstRange = recordFromUnknown(ranges[0]);
+  return Object.keys(firstRange).length > 0 ? firstRange : undefined;
 }
 
 function collectMethodDataUnits(job: JobData): Map<string, unknown> {
@@ -2929,12 +2962,10 @@ function normalizeMethodDataDisplayForXlsx(job: JobData) {
 
     if (value && typeof value === "object") {
       return Object.fromEntries(
-        Object.entries(value as Record<string, unknown>).map(
-          ([key, itemValue]) => [
-            key,
-            formatByPath(itemValue, path ? `${path}.${key}` : key),
-          ],
-        ),
+        Object.entries(recordFromUnknown(value)).map(([key, itemValue]) => [
+          key,
+          formatByPath(itemValue, path ? `${path}.${key}` : key),
+        ]),
       );
     }
 
@@ -3065,12 +3096,9 @@ function normalizeMassCompositionsForXlsx(job: JobData) {
 
   for (const source of sources) {
     for (const [key, value] of Object.entries(source)) {
-      if (
-        value &&
-        typeof value === "object" &&
-        (value as { kind?: unknown }).kind === "mass_standard_composition"
-      ) {
-        compositions.push({ key, ...(value as Record<string, unknown>) });
+      const composition = recordFromUnknown(value);
+      if (composition.kind === "mass_standard_composition") {
+        compositions.push({ key, ...composition });
       }
     }
   }
@@ -3467,7 +3495,7 @@ export async function processBackgroundJob(
   }
 
   if (message.type === "INTEGRATION_SYNC") {
-    await processIntegrationSync(env, message as IntegrationSyncQueueMessage);
+    await processIntegrationSync(env, message);
     return;
   }
 
@@ -3516,9 +3544,7 @@ export async function processBackgroundJobBatch(
   env: Env,
   messages: BackgroundJobMessage[],
 ) {
-  const integrationMessages = messages.filter(
-    (message) => message.type === "INTEGRATION_SYNC",
-  );
+  const integrationMessages = messages.filter(isIntegrationSyncMessage);
   const scheduledNotificationMessages = messages.filter(
     (message) => message.type === "SCHEDULED_NOTIFICATIONS",
   );
@@ -3529,7 +3555,7 @@ export async function processBackgroundJobBatch(
   const documentMessages = messages.filter(isDocumentMessage);
 
   for (const message of integrationMessages) {
-    await processIntegrationSync(env, message as IntegrationSyncQueueMessage);
+    await processIntegrationSync(env, message);
   }
 
   for (const _message of scheduledNotificationMessages) {

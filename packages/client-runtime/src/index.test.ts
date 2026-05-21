@@ -12,6 +12,24 @@ import {
 } from "./index";
 import type { CreateServiceOrderInput, JobExecutionPayload } from "./index";
 
+function testWindow(value: unknown): Window {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- tests construct the browser surface needed by desktop runtime detection.
+  return value as Window;
+}
+
+function testPayload<T>(value: unknown): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- tests intentionally exercise partial command payload transport.
+  return value as T;
+}
+
+function formDataBody(init: RequestInit | undefined): FormData {
+  if (init?.body instanceof FormData) {
+    return init.body;
+  }
+
+  throw new Error("Expected FormData body");
+}
+
 describe("client runtime data policy registry", () => {
   it("documents the current desktop parity boundary", () => {
     expect(getCalibraApiDataPolicy("standards", "list")).toBe(
@@ -1245,21 +1263,25 @@ describe("client runtime data policy registry", () => {
 describe("desktop runtime detection", () => {
   it("detects the Electron renderer even before the preload bridge is available", () => {
     expect(
-      isDesktopRuntime({
-        navigator: {
-          userAgent:
-            "Mozilla/5.0 CalibraFacil Chrome/142.0.0.0 Electron/39.8.10",
-        },
-      } as Window),
+      isDesktopRuntime(
+        testWindow({
+          navigator: {
+            userAgent:
+              "Mozilla/5.0 CalibraFacil Chrome/142.0.0.0 Electron/39.8.10",
+          },
+        }),
+      ),
     ).toBe(true);
   });
 
   it("detects the preload bridge when it is available", () => {
     expect(
-      isDesktopRuntime({
-        calibraBridge: {},
-        navigator: { userAgent: "Mozilla/5.0 Chrome/142.0.0.0" },
-      } as Window),
+      isDesktopRuntime(
+        testWindow({
+          calibraBridge: {},
+          navigator: { userAgent: "Mozilla/5.0 Chrome/142.0.0.0" },
+        }),
+      ),
     ).toBe(true);
   });
 });
@@ -2309,9 +2331,7 @@ describe("certificate templates XLSX runtime adapter", () => {
       ),
     ).toEqual(["20", "20", "20", "20", "20", "20", "20", "20"]);
     expect(fetchCalls[1]?.[1]?.body).toBeInstanceOf(FormData);
-    expect(
-      (fetchCalls[1]?.[1]?.body as FormData | undefined)?.get("xlsx"),
-    ).toBeInstanceOf(Blob);
+    expect(formDataBody(fetchCalls[1]?.[1]).get("xlsx")).toBeInstanceOf(Blob);
     expect(new Headers(fetchCalls[3]?.[1]?.headers).get("Content-Type")).toBe(
       "application/json",
     );
@@ -2517,14 +2537,20 @@ describe("desktop hybrid runtime adapter", () => {
 
     await client.jobs.get("R-0001/2026");
     await client.jobs.get("R-0001%2F2026");
-    await client.jobs.saveExecution("R-0001/2026", {
-      status: "draft",
-      measurements: [],
-    } as unknown as JobExecutionPayload);
-    await client.jobs.submitExecution("R-0001%2F2026", {
-      status: "submitted",
-      measurements: [],
-    } as unknown as JobExecutionPayload);
+    await client.jobs.saveExecution(
+      "R-0001/2026",
+      testPayload<JobExecutionPayload>({
+        status: "draft",
+        measurements: [],
+      }),
+    );
+    await client.jobs.submitExecution(
+      "R-0001%2F2026",
+      testPayload<JobExecutionPayload>({
+        status: "submitted",
+        measurements: [],
+      }),
+    );
     await client.jobs.createCertificateDraft("R-0001/2026");
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
@@ -2577,20 +2603,28 @@ describe("desktop hybrid runtime adapter", () => {
       model: "Modelo",
     });
     await client.assets.update(1, { name: "Ativo atualizado" });
-    await client.jobs.saveExecution("job-1", {
-      status: "draft",
-      measurements: [],
-    } as unknown as JobExecutionPayload);
-    await client.jobs.submitExecution("job-1", {
-      status: "submitted",
-      measurements: [],
-    } as unknown as JobExecutionPayload);
-    await client.serviceOrders.create({
-      customerId: 1,
-      priority: "normal",
-      intakeType: "dropoff",
-      items: [],
-    } as unknown as CreateServiceOrderInput);
+    await client.jobs.saveExecution(
+      "job-1",
+      testPayload<JobExecutionPayload>({
+        status: "draft",
+        measurements: [],
+      }),
+    );
+    await client.jobs.submitExecution(
+      "job-1",
+      testPayload<JobExecutionPayload>({
+        status: "submitted",
+        measurements: [],
+      }),
+    );
+    await client.serviceOrders.create(
+      testPayload<CreateServiceOrderInput>({
+        customerId: 1,
+        priority: "normal",
+        intakeType: "dropoff",
+        items: [],
+      }),
+    );
     await client.serviceOrders.createQuote("service-order-1", {
       items: [],
     });
@@ -3771,9 +3805,9 @@ describe("signatures runtime adapter", () => {
       ),
     ).toEqual(["10", "10", "10"]);
     expect(fetchCalls[1]?.[1]?.body).toBeInstanceOf(FormData);
-    expect(
-      (fetchCalls[1]?.[1]?.body as FormData | undefined)?.get("signature"),
-    ).toBeInstanceOf(Blob);
+    expect(formDataBody(fetchCalls[1]?.[1]).get("signature")).toBeInstanceOf(
+      Blob,
+    );
   });
 
   it("keeps visual signatures cloud-only in the desktop adapter", async () => {
@@ -3839,9 +3873,7 @@ describe("profile media runtime adapter", () => {
       ),
     ).toEqual(["20", "20"]);
     expect(fetchCalls[0]?.[1]?.body).toBeInstanceOf(FormData);
-    expect(
-      (fetchCalls[0]?.[1]?.body as FormData | undefined)?.get("avatar"),
-    ).toBeInstanceOf(Blob);
+    expect(formDataBody(fetchCalls[0]?.[1]).get("avatar")).toBeInstanceOf(Blob);
   });
 
   it("keeps avatar media cloud-only in the desktop adapter", async () => {
@@ -3906,9 +3938,7 @@ describe("organization media runtime adapter", () => {
       ),
     ).toEqual(["20", "20"]);
     expect(fetchCalls[0]?.[1]?.body).toBeInstanceOf(FormData);
-    expect(
-      (fetchCalls[0]?.[1]?.body as FormData | undefined)?.get("logo"),
-    ).toBeInstanceOf(Blob);
+    expect(formDataBody(fetchCalls[0]?.[1]).get("logo")).toBeInstanceOf(Blob);
   });
 
   it("keeps organization logo media cloud-only in the desktop adapter", async () => {

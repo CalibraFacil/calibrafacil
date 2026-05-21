@@ -37,7 +37,10 @@ function CustomerSuccessTicketsPage() {
   const supportQueueQuery = useSupportQueue()
   const updateStatusMutation = useUpdateRequestStatus()
   const [ticketFilter, setTicketFilter] = useState<TicketFilter>('all')
-  const supportQueue = supportQueueQuery.data?.data ?? []
+  const supportQueue = useMemo(
+    () => supportQueueQuery.data?.data ?? [],
+    [supportQueueQuery.data?.data],
+  )
   const filteredSupportQueue = useMemo(
     () =>
       filterSupportQueue({

@@ -32,6 +32,26 @@ export interface AssetsTableMeta {
   onCustomerClick?: (customerId: number) => void
 }
 
+function getAssetsTableMeta(meta: unknown): AssetsTableMeta | null {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null
+
+  const onCustomerClick = Object.fromEntries(Object.entries(meta)).onCustomerClick
+  if (typeof onCustomerClick !== 'function') return null
+
+  return { onCustomerClick }
+}
+
+function getAssetStatus(status: string): AssetStatus {
+  switch (status) {
+    case 'INACTIVE':
+    case 'MAINTENANCE':
+    case 'SCRAPPED':
+      return status
+    default:
+      return 'ACTIVE'
+  }
+}
+
 export const assetsColumns: ColumnDef<Asset>[] = [
   {
     accessorKey: 'tag',
@@ -73,7 +93,7 @@ export const assetsColumns: ColumnDef<Asset>[] = [
     accessorKey: 'customerName',
     header: 'Cliente',
     cell: ({ row, table }) => {
-      const meta = table.options.meta as AssetsTableMeta | undefined
+      const meta = getAssetsTableMeta(table.options.meta)
       return (
         <Badge
           variant="outline"
@@ -91,11 +111,10 @@ export const assetsColumns: ColumnDef<Asset>[] = [
   {
     accessorKey: 'status',
     header: 'Status',
-    cell: ({ row }) => (
-      <Badge variant={statusVariants[row.original.status as AssetStatus]}>
-        {statusLabels[row.original.status as AssetStatus]}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const status = getAssetStatus(row.original.status)
+      return <Badge variant={statusVariants[status]}>{statusLabels[status]}</Badge>
+    },
   },
   {
     accessorKey: 'nextCalibrationDate',

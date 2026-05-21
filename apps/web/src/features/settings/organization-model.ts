@@ -209,9 +209,10 @@ export function buildOrganizationIsoPayload(draft: OrganizationIsoDraft) {
 }
 
 export function createUnitNameDrafts(units: OrganizationUnit[]) {
-  return Object.fromEntries(
-    units.map((unit) => [unit.id, unit.name]),
-  ) as Record<number, string>
+  return units.reduce<Record<number, string>>((drafts, unit) => {
+    drafts[unit.id] = unit.name
+    return drafts
+  }, {})
 }
 
 export function mergeUnitNameDrafts(
@@ -289,7 +290,7 @@ export function getGovernanceActivityLabel(event: GovernanceActivityEntry) {
 
 function objectRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+    ? Object.fromEntries(Object.entries(value))
     : null
 }
 

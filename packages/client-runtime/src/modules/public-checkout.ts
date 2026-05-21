@@ -19,6 +19,7 @@ export function createPublicCheckoutApi(
       ].status.$get({ param: { token } });
 
       if (response.status === 404) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- generic callers choose the status DTO shape; INVALID is the stable 404 payload.
         return { state: "INVALID" } as TResponse;
       }
 

@@ -466,7 +466,7 @@ export function getLatestLocalCertificateDraft(
   if (!job) return null;
 
   const row = database
-    .prepare(
+    .prepare<{ jobId: string }, LocalCertificateDraftRow>(
       `
 SELECT *
 FROM certificate_drafts
@@ -475,7 +475,7 @@ ORDER BY created_at DESC
 LIMIT 1
 `,
     )
-    .get({ jobId: job.id }) as LocalCertificateDraftRow | undefined;
+    .get({ jobId: job.id });
 
   return row ? toLocalCertificateDraft(row) : null;
 }
@@ -496,7 +496,7 @@ export function saveLocalCertificateDraftPdf(
   }
 
   const existing = database
-    .prepare(
+    .prepare<{ draftId: string; jobId: string }, LocalCertificateDraftRow>(
       `
 SELECT *
 FROM certificate_drafts
@@ -506,7 +506,7 @@ WHERE id = @draftId AND job_id = @jobId
     .get({
       draftId: input.draftId,
       jobId: job.id,
-    }) as LocalCertificateDraftRow | undefined;
+    });
 
   if (!existing) {
     throw new Error("Rascunho de certificado local nao encontrado");
@@ -613,7 +613,7 @@ function findLocalJob(database: LocalDatabase, routeId: string) {
   const remoteId = Number(routeId);
   if (Number.isFinite(remoteId)) {
     const remoteMatch = database
-      .prepare(
+      .prepare<{ remoteId: number }, LocalJobRow>(
         `
 SELECT j.*,
   c.remote_id AS customer_remote_id,
@@ -637,12 +637,12 @@ LEFT JOIN services s ON s.id = j.service_id
 WHERE j.remote_id = @remoteId AND j.deleted_at IS NULL
 `,
       )
-      .get({ remoteId }) as LocalJobRow | undefined;
+      .get({ remoteId });
     if (remoteMatch) return remoteMatch;
   }
 
   const rows = database
-    .prepare(
+    .prepare<[], LocalJobRow>(
       `
 SELECT j.*,
   c.remote_id AS customer_remote_id,
@@ -666,7 +666,7 @@ LEFT JOIN services s ON s.id = j.service_id
 WHERE j.deleted_at IS NULL
 `,
     )
-    .all() as LocalJobRow[];
+    .all();
 
   return rows.find((row) => String(stableLocalNumericId(row.id)) === routeId);
 }
@@ -726,7 +726,7 @@ function toJobDetail(job: LocalJobRow) {
 
 function getAssetByRemoteId(database: LocalDatabase, remoteId: number) {
   const remoteRow = database
-    .prepare(
+    .prepare<{ remoteId: number }, LocalAssetCommandRow>(
       `
 SELECT a.*, at.remote_id AS asset_type_remote_id, at.name AS asset_type_name,
   NULL AS asset_type_slug
@@ -735,11 +735,11 @@ LEFT JOIN asset_types at ON at.id = a.asset_type_id
 WHERE a.remote_id = @remoteId AND a.deleted_at IS NULL
 `,
     )
-    .get({ remoteId }) as LocalAssetCommandRow | undefined;
+    .get({ remoteId });
   if (remoteRow) return remoteRow;
 
   const rows = database
-    .prepare(
+    .prepare<[], LocalAssetCommandRow>(
       `
 SELECT a.*, at.remote_id AS asset_type_remote_id, at.name AS asset_type_name,
   NULL AS asset_type_slug
@@ -748,21 +748,27 @@ LEFT JOIN asset_types at ON at.id = a.asset_type_id
 WHERE a.deleted_at IS NULL
 `,
     )
-    .all() as LocalAssetCommandRow[];
+    .all();
 
   return rows.find((row) => stableLocalNumericId(row.id) === remoteId);
 }
 
 function getServiceByRemoteId(database: LocalDatabase, remoteId: number) {
   return database
-    .prepare("SELECT * FROM services WHERE remote_id = @remoteId")
-    .get({ remoteId }) as LocalServiceCommandRow | undefined;
+    .prepare<
+      { remoteId: number },
+      LocalServiceCommandRow
+    >("SELECT * FROM services WHERE remote_id = @remoteId")
+    .get({ remoteId });
 }
 
 function getPublishedMethod(database: LocalDatabase, localMethodId: string) {
   return database
-    .prepare("SELECT * FROM published_methods WHERE id = @id")
-    .get({ id: localMethodId }) as LocalPublishedMethodRow | undefined;
+    .prepare<
+      { id: string },
+      LocalPublishedMethodRow
+    >("SELECT * FROM published_methods WHERE id = @id")
+    .get({ id: localMethodId });
 }
 
 function buildStandardsSnapshot(
@@ -773,14 +779,14 @@ function buildStandardsSnapshot(
   if (selectedStandardIds.length === 0) return [];
 
   const rows = database
-    .prepare(
+    .prepare<number[], LocalReferenceStandardRow>(
       `
 SELECT *
 FROM reference_standards
 WHERE remote_id IN (${selectedStandardIds.map(() => "?").join(",")})
 `,
     )
-    .all(...selectedStandardIds) as LocalReferenceStandardRow[];
+    .all(...selectedStandardIds);
 
   return rows.map((row) => ({
     id: row.remote_id ?? stableLocalNumericId(row.id),
@@ -1012,26 +1018,35 @@ INSERT INTO outbox (
 function nextLocalJobId(database: LocalDatabase) {
   const year = new Date().getFullYear();
   const row = database
-    .prepare(
+    .prepare<{ prefix: string }, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM calibration_jobs
 WHERE job_id LIKE @prefix
 `,
     )
-    .get({ prefix: `LOCAL-${year}-%` }) as { total: number };
+    .get({ prefix: `LOCAL-${year}-%` });
 
-  return `LOCAL-${year}-${String(row.total + 1).padStart(4, "0")}`;
+  return `LOCAL-${year}-${String((row?.total ?? 0) + 1).padStart(4, "0")}`;
 }
 
 function getArray(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
+function recordFromUnknown(value: unknown): JsonRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
 function parseJson(value: string | null | undefined) {
   if (!value) return null;
   try {
-    return JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
   } catch {
     return null;
   }
@@ -1039,9 +1054,7 @@ function parseJson(value: string | null | undefined) {
 
 function parseJsonRecord(value: string | null | undefined) {
   const parsed = parseJson(value);
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed as JsonRecord)
-    : {};
+  return recordFromUnknown(parsed);
 }
 
 function parseJsonRecordOrNull(value: string | null | undefined) {

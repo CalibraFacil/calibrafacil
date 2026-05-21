@@ -208,7 +208,7 @@ function OrganizationSettingsPage({
   >(null)
 
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<string>('member')
+  const [inviteRole, setInviteRole] = useState<GlobalMemberRole>('member')
   const [isInviting, setIsInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
 
@@ -515,7 +515,7 @@ function OrganizationSettingsPage({
     try {
       const result = await authClient.organization.inviteMember({
         email: inviteEmail.trim(),
-        role: inviteRole as GlobalMemberRole,
+        role: inviteRole,
         organizationId: activeOrg.id,
       })
       if (result.error) {
@@ -1644,7 +1644,11 @@ function OrganizationSettingsPage({
                       </div>
                       <Select
                         value={inviteRole}
-                        onValueChange={(value) => value && setInviteRole(value)}
+                        onValueChange={(value) => {
+                          if (typeof value === 'string' && isGlobalMemberRole(value)) {
+                            setInviteRole(value)
+                          }
+                        }}
                         disabled={isInviting}
                       >
                         <SelectTrigger className="w-35">

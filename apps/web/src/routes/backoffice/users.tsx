@@ -69,6 +69,12 @@ type EntityMutation<TVariables> = {
   mutate: (variables: TVariables) => void
 }
 
+type NewPlatformUserDraft = {
+  name: string
+  email: string
+  role: Extract<AssignablePlatformRole, 'platform_operator' | 'platform_admin'>
+}
+
 const platformRoleOptions = [
   { value: 'all', label: 'Todos' },
   { value: 'platform_access', label: 'Com backoffice' },
@@ -129,6 +135,36 @@ function getMembershipSummary(user: BackofficeUser) {
   return `${user.memberships[0]?.organizationName ?? '1 laboratório'} +${user.memberships.length - 1}`
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+
+  return Object.fromEntries(Object.entries(value))
+}
+
+function getSessionRole(sessionUser: unknown) {
+  const role = toRecord(sessionUser).role
+  return typeof role === 'string' ? role : null
+}
+
+function toNewPlatformUserRole(
+  value: string,
+): NewPlatformUserDraft['role'] {
+  return value === 'platform_admin' ? 'platform_admin' : 'platform_operator'
+}
+
+function toAssignablePlatformRole(value: string): AssignablePlatformRole {
+  switch (value) {
+    case 'platform_admin':
+    case 'platform_operator':
+    case 'user':
+      return value
+    default:
+      return 'user'
+  }
+}
+
 function formatCreatedAt(value: BackofficeUser['createdAt']) {
   if (!value) {
     return 'Data indisponível'
@@ -149,10 +185,10 @@ function BackofficeUsersPage() {
   const queryClient = useQueryClient()
   const { data: session } = useBackofficeSession()
   const { impersonationError } = Route.useSearch()
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState<NewPlatformUserDraft>({
     name: '',
     email: '',
-    role: 'platform_operator' as 'platform_operator' | 'platform_admin',
+    role: 'platform_operator',
   })
   const [filters, setFilters] = useState<BackofficeUserFilters>({
     search: '',
@@ -163,11 +199,7 @@ function BackofficeUsersPage() {
   const [sorting, setSorting] = useState<SortingState>([])
   const [expanded, setExpanded] = useState<ExpandedState>({})
   const deferredSearch = useDeferredValue(filters.search)
-  const sessionRole =
-    session?.user &&
-    typeof (session.user as { role?: unknown }).role === 'string'
-      ? ((session.user as { role?: string }).role ?? null)
-      : null
+  const sessionRole = getSessionRole(session?.user)
 
   const currentPlatformRoles = useMemo(
     () => parsePlatformRoles(sessionRole),
@@ -513,14 +545,12 @@ function BackofficeUsersPage() {
                   <NativeSelect
                     id="platformUserRole"
                     value={draft.role}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        role: event.target.value as
-                          | 'platform_operator'
-                          | 'platform_admin',
-                      }))
-                    }
+	                    onChange={(event) =>
+	                      setDraft((current) => ({
+	                        ...current,
+	                        role: toNewPlatformUserRole(event.target.value),
+	                      }))
+	                    }
                   >
                     <NativeSelectOption value="platform_operator">
                       platform_operator
@@ -931,10 +961,12 @@ function UserTableRow({
                       <NativeSelect
                         value={assignableRole}
                         onChange={(event) =>
-                          setRoleMutation.mutate({
-                            userId: user.id,
-                            role: event.target.value as AssignablePlatformRole,
-                          })
+	                          setRoleMutation.mutate({
+	                            userId: user.id,
+	                            role: toAssignablePlatformRole(
+	                              event.target.value,
+	                            ),
+	                          })
                         }
                         disabled={!canManageRoles}
                       >

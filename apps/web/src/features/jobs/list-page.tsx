@@ -128,6 +128,7 @@ export function JobsListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to job list statuses.
                 setStatusFilter(v as JobsListStatus | '')
                 setPage(1)
               }}

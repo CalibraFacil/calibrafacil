@@ -5380,7 +5380,7 @@ export const paymentHistoryRelations = relations(paymentRecord, ({ one }) => ({
 
 export const webhookEventLogRelations = relations(
   providerWebhookEvent,
-  ({}) => ({}),
+  () => ({}),
 );
 
 // =============================================================================

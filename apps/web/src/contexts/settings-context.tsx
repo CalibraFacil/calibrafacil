@@ -110,7 +110,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     await queryClient.invalidateQueries({ queryKey: ['settings', 'sessions'] })
     await queryClient.refetchQueries({ queryKey: ['settings', 'sessions'] })
   }, [queryClient])
-  const sessions = sessionsQuery.data ?? []
+  const sessions = React.useMemo(
+    () => sessionsQuery.data ?? [],
+    [sessionsQuery.data],
+  )
   const sessionsLoading = sessionsQuery.isPending || sessionsQuery.isFetching
 
   const updateProfile = React.useCallback(

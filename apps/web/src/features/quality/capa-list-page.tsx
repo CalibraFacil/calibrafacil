@@ -71,6 +71,44 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: 'Outro',
 }
 
+function parseCapaStatusFilter(value: string | null): CapaStatus | '' {
+  switch (value) {
+    case 'OPEN':
+    case 'INVESTIGATION':
+    case 'IMPLEMENTATION':
+    case 'VERIFICATION':
+    case 'CLOSED':
+      return value
+    default:
+      return ''
+  }
+}
+
+function parseCapaSeverityFilter(value: string | null): CapaSeverity | '' {
+  switch (value) {
+    case 'minor':
+    case 'major':
+    case 'critical':
+      return value
+    default:
+      return ''
+  }
+}
+
+function parseCapaCategoryFilter(value: string | null): CapaCategory | '' {
+  switch (value) {
+    case 'method':
+    case 'equipment':
+    case 'personnel':
+    case 'procedure':
+    case 'environment':
+    case 'other':
+      return value
+    default:
+      return ''
+  }
+}
+
 export function CAPAListPage() {
   const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const { activeOrganizationId, isContextSwitching } =
@@ -229,7 +267,7 @@ export function CAPAListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(v as CapaStatus | '')
+                setStatusFilter(parseCapaStatusFilter(v))
                 setPage(1)
               }}
             >
@@ -252,7 +290,7 @@ export function CAPAListPage() {
             <Select
               value={severityFilter}
               onValueChange={(v) => {
-                setSeverityFilter(v as CapaSeverity | '')
+                setSeverityFilter(parseCapaSeverityFilter(v))
                 setPage(1)
               }}
             >
@@ -273,7 +311,7 @@ export function CAPAListPage() {
             <Select
               value={categoryFilter}
               onValueChange={(v) => {
-                setCategoryFilter(v as CapaCategory | '')
+                setCategoryFilter(parseCapaCategoryFilter(v))
                 setPage(1)
               }}
             >

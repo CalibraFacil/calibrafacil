@@ -5,7 +5,7 @@ import {
   type MemberUnitRole,
 } from "@calibra-facil/db/schema";
 import type { RoleName } from "@calibra-facil/auth/access";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql, type AnyColumn } from "drizzle-orm";
 
 export type UnitScopeMode = "all" | "unit";
 
@@ -305,7 +305,7 @@ export async function resolveMemberUnitScope(params: {
 }
 
 export function buildUnitScopeCondition(
-  column: Parameters<typeof eq>[0],
+  column: AnyColumn<{ data: number }>,
   scope: Pick<
     ResolvedUnitScope,
     "selectedUnitScope" | "activeUnitId" | "accessibleUnitIds"
@@ -315,12 +315,12 @@ export function buildUnitScopeCondition(
     if (scope.accessibleUnitIds.length === 0) {
       return sql`false`;
     }
-    return inArray(column as never, scope.accessibleUnitIds);
+    return inArray(column, scope.accessibleUnitIds);
   }
 
   if (scope.activeUnitId === null) {
     return sql`false`;
   }
 
-  return eq(column as never, scope.activeUnitId as never);
+  return eq(column, scope.activeUnitId);
 }

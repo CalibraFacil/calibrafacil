@@ -940,7 +940,7 @@ function DraftInput(props: {
 function DraftSelect<TValue extends string>(props: {
   label: string
   value: TValue
-  options: Record<TValue, string>
+  options: Record<string, string>
   onChange: (value: TValue) => void
 }) {
   return (
@@ -948,15 +948,18 @@ function DraftSelect<TValue extends string>(props: {
       <FieldLabel>{props.label}</FieldLabel>
       <NativeSelect
         value={props.value}
-        onChange={(event) => props.onChange(event.target.value as TValue)}
+        onChange={(event) => {
+          const nextValue = Object.keys(props.options).find(
+            (value): value is TValue => value === event.target.value,
+          )
+          if (nextValue) props.onChange(nextValue)
+        }}
       >
-        {(Object.entries(props.options) as Array<[TValue, string]>).map(
-          ([value, label]) => (
-            <NativeSelectOption key={value} value={value}>
-              {label}
-            </NativeSelectOption>
-          ),
-        )}
+        {Object.entries(props.options).map(([value, label]) => (
+          <NativeSelectOption key={value} value={value}>
+            {label}
+          </NativeSelectOption>
+        ))}
       </NativeSelect>
     </Field>
   )

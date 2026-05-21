@@ -126,8 +126,10 @@ export function getLocalAttachment(
   attachmentId: string,
 ): LocalAttachment | null {
   const row = database
-    .prepare("SELECT * FROM attachments WHERE id = @attachmentId")
-    .get({ attachmentId }) as LocalAttachmentRow | undefined;
+    .prepare<{ attachmentId: string }, LocalAttachmentRow>(
+      "SELECT * FROM attachments WHERE id = @attachmentId",
+    )
+    .get({ attachmentId });
 
   return row ? toLocalAttachment(row) : null;
 }
@@ -154,7 +156,7 @@ export function listLocalAttachments(
   const whereClause =
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const rows = database
-    .prepare(
+    .prepare<Record<string, string | number>, LocalAttachmentRow>(
       `
 SELECT *
 FROM attachments
@@ -163,7 +165,7 @@ ORDER BY created_at DESC
 LIMIT @limit
 `,
     )
-    .all(params) as LocalAttachmentRow[];
+    .all(params);
 
   return { data: rows.map(toLocalAttachment) };
 }

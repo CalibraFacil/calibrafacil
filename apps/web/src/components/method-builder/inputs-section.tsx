@@ -45,6 +45,13 @@ const massCompositionQuantityModes = [
 
 const massUnits = ['mg', 'g', 'kg'] as const
 
+type MassUnit = (typeof massUnits)[number]
+type TableColumnRole = (typeof tableColumnRoles)[number]
+type MassCompositionOptionSource =
+  (typeof massCompositionOptionSources)[number]
+type MassCompositionQuantityMode =
+  (typeof massCompositionQuantityModes)[number]
+
 const massCompositionTargetFields = [
   ['certifiedValue', 'Valor certificado'],
   ['compositionLabel', 'Rótulo da composição'],
@@ -127,9 +134,7 @@ function InputEditor({
         <Field label="Tipo">
           <Select
             value={input.type}
-            onValueChange={(value) =>
-              onTypeChange(value as MethodDraftInputType)
-            }
+            onValueChange={(value) => onTypeChange(toInputType(value))}
           >
             <SelectTrigger>
               <span>{input.type}</span>
@@ -311,9 +316,7 @@ function TableInputSettings({
                     weighingRangeResolver: {
                       ...input.weighingRangeResolver,
                       enabled: true,
-                      pointUnit: pointUnit as NonNullable<
-                        MethodDraftInput['weighingRangeResolver']
-                      >['pointUnit'],
+                      pointUnit: toMassUnit(pointUnit),
                     },
                   })
                 }
@@ -384,9 +387,7 @@ function TableInputSettings({
                   input.eccentricityIndicator.variant ?? 'circular_platform'
                 }
                 onValueChange={(variant) => {
-                  const nextVariant = variant as NonNullable<
-                    MethodDraftInput['eccentricityIndicator']
-                  >['variant']
+                  const nextVariant = toEccentricityVariant(variant)
                   onChange({
                     eccentricityIndicator: {
                       ...input.eccentricityIndicator,
@@ -512,7 +513,7 @@ function TableColumnsEditor({
               value={column.type}
               onValueChange={(value) =>
                 updateColumn(index, {
-                  type: value as MethodDraftTableColumn['type'],
+                  type: toTableColumnType(value),
                 })
               }
             >
@@ -539,9 +540,7 @@ function TableColumnsEditor({
                   value === 'none'
                     ? { role: undefined, massComposition: undefined }
                     : {
-                        role: value as NonNullable<
-                          MethodDraftTableColumn['role']
-                        >,
+                        role: toTableColumnRole(value),
                         massComposition:
                           value === 'mass_standard_composition'
                             ? {
@@ -608,9 +607,7 @@ function MassCompositionColumnEditor({
           onChange({
             massComposition: {
               ...column.massComposition,
-              targetUnit: targetUnit as NonNullable<
-                MethodDraftTableColumn['massComposition']
-              >['targetUnit'],
+              targetUnit: toMassUnit(targetUnit),
             },
           })
         }
@@ -632,9 +629,7 @@ function MassCompositionColumnEditor({
           onChange({
             massComposition: {
               ...column.massComposition,
-              optionSource: optionSource as NonNullable<
-                MethodDraftTableColumn['massComposition']
-              >['optionSource'],
+              optionSource: toMassCompositionOptionSource(optionSource),
             },
           })
         }
@@ -681,9 +676,7 @@ function MassCompositionColumnEditor({
               quantityMode:
                 quantityMode === 'none'
                   ? undefined
-                  : (quantityMode as NonNullable<
-                      MethodDraftTableColumn['massComposition']
-                    >['quantityMode']),
+                  : toMassCompositionQuantityMode(quantityMode),
             },
           })
         }
@@ -740,4 +733,83 @@ function RemoveButton({
       <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4" />
     </Button>
   )
+}
+
+function toInputType(value: unknown): MethodDraftInputType {
+  switch (value) {
+    case 'number':
+    case 'select':
+    case 'table':
+    case 'text':
+      return value
+    default:
+      return 'text'
+  }
+}
+
+function toMassUnit(value: unknown): MassUnit {
+  switch (value) {
+    case 'mg':
+    case 'kg':
+    case 'g':
+      return value
+    default:
+      return 'g'
+  }
+}
+
+function toEccentricityVariant(
+  value: unknown,
+): NonNullable<MethodDraftInput['eccentricityIndicator']>['variant'] {
+  switch (value) {
+    case 'road_scale':
+    case 'circular_platform':
+      return value
+    default:
+      return 'circular_platform'
+  }
+}
+
+function toTableColumnType(value: unknown): MethodDraftTableColumn['type'] {
+  switch (value) {
+    case 'text':
+    case 'number':
+      return value
+    default:
+      return 'number'
+  }
+}
+
+function toTableColumnRole(value: unknown): TableColumnRole {
+  switch (value) {
+    case 'standard_value':
+    case 'mass_standard_composition':
+      return value
+    default:
+      return 'standard_value'
+  }
+}
+
+function toMassCompositionOptionSource(
+  value: unknown,
+): MassCompositionOptionSource {
+  switch (value) {
+    case 'composition_profiles':
+    case 'certified_values':
+      return value
+    default:
+      return 'certified_values'
+  }
+}
+
+function toMassCompositionQuantityMode(
+  value: unknown,
+): MassCompositionQuantityMode {
+  switch (value) {
+    case 'profile_linear':
+    case 'linear_per_item_then_rss':
+      return value
+    default:
+      return 'linear_per_item_then_rss'
+  }
 }

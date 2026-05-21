@@ -22,9 +22,7 @@ export const REPORT_PERIOD_LABELS: Record<ReportPeriod, string> = {
   month: 'Mês atual',
 }
 
-export const REPORT_PERIOD_OPTIONS = Object.keys(
-  REPORT_PERIOD_LABELS,
-) as ReportPeriod[]
+export const REPORT_PERIOD_OPTIONS: ReportPeriod[] = ['7d', '30d', '90d', 'month']
 
 export function getHealthBadgeVariant(
   status: ComparisonResponse['rows'][number]['healthStatus'],

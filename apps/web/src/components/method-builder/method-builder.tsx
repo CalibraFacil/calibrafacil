@@ -99,6 +99,40 @@ const distributionOptions: Array<
   MethodDraftUncertaintyComponent['distribution']
 > = ['normal', 'rectangular', 'triangular', 'u-shaped']
 
+function parseValidationOperator(
+  value: string | null,
+): MethodDraftValidation['operator'] {
+  switch (value) {
+    case '<=':
+    case '>':
+    case '>=':
+    case '==':
+    case '!=':
+      return value
+    default:
+      return '<'
+  }
+}
+
+function parseValidationSeverity(
+  value: string | null,
+): MethodDraftValidation['severity'] {
+  return value === 'warning' ? 'warning' : 'error'
+}
+
+function parseUncertaintyDistribution(
+  value: string | null,
+): MethodDraftUncertaintyComponent['distribution'] {
+  switch (value) {
+    case 'rectangular':
+    case 'triangular':
+    case 'u-shaped':
+      return value
+    default:
+      return 'normal'
+  }
+}
+
 export function MethodBuilder({
   initialDraft,
   onSave,
@@ -495,8 +529,7 @@ export function MethodBuilder({
                         value={validation.operator}
                         onValueChange={(value) =>
                           updateValidation(index, {
-                            operator:
-                              value as MethodDraftValidation['operator'],
+                            operator: parseValidationOperator(value),
                           })
                         }
                       >
@@ -527,8 +560,7 @@ export function MethodBuilder({
                         value={validation.severity}
                         onValueChange={(value) =>
                           updateValidation(index, {
-                            severity:
-                              value as MethodDraftValidation['severity'],
+                            severity: parseValidationSeverity(value),
                           })
                         }
                       >
@@ -632,8 +664,7 @@ export function MethodBuilder({
                       value={component.distribution}
                       onValueChange={(value) =>
                         updateUncertainty(index, {
-                          distribution:
-                            value as MethodDraftUncertaintyComponent['distribution'],
+                          distribution: parseUncertaintyDistribution(value),
                         })
                       }
                     >

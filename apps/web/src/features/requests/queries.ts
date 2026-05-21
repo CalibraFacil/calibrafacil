@@ -6,6 +6,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
+import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   CALIBRATION_REQUEST_STATUSES,
   type CalibrationRequestDetail,
@@ -18,19 +19,11 @@ import {
 
 export const CALIBRATION_REQUESTS_LIST_LIMIT = 20
 
-function pageFromUrl(url?: URL) {
-  const page = Number(url?.searchParams.get('page') ?? 1)
-  return Number.isFinite(page) && page > 0 ? page : 1
-}
-
 function statusFromUrl(url?: URL): CalibrationRequestStatus | '' {
-  const status = url?.searchParams.get('status') ?? ''
-
-  return CALIBRATION_REQUEST_STATUSES.includes(
-    status as CalibrationRequestStatus,
+  return optionFromUrl(
+    CALIBRATION_REQUEST_STATUSES,
+    url?.searchParams.get('status'),
   )
-    ? (status as CalibrationRequestStatus)
-    : ''
 }
 
 export function calibrationRequestsListQueryInputFromUrl(
@@ -81,7 +74,7 @@ export function calibrationRequestDetailQueryOptions(
 export function requestConversionServicesQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['services', organizationId, 'request-conversion'],
-    queryFn: async () => {
+    queryFn: async (): Promise<{ data: RequestConversionService[] }> => {
       const firstPage = await calibraApi.services.list({
         page: 1,
         limit: 100,
@@ -89,7 +82,7 @@ export function requestConversionServicesQueryOptions(organizationId: string) {
       })
 
       if ((firstPage.pagination?.totalPages ?? 1) <= 1) {
-        return { data: firstPage.data as Array<RequestConversionService> }
+        return { data: firstPage.data.map(toRequestConversionService) }
       }
 
       const remainingData = await Promise.all(
@@ -106,9 +99,9 @@ export function requestConversionServicesQueryOptions(organizationId: string) {
 
       return {
         data: [
-          ...(firstPage.data as Array<RequestConversionService>),
-          ...remainingData.flatMap(
-            (page) => page.data as Array<RequestConversionService>,
+          ...firstPage.data.map(toRequestConversionService),
+          ...remainingData.flatMap((page) =>
+            page.data.map(toRequestConversionService),
           ),
         ],
       }
@@ -119,11 +112,22 @@ export function requestConversionServicesQueryOptions(organizationId: string) {
 export function requestTechniciansQueryOptions(organizationId: string) {
   return queryOptions({
     queryKey: ['jobs', organizationId, 'technicians'],
-    queryFn: () =>
-      calibraApi.jobs.listTechnicians() as Promise<{
-        data: Array<RequestTechnician>
-      }>,
+    queryFn: (): Promise<{
+      data: Array<RequestTechnician>
+    }> => calibraApi.jobs.listTechnicians(),
   })
+}
+
+function toRequestConversionService(
+  service: Awaited<ReturnType<typeof calibraApi.services.list>>['data'][number],
+): RequestConversionService {
+  return {
+    id: service.id,
+    name: service.name,
+    assetTypeId: service.assetTypeId,
+    methodId: service.methodId,
+    methodStatus: service.methodStatus,
+  }
 }
 
 export async function getRequestsIndexEssentialQueries(url?: URL) {

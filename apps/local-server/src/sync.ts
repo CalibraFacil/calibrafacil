@@ -535,7 +535,14 @@ function getLocalSyncContext(
   database: LocalDatabase,
 ) {
   const snapshot = database
-    .prepare(
+    .prepare<
+      [],
+      {
+        organization_id: string;
+        active_unit_id: number | null;
+        user_id: string;
+      }
+    >(
       `
 SELECT organization_id, active_unit_id, user_id
 FROM tenant_snapshot
@@ -543,13 +550,7 @@ ORDER BY pulled_at DESC
 LIMIT 1
 `,
     )
-    .get() as
-    | {
-        organization_id: string;
-        active_unit_id: number | null;
-        user_id: string;
-      }
-    | undefined;
+    .get();
 
   return {
     organizationId: config.organizationId ?? snapshot?.organization_id ?? null,
@@ -571,7 +572,7 @@ function resolveLocalStoragePath(storageRoot: string, localPath: string) {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+    ? Object.fromEntries(Object.entries(value))
     : {};
 }
 

@@ -118,13 +118,11 @@ async function fetchPortalDashboard(): Promise<PortalDashboardData> {
     throw new Error("Falha ao carregar resumo do portal");
   }
 
-  const [assets, requests, certificates] = await Promise.all([
-    assetsResponse.json() as Promise<PaginatedResponse<DashboardAsset>>,
-    requestsResponse.json() as Promise<PaginatedResponse<DashboardRequest>>,
-    certificatesResponse.json() as Promise<
-      PaginatedResponse<DashboardCertificate>
-    >,
-  ]);
+  const assets: PaginatedResponse<DashboardAsset> = await assetsResponse.json();
+  const requests: PaginatedResponse<DashboardRequest> =
+    await requestsResponse.json();
+  const certificates: PaginatedResponse<DashboardCertificate> =
+    await certificatesResponse.json();
 
   return { assets, requests, certificates };
 }

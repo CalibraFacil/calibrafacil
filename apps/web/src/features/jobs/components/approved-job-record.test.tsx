@@ -93,13 +93,11 @@ describe('ApprovedJobRecord certificate distribution', () => {
   it('keeps certificate download disabled until the approved job has a certificate URL', () => {
     renderApprovedJobRecord({ certificateUrl: null })
 
-    expect(
-      (
-        screen.getByRole('button', {
-          name: /baixar certificado/i,
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true)
+    const downloadButton = screen.getByRole('button', {
+      name: /baixar certificado/i,
+    })
+    expect(downloadButton).toBeInstanceOf(HTMLButtonElement)
+    expect(downloadButton).toHaveProperty('disabled', true)
     expect(queryMocks.useJobCertificateDownloadUrlData).toHaveBeenCalledWith({
       certificateUrl: null,
       enabled: false,

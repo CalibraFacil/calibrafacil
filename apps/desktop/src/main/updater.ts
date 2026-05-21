@@ -9,7 +9,7 @@ import {
 import type { DesktopSettingsStore } from "./settings-store";
 
 type DesktopUpdaterOptions = {
-  settingsStore: DesktopSettingsStore;
+  settingsStore: Pick<DesktopSettingsStore, "get">;
   getSyncStatus: () => Promise<SyncStatusSnapshot>;
   getLocalDiagnostics: () => Promise<LocalDiagnostics | null>;
   beforeInstall: () => void;

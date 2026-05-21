@@ -1059,16 +1059,18 @@ function NumberCellWithPicker({
   const [open, setOpen] = useState(false)
 
   // Group options by standard name
-  const groupedOptions = certifiedValueOptions.reduce(
-    (acc, opt) => {
-      if (!acc[opt.standardName]) {
-        acc[opt.standardName] = []
+    const groupedOptions = certifiedValueOptions.reduce<
+      Record<string, CertifiedValueOption[]>
+    >(
+      (acc, opt) => {
+        if (!acc[opt.standardName]) {
+          acc[opt.standardName] = []
       }
       acc[opt.standardName].push(opt)
       return acc
     },
-    {} as Record<string, CertifiedValueOption[]>,
-  )
+      {},
+    )
 
   return (
     <div className="flex gap-1">

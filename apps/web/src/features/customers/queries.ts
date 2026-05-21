@@ -6,6 +6,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
+import { pageFromUrl } from '@/lib/url-search'
 import type {
   CustomerAssetsData,
   CustomerAuditLogEntry,
@@ -20,11 +21,6 @@ import type {
 } from './types'
 
 export const CUSTOMERS_LIST_LIMIT = 20
-
-function pageFromUrl(url?: URL) {
-  const page = Number(url?.searchParams.get('page') ?? 1)
-  return Number.isFinite(page) && page > 0 ? page : 1
-}
 
 export function customersListQueryInputFromUrl(
   organizationId: string,
@@ -47,12 +43,12 @@ export function customersListQueryOptions(input: CustomersListQueryInput) {
       input.limit,
       input.search,
     ],
-    queryFn: () =>
+    queryFn: (): Promise<CustomersListData> =>
       calibraApi.customers.list({
         page: input.page,
         limit: input.limit,
         query: input.search || undefined,
-      }) as Promise<CustomersListData>,
+      }),
   })
 }
 
@@ -62,12 +58,12 @@ export function customersSearchQueryOptions(
 ) {
   return queryOptions({
     queryKey: ['customers', organizationId, 'search', search],
-    queryFn: () =>
+    queryFn: (): Promise<CustomersListData> =>
       calibraApi.customers.list({
         page: 1,
         limit: 50,
         query: search || undefined,
-      }) as Promise<CustomersListData>,
+      }),
     staleTime: 30_000,
   })
 }
@@ -102,7 +98,7 @@ export function customerAssetsQueryOptions({
         limit,
         customerId,
         query: search || undefined,
-      }) as Promise<CustomerAssetsData>
+      })
     },
   })
 }
@@ -136,7 +132,7 @@ export function customerJobsQueryOptions({
         customerId,
         query: search || undefined,
         status: statusFilter || undefined,
-      }) as Promise<CustomerJobsData>
+      })
     },
   })
 }
@@ -144,11 +140,11 @@ export function customerJobsQueryOptions({
 export function customerAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['customer-audit-log', id],
-    queryFn: () =>
+    queryFn: (): Promise<CustomerAuditLogData> =>
       calibraApi.customers.auditLog<CustomerAuditLogEntry>(id, {
         page: 1,
         limit: 50,
-      }) as Promise<CustomerAuditLogData>,
+      }),
   })
 }
 

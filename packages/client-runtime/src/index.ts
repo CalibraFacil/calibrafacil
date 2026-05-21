@@ -100,6 +100,7 @@ export * from "./data-policy";
 export function createCloudApiClient(
   options: CreateCloudApiClientOptions,
 ): CalibraApi {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- the raw Hono client type is narrowed to the browser-supported route subset used by runtime modules.
   const rawCloudClient = createRawCloudClient(options) as unknown as {
     api: {
       dashboard: {

@@ -113,6 +113,16 @@ describe("exportSupportBundle", () => {
       syncEnabled: true,
       syncState: "conflict",
     };
+    const secretStatuses: Awaited<
+      ReturnType<DesktopSecretsStore["getStatuses"]>
+    > = [
+      {
+        name: "cloudAuthToken",
+        stored: true,
+        encryptionAvailable: true,
+        updatedAt: "2026-01-15T10:00:00.000Z",
+      },
+    ];
 
     await exportSupportBundle({
       filePath,
@@ -133,38 +143,13 @@ describe("exportSupportBundle", () => {
       },
       settingsStore: {
         get: vi.fn(async () => settings),
-      } as unknown as DesktopSettingsStore,
+      } satisfies Pick<DesktopSettingsStore, "get">,
       secretsStore: {
-        getStatuses: vi.fn(async () => [
-          {
-            name: "cloudAuthToken",
-            stored: true,
-            encryptionAvailable: true,
-            updatedAt: "2026-01-15T10:00:00.000Z",
-          },
-        ]),
-      } as unknown as DesktopSecretsStore,
+        getStatuses: vi.fn(async () => secretStatuses),
+      } satisfies Pick<DesktopSecretsStore, "getStatuses">,
     });
 
-    const payload = JSON.parse(await readFile(filePath, "utf8")) as {
-      desktop: {
-        settings: DesktopSettings;
-        secrets: Array<Record<string, unknown>>;
-        update: Record<string, unknown>;
-        rendererBuild: {
-          path: string;
-          data: Record<string, unknown>;
-        } | null;
-        log: Record<string, unknown> | null;
-      };
-      localServer: {
-        environment: LocalEnvironmentBootstrap | null;
-        runtime: Record<string, unknown> | null;
-        log: Record<string, unknown> | null;
-        syncStatus: SyncStatusSnapshot;
-        diagnostics: LocalDiagnostics;
-      };
-    };
+    const payload = JSON.parse(await readFile(filePath, "utf8"));
 
     expect(payload.desktop.settings).toEqual(settings);
     expect(payload.desktop.update).toMatchObject({

@@ -38,7 +38,7 @@ interface DataTableProps<TData, TValue> {
   onPageChange?: (page: number) => void
   isLoading?: boolean
   onRowClick?: (row: TData) => void
-  meta?: unknown
+  meta?: TableMeta<TData>
 }
 
 export function DataTable<TData, TValue>({
@@ -67,7 +67,7 @@ export function DataTable<TData, TValue>({
       sorting,
       columnFilters,
     },
-    meta: meta as TableMeta<TData>,
+    meta,
   })
 
   if (isLoading) {

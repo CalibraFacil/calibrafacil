@@ -16,14 +16,10 @@ import type {
  * Create a mock fetch response
  */
 export function mockFetchResponse<T>(data: T, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
+  return new Response(JSON.stringify(data), {
     status,
     statusText: status === 200 ? "OK" : "Error",
-    json: () => Promise.resolve(data),
-    text: () => Promise.resolve(JSON.stringify(data)),
-    headers: new Headers(),
-  } as Response;
+  });
 }
 
 /**

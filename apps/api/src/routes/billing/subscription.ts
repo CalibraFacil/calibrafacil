@@ -14,6 +14,7 @@ import {
 import {
   getEffectivePlanLimits,
   getPlan,
+  isValidPlanId,
   type PlanId,
 } from "@calibra-facil/shared";
 import { withInvalidation } from "../../middleware/cache";
@@ -72,7 +73,8 @@ export const subscriptionRouter = new Hono<{ Variables: AuthVariables }>()
     }
 
     // Get plan details
-    const plan = getPlan(sub.planId as PlanId);
+    const planId: PlanId = isValidPlanId(sub.planId) ? sub.planId : "FREE";
+    const plan = getPlan(planId);
     const usage = await getOrganizationUsage(memberData.organizationId);
 
     return c.json({

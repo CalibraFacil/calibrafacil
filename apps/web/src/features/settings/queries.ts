@@ -26,17 +26,28 @@ import type {
 } from './types'
 import type { IntegrationMappingsConfig } from '@calibra-facil/shared'
 
+function trustedApiResult<T>(promise: Promise<unknown>): Promise<T> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- typed API facade methods lag behind the route-specific response contracts.
+  return promise as Promise<T>
+}
+
+function trustedApiValue<T>(value: unknown): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- Better Auth client responses are validated by the auth package contract.
+  return value as T
+}
+
 export function apiKeysQueryOptions() {
   return queryOptions({
     queryKey: ['api-keys'],
-    queryFn: () => calibraApi.apiKeys.list() as Promise<ApiKeysData>,
+    queryFn: () => trustedApiResult<ApiKeysData>(calibraApi.apiKeys.list()),
   })
 }
 
 export function ssoSettingsQueryOptions(organizationKey: string | null) {
   return queryOptions({
     queryKey: ['sso-settings', organizationKey ?? 'no-org'],
-    queryFn: () => calibraApi.sso.getProviders() as Promise<SettingsSsoData>,
+    queryFn: () =>
+      trustedApiResult<SettingsSsoData>(calibraApi.sso.getProviders()),
   })
 }
 
@@ -44,7 +55,9 @@ export function certificateNumberingProfileQueryOptions() {
   return queryOptions({
     queryKey: ['certificate-numbering-profile'],
     queryFn: () =>
-      calibraApi.certificateNumbering.getProfile() as Promise<SettingsCertificateNumberingData>,
+      trustedApiResult<SettingsCertificateNumberingData>(
+        calibraApi.certificateNumbering.getProfile(),
+      ),
   })
 }
 
@@ -52,7 +65,9 @@ export function signingCertificatesQueryOptions(unitId: number | null) {
   return queryOptions({
     queryKey: ['signing-certificates', unitId ?? 'no-unit'],
     queryFn: () =>
-      calibraApi.signingCertificates.list() as Promise<SettingsSigningCertificatesData>,
+      trustedApiResult<SettingsSigningCertificatesData>(
+        calibraApi.signingCertificates.list(),
+      ),
   })
 }
 
@@ -60,7 +75,7 @@ export function mySignatureQueryOptions() {
   return queryOptions({
     queryKey: ['my-signature'],
     queryFn: () =>
-      calibraApi.signatures.getMine() as Promise<SettingsSignatureData>,
+      trustedApiResult<SettingsSignatureData>(calibraApi.signatures.getMine()),
   })
 }
 
@@ -68,7 +83,9 @@ export function portalDomainQueryOptions() {
   return queryOptions({
     queryKey: ['portal-domain'],
     queryFn: () =>
-      calibraApi.portalDomains.get() as Promise<SettingsPortalDomainData>,
+      trustedApiResult<SettingsPortalDomainData>(
+        calibraApi.portalDomains.get(),
+      ),
   })
 }
 
@@ -76,7 +93,9 @@ export function environmentalLimitsQueryOptions(unitId: number | null) {
   return queryOptions({
     queryKey: ['environmental-limits', unitId ?? 'no-unit'],
     queryFn: () =>
-      calibraApi.environmentalLimits.list() as Promise<SettingsEnvironmentalLimitsData>,
+      trustedApiResult<SettingsEnvironmentalLimitsData>(
+        calibraApi.environmentalLimits.list(),
+      ),
   })
 }
 
@@ -92,7 +111,9 @@ export function billingSubscriptionQueryOptions() {
   return queryOptions({
     queryKey: ['billing', 'subscription'],
     queryFn: () =>
-      calibraApi.billing.getSubscription() as Promise<SettingsBillingSubscriptionData>,
+      trustedApiResult<SettingsBillingSubscriptionData>(
+        calibraApi.billing.getSubscription(),
+      ),
   })
 }
 
@@ -100,10 +121,12 @@ export function billingPaymentsQueryOptions() {
   return queryOptions({
     queryKey: ['billing', 'payments'],
     queryFn: () =>
-      calibraApi.billing.listPayments({
-        limit: 10,
-        offset: 0,
-      }) as Promise<SettingsBillingPaymentsData>,
+      trustedApiResult<SettingsBillingPaymentsData>(
+        calibraApi.billing.listPayments({
+          limit: 10,
+          offset: 0,
+        }),
+      ),
   })
 }
 
@@ -111,7 +134,9 @@ export function notificationPreferencesQueryOptions() {
   return queryOptions({
     queryKey: ['notification-preferences'],
     queryFn: () =>
-      calibraApi.notifications.getPreferences() as Promise<SettingsNotificationPreferencesData>,
+      trustedApiResult<SettingsNotificationPreferencesData>(
+        calibraApi.notifications.getPreferences(),
+      ),
   })
 }
 
@@ -153,7 +178,7 @@ export function dashboardUnitsQueryOptions(organizationId: string) {
       if (!response) {
         throw new Error('Falha ao carregar contexto da unidade')
       }
-      return response as UnitContextResponse
+      return trustedApiValue<UnitContextResponse>(response)
     },
   })
 }
@@ -186,10 +211,12 @@ export function organizationMembersQueryOptions(organizationId: string) {
         query: { organizationId },
       })
 
-      return (result.data?.members ?? []).map((member) => ({
-        ...member,
-        createdAt: new Date(member.createdAt),
-      })) as OrganizationMember[]
+      return trustedApiValue<OrganizationMember[]>(
+        (result.data?.members ?? []).map((member) => ({
+          ...member,
+          createdAt: new Date(member.createdAt),
+        })),
+      )
     },
   })
 }
@@ -202,10 +229,12 @@ export function organizationInvitationsQueryOptions(organizationId: string) {
         query: { organizationId },
       })
 
-      return (result.data ?? []).map((invitation) => ({
-        ...invitation,
-        expiresAt: new Date(invitation.expiresAt),
-      })) as OrganizationInvitation[]
+      return trustedApiValue<OrganizationInvitation[]>(
+        (result.data ?? []).map((invitation) => ({
+          ...invitation,
+          expiresAt: new Date(invitation.expiresAt),
+        })),
+      )
     },
   })
 }

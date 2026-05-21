@@ -125,6 +125,7 @@ export function ChartCalibrations({ data, isLoading }: ChartCalibrationsProps) {
         <div className="@[440px]/chart:hidden">
           <Select
             value={timeRange}
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to TimeRange values.
             onValueChange={(v) => setTimeRange(v as TimeRange)}
           >
             <SelectTrigger size="sm" className="w-24">

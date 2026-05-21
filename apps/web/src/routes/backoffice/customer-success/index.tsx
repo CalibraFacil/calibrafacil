@@ -44,8 +44,14 @@ function CustomerSuccessOverviewPage() {
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search.trim().toLowerCase())
 
-  const organizations = organizationsQuery.data?.data ?? []
-  const supportQueue = supportQueueQuery.data?.data ?? []
+  const organizations = useMemo(
+    () => organizationsQuery.data?.data ?? [],
+    [organizationsQuery.data?.data],
+  )
+  const supportQueue = useMemo(
+    () => supportQueueQuery.data?.data ?? [],
+    [supportQueueQuery.data?.data],
+  )
   const filteredOrganizations = useMemo(
     () =>
       filterOrganizations({

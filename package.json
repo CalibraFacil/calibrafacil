@@ -44,7 +44,7 @@
   "devDependencies": {
     "@typescript/native-preview": "beta",
     "better-sqlite3": "^12.0.0",
-    "oxlint": "^0.16.10",
+    "oxlint": "^1.66.0",
     "prettier": "^3.7.4",
     "turbo": "^2.6.3",
     "typescript": "5.9.2"

@@ -197,8 +197,8 @@ export function normalizeWeighingRangeSpecsForStorage(
       return item;
     }
 
-    const range = item as WeighingRangeSpecLike;
-    const nextRange: WeighingRangeSpecLike = {
+    const range = toRecord(item);
+    const nextRange: Record<string, unknown> = {
       ...range,
       rangeUnit: CANONICAL_MASS_UNIT,
       resolutionUnit: CANONICAL_MASS_UNIT,
@@ -247,8 +247,8 @@ export function denormalizeWeighingRangeSpecsForDisplay(
       return item;
     }
 
-    const range = item as WeighingRangeSpecLike;
-    const nextRange: WeighingRangeSpecLike = {
+    const range = toRecord(item);
+    const nextRange: Record<string, unknown> = {
       ...range,
       rangeUnit: displayUnit,
       resolutionUnit: displayUnit,
@@ -439,9 +439,7 @@ export function normalizeMethodDataForStorage(
         return row;
       }
 
-      const nextRow: Record<string, unknown> = {
-        ...(row as Record<string, unknown>),
-      };
+      const nextRow = toRecord(row);
 
       for (const column of field.columns ?? []) {
         if (!isMassMeasurementUnit(column.unit)) {
@@ -525,9 +523,7 @@ export function denormalizeMethodDataForDisplay(
         return row;
       }
 
-      const nextRow: Record<string, unknown> = {
-        ...(row as Record<string, unknown>),
-      };
+      const nextRow = toRecord(row);
 
       for (const column of field.columns ?? []) {
         if (!isMassMeasurementUnit(column.unit)) {
@@ -596,4 +592,12 @@ export function denormalizeMethodResultsForDisplay(
   }
 
   return nextResults;
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }

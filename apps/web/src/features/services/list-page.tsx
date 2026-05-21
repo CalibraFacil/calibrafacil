@@ -148,6 +148,7 @@ export function ServicesListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to service list statuses.
                 setStatusFilter(v as ServicesListStatus | '')
                 setPage(1)
               }}

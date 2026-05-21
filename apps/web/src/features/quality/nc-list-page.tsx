@@ -49,6 +49,30 @@ import {
 } from '@/features/quality/types'
 import { ncColumns } from '@/features/quality/components/nc-columns'
 
+function parseNonConformanceStatus(
+  value: string | null,
+): NonConformanceStatus | '' {
+  switch (value) {
+    case 'open':
+    case 'under_review':
+    case 'resolved':
+      return value
+    default:
+      return ''
+  }
+}
+
+function parseNonConformanceType(value: string | null): NonConformanceType | '' {
+  switch (value) {
+    case 'work':
+    case 'equipment':
+    case 'documentation':
+      return value
+    default:
+      return ''
+  }
+}
+
 export function NCListPage() {
   const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const { activeOrganizationId, isContextSwitching } =
@@ -208,7 +232,7 @@ export function NCListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(v as NonConformanceStatus | '')
+                setStatusFilter(parseNonConformanceStatus(v))
                 setPage(1)
               }}
             >
@@ -233,7 +257,7 @@ export function NCListPage() {
             <Select
               value={typeFilter}
               onValueChange={(v) => {
-                setTypeFilter(v as NonConformanceType | '')
+                setTypeFilter(parseNonConformanceType(v))
                 setPage(1)
               }}
             >

@@ -16,7 +16,7 @@ export function listSyncConflicts(
   const status = input.status ?? "open";
   const limit = Math.max(1, Math.min(input.limit ?? 50, 100));
   const rows = database
-    .prepare(
+    .prepare<{ status: string; limit: number }, SyncConflictRow>(
       `
 SELECT id, event_id, entity_type, entity_id, local_payload_json, remote_payload_json,
   conflict_type, status, created_at, resolved_at
@@ -26,17 +26,17 @@ ORDER BY created_at DESC
 LIMIT @limit
 `,
     )
-    .all({ status, limit }) as SyncConflictRow[];
+    .all({ status, limit });
 
   const totalRow = database
-    .prepare(
+    .prepare<{ status: string }, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM sync_conflicts
 WHERE status = @status
 `,
     )
-    .get({ status }) as { total: number } | undefined;
+    .get({ status });
 
   return {
     data: rows.map(mapConflictRow),
@@ -140,7 +140,7 @@ WHERE aggregate_id = @entityId
 
 export function getSyncConflict(database: LocalDatabase, id: string) {
   const row = database
-    .prepare(
+    .prepare<{ id: string }, SyncConflictRow>(
       `
 SELECT id, event_id, entity_type, entity_id, local_payload_json, remote_payload_json,
   conflict_type, status, created_at, resolved_at
@@ -149,7 +149,7 @@ WHERE id = @id
 LIMIT 1
 `,
     )
-    .get({ id }) as SyncConflictRow | undefined;
+    .get({ id });
 
   return row ? mapConflictRow(row) : null;
 }
@@ -171,7 +171,8 @@ function mapConflictRow(row: SyncConflictRow): LocalSyncConflict {
 
 function parseJson(value: string) {
   try {
-    return JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
   } catch {
     return null;
   }

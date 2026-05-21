@@ -1,10 +1,18 @@
-export async function readJsonResponse<T>(
+function getErrorPayload(payload: unknown) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return null
+  }
+
+  return Object.fromEntries(Object.entries(payload))
+}
+
+export async function readJsonResponse(
   response: Response,
   options: {
     fallbackMessage?: string
     allowDiagnosticsResponse?: boolean
   } = {},
-): Promise<T> {
+): Promise<unknown> {
   const fallbackMessage =
     options.fallbackMessage ?? `Endpoint indisponível (${response.status})`
   let payload: unknown
@@ -16,21 +24,21 @@ export async function readJsonResponse<T>(
   }
 
   if (response.ok) {
-    return payload as T
+    return payload
   }
 
-  const errorPayload = payload as {
-    error?: string
-    diagnostics?: unknown
-  } | null
+  const errorPayload = getErrorPayload(payload)
 
   if (
     options.allowDiagnosticsResponse &&
     errorPayload &&
     Array.isArray(errorPayload.diagnostics)
   ) {
-    return payload as T
+    return payload
   }
 
-  throw new Error(errorPayload?.error || fallbackMessage)
+  const errorMessage =
+    typeof errorPayload?.error === 'string' ? errorPayload.error : null
+
+  throw new Error(errorMessage || fallbackMessage)
 }

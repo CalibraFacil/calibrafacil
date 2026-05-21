@@ -29,8 +29,8 @@ type SupportBundleInput = {
   syncStatus: SyncStatusSnapshot;
   localDiagnostics: LocalDiagnostics | null;
   updateState: DesktopUpdateState;
-  settingsStore: DesktopSettingsStore;
-  secretsStore: DesktopSecretsStore;
+  settingsStore: Pick<DesktopSettingsStore, "get">;
+  secretsStore: Pick<DesktopSecretsStore, "getStatuses">;
 };
 
 export function defaultSupportBundlePath() {
@@ -99,7 +99,7 @@ async function readSupportJson(filePath: string | null | undefined) {
   try {
     return {
       path: filePath,
-      data: JSON.parse(await readFile(filePath, "utf8")) as unknown,
+      data: JSON.parse(await readFile(filePath, "utf8")),
     };
   } catch (error) {
     return {

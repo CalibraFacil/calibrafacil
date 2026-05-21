@@ -32,15 +32,14 @@ function getWindowState(windowSec: number) {
 }
 
 export function withRateLimit(options: RateLimitOptions) {
-  return createMiddleware(async (c, next) => {
+  return createMiddleware<{ Bindings: { CACHE?: KVNamespace } }>(
+    async (c, next) => {
     if (c.req.method === "OPTIONS") {
       await next();
       return;
     }
 
-    const kv = (c.env as Record<string, unknown>).CACHE as
-      | KVNamespace
-      | undefined;
+    const kv = c.env.CACHE;
     if (!kv) {
       await next();
       return;
@@ -81,8 +80,9 @@ export function withRateLimit(options: RateLimitOptions) {
     c.header("X-RateLimit-Remaining", String(remaining));
     c.header("X-RateLimit-Reset", String(Math.floor(state.resetAtMs / 1000)));
 
-    await next();
-  });
+      await next();
+    },
+  );
 }
 
 export const rateLimitAuth = withRateLimit({

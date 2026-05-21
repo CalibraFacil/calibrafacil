@@ -37,6 +37,24 @@ import {
 } from '@/features/standards/forms'
 import type { CreateReferenceStandardInput } from '@calibra-facil/schemas'
 
+function parseDistribution(
+  value: string | null,
+): StandardFormData['distribution'] {
+  return value === 'rectangular' ? 'rectangular' : 'normal'
+}
+
+function parseStandardStatus(value: string | null): StandardFormData['status'] {
+  switch (value) {
+    case 'ACTIVE':
+    case 'INACTIVE':
+    case 'OUT_OF_TOLERANCE':
+    case 'SENT_FOR_CALIBRATION':
+      return value
+    default:
+      return 'ACTIVE'
+  }
+}
+
 export function NewStandardPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -51,7 +69,7 @@ export function NewStandardPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: CreateReferenceStandardInput) =>
-      calibraApi.standards.create(data as Record<string, unknown>),
+      calibraApi.standards.create(Object.fromEntries(Object.entries(data))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })
       toast.success('Padrão criado com sucesso!')
@@ -635,7 +653,7 @@ export function NewStandardPage() {
                   <Select
                     value={formData.distribution}
                     onValueChange={(v) =>
-                      updateField('distribution', v as 'normal' | 'rectangular')
+                      updateField('distribution', parseDistribution(v))
                     }
                     disabled={createMutation.isPending}
                   >
@@ -684,7 +702,7 @@ export function NewStandardPage() {
                 <Select
                   value={formData.status}
                   onValueChange={(v) =>
-                    updateField('status', v as StandardFormData['status'])
+                    updateField('status', parseStandardStatus(v))
                   }
                   disabled={createMutation.isPending}
                 >

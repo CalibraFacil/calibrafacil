@@ -95,6 +95,74 @@ type ServiceOrderDetailPageProps = {
   conflictReturn: SyncConflictReturnSearch
 }
 
+type WorkflowTabValue = (typeof WORKFLOW_TABS)[number]['value']
+type DeliveryMethod = keyof typeof DELIVERY_METHOD_LABELS
+
+function toWorkflowTabValue(value: string): WorkflowTabValue {
+  switch (value) {
+    case 'quote':
+    case 'execution':
+    case 'delivery':
+    case 'evaluation':
+      return value
+    default:
+      return 'evaluation'
+  }
+}
+
+function toRecommendedAction(value: string): ServiceOrderRecommendedAction {
+  switch (value) {
+    case 'calibration_only':
+    case 'return_without_repair':
+    case 'condemned':
+    case 'warranty_service':
+    case 'external_service_required':
+    case 'repair':
+      return value
+    default:
+      return 'repair'
+  }
+}
+
+function toServiceOrderItemType(value: string): ServiceOrderItemType {
+  switch (value) {
+    case 'part':
+    case 'external_service':
+    case 'freight':
+    case 'discount':
+    case 'evaluation_fee':
+    case 'other':
+    case 'service':
+      return value
+    default:
+      return 'service'
+  }
+}
+
+function toExecutionResult(value: string): ServiceOrderExecutionResult {
+  switch (value) {
+    case 'not_repaired':
+    case 'condemned':
+    case 'returned_without_service':
+    case 'sent_to_third_party':
+    case 'repaired':
+      return value
+    default:
+      return 'repaired'
+  }
+}
+
+function toDeliveryMethod(value: string): DeliveryMethod {
+  switch (value) {
+    case 'ship_to_client':
+    case 'third_party_pickup':
+    case 'pickup_at_lab':
+      return value
+    default:
+      return 'pickup_at_lab'
+  }
+}
+
 export function ServiceOrderDetailPage({
   id,
   conflictReturn,
@@ -576,9 +644,7 @@ function ServiceOrderDetailContent({
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <Tabs
           value={activeTab}
-          onValueChange={(value) =>
-            setActiveTab(value as (typeof WORKFLOW_TABS)[number]['value'])
-          }
+          onValueChange={(value) => setActiveTab(toWorkflowTabValue(value))}
           className="min-w-0 gap-4"
         >
           <div className="overflow-x-auto overflow-y-hidden rounded-lg bg-muted/40 p-1 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]">
@@ -621,12 +687,12 @@ function ServiceOrderDetailContent({
                     <Label>Ação recomendada</Label>
                     <NativeSelect
                       className="w-full"
-                      value={recommendedAction}
-                      onChange={(event) =>
-                        setRecommendedAction(
-                          event.target.value as ServiceOrderRecommendedAction,
-                        )
-                      }
+	                      value={recommendedAction}
+	                      onChange={(event) =>
+	                        setRecommendedAction(
+	                          toRecommendedAction(event.target.value),
+	                        )
+	                      }
                     >
                       {Object.entries(RECOMMENDED_ACTION_LABELS).map(
                         ([value, label]) => (
@@ -730,11 +796,13 @@ function ServiceOrderDetailContent({
                         <NativeSelect
                           className="w-full"
                           value={item.type}
-                          onChange={(event) =>
-                            updateQuoteItem(item.id, {
-                              type: event.target.value as ServiceOrderItemType,
-                            })
-                          }
+	                          onChange={(event) =>
+	                            updateQuoteItem(item.id, {
+	                              type: toServiceOrderItemType(
+	                                event.target.value,
+	                              ),
+	                            })
+	                          }
                         >
                           {Object.entries(ITEM_TYPE_LABELS).map(
                             ([value, label]) => (
@@ -1030,12 +1098,12 @@ function ServiceOrderDetailContent({
                     <Label>Resultado</Label>
                     <NativeSelect
                       className="w-full"
-                      value={executionResult}
-                      onChange={(event) =>
-                        setExecutionResult(
-                          event.target.value as ServiceOrderExecutionResult,
-                        )
-                      }
+	                      value={executionResult}
+	                      onChange={(event) =>
+	                        setExecutionResult(
+	                          toExecutionResult(event.target.value),
+	                        )
+	                      }
                     >
                       {Object.entries(EXECUTION_RESULT_LABELS).map(
                         ([value, label]) => (
@@ -1112,13 +1180,10 @@ function ServiceOrderDetailContent({
                     <Label>Forma de entrega</Label>
                     <NativeSelect
                       className="w-full"
-                      value={deliveryMethod}
-                      onChange={(event) =>
-                        setDeliveryMethod(
-                          event.target
-                            .value as keyof typeof DELIVERY_METHOD_LABELS,
-                        )
-                      }
+	                      value={deliveryMethod}
+	                      onChange={(event) =>
+	                        setDeliveryMethod(toDeliveryMethod(event.target.value))
+	                      }
                     >
                       {Object.entries(DELIVERY_METHOD_LABELS).map(
                         ([value, label]) => (

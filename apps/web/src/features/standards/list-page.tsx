@@ -156,6 +156,7 @@ export function StandardsListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to standard statuses.
                 setStatusFilter(v as StandardStatus | '')
                 setPage(1)
               }}

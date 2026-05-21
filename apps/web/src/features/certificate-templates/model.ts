@@ -25,13 +25,13 @@ export function formatCertificateTemplateApiError(
     return fallback
   }
 
-  const record = data as Record<string, unknown>
+  const record = Object.fromEntries(Object.entries(data))
   const message = 'error' in record ? String(record.error) : fallback
   const warnings = Array.isArray(record.warnings)
     ? record.warnings
         .map((warning) =>
           warning && typeof warning === 'object' && 'message' in warning
-            ? String((warning as { message: unknown }).message)
+            ? String(Object.fromEntries(Object.entries(warning)).message)
             : null,
         )
         .filter(Boolean)

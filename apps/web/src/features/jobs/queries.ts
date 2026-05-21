@@ -6,6 +6,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
+import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   type EffectiveEnvironmentalLimitsData,
   JOBS_LIST_STATUSES,
@@ -61,20 +62,20 @@ export function jobDetailQueryOptions<TJob = unknown>({
 export function jobTechniciansQueryOptions() {
   return queryOptions({
     queryKey: ['jobs', 'technicians'],
-    queryFn: () =>
-      calibraApi.jobs.listTechnicians() as Promise<JobTechniciansData>,
+    queryFn: (): Promise<JobTechniciansData> =>
+      calibraApi.jobs.listTechnicians(),
   })
 }
 
 export function newJobCustomersQueryOptions(search = '') {
   return queryOptions({
     queryKey: ['customers', 'search', search],
-    queryFn: () =>
+    queryFn: (): Promise<NewJobCustomersData> =>
       calibraApi.customers.list({
         page: 1,
         limit: 50,
         query: search || undefined,
-      }) as Promise<NewJobCustomersData>,
+      }),
     staleTime: 30_000,
   })
 }
@@ -91,7 +92,7 @@ export function newJobCustomerAssetsQueryOptions(customerId: number | null) {
         page: 1,
         limit: 100,
         customerId,
-      }) as Promise<NewJobAssetsData>
+      })
     },
   })
 }
@@ -99,23 +100,21 @@ export function newJobCustomerAssetsQueryOptions(customerId: number | null) {
 export function newJobServicesQueryOptions(assetTypeId: number | null) {
   return queryOptions({
     queryKey: ['services', 'for-job', assetTypeId],
-    queryFn: () =>
+    queryFn: (): Promise<NewJobServicesData> =>
       calibraApi.services.list({
         page: 1,
         limit: 100,
         isActive: true,
         assetTypeId: assetTypeId ?? undefined,
-      }) as Promise<NewJobServicesData>,
+      }),
   })
 }
 
 export function activeReferenceStandardsQueryOptions<TStandard = unknown>() {
   return queryOptions({
     queryKey: ['standards', 'active'],
-    queryFn: () =>
-      calibraApi.jobs.listStandards<TStandard>() as Promise<
-        ReferenceStandardsData<TStandard>
-      >,
+    queryFn: (): Promise<ReferenceStandardsData<TStandard>> =>
+      calibraApi.jobs.listStandards<TStandard>(),
   })
 }
 
@@ -128,10 +127,10 @@ export function effectiveEnvironmentalLimitsQueryOptions<TLimits = unknown>({
 }) {
   return queryOptions({
     queryKey: ['environmental-limits', 'effective', assetTypeId, unitId],
-    queryFn: () =>
+    queryFn: (): Promise<EffectiveEnvironmentalLimitsData<TLimits>> =>
       calibraApi.jobs.getEffectiveEnvironmentalLimits<TLimits>(assetTypeId!, {
         unitId,
-      }) as Promise<EffectiveEnvironmentalLimitsData<TLimits>>,
+      }),
     staleTime: 60_000,
   })
 }
@@ -160,17 +159,8 @@ export async function getJobLabelDownloadUrl(jobId: number | string) {
   return data.url
 }
 
-function pageFromUrl(url?: URL) {
-  const page = Number(url?.searchParams.get('page') ?? 1)
-  return Number.isFinite(page) && page > 0 ? page : 1
-}
-
 function statusFromUrl(url?: URL): JobsListStatus | '' {
-  const status = url?.searchParams.get('status') ?? ''
-
-  return JOBS_LIST_STATUSES.includes(status as JobsListStatus)
-    ? (status as JobsListStatus)
-    : ''
+  return optionFromUrl(JOBS_LIST_STATUSES, url?.searchParams.get('status'))
 }
 
 export function jobsListQueryInputFromUrl(organizationId: string, url?: URL) {
@@ -234,12 +224,19 @@ export function useJobDetailData<TJob = unknown>({
     ...jobDetailQueryOptions<TJob>({ id, apiJobId }),
     refetchInterval: refetchWhileGeneratingPdf
       ? (query) => {
-          const status = (query.state.data as { status?: string } | undefined)
-            ?.status
+          const status = getJobStatus(query.state.data)
           return status === 'GENERATING_PDF' ? 2_000 : false
         }
       : false,
   })
+}
+
+function getJobStatus(data: unknown) {
+  if (typeof data !== 'object' || data === null || !('status' in data)) {
+    return undefined
+  }
+
+  return typeof data.status === 'string' ? data.status : undefined
 }
 
 export function useJobTechniciansData({

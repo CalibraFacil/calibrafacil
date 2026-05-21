@@ -96,17 +96,18 @@ export function listLocalStandards(
 
   const whereClause = conditions.join(" AND ");
   const totalRow = database
-    .prepare(
+    .prepare<typeof params, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM reference_standards
 WHERE ${whereClause}
 `,
     )
-    .get(params) as { total: number };
+    .get(params);
 
+  const pageParams = { ...params, limit, offset };
   const rows = database
-    .prepare(
+    .prepare<typeof pageParams, LocalStandardRow>(
       `
 SELECT
   id,
@@ -124,15 +125,15 @@ ORDER BY name ASC
 LIMIT @limit OFFSET @offset
 `,
     )
-    .all({ ...params, limit, offset }) as LocalStandardRow[];
+    .all(pageParams);
 
   return {
     data: rows.map(toLocalStandard),
     pagination: {
       page,
       limit,
-      total: totalRow.total,
-      totalPages: Math.ceil(totalRow.total / limit),
+      total: totalRow?.total ?? 0,
+      totalPages: Math.ceil((totalRow?.total ?? 0) / limit),
     },
   };
 }
@@ -164,7 +165,7 @@ function resolveLocalStandardRow(
   }
 
   const directMatch = database
-    .prepare(
+    .prepare<typeof params, LocalStandardRow>(
       `
 SELECT
   id,
@@ -182,12 +183,12 @@ WHERE sync_state != 'deleted'
 LIMIT 1
 `,
     )
-    .get(params) as LocalStandardRow | undefined;
+    .get(params);
 
   if (directMatch) return directMatch;
 
   const rows = database
-    .prepare(
+    .prepare<[], LocalStandardRow>(
       `
 SELECT
   id,
@@ -203,7 +204,7 @@ FROM reference_standards
 WHERE sync_state != 'deleted'
 `,
     )
-    .all() as LocalStandardRow[];
+    .all();
 
   if (Number.isInteger(numericIdentifier)) {
     const stableMatch = rows.find(
@@ -286,7 +287,7 @@ function parseCertifiedValues(value: unknown): LocalCertifiedValue[] | null {
 
   for (const item of value) {
     if (!item || typeof item !== "object") continue;
-    const record = item as Record<string, unknown>;
+    const record = recordFromUnknown(item);
     const nominal = getString(record, "nominal");
     const certifiedValue = getNumber(record, "value");
     const uncertainty = getNumber(record, "uncertainty");
@@ -326,13 +327,19 @@ function parseStatus(status: string): LocalStandardStatus {
 
 function safeParseRecord(value: string): Record<string, unknown> {
   try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === "object"
-      ? (parsed as Record<string, unknown>)
-      : {};
+    const parsed: unknown = JSON.parse(value);
+    return recordFromUnknown(parsed);
   } catch {
     return {};
   }
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }
 
 function getString(record: Record<string, unknown>, key: string) {

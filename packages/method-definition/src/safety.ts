@@ -128,7 +128,7 @@ export function deepFreezeJsonLike<T>(value: T): T {
     return value;
   }
   for (const key of Object.keys(value)) {
-    deepFreezeJsonLike((value as Record<string, unknown>)[key]);
+    deepFreezeJsonLike(Object.fromEntries(Object.entries(value))[key]);
   }
   return value;
 }

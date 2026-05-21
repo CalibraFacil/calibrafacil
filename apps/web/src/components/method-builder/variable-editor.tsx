@@ -13,6 +13,35 @@ import { FormField as Field } from '@/shared/forms/form-field'
 
 import type { MethodDraftInput, MethodDraftVariableBinding } from './types'
 
+function parseTableStatistic(
+  statistic: string | null,
+): Extract<
+  MethodDraftVariableBinding,
+  { source: 'table_statistic' }
+>['statistic'] {
+  switch (statistic) {
+    case 'sample_stddev':
+    case 'count':
+    case 'min':
+    case 'max':
+      return statistic
+    default:
+      return 'mean'
+  }
+}
+
+function parseEnvironmentField(
+  field: string | null,
+): Extract<MethodDraftVariableBinding, { source: 'environment' }>['field'] {
+  switch (field) {
+    case 'humidity':
+    case 'pressure':
+      return field
+    default:
+      return 'temperature'
+  }
+}
+
 export function VariableEditor({
   variable,
   inputs,
@@ -181,10 +210,7 @@ export function VariableEditor({
               onValueChange={(statistic) =>
                 onChange({
                   ...variable,
-                  statistic: statistic as Extract<
-                    MethodDraftVariableBinding,
-                    { source: 'table_statistic' }
-                  >['statistic'],
+                  statistic: parseTableStatistic(statistic),
                 })
               }
             >
@@ -210,10 +236,7 @@ export function VariableEditor({
               onValueChange={(field) =>
                 onChange({
                   ...variable,
-                  field: field as Extract<
-                    MethodDraftVariableBinding,
-                    { source: 'environment' }
-                  >['field'],
+                  field: parseEnvironmentField(field),
                 })
               }
             >

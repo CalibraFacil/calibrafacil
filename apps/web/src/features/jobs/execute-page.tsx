@@ -53,6 +53,7 @@ import {
   isMassMeasurementUnit,
   normalizeMethodDataForStorage,
   resolveMassDisplayUnit,
+  type AssetSpecificationFieldLike,
 } from '@calibra-facil/shared'
 import { EccentricityIndicator } from '@/components/eccentricity-indicator'
 import type {
@@ -117,6 +118,66 @@ import {
 type ExecuteJobPageProps = {
   id: string
   conflictReturn: SyncConflictReturnSearch
+}
+
+function toAssetSpecificationFieldDefinition(
+  field: MethodInputField,
+): Array<AssetSpecificationFieldLike> {
+  if (
+    !field.assetSpecKey ||
+    (field.type !== 'number' && field.type !== 'text' && field.type !== 'select')
+  ) {
+    return []
+  }
+
+  return [
+    {
+      key: field.assetSpecKey,
+      type: field.type,
+      unit: field.unit,
+    },
+  ]
+}
+
+function toCalibrationPhaseMode(value: unknown): CalibrationPhaseMode {
+  switch (value) {
+    case 'before_only':
+    case 'after_only':
+    case 'not_performed':
+    case 'before_and_after':
+      return value
+    default:
+      return DEFAULT_PHASE_MODE
+  }
+}
+
+function toCalibrationLocationType(value: unknown): CalibrationLocationType {
+  switch (value) {
+    case 'customer_site':
+    case 'lab':
+    case 'other':
+      return value
+    default:
+      return 'customer_site'
+  }
+}
+
+function toRecordArray(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return []
+    }
+
+    return [Object.fromEntries(Object.entries(item))]
+  })
+}
+
+function toStringValue(value: unknown) {
+  return typeof value === 'string' ? value : ''
 }
 
 export function ExecuteJobPage({ id, conflictReturn }: ExecuteJobPageProps) {
@@ -329,19 +390,9 @@ function ExecuteJobForm({
   )
   const displayAssetSpecificationDefinition = useMemo(
     () =>
-      assetSpecFields
-        .filter(
-          (field) =>
-            field.assetSpecKey &&
-            (field.type === 'number' ||
-              field.type === 'text' ||
-              field.type === 'select'),
-        )
-        .map((field) => ({
-          key: field.assetSpecKey!,
-          type: field.type as 'number' | 'text' | 'select',
-          unit: field.unit,
-        })),
+      assetSpecFields.flatMap((field) =>
+        toAssetSpecificationFieldDefinition(field),
+      ),
     [assetSpecFields],
   )
   const displayAssetSpecifications = useMemo(() => {
@@ -695,7 +746,7 @@ function ExecuteJobForm({
                   value={blockMode}
                   onValueChange={(mode) =>
                     updateCalibrationPhase(blockKey, {
-                      mode: mode as CalibrationPhaseMode,
+                      mode: toCalibrationPhaseMode(mode),
                     })
                   }
                   disabled={!isEditable}
@@ -746,7 +797,7 @@ function ExecuteJobForm({
           )}
           <TableInputRenderer
             field={field}
-            value={(value as Array<Record<string, unknown>>) || []}
+            value={toRecordArray(value)}
             onChange={(newValue) => updateField(field.key, newValue)}
             disabled={!isEditable}
             certifiedValueOptions={certifiedValueOptions}
@@ -769,7 +820,7 @@ function ExecuteJobForm({
                 fieldEccentricityVariant === 'circular_platform'
                   ? getCircularEccentricityLoadPositions(
                       field,
-                      (value as Array<Record<string, unknown>>) || [],
+                      toRecordArray(value),
                     )
                   : undefined
               }
@@ -791,11 +842,11 @@ function ExecuteJobForm({
             {field.required && <span className="text-red-500 ml-1">*</span>}
           </FieldLabel>
           <Select
-            value={(value as string) || ''}
+            value={toStringValue(value)}
             onValueChange={(v) => updateField(field.key, v)}
           >
             <SelectTrigger>
-              <span>{(value as string) || 'Selecione...'}</span>
+              <span>{toStringValue(value) || 'Selecione...'}</span>
             </SelectTrigger>
             <SelectContent>
               {field.options.map((option) => (
@@ -861,7 +912,7 @@ function ExecuteJobForm({
         </FieldLabel>
         <Input
           type="text"
-          value={(value as string) ?? ''}
+          value={toStringValue(value)}
           onChange={(e) => updateField(field.key, e.target.value)}
         />
       </Field>
@@ -1199,7 +1250,7 @@ function ExecuteJobForm({
                     <Select
                       value={calibrationLocation.type}
                       onValueChange={(value) => {
-                        const type = value as CalibrationLocationType
+                        const type = toCalibrationLocationType(value)
                         const customerAddress = formatAddress(
                           job.customerAddress,
                         )

@@ -261,6 +261,69 @@ export interface OfficialCompiledExecution {
 
 const CIRCULAR_ECCENTRICITY_LOAD_POSITIONS = ['A', 'B', 'C', 'D', 'E']
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+
+  return Object.fromEntries(Object.entries(value))
+}
+
+function toRecordArray(value: unknown[]): Array<Record<string, unknown>> {
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return []
+    }
+
+    return [Object.fromEntries(Object.entries(item))]
+  })
+}
+
+function toOfficialCompiledExecution(
+  value: unknown,
+): OfficialCompiledExecution | null {
+  const record = toRecord(value)
+  if (Object.keys(record).length === 0) {
+    return null
+  }
+
+  return {
+    methodFingerprint:
+      typeof record.methodFingerprint === 'string'
+        ? record.methodFingerprint
+        : undefined,
+    engineVersion:
+      typeof record.engineVersion === 'string' ? record.engineVersion : undefined,
+    engineOptionsFingerprint:
+      typeof record.engineOptionsFingerprint === 'string'
+        ? record.engineOptionsFingerprint
+        : undefined,
+    inputFingerprint:
+      typeof record.inputFingerprint === 'string'
+        ? record.inputFingerprint
+        : undefined,
+    calculationFingerprint:
+      typeof record.calculationFingerprint === 'string'
+        ? record.calculationFingerprint
+        : undefined,
+    resultFingerprint:
+      typeof record.resultFingerprint === 'string'
+        ? record.resultFingerprint
+        : undefined,
+    diagnostics: Array.isArray(record.diagnostics)
+      ? record.diagnostics
+      : undefined,
+  }
+}
+
+function resolveDisplayMassUnit(
+  baseMeasurementUnit: MassUnit | null | undefined,
+  unit: MassUnit | undefined,
+) {
+  const displayUnit = resolveMassDisplayUnit(baseMeasurementUnit, unit)
+  return isMassMeasurementUnit(displayUnit) ? displayUnit : unit
+}
+
 export function normalizeText(value: string | null | undefined) {
   return (value ?? '')
     .normalize('NFD')
@@ -362,9 +425,7 @@ export function normalizeExecutionFormData({
       const normalizedRows = value.map((row) => {
         if (typeof row === 'object' && row !== null) {
           const normalizedRow: Record<string, unknown> = {}
-          for (const [cellKey, cellValue] of Object.entries(
-            row as Record<string, unknown>,
-          )) {
+          for (const [cellKey, cellValue] of Object.entries(toRecord(row))) {
             normalizedRow[cellKey] =
               typeof cellValue === 'string' && isNumericString(cellValue)
                 ? parseFloat(cellValue)
@@ -378,7 +439,7 @@ export function normalizeExecutionFormData({
         field.type === 'table'
           ? applyTableWeighingRangeResolvers(
               displayField ?? field,
-              normalizedRows as Array<Record<string, unknown>>,
+              toRecordArray(normalizedRows),
               displayAssetSpecifications,
             )
           : normalizedRows
@@ -675,7 +736,7 @@ export function getOfficialCompiledExecution(
     return null
   }
 
-  return value as OfficialCompiledExecution
+  return toOfficialCompiledExecution(value)
 }
 
 export function getCalculationFormulas(job: JobData): MethodFormula[] {
@@ -1208,10 +1269,10 @@ export function resolveFieldForDisplay(
       ? {
           ...field.weighingRangeResolver,
           pointUnit:
-            (resolveMassDisplayUnit(
+            resolveDisplayMassUnit(
               baseMeasurementUnit,
               field.weighingRangeResolver.pointUnit,
-            ) as MassUnit | undefined) ?? field.weighingRangeResolver.pointUnit,
+            ) ?? field.weighingRangeResolver.pointUnit,
         }
       : field.weighingRangeResolver,
     columns: field.columns?.map((column) => ({

@@ -137,7 +137,11 @@ function CertificateDisplaySelect({
     <Field label={label}>
       <Select
         value={value}
-        onValueChange={(nextValue) => onChange(nextValue as 'full' | 'hidden')}
+        onValueChange={(nextValue) => {
+          if (nextValue === 'full' || nextValue === 'hidden') {
+            onChange(nextValue)
+          }
+        }}
       >
         <SelectTrigger>
           <span>{value === 'full' ? 'Exibir' : 'Ocultar'}</span>

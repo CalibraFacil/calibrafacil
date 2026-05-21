@@ -224,6 +224,7 @@ function CertificateNumberingForm({
                 onValueChange={(value) =>
                   setForm((prev) => ({
                     ...prev,
+                    // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to reset scopes.
                     resetScope: value as ResetScope,
                   }))
                 }

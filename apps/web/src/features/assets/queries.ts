@@ -1,4 +1,5 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
+import { AssetTypeFieldSchema } from '@calibra-facil/schemas'
 
 import { calibraApi } from '@/utils/api'
 import {
@@ -6,6 +7,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
+import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   ASSET_STATUSES,
   type AssetAuditLogData,
@@ -20,17 +22,8 @@ import {
 
 export const ASSETS_LIST_LIMIT = 20
 
-function pageFromUrl(url?: URL) {
-  const page = Number(url?.searchParams.get('page') ?? 1)
-  return Number.isFinite(page) && page > 0 ? page : 1
-}
-
 function statusFromUrl(url?: URL): AssetStatus | '' {
-  const status = url?.searchParams.get('status') ?? ''
-
-  return ASSET_STATUSES.includes(status as AssetStatus)
-    ? (status as AssetStatus)
-    : ''
+  return optionFromUrl(ASSET_STATUSES, url?.searchParams.get('status'))
 }
 
 function customerIdFromUrl(url?: URL) {
@@ -60,14 +53,14 @@ export function assetsListQueryOptions(input: AssetsListQueryInput) {
       input.statusFilter,
       input.customerId,
     ],
-    queryFn: () =>
+    queryFn: (): Promise<AssetsListData> =>
       calibraApi.assets.list({
         page: input.page,
         limit: input.limit,
         query: input.search || undefined,
         status: input.statusFilter || undefined,
         customerId: input.customerId ?? undefined,
-      }) as Promise<AssetsListData>,
+      }),
   })
 }
 
@@ -81,17 +74,24 @@ export function assetDetailQueryOptions(id: string) {
 export function assetAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['asset', id, 'audit-log'],
-    queryFn: () =>
-      calibraApi.assets.auditLog<AssetAuditLogRecord>(
-        id,
-      ) as Promise<AssetAuditLogData>,
+    queryFn: (): Promise<AssetAuditLogData> =>
+      calibraApi.assets.auditLog<AssetAuditLogRecord>(id),
   })
 }
 
 export function assetTypesQueryOptions() {
   return queryOptions({
     queryKey: ['asset-types'],
-    queryFn: () => calibraApi.assetTypes.list() as Promise<AssetTypesData>,
+    queryFn: async (): Promise<AssetTypesData> => {
+      const result = await calibraApi.assetTypes.list()
+      return {
+        data: result.data.map((assetType) => ({
+          ...assetType,
+          slug: assetType.slug ?? String(assetType.id),
+          definition: AssetTypeFieldSchema.array().parse(assetType.definition),
+        })),
+      }
+    },
     staleTime: 60_000,
   })
 }
@@ -99,12 +99,12 @@ export function assetTypesQueryOptions() {
 export function newAssetCustomersQueryOptions(search = '') {
   return queryOptions({
     queryKey: ['customers', 'search', search],
-    queryFn: () =>
+    queryFn: (): Promise<NewAssetCustomersData> =>
       calibraApi.customers.list({
         page: 1,
         limit: 50,
         query: search || undefined,
-      }) as Promise<NewAssetCustomersData>,
+      }),
     staleTime: 30_000,
   })
 }

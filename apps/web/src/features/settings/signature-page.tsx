@@ -73,7 +73,10 @@ export function SignatureSettingsPage() {
       // Create preview
       const reader = new FileReader()
       reader.onload = (e) => {
-        setPreviewUrl(e.target?.result as string)
+        const result = e.target?.result
+        if (typeof result === 'string') {
+          setPreviewUrl(result)
+        }
       }
       reader.readAsDataURL(file)
 

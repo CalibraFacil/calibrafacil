@@ -117,6 +117,7 @@ export function NCDetailPage({ id }: { id: string }) {
   const dispositionMutation = useMutation({
     mutationFn: async (data: { disposition: string; justification?: string }) =>
       calibraApi.nonConformances.setDisposition(id, {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- Form submit validates disposition from fixed UI choices.
         ...(data as {
           disposition: 'rework' | 'scrap' | 'use_as_is' | 'concession'
           justification?: string

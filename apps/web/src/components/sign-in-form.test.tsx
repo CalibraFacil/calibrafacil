@@ -60,7 +60,7 @@ describe('startDesktopInitialSync', () => {
     cleanup()
     vi.clearAllMocks()
     vi.restoreAllMocks()
-    delete (window as typeof window & { calibraBridge?: unknown }).calibraBridge
+    Reflect.deleteProperty(window, 'calibraBridge')
   })
 
   it('starts desktop sync through the bridge after lab sign-in', () => {
@@ -97,7 +97,7 @@ describe('SignInForm workflow', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
-    delete (window as typeof window & { calibraBridge?: unknown }).calibraBridge
+    Reflect.deleteProperty(window, 'calibraBridge')
   })
 
   it('signs lab users in, clears desktop signed-out state, starts sync, and navigates to the redirect', async () => {

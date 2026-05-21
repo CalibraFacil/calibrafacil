@@ -72,6 +72,26 @@ import type {
   RenewCertificateInput,
   UpdateReferenceStandardInput,
 } from '@calibra-facil/schemas'
+import {
+  ReferenceStandardStatusSchema,
+  UncertaintyDistributionSchema,
+} from '@calibra-facil/schemas'
+
+function toStandardWriteInput(
+  input: UpdateReferenceStandardInput | RenewCertificateInput,
+) {
+  return Object.fromEntries(Object.entries(input))
+}
+
+function toUncertaintyDistribution(value: unknown) {
+  const parsed = UncertaintyDistributionSchema.safeParse(value)
+  return parsed.success ? parsed.data : 'normal'
+}
+
+function toReferenceStandardStatus(value: unknown) {
+  const parsed = ReferenceStandardStatusSchema.safeParse(value)
+  return parsed.success ? parsed.data : 'ACTIVE'
+}
 
 export function EditStandardPage({ id }: { id: string }) {
   const { data: standard, isLoading } = useStandardDetailData(id)
@@ -140,7 +160,7 @@ function EditStandardForm({
 
   const updateMutation = useMutation({
     mutationFn: async (data: UpdateReferenceStandardInput) =>
-      calibraApi.standards.update(standard.id, data as Record<string, unknown>),
+      calibraApi.standards.update(standard.id, toStandardWriteInput(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })
       toast.success('Padrão atualizado com sucesso!')
@@ -155,7 +175,7 @@ function EditStandardForm({
     mutationFn: async (payload: RenewCertificateInput) => {
       return calibraApi.standards.renew(
         standard.id,
-        payload as Record<string, unknown>,
+        toStandardWriteInput(payload),
       )
     },
     onSuccess: () => {
@@ -707,11 +727,11 @@ function EditStandardForm({
 
                 <Field>
                   <FieldLabel htmlFor="distribution">Distribuicao</FieldLabel>
-                  <Select
-                    value={formData.distribution}
-                    onValueChange={(v) =>
-                      updateField('distribution', v as 'normal' | 'rectangular')
-                    }
+	                  <Select
+	                    value={formData.distribution}
+	                    onValueChange={(v) =>
+	                      updateField('distribution', toUncertaintyDistribution(v))
+	                    }
                     disabled={updateMutation.isPending}
                   >
                     <SelectTrigger id="distribution">
@@ -752,11 +772,11 @@ function EditStandardForm({
           <CardContent>
             <Field>
               <FieldLabel htmlFor="status">Status do Padrão</FieldLabel>
-              <Select
-                value={formData.status}
-                onValueChange={(v) =>
-                  updateField('status', v as StandardFormData['status'])
-                }
+	              <Select
+	                value={formData.status}
+	                onValueChange={(v) =>
+	                  updateField('status', toReferenceStandardStatus(v))
+	                }
                 disabled={updateMutation.isPending}
               >
                 <SelectTrigger id="status" className="w-64">

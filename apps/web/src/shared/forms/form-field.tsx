@@ -2,7 +2,6 @@ import {
   cloneElement,
   isValidElement,
   useId,
-  type ReactElement,
   type ReactNode,
 } from 'react'
 
@@ -56,11 +55,11 @@ export function FormField({
 }
 
 function withControlA11y(children: ReactNode, props: FormFieldControlProps) {
-  if (!isValidElement(children)) {
+  if (!isValidElement<FormFieldControlProps>(children)) {
     return children
   }
 
-  const child = children as ReactElement<FormFieldControlProps>
+  const child = children
 
   return cloneElement(child, {
     id: child.props.id ?? props.id,

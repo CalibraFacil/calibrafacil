@@ -116,10 +116,13 @@ async function resolveSelectedUnits(params: {
     .orderBy(organizationUnit.name);
 
   if (availableUnits.length === 0) {
+    const emptyUnits: UnitSummary[] = [];
+    const emptyUnitIds: number[] = [];
+
     return {
-      availableUnits: [] as UnitSummary[],
-      selectedUnits: [] as UnitSummary[],
-      selectedUnitIds: [] as number[],
+      availableUnits: emptyUnits,
+      selectedUnits: emptyUnits,
+      selectedUnitIds: emptyUnitIds,
     };
   }
 

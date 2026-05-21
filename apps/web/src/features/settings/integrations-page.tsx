@@ -1135,6 +1135,7 @@ export function IntegrationsSettingsPage() {
                                                     field.id,
                                                     {
                                                       formatter:
+                                                        // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to integration mapping formatters.
                                                         value as IntegrationMappingFormatter,
                                                     },
                                                   ),

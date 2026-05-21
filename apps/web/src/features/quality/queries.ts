@@ -6,6 +6,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
+import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   CAPA_CATEGORIES,
   CAPA_SEVERITIES,
@@ -13,37 +14,20 @@ import {
   NON_CONFORMANCE_STATUSES,
   NON_CONFORMANCE_TYPES,
   type CapaAuditLogData,
-  type CapaCategory,
   type CapaDetail,
   type CapaListData,
   type CapaListQueryInput,
   type CapaResponsibleMembersData,
-  type CapaSeverity,
-  type CapaStatus,
   type CapaSummaryData,
   type NewNonConformanceJobsData,
   type NonConformanceAuditLogData,
   type NonConformanceDetail,
   type NonConformanceListData,
   type NonConformanceListQueryInput,
-  type NonConformanceStatus,
   type NonConformanceSummaryData,
-  type NonConformanceType,
 } from './types'
 
 const QUALITY_LIST_LIMIT = 20
-
-function pageFromUrl(url?: URL) {
-  const page = Number(url?.searchParams.get('page') ?? 1)
-  return Number.isFinite(page) && page > 0 ? page : 1
-}
-
-function enumFromUrl<T extends string>(
-  values: readonly T[],
-  value: string | null | undefined,
-) {
-  return values.includes(value as T) ? (value as T) : ''
-}
 
 export function nonConformanceListInputFromUrl(
   organizationId: string,
@@ -53,14 +37,14 @@ export function nonConformanceListInputFromUrl(
     organizationId,
     page: pageFromUrl(url),
     search: url?.searchParams.get('query') ?? '',
-    statusFilter: enumFromUrl(
+    statusFilter: optionFromUrl(
       NON_CONFORMANCE_STATUSES,
       url?.searchParams.get('status'),
-    ) as NonConformanceStatus | '',
-    typeFilter: enumFromUrl(
+    ),
+    typeFilter: optionFromUrl(
       NON_CONFORMANCE_TYPES,
       url?.searchParams.get('type'),
-    ) as NonConformanceType | '',
+    ),
   } satisfies NonConformanceListQueryInput
 }
 
@@ -69,18 +53,15 @@ export function capaListInputFromUrl(organizationId: string, url?: URL) {
     organizationId,
     page: pageFromUrl(url),
     search: url?.searchParams.get('query') ?? '',
-    statusFilter: enumFromUrl(
-      CAPA_STATUSES,
-      url?.searchParams.get('status'),
-    ) as CapaStatus | '',
-    severityFilter: enumFromUrl(
+    statusFilter: optionFromUrl(CAPA_STATUSES, url?.searchParams.get('status')),
+    severityFilter: optionFromUrl(
       CAPA_SEVERITIES,
       url?.searchParams.get('severity'),
-    ) as CapaSeverity | '',
-    categoryFilter: enumFromUrl(
+    ),
+    categoryFilter: optionFromUrl(
       CAPA_CATEGORIES,
       url?.searchParams.get('category'),
-    ) as CapaCategory | '',
+    ),
   } satisfies CapaListQueryInput
 }
 
@@ -133,11 +114,11 @@ export function nonConformanceAuditLogQueryOptions(id: string) {
 export function nonConformanceJobsQueryOptions() {
   return queryOptions({
     queryKey: ['jobs-for-nc'],
-    queryFn: () =>
+    queryFn: (): Promise<NewNonConformanceJobsData> =>
       calibraApi.jobs.list({
         page: 1,
         limit: 100,
-      }) as Promise<NewNonConformanceJobsData>,
+      }),
   })
 }
 

@@ -5,7 +5,7 @@ import { readJsonResponse } from './responses'
 describe('readJsonResponse', () => {
   it('returns JSON payloads for successful responses', async () => {
     await expect(
-      readJsonResponse<{ ok: boolean }>(Response.json({ ok: true })),
+      readJsonResponse(Response.json({ ok: true })),
     ).resolves.toEqual({ ok: true })
   })
 

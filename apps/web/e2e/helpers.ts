@@ -96,11 +96,7 @@ export async function installDesktopBridge(
         body: JSON.stringify(body),
       })
 
-      ;(
-        window as Window & {
-          calibraBridge?: Record<string, unknown>
-        }
-      ).calibraBridge = {
+      window.calibraBridge = {
         async authFetch(request: { url: string; body?: string | null }) {
           const path = new URL(request.url).pathname
 

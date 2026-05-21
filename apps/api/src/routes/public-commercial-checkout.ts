@@ -7,9 +7,12 @@ import {
 } from "../services/commercial/public-checkout";
 
 function resolvePublicAppUrl(c: { env?: unknown }) {
+  const envRecord =
+    c.env && typeof c.env === "object" && !Array.isArray(c.env)
+      ? Object.fromEntries(Object.entries(c.env))
+      : {};
   const configured =
-    (c.env as Record<string, unknown> | undefined)?.APP_URL ??
-    process.env.APP_URL;
+    typeof envRecord.APP_URL === "string" ? envRecord.APP_URL : process.env.APP_URL;
 
   return typeof configured === "string" && configured.trim().length > 0
     ? configured.trim().replace(/\/$/, "")
@@ -35,16 +38,14 @@ function mapStartError(error: unknown) {
   }
 
   if (message.startsWith("TERMINAL_")) {
+    const terminalState = parseTerminalCheckoutState(
+      message.replace("TERMINAL_", ""),
+    );
     return {
       status: 409 as const,
       body: {
         error: "A oferta não pode mais iniciar pagamento",
-        state: message.replace("TERMINAL_", "") as
-          | "REVOKED"
-          | "EXPIRED"
-          | "CANCELED"
-          | "OVERDUE"
-          | "REFUNDED",
+        state: terminalState,
       },
     };
   }
@@ -53,6 +54,19 @@ function mapStartError(error: unknown) {
     status: 500 as const,
     body: { error: "Falha ao iniciar o checkout público" },
   };
+}
+
+function parseTerminalCheckoutState(value: string) {
+  switch (value) {
+    case "REVOKED":
+    case "EXPIRED":
+    case "CANCELED":
+    case "OVERDUE":
+    case "REFUNDED":
+      return value;
+    default:
+      return "EXPIRED";
+  }
 }
 
 export const publicCommercialCheckoutRouter = new Hono()

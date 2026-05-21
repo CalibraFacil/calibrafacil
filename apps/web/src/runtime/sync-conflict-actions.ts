@@ -132,7 +132,7 @@ function getPathValue(payload: unknown, path: string[]) {
       return null
     }
 
-    value = (value as Record<string, unknown>)[segment]
+    value = Object.fromEntries(Object.entries(value))[segment]
   }
 
   return value
@@ -143,7 +143,7 @@ function getRecord(payload: unknown) {
     return null
   }
 
-  return payload as Record<string, unknown>
+  return Object.fromEntries(Object.entries(payload))
 }
 
 function formatConflictValue(value: unknown): string | null {
@@ -158,7 +158,7 @@ function formatConflictValue(value: unknown): string | null {
     return `${value.length} item${value.length === 1 ? '' : 's'}`
   }
   if (typeof value === 'object') {
-    const record = value as Record<string, unknown>
+    const record = Object.fromEntries(Object.entries(value))
     const displayValue =
       record.name ?? record.label ?? record.tag ?? record.status ?? record.id
     if (displayValue != null) return formatConflictValue(displayValue)

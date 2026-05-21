@@ -18,7 +18,7 @@ export function useCustomerSuccessAccess() {
   return useQuery({
     queryKey: ['backoffice', 'access'],
     queryFn: async () => {
-      return calibraApi.backoffice.getAccess() as Promise<{ allowed: boolean }>
+      return calibraApi.backoffice.getAccess()
     },
     retry: false,
   })

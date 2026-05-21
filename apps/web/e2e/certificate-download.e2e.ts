@@ -9,6 +9,12 @@ import {
   routeJson,
 } from './helpers'
 
+declare global {
+  interface Window {
+    __openedUrls?: Array<{ url: string; target: string | null }>
+  }
+}
+
 test.describe('certificate distribution', () => {
   test('opens a fresh signed certificate download URL from an approved job', async ({
     page,
@@ -23,13 +29,9 @@ test.describe('certificate distribution', () => {
     const downloadRequests: Array<Record<string, unknown>> = []
 
     await page.addInitScript(() => {
-      const targetWindow = window as Window & {
-        __openedUrls?: Array<{ url: string; target: string | null }>
-      }
-
-      targetWindow.__openedUrls = []
+      window.__openedUrls = []
       window.open = (url?: string | URL, target?: string) => {
-        targetWindow.__openedUrls?.push({
+        window.__openedUrls?.push({
           url: url ? String(url) : '',
           target: target ?? null,
         })
@@ -70,23 +72,13 @@ test.describe('certificate distribution', () => {
     await expect
       .poll(() =>
         page.evaluate(
-          () =>
-            (
-              window as Window & {
-                __openedUrls?: Array<{ url: string; target: string | null }>
-              }
-            ).__openedUrls?.length ?? 0,
+          () => window.__openedUrls?.length ?? 0,
         ),
       )
       .toBe(1)
 
     const openedUrls = await page.evaluate(
-      () =>
-        (
-          window as Window & {
-            __openedUrls?: Array<{ url: string; target: string | null }>
-          }
-        ).__openedUrls ?? [],
+      () => window.__openedUrls ?? [],
     )
     expect(openedUrls).toContainEqual({
       url: signedDownloadUrl,

@@ -858,12 +858,27 @@ function normalizeLegacyMethodValidationExpression(validation: {
 
   return {
     leftExpression: match?.[1]?.trim() || validation.expression,
-    operator: (match?.[2] ?? "!=") as MethodValidationOperator,
+    operator: parseMethodValidationOperator(match?.[2]),
     rightExpression: match?.[3]?.trim() || "0",
     message: validation.message,
     severity: validation.severity,
     metadata: validation.metadata,
   };
+}
+
+function parseMethodValidationOperator(
+  operator: string | undefined,
+): MethodValidationOperator {
+  switch (operator) {
+    case "<=":
+    case ">":
+    case ">=":
+    case "==":
+    case "!=":
+      return operator;
+    default:
+      return "!=";
+  }
 }
 
 /**

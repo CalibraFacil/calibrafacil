@@ -148,7 +148,9 @@ export function AssetDetailPage({ id }: { id: string }) {
               <DetailItem label="Modelo" value={asset.model || '-'} />
               <DetailItem label="Status">
                 <Badge variant="outline">
-                  {statusLabels[asset.status as AssetStatus]}
+                  {Object.entries(statusLabels).find(
+                    ([status]) => status === asset.status,
+                  )?.[1] ?? asset.status}
                 </Badge>
               </DetailItem>
               {asset.baseMeasurementUnit && (

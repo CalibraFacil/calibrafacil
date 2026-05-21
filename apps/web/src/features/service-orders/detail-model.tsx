@@ -308,12 +308,12 @@ export function buildServiceOrderIntakeHtml(
 }
 
 export function getPublicUrl(result: unknown) {
-  if (!result || typeof result !== 'object') return null
-  const record = result as Record<string, unknown>
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return null
+  const record = Object.fromEntries(Object.entries(result))
   if (typeof record.publicUrl === 'string') return record.publicUrl
   const data = record.data
-  if (!data || typeof data !== 'object') return null
-  const nested = data as Record<string, unknown>
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null
+  const nested = Object.fromEntries(Object.entries(data))
   return typeof nested.publicUrl === 'string' ? nested.publicUrl : null
 }
 

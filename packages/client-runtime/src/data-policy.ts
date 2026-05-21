@@ -362,12 +362,15 @@ export function getCalibraApiDataPolicy<TNamespace extends CalibraApiNamespace>(
   namespace: TNamespace,
   method: CalibraApiMethod<TNamespace>,
 ): DataPolicy {
-  const policies = calibraApiPolicyRegistry[namespace] as Record<
-    CalibraApiMethod<TNamespace>,
-    DataPolicy
-  >;
+  for (const [candidate, policy] of Object.entries(
+    calibraApiPolicyRegistry[namespace],
+  )) {
+    if (candidate === method) {
+      return policy;
+    }
+  }
 
-  return policies[method];
+  throw new Error(`Unknown Calibra API data policy: ${namespace}.${method}`);
 }
 
 export function getDesktopDataPolicyUnavailableMessage(
@@ -377,12 +380,18 @@ export function getDesktopDataPolicyUnavailableMessage(
 }
 
 export function listCalibraApiPolicyEntries(): CalibraApiPolicyEntry[] {
-  return Object.entries(calibraApiPolicyRegistry).flatMap(
-    ([namespace, methods]) =>
-      Object.entries(methods).map(([method, policy]) => ({
-        namespace: namespace as CalibraApiNamespace,
+  return Object.keys(calibraApiPolicyRegistry)
+    .filter(isCalibraApiNamespace)
+    .flatMap((namespace) => {
+      const methods = calibraApiPolicyRegistry[namespace];
+      return Object.entries(methods).map(([method, policy]) => ({
+        namespace,
         method,
         policy,
-      })),
-  );
+      }));
+    });
+}
+
+function isCalibraApiNamespace(value: string): value is CalibraApiNamespace {
+  return value in calibraApiPolicyRegistry;
 }

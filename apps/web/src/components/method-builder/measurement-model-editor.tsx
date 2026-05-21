@@ -37,6 +37,38 @@ const gumDistributions = [
   'custom',
 ] as const
 
+function parseMeasurementModelScope(
+  value: string | null,
+): (typeof measurementModelScopes)[number] {
+  return value === 'table_row' ? 'table_row' : 'scalar'
+}
+
+function parseGumUncertaintyKind(
+  value: string | null,
+): (typeof gumUncertaintyKinds)[number] {
+  switch (value) {
+    case 'type_a':
+    case 'type_b':
+      return value
+    default:
+      return 'direct_standard_uncertainty'
+  }
+}
+
+function parseGumDistribution(
+  value: string | null,
+): (typeof gumDistributions)[number] {
+  switch (value) {
+    case 'rectangular':
+    case 'triangular':
+    case 'u_shaped':
+    case 'custom':
+      return value
+    default:
+      return 'normal'
+  }
+}
+
 export function MeasurementModelEditor({
   model,
   inputs,
@@ -146,7 +178,7 @@ export function MeasurementModelEditor({
           <Select
             value={scopeKind}
             onValueChange={(value) =>
-              changeScope(value as (typeof measurementModelScopes)[number])
+              changeScope(parseMeasurementModelScope(value))
             }
           >
             <SelectTrigger>
@@ -450,7 +482,7 @@ function MeasurementQuantityEditor({
           <Select
             value={uncertainty.kind}
             onValueChange={(value) =>
-              changeUncertainty(value as (typeof gumUncertaintyKinds)[number])
+              changeUncertainty(parseGumUncertaintyKind(value))
             }
           >
             <SelectTrigger>
@@ -574,8 +606,7 @@ function MeasurementQuantityEditor({
                 onChange({
                   uncertainty: {
                     ...uncertainty,
-                    distribution:
-                      distribution as (typeof gumDistributions)[number],
+                    distribution: parseGumDistribution(distribution),
                   },
                 })
               }

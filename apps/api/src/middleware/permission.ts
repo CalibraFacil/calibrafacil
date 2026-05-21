@@ -109,17 +109,116 @@ export interface ServerTimingMetric {
 }
 
 const SERVER_TIMING_KEY = "serverTiming";
+const requestLabAuthCache = new WeakMap<
+  object,
+  ReturnType<typeof createLabAuth>
+>();
+const requestPortalAuthCache = new WeakMap<
+  object,
+  ReturnType<typeof createPortalAuth>
+>();
+const requestBackofficeAuthCache = new WeakMap<
+  object,
+  ReturnType<typeof createBackofficeAuth>
+>();
+const serverTimingCache = new WeakMap<object, ServerTimingMetric[]>();
+
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function isDate(value: unknown): value is Date {
+  return value instanceof Date;
+}
+
+function isNullableDate(value: unknown): value is Date | null | undefined {
+  return value === null || value === undefined || isDate(value);
+}
+
+function isSessionData(value: unknown): value is SessionData {
+  const sessionData = recordFromUnknown(value);
+  const user = recordFromUnknown(sessionData.user);
+  const session = recordFromUnknown(sessionData.session);
+
+  return (
+    typeof user.id === "string" &&
+    typeof user.name === "string" &&
+    typeof user.email === "string" &&
+    typeof user.emailVerified === "boolean" &&
+    (user.role === undefined ||
+      user.role === null ||
+      typeof user.role === "string") &&
+    (user.banned === undefined ||
+      user.banned === null ||
+      typeof user.banned === "boolean") &&
+    (user.banReason === undefined ||
+      user.banReason === null ||
+      typeof user.banReason === "string") &&
+    isNullableDate(user.banExpires) &&
+    (user.image === undefined ||
+      user.image === null ||
+      typeof user.image === "string") &&
+    isDate(user.createdAt) &&
+    isDate(user.updatedAt) &&
+    typeof session.id === "string" &&
+    typeof session.userId === "string" &&
+    (session.activeOrganizationId === undefined ||
+      session.activeOrganizationId === null ||
+      typeof session.activeOrganizationId === "string") &&
+    isDate(session.expiresAt) &&
+    isDate(session.createdAt) &&
+    isDate(session.updatedAt) &&
+    typeof session.token === "string" &&
+    (session.impersonatedBy === undefined ||
+      session.impersonatedBy === null ||
+      typeof session.impersonatedBy === "string")
+  );
+}
+
+function requireSessionData(value: unknown): SessionData {
+  if (!isSessionData(value)) {
+    throw new HTTPException(401, { message: "Invalid session" });
+  }
+
+  return value;
+}
+
+function isOrgType(value: unknown): value is OrgType {
+  return value === "LAB" || value === "CLIENT";
+}
+
+function orgTypeFromUnknown(value: unknown): OrgType {
+  return isOrgType(value) ? value : "LAB";
+}
+
+function roleNameFromUnknown(value: unknown): RoleName {
+  if (
+    value === "owner" ||
+    value === "admin" ||
+    value === "technician" ||
+    value === "operator" ||
+    value === "member" ||
+    value === "client_user"
+  ) {
+    return value;
+  }
+
+  return "member";
+}
 
 function getRequestLabAuth(c: {
   get: (key: string) => unknown;
   set: (key: string, value: unknown) => void;
 }) {
-  const existing = c.get("requestLabAuth") as
-    | ReturnType<typeof createLabAuth>
-    | undefined;
+  const existing = requestLabAuthCache.get(c);
   if (existing) return existing;
 
   const auth = createLabAuth();
+  requestLabAuthCache.set(c, auth);
   c.set("requestLabAuth", auth);
   return auth;
 }
@@ -128,12 +227,11 @@ function getRequestPortalAuth(c: {
   get: (key: string) => unknown;
   set: (key: string, value: unknown) => void;
 }) {
-  const existing = c.get("requestPortalAuth") as
-    | ReturnType<typeof createPortalAuth>
-    | undefined;
+  const existing = requestPortalAuthCache.get(c);
   if (existing) return existing;
 
   const auth = createPortalAuth();
+  requestPortalAuthCache.set(c, auth);
   c.set("requestPortalAuth", auth);
   return auth;
 }
@@ -142,12 +240,11 @@ function getRequestBackofficeAuth(c: {
   get: (key: string) => unknown;
   set: (key: string, value: unknown) => void;
 }) {
-  const existing = c.get("requestBackofficeAuth") as
-    | ReturnType<typeof createBackofficeAuth>
-    | undefined;
+  const existing = requestBackofficeAuthCache.get(c);
   if (existing) return existing;
 
   const auth = createBackofficeAuth();
+  requestBackofficeAuthCache.set(c, auth);
   c.set("requestBackofficeAuth", auth);
   return auth;
 }
@@ -156,10 +253,11 @@ function getServerTimingBuffer(c: {
   get: (key: string) => unknown;
   set: (key: string, value: unknown) => void;
 }): ServerTimingMetric[] {
-  const existing = c.get(SERVER_TIMING_KEY) as ServerTimingMetric[] | undefined;
+  const existing = serverTimingCache.get(c);
   if (existing) return existing;
 
   const created: ServerTimingMetric[] = [];
+  serverTimingCache.set(c, created);
   c.set(SERVER_TIMING_KEY, created);
   return created;
 }
@@ -183,8 +281,7 @@ function applyServerTimingHeader(c: {
 }) {
   if (!c.header) return;
 
-  const entries =
-    (c.get(SERVER_TIMING_KEY) as ServerTimingMetric[] | undefined) ?? [];
+  const entries = serverTimingCache.get(c) ?? [];
   if (entries.length === 0) return;
 
   const value = entries
@@ -213,16 +310,21 @@ export function isInternalOperatorEmail(
 }
 
 function hasPermissionLocally(role: RoleName, permissions: PermissionCheck) {
-  const roleAccess = roles[role] as
-    | {
-        authorize?: (input: PermissionCheck) => { success: boolean };
-      }
-    | undefined;
-
-  if (!roleAccess?.authorize) return false;
-
   try {
-    return roleAccess.authorize(permissions).success;
+    switch (role) {
+      case "owner":
+        return roles.owner.authorize(permissions).success;
+      case "admin":
+        return roles.admin.authorize(permissions).success;
+      case "technician":
+        return roles.technician.authorize(permissions).success;
+      case "operator":
+        return roles.operator.authorize(permissions).success;
+      case "client_user":
+        return roles.client_user.authorize(permissions).success;
+      case "member":
+        return roles.member.authorize(permissions).success;
+    }
   } catch {
     return false;
   }
@@ -322,7 +424,7 @@ export const requireLabAuth = createMiddleware<{ Variables: AuthVariables }>(
       throw new HTTPException(401, { message: "Unauthorized" });
     }
 
-    c.set("session", session as SessionData);
+    c.set("session", requireSessionData(session));
     c.set("authSource", "lab");
     addServerTiming(c, "auth", authStartedAt, "lab");
 
@@ -349,7 +451,7 @@ export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
       throw new HTTPException(401, { message: "Unauthorized" });
     }
 
-    c.set("session", session as SessionData);
+    c.set("session", requireSessionData(session));
     c.set("authSource", "portal");
 
     await next();
@@ -377,7 +479,7 @@ export const requireBackofficeAuthSession = createMiddleware<{
     throw new HTTPException(401, { message: "Unauthorized" });
   }
 
-  c.set("session", session as SessionData);
+  c.set("session", requireSessionData(session));
   c.set("authSource", "backoffice");
   addServerTiming(c, "auth", authStartedAt, "backoffice");
 
@@ -415,7 +517,7 @@ export const requireAuth = createMiddleware<{ Variables: AuthVariables }>(
       throw new HTTPException(401, { message: "Unauthorized" });
     }
 
-    c.set("session", session as SessionData);
+    c.set("session", requireSessionData(session));
     c.set("authSource", authSource);
 
     await next();
@@ -491,14 +593,15 @@ export const requireOrganization = createMiddleware<{
     });
   }
 
-  const orgType = (memberInfo.orgType as OrgType) ?? "LAB";
+  const orgType = orgTypeFromUnknown(memberInfo.orgType);
+  const memberRole = roleNameFromUnknown(memberInfo.memberRole);
 
   const unitScope =
     orgType === "LAB"
       ? await resolveMemberUnitScope({
           organizationId: activeOrgId,
           memberId: memberInfo.memberId,
-          memberRole: memberInfo.memberRole as RoleName,
+          memberRole,
           userId,
           requestedScope: c.req.header("x-active-unit-id") ?? null,
         })
@@ -514,7 +617,7 @@ export const requireOrganization = createMiddleware<{
 
   c.set("member", {
     id: memberInfo.memberId,
-    role: memberInfo.memberRole as RoleName,
+    role: memberRole,
     organizationId: activeOrgId,
     organizationType: orgType,
     userId: userId,
@@ -552,8 +655,8 @@ export const requireOrganization = createMiddleware<{
 export function requirePermission(permissions: PermissionCheck) {
   return createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
     const permStartedAt = performance.now();
-    const authSource = c.get("authSource") as AuthSource;
-    const member = c.get("member") as MemberData | undefined;
+    const authSource = c.get("authSource");
+    const member = c.get("member");
 
     if (member) {
       const hasPermission = hasPermissionLocally(
@@ -725,7 +828,7 @@ export function requireCalibrationAction<
   T extends { Variables: AuthVariables },
 >(action: CalibrationAction, getState: CalibrationStateGetter<T>) {
   return createMiddleware<T>(async (c, next) => {
-    const member = c.get("member") as MemberData;
+    const member = c.get("member");
     const state = await getState(c);
 
     const effectiveRole = getCalibrationAuthorizationRole(member);
@@ -779,7 +882,7 @@ export const requireInternalOperator = createMiddleware<{
 }>(async (c, next) => {
   const session = c.get("session");
   const envAllowlist =
-    (c.env as Record<string, unknown> | undefined)?.INTERNAL_OPERATOR_EMAILS ??
+    recordFromUnknown(c.env).INTERNAL_OPERATOR_EMAILS ??
     process.env.INTERNAL_OPERATOR_EMAILS;
 
   if (

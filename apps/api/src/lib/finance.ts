@@ -146,9 +146,9 @@ function toLowerBillingDocumentStatus(
 }
 
 function extractRemoteId(data: unknown): string | null {
-  if (!data || typeof data !== "object") return null;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
 
-  const record = data as Record<string, unknown>;
+  const record = Object.fromEntries(Object.entries(data));
   if (typeof record.remoteId === "string" && record.remoteId.trim()) {
     return record.remoteId.trim();
   }
@@ -825,7 +825,7 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
   );
   const mappedPayload = applyIntegrationMappings(
     "billing_document",
-    payload as unknown as Record<string, unknown>,
+    Object.fromEntries(Object.entries(payload)),
     config.mappings.billing_document,
   );
   const [existingLink] = await db

@@ -40,6 +40,28 @@ function formatDate(date: string | null | undefined) {
   return new Date(date).toLocaleDateString("pt-BR");
 }
 
+function getResponseErrorMessage(result: unknown) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    return null;
+  }
+
+  const error = Object.fromEntries(Object.entries(result)).error;
+  return typeof error === "string" ? error : null;
+}
+
+function getCreatedRequestId(result: unknown) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error("Resposta inválida ao criar solicitação");
+  }
+
+  const id = Object.fromEntries(Object.entries(result)).id;
+  if (typeof id !== "number") {
+    throw new Error("Resposta inválida ao criar solicitação");
+  }
+
+  return id;
+}
+
 function NewRequestPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -95,14 +117,14 @@ function NewRequestPage() {
         }),
       });
 
-      const result = await response.json();
+      const result: unknown = await response.json();
       if (!response.ok) {
         throw new Error(
-          (result as { error?: string }).error || "Erro ao criar solicitação",
+          getResponseErrorMessage(result) || "Erro ao criar solicitação",
         );
       }
 
-      return result as { id: number };
+      return { id: getCreatedRequestId(result) };
     },
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ["portal-requests"] });

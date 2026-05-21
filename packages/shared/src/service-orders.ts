@@ -201,9 +201,9 @@ export const SERVICE_ORDER_ALLOWED_TRANSITIONS: Record<
 };
 
 export function isServiceOrderFinalStatus(status: ServiceOrderStatus) {
-  return (
-    SERVICE_ORDER_FINAL_STATUSES as readonly ServiceOrderStatus[]
-  ).includes(status);
+  const finalStatuses: readonly ServiceOrderStatus[] =
+    SERVICE_ORDER_FINAL_STATUSES;
+  return finalStatuses.includes(status);
 }
 
 export function canTransitionServiceOrderStatus(

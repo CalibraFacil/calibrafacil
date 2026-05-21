@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { z } from 'zod'
 
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
@@ -29,6 +30,18 @@ type ViaCepResponse = {
   uf?: string
   erro?: boolean
 }
+
+const ViaCepResponseSchema = z
+  .object({
+    cep: z.string().optional(),
+    logradouro: z.string().optional(),
+    complemento: z.string().optional(),
+    bairro: z.string().optional(),
+    localidade: z.string().optional(),
+    uf: z.string().optional(),
+    erro: z.boolean().optional(),
+  })
+  .passthrough()
 
 export type ViaCepLookupStatus =
   | 'idle'
@@ -61,14 +74,13 @@ export function mergeViaCepAddress<TAddress extends EditableAddress>(
   currentAddress: TAddress,
   viaCepAddress: ViaCepAddress,
 ): TAddress {
-  return {
-    ...currentAddress,
+  return Object.assign({}, currentAddress, {
     cep: viaCepAddress.cep || currentAddress.cep,
     street: viaCepAddress.street,
     neighbourhood: viaCepAddress.neighbourhood,
     city: viaCepAddress.city,
     state: viaCepAddress.state,
-  } as TAddress
+  })
 }
 
 export async function fetchViaCepAddress(
@@ -88,7 +100,7 @@ export async function fetchViaCepAddress(
     throw new Error('Falha ao consultar CEP')
   }
 
-  return mapViaCepResponse((await response.json()) as ViaCepResponse)
+  return mapViaCepResponse(ViaCepResponseSchema.parse(await response.json()))
 }
 
 export function useViaCepLookup({

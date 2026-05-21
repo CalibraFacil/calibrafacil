@@ -294,7 +294,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
       comp.requestedBy,
       comp.evaluatedBy,
       comp.approvedBy,
-    ].filter(Boolean) as string[];
+    ].filter((userId): userId is string => Boolean(userId));
     const userNames: Record<string, string> = {};
     if (userIds.length > 0) {
       const users = await db

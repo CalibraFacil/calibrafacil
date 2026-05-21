@@ -56,11 +56,14 @@ function slugify(name: string) {
 }
 
 function isUniqueViolation(error: unknown) {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? error.code
+      : undefined;
+
   return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "23505"
+    typeof code === "string" &&
+    code === "23505"
   );
 }
 
@@ -95,8 +98,8 @@ async function allocateUnitSlug(params: {
   throw new Error("Nao foi possivel gerar um slug unico para a unidade");
 }
 
-function getViewerAccess(c: { get: (key: string) => unknown }) {
-  const memberData = c.get("member") as MemberData;
+function getViewerAccess(c: { get: (key: "member") => MemberData }) {
+  const memberData = c.get("member");
   return {
     memberData,
     viewer: getGovernanceAccess(memberData),

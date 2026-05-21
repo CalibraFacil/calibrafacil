@@ -71,6 +71,41 @@ const initialFormData: ServiceOrderFormData = {
   evaluationFeeCents: '',
 }
 
+function parseIntakeType(value: string): ServiceOrderFormData['intakeType'] {
+  switch (value) {
+    case 'carrier':
+    case 'third_party':
+    case 'internal':
+    case 'warranty_return':
+      return value
+    default:
+      return 'counter'
+  }
+}
+
+function parsePriority(value: string): ServiceOrderFormData['priority'] {
+  switch (value) {
+    case 'urgent':
+    case 'contract':
+    case 'warranty':
+      return value
+    default:
+      return 'normal'
+  }
+}
+
+function parseDeliveryMethod(
+  value: string,
+): ServiceOrderFormData['deliveryMethod'] {
+  switch (value) {
+    case 'ship_to_client':
+    case 'third_party_pickup':
+      return value
+    default:
+      return 'pickup_at_lab'
+  }
+}
+
 export function NewServiceOrderPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -367,11 +402,7 @@ export function NewServiceOrderPage() {
                     <NativeSelect
                       value={formData.intakeType}
                       onChange={(event) =>
-                        updateField(
-                          'intakeType',
-                          event.target
-                            .value as ServiceOrderFormData['intakeType'],
-                        )
+                        updateField('intakeType', parseIntakeType(event.target.value))
                       }
                       className="w-full"
                     >
@@ -398,11 +429,7 @@ export function NewServiceOrderPage() {
                     <NativeSelect
                       value={formData.priority}
                       onChange={(event) =>
-                        updateField(
-                          'priority',
-                          event.target
-                            .value as ServiceOrderFormData['priority'],
-                        )
+                        updateField('priority', parsePriority(event.target.value))
                       }
                       className="w-full"
                     >
@@ -432,8 +459,7 @@ export function NewServiceOrderPage() {
                       onChange={(event) =>
                         updateField(
                           'deliveryMethod',
-                          event.target
-                            .value as ServiceOrderFormData['deliveryMethod'],
+                          parseDeliveryMethod(event.target.value),
                         )
                       }
                       className="w-full"

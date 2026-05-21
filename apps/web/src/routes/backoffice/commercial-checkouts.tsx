@@ -34,6 +34,22 @@ import { brazilPhoneMask } from '@/lib/input-masks'
 
 type OfferKind = 'SETUP_FEE' | 'PLAN_UPFRONT' | 'PLAN_RECURRING'
 type PaymentMethod = 'PIX' | 'BOLETO' | 'CREDIT_CARD'
+type BasePlanId = 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE'
+type BillingCycle = 'MONTHLY' | 'YEARLY'
+type CommercialOfferForm = {
+  kind: OfferKind
+  basePlanId: BasePlanId
+  billingCycle: BillingCycle
+  negotiatedAmount: string
+  discountAmount: string
+  setupFeeAmount: string
+  contractTermMonths: string
+  dueDate: string
+  offerExpiresAt: string
+  internalNotes: string
+  customerVisibleDescription: string
+  paymentMethods: PaymentMethod[]
+}
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   PIX: 'Pix',
@@ -50,10 +66,10 @@ const KIND_DESCRIPTIONS: Record<OfferKind, string> = {
     'Usado apenas para taxa de implantação ou onboarding. Não gera recorrência e não usa ciclo de cobrança.',
 }
 
-const DEFAULT_FORM = {
-  kind: 'PLAN_RECURRING' as OfferKind,
-  basePlanId: 'PROFESSIONAL' as 'STANDARD' | 'PROFESSIONAL' | 'ENTERPRISE',
-  billingCycle: 'MONTHLY' as 'MONTHLY' | 'YEARLY',
+const DEFAULT_FORM: CommercialOfferForm = {
+  kind: 'PLAN_RECURRING',
+  basePlanId: 'PROFESSIONAL',
+  billingCycle: 'MONTHLY',
   negotiatedAmount: '0,00',
   discountAmount: '0,00',
   setupFeeAmount: '0,00',
@@ -62,7 +78,36 @@ const DEFAULT_FORM = {
   offerExpiresAt: '',
   internalNotes: '',
   customerVisibleDescription: '',
-  paymentMethods: ['CREDIT_CARD'] as PaymentMethod[],
+  paymentMethods: ['CREDIT_CARD'],
+}
+
+const PAYMENT_METHODS: PaymentMethod[] = ['PIX', 'BOLETO', 'CREDIT_CARD']
+
+function offerKindFromInput(value: string): OfferKind {
+  return value === 'SETUP_FEE' || value === 'PLAN_UPFRONT'
+    ? value
+    : 'PLAN_RECURRING'
+}
+
+function basePlanIdFromInput(value: string): BasePlanId {
+  return value === 'STANDARD' || value === 'ENTERPRISE' ? value : 'PROFESSIONAL'
+}
+
+function billingCycleFromInput(value: string): BillingCycle {
+  return value === 'YEARLY' ? 'YEARLY' : 'MONTHLY'
+}
+
+function paymentMethodFromInput(value: string): PaymentMethod {
+  return value === 'PIX' || value === 'BOLETO' ? value : 'CREDIT_CARD'
+}
+
+function organizationIdFromSearch(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+
+  const organizationId = Reflect.get(value, 'organizationId')
+  return typeof organizationId === 'string' ? organizationId : undefined
 }
 
 export const Route = createFileRoute('/backoffice/commercial-checkouts')({
@@ -78,11 +123,11 @@ type IssuedOffer = NonNullable<
 
 function BackofficeCommercialCheckoutsPage() {
   const queryClient = useQueryClient()
-  const search = Route.useSearch() as { organizationId?: string } | undefined
+  const search = Route.useSearch()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<
     string | null
-  >(search?.organizationId ?? null)
+  >(organizationIdFromSearch(search) ?? null)
   const [billingContactId, setBillingContactId] = useState<number | undefined>(
     undefined,
   )
@@ -544,7 +589,7 @@ function BackofficeCommercialCheckoutsPage() {
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      kind: event.target.value as OfferKind,
+                      kind: offerKindFromInput(event.target.value),
                       billingCycle:
                         event.target.value === 'PLAN_RECURRING'
                           ? current.billingCycle
@@ -579,8 +624,7 @@ function BackofficeCommercialCheckoutsPage() {
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      basePlanId: event.target
-                        .value as typeof current.basePlanId,
+                      basePlanId: basePlanIdFromInput(event.target.value),
                     }))
                   }
                 >
@@ -613,7 +657,7 @@ function BackofficeCommercialCheckoutsPage() {
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      billingCycle: event.target.value as 'MONTHLY' | 'YEARLY',
+                      billingCycle: billingCycleFromInput(event.target.value),
                     }))
                   }
                 >
@@ -730,17 +774,17 @@ function BackofficeCommercialCheckoutsPage() {
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    paymentMethods: [event.target.value as PaymentMethod],
+                    paymentMethods: [
+                      paymentMethodFromInput(event.target.value),
+                    ],
                   }))
                 }
               >
-                {(['PIX', 'BOLETO', 'CREDIT_CARD'] as PaymentMethod[]).map(
-                  (method) => (
-                    <NativeSelectOption key={method} value={method}>
-                      {PAYMENT_METHOD_LABELS[method]}
-                    </NativeSelectOption>
-                  ),
-                )}
+                {PAYMENT_METHODS.map((method) => (
+                  <NativeSelectOption key={method} value={method}>
+                    {PAYMENT_METHOD_LABELS[method]}
+                  </NativeSelectOption>
+                ))}
               </NativeSelect>
               <p className="text-xs text-muted-foreground">
                 Cada oferta comercial usa um único método de pagamento.

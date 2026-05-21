@@ -40,7 +40,6 @@ import {
   formatPrice,
   getEnabledEntitlements,
   isValidPlanId,
-  type FeatureFlag,
 } from '@calibra-facil/shared'
 
 // Status badge variants
@@ -363,7 +362,9 @@ export function BillingSettingsPage() {
 
 // Helper functions
 function getFeatureLabel(feature: string): string {
-  const metadata = ENTITLEMENT_METADATA[feature as FeatureFlag]
+  const metadata = Object.entries(ENTITLEMENT_METADATA).find(
+    ([key]) => key === feature,
+  )?.[1]
   return metadata?.name || feature
 }
 

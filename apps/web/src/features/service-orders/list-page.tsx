@@ -98,6 +98,29 @@ const statusVariants: Record<
   warranty_return: 'outline',
 }
 
+function parseServiceOrderStatus(value: string | null): ServiceOrderStatus | '' {
+  switch (value) {
+    case 'opened':
+    case 'awaiting_tech_evaluation':
+    case 'under_evaluation':
+    case 'awaiting_quote_approval':
+    case 'quote_approved':
+    case 'quote_rejected':
+    case 'repair_in_progress':
+    case 'awaiting_calibration':
+    case 'calibration_in_progress':
+    case 'awaiting_final_review':
+    case 'ready_for_pickup':
+    case 'delivered':
+    case 'closed':
+    case 'canceled':
+    case 'warranty_return':
+      return value
+    default:
+      return ''
+  }
+}
+
 function formatDate(value: string | null | undefined) {
   return value ? new Date(value).toLocaleDateString('pt-BR') : '-'
 }
@@ -200,7 +223,7 @@ const serviceOrderColumns: ColumnDef<ServiceOrderListItem>[] = [
     accessorKey: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      const status = row.original.status as ServiceOrderStatus
+      const status = parseServiceOrderStatus(row.original.status) || 'opened'
       return (
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={statusVariants[status] ?? 'secondary'}>
@@ -307,7 +330,7 @@ export function ServiceOrdersPage() {
             <Select
               value={statusFilter}
               onValueChange={(value) => {
-                setStatusFilter(value as ServiceOrderStatus | '')
+                setStatusFilter(parseServiceOrderStatus(value))
                 setPage(1)
               }}
             >

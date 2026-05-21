@@ -3,7 +3,6 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import { calibraApi } from '@/utils/api'
 import { ensureRouteQueries, prewarmRouteQueries } from '@/lib/route-data'
 import type {
-  BackofficeAccessData,
   BackofficeCommercialContext,
   BackofficeCommercialOrganizationsData,
   BackofficeOrganizationDetail,
@@ -17,7 +16,7 @@ import type {
 const BACKOFFICE_ACCESS_STALE_TIME_MS = 30_000
 
 export function getBackofficeAccess() {
-  return calibraApi.backoffice.getAccess() as Promise<BackofficeAccessData>
+  return calibraApi.backoffice.getAccess()
 }
 
 export function backofficeAccessQueryOptions(scope: string) {

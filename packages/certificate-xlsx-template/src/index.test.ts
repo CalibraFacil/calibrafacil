@@ -310,8 +310,11 @@ describe("ExcelTsCertificateWorkbookEngine", () => {
       /<xdr:from><xdr:col>(\d+)<\/xdr:col><xdr:colOff>(\d+)<\/xdr:colOff><xdr:row>(\d+)<\/xdr:row><xdr:rowOff>(\d+)<\/xdr:rowOff><\/xdr:from><xdr:to><xdr:col>(\d+)<\/xdr:col><xdr:colOff>(\d+)<\/xdr:colOff><xdr:row>(\d+)<\/xdr:row><xdr:rowOff>(\d+)<\/xdr:rowOff><\/xdr:to>/,
     );
     expect(markerMatch).toBeTruthy();
+    if (!markerMatch) {
+      throw new Error("Expected drawing marker XML to match.");
+    }
 
-    const markerValues = markerMatch!.slice(1).map(Number) as [
+    const markerValues: [
       number,
       number,
       number,
@@ -320,6 +323,15 @@ describe("ExcelTsCertificateWorkbookEngine", () => {
       number,
       number,
       number,
+    ] = [
+      Number(markerMatch[1]),
+      Number(markerMatch[2]),
+      Number(markerMatch[3]),
+      Number(markerMatch[4]),
+      Number(markerMatch[5]),
+      Number(markerMatch[6]),
+      Number(markerMatch[7]),
+      Number(markerMatch[8]),
     ];
     const [
       fromCol,

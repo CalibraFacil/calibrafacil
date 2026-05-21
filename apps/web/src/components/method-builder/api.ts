@@ -3,10 +3,37 @@ import { calibraApi } from '@/utils/api'
 import type {
   MethodCompileResult,
   MethodDiagnostic,
+  MethodDiagnosticSeverity,
   MethodDraft,
   MethodNormalizedFormula,
   MethodPreviewResult,
 } from './types'
+
+function normalizeDiagnosticSeverity(
+  severity: unknown,
+): MethodDiagnosticSeverity {
+  switch (severity) {
+    case 'warning':
+    case 'info':
+      return severity
+    default:
+      return 'error'
+  }
+}
+
+function optionalString(value: unknown) {
+  return typeof value === 'string' ? value : undefined
+}
+
+function normalizeFormulaScope(value: unknown): MethodNormalizedFormula['scope'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = Object.fromEntries(Object.entries(value))
+  if (record.kind === 'table_row' && typeof record.tableKey === 'string') {
+    return { kind: 'table_row', tableKey: record.tableKey }
+  }
+  if (record.kind === 'scalar') return { kind: 'scalar' }
+  return undefined
+}
 
 function normalizeDiagnostics(value: unknown): Array<MethodDiagnostic> {
   if (!Array.isArray(value)) return []
@@ -16,12 +43,15 @@ function normalizeDiagnostics(value: unknown): Array<MethodDiagnostic> {
       return { severity: 'error', message: item }
     }
 
-    const diagnostic = item as Partial<MethodDiagnostic>
+    const diagnostic =
+      item && typeof item === 'object' && !Array.isArray(item)
+        ? Object.fromEntries(Object.entries(item))
+        : {}
     return {
-      code: diagnostic.code,
-      severity: diagnostic.severity ?? 'error',
-      message: diagnostic.message ?? 'Diagnóstico sem mensagem',
-      path: diagnostic.path,
+      code: optionalString(diagnostic.code),
+      severity: normalizeDiagnosticSeverity(diagnostic.severity),
+      message: optionalString(diagnostic.message) ?? 'Diagnóstico sem mensagem',
+      path: optionalString(diagnostic.path),
     }
   })
 }
@@ -29,13 +59,18 @@ function normalizeDiagnostics(value: unknown): Array<MethodDiagnostic> {
 function normalizeFormulaList(value: unknown): Array<MethodNormalizedFormula> {
   if (Array.isArray(value)) {
     return value.map((formula) => {
-      const item = formula as Partial<MethodNormalizedFormula>
+      const item =
+        formula && typeof formula === 'object' && !Array.isArray(formula)
+          ? Object.fromEntries(Object.entries(formula))
+          : {}
       return {
-        outputKey: item.outputKey ?? '',
-        expression: item.expression ?? '',
+        outputKey: optionalString(item.outputKey) ?? '',
+        expression: optionalString(item.expression) ?? '',
         normalizedExpression:
-          item.normalizedExpression ?? item.expression ?? '',
-        scope: item.scope,
+          optionalString(item.normalizedExpression) ??
+          optionalString(item.expression) ??
+          '',
+        scope: normalizeFormulaScope(item.scope),
       }
     })
   }

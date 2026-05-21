@@ -32,9 +32,7 @@ export function withCache(resource: string, ttl: number) {
       return;
     }
 
-    const kv = (c.env as Record<string, unknown>).CACHE as
-      | KVNamespace
-      | undefined;
+    const kv = getCacheNamespace(c.env);
     if (!kv) {
       await next();
       return;
@@ -62,7 +60,7 @@ export function withCache(resource: string, ttl: number) {
     const cached = await kvGet<{ body: unknown; status: number }>(kv, cacheKey);
     if (cached) {
       c.header("X-Cache", "HIT");
-      return c.json(cached.body as object, cached.status as 200);
+      return c.json(toJsonResponseBody(cached.body), 200);
     }
 
     // Cache miss — run the handler
@@ -106,9 +104,7 @@ export function withInvalidation(resource: string) {
 
     // Only invalidate on successful mutations
     if (c.res.status >= 200 && c.res.status < 300) {
-      const kv = (c.env as Record<string, unknown>).CACHE as
-        | KVNamespace
-        | undefined;
+      const kv = getCacheNamespace(c.env);
       const member = c.get("member");
       if (kv && member) {
         // Fire-and-forget — don't block the response
@@ -116,4 +112,31 @@ export function withInvalidation(resource: string) {
       }
     }
   });
+}
+
+function getCacheNamespace(env: unknown): KVNamespace | undefined {
+  const cache = toRecord(env).CACHE;
+  return isKvNamespace(cache) ? cache : undefined;
+}
+
+function isKvNamespace(value: unknown): value is KVNamespace {
+  const candidate = toRecord(value);
+
+  return (
+    typeof candidate.get === "function" &&
+    typeof candidate.put === "function" &&
+    typeof candidate.delete === "function"
+  );
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function toJsonResponseBody(value: unknown): object {
+  return value !== null && typeof value === "object" ? value : { data: value };
 }

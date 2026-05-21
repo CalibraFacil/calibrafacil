@@ -12,12 +12,13 @@ afterEach(() => {
 
 describe("DesktopCloudAuthProxy", () => {
   it("forwards sync requests through the authenticated desktop fetcher", async () => {
+    const responseHeaders: Array<[string, string]> = [
+      ["content-type", "application/json"],
+    ];
     const authFetch = vi.fn(async () => ({
       status: 200,
       statusText: "OK",
-      headers: [["content-type", "application/json"]] as Array<
-        [string, string]
-      >,
+      headers: responseHeaders,
       body: JSON.stringify({ ok: true }),
     }));
     const proxy = new DesktopCloudAuthProxy({

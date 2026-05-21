@@ -207,6 +207,7 @@ export function RequestsPage() {
                   variant={statusFilter === value ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => {
+                    // oxlint-disable-next-line typescript/consistent-type-assertions -- Buttons are generated from calibration request status labels.
                     setStatusFilter(value as CalibrationRequestStatus)
                     setPage(1)
                   }}

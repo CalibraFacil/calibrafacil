@@ -49,8 +49,8 @@ export type ServiceOrderEventInput = {
   userAgent?: string | null;
 };
 
-function toHex(buffer: ArrayBuffer) {
-  return [...new Uint8Array(buffer)]
+function toHex(bytes: Uint8Array) {
+  return [...bytes]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 }
@@ -58,15 +58,15 @@ function toHex(buffer: ArrayBuffer) {
 export async function hashServiceOrderToken(token: string) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(token).buffer as ArrayBuffer,
+    new TextEncoder().encode(token),
   );
-  return toHex(digest);
+  return toHex(new Uint8Array(digest));
 }
 
 export function createServiceOrderPublicToken() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return toHex(bytes.buffer as ArrayBuffer);
+  return toHex(bytes);
 }
 
 export function calculatePricedItems<

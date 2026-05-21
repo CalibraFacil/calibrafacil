@@ -85,7 +85,7 @@ function buildInitialConversionDrafts(
   request: CalibrationRequestDetail,
   services: Array<RequestConversionService>,
 ) {
-  return Object.fromEntries(
+  const drafts: Record<number, ConversionDraft> = Object.fromEntries(
     request.items.map((item) => {
       const compatibleServices = getCompatibleServices(services, item)
 
@@ -103,7 +103,8 @@ function buildInitialConversionDrafts(
         },
       ]
     }),
-  ) as Record<number, ConversionDraft>
+  )
+  return drafts
 }
 
 function CalibrationRequestTriagePanel({

@@ -27,7 +27,21 @@ export function invitationQueryOptions(id: string) {
         throw new Error(error.message || 'Não foi possível carregar o convite.')
       }
 
-      return data as InvitationData
+      if (!data) {
+        throw new Error('Convite não encontrado.')
+      }
+
+      return {
+        id: data.id,
+        email: data.email,
+        role: data.role,
+        status: data.status,
+        expiresAt: data.expiresAt,
+        organizationId: data.organizationId,
+        organizationName: data.organizationName,
+        organizationSlug: data.organizationSlug,
+        inviterEmail: data.inviterEmail,
+      }
     },
   })
 }

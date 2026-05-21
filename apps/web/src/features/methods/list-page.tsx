@@ -60,6 +60,19 @@ const statusLabels: Record<MethodStatus, string> = {
   ARCHIVED: 'Arquivado',
 }
 
+function parseMethodStatus(value: string | null): MethodStatus | '' {
+  switch (value) {
+    case 'DRAFT':
+    case 'PENDING_APPROVAL':
+    case 'TECHNICAL_REVIEWED':
+    case 'PUBLISHED':
+    case 'ARCHIVED':
+      return value
+    default:
+      return ''
+  }
+}
+
 export function MethodsListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -98,8 +111,12 @@ export function MethodsListPage() {
   })
 
   const newVersionMutation = useMutation({
-    mutationFn: async (id: number) => {
-      return calibraApi.methods.createNewVersion(id) as Promise<Method>
+    mutationFn: async (id: number): Promise<Method> => {
+      const result = await calibraApi.methods.createNewVersion(id)
+      return {
+        ...result,
+        status: parseMethodStatus(result.status) || 'DRAFT',
+      }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })
@@ -167,7 +184,7 @@ export function MethodsListPage() {
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(v as MethodStatus | '')
+                setStatusFilter(parseMethodStatus(v))
                 setPage(1)
               }}
             >

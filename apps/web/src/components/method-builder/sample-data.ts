@@ -7,7 +7,7 @@ import type {
 export function parseJsonObject(value: string): Record<string, unknown> {
   let parsed: unknown
   try {
-    parsed = JSON.parse(value) as unknown
+    parsed = JSON.parse(value)
   } catch {
     throw new Error('JSON inválido')
   }
@@ -16,7 +16,7 @@ export function parseJsonObject(value: string): Record<string, unknown> {
     throw new Error('O preview precisa de um objeto JSON')
   }
 
-  return parsed as Record<string, unknown>
+  return Object.fromEntries(Object.entries(parsed))
 }
 
 export function buildInitialSampleData(
@@ -55,9 +55,7 @@ export function buildInitialSampleData(
         variable.statistic === 'sample_stddev'
           ? 2
           : 1
-      const rows = Array.isArray(sample[variable.fieldKey])
-        ? (sample[variable.fieldKey] as Array<Record<string, unknown>>)
-        : []
+      const rows = toRecordArray(sample[variable.fieldKey])
       while (rows.length < rowsRequired) rows.push({})
       for (const row of rows) {
         row[variable.columnKey] = row[variable.columnKey] ?? 0
@@ -107,7 +105,9 @@ function ensureRecord(
 ): Record<string, unknown> {
   const value = source[key]
   if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>
+    const record = Object.fromEntries(Object.entries(value))
+    source[key] = record
+    return record
   }
   const record: Record<string, unknown> = {}
   source[key] = record
@@ -119,9 +119,7 @@ function addStandardSampleBinding(
   standardId: number | undefined,
   valueKey: string,
 ): void {
-  const standards = Array.isArray(sample.standards)
-    ? (sample.standards as Array<Record<string, unknown>>)
-    : []
+  const standards = toRecordArray(sample.standards)
   const targetId = standardId ?? 0
   let standard = standards.find((item) => item.id === targetId)
 
@@ -148,12 +146,11 @@ function addStandardSampleBinding(
     valueKey !== 'drift'
   ) {
     const nominal = valueKey.endsWith('_u') ? valueKey.slice(0, -2) : valueKey
-    const certifiedValues = standard.certifiedValues as Array<
-      Record<string, unknown>
-    >
+    const certifiedValues = toRecordArray(standard.certifiedValues)
     if (!certifiedValues.some((item) => item.nominal === nominal)) {
       certifiedValues.push({ nominal, value: 0, uncertainty: 0 })
     }
+    standard.certifiedValues = certifiedValues
   }
 
   sample.standards = standards
@@ -169,12 +166,24 @@ function addMeasurementSourceSample(
   }
   if (source.kind !== 'table_column') return
 
-  const rows = Array.isArray(sample[source.tableKey])
-    ? (sample[source.tableKey] as Array<Record<string, unknown>>)
-    : []
+  const rows = toRecordArray(sample[source.tableKey])
   while (rows.length < 2) rows.push({})
   for (const row of rows) {
     row[source.columnKey] = row[source.columnKey] ?? 0
   }
   sample[source.tableKey] = rows
+}
+
+function toRecordArray(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return []
+    }
+
+    return [Object.fromEntries(Object.entries(item))]
+  })
 }

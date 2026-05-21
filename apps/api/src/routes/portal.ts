@@ -63,7 +63,10 @@ async function getPortalLabScope(c: {
  * These routes handle client-facing functionality.
  * Uses Portal auth (portal_session cookie) for authentication.
  */
-export const portalRouter = new Hono<{ Variables: AuthVariables }>()
+export const portalRouter = new Hono<{
+  Variables: AuthVariables;
+  Bindings: R2Env;
+}>()
   // =========================================================================
   // GET /organizations - List CLIENT organizations for the portal
   // =========================================================================
@@ -668,7 +671,7 @@ export const portalRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Documento ainda nao disponivel" }, 400);
       }
 
-      const env = c.env as R2Env;
+      const env = c.env;
       const key = extractKeyFromUrl(certificate.certificateUrl);
       const client = createR2Client(env);
       const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);

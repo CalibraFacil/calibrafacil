@@ -37,6 +37,15 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { calibraApi } from '@/utils/api'
 import { markDesktopSignedOut } from '@/runtime/desktop-auth'
 
+function getStringProperty(source: unknown, key: string) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return null
+  }
+
+  const value = Object.fromEntries(Object.entries(source))[key]
+  return typeof value === 'string' ? value : null
+}
+
 export function NavUser() {
   const { isMobile } = useSidebar()
   const location = useLocation()
@@ -97,14 +106,8 @@ export function NavUser() {
   }
 
   const user = session.user
-  const roleCandidate = (user as { role?: unknown }).role
-  const userRole = typeof roleCandidate === 'string' ? roleCandidate : null
-  const impersonatedBy =
-    typeof (session.session as { impersonatedBy?: unknown }).impersonatedBy ===
-    'string'
-      ? ((session.session as { impersonatedBy?: string }).impersonatedBy ??
-        null)
-      : null
+  const userRole = getStringProperty(user, 'role')
+  const impersonatedBy = getStringProperty(session.session, 'impersonatedBy')
   const showBackoffice = !impersonatedBy && canAccessBackoffice(userRole)
 
   return (

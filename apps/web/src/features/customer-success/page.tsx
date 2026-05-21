@@ -40,6 +40,40 @@ import type {
   WorkflowState,
 } from '@/features/customer-success/types'
 
+type SupportRequestCategory =
+  | 'GENERAL'
+  | 'TRAINING'
+  | 'MIGRATION'
+  | 'INTEGRATION'
+  | 'BILLING'
+  | 'INCIDENT'
+
+type SupportRequestPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
+
+function toSupportRequestCategory(value: string): SupportRequestCategory {
+  switch (value) {
+    case 'TRAINING':
+    case 'MIGRATION':
+    case 'INTEGRATION':
+    case 'BILLING':
+    case 'INCIDENT':
+      return value
+    default:
+      return 'GENERAL'
+  }
+}
+
+function toSupportRequestPriority(value: string): SupportRequestPriority {
+  switch (value) {
+    case 'LOW':
+    case 'HIGH':
+    case 'URGENT':
+      return value
+    default:
+      return 'NORMAL'
+  }
+}
+
 const onboardingSteps: Record<OnboardingStatus, number> = {
   NOT_STARTED: 0,
   DISCOVERY: 20,
@@ -184,7 +218,12 @@ function getWorkflowBadgeVariant(
 export function CustomerSuccessPage() {
   const queryClient = useQueryClient()
   const { data: activeOrg } = useActiveOrganization()
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState<{
+    category: SupportRequestCategory
+    priority: SupportRequestPriority
+    subject: string
+    description: string
+  }>({
     category: 'GENERAL',
     priority: 'NORMAL',
     subject: '',
@@ -197,14 +236,8 @@ export function CustomerSuccessPage() {
   const createRequestMutation = useMutation({
     mutationFn: async () =>
       calibraApi.customerSuccess.createRequest({
-        category: draft.category as
-          | 'GENERAL'
-          | 'TRAINING'
-          | 'MIGRATION'
-          | 'INTEGRATION'
-          | 'BILLING'
-          | 'INCIDENT',
-        priority: draft.priority as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
+        category: draft.category,
+        priority: draft.priority,
         subject: draft.subject,
         description: draft.description,
       }),
@@ -630,7 +663,7 @@ export function CustomerSuccessPage() {
                       onChange={(event) =>
                         setDraft((current) => ({
                           ...current,
-                          category: event.target.value,
+                          category: toSupportRequestCategory(event.target.value),
                         }))
                       }
                     >
@@ -662,7 +695,7 @@ export function CustomerSuccessPage() {
                       onChange={(event) =>
                         setDraft((current) => ({
                           ...current,
-                          priority: event.target.value,
+                          priority: toSupportRequestPriority(event.target.value),
                         }))
                       }
                     >

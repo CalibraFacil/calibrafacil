@@ -130,6 +130,7 @@ export function NewFinanceDocumentPage() {
                 <Select
                   value={mode}
                   onValueChange={(value) => {
+                    // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to billing document modes.
                     setMode(value as 'single' | 'consolidated')
                     setSelectedJobIds([])
                   }}

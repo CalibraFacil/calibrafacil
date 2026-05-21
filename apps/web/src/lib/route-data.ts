@@ -13,7 +13,10 @@ export async function ensureRouteQueries(
   await Promise.all(
     queries
       .filter((query) => query != null)
-      .map((query) => queryClient.ensureQueryData(query as RouteQueryOptions)),
+      .map((query) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- TanStack queryOptions returns specific option types that QueryClient accepts at runtime through its generic overloads.
+        return queryClient.ensureQueryData(query as RouteQueryOptions)
+      }),
   )
 }
 
@@ -24,7 +27,10 @@ export async function prewarmRouteQueries(
   await Promise.all(
     queries
       .filter((query) => query != null)
-      .map((query) => queryClient.prefetchQuery(query as RouteQueryOptions)),
+      .map((query) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- TanStack queryOptions returns specific option types that QueryClient accepts at runtime through its generic overloads.
+        return queryClient.prefetchQuery(query as RouteQueryOptions)
+      }),
   )
 }
 

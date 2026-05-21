@@ -29,13 +29,13 @@ export const profileMediaRouter = new Hono<{
 }>()
   .post("/avatar", requireAuth, async (c) => {
     const session = c.get("session");
-    const env = c.env as R2Env;
+    const env = c.env;
 
     try {
       const formData = await c.req.formData();
-      const file = formData.get("avatar") as File | null;
+      const file = formData.get("avatar");
 
-      if (!file) {
+      if (!(file instanceof File)) {
         return c.json({ error: "Nenhum arquivo enviado" }, 400);
       }
 
@@ -76,7 +76,7 @@ export const profileMediaRouter = new Hono<{
   })
   .get("/avatar", requireAuth, async (c) => {
     const session = c.get("session");
-    const env = c.env as R2Env;
+    const env = c.env;
 
     const [currentUser] = await db
       .select({ image: user.image })
@@ -105,7 +105,7 @@ export const profileMediaRouter = new Hono<{
   })
   .delete("/avatar", requireAuth, async (c) => {
     const session = c.get("session");
-    const env = c.env as R2Env;
+    const env = c.env;
 
     try {
       const r2Client = createR2Client(env);

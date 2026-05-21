@@ -6,6 +6,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
+import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   type MethodAuditLogData,
   type MethodAuditLogRecord,
@@ -19,17 +20,8 @@ import {
 
 export const METHODS_LIST_LIMIT = 20
 
-function pageFromUrl(url?: URL) {
-  const page = Number(url?.searchParams.get('page') ?? 1)
-  return Number.isFinite(page) && page > 0 ? page : 1
-}
-
 function statusFromUrl(url?: URL): MethodStatus | '' {
-  const status = url?.searchParams.get('status') ?? ''
-
-  return METHOD_STATUSES.includes(status as MethodStatus)
-    ? (status as MethodStatus)
-    : ''
+  return optionFromUrl(METHOD_STATUSES, url?.searchParams.get('status'))
 }
 
 export function methodsListQueryInputFromUrl(
@@ -55,6 +47,7 @@ export function methodsListQueryOptions(input: MethodsListQueryInput) {
       input.statusFilter,
     ],
     queryFn: () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- method list DTOs need schema-backed normalization before this status-narrowing cast can be removed.
       calibraApi.methods.list({
         page: input.page,
         limit: input.limit,
@@ -67,24 +60,26 @@ export function methodsListQueryOptions(input: MethodsListQueryInput) {
 export function methodDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['methods', id],
-    queryFn: () => calibraApi.methods.get(id) as Promise<MethodDetail>,
+    queryFn: () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- method detail DTOs need schema-backed normalization before this view-model cast can be removed.
+      calibraApi.methods.get(id) as Promise<MethodDetail>,
   })
 }
 
 export function methodEditQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['methods', id],
-    queryFn: () => calibraApi.methods.get(id) as Promise<MethodEditData>,
+    queryFn: () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- method edit DTOs need schema-backed normalization before this builder-model cast can be removed.
+      calibraApi.methods.get(id) as Promise<MethodEditData>,
   })
 }
 
 export function methodAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['methods', id, 'audit'],
-    queryFn: () =>
-      calibraApi.methods.audit<MethodAuditLogRecord>(
-        id,
-      ) as Promise<MethodAuditLogData>,
+    queryFn: (): Promise<MethodAuditLogData> =>
+      calibraApi.methods.audit<MethodAuditLogRecord>(id),
   })
 }
 

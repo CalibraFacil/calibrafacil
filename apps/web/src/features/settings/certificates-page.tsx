@@ -481,7 +481,7 @@ function UploadCertificateDialog({ onSuccess }: { onSuccess: () => void }) {
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => {
-          const result = reader.result as string
+          const result = typeof reader.result === 'string' ? reader.result : ''
           // Remove data URL prefix
           const base64 = result.split(',')[1]
           resolve(base64)

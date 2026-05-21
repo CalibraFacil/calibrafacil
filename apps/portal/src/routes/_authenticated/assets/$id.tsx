@@ -162,6 +162,7 @@ function AssetDetailPage() {
         throw new Error("Falha ao carregar ativo.");
       }
 
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- portal asset endpoint returns the AssetDetail DTO.
       const result = (await response.json()) as { data: AssetDetail };
       return result.data;
     },

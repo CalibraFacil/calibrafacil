@@ -162,6 +162,7 @@ function ClientComplianceForm({
   const [reason, setReason] = useState('')
   const [reasonError, setReasonError] = useState<string | null>(null)
 
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- API customer detail includes the CustomerCompliance JSON payload.
   const compliance = customer.compliance as CustomerCompliance | undefined
   const activeCommercialAgreement = customer.activeCommercialAgreement ?? null
 
@@ -214,6 +215,7 @@ function ClientComplianceForm({
     updateComplianceMutation.mutate({
       compliance: {
         qualificationStatus:
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to compliance qualification statuses.
           qualificationStatus as CustomerCompliance['qualificationStatus'],
         qualificationDate: qualificationDate || undefined,
         qualificationExpiresAt: qualificationExpiresAt || undefined,

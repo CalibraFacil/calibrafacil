@@ -54,6 +54,18 @@ import {
   type CreateDesktopApiClientOptions,
 } from "./desktop";
 
+function assumeDesktopPayload<TResponse>(payload: unknown): TResponse {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- desktop transport mirrors typed API methods; domain schemas live at higher boundaries and this helper centralizes the unavoidable generic JSON trust point.
+  return payload as TResponse;
+}
+
+async function readDesktopJson<TResponse>(
+  response: Response,
+): Promise<TResponse> {
+  const payload: unknown = await response.json();
+  return assumeDesktopPayload<TResponse>(payload);
+}
+
 export function createDesktopApiClient(
   options: CreateDesktopApiClientOptions,
 ): CalibraApi {
@@ -85,7 +97,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar sessão local");
         }
 
-        return response.json() as Promise<LocalSessionSnapshotResponse>;
+        return readDesktopJson<LocalSessionSnapshotResponse>(response);
       })
       .catch((error) => {
         localSessionCache = null;
@@ -115,7 +127,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar estatísticas");
         }
 
-        return response.json() as Promise<TStats>;
+        return readDesktopJson<TStats>(response);
       },
     },
     units: {
@@ -124,13 +136,13 @@ export function createDesktopApiClient(
         return buildDesktopUnitsResponse(session.data);
       },
       async listAdminUnits<TResponse = unknown>() {
-        return emptyGovernanceResponse() as TResponse;
+        return assumeDesktopPayload<TResponse>(emptyGovernanceResponse());
       },
       async listAdminMembers<TResponse = unknown>() {
-        return emptyGovernanceResponse() as TResponse;
+        return assumeDesktopPayload<TResponse>(emptyGovernanceResponse());
       },
       async listAdminActivity<TResponse = unknown>() {
-        return emptyGovernanceResponse() as TResponse;
+        return assumeDesktopPayload<TResponse>(emptyGovernanceResponse());
       },
       async createAdminUnit() {
         throw desktopUnsupportedAuthAction("Governança de unidades");
@@ -486,7 +498,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar clientes");
         }
 
-        return response.json() as Promise<CustomersListData>;
+        return readDesktopJson<CustomersListData>(response);
       },
       async create(input) {
         const response = await fetchImpl(
@@ -507,7 +519,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<CustomersListData["data"][number]>;
+        return readDesktopJson<CustomersListData["data"][number]>(response);
       },
       async get<TCustomer = CustomerDetailData>(id: string | number) {
         const response = await fetchImpl(
@@ -525,7 +537,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar cliente");
         }
 
-        return response.json() as Promise<TCustomer>;
+        return readDesktopJson<TCustomer>(response);
       },
       async update<TCustomer = CustomerDetailData>(
         id: string | number,
@@ -552,7 +564,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<TCustomer>;
+        return readDesktopJson<TCustomer>(response);
       },
       async auditLog<TRecord = unknown>(
         id: string | number,
@@ -574,7 +586,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar historico");
         }
 
-        return response.json() as Promise<CustomerAuditLogData<TRecord>>;
+        return readDesktopJson<CustomerAuditLogData<TRecord>>(response);
       },
       async updateCompliance<TCustomer = CustomerDetailData>(
         id: string | number,
@@ -601,7 +613,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<TCustomer>;
+        return readDesktopJson<TCustomer>(response);
       },
       async listMembers<TMember = unknown>(id: string | number) {
         const response = await fetchImpl(
@@ -619,7 +631,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar usuarios");
         }
 
-        return response.json() as Promise<TMember[]>;
+        return readDesktopJson<TMember[]>(response);
       },
       async listInvitations<TInvitation = unknown>(id: string | number) {
         const response = await fetchImpl(
@@ -637,7 +649,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar convites");
         }
 
-        return response.json() as Promise<TInvitation[]>;
+        return readDesktopJson<TInvitation[]>(response);
       },
       async createInvitation<TInvitation = unknown>(
         id: string | number,
@@ -664,7 +676,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<TInvitation>;
+        return readDesktopJson<TInvitation>(response);
       },
       async resendInvitation(id: string | number, invitationId: string) {
         const response = await fetchImpl(
@@ -763,7 +775,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar ativos");
         }
 
-        return response.json() as Promise<AssetsListData>;
+        return readDesktopJson<AssetsListData>(response);
       },
       async create(input) {
         const response = await fetchImpl(
@@ -782,7 +794,7 @@ export function createDesktopApiClient(
           throw new Error(await readApiError(response, "Erro ao criar ativo"));
         }
 
-        return response.json() as Promise<AssetsListData["data"][number]>;
+        return readDesktopJson<AssetsListData["data"][number]>(response);
       },
       async get<TAsset = AssetDetailData>(id: string | number) {
         const response = await fetchImpl(
@@ -800,7 +812,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar ativo");
         }
 
-        return response.json() as Promise<TAsset>;
+        return readDesktopJson<TAsset>(response);
       },
       async update<TAsset = AssetDetailData>(
         id: string | number,
@@ -827,7 +839,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<TAsset>;
+        return readDesktopJson<TAsset>(response);
       },
       async auditLog<TRecord = unknown>(id: string | number) {
         const response = await fetchImpl(
@@ -845,7 +857,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar histórico");
         }
 
-        return response.json() as Promise<AssetAuditLogData<TRecord>>;
+        return readDesktopJson<AssetAuditLogData<TRecord>>(response);
       },
     },
     assetTypes: {
@@ -862,7 +874,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar tipos de instrumento");
         }
 
-        return response.json() as Promise<AssetTypesListData>;
+        return readDesktopJson<AssetTypesListData>(response);
       },
     },
     environmentalLimits: {
@@ -1085,7 +1097,7 @@ export function createDesktopApiClient(
     },
     integrations: {
       async list<TResponse = unknown>() {
-        return {
+        return assumeDesktopPayload<TResponse>({
           billing: {
             planId: "desktop-local",
             planName: "Desktop local",
@@ -1093,7 +1105,7 @@ export function createDesktopApiClient(
             hasCustomIntegrations: false,
           },
           data: [],
-        } as TResponse;
+        });
       },
       async create() {
         throw desktopUnsupportedAuthAction("Integrações");
@@ -1151,7 +1163,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar serviços");
         }
 
-        return response.json() as Promise<ServicesListData>;
+        return readDesktopJson<ServicesListData>(response);
       },
       async get(id) {
         const response = await fetchImpl(
@@ -1169,7 +1181,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar serviço");
         }
 
-        return response.json() as Promise<ServiceDetailData>;
+        return readDesktopJson<ServiceDetailData>(response);
       },
       async auditLog<TRecord = unknown>(id: string | number) {
         const response = await fetchImpl(
@@ -1187,7 +1199,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar histórico");
         }
 
-        return response.json() as Promise<ServiceAuditLogData<TRecord>>;
+        return readDesktopJson<ServiceAuditLogData<TRecord>>(response);
       },
       async create(input) {
         const response = await fetchImpl(
@@ -1208,7 +1220,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<{ id: number }>;
+        return readDesktopJson<{ id: number }>(response);
       },
       async update(id, input) {
         const response = await fetchImpl(
@@ -1232,7 +1244,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<ServiceDetailData>;
+        return readDesktopJson<ServiceDetailData>(response);
       },
       async deactivate(id) {
         const response = await fetchImpl(
@@ -1253,7 +1265,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<unknown>;
+        return readDesktopJson<unknown>(response);
       },
     },
     methods: {
@@ -1283,7 +1295,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar métodos");
         }
 
-        return response.json() as Promise<MethodsListData>;
+        return readDesktopJson<MethodsListData>(response);
       },
       async get(id) {
         const response = await fetchImpl(
@@ -1301,7 +1313,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar método");
         }
 
-        return response.json() as Promise<MethodDetailData>;
+        return readDesktopJson<MethodDetailData>(response);
       },
       async audit<TRecord = unknown>(id: string | number) {
         const response = await fetchImpl(
@@ -1319,7 +1331,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar histórico");
         }
 
-        return response.json() as Promise<MethodAuditLogData<TRecord>>;
+        return readDesktopJson<MethodAuditLogData<TRecord>>(response);
       },
       async create(input) {
         const response = await fetchImpl(
@@ -1338,7 +1350,7 @@ export function createDesktopApiClient(
           throw new Error(await readApiError(response, "Erro ao criar método"));
         }
 
-        return response.json() as Promise<MethodDetailData>;
+        return readDesktopJson<MethodDetailData>(response);
       },
       async update(id, input) {
         const response = await fetchImpl(
@@ -1362,7 +1374,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<MethodDetailData>;
+        return readDesktopJson<MethodDetailData>(response);
       },
       async archive(id) {
         return postDesktopMethodAction(
@@ -1375,14 +1387,14 @@ export function createDesktopApiClient(
         );
       },
       async createNewVersion(id) {
-        return postDesktopMethodAction(
+        return postDesktopMethodAction<MethodDetailData>(
           fetchImpl,
           options,
           id,
           "new-version",
           undefined,
           "Erro ao criar nova versão",
-        ) as Promise<MethodDetailData>;
+        );
       },
       async technicalReview(id) {
         return postDesktopMethodAction(
@@ -1450,7 +1462,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar padrões");
         }
 
-        return response.json() as Promise<StandardsListData>;
+        return readDesktopJson<StandardsListData>(response);
       },
       async get(id) {
         const response = await fetchImpl(
@@ -1468,7 +1480,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar padrão");
         }
 
-        return response.json() as Promise<StandardData>;
+        return readDesktopJson<StandardData>(response);
       },
       async auditLog<TRecord = unknown>(id: string | number) {
         const response = await fetchImpl(
@@ -1486,7 +1498,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar histórico");
         }
 
-        return response.json() as Promise<StandardAuditLogData<TRecord>>;
+        return readDesktopJson<StandardAuditLogData<TRecord>>(response);
       },
       async create(input) {
         const response = await fetchImpl(
@@ -1505,7 +1517,7 @@ export function createDesktopApiClient(
           throw new Error(await readApiError(response, "Erro ao criar padrão"));
         }
 
-        return response.json() as Promise<{ id: number }>;
+        return readDesktopJson<{ id: number }>(response);
       },
       async update(id, input) {
         const response = await fetchImpl(
@@ -1529,7 +1541,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<StandardData>;
+        return readDesktopJson<StandardData>(response);
       },
       async delete(id) {
         const response = await fetchImpl(
@@ -1550,7 +1562,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<unknown>;
+        return readDesktopJson<unknown>(response);
       },
       async renew(id, input) {
         const response = await fetchImpl(
@@ -1574,7 +1586,7 @@ export function createDesktopApiClient(
           );
         }
 
-        return response.json() as Promise<unknown>;
+        return readDesktopJson<unknown>(response);
       },
     },
     jobs: {
@@ -1604,7 +1616,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar calibrações");
         }
 
-        return response.json() as Promise<JobsListData>;
+        return readDesktopJson<JobsListData>(response);
       },
       async create(input) {
         const response = await fetchImpl(
@@ -1623,7 +1635,7 @@ export function createDesktopApiClient(
           throw new Error(await readApiError(response, "Erro ao criar ordem"));
         }
 
-        return response.json() as Promise<CreateJobResult>;
+        return readDesktopJson<CreateJobResult>(response);
       },
       async get<TJob = unknown>(jobId: string | number) {
         const response = await fetchImpl(
@@ -1638,7 +1650,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar job");
         }
 
-        return response.json() as Promise<TJob>;
+        return readDesktopJson<TJob>(response);
       },
       async listTechnicians() {
         const response = await fetchImpl(
@@ -1653,7 +1665,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar técnicos");
         }
 
-        return response.json() as Promise<TechnicianListData>;
+        return readDesktopJson<TechnicianListData>(response);
       },
       async approve() {
         throw desktopUnsupportedJobAction("Aprovação de job");
@@ -1681,9 +1693,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar padrões");
         }
 
-        return response.json() as Promise<
-          ReferenceStandardsResponse<TStandard>
-        >;
+        return readDesktopJson<ReferenceStandardsResponse<TStandard>>(response);
       },
       async getEffectiveEnvironmentalLimits<TLimits = unknown>(
         assetTypeId: string | number,
@@ -1709,9 +1719,9 @@ export function createDesktopApiClient(
           return { limits: null, source: null };
         }
 
-        return response.json() as Promise<
-          EffectiveEnvironmentalLimitsResponse<TLimits>
-        >;
+        return readDesktopJson<EffectiveEnvironmentalLimitsResponse<TLimits>>(
+          response,
+        );
       },
       async saveExecution(jobId, input) {
         const response = await fetchImpl(
@@ -1768,7 +1778,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao gerar rascunho local do certificado");
         }
 
-        return response.json() as Promise<LocalCertificateDraft>;
+        return readDesktopJson<LocalCertificateDraft>(response);
       },
       async getCertificateDownloadUrl() {
         throw desktopUnsupportedJobAction("Download de certificado publicado");
@@ -1806,7 +1816,7 @@ export function createDesktopApiClient(
           throw new Error("Erro ao carregar ordens de serviço");
         }
 
-        return response.json() as Promise<ServiceOrdersListData>;
+        return readDesktopJson<ServiceOrdersListData>(response);
       },
       async get(id) {
         const response = await fetchImpl(
@@ -1824,7 +1834,9 @@ export function createDesktopApiClient(
           throw new Error("Erro ao carregar OS");
         }
 
-        const result = (await response.json()) as { data: ServiceOrderDetail };
+        const result = await readDesktopJson<{ data: ServiceOrderDetail }>(
+          response,
+        );
         return result.data;
       },
       async create(input) {
@@ -1844,7 +1856,7 @@ export function createDesktopApiClient(
           throw new Error(await readApiError(response, "Erro ao criar OS"));
         }
 
-        return response.json() as Promise<CreateServiceOrderResult>;
+        return readDesktopJson<CreateServiceOrderResult>(response);
       },
       async createQuote(id, input) {
         const response = await fetchImpl(
@@ -1977,7 +1989,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar conflitos de sincronização");
         }
 
-        return response.json() as Promise<LocalSyncConflictsResponse>;
+        return readDesktopJson<LocalSyncConflictsResponse>(response);
       },
       async resolveConflict(id, status = "resolved") {
         const response = await fetchImpl(
@@ -1999,7 +2011,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao resolver conflito de sincronização");
         }
 
-        return response.json() as Promise<{ data: LocalSyncConflict }>;
+        return readDesktopJson<{ data: LocalSyncConflict }>(response);
       },
     },
     attachments: {
@@ -2027,7 +2039,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar anexos locais");
         }
 
-        return response.json() as Promise<LocalAttachmentsResponse>;
+        return readDesktopJson<LocalAttachmentsResponse>(response);
       },
       async upload(input) {
         const formData = new FormData();
@@ -2049,7 +2061,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao anexar arquivo local");
         }
 
-        return response.json() as Promise<LocalAttachment>;
+        return readDesktopJson<LocalAttachment>(response);
       },
     },
   };
@@ -2062,68 +2074,71 @@ export function withDesktopLocalFirstReadThroughSync<TNamespace extends object>(
   readMethods: Array<keyof TNamespace>,
   requestBackgroundSync: () => void,
 ): TNamespace {
-  const namespace = { ...cloudNamespace } as Record<PropertyKey, unknown>;
+  const namespace = { ...cloudNamespace };
 
   for (const method of readMethods) {
-    const cloudMethod = cloudNamespace[method];
-    const localMethod = localNamespace[method];
+    const cloudMethod: unknown = cloudNamespace[method];
+    const localMethod: unknown = localNamespace[method];
 
     if (
-      typeof cloudMethod !== "function" ||
-      typeof localMethod !== "function"
+      !isAsyncNamespaceMethod(cloudMethod) ||
+      !isAsyncNamespaceMethod(localMethod)
     ) {
       continue;
     }
 
-    namespace[method] = async (...args: unknown[]) => {
-      if (await hasBootstrappedLocalCache(localApi)) {
-        try {
-          const result = await (
-            localMethod as (...args: unknown[]) => Promise<unknown>
-          )(...args);
-          requestBackgroundSync();
-          return result;
-        } catch (localError) {
+    Object.defineProperty(namespace, method, {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: async (...args: unknown[]) => {
+        if (await hasBootstrappedLocalCache(localApi)) {
           try {
-            return await (
-              cloudMethod as (...args: unknown[]) => Promise<unknown>
-            )(...args);
-          } catch (cloudError) {
-            if (isDesktopOfflineError(cloudError)) {
-              throw localError;
-            }
+            const result = await localMethod(...args);
+            requestBackgroundSync();
+            return result;
+          } catch (localError) {
+            try {
+              return await cloudMethod(...args);
+            } catch (cloudError) {
+              if (isDesktopOfflineError(cloudError)) {
+                throw localError;
+              }
 
-            throw cloudError;
+              throw cloudError;
+            }
           }
         }
-      }
 
-      try {
-        return await (cloudMethod as (...args: unknown[]) => Promise<unknown>)(
-          ...args,
-        );
-      } catch (error) {
-        if (!isDesktopOfflineError(error)) {
-          throw error;
+        try {
+          return await cloudMethod(...args);
+        } catch (error) {
+          if (!isDesktopOfflineError(error)) {
+            throw error;
+          }
+
+          if (!(await hasBootstrappedLocalCache(localApi))) {
+            throw new Error(
+              getDesktopDataPolicyUnavailableMessage(
+                "local-first-read-through-sync",
+              ),
+              { cause: error },
+            );
+          }
+
+          return localMethod(...args);
         }
-
-        if (!(await hasBootstrappedLocalCache(localApi))) {
-          throw new Error(
-            getDesktopDataPolicyUnavailableMessage(
-              "local-first-read-through-sync",
-            ),
-            { cause: error },
-          );
-        }
-
-        return (localMethod as (...args: unknown[]) => Promise<unknown>)(
-          ...args,
-        );
-      }
-    };
+      },
+    });
   }
 
-  return namespace as TNamespace;
+  return namespace;
+}
+
+function isAsyncNamespaceMethod(
+  value: unknown,
+): value is (...args: unknown[]) => Promise<unknown> {
+  return typeof value === "function";
 }
 
 export function createDesktopBackgroundSyncRequester(
@@ -2419,26 +2434,33 @@ function environmentalLimitFromUnknown(
   value: unknown,
 ): EnvironmentalLimit | null {
   if (!value || typeof value !== "object") return null;
-  const row = value as Record<string, unknown>;
-  const id = numberFromUnknown(row.id);
-  const unitId = numberFromUnknown(row.unitId);
+  const id = numberFromUnknown(Reflect.get(value, "id"));
+  const unitId = numberFromUnknown(Reflect.get(value, "unitId"));
 
   if (id === null || unitId === null) return null;
 
   return {
     id,
     unitId,
-    assetTypeId: numberFromUnknown(row.assetTypeId),
+    assetTypeId: numberFromUnknown(Reflect.get(value, "assetTypeId")),
     assetTypeName:
-      typeof row.assetTypeName === "string" ? row.assetTypeName : null,
-    temperatureMin: numberFromUnknown(row.temperatureMin),
-    temperatureMax: numberFromUnknown(row.temperatureMax),
-    humidityMin: numberFromUnknown(row.humidityMin),
-    humidityMax: numberFromUnknown(row.humidityMax),
-    pressureMin: numberFromUnknown(row.pressureMin),
-    pressureMax: numberFromUnknown(row.pressureMax),
-    createdAt: typeof row.createdAt === "string" ? row.createdAt : null,
-    updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : null,
+      typeof Reflect.get(value, "assetTypeName") === "string"
+        ? Reflect.get(value, "assetTypeName")
+        : null,
+    temperatureMin: numberFromUnknown(Reflect.get(value, "temperatureMin")),
+    temperatureMax: numberFromUnknown(Reflect.get(value, "temperatureMax")),
+    humidityMin: numberFromUnknown(Reflect.get(value, "humidityMin")),
+    humidityMax: numberFromUnknown(Reflect.get(value, "humidityMax")),
+    pressureMin: numberFromUnknown(Reflect.get(value, "pressureMin")),
+    pressureMax: numberFromUnknown(Reflect.get(value, "pressureMax")),
+    createdAt:
+      typeof Reflect.get(value, "createdAt") === "string"
+        ? Reflect.get(value, "createdAt")
+        : null,
+    updatedAt:
+      typeof Reflect.get(value, "updatedAt") === "string"
+        ? Reflect.get(value, "updatedAt")
+        : null,
   };
 }
 
@@ -2488,14 +2510,14 @@ function desktopUnsupportedAuthAction(action: string) {
   return new Error(`${action} requer a API web/nuvem neste momento.`);
 }
 
-async function postDesktopMethodAction(
+async function postDesktopMethodAction<TResponse = unknown>(
   fetchImpl: typeof fetch,
   options: CreateDesktopApiClientOptions,
   id: string | number,
   action: string,
   input: MethodWriteInput | undefined,
   fallback: string,
-): Promise<unknown> {
+): Promise<TResponse> {
   const response = await fetchImpl(
     new URL(
       `/api/methods/${encodeURIComponent(String(id))}/${action}`,
@@ -2518,5 +2540,5 @@ async function postDesktopMethodAction(
     throw new Error(await readApiError(response, fallback));
   }
 
-  return response.json() as Promise<unknown>;
+  return readDesktopJson<TResponse>(response);
 }

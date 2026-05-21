@@ -88,9 +88,7 @@ function evaluateTestExpression(
 
   const aggregateMatch = trimmed.match(/^(mean|std|min|max)\(([^)]+)\)$/);
   if (aggregateMatch?.[1] && aggregateMatch[2]) {
-    const value = (inputs as Readonly<Record<string, unknown>>)[
-      aggregateMatch[2]
-    ];
+    const value = Object.fromEntries(Object.entries(inputs))[aggregateMatch[2]];
     if (!Array.isArray(value)) {
       throw new Error(`Expected array input ${aggregateMatch[2]}`);
     }
@@ -318,9 +316,10 @@ describe("compileMethodDraft", () => {
     expect(execution.ok).toBe(true);
     expect(execution.outputs.before_error).toBeUndefined();
     expect(execution.outputs.after_error).toEqual([expect.any(Number)]);
-    expect(Number((execution.outputs.after_error as number[])[0])).toBeCloseTo(
-      0.1,
-    );
+    if (!Array.isArray(execution.outputs.after_error)) {
+      throw new Error("Expected after_error array output");
+    }
+    expect(Number(execution.outputs.after_error[0])).toBeCloseTo(0.1);
     expect(execution.acceptanceCriteriaResults.map((item) => item.key)).toEqual(
       ["after_limit"],
     );

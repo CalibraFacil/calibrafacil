@@ -8,7 +8,6 @@ import {
 } from '@/lib/route-data'
 import {
   type AssignableTrainingRecordsData,
-  COMPETENCE_STATUSES,
   type CompetenceAuditLogData,
   type CompetenceDetail,
   type CompetencesListData,
@@ -27,9 +26,19 @@ function pageFromUrl(url?: URL) {
 function statusFromUrl(url?: URL): CompetenceStatus | '' {
   const status = url?.searchParams.get('status') ?? ''
 
-  return COMPETENCE_STATUSES.includes(status as CompetenceStatus)
-    ? (status as CompetenceStatus)
-    : ''
+  switch (status) {
+    case 'REQUESTED':
+    case 'TRAINING_ASSIGNED':
+    case 'IN_TRAINING':
+    case 'PENDING_EVALUATION':
+    case 'ACTIVE':
+    case 'SUSPENDED':
+    case 'EXPIRED':
+    case 'CANCELLED':
+      return status
+    default:
+      return ''
+  }
 }
 
 export function competencesListQueryInputFromUrl(

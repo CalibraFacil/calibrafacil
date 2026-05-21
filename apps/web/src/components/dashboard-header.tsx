@@ -146,6 +146,15 @@ function getCachedLabel(
   return null
 }
 
+function stringProperty(value: unknown, key: string) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+
+  const property = Reflect.get(value, key)
+  return typeof property === 'string' ? property : undefined
+}
+
 // Extract entity IDs from pathname
 function extractEntityIds(pathname: string): {
   customerId?: string
@@ -293,54 +302,52 @@ export function DashboardHeader({
   const customerCachedLabel = getCachedLabel(
     queryClient,
     [['customer', customerId]],
-    (cached) => (cached as { name?: string } | undefined)?.name,
+    (cached) => stringProperty(cached, 'name'),
   )
   const assetCachedLabel = getCachedLabel(
     queryClient,
     [['asset', assetId]],
-    (cached) => (cached as { name?: string } | undefined)?.name,
+    (cached) => stringProperty(cached, 'name'),
   )
   const methodCachedLabel = getCachedLabel(
     queryClient,
     [['methods', methodId]],
-    (cached) => (cached as { name?: string } | undefined)?.name,
+    (cached) => stringProperty(cached, 'name'),
   )
   const jobCachedLabel = getCachedLabel(
     queryClient,
     [['jobs', jobId]],
-    (cached) => (cached as { jobId?: string } | undefined)?.jobId,
+    (cached) => stringProperty(cached, 'jobId'),
   )
   const serviceCachedLabel = getCachedLabel(
     queryClient,
     [['services', serviceId]],
-    (cached) => (cached as { name?: string } | undefined)?.name,
+    (cached) => stringProperty(cached, 'name'),
   )
   const serviceOrderCachedLabel = getCachedLabel(
     queryClient,
     [['service-order', serviceOrderId]],
-    (cached) =>
-      (cached as { serviceOrderNumber?: string } | undefined)
-        ?.serviceOrderNumber,
+    (cached) => stringProperty(cached, 'serviceOrderNumber'),
   )
   const standardCachedLabel = getCachedLabel(
     queryClient,
     [['standards', standardId]],
-    (cached) => (cached as { name?: string } | undefined)?.name,
+    (cached) => stringProperty(cached, 'name'),
   )
   const ncCachedLabel = getCachedLabel(
     queryClient,
     [['non-conformance', ncId]],
-    (cached) => (cached as { ncNumber?: string } | undefined)?.ncNumber,
+    (cached) => stringProperty(cached, 'ncNumber'),
   )
   const capaCachedLabel = getCachedLabel(
     queryClient,
     [['capa', capaId]],
-    (cached) => (cached as { capaNumber?: string } | undefined)?.capaNumber,
+    (cached) => stringProperty(cached, 'capaNumber'),
   )
   const competenceCachedLabel = getCachedLabel(
     queryClient,
     [['competence', competenceId]],
-    (cached) => (cached as { userName?: string } | undefined)?.userName,
+    (cached) => stringProperty(cached, 'userName'),
   )
 
   const customerDetailFetchCount = useIsFetching({

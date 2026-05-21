@@ -12,6 +12,7 @@ import {
   getPlan,
   hasFeature,
   isSubscriptionActive,
+  isValidPlanId,
   type PlanId,
   type SubscriptionStatus,
 } from "@calibra-facil/shared";
@@ -45,6 +46,31 @@ const startSsoSchema = z.object({
   organizationSlug: z.string().trim().min(1),
   email: z.string().trim().email().optional(),
   redirectPath: z.string().trim().optional(),
+});
+
+const providerOidcConfigSchema = z.object({
+  discoveryEndpoint: z.string().optional(),
+  authorizationEndpoint: z.string().optional(),
+  tokenEndpoint: z.string().optional(),
+  userInfoEndpoint: z.string().optional(),
+  jwksEndpoint: z.string().optional(),
+  scopes: z.array(z.string()).optional(),
+  clientId: z.string().optional(),
+  pkce: z.boolean().optional(),
+  tokenEndpointAuthentication: z.string().optional(),
+});
+
+const domainVerificationResponseSchema = z.object({
+  domainVerificationToken: z.string().optional(),
+});
+
+const requiredDomainVerificationResponseSchema = z.object({
+  domainVerificationToken: z.string(),
+});
+
+const ssoStartResponseSchema = z.object({
+  url: z.string(),
+  redirect: z.boolean(),
 });
 
 type SsoProviderRow = typeof ssoProvider.$inferSelect;
@@ -95,19 +121,10 @@ function maskClientId(clientId?: string | null) {
 
 function parseProviderConfig(provider: SsoProviderRow) {
   try {
-    return provider.oidcConfig
-      ? (JSON.parse(provider.oidcConfig) as {
-          discoveryEndpoint?: string;
-          authorizationEndpoint?: string;
-          tokenEndpoint?: string;
-          userInfoEndpoint?: string;
-          jwksEndpoint?: string;
-          scopes?: string[];
-          clientId?: string;
-          pkce?: boolean;
-          tokenEndpointAuthentication?: string;
-        })
-      : null;
+    if (!provider.oidcConfig) return null;
+    const parsed: unknown = JSON.parse(provider.oidcConfig);
+    const config = providerOidcConfigSchema.safeParse(parsed);
+    return config.success ? config.data : null;
   } catch {
     return null;
   }
@@ -167,9 +184,8 @@ async function getPlanAccessForOrg(organizationId: string) {
     where: eq(subscription.organizationId, organizationId),
   });
 
-  const planId = (activeSubscription?.planId as PlanId | undefined) ?? "FREE";
-  const status =
-    (activeSubscription?.status as SubscriptionStatus | undefined) ?? "TRIAL";
+  const planId = toPlanId(activeSubscription?.planId);
+  const status = toSubscriptionStatus(activeSubscription?.status);
 
   return {
     planId,
@@ -316,9 +332,9 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      const data = (await response.json()) as {
-        domainVerificationToken?: string;
-      };
+      const data = domainVerificationResponseSchema.parse(
+        await response.json(),
+      );
       const provider = await getOrganizationProvider(member.organizationId);
 
       if (!provider) {
@@ -408,9 +424,9 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      const data = (await response.json()) as {
-        domainVerificationToken: string;
-      };
+      const data = requiredDomainVerificationResponseSchema.parse(
+        await response.json(),
+      );
 
       await writeOrganizationAuditEvent({
         organizationId: member.organizationId,
@@ -642,10 +658,23 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       );
     }
 
-    const payload = (await response.json()) as {
-      url: string;
-      redirect: boolean;
-    };
+    const payload = ssoStartResponseSchema.parse(await response.json());
 
     return c.json(payload);
   });
+
+function toPlanId(value: unknown): PlanId {
+  return typeof value === "string" && isValidPlanId(value) ? value : "FREE";
+}
+
+function toSubscriptionStatus(value: unknown): SubscriptionStatus {
+  switch (value) {
+    case "ACTIVE":
+    case "PAST_DUE":
+    case "CANCELED":
+    case "TRIAL":
+      return value;
+    default:
+      return "TRIAL";
+  }
+}

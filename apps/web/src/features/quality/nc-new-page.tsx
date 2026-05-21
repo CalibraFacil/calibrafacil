@@ -124,6 +124,7 @@ export function NewNCPage() {
               <Select
                 value={typeValue}
                 onValueChange={(v) =>
+                  // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to non-conformance types.
                   setValue('type', v as NonConformanceFormData['type'])
                 }
               >

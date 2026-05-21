@@ -52,6 +52,57 @@ function createConfig(dbPath: string): LocalServerConfig {
   };
 }
 
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function dataRecordFromJson(value: unknown) {
+  return recordFromUnknown(recordFromUnknown(value).data);
+}
+
+function stringFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "string" ? value : "";
+}
+
+function numberFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function maybeNumberFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function parseSyncPushBody(body: unknown) {
+  const parsed = recordFromUnknown(JSON.parse(String(body)));
+  const events = Array.isArray(parsed.events)
+    ? parsed.events.map(recordFromUnknown)
+    : [];
+
+  return {
+    clientBatchId: stringFromRecord(parsed, "clientBatchId"),
+    events: events.map((event) => ({
+      eventId: stringFromRecord(event, "eventId"),
+      operation: stringFromRecord(event, "operation"),
+      localVersion: numberFromRecord(event, "localVersion"),
+    })),
+  };
+}
+
+function formDataFromBody(body: BodyInit | null | undefined) {
+  if (body instanceof FormData) {
+    return body;
+  }
+
+  throw new Error("Expected FormData body");
+}
+
 describe("local server", () => {
   it("uses synced tenant context for local writes after packaged startup", async () => {
     const dbPath = createTempDatabasePath();
@@ -124,15 +175,17 @@ describe("local server", () => {
       syncState: "local",
     });
 
-    const row = database
-      .prepare(
-        `
+    const row = recordFromUnknown(
+      database
+        .prepare(
+          `
 SELECT organization_id, unit_id
 FROM customers
 WHERE name = 'Cliente Offline'
 `,
-      )
-      .get() as { organization_id: string; unit_id: number } | undefined;
+        )
+        .get(),
+    );
 
     expect(row).toEqual({ organization_id: "org-synced", unit_id: 42 });
   });
@@ -555,14 +608,7 @@ INSERT INTO reference_standards (
 
           if (url === "https://api.example.test/api/sync/push") {
             expect(init?.method).toBe("POST");
-            const body = JSON.parse(String(init?.body)) as {
-              clientBatchId: string;
-              events: Array<{
-                eventId: string;
-                operation: string;
-                localVersion: number;
-              }>;
-            };
+            const body = parseSyncPushBody(init?.body);
 
             return Response.json({
               accepted: body.events.map((event) => ({
@@ -587,7 +633,7 @@ INSERT INTO reference_standards (
           if (url === "https://api.example.test/api/sync/certificate-pdfs") {
             expect(init?.method).toBe("POST");
             expect(init?.body).toBeInstanceOf(FormData);
-            const formData = init?.body as FormData;
+            const formData = formDataFromBody(init?.body);
             const eventId = formData.get("eventId");
             const localVersion = Number(formData.get("localVersion"));
             const file = formData.get("file");
@@ -806,17 +852,19 @@ INSERT INTO assets (
       email: "beta@example.com",
     });
 
-    const customerOutbox = database
-      .prepare(
-        `
+    const customerOutbox = recordFromUnknown(
+      database
+        .prepare(
+          `
 SELECT domain_events.aggregate_kind, domain_events.event_type
 FROM domain_events
 INNER JOIN outbox ON outbox.event_id = domain_events.event_id
 WHERE domain_events.aggregate_kind = 'customer'
 LIMIT 1
 `,
-      )
-      .get() as { aggregate_kind: string; event_type: string };
+        )
+        .get(),
+    );
     expect(customerOutbox).toEqual({
       aggregate_kind: "customer",
       event_type: "create_local_customer",
@@ -844,9 +892,10 @@ LIMIT 1
       address: { city: "Sao Paulo", state: "SP" },
     });
 
-    const updateCustomerOutbox = database
-      .prepare(
-        `
+    const updateCustomerOutbox = recordFromUnknown(
+      database
+        .prepare(
+          `
 SELECT domain_events.aggregate_kind, domain_events.event_type
 FROM domain_events
 INNER JOIN outbox ON outbox.event_id = domain_events.event_id
@@ -854,8 +903,9 @@ WHERE domain_events.aggregate_kind = 'customer'
   AND domain_events.event_type = 'update_local_customer'
 LIMIT 1
 `,
-      )
-      .get() as { aggregate_kind: string; event_type: string };
+        )
+        .get(),
+    );
     expect(updateCustomerOutbox).toEqual({
       aggregate_kind: "customer",
       event_type: "update_local_customer",
@@ -887,9 +937,10 @@ LIMIT 1
       },
     });
 
-    const complianceOutbox = database
-      .prepare(
-        `
+    const complianceOutbox = recordFromUnknown(
+      database
+        .prepare(
+          `
 SELECT domain_events.aggregate_kind, domain_events.event_type
 FROM domain_events
 INNER JOIN outbox ON outbox.event_id = domain_events.event_id
@@ -897,8 +948,9 @@ WHERE domain_events.aggregate_kind = 'customer'
   AND domain_events.event_type = 'update_local_customer_compliance'
 LIMIT 1
 `,
-      )
-      .get() as { aggregate_kind: string; event_type: string };
+        )
+        .get(),
+    );
     expect(complianceOutbox).toEqual({
       aggregate_kind: "customer",
       event_type: "update_local_customer_compliance",
@@ -1006,9 +1058,10 @@ LIMIT 1
       comments: "Atualizado offline",
     });
 
-    const updateAssetOutbox = database
-      .prepare(
-        `
+    const updateAssetOutbox = recordFromUnknown(
+      database
+        .prepare(
+          `
 SELECT domain_events.aggregate_kind, domain_events.event_type
 FROM domain_events
 INNER JOIN outbox ON outbox.event_id = domain_events.event_id
@@ -1016,8 +1069,9 @@ WHERE domain_events.aggregate_kind = 'asset'
   AND domain_events.event_type = 'update_local_asset'
 LIMIT 1
 `,
-      )
-      .get() as { aggregate_kind: string; event_type: string };
+        )
+        .get(),
+    );
     expect(updateAssetOutbox).toEqual({
       aggregate_kind: "asset",
       event_type: "update_local_asset",
@@ -1056,9 +1110,10 @@ LIMIT 1
       status: "ACTIVE",
     });
 
-    const assetOutbox = database
-      .prepare(
-        `
+    const assetOutbox = recordFromUnknown(
+      database
+        .prepare(
+          `
 SELECT domain_events.aggregate_kind, domain_events.event_type
 FROM domain_events
 INNER JOIN outbox ON outbox.event_id = domain_events.event_id
@@ -1066,8 +1121,9 @@ WHERE domain_events.aggregate_kind = 'asset'
   AND domain_events.event_type = 'create_local_asset'
 LIMIT 1
 `,
-      )
-      .get() as { aggregate_kind: string; event_type: string };
+        )
+        .get(),
+    );
     expect(assetOutbox).toEqual({
       aggregate_kind: "asset",
       event_type: "create_local_asset",
@@ -1123,14 +1179,7 @@ LIMIT 1
 
         if (url === "https://api.example.test/api/sync/push") {
           expect(init?.method).toBe("POST");
-          const body = JSON.parse(String(init?.body)) as {
-            clientBatchId: string;
-            events: Array<{
-              eventId: string;
-              operation: string;
-              localVersion: number;
-            }>;
-          };
+          const body = parseSyncPushBody(init?.body);
 
           return Response.json({
             accepted: body.events.map((event) => ({
@@ -1318,14 +1367,19 @@ INSERT INTO assets (
       }),
       headers: { "Content-Type": "application/json" },
     });
-    const created = (await createResponse.json()) as {
-      data: { id: number; serviceOrderNumber: string };
-    };
+    const created = dataRecordFromJson(await createResponse.json());
+    const createdId = numberFromRecord(created, "id");
+    const createdServiceOrderNumber = stringFromRecord(
+      created,
+      "serviceOrderNumber",
+    );
     expect(createResponse.status, JSON.stringify(created)).toBe(201);
-    expect(created.data.serviceOrderNumber).toMatch(/^LOCAL-OS-/);
+    expect(stringFromRecord(created, "serviceOrderNumber")).toMatch(
+      /^LOCAL-OS-/,
+    );
 
     const quoteResponse = await app.request(
-      `/api/service-orders/${created.data.id}/quotes`,
+      `/api/service-orders/${createdId}/quotes`,
       {
         method: "POST",
         body: JSON.stringify({
@@ -1346,7 +1400,7 @@ INSERT INTO assets (
     expect(quoteResponse.status, await quoteResponse.text()).toBe(201);
 
     const executionResponse = await app.request(
-      `/api/service-orders/${created.data.id}/execution`,
+      `/api/service-orders/${createdId}/execution`,
       {
         method: "PATCH",
         body: JSON.stringify({
@@ -1360,7 +1414,7 @@ INSERT INTO assets (
     expect(executionResponse.status, await executionResponse.text()).toBe(200);
 
     const deliveryDocumentResponse = await app.request(
-      `/api/service-orders/${created.data.id}/delivery-document`,
+      `/api/service-orders/${createdId}/delivery-document`,
       {
         method: "POST",
         body: JSON.stringify({
@@ -1392,7 +1446,7 @@ INSERT INTO assets (
 
     const intakeAttachmentForm = new FormData();
     intakeAttachmentForm.set("entityType", "service_order");
-    intakeAttachmentForm.set("entityId", String(created.data.id));
+    intakeAttachmentForm.set("entityId", String(createdId));
     intakeAttachmentForm.set(
       "file",
       new File(["intake photo"], "intake.txt", {
@@ -1403,11 +1457,9 @@ INSERT INTO assets (
       method: "POST",
       body: intakeAttachmentForm,
     });
-    const intakeAttachment = (await intakeAttachmentResponse.json()) as {
-      id: string;
-      fileUrl: string;
-      uploadStatus: string;
-    };
+    const intakeAttachment = recordFromUnknown(
+      await intakeAttachmentResponse.json(),
+    );
     expect(
       intakeAttachmentResponse.status,
       JSON.stringify(intakeAttachment),
@@ -1434,12 +1486,12 @@ INSERT INTO assets (
     });
 
     const reopenedDetailResponse = await app.request(
-      `/api/service-orders/${created.data.id}`,
+      `/api/service-orders/${createdId}`,
     );
     expect(reopenedDetailResponse.status).toBe(200);
     await expect(reopenedDetailResponse.json()).resolves.toMatchObject({
       data: {
-        serviceOrderNumber: created.data.serviceOrderNumber,
+        serviceOrderNumber: createdServiceOrderNumber,
         claimedDefect: "Nao liga",
         intakeCondition: "Recebida com fonte",
         syncState: "local",
@@ -1447,7 +1499,7 @@ INSERT INTO assets (
     });
 
     const reopenedAttachmentListResponse = await app.request(
-      `/api/attachments?entityType=service_order&entityId=${created.data.id}`,
+      `/api/attachments?entityType=service_order&entityId=${createdId}`,
     );
     expect(reopenedAttachmentListResponse.status).toBe(200);
     await expect(reopenedAttachmentListResponse.json()).resolves.toMatchObject({
@@ -1460,7 +1512,7 @@ INSERT INTO assets (
     });
 
     const reopenedAttachmentFileResponse = await app.request(
-      intakeAttachment.fileUrl,
+      stringFromRecord(intakeAttachment, "fileUrl"),
     );
     expect(reopenedAttachmentFileResponse.status).toBe(200);
     await expect(reopenedAttachmentFileResponse.text()).resolves.toBe(
@@ -1473,38 +1525,34 @@ INSERT INTO assets (
     const syncBody = await syncResponse.text();
     expect(syncResponse.status, syncBody).toBe(200);
 
-    const synced = database
-      .prepare(
-        `
+    const synced = recordFromUnknown(
+      database
+        .prepare(
+          `
 SELECT remote_id, service_order_number, sync_state
 FROM service_orders
 WHERE service_order_number = 'OS-2026-0009'
 `,
-      )
-      .get() as {
-      remote_id: number | null;
-      service_order_number: string;
-      sync_state: string;
-    };
+        )
+        .get(),
+    );
     expect(synced).toEqual({
       remote_id: 555,
       service_order_number: "OS-2026-0009",
       sync_state: "synced",
     });
-    const syncedWorkflow = database
-      .prepare(
-        `
+    const syncedWorkflow = recordFromUnknown(
+      database
+        .prepare(
+          `
 SELECT
   (SELECT remote_id FROM service_order_quotes LIMIT 1) AS quote_remote_id,
   (SELECT remote_id FROM service_order_executions LIMIT 1) AS execution_remote_id,
   (SELECT remote_id FROM service_order_delivery_documents LIMIT 1) AS document_remote_id
 `,
-      )
-      .get() as {
-      quote_remote_id: number | null;
-      execution_remote_id: number | null;
-      document_remote_id: number | null;
-    };
+        )
+        .get(),
+    );
     expect(syncedWorkflow).toEqual({
       quote_remote_id: 556,
       execution_remote_id: 557,
@@ -1723,7 +1771,7 @@ SELECT
         cloudProxyToken: "proxy-token",
       },
       database,
-      { fetch: fetchMock as typeof fetch },
+      { fetch: fetchMock },
     );
 
     const response = await app.request("/api/local/sync/start", {
@@ -2078,14 +2126,7 @@ INSERT INTO sync_conflicts (
 
         if (url === "https://api.example.test/api/sync/push") {
           expect(init?.method).toBe("POST");
-          const body = JSON.parse(String(init?.body)) as {
-            clientBatchId: string;
-            events: Array<{
-              eventId: string;
-              operation: string;
-              localVersion: number;
-            }>;
-          };
+          const body = parseSyncPushBody(init?.body);
 
           return Response.json({
             accepted: body.events.map((event) => ({
@@ -2110,7 +2151,7 @@ INSERT INTO sync_conflicts (
         if (url === "https://api.example.test/api/sync/certificate-pdfs") {
           expect(init?.method).toBe("POST");
           expect(init?.body).toBeInstanceOf(FormData);
-          const formData = init?.body as FormData;
+          const formData = formDataFromBody(init?.body);
           const eventId = formData.get("eventId");
           const localVersion = Number(formData.get("localVersion"));
           const file = formData.get("file");
@@ -2436,14 +2477,13 @@ INSERT INTO environmental_limits (
       headers: { "Content-Type": "application/json" },
     });
     expect(createResponse.status).toBe(201);
-    const created = (await createResponse.json()) as {
-      id: number;
-      jobId: string;
-    };
-    expect(created.jobId).toMatch(/^LOCAL-/);
+    const created = recordFromUnknown(await createResponse.json());
+    const createdId = numberFromRecord(created, "id");
+    const createdJobId = stringFromRecord(created, "jobId");
+    expect(createdJobId).toMatch(/^LOCAL-/);
 
     const executeResponse = await app.request(
-      `/api/jobs/${created.id}/execute`,
+      `/api/jobs/${createdId}/execute`,
       {
         method: "POST",
         body: JSON.stringify({
@@ -2464,7 +2504,7 @@ INSERT INTO environmental_limits (
     );
     expect(executeResponse.status).toBe(200);
 
-    const submitResponse = await app.request(`/api/jobs/${created.id}/submit`, {
+    const submitResponse = await app.request(`/api/jobs/${createdId}/submit`, {
       method: "POST",
       body: JSON.stringify({
         data: { indication: "10.03", reference: "10" },
@@ -2473,7 +2513,7 @@ INSERT INTO environmental_limits (
     });
     expect(submitResponse.status).toBe(200);
 
-    const detailResponse = await app.request(`/api/jobs/${created.id}`);
+    const detailResponse = await app.request(`/api/jobs/${createdId}`);
     await expect(detailResponse.json()).resolves.toMatchObject({
       status: "REVIEW",
       customerId: 123,
@@ -2502,25 +2542,23 @@ INSERT INTO environmental_limits (
     });
 
     const draftResponse = await app.request(
-      `/api/jobs/${created.id}/certificate-draft`,
+      `/api/jobs/${createdId}/certificate-draft`,
       { method: "POST" },
     );
-    const draftBody = (await draftResponse.json()) as {
-      id: string;
-      localPath: string;
-      contentType: string;
-      fileUrl: string;
-    };
+    const draftBody = recordFromUnknown(await draftResponse.json());
+    const draftId = stringFromRecord(draftBody, "id");
+    const draftFileUrl = stringFromRecord(draftBody, "fileUrl");
+    const draftLocalPath = stringFromRecord(draftBody, "localPath");
     expect(draftResponse.status, JSON.stringify(draftBody)).toBe(201);
     expect(draftBody).toMatchObject({
       contentType: "text/html",
       draftKind: "local_certificate_draft",
       published: false,
-      fileUrl: `/api/jobs/${created.id}/certificate-draft/file`,
+      fileUrl: `/api/jobs/${createdId}/certificate-draft/file`,
     });
-    expect(draftBody.localPath).toMatch(/^certificates\/.+\.html$/);
+    expect(draftLocalPath).toMatch(/^certificates\/.+\.html$/);
 
-    const draftFileResponse = await app.request(draftBody.fileUrl);
+    const draftFileResponse = await app.request(draftFileUrl);
     expect(draftFileResponse.status).toBe(200);
     expect(draftFileResponse.headers.get("content-type")).toContain(
       "text/html",
@@ -2530,24 +2568,24 @@ INSERT INTO environmental_limits (
     expect(draftHtml).toContain("Rascunho local");
     expect(draftHtml).toContain("Pendente de sincronização");
     expect(draftHtml).toContain("Não publicado");
-    expect(draftHtml).toContain(created.jobId);
+    expect(draftHtml).toContain(createdJobId);
 
     database
       .prepare(
         "UPDATE certificate_drafts SET local_path = '../../outside.html' WHERE id = @id",
       )
-      .run({ id: draftBody.id });
-    const unsafeDraftFileResponse = await app.request(draftBody.fileUrl);
+      .run({ id: draftId });
+    const unsafeDraftFileResponse = await app.request(draftFileUrl);
     expect(unsafeDraftFileResponse.status).toBe(400);
     database
       .prepare(
         "UPDATE certificate_drafts SET local_path = @path WHERE id = @id",
       )
-      .run({ id: draftBody.id, path: draftBody.localPath });
+      .run({ id: draftId, path: draftLocalPath });
 
     const pdfResponse = await app.request(
-      `/api/jobs/${created.id}/certificate-draft/${encodeURIComponent(
-        draftBody.id,
+      `/api/jobs/${createdId}/certificate-draft/${encodeURIComponent(
+        draftId,
       )}/pdf`,
       {
         method: "POST",
@@ -2556,19 +2594,11 @@ INSERT INTO environmental_limits (
         }),
       },
     );
-    const pdfBody = (await pdfResponse.json()) as {
-      id: string;
-      status: string;
-      metadata: {
-        pdfPath?: string;
-        pdfContentHash?: string;
-        pdfSizeBytes?: number;
-        pdfContentType?: string;
-      };
-    };
+    const pdfBody = recordFromUnknown(await pdfResponse.json());
+    const pdfMetadata = recordFromUnknown(pdfBody.metadata);
     expect(pdfResponse.status, JSON.stringify(pdfBody)).toBe(200);
     expect(pdfBody).toMatchObject({
-      id: draftBody.id,
+      id: draftId,
       status: "pdf_generated",
       draftKind: "local_certificate_draft",
       published: false,
@@ -2577,12 +2607,16 @@ INSERT INTO environmental_limits (
         pdfSizeBytes: "%PDF-1.7 local draft".length,
       },
     });
-    expect(pdfBody.metadata.pdfPath).toMatch(/^certificates\/.+\.pdf$/);
-    expect(pdfBody.metadata.pdfContentHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(stringFromRecord(pdfMetadata, "pdfPath")).toMatch(
+      /^certificates\/.+\.pdf$/,
+    );
+    expect(stringFromRecord(pdfMetadata, "pdfContentHash")).toMatch(
+      /^[a-f0-9]{64}$/,
+    );
 
     const attachmentForm = new FormData();
     attachmentForm.set("entityType", "calibration_job");
-    attachmentForm.set("entityId", String(created.id));
+    attachmentForm.set("entityId", String(createdId));
     attachmentForm.set(
       "file",
       new File(["measurement evidence"], "evidence.txt", {
@@ -2593,30 +2627,25 @@ INSERT INTO environmental_limits (
       method: "POST",
       body: attachmentForm,
     });
-    const attachmentBody = (await attachmentResponse.json()) as {
-      id: string;
-      entityType: string;
-      entityId: string;
-      localPath: string;
-      contentHash: string;
-      mimeType: string;
-      sizeBytes: number;
-      uploadStatus: string;
-      fileUrl: string;
-    };
+    const attachmentBody = recordFromUnknown(await attachmentResponse.json());
+    const attachmentId = stringFromRecord(attachmentBody, "id");
+    const attachmentFileUrl = stringFromRecord(attachmentBody, "fileUrl");
+    const attachmentLocalPath = stringFromRecord(attachmentBody, "localPath");
     expect(attachmentResponse.status, JSON.stringify(attachmentBody)).toBe(201);
     expect(attachmentBody).toMatchObject({
       entityType: "calibration_job",
-      entityId: String(created.id),
+      entityId: String(createdId),
       mimeType: "text/plain",
       sizeBytes: "measurement evidence".length,
       uploadStatus: "pending",
-      fileUrl: `/api/attachments/${encodeURIComponent(attachmentBody.id)}`,
+      fileUrl: `/api/attachments/${encodeURIComponent(attachmentId)}`,
     });
-    expect(attachmentBody.contentHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(stringFromRecord(attachmentBody, "contentHash")).toMatch(
+      /^[a-f0-9]{64}$/,
+    );
 
     const attachmentListResponse = await app.request(
-      `/api/attachments?entityType=calibration_job&entityId=${created.id}`,
+      `/api/attachments?entityType=calibration_job&entityId=${createdId}`,
     );
     expect(attachmentListResponse.status).toBe(200);
     await expect(attachmentListResponse.json()).resolves.toMatchObject({
@@ -2629,7 +2658,7 @@ INSERT INTO environmental_limits (
       ],
     });
 
-    const attachmentFileResponse = await app.request(attachmentBody.fileUrl);
+    const attachmentFileResponse = await app.request(attachmentFileUrl);
     expect(attachmentFileResponse.status).toBe(200);
     expect(attachmentFileResponse.headers.get("content-type")).toContain(
       "text/plain",
@@ -2642,14 +2671,12 @@ INSERT INTO environmental_limits (
       .prepare(
         "UPDATE attachments SET local_path = '../../outside.txt' WHERE id = @id",
       )
-      .run({ id: attachmentBody.id });
-    const unsafeAttachmentFileResponse = await app.request(
-      attachmentBody.fileUrl,
-    );
+      .run({ id: attachmentId });
+    const unsafeAttachmentFileResponse = await app.request(attachmentFileUrl);
     expect(unsafeAttachmentFileResponse.status).toBe(400);
     database
       .prepare("UPDATE attachments SET local_path = @path WHERE id = @id")
-      .run({ id: attachmentBody.id, path: attachmentBody.localPath });
+      .run({ id: attachmentId, path: attachmentLocalPath });
 
     database.close();
     database = openLocalDatabase({ filePath: dbPath });
@@ -2689,7 +2716,7 @@ INSERT INTO environmental_limits (
       syncState: "local",
     });
 
-    const reopenedDraftFileResponse = await app.request(draftBody.fileUrl);
+    const reopenedDraftFileResponse = await app.request(draftFileUrl);
     expect(reopenedDraftFileResponse.status).toBe(200);
     const reopenedDraftHtml = await reopenedDraftFileResponse.text();
     expect(reopenedDraftHtml).toContain("Rascunho local");
@@ -2697,53 +2724,54 @@ INSERT INTO environmental_limits (
     expect(reopenedDraftHtml).toContain("Não publicado");
 
     const reopenedAttachmentListResponse = await app.request(
-      `/api/attachments?entityType=calibration_job&entityId=${created.id}`,
+      `/api/attachments?entityType=calibration_job&entityId=${createdId}`,
     );
     expect(reopenedAttachmentListResponse.status).toBe(200);
     await expect(reopenedAttachmentListResponse.json()).resolves.toMatchObject({
       data: [
         {
-          id: attachmentBody.id,
+          id: attachmentId,
           uploadStatus: "pending",
         },
       ],
     });
 
-    const reopenedAttachmentFileResponse = await app.request(
-      attachmentBody.fileUrl,
-    );
+    const reopenedAttachmentFileResponse = await app.request(attachmentFileUrl);
     expect(reopenedAttachmentFileResponse.status).toBe(200);
     await expect(reopenedAttachmentFileResponse.text()).resolves.toBe(
       "measurement evidence",
     );
 
-    const audit = database
-      .prepare("SELECT COUNT(*) AS total FROM local_audit_log")
-      .get() as { total: number };
-    const outbox = database
-      .prepare("SELECT COUNT(*) AS total FROM outbox")
-      .get() as { total: number };
-    expect(audit.total).toBeGreaterThanOrEqual(3);
-    expect(outbox.total).toBeGreaterThanOrEqual(3);
+    const audit = recordFromUnknown(
+      database.prepare("SELECT COUNT(*) AS total FROM local_audit_log").get(),
+    );
+    const outbox = recordFromUnknown(
+      database.prepare("SELECT COUNT(*) AS total FROM outbox").get(),
+    );
+    expect(numberFromRecord(audit, "total")).toBeGreaterThanOrEqual(3);
+    expect(numberFromRecord(outbox, "total")).toBeGreaterThanOrEqual(3);
 
     const syncResponse = await app.request("/api/local/sync/start", {
       method: "POST",
     });
     const syncBody = await syncResponse.text();
     expect(syncResponse.status, syncBody).toBe(200);
-    const pendingOutbox = database
-      .prepare(
-        `
+    const pendingOutbox = recordFromUnknown(
+      database
+        .prepare(
+          `
 SELECT COUNT(*) AS total
 FROM outbox
 WHERE status != 'synced'
 `,
-      )
-      .get() as { total: number };
-    expect(pendingOutbox.total).toBe(0);
-    const syncedCertificate = database
-      .prepare(
-        `
+        )
+        .get(),
+    );
+    expect(numberFromRecord(pendingOutbox, "total")).toBe(0);
+    const syncedCertificate = recordFromUnknown(
+      database
+        .prepare(
+          `
 SELECT
   calibration_jobs.job_id,
   calibration_jobs.status,
@@ -2753,13 +2781,9 @@ FROM calibration_jobs
 INNER JOIN certificate_drafts ON certificate_drafts.job_id = calibration_jobs.id
 WHERE certificate_drafts.id = @draftId
 `,
-      )
-      .get({ draftId: draftBody.id }) as {
-      job_id: string;
-      status: string;
-      certificate_url: string | null;
-      draft_sync_state: string;
-    };
+        )
+        .get({ draftId }),
+    );
     expect(syncedCertificate).toEqual({
       job_id: "CAL-2026-0001",
       status: "APPROVED",

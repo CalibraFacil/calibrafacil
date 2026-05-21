@@ -178,6 +178,7 @@ export function FinanceReceiptsPage() {
                 value={paymentMethod}
                 onChange={(event) =>
                   setPaymentMethod(
+                    // oxlint-disable-next-line typescript/consistent-type-assertions -- NativeSelect options are generated from PAYMENT_METHODS.
                     event.target.value as (typeof PAYMENT_METHODS)[number],
                   )
                 }

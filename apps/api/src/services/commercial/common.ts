@@ -33,6 +33,14 @@ import type { CommercialOfferPreviewResult } from "./preview";
 
 export type DbTx = any;
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
 function sanitizeTaxId(value: string | null | undefined) {
   return value?.replace(/\D/g, "") ?? "";
 }
@@ -239,10 +247,7 @@ export async function ensureBillingCustomer(
           city: customerPayload.city,
           state: customerPayload.state,
         },
-        providerSnapshot: providerCustomer as unknown as Record<
-          string,
-          unknown
-        >,
+        providerSnapshot: toRecord(providerCustomer),
         updatedAt: new Date(),
       })
       .where(eq(billingCustomer.id, existing.id))
@@ -271,7 +276,7 @@ export async function ensureBillingCustomer(
         city: customerPayload.city,
         state: customerPayload.state,
       },
-      providerSnapshot: providerCustomer as unknown as Record<string, unknown>,
+      providerSnapshot: toRecord(providerCustomer),
       createdBy: actorUserId,
     })
     .returning();
@@ -366,7 +371,7 @@ export async function createProviderArtifact(params: {
         externalReference,
         description,
       },
-      providerResponseSnapshot: checkout as unknown as Record<string, unknown>,
+      providerResponseSnapshot: toRecord(checkout),
     };
   }
 
@@ -394,7 +399,7 @@ export async function createProviderArtifact(params: {
         externalReference,
         description,
       },
-      providerResponseSnapshot: payment as unknown as Record<string, unknown>,
+      providerResponseSnapshot: toRecord(payment),
       initialPayment: payment,
     };
   }
@@ -432,7 +437,7 @@ export async function createProviderArtifact(params: {
     providerResponseSnapshot: {
       subscription: subscriptionResult,
       firstPayment,
-    } as Record<string, unknown>,
+    },
     initialPayment: firstPayment,
   };
 }

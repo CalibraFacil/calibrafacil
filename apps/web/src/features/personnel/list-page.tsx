@@ -58,6 +58,22 @@ const STATUS_LABELS: Record<CompetenceStatus, string> = {
   CANCELLED: 'Cancelada',
 }
 
+function parseStatusFilter(value: string | null): StatusFilter {
+  switch (value) {
+    case 'REQUESTED':
+    case 'TRAINING_ASSIGNED':
+    case 'IN_TRAINING':
+    case 'PENDING_EVALUATION':
+    case 'ACTIVE':
+    case 'SUSPENDED':
+    case 'EXPIRED':
+    case 'CANCELLED':
+      return value
+    default:
+      return ''
+  }
+}
+
 export function PersonnelPage() {
   const { activeOrganizationId, isContextSwitching } =
     useDashboardContextState()
@@ -143,7 +159,7 @@ export function PersonnelPage() {
                 <Select
                   value={statusFilter}
                   onValueChange={(v) => {
-                    setStatusFilter(v as StatusFilter)
+                    setStatusFilter(parseStatusFilter(v))
                     setPage(1)
                   }}
                 >
@@ -156,13 +172,11 @@ export function PersonnelPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Todos os Status</SelectItem>
-                    {(Object.keys(STATUS_LABELS) as CompetenceStatus[]).map(
-                      (status) => (
+                    {COMPETENCE_STATUSES.map((status) => (
                         <SelectItem key={status} value={status}>
                           {STATUS_LABELS[status]}
                         </SelectItem>
-                      ),
-                    )}
+                      ))}
                   </SelectContent>
                 </Select>
                 {statusFilter && (

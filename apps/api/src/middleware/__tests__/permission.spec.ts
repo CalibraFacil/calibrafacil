@@ -22,6 +22,7 @@ function createMockContext(authSource?: "lab" | "portal") {
     store.set("authSource", authSource);
   }
 
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- Hono middleware tests only need this minimal Context surface.
   return {
     req: {
       raw: {

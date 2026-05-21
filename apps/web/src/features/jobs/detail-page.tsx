@@ -53,6 +53,7 @@ import { Field, FieldLabel } from '@/components/ui/field'
 import {
   formatCalibrationValue,
   getFinancialStatusLabel,
+  type FinancialStatus,
 } from '@calibra-facil/shared'
 import { ApprovedJobRecord } from '@/features/jobs/components/approved-job-record'
 import { apiRouteParam } from '@/lib/route-identifiers'
@@ -72,6 +73,7 @@ import {
   JOB_STATUS_VARIANTS,
   REVIEW_ACTION_BUTTON_CLASS,
   REVIEW_SURFACE_CLASS,
+  type ApprovedJobRecordData,
   type JobStatus,
   type ReviewFormula,
   type ReviewMethodField,
@@ -85,6 +87,86 @@ type JobDetailPageProps = {
   id: string
   runtime: {
     isDesktop: boolean
+  }
+}
+
+function toRecordArray(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return []
+    }
+
+    return [Object.fromEntries(Object.entries(item))]
+  })
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+
+  return Object.fromEntries(Object.entries(value))
+}
+
+function isNullableRecord(value: unknown) {
+  return (
+    value === null ||
+    value === undefined ||
+    (typeof value === 'object' && !Array.isArray(value))
+  )
+}
+
+function isApprovedJobRecordData(value: unknown): value is ApprovedJobRecordData {
+  const job = toRecord(value)
+  const methodSnapshot = toRecord(job.methodSnapshot)
+
+  return (
+    typeof job.id === 'number' &&
+    typeof job.jobId === 'string' &&
+    typeof job.status === 'string' &&
+    isNullableRecord(job.data) &&
+    isNullableRecord(job.results) &&
+    typeof methodSnapshot.methodId === 'number' &&
+    typeof methodSnapshot.methodName === 'string' &&
+    typeof methodSnapshot.methodVersion === 'number' &&
+    Array.isArray(methodSnapshot.dataFields) &&
+    Array.isArray(methodSnapshot.formulas) &&
+    Array.isArray(methodSnapshot.validations) &&
+    typeof job.createdAt === 'string'
+  )
+}
+
+function toJobStatus(value: unknown): JobStatus {
+  switch (value) {
+    case 'DRAFT':
+    case 'IN_PROGRESS':
+    case 'REVIEW':
+    case 'APPROVED':
+    case 'REJECTED':
+    case 'CANCELED':
+    case 'GENERATING_PDF':
+    case 'SUPERSEDED':
+      return value
+    default:
+      return 'DRAFT'
+  }
+}
+
+function toFinancialStatus(value: unknown): FinancialStatus {
+  switch (value) {
+    case 'DRAFT':
+    case 'ISSUED':
+    case 'PAID':
+    case 'OVERDUE':
+    case 'VOID':
+    case 'UNBILLED':
+      return value
+    default:
+      return 'UNBILLED'
   }
 }
 
@@ -279,10 +361,13 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
     !runtime.isDesktop
   const financialStatus =
     typeof job.financialStatus === 'string' ? job.financialStatus : 'UNBILLED'
+  const normalizedFinancialStatus = toFinancialStatus(financialStatus)
+  const normalizedJobStatus = toJobStatus(job.status)
   const renderReviewFieldValue = (field: ReviewMethodField) => {
     const value = displayReviewData?.[field.key]
 
     if (field.type === 'table' && field.columns && Array.isArray(value)) {
+      const columns = field.columns
       return (
         <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)]">
           <Table className="min-w-max text-[13px]">
@@ -304,9 +389,9 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(value as Record<string, unknown>[]).map((row, index) => (
+              {toRecordArray(value).map((row, index) => (
                 <TableRow key={index} className="hover:bg-muted/30">
-                  {field.columns!.map((column) => {
+                  {columns.map((column) => {
                     const cellValue = row[column.key]
                     const isComposition = isMassCompositionValue(cellValue)
                     return (
@@ -435,10 +520,13 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
   }
 
   // APPROVED or SUPERSEDED status: Show immutable Quality Record view
-  if (job.status === 'APPROVED' || job.status === 'SUPERSEDED') {
+  if (
+    (job.status === 'APPROVED' || job.status === 'SUPERSEDED') &&
+    isApprovedJobRecordData(job)
+  ) {
     return (
       <ApprovedJobRecord
-        job={job as Parameters<typeof ApprovedJobRecord>[0]['job']}
+        job={job}
         onBack={() => navigate({ to: '/dashboard/jobs' })}
         onRefresh={refreshJob}
       />
@@ -505,7 +593,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
         </div>
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <Badge
-            variant={JOB_STATUS_VARIANTS[job.status as JobStatus]}
+            variant={JOB_STATUS_VARIANTS[normalizedJobStatus]}
             className={
               job.status === 'GENERATING_PDF'
                 ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
@@ -518,19 +606,12 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                 Gerando PDF...
               </span>
             ) : (
-              JOB_STATUS_LABELS[job.status as JobStatus]
+              JOB_STATUS_LABELS[normalizedJobStatus]
             )}
           </Badge>
           {job.isOverdue && <Badge variant="destructive">Atrasado</Badge>}
-          <Badge variant={getFinancialVariant(financialStatus)}>
-            {getFinancialStatusLabel(
-              financialStatus as
-                | 'UNBILLED'
-                | 'DRAFT'
-                | 'ISSUED'
-                | 'PAID'
-                | 'OVERDUE',
-            )}
+          <Badge variant={getFinancialVariant(normalizedFinancialStatus)}>
+            {getFinancialStatusLabel(normalizedFinancialStatus)}
           </Badge>
         </div>
       </section>
@@ -1001,14 +1082,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground">Financeiro</span>
                     <Badge variant={getFinancialVariant(financialStatus)}>
-                      {getFinancialStatusLabel(
-                        financialStatus as
-                          | 'UNBILLED'
-                          | 'DRAFT'
-                          | 'ISSUED'
-                          | 'PAID'
-                          | 'OVERDUE',
-                      )}
+                      {getFinancialStatusLabel(normalizedFinancialStatus)}
                     </Badge>
                   </div>
                 </div>

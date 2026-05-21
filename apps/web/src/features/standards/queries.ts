@@ -6,6 +6,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
+import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   STANDARD_STATUSES,
   type StandardAuditLogData,
@@ -18,17 +19,8 @@ import {
 
 export const STANDARDS_LIST_LIMIT = 20
 
-function pageFromUrl(url?: URL) {
-  const page = Number(url?.searchParams.get('page') ?? 1)
-  return Number.isFinite(page) && page > 0 ? page : 1
-}
-
 function statusFromUrl(url?: URL): StandardStatus | '' {
-  const status = url?.searchParams.get('status') ?? ''
-
-  return STANDARD_STATUSES.includes(status as StandardStatus)
-    ? (status as StandardStatus)
-    : ''
+  return optionFromUrl(STANDARD_STATUSES, url?.searchParams.get('status'))
 }
 
 export function standardsListQueryInputFromUrl(
@@ -53,30 +45,28 @@ export function standardsListQueryOptions(input: StandardsListQueryInput) {
       input.search,
       input.statusFilter,
     ],
-    queryFn: () =>
+    queryFn: (): Promise<StandardsListData> =>
       calibraApi.standards.list({
         page: input.page,
         limit: input.limit,
         query: input.search || undefined,
         status: input.statusFilter || undefined,
-      }) as Promise<StandardsListData>,
+      }),
   })
 }
 
 export function standardDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['standards', id],
-    queryFn: () => calibraApi.standards.get(id) as Promise<StandardDetail>,
+    queryFn: (): Promise<StandardDetail> => calibraApi.standards.get(id),
   })
 }
 
 export function standardAuditLogQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['standards', id, 'audit-log'],
-    queryFn: () =>
-      calibraApi.standards.auditLog<StandardAuditLogRecord>(
-        id,
-      ) as Promise<StandardAuditLogData>,
+    queryFn: (): Promise<StandardAuditLogData> =>
+      calibraApi.standards.auditLog<StandardAuditLogRecord>(id),
   })
 }
 

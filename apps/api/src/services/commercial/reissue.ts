@@ -1,4 +1,8 @@
-import type { ReissueCommercialOfferInput } from "@calibra-facil/schemas";
+import {
+  CommercialOfferItemSchema,
+  CommercialPaymentMethodSchema,
+  type ReissueCommercialOfferInput,
+} from "@calibra-facil/schemas";
 import { db } from "@calibra-facil/db";
 import { commercialOffer } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
@@ -10,12 +14,55 @@ export function resolveReissueItems(
   termsSnapshot: Record<string, unknown>,
 ) {
   const originalItems = Array.isArray(termsSnapshot.items)
-    ? (termsSnapshot.items as NonNullable<
-        ReissueCommercialOfferInput["overrides"]["items"]
-      >)
+    ? termsSnapshot.items.flatMap((item) => {
+        const parsed = CommercialOfferItemSchema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      })
     : [];
 
   return overrides.items ?? originalItems;
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function toBasePlanId(value: unknown) {
+  switch (value) {
+    case "STANDARD":
+    case "PROFESSIONAL":
+    case "ENTERPRISE":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function toBillingCycle(value: unknown) {
+  switch (value) {
+    case "MONTHLY":
+    case "YEARLY":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function toPaymentMethods(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const methods = value.flatMap((item) => {
+    const parsed = CommercialPaymentMethodSchema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+
+  return methods.length > 0 ? methods : undefined;
 }
 
 export async function reissueCommercialOffer(
@@ -28,7 +75,12 @@ export async function reissueCommercialOffer(
     throw new Error("Oferta original não encontrada");
   }
 
-  const terms = (current.termsSnapshot ?? {}) as Record<string, unknown>;
+  const terms = toRecord(current.termsSnapshot);
+  const paymentMethods =
+    input.overrides.paymentMethods ?? toPaymentMethods(current.paymentMethods);
+  if (!paymentMethods) {
+    throw new Error("Oferta original sem meio de pagamento valido");
+  }
   const merged = {
     organizationId: current.organizationId,
     dealId: current.dealId,
@@ -37,12 +89,10 @@ export async function reissueCommercialOffer(
         ? terms.billingContactId
         : undefined,
     kind: current.kind,
-    basePlanId: (input.overrides.basePlanId ??
-      current.basePlanId ??
-      undefined) as "STANDARD" | "PROFESSIONAL" | "ENTERPRISE" | undefined,
-    billingCycle: (input.overrides.billingCycle ??
-      current.billingCycle ??
-      undefined) as "MONTHLY" | "YEARLY" | undefined,
+    basePlanId:
+      input.overrides.basePlanId ?? toBasePlanId(current.basePlanId),
+    billingCycle:
+      input.overrides.billingCycle ?? toBillingCycle(current.billingCycle),
     contractTermMonths:
       input.overrides.contractTermMonths ??
       current.contractTermMonths ??
@@ -60,8 +110,7 @@ export async function reissueCommercialOffer(
       (current.offerExpiresAt
         ? current.offerExpiresAt.toISOString()
         : undefined),
-    paymentMethods:
-      input.overrides.paymentMethods ?? (current.paymentMethods as any[]),
+    paymentMethods,
     customerVisibleDescription:
       input.overrides.customerVisibleDescription ??
       current.customerVisibleDescription ??

@@ -6,6 +6,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
+import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   type NewServiceOrderAssetsData,
   type NewServiceOrderCustomersData,
@@ -18,17 +19,8 @@ import {
 
 export const SERVICE_ORDERS_LIST_LIMIT = 20
 
-function pageFromUrl(url?: URL) {
-  const page = Number(url?.searchParams.get('page') ?? 1)
-  return Number.isFinite(page) && page > 0 ? page : 1
-}
-
 function statusFromUrl(url?: URL): ServiceOrderStatus | '' {
-  const status = url?.searchParams.get('status') ?? ''
-
-  return SERVICE_ORDER_STATUSES.includes(status as ServiceOrderStatus)
-    ? (status as ServiceOrderStatus)
-    : ''
+  return optionFromUrl(SERVICE_ORDER_STATUSES, url?.searchParams.get('status'))
 }
 
 export function serviceOrdersListQueryInputFromUrl(
@@ -56,6 +48,7 @@ export function serviceOrdersListQueryOptions(
       input.statusFilter,
     ],
     queryFn: () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- legacy service-order list DTOs need a runtime normalizer before this view-model cast can be removed.
       calibraApi.serviceOrders.list({
         page: input.page,
         limit: input.limit,
@@ -69,6 +62,7 @@ export function serviceOrderDetailQueryOptions(id: string) {
   return queryOptions({
     queryKey: ['service-order', id],
     queryFn: () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- legacy service-order detail DTOs need a runtime normalizer before this view-model cast can be removed.
       calibraApi.serviceOrders.get(id) as Promise<ServiceOrderDetail>,
   })
 }
@@ -76,12 +70,23 @@ export function serviceOrderDetailQueryOptions(id: string) {
 export function newServiceOrderCustomersQueryOptions(search = '') {
   return queryOptions({
     queryKey: ['customers', 'service-order-open', search],
-    queryFn: () =>
-      calibraApi.customers.list({
+    queryFn: async (): Promise<NewServiceOrderCustomersData> => {
+      const result = await calibraApi.customers.list({
         page: 1,
         limit: 100,
         query: search.trim() || undefined,
-      }) as Promise<NewServiceOrderCustomersData>,
+      })
+      return {
+        data: result.data.map((customer) => ({
+          id: customer.id,
+          name: customer.name,
+          taxId: customer.taxId,
+          email: customer.email,
+          phone: customer.phone ?? null,
+          compliance: customer.compliance,
+        })),
+      }
+    },
   })
 }
 
@@ -104,7 +109,7 @@ export function newServiceOrderAssetsQueryOptions({
         limit: 100,
         customerId,
         query: search.trim() || undefined,
-      }) as Promise<NewServiceOrderAssetsData>
+      })
     },
   })
 }

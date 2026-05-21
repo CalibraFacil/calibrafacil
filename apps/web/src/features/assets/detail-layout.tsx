@@ -26,6 +26,17 @@ const statusVariants: Record<
   SCRAPPED: 'destructive',
 }
 
+function parseAssetStatus(status: string): AssetStatus {
+  switch (status) {
+    case 'INACTIVE':
+    case 'MAINTENANCE':
+    case 'SCRAPPED':
+      return status
+    default:
+      return 'ACTIVE'
+  }
+}
+
 type AssetDetailLayoutProps = {
   id: string
 }
@@ -64,8 +75,8 @@ export function AssetDetailLayout({ id }: AssetDetailLayoutProps) {
                   <h1 className="text-balance text-2xl font-semibold tracking-tight">
                     {asset.name}
                   </h1>
-                  <Badge variant={statusVariants[asset.status as AssetStatus]}>
-                    {statusLabels[asset.status as AssetStatus]}
+                  <Badge variant={statusVariants[parseAssetStatus(asset.status)]}>
+                    {statusLabels[parseAssetStatus(asset.status)]}
                   </Badge>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">

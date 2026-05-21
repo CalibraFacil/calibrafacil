@@ -112,8 +112,8 @@ const DEFAULT_SYNC_PULL_LIMIT = 100;
 const MAX_SYNC_PULL_LIMIT = 500;
 const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;
 
-function getMemberData(c: { get: (key: string) => unknown }) {
-  return c.get("member") as MemberData;
+function getMemberData(c: { get: (key: "member") => MemberData }) {
+  return c.get("member");
 }
 
 export const syncRouter = new Hono<{
@@ -385,7 +385,7 @@ export const syncRouter = new Hono<{
         formData,
         memberData,
         sessionUserId: session.user.id,
-        env: c.env as R2Env,
+        env: c.env,
       });
 
       return c.json(syncPushResponseSchema.parse(result));
@@ -591,8 +591,8 @@ export const syncRouter = new Hono<{
       );
       const objectKey = buildSyncAttachmentObjectKey(memberData, body);
       const uploadUrl = await generatePresignedUploadUrl(
-        createR2Client(c.env as R2Env),
-        (c.env as R2Env).R2_BUCKET_NAME,
+        createR2Client(c.env),
+        c.env.R2_BUCKET_NAME,
         objectKey,
         body.mimeType,
         SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS,
@@ -651,8 +651,8 @@ export const syncRouter = new Hono<{
       }
 
       const downloadUrl = await generatePresignedUrl(
-        createR2Client(c.env as R2Env),
-        (c.env as R2Env).R2_BUCKET_NAME,
+        createR2Client(c.env),
+        c.env.R2_BUCKET_NAME,
         objectKey,
         SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS,
       );
@@ -1210,16 +1210,15 @@ async function applyDesktopCertificatePdfUpload(
       input.sessionUserId,
     );
     const approvedAt = job.approvedAt ?? new Date();
+    const storedTemplateSnapshot = asRecord(job.certificateTemplateSnapshot);
     const effectiveTemplateSnapshot =
-      (job.certificateTemplateSnapshot as
-        | ReturnType<typeof serializeCertificateTemplateSnapshot>
-        | null
-        | undefined) ??
-      serializeCertificateTemplateSnapshot(
-        await getEffectiveCertificateTemplateSnapshot(
-          input.memberData.organizationId,
-        ),
-      );
+      Object.keys(storedTemplateSnapshot).length > 0
+        ? storedTemplateSnapshot
+        : serializeCertificateTemplateSnapshot(
+            await getEffectiveCertificateTemplateSnapshot(
+              input.memberData.organizationId,
+            ),
+          );
 
     await uploadToR2(
       r2Client,
@@ -1785,7 +1784,7 @@ async function applyUpdateLocalAsset(
 
   for (const [key, value] of Object.entries(updateData)) {
     if (key === "updatedAt") continue;
-    const oldValue = existingAsset[key as keyof typeof existingAsset];
+    const oldValue = Reflect.get(existingAsset, key);
     if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
       changes[key] = { old: oldValue, new: value };
     }
@@ -1966,7 +1965,7 @@ async function applyUpdateLocalCustomer(
 
   const changes: Record<string, { old: unknown; new: unknown }> = {};
   for (const [key, value] of Object.entries(values)) {
-    const oldValue = existing[key as keyof typeof existing];
+    const oldValue = Reflect.get(existing, key);
     if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
       changes[key] = { old: oldValue, new: value };
     }
@@ -2214,25 +2213,28 @@ async function applyLocalJobExecution(
       : (getJobStatus(payload, "status") ?? "IN_PROGRESS");
   const nextData = getRecordOrNull(payload, "data") ?? {};
   const nextStandardsSnapshot = hasOwn(payload, "standardsSnapshot")
-    ? getArrayOrNull(payload, "standardsSnapshot")
+    ? getStandardSnapshotsOrNull(payload, "standardsSnapshot")
     : existing.standardsSnapshot;
   const nextEnvironmentalSnapshot = hasOwn(payload, "environmentalSnapshot")
-    ? getRecordOrNull(payload, "environmentalSnapshot")
+    ? getEnvironmentalSnapshotOrNull(payload, "environmentalSnapshot")
     : existing.environmentalSnapshot;
   const nextCalibrationLocationSnapshot = hasOwn(
     payload,
     "calibrationLocationSnapshot",
   )
-    ? getRecordOrNull(payload, "calibrationLocationSnapshot")
+    ? getCalibrationLocationSnapshotOrNull(
+        payload,
+        "calibrationLocationSnapshot",
+      )
     : existing.calibrationLocationSnapshot;
   const nextCalibrationPhaseSnapshot = hasOwn(
     payload,
     "calibrationPhaseSnapshot",
   )
-    ? getRecordOrNull(payload, "calibrationPhaseSnapshot")
+    ? getCalibrationPhaseSnapshotOrNull(payload, "calibrationPhaseSnapshot")
     : existing.calibrationPhaseSnapshot;
   const standardsValidation = await validateDesktopExecutionStandardsSnapshot(
-    nextStandardsSnapshot as StandardSnapshot[] | null,
+    nextStandardsSnapshot,
     input.memberData,
   );
 
@@ -2248,11 +2250,9 @@ async function applyLocalJobExecution(
     methodSnapshot: existing.methodSnapshot,
     data: nextData,
     assetSnapshot: existing.assetSnapshot,
-    standardsSnapshot: nextStandardsSnapshot as StandardSnapshot[] | null,
-    environmentalSnapshot:
-      nextEnvironmentalSnapshot as EnvironmentalSnapshot | null,
-    calibrationPhaseSnapshot:
-      nextCalibrationPhaseSnapshot as CalibrationPhaseSnapshot | null,
+    standardsSnapshot: nextStandardsSnapshot,
+    environmentalSnapshot: nextEnvironmentalSnapshot,
+    calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
   });
 
   if (!officialExecution.ok) {
@@ -2265,19 +2265,17 @@ async function applyLocalJobExecution(
 
   const submittedResults = getRecordOrNull(payload, "results");
   const nextResults = officialExecution.results;
+  const compiledExecution = asRecord(nextResults.__compiledExecution);
 
   const [updated] = await db
     .update(calibrationJob)
     .set({
       data: nextData,
       results: nextResults,
-      standardsSnapshot: nextStandardsSnapshot as StandardSnapshot[] | null,
-      environmentalSnapshot:
-        nextEnvironmentalSnapshot as EnvironmentalSnapshot | null,
-      calibrationLocationSnapshot:
-        nextCalibrationLocationSnapshot as CalibrationLocationSnapshot | null,
-      calibrationPhaseSnapshot:
-        nextCalibrationPhaseSnapshot as CalibrationPhaseSnapshot | null,
+      standardsSnapshot: nextStandardsSnapshot,
+      environmentalSnapshot: nextEnvironmentalSnapshot,
+      calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
+      calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
       status: nextStatus,
       performedAt: nextStatus === "REVIEW" ? new Date() : existing.performedAt,
       updatedAt: new Date(),
@@ -2296,18 +2294,8 @@ async function applyLocalJobExecution(
       results: { old: existing.results, new: nextResults },
       desktopSubmittedResults: submittedResults,
       officialExecution: {
-        methodFingerprint:
-          nextResults.__compiledExecution &&
-          typeof nextResults.__compiledExecution === "object"
-            ? (nextResults.__compiledExecution as Record<string, unknown>)
-                .methodFingerprint
-            : null,
-        resultFingerprint:
-          nextResults.__compiledExecution &&
-          typeof nextResults.__compiledExecution === "object"
-            ? (nextResults.__compiledExecution as Record<string, unknown>)
-                .resultFingerprint
-            : null,
+        methodFingerprint: compiledExecution.methodFingerprint ?? null,
+        resultFingerprint: compiledExecution.resultFingerprint ?? null,
       },
       standardsSnapshot: {
         old: existing.standardsSnapshot,
@@ -2365,9 +2353,7 @@ async function validateDesktopExecutionStandardsSnapshot(
   }
 
   const selectedStandardIds = standardsSnapshot.map((standard) => standard.id);
-  const invalidIds = selectedStandardIds.filter(
-    (id): id is Exclude<typeof id, number> => !Number.isInteger(id),
-  );
+  const invalidIds = selectedStandardIds.filter((id) => !isIntegerNumber(id));
 
   if (invalidIds.length > 0) {
     return {
@@ -2377,7 +2363,7 @@ async function validateDesktopExecutionStandardsSnapshot(
     };
   }
 
-  const uniqueIds = [...new Set(selectedStandardIds as number[])];
+  const uniqueIds = [...new Set(selectedStandardIds.filter(isIntegerNumber))];
   const standards = await db
     .select({
       id: referenceStandard.id,
@@ -3058,16 +3044,7 @@ function getCompiledMethodSnapshot(
     };
   }
 
-  const candidate = compiledMethod as Partial<CompiledMethod>;
-  if (
-    candidate.status !== "compiled" ||
-    typeof candidate.methodFingerprint !== "string" ||
-    !candidate.engine ||
-    !Array.isArray(candidate.inputs) ||
-    !Array.isArray(candidate.formulas) ||
-    !Array.isArray(candidate.measurementModels) ||
-    !Array.isArray(candidate.acceptanceCriteria)
-  ) {
+  if (!isCompiledMethodCandidate(compiledMethod)) {
     const reason = "Compiled method snapshot has an invalid shape.";
     return {
       ok: false,
@@ -3081,6 +3058,7 @@ function getCompiledMethodSnapshot(
       ],
     };
   }
+  const candidate = compiledMethod;
 
   const mismatches: MethodDiagnostic[] = [];
   if (candidate.methodFingerprint !== methodSnapshot.methodFingerprint) {
@@ -3134,7 +3112,7 @@ function getCompiledMethodSnapshot(
     };
   }
 
-  return { ok: true, compiledMethod: compiledMethod as CompiledMethod };
+  return { ok: true, compiledMethod: candidate };
 }
 
 function buildOfficialExecutionInputs(params: {
@@ -3171,6 +3149,7 @@ function buildOfficialExecutionInputs(params: {
 }
 
 async function createMethodExecutionEngine(): Promise<CalculationEngineLike> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine v0.2.4 has narrower input parameter types than method-definition's adapter interface, but the runtime method surface is compatible.
   return createCalculationEngine(
     METHOD_ENGINE_OPTIONS,
   ) as unknown as CalculationEngineLike;
@@ -3609,8 +3588,28 @@ function getSyncActorUserId(event: SyncEvent, fallbackUserId: string) {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+    ? Object.fromEntries(Object.entries(value))
     : {};
+}
+
+function isIntegerNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value);
+}
+
+function isCompiledMethodCandidate(value: unknown): value is CompiledMethod {
+  const candidate = asRecord(value);
+  const engine = asRecord(candidate.engine);
+
+  return (
+    candidate.status === "compiled" &&
+    typeof candidate.methodFingerprint === "string" &&
+    typeof engine.version === "string" &&
+    typeof engine.optionsFingerprint === "string" &&
+    Array.isArray(candidate.inputs) &&
+    Array.isArray(candidate.formulas) &&
+    Array.isArray(candidate.measurementModels) &&
+    Array.isArray(candidate.acceptanceCriteria)
+  );
 }
 
 function getNumber(row: Record<string, unknown>, key: string) {
@@ -3626,13 +3625,88 @@ function getNullableString(row: Record<string, unknown>, key: string) {
 function getRecordOrNull(row: Record<string, unknown>, key: string) {
   const value = row[key];
   return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+    ? Object.fromEntries(Object.entries(value))
     : null;
 }
 
-function getArrayOrNull(row: Record<string, unknown>, key: string) {
+function getStandardSnapshotsOrNull(
+  row: Record<string, unknown>,
+  key: string,
+): StandardSnapshot[] | null {
   const value = row[key];
-  return Array.isArray(value) ? value : null;
+  return isStandardSnapshotArray(value) ? value : null;
+}
+
+function getEnvironmentalSnapshotOrNull(
+  row: Record<string, unknown>,
+  key: string,
+): EnvironmentalSnapshot | null {
+  const value = row[key];
+  return isEnvironmentalSnapshot(value) ? value : null;
+}
+
+function getCalibrationLocationSnapshotOrNull(
+  row: Record<string, unknown>,
+  key: string,
+): CalibrationLocationSnapshot | null {
+  const value = row[key];
+  return isCalibrationLocationSnapshot(value) ? value : null;
+}
+
+function getCalibrationPhaseSnapshotOrNull(
+  row: Record<string, unknown>,
+  key: string,
+): CalibrationPhaseSnapshot | null {
+  const value = row[key];
+  return isCalibrationPhaseSnapshot(value) ? value : null;
+}
+
+function isStandardSnapshotArray(value: unknown): value is StandardSnapshot[] {
+  return Array.isArray(value) && value.every(isStandardSnapshot);
+}
+
+function isStandardSnapshot(value: unknown): value is StandardSnapshot {
+  const row = asRecord(value);
+  return (
+    typeof row.id === "number" &&
+    typeof row.name === "string" &&
+    typeof row.certificateNumber === "string"
+  );
+}
+
+function isEnvironmentalSnapshot(
+  value: unknown,
+): value is EnvironmentalSnapshot {
+  const row = asRecord(value);
+  return (
+    ("temperature" in row || "humidity" in row || "pressure" in row) &&
+    typeof row.recordedAt === "string" &&
+    typeof row.recordedBy === "string"
+  );
+}
+
+function isCalibrationLocationSnapshot(
+  value: unknown,
+): value is CalibrationLocationSnapshot {
+  const row = asRecord(value);
+  return (
+    typeof row.type === "string" &&
+    typeof row.addressText === "string" &&
+    typeof row.recordedAt === "string" &&
+    typeof row.recordedBy === "string"
+  );
+}
+
+function isCalibrationPhaseSnapshot(
+  value: unknown,
+): value is CalibrationPhaseSnapshot {
+  const row = asRecord(value);
+  return (
+    typeof row.blocks === "object" &&
+    row.blocks !== null &&
+    typeof row.recordedAt === "string" &&
+    typeof row.recordedBy === "string"
+  );
 }
 
 function hasOwn(row: Record<string, unknown>, key: string) {

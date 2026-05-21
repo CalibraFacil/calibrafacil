@@ -41,12 +41,20 @@ async function fetchTxtAnswers(hostname: string): Promise<string[]> {
 
   if (!response.ok) return [];
 
-  const payload = (await response.json()) as {
-    Answer?: Array<{ data?: string }>;
-  };
+  const payload: unknown = await response.json();
+  const answerValue =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? Object.fromEntries(Object.entries(payload)).Answer
+      : null;
+  const answers = Array.isArray(answerValue) ? answerValue : [];
 
-  return (payload.Answer ?? [])
-    .map((answer) => answer.data?.trim())
+  return answers
+    .map((answer) =>
+      answer && typeof answer === "object" && !Array.isArray(answer)
+        ? Object.fromEntries(Object.entries(answer)).data
+        : null,
+    )
+    .map((data) => (typeof data === "string" ? data.trim() : null))
     .filter((value): value is string => Boolean(value))
     .map(stripTxtQuotes);
 }

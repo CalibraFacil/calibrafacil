@@ -105,23 +105,23 @@ export function financeEligibleJobsQueryOptions({
 export function financeContractCustomerOptionsQueryOptions() {
   return queryOptions({
     queryKey: ['finance', 'contract-form', 'customers'],
-    queryFn: () =>
+    queryFn: async (): Promise<FinanceContractCustomerOptionsData> =>
       calibraApi.customers.list({
         page: 1,
         limit: 100,
-      }) as Promise<FinanceContractCustomerOptionsData>,
+      }),
   })
 }
 
 export function financeContractServiceOptionsQueryOptions() {
   return queryOptions({
     queryKey: ['finance', 'contract-form', 'services'],
-    queryFn: () =>
+    queryFn: async (): Promise<FinanceContractServiceOptionsData> =>
       calibraApi.services.list({
         page: 1,
         limit: 100,
         isActive: true,
-      }) as Promise<FinanceContractServiceOptionsData>,
+      }),
   })
 }
 

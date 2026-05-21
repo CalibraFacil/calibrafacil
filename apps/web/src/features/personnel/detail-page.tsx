@@ -702,6 +702,7 @@ function AssignTrainingDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {(
+                    // oxlint-disable-next-line typescript/consistent-type-assertions -- Entries are generated from the typed TRAINING_TYPE_LABELS map.
                     Object.entries(TRAINING_TYPE_LABELS) as Array<
                       [TrainingType, string]
                     >

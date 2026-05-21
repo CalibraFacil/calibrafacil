@@ -105,7 +105,10 @@ export function CertificateTemplatesPage() {
     enabled: !cloudOnlyUnavailable,
   })
 
-  const templates = templatesQuery.data?.items ?? []
+  const templates = useMemo(
+    () => templatesQuery.data?.items ?? [],
+    [templatesQuery.data?.items],
+  )
   const defaultTemplateKey = useMemo(
     () => getDefaultCertificateTemplateKey(templates),
     [templates],

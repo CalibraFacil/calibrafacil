@@ -202,6 +202,21 @@ export const ENTITLEMENT_METADATA: Record<FeatureFlag, EntitlementMetadata> = {
   },
 } as const;
 
+const FEATURE_FLAGS = [
+  "math_engine",
+  "portal",
+  "financial",
+  "api",
+  "custom_domain",
+  "sso",
+  "approval_workflow",
+  "advanced_audit_trail",
+  "custom_templates",
+  "priority_support",
+  "multi_unit",
+  "custom_integrations",
+] as const satisfies readonly FeatureFlag[];
+
 const legacyFeatureMap: Record<FeatureFlag, FeatureFlag[]> = {
   math_engine: ["math_engine"],
   portal: ["portal"],
@@ -359,13 +374,14 @@ export function hasEntitlement(
   if (!plan?.entitlements) {
     return false;
   }
+  const entitlementGroups: Array<Partial<Record<FeatureFlag, boolean>>> = [
+    plan.entitlements.capabilities,
+    plan.entitlements.operations,
+    plan.entitlements.scale,
+  ];
 
   return legacyFeatureMap[feature].some((mappedFeature) =>
-    [
-      plan.entitlements.capabilities,
-      plan.entitlements.operations,
-      plan.entitlements.scale,
-    ].some((group) => group[mappedFeature as keyof typeof group] === true),
+    entitlementGroups.some((group) => group[mappedFeature] === true),
   );
 }
 
@@ -435,9 +451,7 @@ export function getPaidPlans(): PlanConfig[] {
  * List enabled feature flags for a plan.
  */
 export function getEnabledEntitlements(planId: PlanId): FeatureFlag[] {
-  return (Object.keys(ENTITLEMENT_METADATA) as FeatureFlag[]).filter(
-    (feature) => hasEntitlement(planId, feature),
-  );
+  return FEATURE_FLAGS.filter((feature) => hasEntitlement(planId, feature));
 }
 
 /**

@@ -9,6 +9,7 @@ import type {
   ScalarCellBinding,
   TableBinding,
 } from "../src/index.js";
+import { certificateXlsxBindingManifestSchema } from "../src/index.js";
 
 export const packageRoot = resolve(import.meta.dirname, "..");
 export const fixtureRoot = resolve(packageRoot, "fixtures", "exemplo");
@@ -38,16 +39,18 @@ export async function writeBytes(path: string, bytes: Uint8Array) {
 }
 
 export async function readSampleData(): Promise<Record<string, unknown>> {
-  return JSON.parse(await readFile(sampleDataPath, "utf8")) as Record<
-    string,
-    unknown
-  >;
+  const parsed: unknown = JSON.parse(await readFile(sampleDataPath, "utf8"));
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Sample data must be a JSON object");
+  }
+
+  return Object.fromEntries(Object.entries(parsed));
 }
 
 export async function readManifest(): Promise<CertificateXlsxBindingManifest> {
-  return JSON.parse(
-    await readFile(manifestPath, "utf8"),
-  ) as CertificateXlsxBindingManifest;
+  return certificateXlsxBindingManifestSchema.parse(
+    JSON.parse(await readFile(manifestPath, "utf8")),
+  );
 }
 
 export function scalarBindings(): ScalarCellBinding[] {

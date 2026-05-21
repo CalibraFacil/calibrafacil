@@ -188,6 +188,19 @@ type AssetSpecDefinition = {
   unit?: string
 }
 
+function parseAssetSpecDefinitionType(
+  type: string,
+): AssetSpecDefinition['type'] {
+  switch (type) {
+    case 'number':
+    case 'select':
+    case 'weighing_ranges':
+      return type
+    default:
+      return 'text'
+  }
+}
+
 export const REVIEW_ACTION_BUTTON_CLASS =
   'min-h-10 active:scale-[0.96] transition-[background-color,color,box-shadow,border-color,transform]'
 
@@ -265,7 +278,7 @@ export function buildReviewAssetSpecDefinitions(
       .map((field) => ({
         key: field.assetSpecKey!,
         label: field.label,
-        type: field.type as 'text' | 'number' | 'select' | 'weighing_ranges',
+        type: parseAssetSpecDefinitionType(field.type),
         unit: field.unit ?? undefined,
       })),
     ...dataFields
@@ -649,7 +662,11 @@ export function buildJobReviewModel(
     ...supportingReviewFormulas,
   ]
   const indicationRows = Array.isArray(displayReviewData?.pontos_indicacao)
-    ? (displayReviewData.pontos_indicacao as Record<string, unknown>[])
+    ? displayReviewData.pontos_indicacao.flatMap((row) =>
+        row && typeof row === 'object' && !Array.isArray(row)
+          ? [Object.fromEntries(Object.entries(row))]
+          : [],
+      )
     : []
   const adjustmentSummaryRows = buildAdjustmentSummaryRows({
     indicationRows,

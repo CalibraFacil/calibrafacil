@@ -164,7 +164,7 @@ export function normalizeMethodValidation(
     return validationFallback('')
   }
 
-  const value = validation as Record<string, unknown>
+  const value = Object.fromEntries(Object.entries(validation))
   if (
     typeof value.leftExpression === 'string' &&
     typeof value.operator === 'string' &&
@@ -357,7 +357,7 @@ function tableColumnNumbers(
   return rows
     .map((row) =>
       row && typeof row === 'object'
-        ? toFiniteNumber((row as Record<string, unknown>)[columnKey])
+        ? toFiniteNumber(Object.fromEntries(Object.entries(row))[columnKey])
         : null,
     )
     .filter((value): value is number => value !== null)
@@ -649,12 +649,30 @@ function normalizeMethodValidationExpression(
 ): MethodValidation {
   const match = expression.match(/^\s*(.+?)\s*(<=|>=|==|!=|<|>)\s*(.+?)\s*$/)
 
+  const operator = parseValidationOperator(match?.[2])
+
   return {
     leftExpression: match?.[1]?.trim() || expression,
-    operator: (match?.[2] ?? '!=') as MethodValidation['operator'],
+    operator,
     rightExpression: match?.[3]?.trim() || '0',
     message,
     severity,
+  }
+}
+
+function parseValidationOperator(
+  operator: string | undefined,
+): MethodValidation['operator'] {
+  switch (operator) {
+    case '<=':
+    case '>=':
+    case '==':
+    case '!=':
+    case '<':
+    case '>':
+      return operator
+    default:
+      return '!='
   }
 }
 

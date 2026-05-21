@@ -116,7 +116,8 @@ function ProfileSettingsForm({
 
     const reader = new FileReader()
     reader.onload = (event) => {
-      setPreviewUrl((event.target?.result as string) ?? null)
+      const result = event.target?.result
+      setPreviewUrl(typeof result === 'string' ? result : null)
     }
     reader.readAsDataURL(file)
     uploadMutation.mutate(file)

@@ -32,6 +32,37 @@ const reportingRoles: Array<
 
 const formulaScopes = ['scalar', 'table_row'] as const
 
+function parseFormulaScope(value: string | null): (typeof formulaScopes)[number] {
+  return value === 'table_row' ? 'table_row' : 'scalar'
+}
+
+function parseReportingGroup(
+  value: string | null,
+): NonNullable<MethodDraftFormula['reporting']>['group'] {
+  switch (value) {
+    case 'uncertainty_budget':
+    case 'raw_calculation':
+      return value
+    default:
+      return 'calibration_result'
+  }
+}
+
+function parseReportingRole(
+  value: string | null,
+): NonNullable<MethodDraftFormula['reporting']>['role'] {
+  switch (value) {
+    case 'primary_result':
+    case 'expanded_uncertainty':
+    case 'coverage_factor':
+    case 'conformity_margin':
+    case 'uncertainty_component':
+      return value
+    default:
+      return 'auxiliary'
+  }
+}
+
 export function FormulaEditor({
   formula,
   inputs,
@@ -89,7 +120,7 @@ export function FormulaEditor({
           <Select
             value={scopeKind}
             onValueChange={(value) =>
-              changeScope(value as (typeof formulaScopes)[number])
+              changeScope(parseFormulaScope(value))
             }
           >
             <SelectTrigger>
@@ -160,9 +191,7 @@ export function FormulaEditor({
                   reporting: {
                     ...formula.reporting,
                     includeInCertificate: true,
-                    group: value as NonNullable<
-                      MethodDraftFormula['reporting']
-                    >['group'],
+                    group: parseReportingGroup(value),
                   },
                 })
               }
@@ -187,9 +216,7 @@ export function FormulaEditor({
                   reporting: {
                     ...formula.reporting,
                     includeInCertificate: true,
-                    role: value as NonNullable<
-                      MethodDraftFormula['reporting']
-                    >['role'],
+                    role: parseReportingRole(value),
                   },
                 })
               }

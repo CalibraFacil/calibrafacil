@@ -6,8 +6,8 @@ import type {
 } from "@calibra-facil/contracts";
 import { desktopIpcChannels } from "../main/channels";
 
-const invoke = <T>(channel: string, ...args: unknown[]) =>
-  ipcRenderer.invoke(channel, ...args) as Promise<T>;
+const invoke = async <T>(channel: string, ...args: unknown[]): Promise<T> =>
+  ipcRenderer.invoke(channel, ...args);
 
 function subscribe<T>(channel: string, listener: (value: T) => void) {
   const handler = (_event: IpcRendererEvent, value: T) => {

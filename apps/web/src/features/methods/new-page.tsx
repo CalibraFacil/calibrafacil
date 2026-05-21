@@ -25,11 +25,7 @@ export function NewMethodPage() {
   const createMutation = useMutation({
     mutationFn: async (draft: MethodDraft) => {
       const payload = draftToMethodSavePayload(draft)
-      return calibraApi.methods.create(payload) as Promise<{
-        id: number
-        name: string
-        version: number
-      }>
+      return calibraApi.methods.create(payload)
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })

@@ -27,7 +27,10 @@ const ListQuerySchema = z.object({
   query: z.string().trim().optional(),
 });
 
-export const publicApiRouter = new Hono<{ Variables: ApiKeyAuthVariables }>()
+export const publicApiRouter = new Hono<{
+  Variables: ApiKeyAuthVariables;
+  Bindings: R2Env;
+}>()
   .use("*", requireApiKeyAuth)
   .get(
     "/customers",
@@ -254,7 +257,7 @@ export const publicApiRouter = new Hono<{ Variables: ApiKeyAuthVariables }>()
         return c.json({ error: "Documento ainda não disponível" }, 400);
       }
 
-      const env = c.env as R2Env;
+      const env = c.env;
       const client = createR2Client(env);
       const key = extractKeyFromUrl(job.certificateUrl);
       const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);

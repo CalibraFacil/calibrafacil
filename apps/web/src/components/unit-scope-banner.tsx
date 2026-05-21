@@ -7,42 +7,6 @@ import { setStoredDashboardActiveUnitIdForOrganization } from '@/features/dashbo
 import { useDashboardUnits } from '@/hooks/use-dashboard-units'
 import { cn } from '@/lib/utils'
 
-type GovernanceViewer = {
-  viewer: {
-    isGlobalManager: boolean
-    canManageOrganizationUnits: boolean
-    canManageAssignments: boolean
-    canManageGlobalRoles: boolean
-    canViewGovernance: boolean
-    canAccessConsolidatedView: boolean
-    managedUnitIds: number[]
-  }
-  scopeSummary: {
-    isConsolidated: boolean
-    activeUnitId: number | null
-    activeUnitName: string | null
-    accessibleUnitsCount: number
-    managedUnitsCount: number
-    effectiveRole: string
-    effectiveRoleLabel: string
-    label: string
-    description: string
-  }
-}
-
-type UnitScopeResponse = GovernanceViewer & {
-  activeUnitId: number | null
-  activeUnitName: string | null
-  selectedUnitScope: 'all' | 'unit'
-  canAccessAllUnits: boolean
-  data: Array<{
-    id: number
-    name: string
-    slug: string
-    role: string
-  }>
-}
-
 export function UnitScopeBanner() {
   const queryClient = useQueryClient()
   const { activeOrg, data, hasMultiUnit, isCheckingAccess, unitsQuery } =
@@ -67,7 +31,11 @@ export function UnitScopeBanner() {
     return null
   }
 
-  const { scopeSummary, viewer } = data as UnitScopeResponse
+  const { scopeSummary, viewer } = data
+  if (!scopeSummary || !viewer) {
+    return null
+  }
+
   const shouldRender =
     data.data.length > 1 || viewer.canViewGovernance || data.canAccessAllUnits
 

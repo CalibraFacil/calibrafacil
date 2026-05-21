@@ -79,6 +79,14 @@ export const INTEGRATION_TARGETS = [
 
 export const DEFAULT_INTEGRATION_SYNC_LIMIT = 50;
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
 function formatCustomerAddress(
   address: (typeof customer.$inferSelect)["address"],
 ): string | null {
@@ -227,7 +235,7 @@ async function callRemoteJson(
 function extractRemoteId(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
 
-  const record = data as Record<string, unknown>;
+  const record = toRecord(data);
   if (typeof record.remoteId === "string" && record.remoteId.trim()) {
     return record.remoteId;
   }
@@ -397,7 +405,7 @@ export async function failIntegrationSyncRun(params: {
     message: params.message,
     details: {
       target: params.target,
-      ...(params.details ?? {}),
+      ...params.details,
     },
   });
 }
@@ -746,7 +754,7 @@ function buildMappedTargetPayload(params: {
 }) {
   return applyIntegrationMappings(
     params.target,
-    params.payload as unknown as Record<string, unknown>,
+    toRecord(params.payload),
     params.config.mappings[params.target],
   );
 }
@@ -794,7 +802,7 @@ function getLastBlockedAt(runs: (typeof integrationSyncRun.$inferSelect)[]) {
   for (const run of runs) {
     const summary =
       run.summary && typeof run.summary === "object"
-        ? (run.summary as Record<string, unknown>)
+        ? toRecord(run.summary)
         : null;
 
     if (summary?.blocked === true) {
@@ -870,10 +878,28 @@ export async function buildIntegrationOverview(
     ),
   );
 
-  const coverageByTarget = Object.fromEntries(coverageEntries) as Record<
+  const emptyCoverage = (
+    target: IntegrationSyncTarget,
+  ): IntegrationTargetCoverageSummary => ({
+    target,
+    localCount: 0,
+    linkedCount: 0,
+    unlinkedCount: 0,
+  });
+  const coverageByTarget: Record<
     IntegrationSyncTarget,
     IntegrationTargetCoverageSummary
-  >;
+  > = {
+    customer:
+      coverageEntries.find(([target]) => target === "customer")?.[1] ??
+      emptyCoverage("customer"),
+    service_order:
+      coverageEntries.find(([target]) => target === "service_order")?.[1] ??
+      emptyCoverage("service_order"),
+    billing_document:
+      coverageEntries.find(([target]) => target === "billing_document")?.[1] ??
+      emptyCoverage("billing_document"),
+  };
 
   const validated = hasRemoteValidation(record);
   const targets: IntegrationTargetSyncSummary[] = INTEGRATION_TARGETS.map(
@@ -1046,7 +1072,7 @@ export function getRequestedLimitFromRun(
 ) {
   const summary =
     run.summary && typeof run.summary === "object"
-      ? (run.summary as Record<string, unknown>)
+      ? toRecord(run.summary)
       : null;
   const requestedLimit = summary?.requestedLimit;
 

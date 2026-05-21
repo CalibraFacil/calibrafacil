@@ -57,7 +57,7 @@ export function compileCriterionExpression(
   const right = engine.compileFormula(rightRewrite.expression, {
     allowedVariables: allowedWithSyntheticVariables,
   });
-  const operator = match[2] as CompiledCriterion["operator"];
+  const operator = parseCriterionOperator(match[2]);
   const variables = [
     ...new Set(
       [...left.variables, ...right.variables]
@@ -118,6 +118,21 @@ export function compileCriterionExpression(
       variables,
     }),
   };
+}
+
+function parseCriterionOperator(
+  operator: string,
+): CompiledCriterion["operator"] {
+  switch (operator) {
+    case "<=":
+    case ">":
+    case ">=":
+    case "==":
+    case "!=":
+      return operator;
+    default:
+      return "<";
+  }
 }
 
 function rewriteAggregatesForCompile(

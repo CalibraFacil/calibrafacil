@@ -41,6 +41,8 @@ async function parseCloudEntityLabel(
     throw new Error(`Failed to fetch ${entityName} label`);
   }
 
-  const data = (await response.json()) as { label?: string | null };
-  return data.label ?? null;
+  const data: unknown = await response.json();
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const label = Object.fromEntries(Object.entries(data)).label;
+  return typeof label === "string" ? label : null;
 }

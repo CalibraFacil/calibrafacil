@@ -9,8 +9,8 @@ import type {
 export function unreadNotificationsQueryOptions(organizationKey: string) {
   return queryOptions({
     queryKey: ['notifications', organizationKey, 'unread-count'],
-    queryFn: () =>
-      calibraApi.notifications.getUnreadCount() as Promise<UnreadNotificationsResponse>,
+    queryFn: async (): Promise<UnreadNotificationsResponse> =>
+      calibraApi.notifications.getUnreadCount(),
     refetchInterval: 30_000,
     staleTime: 10_000,
   })
@@ -19,11 +19,11 @@ export function unreadNotificationsQueryOptions(organizationKey: string) {
 export function recentNotificationsQueryOptions(organizationKey: string) {
   return queryOptions({
     queryKey: ['notifications', organizationKey, 'recent'],
-    queryFn: () =>
+    queryFn: async (): Promise<NotificationsListResponse> =>
       calibraApi.notifications.listRecent({
         page: 1,
         limit: 5,
-      }) as Promise<NotificationsListResponse>,
+      }),
     staleTime: 5_000,
   })
 }

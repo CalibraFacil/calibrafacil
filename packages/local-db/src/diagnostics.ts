@@ -17,9 +17,8 @@ export type LocalDatabaseDiagnostics = {
 export function getLocalDatabaseDiagnostics(
   database: LocalDatabase,
 ): LocalDatabaseDiagnostics {
-  const rows = database.pragma("integrity_check") as Array<
-    Record<string, unknown>
-  >;
+  const rawRows = database.pragma("integrity_check");
+  const rows = Array.isArray(rawRows) ? rawRows.map(toRecord) : [];
   const messages = rows
     .map((row) => {
       const value = row.integrity_check;
@@ -40,9 +39,17 @@ export function getLocalDatabaseDiagnostics(
   };
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
 function countActiveCalibrationJobs(database: LocalDatabase) {
   const row = database
-    .prepare(
+    .prepare<[], { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM calibration_jobs
@@ -50,21 +57,21 @@ WHERE status = 'IN_PROGRESS'
   AND deleted_at IS NULL
 `,
     )
-    .get() as { total: number };
+    .get();
 
-  return row.total;
+  return row?.total ?? 0;
 }
 
 function countActiveServiceOrderWorkflows(database: LocalDatabase) {
   const row = database
-    .prepare(
+    .prepare<[], { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM service_orders
 WHERE status IN ('repair_in_progress', 'calibration_in_progress')
 `,
     )
-    .get() as { total: number };
+    .get();
 
-  return row.total;
+  return row?.total ?? 0;
 }

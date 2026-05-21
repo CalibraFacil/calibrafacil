@@ -9,9 +9,12 @@ import { calibraApi } from '@/utils/api'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { isDesktopRuntime } from '@/runtime/desktop'
 
-type ActiveOrganization = NonNullable<
-  ReturnType<typeof useActiveOrganization>['data']
->
+type ActiveOrganization = {
+  id: string
+  name: string
+  slug: string
+  members?: Array<{ role?: string | null }>
+}
 
 export type { DashboardUnitSummary, DashboardUnitsResponse }
 
@@ -42,20 +45,19 @@ export function useDashboardUnits() {
   const desktopUnits = desktopSession?.activeUnits ?? []
   const desktopCanAccessAllUnits =
     desktopSession?.permissions.canAccessAllUnits ?? false
-  const activeOrg =
-    cloudActiveOrg ??
-    (desktopSession
-      ? ({
-          id: desktopSession.organization.id,
-          name: desktopSession.organization.id,
-          slug: desktopSession.organization.id,
-          members: [
-            {
-              role: desktopSession.permissions.role,
-            },
-          ],
-        } as ActiveOrganization)
-      : undefined)
+  const desktopActiveOrg: ActiveOrganization | undefined = desktopSession
+    ? {
+        id: desktopSession.organization.id,
+        name: desktopSession.organization.id,
+        slug: desktopSession.organization.id,
+        members: [
+          {
+            role: desktopSession.permissions.role,
+          },
+        ],
+      }
+    : undefined
+  const activeOrg = cloudActiveOrg ?? desktopActiveOrg
   const hasMultiUnit = isDesktop
     ? desktopUnits.length > 1 || desktopCanAccessAllUnits
     : (accessQuery.data?.entitlements.includes('multi_unit') ?? false)

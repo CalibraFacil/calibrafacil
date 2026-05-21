@@ -224,26 +224,34 @@ export function ApprovedJobRecord({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(value as Record<string, unknown>[]).map((row, idx) => (
-                <TableRow key={idx} className="hover:bg-muted/30">
-                  {field.columns!.map((col) => {
-                    const cellValue = row[col.key]
-                    const isComposition = isMassCompositionValue(cellValue)
-                    return (
-                      <TableCell
-                        key={col.key}
-                        className={
-                          isComposition
-                            ? 'min-w-44 max-w-64 whitespace-normal px-3 font-sans text-sm leading-snug'
-                            : 'whitespace-nowrap px-3 font-mono tabular-nums'
-                        }
-                      >
-                        {formatReviewValue(cellValue, displayUnitFor(col.unit))}
-                      </TableCell>
-                    )
-                  })}
-                </TableRow>
-              ))}
+              {(Array.isArray(value) ? value : [])
+                .filter(
+                  (row): row is Record<string, unknown> =>
+                    row !== null && typeof row === 'object' && !Array.isArray(row),
+                )
+                .map((row, idx) => (
+                  <TableRow key={idx} className="hover:bg-muted/30">
+                    {field.columns!.map((col) => {
+                      const cellValue = row[col.key]
+                      const isComposition = isMassCompositionValue(cellValue)
+                      return (
+                        <TableCell
+                          key={col.key}
+                          className={
+                            isComposition
+                              ? 'min-w-44 max-w-64 whitespace-normal px-3 font-sans text-sm leading-snug'
+                              : 'whitespace-nowrap px-3 font-mono tabular-nums'
+                          }
+                        >
+                          {formatReviewValue(
+                            cellValue,
+                            displayUnitFor(col.unit),
+                          )}
+                        </TableCell>
+                      )
+                    })}
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </div>

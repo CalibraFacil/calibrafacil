@@ -354,10 +354,18 @@ function sanitizeMailHeader(value: string): string {
 function readCallbackUrlFromMagicLinkContext(ctx: unknown): string | null {
   if (!ctx || typeof ctx !== "object" || !("body" in ctx)) return null;
 
-  const body = (ctx as { body?: Record<string, unknown> }).body;
+  const body = toRecord(toRecord(ctx).body);
   const callbackURL = body?.callbackURL;
 
   return typeof callbackURL === "string" ? callbackURL : null;
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }
 
 function readInvitationIdFromCallbackUrl(
@@ -557,8 +565,8 @@ function createOrganizationPlugin() {
   return organization({
     ac,
     roles,
-    defaultMemberRole: "member" as any,
-    creatorRole: "owner" as any,
+    defaultMemberRole: "member",
+    creatorRole: "owner",
     schema: {
       organization: {
         additionalFields: {
@@ -977,32 +985,32 @@ export type BackofficeAuth = ReturnType<typeof createBackofficeAuth>;
 export type PortalAuth = ReturnType<typeof createPortalAuth>;
 
 // Legacy exports for backwards compatibility (lazy getters)
-export const labAuth = {
+export const labAuth: Pick<LabAuth, "api" | "handler"> = {
   get api() {
     return getLabAuth().api;
   },
   get handler() {
     return getLabAuth().handler;
   },
-} as Pick<LabAuth, "api" | "handler">;
+};
 
-export const backofficeAuth = {
+export const backofficeAuth: Pick<BackofficeAuth, "api" | "handler"> = {
   get api() {
     return getBackofficeAuth().api;
   },
   get handler() {
     return getBackofficeAuth().handler;
   },
-} as Pick<BackofficeAuth, "api" | "handler">;
+};
 
-export const portalAuth = {
+export const portalAuth: Pick<PortalAuth, "api" | "handler"> = {
   get api() {
     return getPortalAuth().api;
   },
   get handler() {
     return getPortalAuth().handler;
   },
-} as Pick<PortalAuth, "api" | "handler">;
+};
 
 export const auth = labAuth;
 

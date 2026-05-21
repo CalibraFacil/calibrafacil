@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "react", "react-hooks", "import", "unicorn"],
   "categories": {
     "correctness": "error",
@@ -14,6 +14,12 @@
     "no-unused-vars": "warn",
     "no-console": "off",
     "react/react-in-jsx-scope": "off",
+    "typescript/consistent-type-assertions": [
+      "error",
+      {
+        "assertionStyle": "never"
+      }
+    ],
     "unicorn/no-null": "off",
     "unicorn/filename-case": "off"
   },

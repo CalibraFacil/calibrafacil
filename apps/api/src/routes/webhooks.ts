@@ -34,7 +34,9 @@ export function verifyWebhookToken(request: Request): boolean {
   return timingSafeEqual(expected, received);
 }
 
-export const webhooksRouter = new Hono().post("/asaas", async (c) => {
+export const webhooksRouter = new Hono<{
+  Bindings: { CACHE?: KVNamespace };
+}>().post("/asaas", async (c) => {
   const contentLength = Number(c.req.header("content-length") ?? "0");
   if (
     Number.isFinite(contentLength) &&
@@ -61,7 +63,7 @@ export const webhooksRouter = new Hono().post("/asaas", async (c) => {
 
     if (result.organizationId) {
       await invalidateOnMutation(
-        (c.env as { CACHE?: KVNamespace } | undefined)?.CACHE,
+        c.env.CACHE,
         result.organizationId,
         "subscription",
       );

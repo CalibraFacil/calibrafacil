@@ -36,7 +36,8 @@ describe("PDF Signing", () => {
         parsePkcs12(emptyBuffer, "password");
       } catch (error) {
         expect(error).toBeInstanceOf(SigningError);
-        expect((error as SigningError).code).toBe("INVALID_P12");
+        if (!(error instanceof SigningError)) throw error;
+        expect(error.code).toBe("INVALID_P12");
       }
     });
 
@@ -51,7 +52,8 @@ describe("PDF Signing", () => {
         parsePkcs12(invalidBuffer, "password");
       } catch (error) {
         expect(error).toBeInstanceOf(SigningError);
-        expect((error as SigningError).code).toBe("INVALID_P12");
+        if (!(error instanceof SigningError)) throw error;
+        expect(error.code).toBe("INVALID_P12");
       }
     });
   });

@@ -102,6 +102,7 @@ export const methodsColumns: ColumnDef<Method>[] = [
   {
     id: 'actions',
     cell: ({ row, table }) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- TanStack table meta is supplied by this table instance.
       const meta = table.options.meta as MethodsTableMeta | undefined
 
       return (

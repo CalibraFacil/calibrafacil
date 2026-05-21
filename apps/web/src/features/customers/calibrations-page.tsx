@@ -306,6 +306,7 @@ export function ClientCalibrationsTab({ id }: { id: string }) {
             <Select
               value={statusFilter}
               onValueChange={(value) => {
+                // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to customer job statuses.
                 setStatusFilter(value as CustomerJobStatus | '')
                 setPage(1)
               }}

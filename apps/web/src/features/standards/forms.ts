@@ -242,7 +242,7 @@ export function parseStandardRenewForm(
   }
 
   const certifiedValues = options.isMultiValue
-    ? parseCertifiedValues(data.certifiedValues, fieldErrors)
+    ? parseCertifiedValues(data.certifiedValues, fieldErrors, 'certifiedValues')
     : undefined
 
   const parsed = RenewCertificateSchema.safeParse({
@@ -339,7 +339,7 @@ function parseStandardPayload<TData>(
   }
 
   const certifiedValues = options.isMultiValue
-    ? parseCertifiedValues(data.certifiedValues, fieldErrors)
+    ? parseCertifiedValues(data.certifiedValues, fieldErrors, 'certifiedValues')
     : payloadOptions.emptyOptionalValue
 
   const singleValuePayload = options.isMultiValue
@@ -472,10 +472,11 @@ function parseSingleValueFields(
 function parseCertifiedValues<TField extends string>(
   values: Array<StandardCertifiedValueFormData>,
   fieldErrors: Array<{ field: TField; message: string }>,
+  certifiedValuesField: TField,
 ) {
   if (values.length === 0) {
     fieldErrors.push({
-      field: 'certifiedValues' as TField,
+      field: certifiedValuesField,
       message: 'Adicione pelo menos um valor certificado',
     })
     return []
@@ -489,7 +490,7 @@ function parseCertifiedValues<TField extends string>(
       !value.unit.trim()
     ) {
       fieldErrors.push({
-        field: 'certifiedValues' as TField,
+        field: certifiedValuesField,
         message: `Valor ${index + 1}: Preencha todos os campos`,
       })
     }
@@ -504,7 +505,7 @@ function parseCertifiedValues<TField extends string>(
     ] as const) {
       if (value[field].trim() && !Number.isFinite(Number(value[field]))) {
         fieldErrors.push({
-          field: 'certifiedValues' as TField,
+          field: certifiedValuesField,
           message: `Valor ${index + 1}: Campo numérico inválido`,
         })
         break

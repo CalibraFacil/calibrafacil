@@ -17,6 +17,12 @@ export type IntegrationSyncTarget =
   | "service_order"
   | "billing_document";
 
+const INTEGRATION_SYNC_TARGETS = [
+  "customer",
+  "service_order",
+  "billing_document",
+] as const satisfies readonly IntegrationSyncTarget[];
+
 export type IntegrationSyncTrigger = "manual" | "event" | "scheduled" | "retry";
 
 export type IntegrationRunMode = "disabled" | "manual_only" | "scheduled";
@@ -585,7 +591,7 @@ export function validateIntegrationMappings(
 ): IntegrationMappingValidationIssue[] {
   const issues: IntegrationMappingValidationIssue[] = [];
 
-  for (const target of Object.keys(mappings) as IntegrationSyncTarget[]) {
+  for (const target of INTEGRATION_SYNC_TARGETS) {
     const config = mappings[target];
     const seenDestinations = new Set<string>();
 

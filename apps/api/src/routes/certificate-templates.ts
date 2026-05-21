@@ -101,6 +101,51 @@ function sha256Hex(bytes: Uint8Array | ArrayBuffer): string {
   return createHash("sha256").update(new Uint8Array(bytes)).digest("hex");
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function getString(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function isR2BucketLike(value: unknown): value is R2Env["CERTIFICATES_BUCKET"] {
+  return typeof toRecord(value).get === "function";
+}
+
+function getR2Env(value: unknown): R2Env | null {
+  const env = toRecord(value);
+  const accountId = getString(env.R2_ACCOUNT_ID);
+  const accessKeyId = getString(env.R2_ACCESS_KEY_ID);
+  const secretAccessKey = getString(env.R2_SECRET_ACCESS_KEY);
+  const bucketName = getString(env.R2_BUCKET_NAME);
+
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
+    return null;
+  }
+
+  return {
+    R2_ACCOUNT_ID: accountId,
+    R2_ACCESS_KEY_ID: accessKeyId,
+    R2_SECRET_ACCESS_KEY: secretAccessKey,
+    R2_BUCKET_NAME: bucketName,
+    CERTIFICATES_BUCKET: isR2BucketLike(env.CERTIFICATES_BUCKET)
+      ? env.CERTIFICATES_BUCKET
+      : undefined,
+    NODE_ENV: getString(env.NODE_ENV) ?? undefined,
+    API_URL: getString(env.API_URL) ?? undefined,
+  };
+}
+
+function countSheetPlaceholders(sheet: unknown) {
+  const placeholders = toRecord(sheet).placeholders;
+  return Array.isArray(placeholders) ? placeholders.length : 0;
+}
+
 function createDefaultXlsxBindingManifest(
   analysis: WorkbookAnalysis,
 ): CertificateXlsxBindingManifest {
@@ -229,8 +274,8 @@ function previewMatchesPublishedInputs(
 function summarizeXlsxVersion(
   version: typeof certificateTemplateVersion.$inferSelect,
 ) {
-  const analysis = version.analysis as WorkbookAnalysis | null;
-  const sheets = Array.isArray(analysis?.sheets) ? analysis.sheets : [];
+  const analysis = toRecord(version.analysis);
+  const sheets = Array.isArray(analysis.sheets) ? analysis.sheets : [];
 
   return {
     id: version.id,
@@ -241,12 +286,10 @@ function summarizeXlsxVersion(
     bindingManifestSha256: version.bindingManifestSha256,
     sheetCount: sheets.length,
     placeholderCount: sheets.reduce(
-      (total, sheet) =>
-        total +
-        (Array.isArray(sheet.placeholders) ? sheet.placeholders.length : 0),
+      (total, sheet) => total + countSheetPlaceholders(sheet),
       0,
     ),
-    warningCount: Array.isArray(analysis?.warnings)
+    warningCount: Array.isArray(analysis.warnings)
       ? analysis.warnings.length
       : 0,
     createdAt: version.createdAt,
@@ -419,11 +462,12 @@ export const certificateTemplatesRouter = new Hono<{
       const member = c.get("member");
       const session = c.get("session");
       const id = Number.parseInt(c.req.param("id"), 10);
-      const env = c.env as R2Env;
+      const env = getR2Env(c.env);
 
       if (!Number.isFinite(id)) {
         return c.json({ error: "Template inválido" }, 400);
       }
+      if (!env) return c.json({ error: "Storage R2 nao configurado" }, 500);
 
       const template = await db.query.certificateTemplate.findFirst({
         where: and(
@@ -630,11 +674,12 @@ export const certificateTemplatesRouter = new Hono<{
       const member = c.get("member");
       const id = Number.parseInt(c.req.param("id"), 10);
       const versionId = Number.parseInt(c.req.param("versionId"), 10);
-      const env = c.env as R2Env;
+      const env = getR2Env(c.env);
 
       if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
         return c.json({ error: "Template ou versão inválidos" }, 400);
       }
+      if (!env) return c.json({ error: "Storage R2 nao configurado" }, 500);
 
       const version = await db.query.certificateTemplateVersion.findFirst({
         where: and(
@@ -764,11 +809,12 @@ export const certificateTemplatesRouter = new Hono<{
       const session = c.get("session");
       const id = Number.parseInt(c.req.param("id"), 10);
       const versionId = Number.parseInt(c.req.param("versionId"), 10);
-      const env = c.env as R2Env;
+      const env = getR2Env(c.env);
 
       if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
         return c.json({ error: "Template ou versão inválidos" }, 400);
       }
+      if (!env) return c.json({ error: "Storage R2 nao configurado" }, 500);
 
       const existing = await db.query.certificateTemplateVersion.findFirst({
         where: and(
@@ -937,7 +983,7 @@ export const certificateTemplatesRouter = new Hono<{
       const id = Number.parseInt(c.req.param("id"), 10);
       const versionId = Number.parseInt(c.req.param("versionId"), 10);
       const previewId = Number.parseInt(c.req.param("previewId"), 10);
-      const env = c.env as R2Env;
+      const env = getR2Env(c.env);
 
       if (
         !Number.isFinite(id) ||
@@ -946,6 +992,7 @@ export const certificateTemplatesRouter = new Hono<{
       ) {
         return c.json({ error: "Template, versão ou prévia inválidos" }, 400);
       }
+      if (!env) return c.json({ error: "Storage R2 nao configurado" }, 500);
 
       const preview = await db.query.certificateTemplatePreview.findFirst({
         with: {
@@ -1003,11 +1050,8 @@ export const certificateTemplatesRouter = new Hono<{
         return c.json({ error: "Versão XLSX não encontrada" }, 404);
       }
 
-      const validation = existing.validationResult as
-        | { ok?: unknown }
-        | null
-        | undefined;
-      if (validation?.ok !== true && existing.status !== "VALIDATED") {
+      const validation = toRecord(existing.validationResult);
+      if (validation.ok !== true && existing.status !== "VALIDATED") {
         return c.json({ error: "Valide a versão XLSX antes de publicar" }, 409);
       }
 
