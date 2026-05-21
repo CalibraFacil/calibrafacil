@@ -62,6 +62,15 @@ export async function mockPlanAccess(page: Page) {
   })
 }
 
+export async function mockNotifications(page: Page) {
+  await routeJson(page, '**/api/notifications/unread-count*', {
+    body: { count: 0 },
+  })
+  await routeJson(page, '**/api/notifications?*', {
+    body: { data: [], total: 0 },
+  })
+}
+
 export async function installDesktopBridge(
   page: Page,
   {
