@@ -33,6 +33,20 @@ import type {
 
 const PLACEHOLDER_PATTERN = /\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g;
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function getObjectProperty(value: unknown, key: string) {
+  return value && typeof value === "object" && key in value
+    ? Reflect.get(value, key)
+    : undefined;
+}
+
 export class ExcelTsCertificateWorkbookEngine implements CertificateWorkbookEngine {
   async analyze(input: Uint8Array): Promise<WorkbookAnalysis> {
     const warnings = validateWorkbookContainer(input);
@@ -259,14 +273,14 @@ export class ExcelTsCertificateWorkbookEngine implements CertificateWorkbookEngi
     }
 
     rows.forEach((row, rowIndex) => {
-      const item = typeof row === "object" && row != null ? row : {};
+      const item = toRecord(row);
       for (const column of binding.columns) {
         const cellAddress = column.cell.replace(
           /\d+$/,
           String(templateRow + rowIndex),
         );
         sheet.getCell(cellAddress).value = formatValue(
-          getPath(item as Record<string, unknown>, column.path),
+          getPath(item, column.path),
           column.formatter,
         );
       }
@@ -399,24 +413,21 @@ function findPlaceholders(sheet: Worksheet): WorkbookPlaceholder[] {
 
 function getMergedRangesByMasterCell(sheet: Worksheet): Map<string, string> {
   const ranges = new Map<string, string>();
-  const merges = (sheet as unknown as { _merges?: Record<string, unknown> })
-    ._merges;
+  const merges = getObjectProperty(sheet, "_merges");
 
-  if (!merges) {
+  if (!merges || typeof merges !== "object" || Array.isArray(merges)) {
     return ranges;
   }
 
   for (const [masterCell, range] of Object.entries(merges)) {
-    const model = (range as { model?: unknown }).model as
-      | {
-          top?: number;
-          left?: number;
-          bottom?: number;
-          right?: number;
-        }
-      | undefined;
+    const model = toRecord(getObjectProperty(range, "model"));
 
-    if (!model || !model.top || !model.left || !model.bottom || !model.right) {
+    if (
+      typeof model.top !== "number" ||
+      typeof model.left !== "number" ||
+      typeof model.bottom !== "number" ||
+      typeof model.right !== "number"
+    ) {
       continue;
     }
 

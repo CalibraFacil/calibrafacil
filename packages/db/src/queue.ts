@@ -5,7 +5,10 @@ import {
   type AppQueueJobStatus,
   type AppQueueJobType,
 } from "./schema.js";
-import type { BackgroundJobMessage } from "@calibra-facil/shared";
+import {
+  isBackgroundJobMessage,
+  type BackgroundJobMessage,
+} from "@calibra-facil/shared";
 
 export type QueueMessage = Exclude<
   BackgroundJobMessage,
@@ -20,25 +23,66 @@ export type ClaimedQueueJob = {
   maxAttempts: number;
 };
 
-type ExecuteRows<T> = {
-  rows: T[];
-};
-
-function getExecuteRows<T>(result: unknown): T[] {
-  if (Array.isArray(result)) return result as T[];
-  if (
-    typeof result === "object" &&
-    result !== null &&
-    "rows" in result &&
-    Array.isArray((result as ExecuteRows<T>).rows)
-  ) {
-    return (result as ExecuteRows<T>).rows;
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
   }
-  return [];
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function getExecuteRows(result: unknown): unknown[] {
+  if (Array.isArray(result)) return result;
+  const rows = toRecord(result).rows;
+  return Array.isArray(rows) ? rows : [];
+}
+
+function getInsertedQueueJobId(result: unknown): number | null {
+  const [row] = getExecuteRows(result);
+  const id = toRecord(row).id;
+  return typeof id === "number" && Number.isFinite(id) ? id : null;
+}
+
+function isQueueMessage(value: unknown): value is QueueMessage {
+  return (
+    isBackgroundJobMessage(value) &&
+    value.type !== "SCHEDULED_NOTIFICATIONS"
+  );
 }
 
 function getMessageType(message: QueueMessage): AppQueueJobType {
-  return (message.type ?? "CERTIFICATE") as AppQueueJobType;
+  switch (message.type) {
+    case "LABEL":
+    case "SERVICE_ORDER_INTAKE_DOCUMENT":
+    case "SERVICE_ORDER_TAG":
+    case "SERVICE_ORDER_QUOTE":
+    case "SERVICE_ORDER_DELIVERY_RECEIPT":
+    case "INTEGRATION_SYNC":
+    case "CERTIFICATE_XLSX_PREVIEW":
+      return message.type;
+    default:
+      return "CERTIFICATE";
+  }
+}
+
+function toClaimedQueueJob(value: unknown): ClaimedQueueJob | null {
+  const row = toRecord(value);
+  if (
+    typeof row.id !== "number" ||
+    !isQueueMessage(row.payload) ||
+    typeof row.attempts !== "number" ||
+    typeof row.maxAttempts !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    type: getMessageType(row.payload),
+    payload: row.payload,
+    attempts: row.attempts,
+    maxAttempts: row.maxAttempts,
+  };
 }
 
 function getRetryDelayMs(attempts: number) {
@@ -61,13 +105,13 @@ export async function enqueueQueueJob(
     )
     returning id
   `);
-  const [job] = getExecuteRows<{ id: number }>(result);
+  const jobId = getInsertedQueueJobId(result);
 
-  if (!job) {
+  if (jobId === null) {
     throw new Error("Failed to enqueue queue job");
   }
 
-  return job.id;
+  return jobId;
 }
 
 export async function claimQueueJobs(
@@ -100,10 +144,10 @@ export async function claimQueueJobs(
       q.max_attempts as "maxAttempts"
   `);
 
-  return getExecuteRows<ClaimedQueueJob>(result).map((job) => ({
-    ...job,
-    payload: job.payload,
-  }));
+  return getExecuteRows(result).flatMap((row) => {
+    const job = toClaimedQueueJob(row);
+    return job ? [job] : [];
+  });
 }
 
 export async function completeQueueJob(id: number) {

@@ -5,12 +5,12 @@ import {
   useLocation,
   useNavigate,
 } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 
 import {
   getBackofficeSession,
   useBackofficeSession,
 } from '@calibra-facil/auth/client'
+import { useBackofficeAccessData } from '@/features/backoffice/queries'
 import { BackofficeHeader } from '@/components/backoffice-header'
 import { BackofficeSidebar } from '@/components/backoffice-sidebar'
 import { Button } from '@/components/ui/button'
@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
-import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice')({
   beforeLoad: async ({ location, preload }) => {
@@ -53,12 +52,9 @@ function BackofficeLayout() {
     location.pathname === '/backoffice/bootstrap'
   const { data: session } = useBackofficeSession()
 
-  const accessQuery = useQuery({
-    queryKey: ['backoffice', 'access', 'layout'],
-    queryFn: async () =>
-      calibraApi.backoffice.getAccess() as Promise<{ allowed: boolean }>,
+  const accessQuery = useBackofficeAccessData({
+    scope: 'layout',
     enabled: Boolean(session?.user) && !isAuthPage,
-    retry: false,
   })
 
   if (isAuthPage) {

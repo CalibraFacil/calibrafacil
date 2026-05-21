@@ -12,6 +12,24 @@ import {
 } from "./index";
 import type { CreateServiceOrderInput, JobExecutionPayload } from "./index";
 
+function testWindow(value: unknown): Window {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- tests construct the browser surface needed by desktop runtime detection.
+  return value as Window;
+}
+
+function testPayload<T>(value: unknown): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- tests intentionally exercise partial command payload transport.
+  return value as T;
+}
+
+function formDataBody(init: RequestInit | undefined): FormData {
+  if (init?.body instanceof FormData) {
+    return init.body;
+  }
+
+  throw new Error("Expected FormData body");
+}
+
 describe("client runtime data policy registry", () => {
   it("documents the current desktop parity boundary", () => {
     expect(getCalibraApiDataPolicy("standards", "list")).toBe(
@@ -436,6 +454,16 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "uploadLogo",
+          "namespace": "organizationMedia",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "deleteLogo",
+          "namespace": "organizationMedia",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "signingCertificates",
           "policy": "cloud-only",
@@ -622,6 +650,26 @@ describe("client runtime data policy registry", () => {
         },
         {
           "method": "returnToDraft",
+          "namespace": "methods",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "compileDraft",
+          "namespace": "methods",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "previewDraft",
+          "namespace": "methods",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "publishDraft",
+          "namespace": "methods",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "requestApproval",
           "namespace": "methods",
           "policy": "cloud-only",
         },
@@ -1001,6 +1049,46 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "getXlsxVersion",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "uploadXlsx",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "validateXlsx",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updateXlsxBindings",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createXlsxPreview",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "getXlsxPreview",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "publishXlsx",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "createXlsxAssignment",
+          "namespace": "certificateTemplates",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "competences",
           "policy": "cloud-only",
@@ -1175,21 +1263,25 @@ describe("client runtime data policy registry", () => {
 describe("desktop runtime detection", () => {
   it("detects the Electron renderer even before the preload bridge is available", () => {
     expect(
-      isDesktopRuntime({
-        navigator: {
-          userAgent:
-            "Mozilla/5.0 CalibraFacil Chrome/142.0.0.0 Electron/39.8.10",
-        },
-      } as Window),
+      isDesktopRuntime(
+        testWindow({
+          navigator: {
+            userAgent:
+              "Mozilla/5.0 CalibraFacil Chrome/142.0.0.0 Electron/39.8.10",
+          },
+        }),
+      ),
     ).toBe(true);
   });
 
   it("detects the preload bridge when it is available", () => {
     expect(
-      isDesktopRuntime({
-        calibraBridge: {},
-        navigator: { userAgent: "Mozilla/5.0 Chrome/142.0.0.0" },
-      } as Window),
+      isDesktopRuntime(
+        testWindow({
+          calibraBridge: {},
+          navigator: { userAgent: "Mozilla/5.0 Chrome/142.0.0.0" },
+        }),
+      ),
     ).toBe(true);
   });
 });
@@ -1916,6 +2008,171 @@ describe("api keys runtime adapter", () => {
   });
 });
 
+describe("methods runtime adapter", () => {
+  it("routes Method Builder actions through the cloud methods facade", async () => {
+    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const fetchMock: typeof fetch = async (input, init) => {
+      fetchCalls.push([input, init]);
+      const url = new URL(String(input));
+
+      if (url.pathname === "/api/methods/compile") {
+        return Response.json({
+          diagnostics: [],
+          fingerprint: "fp-1",
+          normalizedFormulas: [{ outputKey: "erro", expression: "a-b" }],
+        });
+      }
+
+      if (url.pathname === "/api/methods/preview") {
+        return Response.json({
+          diagnostics: [],
+          results: { erro: 0.1 },
+          normalizedData: { leitura: 10 },
+        });
+      }
+
+      if (url.pathname === "/api/methods/12/publish") {
+        return Response.json({ id: 12, status: "PUBLISHED" });
+      }
+
+      if (url.pathname === "/api/methods/12/request-approval") {
+        return Response.json({ id: 12, status: "TECHNICAL_REVIEW" });
+      }
+
+      throw new Error(`Unexpected request: ${url.toString()}`);
+    };
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    await expect(
+      client.methods.compileDraft({ draft: { name: "Massa" } }),
+    ).resolves.toMatchObject({ fingerprint: "fp-1" });
+    await expect(
+      client.methods.previewDraft({
+        draft: { name: "Massa" },
+        sampleData: { leitura: 10 },
+      }),
+    ).resolves.toMatchObject({ results: { erro: 0.1 } });
+    await expect(
+      client.methods.publishDraft(12, {
+        sampleData: { leitura: 10 },
+        reasonForChange: "Publicação inicial",
+      }),
+    ).resolves.toMatchObject({ status: "PUBLISHED" });
+    await expect(
+      client.methods.requestApproval(12, { sampleData: { leitura: 10 } }),
+    ).resolves.toMatchObject({ status: "TECHNICAL_REVIEW" });
+
+    expect(fetchCalls.map(([input]) => String(input))).toEqual([
+      "https://api.example.test/api/methods/compile",
+      "https://api.example.test/api/methods/preview",
+      "https://api.example.test/api/methods/12/publish",
+      "https://api.example.test/api/methods/12/request-approval",
+    ]);
+    expect(JSON.parse(String(fetchCalls[0]?.[1]?.body))).toEqual({
+      draft: { name: "Massa" },
+    });
+    expect(JSON.parse(String(fetchCalls[2]?.[1]?.body))).toEqual({
+      sampleData: { leitura: 10 },
+      reasonForChange: "Publicação inicial",
+    });
+  });
+
+  it("returns method diagnostics responses from validation failures", async () => {
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: async () =>
+        Response.json(
+          { diagnostics: [{ message: "Fórmula inválida" }] },
+          { status: 422 },
+        ),
+    });
+
+    await expect(
+      client.methods.compileDraft({ draft: { name: "Massa" } }),
+    ).resolves.toEqual({
+      diagnostics: [{ message: "Fórmula inválida" }],
+    });
+  });
+
+  it("rejects method status mutations with diagnostics failures", async () => {
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: async () =>
+        Response.json(
+          { diagnostics: [{ message: "Amostra inválida" }] },
+          { status: 422 },
+        ),
+    });
+
+    await expect(
+      client.methods.publishDraft(12, {
+        sampleData: { leitura: 10 },
+        reasonForChange: "Publicação inicial",
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      payload: { diagnostics: [{ message: "Amostra inválida" }] },
+    });
+    await expect(
+      client.methods.requestApproval(12, { sampleData: { leitura: 10 } }),
+    ).rejects.toMatchObject({
+      status: 422,
+      payload: { diagnostics: [{ message: "Amostra inválida" }] },
+    });
+  });
+});
+
+describe("non-conformances runtime adapter", () => {
+  it("creates NCs through the cloud API facade", async () => {
+    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const fetchMock: typeof fetch = async (input, init) => {
+      fetchCalls.push([input, init]);
+      return Response.json({ id: 10, ncNumber: "NC-2026-001" });
+    };
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    await expect(
+      client.nonConformances.create({
+        type: "work",
+        description: "Leitura fora da faixa esperada",
+        detectedAt: "2026-05-20T12:00:00.000Z",
+        jobId: 42,
+      }),
+    ).resolves.toEqual({ id: 10, ncNumber: "NC-2026-001" });
+
+    expect(String(fetchCalls[0]?.[0])).toBe("https://api.example.test/api/nc");
+    expect(fetchCalls[0]?.[1]?.method).toBe("POST");
+    expect(JSON.parse(String(fetchCalls[0]?.[1]?.body))).toEqual({
+      type: "work",
+      description: "Leitura fora da faixa esperada",
+      detectedAt: "2026-05-20T12:00:00.000Z",
+      jobId: 42,
+    });
+  });
+
+  it("throws API errors from NC creation", async () => {
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: async () =>
+        Response.json({ error: "Descrição inválida" }, { status: 400 }),
+    });
+
+    await expect(
+      client.nonConformances.create({
+        type: "work",
+        description: "Leitura fora da faixa esperada",
+        detectedAt: "2026-05-20T12:00:00.000Z",
+      }),
+    ).rejects.toThrow("Descrição inválida");
+  });
+});
+
 describe("entity labels runtime adapter", () => {
   it("loads NC, CAPA, and competence labels through the cloud API", async () => {
     const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
@@ -1975,6 +2232,129 @@ describe("entity labels runtime adapter", () => {
     await expect(
       desktopClient.entityLabels.getCompetence(30),
     ).resolves.toBeNull();
+  });
+});
+
+describe("certificate templates XLSX runtime adapter", () => {
+  it("routes XLSX operations through the cloud API facade", async () => {
+    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const fetchMock: typeof fetch = async (input, init) => {
+      fetchCalls.push([input, init]);
+      const url = String(input);
+
+      if (url.endsWith("/upload-xlsx")) {
+        return Response.json({
+          item: { id: 10 },
+          analysis: {},
+          bindingManifest: {},
+        });
+      }
+      if (url.endsWith("/validate")) {
+        return Response.json({
+          item: { id: 10 },
+          analysis: {},
+          validation: { ok: true, warnings: [] },
+        });
+      }
+      if (url.endsWith("/bindings")) {
+        return Response.json({ item: { id: 10 } });
+      }
+      if (url.endsWith("/preview")) {
+        return Response.json({ item: { id: 20 } });
+      }
+      if (url.endsWith("/previews/20")) {
+        return Response.json({ item: { status: "ready" } });
+      }
+      if (url.endsWith("/publish")) {
+        return Response.json({ item: { id: 10, status: "published" } });
+      }
+      if (url.endsWith("/assignments")) {
+        return Response.json({ item: { id: 30 } });
+      }
+      return Response.json({
+        item: { id: 10 },
+        analysis: {},
+        bindingManifest: {},
+      });
+    };
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      activeUnitProvider: () => "20",
+      fetch: fetchMock,
+    });
+
+    await client.certificateTemplates.getXlsxVersion(1, 10);
+    await client.certificateTemplates.uploadXlsx(
+      1,
+      new Blob(["xlsx"], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+      { fileName: "template.xlsx" },
+    );
+    await client.certificateTemplates.validateXlsx(1, 10);
+    await client.certificateTemplates.updateXlsxBindings(1, 10, {
+      manifest: { scalarBindings: [] },
+    });
+    await client.certificateTemplates.createXlsxPreview(1, 10, {
+      sampleData: {},
+    });
+    await client.certificateTemplates.getXlsxPreview(1, 10, 20);
+    await client.certificateTemplates.publishXlsx(1, 10);
+    await client.certificateTemplates.createXlsxAssignment(1, 10, {
+      certificateType: "calibration",
+      priority: 100,
+    });
+
+    expect(fetchCalls.map(([input]) => String(input))).toEqual([
+      "https://api.example.test/api/certificate-templates/1/versions/10",
+      "https://api.example.test/api/certificate-templates/1/versions/upload-xlsx",
+      "https://api.example.test/api/certificate-templates/1/versions/10/validate",
+      "https://api.example.test/api/certificate-templates/1/versions/10/bindings",
+      "https://api.example.test/api/certificate-templates/1/versions/10/preview",
+      "https://api.example.test/api/certificate-templates/1/versions/10/previews/20",
+      "https://api.example.test/api/certificate-templates/1/versions/10/publish",
+      "https://api.example.test/api/certificate-templates/1/versions/10/assignments",
+    ]);
+    expect(fetchCalls.map(([, init]) => init?.method)).toEqual([
+      "GET",
+      "POST",
+      "POST",
+      "PATCH",
+      "POST",
+      "GET",
+      "POST",
+      "POST",
+    ]);
+    expect(
+      fetchCalls.map(([, init]) =>
+        new Headers(init?.headers).get("x-active-unit-id"),
+      ),
+    ).toEqual(["20", "20", "20", "20", "20", "20", "20", "20"]);
+    expect(fetchCalls[1]?.[1]?.body).toBeInstanceOf(FormData);
+    expect(formDataBody(fetchCalls[1]?.[1]).get("xlsx")).toBeInstanceOf(Blob);
+    expect(new Headers(fetchCalls[3]?.[1]?.headers).get("Content-Type")).toBe(
+      "application/json",
+    );
+  });
+
+  it("keeps XLSX template operations cloud-only in the desktop adapter", async () => {
+    const client = createDesktopApiClient({
+      baseUrl: "http://127.0.0.1:4317",
+      fetch: async () => {
+        throw new Error("fetch should not be called");
+      },
+    });
+
+    await expect(
+      client.certificateTemplates.getXlsxVersion(1, 10),
+    ).rejects.toThrow(
+      "Templates de certificado requer a API web/nuvem neste momento.",
+    );
+    await expect(
+      client.certificateTemplates.uploadXlsx(1, new Blob(["xlsx"])),
+    ).rejects.toThrow(
+      "Templates de certificado requer a API web/nuvem neste momento.",
+    );
   });
 });
 
@@ -2157,14 +2537,20 @@ describe("desktop hybrid runtime adapter", () => {
 
     await client.jobs.get("R-0001/2026");
     await client.jobs.get("R-0001%2F2026");
-    await client.jobs.saveExecution("R-0001/2026", {
-      status: "draft",
-      measurements: [],
-    } as unknown as JobExecutionPayload);
-    await client.jobs.submitExecution("R-0001%2F2026", {
-      status: "submitted",
-      measurements: [],
-    } as unknown as JobExecutionPayload);
+    await client.jobs.saveExecution(
+      "R-0001/2026",
+      testPayload<JobExecutionPayload>({
+        status: "draft",
+        measurements: [],
+      }),
+    );
+    await client.jobs.submitExecution(
+      "R-0001%2F2026",
+      testPayload<JobExecutionPayload>({
+        status: "submitted",
+        measurements: [],
+      }),
+    );
     await client.jobs.createCertificateDraft("R-0001/2026");
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
@@ -2217,20 +2603,28 @@ describe("desktop hybrid runtime adapter", () => {
       model: "Modelo",
     });
     await client.assets.update(1, { name: "Ativo atualizado" });
-    await client.jobs.saveExecution("job-1", {
-      status: "draft",
-      measurements: [],
-    } as unknown as JobExecutionPayload);
-    await client.jobs.submitExecution("job-1", {
-      status: "submitted",
-      measurements: [],
-    } as unknown as JobExecutionPayload);
-    await client.serviceOrders.create({
-      customerId: 1,
-      priority: "normal",
-      intakeType: "dropoff",
-      items: [],
-    } as unknown as CreateServiceOrderInput);
+    await client.jobs.saveExecution(
+      "job-1",
+      testPayload<JobExecutionPayload>({
+        status: "draft",
+        measurements: [],
+      }),
+    );
+    await client.jobs.submitExecution(
+      "job-1",
+      testPayload<JobExecutionPayload>({
+        status: "submitted",
+        measurements: [],
+      }),
+    );
+    await client.serviceOrders.create(
+      testPayload<CreateServiceOrderInput>({
+        customerId: 1,
+        priority: "normal",
+        intakeType: "dropoff",
+        items: [],
+      }),
+    );
     await client.serviceOrders.createQuote("service-order-1", {
       items: [],
     });
@@ -3411,9 +3805,9 @@ describe("signatures runtime adapter", () => {
       ),
     ).toEqual(["10", "10", "10"]);
     expect(fetchCalls[1]?.[1]?.body).toBeInstanceOf(FormData);
-    expect(
-      (fetchCalls[1]?.[1]?.body as FormData | undefined)?.get("signature"),
-    ).toBeInstanceOf(Blob);
+    expect(formDataBody(fetchCalls[1]?.[1]).get("signature")).toBeInstanceOf(
+      Blob,
+    );
   });
 
   it("keeps visual signatures cloud-only in the desktop adapter", async () => {
@@ -3479,9 +3873,7 @@ describe("profile media runtime adapter", () => {
       ),
     ).toEqual(["20", "20"]);
     expect(fetchCalls[0]?.[1]?.body).toBeInstanceOf(FormData);
-    expect(
-      (fetchCalls[0]?.[1]?.body as FormData | undefined)?.get("avatar"),
-    ).toBeInstanceOf(Blob);
+    expect(formDataBody(fetchCalls[0]?.[1]).get("avatar")).toBeInstanceOf(Blob);
   });
 
   it("keeps avatar media cloud-only in the desktop adapter", async () => {
@@ -3500,6 +3892,71 @@ describe("profile media runtime adapter", () => {
     ).rejects.toThrow("Avatar requer sincronização com a nuvem");
     await expect(client.profileMedia.deleteAvatar()).rejects.toThrow(
       "Avatar requer sincronização com a nuvem",
+    );
+  });
+});
+
+describe("organization media runtime adapter", () => {
+  it("routes organization logo media operations through the cloud API", async () => {
+    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const fetchMock: typeof fetch = async (input, init) => {
+      fetchCalls.push([input, init]);
+
+      if (init?.method === "DELETE") {
+        return Response.json({ logoUrl: null });
+      }
+
+      return Response.json({
+        logoUrl: "https://api.example.test/api/organization-media/logo",
+      });
+    };
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      activeUnitProvider: () => "20",
+      fetch: fetchMock,
+    });
+    const logoFile = new Blob(["logo"], { type: "image/png" });
+
+    await expect(
+      client.organizationMedia.uploadLogo(logoFile, {
+        fileName: "logo.png",
+      }),
+    ).resolves.toEqual({
+      logoUrl: "https://api.example.test/api/organization-media/logo",
+    });
+    await expect(client.organizationMedia.deleteLogo()).resolves.toEqual({
+      logoUrl: null,
+    });
+
+    expect(fetchCalls.map(([input]) => String(input))).toEqual([
+      "https://api.example.test/api/organization-media/logo",
+      "https://api.example.test/api/organization-media/logo",
+    ]);
+    expect(
+      fetchCalls.map(([, init]) =>
+        new Headers(init?.headers).get("x-active-unit-id"),
+      ),
+    ).toEqual(["20", "20"]);
+    expect(fetchCalls[0]?.[1]?.body).toBeInstanceOf(FormData);
+    expect(formDataBody(fetchCalls[0]?.[1]).get("logo")).toBeInstanceOf(Blob);
+  });
+
+  it("keeps organization logo media cloud-only in the desktop adapter", async () => {
+    const fetchMock: typeof fetch = async () => {
+      throw new Error("fetch should not be called");
+    };
+    const client = createDesktopApiClient({
+      baseUrl: "http://127.0.0.1:4317",
+      fetch: fetchMock,
+    });
+
+    await expect(
+      client.organizationMedia.uploadLogo(
+        new Blob(["logo"], { type: "image/png" }),
+      ),
+    ).rejects.toThrow("Logo da organização requer sincronização com a nuvem");
+    await expect(client.organizationMedia.deleteLogo()).rejects.toThrow(
+      "Logo da organização requer sincronização com a nuvem",
     );
   });
 });

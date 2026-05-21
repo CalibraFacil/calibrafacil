@@ -142,7 +142,7 @@ export function createLocalAsset(
   }
 
   const existingTag = database
-    .prepare(
+    .prepare<{ tag: string }, { id: string }>(
       `
 SELECT id
 FROM assets
@@ -151,7 +151,7 @@ WHERE tag = @tag
 LIMIT 1
 `,
     )
-    .get({ tag: input.tag }) as { id: string } | undefined;
+    .get({ tag: input.tag });
 
   if (existingTag) {
     throw new Error("Tag ja esta em uso");
@@ -291,7 +291,7 @@ export function listLocalAssets(
 
   const whereClause = conditions.join(" AND ");
   const totalRow = database
-    .prepare(
+    .prepare<typeof params, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM assets a
@@ -300,10 +300,11 @@ LEFT JOIN asset_types at ON at.id = a.asset_type_id
 WHERE ${whereClause}
 `,
     )
-    .get(params) as { total: number };
+    .get(params);
 
+  const pageParams = { ...params, limit, offset };
   const rows = database
-    .prepare(
+    .prepare<typeof pageParams, LocalAssetListRow>(
       `
 SELECT
   a.id,
@@ -337,22 +338,22 @@ ORDER BY a.tag ASC
 LIMIT @limit OFFSET @offset
 `,
     )
-    .all({ ...params, limit, offset }) as LocalAssetListRow[];
+    .all(pageParams);
 
   return {
     data: rows.map(toLocalAsset),
     pagination: {
       page,
       limit,
-      total: totalRow.total,
-      totalPages: Math.ceil(totalRow.total / limit),
+      total: totalRow?.total ?? 0,
+      totalPages: Math.ceil((totalRow?.total ?? 0) / limit),
     },
   };
 }
 
 function getLocalAssetById(database: LocalDatabase, id: string): LocalAsset {
   const row = database
-    .prepare(
+    .prepare<{ id: string }, LocalAssetListRow>(
       `
 SELECT
   a.id,
@@ -385,7 +386,7 @@ WHERE a.id = @id
 LIMIT 1
 `,
     )
-    .get({ id }) as LocalAssetListRow | undefined;
+    .get({ id });
 
   if (!row) {
     throw new Error("Ativo local nao encontrado");
@@ -405,7 +406,7 @@ export function getLocalAssetDetail(
   if (directMatch) return directMatch;
 
   const rows = database
-    .prepare(
+    .prepare<[], LocalAssetListRow>(
       `
 SELECT
   a.id,
@@ -437,7 +438,7 @@ LEFT JOIN asset_types at ON at.id = a.asset_type_id
 WHERE a.deleted_at IS NULL
 `,
     )
-    .all() as LocalAssetListRow[];
+    .all();
 
   const normalizedIdentifier = slugifyRouteIdentifier(identifier);
   const row = rows.find(
@@ -461,7 +462,7 @@ export function updateLocalAsset(
   const tag = input.tag ?? row.tag;
   if (tag !== row.tag) {
     const existingTag = database
-      .prepare(
+      .prepare<{ tag: string; id: string }, { id: string }>(
         `
 SELECT id
 FROM assets
@@ -471,7 +472,7 @@ WHERE tag = @tag
 LIMIT 1
 `,
       )
-      .get({ tag, id: row.id }) as { id: string } | undefined;
+      .get({ tag, id: row.id });
 
     if (existingTag) {
       throw new Error("Tag ja esta em uso");
@@ -565,7 +566,14 @@ function getLocalAssetDetailByDirectIdentifier(
   const hasNumericIdentifier =
     Number.isInteger(numericIdentifier) && numericIdentifier > 0;
   const row = database
-    .prepare(
+    .prepare<
+      {
+        identifier: string;
+        numericIdentifier: number | null;
+        hasNumericIdentifier: number;
+      },
+      LocalAssetListRow
+    >(
       `
 SELECT
   a.id,
@@ -608,16 +616,17 @@ LIMIT 1
       identifier,
       numericIdentifier: hasNumericIdentifier ? numericIdentifier : null,
       hasNumericIdentifier: hasNumericIdentifier ? 1 : 0,
-    }) as LocalAssetListRow | undefined;
+    });
 
   if (row) return toLocalAsset(row);
   if (!hasNumericIdentifier) return null;
 
   const rows = database
-    .prepare(`SELECT id FROM assets WHERE deleted_at IS NULL`)
-    .all() as Array<{
-    id: string;
-  }>;
+    .prepare<
+      [],
+      { id: string }
+    >(`SELECT id FROM assets WHERE deleted_at IS NULL`)
+    .all();
   const stableMatch = rows.find(
     (assetRow) => stableLocalNumericId(assetRow.id) === numericIdentifier,
   );
@@ -633,7 +642,7 @@ function resolveLocalAssetRow(
   const hasNumericIdentifier =
     Number.isInteger(numericIdentifier) && numericIdentifier > 0;
   const rows = database
-    .prepare(
+    .prepare<[], LocalAssetListRow>(
       `
 SELECT
   a.id,
@@ -665,7 +674,7 @@ LEFT JOIN asset_types at ON at.id = a.asset_type_id
 WHERE a.deleted_at IS NULL
 `,
     )
-    .all() as LocalAssetListRow[];
+    .all();
 
   const directMatch = rows.find(
     (candidate) =>
@@ -734,13 +743,16 @@ function resolveLocalEntityId(
   numericId: number,
 ) {
   const remoteRow = database
-    .prepare(`SELECT id FROM ${table} WHERE remote_id = @remoteId LIMIT 1`)
-    .get({ remoteId: numericId }) as { id: string } | undefined;
+    .prepare<
+      { remoteId: number },
+      { id: string }
+    >(`SELECT id FROM ${table} WHERE remote_id = @remoteId LIMIT 1`)
+    .get({ remoteId: numericId });
   if (remoteRow) return remoteRow.id;
 
-  const rows = database.prepare(`SELECT id FROM ${table}`).all() as Array<{
-    id: string;
-  }>;
+  const rows = database
+    .prepare<[], { id: string }>(`SELECT id FROM ${table}`)
+    .all();
   return (
     rows.find((row) => stableLocalNumericId(row.id) === numericId)?.id ?? null
   );
@@ -836,7 +848,8 @@ function parseJson(value: string | null) {
   if (!value) return null;
 
   try {
-    return JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
   } catch {
     return null;
   }

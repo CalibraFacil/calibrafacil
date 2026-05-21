@@ -93,11 +93,7 @@ describe("AsaasClient", () => {
     });
 
     it("should handle empty response body", async () => {
-      const response = {
-        ok: true,
-        status: 200,
-        text: () => Promise.resolve(""),
-      } as Response;
+      const response = new Response("", { status: 200 });
       global.fetch = vi.fn().mockResolvedValue(response);
 
       const client = new AsaasClient("test-api-key", "sandbox");
@@ -253,7 +249,8 @@ describe("AsaasClient", () => {
         expect.fail("Should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(AsaasError);
-        const asaasError = error as AsaasError;
+        if (!(error instanceof AsaasError)) throw error;
+        const asaasError = error;
         expect(asaasError.code).toBe("invalid_cpfCnpj");
         expect(asaasError.message).toBe("CPF/CNPJ inválido");
         expect(asaasError.details.errors).toHaveLength(2);
@@ -261,12 +258,10 @@ describe("AsaasClient", () => {
     });
 
     it("should handle non-JSON error response", async () => {
-      const response = {
-        ok: false,
+      const response = new Response("not json", {
         status: 500,
         statusText: "Internal Server Error",
-        json: () => Promise.reject(new Error("Invalid JSON")),
-      } as unknown as Response;
+      });
 
       // Mock to always return this error (simulates exhausted retries)
       global.fetch = vi.fn().mockResolvedValue(response);
@@ -278,7 +273,8 @@ describe("AsaasClient", () => {
         expect.fail("Should have thrown");
       } catch (error) {
         expect(error).toBeInstanceOf(AsaasError);
-        const asaasError = error as AsaasError;
+        if (!(error instanceof AsaasError)) throw error;
+        const asaasError = error;
         expect(asaasError.code).toBe("HTTP_500");
       }
     });

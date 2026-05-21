@@ -52,10 +52,12 @@ async function importPreload() {
   await import("./preload");
   const call = mocks.exposeInMainWorld.mock.calls[0];
   if (!call) throw new Error("preload did not expose a bridge");
+  const name: string = call[0];
+  const bridge: CalibraBridge = call[1];
 
   return {
-    name: call[0] as string,
-    bridge: call[1] as CalibraBridge,
+    name,
+    bridge,
   };
 }
 
@@ -114,9 +116,10 @@ describe("preload bridge", () => {
     const { bridge } = await importPreload();
 
     const unsubscribe = bridge.onUpdateState(listener);
-    const handler = mocks.on.mock.calls[0]?.[1] as
-      | ((event: unknown, value: unknown) => void)
-      | undefined;
+    const handler =
+      typeof mocks.on.mock.calls[0]?.[1] === "function"
+        ? mocks.on.mock.calls[0][1]
+        : undefined;
 
     expect(mocks.on).toHaveBeenCalledWith(
       desktopIpcChannels.updateStateChanged,

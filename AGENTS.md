@@ -6,6 +6,7 @@
 - `packages/`: shared libraries such as `db` (Drizzle schema), `schemas` (Zod), `auth`, `documents`, `shared`.
 - `docs/`: documentation assets.
 - Root config: `package.json`, `turbo.json`, `pnpm-workspace.yaml`, `oxlint.json`.
+- Web architecture reference: `docs/architecture/web-frontend-architecture.md`.
 
 ## Build, Test, and Development Commands
 
@@ -34,6 +35,18 @@
 - If a browser-facing raw Hono route is added, removed, or renamed, update the route list in `packages/contracts/src/api-app.ts` in the same change.
 - Raw Hono RPC calls should stay inside `packages/client-runtime`. Frontend code should prefer product-level methods such as `calibraClient.jobs.approve(...)`.
 - See `docs/architecture/api-client-contract.md` before changing API/client package boundaries.
+
+## Web Frontend Architecture Rules
+
+- Keep TanStack route files in `apps/web/src/routes` thin. They should declare `createFileRoute`, route metadata, loaders, search validation, and small param adapters only.
+- Put product UI, data hooks, forms, models, and table columns in `apps/web/src/features/<domain>`.
+- Production feature modules must not call `createFileRoute`, `Route.use*`, `useParams`, or `useSearch`. Route params/search should be passed from route adapters as explicit props or normalized loader inputs.
+- Do not add new route-local `-components`, `-index.data.ts`, or `-index.db.ts` modules under dashboard routes. Add the equivalent feature module instead.
+- Shared primitives and cross-domain helpers belong in `apps/web/src/shared`, `apps/web/src/components/ui`, `apps/web/src/lib`, or `apps/web/src/app`, not inside a feature.
+- Runtime constants, telemetry flags, and dashboard storage keys belong in `apps/web/src/app/config/runtime.ts` and `apps/web/src/features/dashboard/dashboard-scope-storage.ts`.
+- Route navigation, cloud-only state, sidebar visibility, and plan/role rules should use `apps/web/src/app/router/route-meta.ts` where possible.
+- Forms for regulated workflows should be schema-first. Prefer `@calibra-facil/schemas` for domain payloads and feature `forms.ts` files for UI-to-payload parsing.
+- Sentry PII and session replay must remain opt-in through runtime config. Do not enable replay or default PII collection by default.
 
 ## Testing Guidelines
 

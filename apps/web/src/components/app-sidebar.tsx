@@ -13,7 +13,6 @@ import {
   CustomerSupportIcon,
   Home01Icon,
   Notebook01Icon,
-  PieChartIcon,
   RulerIcon,
   Settings05Icon,
   TaskAdd02Icon,
@@ -26,6 +25,14 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 
+import {
+  dashboardManagementNavItems,
+  dashboardPrimaryNavItems,
+  dashboardSecondaryNavItems,
+  filterDashboardNavItems,
+  type DashboardIconId,
+  type DashboardNavItem,
+} from '@/app/router/route-meta'
 import { OrganizationSwitcher } from './organization-switcher'
 import { NavMain } from './nav-main'
 import { NavUser } from './nav-user'
@@ -46,95 +53,42 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar'
 
-const data = {
-  navMain: [
-    {
-      title: 'Painel',
-      url: '/dashboard',
-      icon: <HugeiconsIcon icon={Home01Icon} />,
-    },
-    {
-      title: 'Clientes',
-      url: '/dashboard/clients',
-      icon: <HugeiconsIcon icon={UserIcon} />,
-    },
-    {
-      title: 'Ativos',
-      url: '/dashboard/assets',
-      icon: <HugeiconsIcon icon={Wrench01Icon} />,
-    },
-    {
-      title: 'Laboratório',
-      url: '#',
-      icon: <HugeiconsIcon icon={Building02Icon} />,
-      items: [
-        {
-          title: 'Métodos de Calibração',
-          url: '/dashboard/methods',
-          icon: <HugeiconsIcon icon={Notebook01Icon} />,
-        },
-        {
-          title: 'Padrões de Referência',
-          url: '/dashboard/standards',
-          icon: <HugeiconsIcon icon={RulerIcon} />,
-        },
-        {
-          title: 'Competências do Pessoal',
-          url: '/dashboard/personnel',
-          icon: <HugeiconsIcon icon={UserGroupIcon} />,
-        },
-      ],
-    },
-    {
-      title: 'Serviços',
-      url: '/dashboard/services',
-      icon: <HugeiconsIcon icon={TaskAdd02Icon} />,
-    },
-    {
-      title: 'Calibrações',
-      url: '/dashboard/jobs',
-      icon: <HugeiconsIcon icon={RepairIcon} />,
-    },
-    {
-      title: 'Ordens de Serviço',
-      url: '/dashboard/service-orders',
-      icon: <HugeiconsIcon icon={Files01Icon} />,
-    },
-    {
-      title: 'Templates de Certificados',
-      url: '/dashboard/certificate-templates',
-      icon: <HugeiconsIcon icon={FileEditIcon} />,
-    },
-    {
-      title: 'Solicitações',
-      url: '/dashboard/requests',
-      icon: <HugeiconsIcon icon={DocumentValidationIcon} />,
-    },
-    {
-      title: 'Qualidade',
-      url: '#',
-      icon: <HugeiconsIcon icon={AlertCircleIcon} />,
-      items: [
-        {
-          title: 'Não Conformidades',
-          url: '/dashboard/nc',
-          icon: <HugeiconsIcon icon={AlertCircleIcon} />,
-        },
-        {
-          title: 'Ações Corretivas (CAPA)',
-          url: '/dashboard/capa',
-          icon: <HugeiconsIcon icon={TaskAdd02Icon} />,
-        },
-      ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: 'Documentação',
-      url: 'https://docs.calibrafacil.com',
-      icon: <HugeiconsIcon icon={Book02Icon} />,
-    },
-  ],
+const dashboardIconMap = {
+  analytics: Analytics01Icon,
+  assets: Wrench01Icon,
+  billing: Wallet03Icon,
+  building: Building02Icon,
+  certificateTemplate: FileEditIcon,
+  clipboard: ClipboardIcon,
+  creditCard: CreditCardIcon,
+  customers: UserIcon,
+  customerSuccess: CustomerSupportIcon,
+  documentation: Book02Icon,
+  file: File02Icon,
+  home: Home01Icon,
+  jobs: RepairIcon,
+  methods: Notebook01Icon,
+  personnel: UserGroupIcon,
+  quality: AlertCircleIcon,
+  requests: DocumentValidationIcon,
+  ruler: RulerIcon,
+  services: TaskAdd02Icon,
+  serviceOrders: Files01Icon,
+  settings: Settings05Icon,
+  wallet: Wallet03Icon,
+} satisfies Record<DashboardIconId, typeof Home01Icon>
+
+function toNavMainItems(items: DashboardNavItem[]) {
+  return items.map((item) => ({
+    title: item.title,
+    url: item.url,
+    icon: <HugeiconsIcon icon={dashboardIconMap[item.icon]} />,
+    items: item.items?.map((subItem) => ({
+      title: subItem.title,
+      url: subItem.url,
+      icon: <HugeiconsIcon icon={dashboardIconMap[subItem.icon]} />,
+    })),
+  }))
 }
 
 export function AppSidebar() {
@@ -144,78 +98,21 @@ export function AppSidebar() {
     typeof activeOrg?.members?.[0]?.role === 'string'
       ? activeOrg.members[0].role
       : 'member'
-  const canAccessConsolidatedReports =
+  const canAccessAdminOrOwner =
     currentRole === 'owner' || currentRole === 'admin'
   const canAccessFinance =
-    (currentRole === 'owner' || currentRole === 'admin') &&
-    Boolean(accessQuery.data?.hasFinancialModule)
+    canAccessAdminOrOwner && Boolean(accessQuery.data?.hasFinancialModule)
 
-  const navMain = canAccessFinance
-    ? [
-        ...data.navMain,
-        {
-          title: 'Financeiro',
-          url: '#',
-          icon: <HugeiconsIcon icon={Wallet03Icon} />,
-          items: [
-            {
-              title: 'Visão geral',
-              url: '/dashboard/finance',
-              icon: <HugeiconsIcon icon={Analytics01Icon} />,
-            },
-            {
-              title: 'Documentos',
-              url: '/dashboard/finance/documents',
-              icon: <HugeiconsIcon icon={File02Icon} />,
-            },
-            {
-              title: 'Recebimentos',
-              url: '/dashboard/finance/receipts',
-              icon: <HugeiconsIcon icon={CreditCardIcon} />,
-            },
-            {
-              title: 'Contratos',
-              url: '/dashboard/finance/contracts',
-              icon: <HugeiconsIcon icon={ClipboardIcon} />,
-            },
-            {
-              title: 'ERP',
-              url: '/dashboard/finance/erp',
-              icon: <HugeiconsIcon icon={Settings05Icon} />,
-            },
-          ],
-        },
-      ]
-    : data.navMain
-
-  const managementItems = [
-    ...(canAccessConsolidatedReports
-      ? [
-          {
-            title: 'Relatórios',
-            url: '/dashboard/reports',
-            icon: <HugeiconsIcon icon={PieChartIcon} />,
-          },
-        ]
-      : []),
-    {
-      title: 'Customer Success',
-      url: '/dashboard/customer-success',
-      icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
-      items: [
-        {
-          title: 'Área do laboratório',
-          url: '/dashboard/customer-success',
-          icon: <HugeiconsIcon icon={CustomerSupportIcon} />,
-        },
-      ],
-    },
-    {
-      title: 'Configurações',
-      url: '/dashboard/settings',
-      icon: <HugeiconsIcon icon={Settings05Icon} />,
-    },
-  ]
+  const navAccess = { canAccessFinance, canAccessAdminOrOwner }
+  const navMain = toNavMainItems(
+    filterDashboardNavItems(dashboardPrimaryNavItems, navAccess),
+  )
+  const managementItems = toNavMainItems(
+    filterDashboardNavItems(dashboardManagementNavItems, navAccess),
+  )
+  const secondaryItems = toNavMainItems(
+    filterDashboardNavItems(dashboardSecondaryNavItems, navAccess),
+  )
 
   return (
     <Sidebar variant="inset" collapsible="icon">
@@ -231,7 +128,7 @@ export function AppSidebar() {
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>
-              {data.navSecondary.map((item) => (
+              {secondaryItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     render={

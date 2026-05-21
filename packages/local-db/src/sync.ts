@@ -1,3 +1,4 @@
+import { syncBootstrapResponseSchema } from "@calibra-facil/contracts";
 import type {
   CloudSyncEvent,
   SyncBootstrapResponse,
@@ -840,7 +841,7 @@ function remoteLocalId(kind: string, remoteId: number) {
 
 export function getLocalSessionSnapshot(database: LocalDatabase) {
   const row = database
-    .prepare(
+    .prepare<[], { snapshot_json: string }>(
       `
 SELECT snapshot_json
 FROM tenant_snapshot
@@ -848,7 +849,7 @@ ORDER BY pulled_at DESC
 LIMIT 1
 `,
     )
-    .get() as { snapshot_json: string } | undefined;
+    .get();
 
   if (!row) return null;
 
@@ -857,7 +858,8 @@ LIMIT 1
     return null;
   }
 
-  return parsed as SyncBootstrapResponse;
+  const snapshot = syncBootstrapResponseSchema.safeParse(parsed);
+  return snapshot.success ? snapshot.data : null;
 }
 
 function eventsFor(
@@ -874,7 +876,7 @@ function eventsFor(
 
 function asRecord(value: unknown): JsonRecord {
   if (value && typeof value === "object") {
-    return value as JsonRecord;
+    return Object.fromEntries(Object.entries(value));
   }
 
   return {};
@@ -918,13 +920,14 @@ function getDateString(row: JsonRecord, key: string) {
 
 function getNestedString(value: unknown, key: string) {
   if (!value || typeof value !== "object") return null;
-  const nested = (value as JsonRecord)[key];
+  const nested = Object.fromEntries(Object.entries(value))[key];
   return typeof nested === "string" ? nested : null;
 }
 
 function parseJson(value: string) {
   try {
-    return JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
   } catch {
     return null;
   }

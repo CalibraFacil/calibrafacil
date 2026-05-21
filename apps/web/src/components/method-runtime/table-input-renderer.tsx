@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Add01Icon,
@@ -512,10 +512,6 @@ export function TableInputRenderer({
   const isPanelVisibleColumn = (column: TableColumn) =>
     !panelHiddenColumnKeys.has(column.key)
   const hasCertifiedValues = certifiedValueOptions.length > 0
-  useEffect(() => {
-    if (disabled || rowsAreEqual(value || [], rows)) return
-    onChange(rows)
-  }, [disabled, onChange, rows, value])
 
   const addRow = () => {
     const newRow: Record<string, unknown> = {}
@@ -1063,16 +1059,18 @@ function NumberCellWithPicker({
   const [open, setOpen] = useState(false)
 
   // Group options by standard name
-  const groupedOptions = certifiedValueOptions.reduce(
-    (acc, opt) => {
-      if (!acc[opt.standardName]) {
-        acc[opt.standardName] = []
+    const groupedOptions = certifiedValueOptions.reduce<
+      Record<string, CertifiedValueOption[]>
+    >(
+      (acc, opt) => {
+        if (!acc[opt.standardName]) {
+          acc[opt.standardName] = []
       }
       acc[opt.standardName].push(opt)
       return acc
     },
-    {} as Record<string, CertifiedValueOption[]>,
-  )
+      {},
+    )
 
   return (
     <div className="flex gap-1">

@@ -1,66 +1,38 @@
-import { apiFetch } from '@/utils/api'
+import { calibraApi } from '@/utils/api'
 
 import type {
   MethodCompileResult,
   MethodDiagnostic,
+  MethodDiagnosticSeverity,
   MethodDraft,
   MethodNormalizedFormula,
   MethodPreviewResult,
 } from './types'
 
-const ACTIVE_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
-
-function getActiveUnitHeader(): string | null {
-  if (typeof window === 'undefined') return null
-
-  const activeOrgId = window.localStorage.getItem('dashboard-active-org')
-  if (!activeOrgId) return null
-
-  return window.localStorage.getItem(`${ACTIVE_UNIT_KEY_PREFIX}${activeOrgId}`)
+function normalizeDiagnosticSeverity(
+  severity: unknown,
+): MethodDiagnosticSeverity {
+  switch (severity) {
+    case 'warning':
+    case 'info':
+      return severity
+    default:
+      return 'error'
+  }
 }
 
-async function postJson<T>(
-  path: string,
-  body: unknown,
-  options: { allowDiagnosticsResponse?: boolean } = {},
-): Promise<T> {
-  const headers = new Headers({ 'content-type': 'application/json' })
-  const activeUnitId = getActiveUnitHeader()
+function optionalString(value: unknown) {
+  return typeof value === 'string' ? value : undefined
+}
 
-  if (activeUnitId) {
-    headers.set('x-active-unit-id', activeUnitId)
+function normalizeFormulaScope(value: unknown): MethodNormalizedFormula['scope'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = Object.fromEntries(Object.entries(value))
+  if (record.kind === 'table_row' && typeof record.tableKey === 'string') {
+    return { kind: 'table_row', tableKey: record.tableKey }
   }
-
-  const response = await apiFetch(path, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
-
-  if (!response.ok) {
-    let message = `Endpoint indisponível (${response.status})`
-    let payload: unknown
-    try {
-      payload = await response.json()
-      const errorPayload = payload as {
-        error?: string
-        diagnostics?: unknown
-      }
-      if (
-        options.allowDiagnosticsResponse &&
-        Array.isArray(errorPayload.diagnostics)
-      ) {
-        return payload as T
-      }
-      message = errorPayload.error || message
-    } catch {
-      // Keep the status-based message when the server did not return JSON.
-    }
-
-    throw new Error(message)
-  }
-
-  return response.json() as Promise<T>
+  if (record.kind === 'scalar') return { kind: 'scalar' }
+  return undefined
 }
 
 function normalizeDiagnostics(value: unknown): Array<MethodDiagnostic> {
@@ -71,12 +43,15 @@ function normalizeDiagnostics(value: unknown): Array<MethodDiagnostic> {
       return { severity: 'error', message: item }
     }
 
-    const diagnostic = item as Partial<MethodDiagnostic>
+    const diagnostic =
+      item && typeof item === 'object' && !Array.isArray(item)
+        ? Object.fromEntries(Object.entries(item))
+        : {}
     return {
-      code: diagnostic.code,
-      severity: diagnostic.severity ?? 'error',
-      message: diagnostic.message ?? 'Diagnóstico sem mensagem',
-      path: diagnostic.path,
+      code: optionalString(diagnostic.code),
+      severity: normalizeDiagnosticSeverity(diagnostic.severity),
+      message: optionalString(diagnostic.message) ?? 'Diagnóstico sem mensagem',
+      path: optionalString(diagnostic.path),
     }
   })
 }
@@ -84,13 +59,18 @@ function normalizeDiagnostics(value: unknown): Array<MethodDiagnostic> {
 function normalizeFormulaList(value: unknown): Array<MethodNormalizedFormula> {
   if (Array.isArray(value)) {
     return value.map((formula) => {
-      const item = formula as Partial<MethodNormalizedFormula>
+      const item =
+        formula && typeof formula === 'object' && !Array.isArray(formula)
+          ? Object.fromEntries(Object.entries(formula))
+          : {}
       return {
-        outputKey: item.outputKey ?? '',
-        expression: item.expression ?? '',
+        outputKey: optionalString(item.outputKey) ?? '',
+        expression: optionalString(item.expression) ?? '',
         normalizedExpression:
-          item.normalizedExpression ?? item.expression ?? '',
-        scope: item.scope,
+          optionalString(item.normalizedExpression) ??
+          optionalString(item.expression) ??
+          '',
+        scope: normalizeFormulaScope(item.scope),
       }
     })
   }
@@ -109,13 +89,13 @@ function normalizeFormulaList(value: unknown): Array<MethodNormalizedFormula> {
 export async function compileMethodDraft(
   draft: MethodDraft,
 ): Promise<MethodCompileResult> {
-  const result = await postJson<{
+  const result = await calibraApi.methods.compileDraft<{
     diagnostics?: unknown
     fingerprint?: string
     normalizedFormulas?: unknown
     formulas?: unknown
     compiledMethod?: unknown
-  }>('/api/methods/compile', { draft }, { allowDiagnosticsResponse: true })
+  }>({ draft })
 
   return {
     diagnostics: normalizeDiagnostics(result.diagnostics),
@@ -131,12 +111,12 @@ export async function previewMethodDraft(params: {
   draft: MethodDraft
   sampleData: Record<string, unknown>
 }): Promise<MethodPreviewResult> {
-  const result = await postJson<{
+  const result = await calibraApi.methods.previewDraft<{
     diagnostics?: unknown
     results?: Record<string, unknown>
     outputs?: Record<string, unknown>
     normalizedData?: Record<string, unknown>
-  }>('/api/methods/preview', params, { allowDiagnosticsResponse: true })
+  }>(params)
 
   return {
     diagnostics: normalizeDiagnostics(result.diagnostics),
@@ -150,7 +130,7 @@ export async function publishMethodDraft(params: {
   sampleData: Record<string, unknown>
   reasonForChange?: string
 }): Promise<unknown> {
-  return postJson(`/api/methods/${params.methodId}/publish`, {
+  return calibraApi.methods.publishDraft(params.methodId, {
     sampleData: params.sampleData,
     reasonForChange: params.reasonForChange,
   })
@@ -160,5 +140,5 @@ export async function requestMethodApproval(
   methodId: number,
   sampleData: Record<string, unknown>,
 ): Promise<unknown> {
-  return postJson(`/api/methods/${methodId}/request-approval`, { sampleData })
+  return calibraApi.methods.requestApproval(methodId, { sampleData })
 }

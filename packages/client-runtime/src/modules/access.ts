@@ -3,26 +3,21 @@ import type {
   FinanceAccessResponse,
   PlanAccessResponse,
 } from "../types";
+import { readJsonResponse } from "../transport/response";
 
 export function createAccessApi(rawCloudClient: any): AccessApi {
   return {
     async getPlanAccess() {
-      const response = await rawCloudClient.api.billing.access.$get();
-
-      if (!response.ok) {
-        throw new Error("Erro ao carregar plano atual");
-      }
-
-      return response.json() as Promise<PlanAccessResponse>;
+      return readJsonResponse<PlanAccessResponse>(
+        await rawCloudClient.api.billing.access.$get(),
+        "Erro ao carregar plano atual",
+      );
     },
     async getFinanceAccess() {
-      const response = await rawCloudClient.api.finance.access.$get();
-
-      if (!response.ok) {
-        throw new Error("Erro ao carregar acesso financeiro");
-      }
-
-      return response.json() as Promise<FinanceAccessResponse>;
+      return readJsonResponse<FinanceAccessResponse>(
+        await rawCloudClient.api.finance.access.$get(),
+        "Erro ao carregar acesso financeiro",
+      );
     },
   };
 }

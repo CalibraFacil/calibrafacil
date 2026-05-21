@@ -6,7 +6,7 @@ import { and, eq } from "drizzle-orm";
 export function serializeCertificateTemplateSnapshot(
   snapshot: CertificateTemplateSnapshot,
 ): Record<string, unknown> {
-  return snapshot as unknown as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(snapshot));
 }
 
 export async function getEffectiveCertificateTemplateSnapshot(

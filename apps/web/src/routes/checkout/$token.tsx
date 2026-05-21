@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Calendar03Icon,
@@ -28,6 +28,15 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
+import type { PublicCheckoutPresentation } from '@/features/public/types'
+import {
+  usePublicCheckoutSnapshotData,
+  usePublicCheckoutStatusData,
+} from '@/features/public/queries'
+import type {
+  CheckoutState,
+  PublicCheckoutStartResponse,
+} from '@/features/public/types'
 import { cn } from '@/lib/utils'
 import { calibraApi } from '@/utils/api'
 
@@ -36,146 +45,6 @@ type ProviderOutcome = 'success' | 'cancel' | 'expired'
 type CheckoutSearch = {
   providerOutcome?: ProviderOutcome
 }
-
-type CheckoutState =
-  | 'INVALID'
-  | 'EXPIRED'
-  | 'REVOKED'
-  | 'AWAITING_PAYMENT'
-  | 'PIX_READY'
-  | 'BOLETO_READY'
-  | 'PAID'
-  | 'OVERDUE'
-  | 'REFUNDED'
-  | 'CANCELED'
-
-type SnapshotResponse =
-  | {
-      state: 'INVALID'
-      offer: null
-      presentation: null
-    }
-  | {
-      state: CheckoutState
-      offer: {
-        id: string
-        status: string
-        kind: 'SETUP_FEE' | 'PLAN_UPFRONT' | 'PLAN_RECURRING'
-        paymentMethod: 'PIX' | 'BOLETO' | 'CREDIT_CARD'
-        providerMode: 'CHECKOUT' | 'PAYMENT' | 'SUBSCRIPTION'
-        currency: string
-        totalAmount: number
-        recurringAmount: number | null
-        dueDate: string | null
-        offerExpiresAt: string | null
-        issuedAt: string | null
-        paidAt: string | null
-        customerVisibleDescription: string | null
-        items: Array<{
-          id: number
-          type: string
-          label: string
-          description: string | null
-          quantity: number
-          unitAmount: number
-          totalAmount: number
-        }>
-        seller: {
-          name: string
-          cnpj: string | null
-          email: string | null
-          phone: string | null
-          website: string | null
-          city: string | null
-          state: string | null
-        }
-        payer: {
-          name: string | null
-          email: string | null
-          phone: string | null
-          taxId: string | null
-        }
-      }
-      presentation: Presentation
-    }
-
-type Presentation =
-  | {
-      type: 'PIX'
-      paymentId: number | null
-      providerPaymentId: string | null
-      providerUrl: string | null
-      pix: {
-        qrCodeImage: string | null
-        payload: string | null
-        expirationDate: string | null
-      }
-      boleto: null
-    }
-  | {
-      type: 'BOLETO'
-      paymentId: number | null
-      providerPaymentId: string | null
-      providerUrl: string | null
-      pix: null
-      boleto: {
-        bankSlipUrl: string | null
-        identificationField: string | null
-        dueDate: string | null
-        amount: number
-      }
-    }
-  | {
-      type: 'REDIRECT' | null
-      paymentId: number | null
-      providerPaymentId: string | null
-      providerUrl: string | null
-      pix: null
-      boleto: null
-    }
-  | null
-
-type StatusResponse = {
-  state: CheckoutState
-  paymentId: number | null
-  status: string | null
-  paidAt: string | null
-  presentation: Presentation
-}
-
-type StartResponse =
-  | {
-      type: 'PAID'
-      state: 'PAID'
-      paymentId: number | null
-    }
-  | {
-      type: 'PIX_READY'
-      state: 'PIX_READY'
-      paymentId: number
-      pix: {
-        qrCodeImage: string | null
-        payload: string | null
-        expirationDate: string | null
-      }
-    }
-  | {
-      type: 'BOLETO_READY'
-      state: 'BOLETO_READY'
-      paymentId: number
-      boleto: {
-        bankSlipUrl: string | null
-        identificationField: string | null
-        dueDate: string | null
-        amount: number
-      }
-    }
-  | {
-      type: 'REDIRECT'
-      state: 'AWAITING_PAYMENT'
-      providerUrl: string
-      paymentId: number | null
-    }
 
 const METHOD_COPY = {
   PIX: {
@@ -277,12 +146,7 @@ function PublicCheckoutPage() {
   const [copiedBoleto, setCopiedBoleto] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
 
-  const snapshotQuery = useQuery({
-    queryKey: ['public-commercial-checkout', token, 'snapshot'],
-    queryFn: async () => {
-      return calibraApi.publicCheckout.getSnapshot<SnapshotResponse>(token)
-    },
-  })
+  const snapshotQuery = usePublicCheckoutSnapshotData(token)
 
   const effectiveSnapshot = snapshotQuery.data
   const shouldPoll =
@@ -291,13 +155,8 @@ function PublicCheckoutPage() {
     effectiveSnapshot?.state === 'AWAITING_PAYMENT' ||
     Boolean(providerOutcome)
 
-  const statusQuery = useQuery({
-    queryKey: ['public-commercial-checkout', token, 'status'],
-    queryFn: async () => {
-      return calibraApi.publicCheckout.getStatus<
-        StatusResponse | { state: 'INVALID' }
-      >(token)
-    },
+  const statusQuery = usePublicCheckoutStatusData({
+    token,
     enabled: shouldPoll,
     refetchInterval: (query) => {
       const data = query.state.data
@@ -320,7 +179,7 @@ function PublicCheckoutPage() {
 
   const startMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.publicCheckout.start<StartResponse>(token)
+      return calibraApi.publicCheckout.start<PublicCheckoutStartResponse>(token)
     },
     onMutate: () => {
       setStartError(null)
@@ -835,7 +694,7 @@ function IdentityCard(props: { title: string; lines: Array<string | null> }) {
 }
 
 function PixInstructions(props: {
-  presentation: Extract<Presentation, { type: 'PIX' }>
+  presentation: Extract<PublicCheckoutPresentation, { type: 'PIX' }>
   copied: boolean
   onCopy: () => void
   onVerify: () => void
@@ -904,7 +763,7 @@ function PixInstructions(props: {
 }
 
 function BoletoInstructions(props: {
-  presentation: Extract<Presentation, { type: 'BOLETO' }>
+  presentation: Extract<PublicCheckoutPresentation, { type: 'BOLETO' }>
   copied: boolean
   onCopy: () => void
   onVerify: () => void

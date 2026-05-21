@@ -5,6 +5,7 @@ import {
   getPlan,
   getPlanSupportPolicy,
   isSubscriptionActive,
+  isValidPlanId,
   type FeatureFlag,
   type PlanId,
   type PlanSupportPolicy,
@@ -28,9 +29,9 @@ export async function getOrganizationPlanAccess(
     where: eq(subscription.organizationId, organizationId),
   });
 
-  const planId = (currentSubscription?.planId as PlanId | undefined) ?? "FREE";
-  const status =
-    (currentSubscription?.status as SubscriptionStatus | undefined) ?? "TRIAL";
+  const planIdValue = currentSubscription?.planId ?? "";
+  const planId = isValidPlanId(planIdValue) ? planIdValue : "FREE";
+  const status = parseSubscriptionStatus(currentSubscription?.status);
   const plan = getPlan(planId);
   const isActive = currentSubscription ? isSubscriptionActive(status) : true;
 
@@ -42,6 +43,20 @@ export async function getOrganizationPlanAccess(
     entitlements: isActive ? getEnabledEntitlements(planId) : [],
     supportPolicy: getPlanSupportPolicy(planId),
   };
+}
+
+function parseSubscriptionStatus(
+  status: string | null | undefined,
+): SubscriptionStatus {
+  switch (status) {
+    case "ACTIVE":
+    case "PAST_DUE":
+    case "CANCELED":
+    case "TRIAL":
+      return status;
+    default:
+      return "TRIAL";
+  }
 }
 
 export async function organizationHasEntitlement(

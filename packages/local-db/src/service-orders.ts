@@ -499,7 +499,7 @@ export function listLocalServiceOrders(
   const whereClause =
     conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const totalRow = database
-    .prepare(
+    .prepare<typeof params, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM service_orders so
@@ -508,9 +508,10 @@ LEFT JOIN assets a ON a.id = so.asset_id
 ${whereClause}
 `,
     )
-    .get(params) as { total: number };
+    .get(params);
+  const pageParams = { ...params, limit, offset };
   const rows = database
-    .prepare(
+    .prepare<typeof pageParams, LocalServiceOrderListRow>(
       `
 SELECT
   so.remote_id,
@@ -531,7 +532,7 @@ ORDER BY so.opened_at DESC
 LIMIT @limit OFFSET @offset
 `,
     )
-    .all({ ...params, limit, offset }) as LocalServiceOrderListRow[];
+    .all(pageParams);
 
   return {
     data: rows.map((row) => ({
@@ -555,8 +556,8 @@ LIMIT @limit OFFSET @offset
     pagination: {
       page,
       limit,
-      total: totalRow.total,
-      totalPages: Math.ceil(totalRow.total / limit),
+      total: totalRow?.total ?? 0,
+      totalPages: Math.ceil((totalRow?.total ?? 0) / limit),
     },
   };
 }
@@ -976,20 +977,23 @@ function findLocalServiceOrder(database: LocalDatabase, routeId: string) {
     const remoteMatch = selectServiceOrderDetail(database).get({
       remoteId,
       routeLocalId: null,
-    }) as LocalServiceOrderDetailRow | undefined;
+    });
     if (remoteMatch) return remoteMatch;
   }
 
   const rows = selectServiceOrderDetail(database).all({
     remoteId: null,
     routeLocalId: null,
-  }) as LocalServiceOrderDetailRow[];
+  });
 
   return rows.find((row) => String(stableLocalNumericId(row.id)) === routeId);
 }
 
 function selectServiceOrderDetail(database: LocalDatabase) {
-  return database.prepare(
+  return database.prepare<
+    { remoteId: number | null; routeLocalId: string | null },
+    LocalServiceOrderDetailRow
+  >(
     `
 SELECT
   so.*,
@@ -1030,7 +1034,10 @@ function getAssetForServiceOrderIntake(
   input: { assetId: number; customerId: number },
 ) {
   const rows = database
-    .prepare(
+    .prepare<
+      { assetId: number; customerId: number },
+      LocalServiceOrderAssetRow
+    >(
       `
 SELECT
   a.*,
@@ -1045,7 +1052,7 @@ WHERE (a.remote_id = @assetId OR a.remote_id IS NULL)
   AND a.deleted_at IS NULL
 `,
     )
-    .all(input) as LocalServiceOrderAssetRow[];
+    .all(input);
 
   return rows.find((row) => {
     const assetId = row.remote_id ?? stableLocalNumericId(row.id);
@@ -1088,7 +1095,7 @@ function listLocalServiceOrderQuotes(
   serviceOrderId: string,
 ) {
   const rows = database
-    .prepare(
+    .prepare<{ serviceOrderId: string }, LocalServiceOrderQuoteRow>(
       `
 SELECT *
 FROM service_order_quotes
@@ -1096,15 +1103,18 @@ WHERE service_order_id = @serviceOrderId
 ORDER BY version DESC
 `,
     )
-    .all({ serviceOrderId }) as LocalServiceOrderQuoteRow[];
+    .all({ serviceOrderId });
 
   return rows.map((row) => toLocalQuote(database, row));
 }
 
 function getLocalServiceOrderQuote(database: LocalDatabase, quoteId: string) {
   const row = database
-    .prepare("SELECT * FROM service_order_quotes WHERE id = @quoteId")
-    .get({ quoteId }) as LocalServiceOrderQuoteRow | undefined;
+    .prepare<
+      { quoteId: string },
+      LocalServiceOrderQuoteRow
+    >("SELECT * FROM service_order_quotes WHERE id = @quoteId")
+    .get({ quoteId });
 
   return row ? toLocalQuote(database, row) : null;
 }
@@ -1137,7 +1147,7 @@ function toLocalQuote(database: LocalDatabase, row: LocalServiceOrderQuoteRow) {
 
 function listLocalQuoteItems(database: LocalDatabase, quoteId: string) {
   const rows = database
-    .prepare(
+    .prepare<{ quoteId: string }, LocalServiceOrderQuoteItemRow>(
       `
 SELECT *
 FROM service_order_quote_items
@@ -1145,7 +1155,7 @@ WHERE quote_id = @quoteId
 ORDER BY sort_order ASC
 `,
     )
-    .all({ quoteId }) as LocalServiceOrderQuoteItemRow[];
+    .all({ quoteId });
 
   return rows.map((row) => ({
     id: row.remote_id ?? stableLocalNumericId(row.id),
@@ -1197,19 +1207,19 @@ function getLocalServiceOrderExecutionRow(
   serviceOrderId: string,
 ) {
   return database
-    .prepare(
+    .prepare<{ serviceOrderId: string }, LocalServiceOrderExecutionRow>(
       `
 SELECT *
 FROM service_order_executions
 WHERE service_order_id = @serviceOrderId
 `,
     )
-    .get({ serviceOrderId }) as LocalServiceOrderExecutionRow | undefined;
+    .get({ serviceOrderId });
 }
 
 function listLocalExecutionItems(database: LocalDatabase, executionId: string) {
   const rows = database
-    .prepare(
+    .prepare<{ executionId: string }, LocalServiceOrderExecutionItemRow>(
       `
 SELECT *
 FROM service_order_execution_items
@@ -1217,7 +1227,7 @@ WHERE execution_id = @executionId
 ORDER BY sort_order ASC
 `,
     )
-    .all({ executionId }) as LocalServiceOrderExecutionItemRow[];
+    .all({ executionId });
 
   return rows.map((row) => ({
     id: row.remote_id ?? stableLocalNumericId(row.id),
@@ -1239,7 +1249,7 @@ function listLocalServiceOrderDeliveryDocuments(
   serviceOrderId: string,
 ) {
   const rows = database
-    .prepare(
+    .prepare<{ serviceOrderId: string }, LocalServiceOrderDeliveryDocumentRow>(
       `
 SELECT *
 FROM service_order_delivery_documents
@@ -1247,7 +1257,7 @@ WHERE service_order_id = @serviceOrderId
 ORDER BY version DESC
 `,
     )
-    .all({ serviceOrderId }) as LocalServiceOrderDeliveryDocumentRow[];
+    .all({ serviceOrderId });
 
   return rows.map(toLocalDeliveryDocument);
 }
@@ -1257,10 +1267,11 @@ function getLocalServiceOrderDeliveryDocument(
   documentId: string,
 ) {
   const row = database
-    .prepare(
-      "SELECT * FROM service_order_delivery_documents WHERE id = @documentId",
-    )
-    .get({ documentId }) as LocalServiceOrderDeliveryDocumentRow | undefined;
+    .prepare<
+      { documentId: string },
+      LocalServiceOrderDeliveryDocumentRow
+    >("SELECT * FROM service_order_delivery_documents WHERE id = @documentId")
+    .get({ documentId });
 
   return row ? toLocalDeliveryDocument(row) : null;
 }
@@ -1457,16 +1468,16 @@ function nextLocalQuoteVersion(
   serviceOrderId: string,
 ) {
   const row = database
-    .prepare(
+    .prepare<{ serviceOrderId: string }, { version: number }>(
       `
 SELECT COALESCE(MAX(version), 0) + 1 AS version
 FROM service_order_quotes
 WHERE service_order_id = @serviceOrderId
 `,
     )
-    .get({ serviceOrderId }) as { version: number };
+    .get({ serviceOrderId });
 
-  return row.version;
+  return row?.version ?? 1;
 }
 
 function nextLocalDeliveryDocumentVersion(
@@ -1474,16 +1485,16 @@ function nextLocalDeliveryDocumentVersion(
   serviceOrderId: string,
 ) {
   const row = database
-    .prepare(
+    .prepare<{ serviceOrderId: string }, { version: number }>(
       `
 SELECT COALESCE(MAX(version), 0) + 1 AS version
 FROM service_order_delivery_documents
 WHERE service_order_id = @serviceOrderId
 `,
     )
-    .get({ serviceOrderId }) as { version: number };
+    .get({ serviceOrderId });
 
-  return row.version;
+  return row?.version ?? 1;
 }
 
 function markServiceOrderLocal(
@@ -1662,32 +1673,39 @@ INSERT INTO outbox (
 function nextLocalServiceOrderNumber(database: LocalDatabase) {
   const year = new Date().getFullYear();
   const row = database
-    .prepare(
+    .prepare<{ prefix: string }, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM service_orders
 WHERE service_order_number LIKE @prefix
 `,
     )
-    .get({ prefix: `LOCAL-OS-${year}-%` }) as { total: number };
+    .get({ prefix: `LOCAL-OS-${year}-%` });
 
-  return `LOCAL-OS-${year}-${String(row.total + 1).padStart(4, "0")}`;
+  return `LOCAL-OS-${year}-${String((row?.total ?? 0) + 1).padStart(4, "0")}`;
 }
 
 function parseJson(value: string | null | undefined) {
   if (!value) return null;
   try {
-    return JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
   } catch {
     return null;
   }
 }
 
+function recordFromUnknown(value: unknown): JsonRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
 function parseJsonRecord(value: string | null | undefined) {
   const parsed = parseJson(value);
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed as JsonRecord)
-    : {};
+  return recordFromUnknown(parsed);
 }
 
 function parseJsonRecordOrNull(value: string | null | undefined) {

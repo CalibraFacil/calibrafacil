@@ -33,6 +33,7 @@ type R2S3Client = S3Client & {
 };
 
 export function createR2Client(env: R2Env): R2S3Client {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client exposes command-specific send overloads through the concrete client.
   return new S3Client({
     region: "auto",
     endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -105,23 +106,27 @@ export async function downloadFromR2(
   key: string,
 ): Promise<Uint8Array> {
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
-  const response = (await client.send(command)) as {
-    Body?: {
-      transformToByteArray?: () => Promise<Uint8Array>;
-      transformToString?: () => Promise<string>;
-    };
-  };
+  const response = await client.send(command);
+  const responseRecord =
+    response && typeof response === "object" && !Array.isArray(response)
+      ? Object.fromEntries(Object.entries(response))
+      : {};
+  const body = responseRecord.Body;
+  const bodyRecord =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? Object.fromEntries(Object.entries(body))
+      : {};
 
-  if (!response.Body) {
+  if (!body) {
     throw new Error(`R2 object not found: ${key}`);
   }
 
-  if (typeof response.Body.transformToByteArray === "function") {
-    return response.Body.transformToByteArray();
+  if (typeof bodyRecord.transformToByteArray === "function") {
+    return bodyRecord.transformToByteArray();
   }
 
-  if (typeof response.Body.transformToString === "function") {
-    return new TextEncoder().encode(await response.Body.transformToString());
+  if (typeof bodyRecord.transformToString === "function") {
+    return new TextEncoder().encode(await bodyRecord.transformToString());
   }
 
   throw new Error(`R2 object body is not readable: ${key}`);

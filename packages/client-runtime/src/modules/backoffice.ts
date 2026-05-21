@@ -3,7 +3,7 @@ import type {
   BackofficeApi,
   BackofficeBootstrapInput,
 } from "../types";
-import { readApiError, readJsonResponse } from "../transport/response";
+import { readJsonResponse, readMutationResponse } from "../transport/response";
 
 export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
   return {
@@ -301,15 +301,10 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
       },
     },
     async stopImpersonation() {
-      const response =
-        await rawCloudClient.api.backoffice.impersonation.stop.$post();
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Erro ao parar impersonação"),
-        );
-      }
-
+      await readMutationResponse(
+        await rawCloudClient.api.backoffice.impersonation.stop.$post(),
+        "Erro ao parar impersonação",
+      );
       return { ok: true };
     },
   };

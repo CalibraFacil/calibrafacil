@@ -2,16 +2,16 @@ import type { ReactNode } from 'react'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 
-import { AccountBoard } from './-customer-success/boards'
+import { AccountBoard } from '@/features/backoffice/customer-success/boards'
 import {
   useCustomerSuccessOrganizations,
   useSupportQueue,
   useUpdateAccountHealth,
-} from './-customer-success/hooks'
+} from '@/features/backoffice/customer-success/hooks'
 import type {
   OrganizationFilter,
   OrganizationQueueItem,
-} from './-customer-success/model'
+} from '@/features/backoffice/customer-success/model'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -44,8 +44,14 @@ function CustomerSuccessOverviewPage() {
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search.trim().toLowerCase())
 
-  const organizations = organizationsQuery.data?.data ?? []
-  const supportQueue = supportQueueQuery.data?.data ?? []
+  const organizations = useMemo(
+    () => organizationsQuery.data?.data ?? [],
+    [organizationsQuery.data?.data],
+  )
+  const supportQueue = useMemo(
+    () => supportQueueQuery.data?.data ?? [],
+    [supportQueueQuery.data?.data],
+  )
   const filteredOrganizations = useMemo(
     () =>
       filterOrganizations({

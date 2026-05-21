@@ -19,11 +19,13 @@ type IntegrationsModule = {
   ): Promise<{ scheduledRuns: number }>;
 };
 
-const runtimeImport = new Function("specifier", "return import(specifier)") as <
-  T,
->(
-  specifier: string,
-) => Promise<T>;
+async function runtimeImport<T>(specifier: string): Promise<T> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- dynamic import is intentionally hidden from bundlers and typed by the caller's module boundary.
+  const importer = new Function("specifier", "return import(specifier)") as (
+    specifier: string,
+  ) => Promise<T>;
+  return importer(specifier);
+}
 
 export function importWorkerModule() {
   return runtimeImport<WorkerModule>("@calibra-facil/worker");

@@ -1,4 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { z } from 'zod'
+
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 export type EditableAddress = {
   cep?: string
@@ -26,6 +30,18 @@ type ViaCepResponse = {
   uf?: string
   erro?: boolean
 }
+
+const ViaCepResponseSchema = z
+  .object({
+    cep: z.string().optional(),
+    logradouro: z.string().optional(),
+    complemento: z.string().optional(),
+    bairro: z.string().optional(),
+    localidade: z.string().optional(),
+    uf: z.string().optional(),
+    erro: z.boolean().optional(),
+  })
+  .passthrough()
 
 export type ViaCepLookupStatus =
   | 'idle'
@@ -58,14 +74,13 @@ export function mergeViaCepAddress<TAddress extends EditableAddress>(
   currentAddress: TAddress,
   viaCepAddress: ViaCepAddress,
 ): TAddress {
-  return {
-    ...currentAddress,
+  return Object.assign({}, currentAddress, {
     cep: viaCepAddress.cep || currentAddress.cep,
     street: viaCepAddress.street,
     neighbourhood: viaCepAddress.neighbourhood,
     city: viaCepAddress.city,
     state: viaCepAddress.state,
-  } as TAddress
+  })
 }
 
 export async function fetchViaCepAddress(
@@ -85,7 +100,7 @@ export async function fetchViaCepAddress(
     throw new Error('Falha ao consultar CEP')
   }
 
-  return mapViaCepResponse((await response.json()) as ViaCepResponse)
+  return mapViaCepResponse(ViaCepResponseSchema.parse(await response.json()))
 }
 
 export function useViaCepLookup({
@@ -99,53 +114,81 @@ export function useViaCepLookup({
   debounceMs?: number
   onResolved: (address: ViaCepAddress) => void
 }) {
+  const queryClient = useQueryClient()
   const [status, setStatus] = useState<ViaCepLookupStatus>('idle')
+  const timeoutRef = useRef<number | null>(null)
+  const controllerRef = useRef<AbortController | null>(null)
 
-  useEffect(() => {
-    const cepDigits = getCepDigits(cep)
-
-    if (disabled || cepDigits.length !== 8) {
-      setStatus('idle')
-      return
+  const clearPendingLookup = useCallback(() => {
+    if (timeoutRef.current) {
+      window.clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
     }
 
-    const controller = new AbortController()
-    const timeoutId = window.setTimeout(async () => {
-      setStatus('loading')
+    controllerRef.current?.abort()
+    controllerRef.current = null
+  }, [])
 
-      try {
-        const address = await fetchViaCepAddress(cepDigits, controller.signal)
+  const lookupCep = useCallback(
+    (nextCep = cep) => {
+      clearPendingLookup()
 
-        if (controller.signal.aborted) {
-          return
-        }
+      const cepDigits = getCepDigits(nextCep)
 
-        if (!address) {
-          setStatus('not-found')
-          return
-        }
-
-        onResolved(address)
-        setStatus('success')
-      } catch {
-        if (controller.signal.aborted) {
-          return
-        }
-
-        setStatus('error')
+      if (disabled || cepDigits.length !== 8) {
+        setStatus('idle')
+        return
       }
-    }, debounceMs)
 
-    return () => {
-      controller.abort()
-      window.clearTimeout(timeoutId)
-    }
-  }, [cep, debounceMs, disabled, onResolved])
+      const controller = new AbortController()
+      controllerRef.current = controller
+      timeoutRef.current = window.setTimeout(async () => {
+        timeoutRef.current = null
+        setStatus('loading')
+
+        try {
+          const address = await queryClient.fetchQuery({
+            queryKey: ['viacep', cepDigits],
+            queryFn: () => fetchViaCepAddress(cepDigits, controller.signal),
+            staleTime: 24 * 60 * 60 * 1000,
+          })
+
+          if (controller.signal.aborted) {
+            return
+          }
+
+          if (!address) {
+            setStatus('not-found')
+            return
+          }
+
+          onResolved(address)
+          setStatus('success')
+        } catch {
+          if (controller.signal.aborted) {
+            return
+          }
+
+          setStatus('error')
+        }
+      }, debounceMs)
+    },
+    [cep, clearPendingLookup, debounceMs, disabled, onResolved, queryClient],
+  )
+
+  const reset = useCallback(() => {
+    clearPendingLookup()
+    setStatus('idle')
+  }, [clearPendingLookup])
+
+  useMountEffect(() => clearPendingLookup)
 
   return {
     status,
     isLoading: status === 'loading',
     message: getViaCepStatusMessage(status),
+    lookupCep,
+    reset,
   }
 }
 

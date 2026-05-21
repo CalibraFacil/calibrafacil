@@ -152,6 +152,10 @@ export const calibraApiPolicyRegistry = {
     uploadAvatar: "cloud-only",
     deleteAvatar: "cloud-only",
   },
+  organizationMedia: {
+    uploadLogo: "cloud-only",
+    deleteLogo: "cloud-only",
+  },
   signingCertificates: {
     list: "cloud-only",
     upload: "cloud-only",
@@ -201,6 +205,10 @@ export const calibraApiPolicyRegistry = {
     technicalReview: "cloud-only",
     qualityApprove: "cloud-only",
     returnToDraft: "cloud-only",
+    compileDraft: "cloud-only",
+    previewDraft: "cloud-only",
+    publishDraft: "cloud-only",
+    requestApproval: "cloud-only",
   },
   standards: {
     list: "local-first-read-through-sync",
@@ -298,6 +306,14 @@ export const calibraApiPolicyRegistry = {
     update: "cloud-only",
     duplicate: "cloud-only",
     setDefault: "cloud-only",
+    getXlsxVersion: "cloud-only",
+    uploadXlsx: "cloud-only",
+    validateXlsx: "cloud-only",
+    updateXlsxBindings: "cloud-only",
+    createXlsxPreview: "cloud-only",
+    getXlsxPreview: "cloud-only",
+    publishXlsx: "cloud-only",
+    createXlsxAssignment: "cloud-only",
   },
   competences: {
     list: "cloud-only",
@@ -346,12 +362,15 @@ export function getCalibraApiDataPolicy<TNamespace extends CalibraApiNamespace>(
   namespace: TNamespace,
   method: CalibraApiMethod<TNamespace>,
 ): DataPolicy {
-  const policies = calibraApiPolicyRegistry[namespace] as Record<
-    CalibraApiMethod<TNamespace>,
-    DataPolicy
-  >;
+  for (const [candidate, policy] of Object.entries(
+    calibraApiPolicyRegistry[namespace],
+  )) {
+    if (candidate === method) {
+      return policy;
+    }
+  }
 
-  return policies[method];
+  throw new Error(`Unknown Calibra API data policy: ${namespace}.${method}`);
 }
 
 export function getDesktopDataPolicyUnavailableMessage(
@@ -361,12 +380,18 @@ export function getDesktopDataPolicyUnavailableMessage(
 }
 
 export function listCalibraApiPolicyEntries(): CalibraApiPolicyEntry[] {
-  return Object.entries(calibraApiPolicyRegistry).flatMap(
-    ([namespace, methods]) =>
-      Object.entries(methods).map(([method, policy]) => ({
-        namespace: namespace as CalibraApiNamespace,
+  return Object.keys(calibraApiPolicyRegistry)
+    .filter(isCalibraApiNamespace)
+    .flatMap((namespace) => {
+      const methods = calibraApiPolicyRegistry[namespace];
+      return Object.entries(methods).map(([method, policy]) => ({
+        namespace,
         method,
         policy,
-      })),
-  );
+      }));
+    });
+}
+
+function isCalibraApiNamespace(value: string): value is CalibraApiNamespace {
+  return value in calibraApiPolicyRegistry;
 }

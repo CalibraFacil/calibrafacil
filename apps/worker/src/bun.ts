@@ -99,10 +99,9 @@ function createR2Bucket(bucket = requiredEnv("R2_BUCKET_NAME")) {
       const bytes = await response.Body.transformToByteArray();
       return {
         async arrayBuffer() {
-          return bytes.buffer.slice(
-            bytes.byteOffset,
-            bytes.byteOffset + bytes.byteLength,
-          );
+          const copy = new Uint8Array(bytes.byteLength);
+          copy.set(bytes);
+          return copy.buffer;
         },
       };
     },
@@ -139,7 +138,7 @@ function createEnv(): WorkerEnv {
     GOTENBERG_URL: process.env.GOTENBERG_URL,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
     INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
-  } as WorkerEnv;
+  };
 }
 
 function createBatch(jobs: ClaimedQueueJob[]) {
@@ -164,9 +163,20 @@ async function processQueueBatch(env: WorkerEnv) {
 
   console.log(`[Worker] Claimed ${jobs.length} queue job(s)`);
   const { batch, states } = createBatch(jobs);
+  const executionContext: ExecutionContext = {
+    props: {},
+    waitUntil(promise) {
+      void promise.catch((error) => {
+        console.error("[Worker] waitUntil task failed", error);
+      });
+    },
+    passThroughOnException() {
+      // Local queue processing has no upstream request to pass through.
+    },
+  };
 
   try {
-    await worker.queue(batch, env, {} as never);
+    await worker.queue(batch, env, executionContext);
   } catch (error) {
     await Promise.all(jobs.map((job) => failQueueJob(job.id, error)));
     return;

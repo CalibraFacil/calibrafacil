@@ -16,7 +16,9 @@ import {
 } from "@calibra-facil/db/schema";
 import {
   CancelCommercialOfferSchema,
+  CommercialOfferKindSchema,
   CommercialOfferPreviewInputSchema,
+  CommercialOfferStatusSchema,
   CreateCommercialOfferSchema,
   ReissueCommercialOfferSchema,
   SyncBillingCustomerSchema,
@@ -34,13 +36,19 @@ import { cancelCommercialOffer } from "../services/commercial/cancel";
 import { reissueCommercialOffer } from "../services/commercial/reissue";
 
 function resolvePublicAppUrl(c: { env?: unknown }) {
-  const configured =
-    (c.env as Record<string, unknown> | undefined)?.APP_URL ??
-    process.env.APP_URL;
+  const configured = toRecord(c.env).APP_URL ?? process.env.APP_URL;
 
   return typeof configured === "string" && configured.trim().length > 0
     ? configured.trim().replace(/\/$/, "")
     : "https://calibrafacil.com";
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }
 
 function attachCustomerCheckoutUrl<
@@ -188,7 +196,7 @@ export const backofficeCommercialRouter = new Hono<{
           email: input.email,
           phone: input.phone,
           taxId: input.taxId,
-          address: input.address as Record<string, unknown> | undefined,
+          address: input.address ? toRecord(input.address) : undefined,
         }),
       );
 
@@ -291,9 +299,12 @@ export const backofficeCommercialRouter = new Hono<{
     const filters = [];
     if (organizationId)
       filters.push(eq(commercialOffer.organizationId, organizationId));
-    if (status) filters.push(eq(commercialOffer.status, status as any));
+    const parsedStatus = CommercialOfferStatusSchema.safeParse(status);
+    if (parsedStatus.success)
+      filters.push(eq(commercialOffer.status, parsedStatus.data));
     if (dealId) filters.push(eq(commercialOffer.dealId, dealId));
-    if (kind) filters.push(eq(commercialOffer.kind, kind as any));
+    const parsedKind = CommercialOfferKindSchema.safeParse(kind);
+    if (parsedKind.success) filters.push(eq(commercialOffer.kind, parsedKind.data));
 
     const rows = await db
       .select()

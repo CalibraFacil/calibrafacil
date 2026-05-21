@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => {
 
   function createQuery() {
     const rows = selectResults.shift() ?? [];
-    const query = Promise.resolve(rows) as Promise<unknown[]> & {
+    let query: Promise<unknown[]> & {
       from: ReturnType<typeof vi.fn>;
       innerJoin: ReturnType<typeof vi.fn>;
       leftJoin: ReturnType<typeof vi.fn>;
@@ -27,16 +27,17 @@ const mocks = vi.hoisted(() => {
       values: ReturnType<typeof vi.fn>;
       returning: ReturnType<typeof vi.fn>;
     };
-
-    query.from = vi.fn(() => query);
-    query.innerJoin = vi.fn(() => query);
-    query.leftJoin = vi.fn(() => query);
-    query.where = vi.fn(() => query);
-    query.orderBy = vi.fn(() => query);
-    query.limit = vi.fn(() => query);
-    query.set = vi.fn(() => query);
-    query.values = vi.fn(() => query);
-    query.returning = vi.fn(() => Promise.resolve(rows));
+    query = Object.assign(Promise.resolve(rows), {
+      from: vi.fn(() => query),
+      innerJoin: vi.fn(() => query),
+      leftJoin: vi.fn(() => query),
+      where: vi.fn(() => query),
+      orderBy: vi.fn(() => query),
+      limit: vi.fn(() => query),
+      set: vi.fn(() => query),
+      values: vi.fn(() => query),
+      returning: vi.fn(() => Promise.resolve(rows)),
+    });
 
     return query;
   }

@@ -41,8 +41,9 @@ export function executeLocalCompiledMethod(input: ExecutionInput) {
     const message =
       execution.diagnostics.find((item) => item.severity === "error")
         ?.message ?? "Execucao local do metodo compilado falhou";
-    const error = new Error(message) as Error & { diagnostics?: unknown };
-    error.diagnostics = execution.diagnostics;
+    const error = Object.assign(new Error(message), {
+      diagnostics: execution.diagnostics,
+    });
     throw error;
   }
 
@@ -88,12 +89,12 @@ function buildExecutionInputs(input: ExecutionInput) {
   const specifications =
     input.assetSnapshot.specifications &&
     typeof input.assetSnapshot.specifications === "object"
-      ? (input.assetSnapshot.specifications as Record<string, unknown>)
+      ? toRecord(input.assetSnapshot.specifications)
       : {};
 
   for (const field of dataFields) {
     if (!field || typeof field !== "object") continue;
-    const record = field as Record<string, unknown>;
+    const record = toRecord(field);
     if (
       record.source === "asset_spec" &&
       typeof record.key === "string" &&
@@ -105,7 +106,7 @@ function buildExecutionInputs(input: ExecutionInput) {
   }
 
   if (input.environmentalSnapshot) {
-    const environment = input.environmentalSnapshot as Record<string, unknown>;
+    const environment = toRecord(input.environmentalSnapshot);
     values.environment = {
       temperature: environment.temperature,
       humidity: environment.humidity,
@@ -121,10 +122,19 @@ function buildExecutionInputs(input: ExecutionInput) {
 }
 
 function isCompiledMethod(value: unknown): value is CompiledMethod {
+  const record = toRecord(value);
   return (
     Boolean(value) &&
     typeof value === "object" &&
     !Array.isArray(value) &&
-    (value as { status?: unknown }).status === "compiled"
+    record.status === "compiled"
   );
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }

@@ -1,6 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 
+import {
+  loadBackofficeSupportData,
+  useBackofficeSupportQueueData,
+} from '@/features/backoffice/queries'
 import {
   Card,
   CardContent,
@@ -10,30 +13,14 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice/support')({
+  loader: ({ context }) => loadBackofficeSupportData(context.queryClient),
   component: BackofficeSupportPage,
 })
 
-type SupportQueueItem = {
-  id: number
-  subject: string
-  category: string
-  priority: string
-  status: string
-  organization: { name: string; slug: string } | null
-  requestedByUser: { name: string; email: string } | null
-  assignedToUser: { name: string; email: string } | null
-  createdAt: string
-}
-
 function BackofficeSupportPage() {
-  const queueQuery = useQuery({
-    queryKey: ['backoffice', 'support', 'queue'],
-    queryFn: async () =>
-      calibraApi.backoffice.getSupportQueue<{ data: SupportQueueItem[] }>(),
-  })
+  const queueQuery = useBackofficeSupportQueueData('list')
 
   return (
     <div className="space-y-4">

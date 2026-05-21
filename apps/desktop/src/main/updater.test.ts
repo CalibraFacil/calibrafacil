@@ -7,23 +7,37 @@ import type {
 import type { DesktopSettingsStore } from "./settings-store";
 import { DesktopUpdater } from "./updater";
 
-const mocks = vi.hoisted(() => ({
-  app: {
-    isPackaged: true,
-  },
-  autoUpdater: {
+const mocks = vi.hoisted(() => {
+  const autoUpdater: {
+    autoDownload: boolean;
+    autoInstallOnAppQuit: boolean;
+    logger: unknown;
+    allowPrerelease: boolean;
+    channel: string | null;
+    on: ReturnType<typeof vi.fn>;
+    checkForUpdates: ReturnType<typeof vi.fn>;
+    downloadUpdate: ReturnType<typeof vi.fn>;
+    quitAndInstall: ReturnType<typeof vi.fn>;
+  } = {
     autoDownload: true,
     autoInstallOnAppQuit: true,
     logger: {},
     allowPrerelease: false,
-    channel: null as string | null,
+    channel: null,
     on: vi.fn(),
     checkForUpdates: vi.fn(),
     downloadUpdate: vi.fn(),
     quitAndInstall: vi.fn(),
-  },
-  handlers: new Map<string, (...args: unknown[]) => void>(),
-}));
+  };
+
+  return {
+    app: {
+      isPackaged: true,
+    },
+    autoUpdater,
+    handlers: new Map<string, (...args: unknown[]) => void>(),
+  };
+});
 
 vi.mock("electron", () => ({
   app: mocks.app,
@@ -37,11 +51,11 @@ function createUpdater(
   options: {
     syncStatus?: Partial<SyncStatusSnapshot>;
     diagnostics?: LocalDiagnostics | null;
-    beforeInstall?: ReturnType<typeof vi.fn>;
+    beforeInstall?: () => void;
     seedDownloadedEvent?: boolean;
   } = {},
 ) {
-  const beforeInstall = options.beforeInstall ?? vi.fn();
+  const beforeInstall = options.beforeInstall ?? vi.fn(() => {});
   const settings: DesktopSettings = {
     autoStartSync: true,
     updateChannel: "stable",
@@ -57,10 +71,10 @@ function createUpdater(
   const updater = new DesktopUpdater({
     settingsStore: {
       get: vi.fn(async () => settings),
-    } as unknown as DesktopSettingsStore,
+    } satisfies Pick<DesktopSettingsStore, "get">,
     getSyncStatus: vi.fn(async () => syncStatus),
     getLocalDiagnostics: vi.fn(async () => options.diagnostics ?? null),
-    beforeInstall: beforeInstall as () => void,
+    beforeInstall,
   });
 
   if (options.seedDownloadedEvent !== false) {

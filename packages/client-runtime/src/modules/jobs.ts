@@ -114,9 +114,9 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
         return { limits: null, source: null };
       }
 
-      return response.json() as Promise<
-        EffectiveEnvironmentalLimitsResponse<TLimits>
-      >;
+      const result: EffectiveEnvironmentalLimitsResponse<TLimits> =
+        await response.json();
+      return result;
     },
     async saveExecution(jobId: string | number, input: JobExecutionPayload) {
       return readJsonResponse<unknown>(

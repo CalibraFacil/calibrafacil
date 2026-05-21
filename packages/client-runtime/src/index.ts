@@ -12,6 +12,10 @@ import type {
   IssueServiceOrderDeliveryDocumentInput,
   JobExecutionPayload,
   JobsListStatus,
+  MethodCompileDraftInput,
+  MethodPreviewDraftInput,
+  MethodPublishDraftInput,
+  MethodRequestApprovalInput,
   MethodWriteInput,
   SaveEnvironmentalLimitInput,
   SaveServiceOrderEvaluationInput,
@@ -62,6 +66,7 @@ import { createJobsApi } from "./modules/jobs";
 import { createMethodsApi } from "./modules/methods";
 import { createNotificationsApi } from "./modules/notifications";
 import { createNonConformancesApi } from "./modules/non-conformances";
+import { createOrganizationMediaApi } from "./modules/organization-media";
 import { createPortalDomainsApi } from "./modules/portal-domains";
 import { createProfileMediaApi } from "./modules/profile-media";
 import { createPublicCheckoutApi } from "./modules/public-checkout";
@@ -95,6 +100,7 @@ export * from "./data-policy";
 export function createCloudApiClient(
   options: CreateCloudApiClientOptions,
 ): CalibraApi {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- the raw Hono client type is narrowed to the browser-supported route subset used by runtime modules.
   const rawCloudClient = createRawCloudClient(options) as unknown as {
     api: {
       dashboard: {
@@ -451,6 +457,12 @@ export function createCloudApiClient(
           };
         }): Promise<Response>;
         $post(input: { json: MethodWriteInput }): Promise<Response>;
+        compile: {
+          $post(input: { json: MethodCompileDraftInput }): Promise<Response>;
+        };
+        preview: {
+          $post(input: { json: MethodPreviewDraftInput }): Promise<Response>;
+        };
         ":id": {
           $get(input: { param: { id: string } }): Promise<Response>;
           $put(input: {
@@ -479,6 +491,18 @@ export function createCloudApiClient(
             $post(input: {
               param: { id: string };
               json: { reason: string };
+            }): Promise<Response>;
+          };
+          publish: {
+            $post(input: {
+              param: { id: string };
+              json: MethodPublishDraftInput;
+            }): Promise<Response>;
+          };
+          "request-approval": {
+            $post(input: {
+              param: { id: string };
+              json: MethodRequestApprovalInput;
             }): Promise<Response>;
           };
         };
@@ -705,6 +729,7 @@ export function createCloudApiClient(
     notifications: createNotificationsApi(rawCloudClient),
     signatures: createSignaturesApi(rawCloudClient, options),
     profileMedia: createProfileMediaApi(options),
+    organizationMedia: createOrganizationMediaApi(options),
     signingCertificates: createSigningCertificatesApi(rawCloudClient),
     customers: createCustomersApi(rawCloudClient),
     assets: createAssetsApi(rawCloudClient),
@@ -722,7 +747,10 @@ export function createCloudApiClient(
     publicCheckout: createPublicCheckoutApi(rawCloudClient),
     nonConformances: createNonConformancesApi(rawCloudClient),
     capas: createCapasApi(rawCloudClient),
-    certificateTemplates: createCertificateTemplatesApi(rawCloudClient),
+    certificateTemplates: createCertificateTemplatesApi(
+      rawCloudClient,
+      options,
+    ),
     competences: createCompetencesApi(rawCloudClient),
     trainingRecords: createTrainingRecordsApi(rawCloudClient),
     customerSuccess: createCustomerSuccessApi(rawCloudClient),

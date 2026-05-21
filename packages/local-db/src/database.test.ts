@@ -47,6 +47,14 @@ afterEach(() => {
   }
 });
 
+function requiredRow<T>(row: T | undefined): T {
+  if (!row) {
+    throw new Error("Expected database row");
+  }
+
+  return row;
+}
+
 function seedCalibrationJobConflict(
   database: ReturnType<typeof openLocalDatabase>,
 ) {
@@ -422,24 +430,34 @@ INSERT INTO reference_standards (
       ],
     });
 
-    const customer = database
-      .prepare(
-        `
+    const customer = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            id: string;
+            remote_id: number;
+            name: string;
+            email: string;
+            sync_state: string;
+          }
+        >(
+          `
 SELECT id, remote_id, name, email, sync_state
 FROM customers
 WHERE id = 'customer:123'
 `,
-      )
-      .get() as {
-      id: string;
-      remote_id: number;
-      name: string;
-      email: string;
-      sync_state: string;
-    };
-    const cursor = database
-      .prepare("SELECT cursor FROM sync_cursors WHERE scope = 'default'")
-      .get() as { cursor: string | null };
+        )
+        .get(),
+    );
+    const cursor = requiredRow(
+      database
+        .prepare<
+          [],
+          { cursor: string | null }
+        >("SELECT cursor FROM sync_cursors WHERE scope = 'default'")
+        .get(),
+    );
 
     expect(customer).toEqual({
       id: "customer:123",
@@ -1011,19 +1029,24 @@ INSERT INTO outbox (
       newCursor: "cursor-1",
     });
 
-    const row = database
-      .prepare(
-        `
+    const row = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            remote_id: number | null;
+            job_id: string;
+            sync_state: string;
+          }
+        >(
+          `
 SELECT remote_id, job_id, sync_state
 FROM calibration_jobs
 WHERE id = 'job-local'
 `,
-      )
-      .get() as {
-      remote_id: number | null;
-      job_id: string;
-      sync_state: string;
-    };
+        )
+        .get(),
+    );
 
     expect(row).toEqual({
       remote_id: 321,
@@ -1038,21 +1061,26 @@ WHERE id = 'job-local'
     const database = openLocalDatabase({ filePath: createTempDatabasePath() });
     seedCalibrationJobConflict(database);
 
-    const conflict = database
-      .prepare(
-        `
+    const conflict = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            event_id: string | null;
+            local_payload_json: string;
+            remote_payload_json: string;
+            conflict_type: string;
+            status: string;
+          }
+        >(
+          `
 SELECT event_id, local_payload_json, remote_payload_json, conflict_type, status
 FROM sync_conflicts
 WHERE id = 'desktop-conflict:calibration_job:job-local:event-conflict'
 `,
-      )
-      .get() as {
-      event_id: string | null;
-      local_payload_json: string;
-      remote_payload_json: string;
-      conflict_type: string;
-      status: string;
-    };
+        )
+        .get(),
+    );
 
     expect({
       eventId: conflict.event_id,
@@ -1073,19 +1101,24 @@ WHERE id = 'desktop-conflict:calibration_job:job-local:event-conflict'
       status: "open",
     });
 
-    const outboxRow = database
-      .prepare(
-        `
+    const outboxRow = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            outbox_status: string;
+            sync_state: string;
+          }
+        >(
+          `
 SELECT outbox.status AS outbox_status, domain_events.sync_state
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
 WHERE outbox.event_id = 'event-conflict'
 `,
-      )
-      .get() as {
-      outbox_status: string;
-      sync_state: string;
-    };
+        )
+        .get(),
+    );
 
     expect(outboxRow).toEqual({
       outbox_status: "conflict",
@@ -1179,7 +1212,14 @@ INSERT INTO outbox (
     resolveSyncConflict(database, conflictId, "resolved");
 
     const rows = database
-      .prepare(
+      .prepare<
+        [],
+        {
+          event_id: string;
+          outbox_status: string;
+          sync_state: string;
+        }
+      >(
         `
 SELECT outbox.event_id, outbox.status AS outbox_status, domain_events.sync_state
 FROM outbox
@@ -1188,11 +1228,7 @@ WHERE outbox.event_id IN ('event-conflict', 'event-conflict-2')
 ORDER BY outbox.event_id ASC
 `,
       )
-      .all() as Array<{
-      event_id: string;
-      outbox_status: string;
-      sync_state: string;
-    }>;
+      .all();
 
     expect(rows).toEqual([
       {
@@ -1223,20 +1259,25 @@ ORDER BY outbox.event_id ASC
     });
     expect(listPendingOutboxEvents(database)).toHaveLength(1);
 
-    const row = database
-      .prepare(
-        `
+    const row = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            outbox_status: string;
+            last_error: string | null;
+            sync_state: string;
+          }
+        >(
+          `
 SELECT outbox.status AS outbox_status, outbox.last_error, domain_events.sync_state
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
 WHERE outbox.event_id = 'event-conflict'
 `,
-      )
-      .get() as {
-      outbox_status: string;
-      last_error: string | null;
-      sync_state: string;
-    };
+        )
+        .get(),
+    );
 
     expect(row).toEqual({
       outbox_status: "pending",
@@ -1260,20 +1301,25 @@ WHERE outbox.event_id = 'event-conflict'
     });
     expect(listPendingOutboxEvents(database)).toHaveLength(0);
 
-    const row = database
-      .prepare(
-        `
+    const row = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            outbox_status: string;
+            last_error: string | null;
+            sync_state: string;
+          }
+        >(
+          `
 SELECT outbox.status AS outbox_status, outbox.last_error, domain_events.sync_state
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
 WHERE outbox.event_id = 'event-conflict'
 `,
-      )
-      .get() as {
-      outbox_status: string;
-      last_error: string | null;
-      sync_state: string;
-    };
+        )
+        .get(),
+    );
 
     expect(row).toEqual({
       outbox_status: "synced",
@@ -1366,21 +1412,26 @@ INSERT INTO customers (
       )?.syncState,
     ).toBe("local");
 
-    const outboxRow = database
-      .prepare(
-        `
+    const outboxRow = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            event_id: string;
+            aggregate_kind: string;
+            event_type: string;
+          }
+        >(
+          `
 SELECT domain_events.event_id, domain_events.aggregate_kind, domain_events.event_type
 FROM domain_events
 INNER JOIN outbox ON outbox.event_id = domain_events.event_id
 WHERE domain_events.aggregate_kind = 'asset'
 LIMIT 1
 `,
-      )
-      .get() as {
-      event_id: string;
-      aggregate_kind: string;
-      event_type: string;
-    };
+        )
+        .get(),
+    );
 
     expect(outboxRow.aggregate_kind).toBe("asset");
     expect(outboxRow.event_type).toBe("create_local_asset");
@@ -1400,15 +1451,17 @@ LIMIT 1
       newCursor: "cursor-asset",
     });
 
-    const synced = database
-      .prepare(
-        `
+    const synced = requiredRow(
+      database
+        .prepare<[], { remote_id: number | null; sync_state: string }>(
+          `
 SELECT remote_id, sync_state
 FROM assets
 WHERE tag = 'BAL-001'
 `,
-      )
-      .get() as { remote_id: number | null; sync_state: string };
+        )
+        .get(),
+    );
 
     expect(synced).toEqual({
       remote_id: 654,
@@ -1446,21 +1499,26 @@ WHERE tag = 'BAL-001'
       )?.syncState,
     ).toBe("local");
 
-    const outboxRow = database
-      .prepare(
-        `
+    const outboxRow = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            event_id: string;
+            aggregate_kind: string;
+            event_type: string;
+          }
+        >(
+          `
 SELECT domain_events.event_id, domain_events.aggregate_kind, domain_events.event_type
 FROM domain_events
 INNER JOIN outbox ON outbox.event_id = domain_events.event_id
 WHERE domain_events.aggregate_kind = 'customer'
 LIMIT 1
 `,
-      )
-      .get() as {
-      event_id: string;
-      aggregate_kind: string;
-      event_type: string;
-    };
+        )
+        .get(),
+    );
 
     expect(outboxRow.aggregate_kind).toBe("customer");
     expect(outboxRow.event_type).toBe("create_local_customer");
@@ -1480,15 +1538,17 @@ LIMIT 1
       newCursor: "cursor-customer",
     });
 
-    const synced = database
-      .prepare(
-        `
+    const synced = requiredRow(
+      database
+        .prepare<[], { remote_id: number | null; sync_state: string }>(
+          `
 SELECT remote_id, sync_state
 FROM customers
 WHERE name = 'Cliente Local'
 `,
-      )
-      .get() as { remote_id: number | null; sync_state: string };
+        )
+        .get(),
+    );
 
     expect(synced).toEqual({
       remote_id: 987,
@@ -1672,22 +1732,27 @@ INSERT INTO asset_types (
       listPendingOutboxEvents(database, 50, { includeDeferred: true }),
     ).toHaveLength(1);
 
-    const failed = database
-      .prepare(
-        `
+    const failed = requiredRow(
+      database
+        .prepare<
+          { eventId: string },
+          {
+            status: string;
+            attempt_count: number;
+            last_error: string | null;
+            next_attempt_at: string | null;
+            sync_state: string;
+          }
+        >(
+          `
 SELECT outbox.status, outbox.attempt_count, outbox.last_error, outbox.next_attempt_at, domain_events.sync_state
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
 WHERE outbox.event_id = @eventId
 `,
-      )
-      .get({ eventId: pendingEvent.eventId }) as {
-      status: string;
-      attempt_count: number;
-      last_error: string | null;
-      next_attempt_at: string | null;
-      sync_state: string;
-    };
+        )
+        .get({ eventId: pendingEvent.eventId }),
+    );
 
     expect(failed).toMatchObject({
       status: "failed",
@@ -1847,9 +1912,17 @@ INSERT INTO outbox (
       conflicts: [],
     });
 
-    const row = database
-      .prepare(
-        `
+    const row = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            draft_sync_state: string;
+            job_status: string;
+            certificate_url: string | null;
+          }
+        >(
+          `
 SELECT
   certificate_drafts.sync_state AS draft_sync_state,
   calibration_jobs.status AS job_status,
@@ -1858,12 +1931,9 @@ FROM certificate_drafts
 INNER JOIN calibration_jobs ON calibration_jobs.id = certificate_drafts.job_id
 WHERE certificate_drafts.id = 'certificate-draft:local'
 `,
-      )
-      .get() as {
-      draft_sync_state: string;
-      job_status: string;
-      certificate_url: string | null;
-    };
+        )
+        .get(),
+    );
 
     expect(row).toEqual({
       draft_sync_state: "synced",
@@ -2001,20 +2071,25 @@ INSERT INTO assets (
       }).data,
     ).toHaveLength(1);
 
-    const outboxRow = database
-      .prepare(
-        `
+    const outboxRow = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            aggregate_kind: string;
+            event_type: string;
+            payload_json: string;
+          }
+        >(
+          `
 SELECT domain_events.aggregate_kind, domain_events.event_type, domain_events.payload_json
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
 WHERE outbox.status = 'pending'
 `,
-      )
-      .get() as {
-      aggregate_kind: string;
-      event_type: string;
-      payload_json: string;
-    };
+        )
+        .get(),
+    );
 
     expect(outboxRow.aggregate_kind).toBe("service_order");
     expect(outboxRow.event_type).toBe("create_local_service_order_intake");
@@ -2104,9 +2179,16 @@ INSERT INTO asset_types (
       syncState: "local",
     });
 
-    const outboxRow = database
-      .prepare(
-        `
+    const outboxRow = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            event_type: string;
+            payload_json: string;
+          }
+        >(
+          `
 SELECT domain_events.event_type, domain_events.payload_json
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
@@ -2114,11 +2196,9 @@ WHERE domain_events.aggregate_kind = 'service_order'
   AND outbox.status = 'pending'
 LIMIT 1
 `,
-      )
-      .get() as {
-      event_type: string;
-      payload_json: string;
-    };
+        )
+        .get(),
+    );
 
     expect(outboxRow.event_type).toBe("create_local_service_order_intake");
     expect(JSON.parse(outboxRow.payload_json)).toMatchObject({
@@ -2228,7 +2308,7 @@ INSERT INTO service_orders (
     });
 
     const outboxRows = database
-      .prepare(
+      .prepare<[], { event_type: string }>(
         `
 SELECT domain_events.event_type
 FROM outbox
@@ -2236,7 +2316,7 @@ INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
 ORDER BY domain_events.event_type ASC
 `,
       )
-      .all() as Array<{ event_type: string }>;
+      .all();
     expect(outboxRows.map((row) => row.event_type)).toEqual([
       "create_local_service_order_delivery_document_draft",
       "create_local_service_order_quote_draft",
@@ -2363,20 +2443,25 @@ INSERT INTO outbox (
       conflicts: [],
     });
 
-    const row = database
-      .prepare(
-        `
+    const row = requiredRow(
+      database
+        .prepare<
+          [],
+          {
+            remote_id: number | null;
+            service_order_number: string;
+            status: string;
+            sync_state: string;
+          }
+        >(
+          `
 SELECT remote_id, service_order_number, status, sync_state
 FROM service_orders
 WHERE id = 'service-order-local'
 `,
-      )
-      .get() as {
-      remote_id: number | null;
-      service_order_number: string;
-      status: string;
-      sync_state: string;
-    };
+        )
+        .get(),
+    );
 
     expect(row).toEqual({
       remote_id: 987,

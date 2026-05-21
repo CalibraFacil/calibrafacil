@@ -124,6 +124,31 @@ function formatDate(value: string | null | undefined) {
   return new Date(value).toLocaleDateString("pt-BR");
 }
 
+function parseServiceOrderStatusFilter(
+  value: string | null,
+): ServiceOrderStatus | "" {
+  switch (value) {
+    case "opened":
+    case "awaiting_tech_evaluation":
+    case "under_evaluation":
+    case "awaiting_quote_approval":
+    case "quote_approved":
+    case "quote_rejected":
+    case "repair_in_progress":
+    case "awaiting_calibration":
+    case "calibration_in_progress":
+    case "awaiting_final_review":
+    case "ready_for_pickup":
+    case "delivered":
+    case "closed":
+    case "canceled":
+    case "warranty_return":
+      return value;
+    default:
+      return "";
+  }
+}
+
 function ServiceOrdersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -155,10 +180,7 @@ function ServiceOrdersPage() {
         throw new Error("Falha ao carregar ordens de serviço.");
       }
 
-      const result = (await response.json()) as {
-        data: ServiceOrdersResponse["data"];
-        pagination: ServiceOrdersResponse["pagination"];
-      };
+      const result: ServiceOrdersResponse = await response.json();
       return result;
     },
   });
@@ -264,9 +286,7 @@ function ServiceOrdersPage() {
               <Select
                 value={statusFilter || "all"}
                 onValueChange={(value) => {
-                  setStatusFilter(
-                    value === "all" ? "" : (value as ServiceOrderStatus),
-                  );
+                  setStatusFilter(parseServiceOrderStatusFilter(value));
                   setPage(1);
                 }}
               >

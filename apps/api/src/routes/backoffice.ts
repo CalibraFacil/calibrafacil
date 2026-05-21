@@ -101,6 +101,55 @@ const ImpersonationBridgeSchema = z.object({
   targetUserId: z.string().trim().min(1),
 });
 
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function getEnvValue(c: { env?: unknown }, key: string) {
+  return recordFromUnknown(c.env)[key];
+}
+
+function responseStatus(status: number) {
+  switch (status) {
+    case 400:
+    case 401:
+    case 403:
+    case 404:
+    case 409:
+    case 422:
+    case 500:
+    case 503:
+      return status;
+    default:
+      return 500;
+  }
+}
+
+function platformUserFromUnknown(value: unknown) {
+  const candidate = recordFromUnknown(value);
+  const nested = recordFromUnknown(candidate.user);
+  const user = Object.keys(nested).length > 0 ? nested : candidate;
+  if (
+    typeof user.id !== "string" ||
+    typeof user.email !== "string" ||
+    typeof user.name !== "string"
+  ) {
+    throw new HTTPException(502, {
+      message: "Backoffice auth returned an invalid user payload",
+    });
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+  };
+}
+
 function extractErrorMessage(payload: unknown, fallback: string) {
   if (!payload || typeof payload !== "object") {
     return fallback;
@@ -142,12 +191,10 @@ function redirectToAppWithError(
 }
 
 function getSetCookieHeaders(headers: Headers) {
-  const candidate = headers as Headers & {
-    getSetCookie?: () => string[];
-  };
+  const getSetCookie = Reflect.get(headers, "getSetCookie");
 
-  if (typeof candidate.getSetCookie === "function") {
-    return candidate.getSetCookie();
+  if (typeof getSetCookie === "function") {
+    return getSetCookie.call(headers);
   }
 
   const value = headers.get("set-cookie");
@@ -217,8 +264,8 @@ async function hasAnyPlatformAdmin() {
 
 function readBootstrapToken(c: { env?: unknown }) {
   const envToken =
-    (c.env as Record<string, unknown> | undefined)
-      ?.BACKOFFICE_BOOTSTRAP_TOKEN ?? process.env.BACKOFFICE_BOOTSTRAP_TOKEN;
+    getEnvValue(c, "BACKOFFICE_BOOTSTRAP_TOKEN") ??
+    process.env.BACKOFFICE_BOOTSTRAP_TOKEN;
 
   return typeof envToken === "string" ? envToken.trim() : "";
 }
@@ -254,9 +301,7 @@ function resolveAppUrl(c: {
     }
   }
 
-  const configuredAppUrl =
-    (c.env as Record<string, unknown> | undefined)?.APP_URL ??
-    process.env.APP_URL;
+  const configuredAppUrl = getEnvValue(c, "APP_URL") ?? process.env.APP_URL;
 
   return typeof configuredAppUrl === "string" &&
     configuredAppUrl.trim().length > 0
@@ -374,7 +419,7 @@ export const backofficeRouter = new Hono<{
     async (c) => {
       const session = c.get("session");
       const input = c.req.valid("query");
-      const labAuth = createLabAuth() as any;
+      const labAuth = createLabAuth();
 
       const targetUser = await db.query.user.findFirst({
         where: eq(userTable.id, input.targetUserId),
@@ -396,10 +441,10 @@ export const backofficeRouter = new Hono<{
       }
 
       try {
-        const verifyResponse = (await labAuth.api.verifyOneTimeToken({
+        const verifyResponse = await labAuth.api.verifyOneTimeToken({
           body: { token: input.token },
           asResponse: true,
-        })) as Response;
+        });
 
         if (!verifyResponse.ok) {
           const payload = await verifyResponse.json().catch(() => null);
@@ -489,7 +534,7 @@ export const backofficeRouter = new Hono<{
           );
         }
 
-        const impersonateResponse = (await labAuth.api.impersonateUser({
+        const impersonateResponse = await labAuth.api.impersonateUser({
           body: {
             userId: input.targetUserId,
           },
@@ -497,7 +542,7 @@ export const backofficeRouter = new Hono<{
             cookie: operatorLabCookie,
           }),
           asResponse: true,
-        })) as Response;
+        });
 
         if (!impersonateResponse.ok) {
           const payload = await impersonateResponse.json().catch(() => null);
@@ -985,7 +1030,7 @@ export const backofficeRouter = new Hono<{
     requirePlatformAdmin,
     zValidator("json", CreatePlatformUserSchema),
     async (c) => {
-      const auth = createBackofficeAuth() as any;
+      const auth = createBackofficeAuth();
       const session = c.get("session");
       const input = c.req.valid("json");
       const temporaryPassword = randomBytes(24).toString("base64url");
@@ -1000,10 +1045,7 @@ export const backofficeRouter = new Hono<{
         },
         headers: c.req.raw.headers,
       });
-      const createdUserRecord =
-        createdUser && typeof createdUser === "object" && "user" in createdUser
-          ? (createdUser.user as { id: string; email: string; name: string })
-          : (createdUser as { id: string; email: string; name: string });
+      const createdUserRecord = platformUserFromUnknown(createdUser);
 
       const resetResponse = await forwardLabAuthResponse({
         c,
@@ -1044,7 +1086,7 @@ export const backofficeRouter = new Hono<{
     },
   )
   .post("/users/:id/impersonate", async (c) => {
-    const backofficeAuth = createBackofficeAuth() as any;
+    const backofficeAuth = createBackofficeAuth();
     const session = c.get("session");
     const targetUserId = c.req.param("id");
     const targetUser = await db.query.user.findFirst({
@@ -1114,15 +1156,7 @@ export const backofficeRouter = new Hono<{
           ),
         },
         {
-          status: response.status as
-            | 400
-            | 401
-            | 403
-            | 404
-            | 409
-            | 422
-            | 500
-            | 503,
+          status: responseStatus(response.status),
         },
       );
     }
@@ -1144,7 +1178,7 @@ export const backofficeRouter = new Hono<{
     "/users/:id/role",
     zValidator("json", SetPlatformRoleSchema),
     async (c) => {
-      const auth = createBackofficeAuth() as any;
+      const auth = createBackofficeAuth();
       const session = c.get("session");
       const userId = c.req.param("id");
       const input = c.req.valid("json");
@@ -1172,7 +1206,7 @@ export const backofficeRouter = new Hono<{
     },
   )
   .post("/users/:id/ban", zValidator("json", BanUserSchema), async (c) => {
-    const auth = createBackofficeAuth() as any;
+    const auth = createBackofficeAuth();
     const session = c.get("session");
     const userId = c.req.param("id");
     const input = c.req.valid("json");
@@ -1201,7 +1235,7 @@ export const backofficeRouter = new Hono<{
     return c.json(result);
   })
   .post("/users/:id/unban", async (c) => {
-    const auth = createBackofficeAuth() as any;
+    const auth = createBackofficeAuth();
     const session = c.get("session");
     const userId = c.req.param("id");
 

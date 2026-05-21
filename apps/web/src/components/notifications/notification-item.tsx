@@ -89,8 +89,9 @@ export function NotificationItem({
   onClick,
 }: NotificationItemProps) {
   const icon =
-    notificationIcons[notification.type as keyof typeof notificationIcons] ??
-    Notification01Icon
+    Object.entries(notificationIcons).find(
+      ([type]) => type === notification.type,
+    )?.[1] ?? Notification01Icon
   const iconColor =
     notificationColors[notification.type] ?? 'text-muted-foreground'
   const isUnread = notification.status === 'UNREAD'

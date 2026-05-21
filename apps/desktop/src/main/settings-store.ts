@@ -74,7 +74,7 @@ function readDesktopSettings(value: unknown): DesktopSettings {
     return defaultSettings;
   }
 
-  const candidate = value as Record<string, unknown>;
+  const candidate = Object.fromEntries(Object.entries(value));
   return desktopSettingsSchema.parse({
     autoStartSync:
       typeof candidate.autoStartSync === "boolean"
@@ -88,9 +88,12 @@ function readDesktopSettings(value: unknown): DesktopSettings {
 }
 
 function isMissingFileError(error: unknown): boolean {
+  const errorCode =
+    error instanceof Error && "code" in error ? error.code : undefined;
+
   return (
     error instanceof Error &&
-    "code" in error &&
-    (error as NodeJS.ErrnoException).code === "ENOENT"
+    typeof errorCode === "string" &&
+    errorCode === "ENOENT"
   );
 }

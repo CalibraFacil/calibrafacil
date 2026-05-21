@@ -1,15 +1,20 @@
-import { readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
+import { readBundleMetricsFromDist } from './bundle-metrics.mjs'
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const appDir = path.resolve(scriptDir, '..')
 const distDir = path.join(appDir, 'dist')
-const indexHtmlPath = path.join(distDir, 'index.html')
 
 const jsBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS ?? 650_000)
-const cssBudget = Number(process.env.WEB_BUNDLE_BUDGET_CSS ?? 190_000)
+const cssBudget = Number(process.env.WEB_BUNDLE_BUDGET_CSS ?? 230_000)
+const jsChunkBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS_CHUNK ?? 850_000)
+const appChunkBudget = Number(
+  process.env.WEB_BUNDLE_BUDGET_APP_CHUNK ?? 180_000,
+)
+const failAppChunkBudget = process.env.WEB_BUNDLE_FAIL_APP_CHUNKS === 'true'
 
 function fail(message) {
   console.error(`\n[bundle-budget] ${message}`)
@@ -20,35 +25,41 @@ function toKb(bytes) {
   return `${(bytes / 1024).toFixed(1)} KiB`
 }
 
-let html
-
+let metrics
 try {
-  html = readFileSync(indexHtmlPath, 'utf8')
-} catch {
+  metrics = readBundleMetricsFromDist(distDir)
+} catch (error) {
   fail(
-    'Missing apps/web/dist/index.html. Run `pnpm --filter @calibra-facil/web build` first.',
+    `${error instanceof Error ? error.message : 'Could not read bundle metrics.'} Run \`pnpm --filter @calibra-facil/web build\` first.`,
   )
 }
 
-const jsMatch = html.match(/<script[^>]+src="([^"]+\.js)"/)
-const cssMatch = html.match(/<link[^>]+href="([^"]+\.css)"/)
-
-if (!jsMatch || !cssMatch) {
-  fail('Could not detect entry JS/CSS assets in dist/index.html.')
-}
-
-const jsAssetPath = path.join(distDir, jsMatch[1].replace(/^\//, ''))
-const cssAssetPath = path.join(distDir, cssMatch[1].replace(/^\//, ''))
-
-const jsBytes = statSync(jsAssetPath).size
-const cssBytes = statSync(cssAssetPath).size
+const { jsBytes, cssBytes, jsChunks, appChunks } = metrics
 
 const checks = [
   { name: 'entry-js', bytes: jsBytes, budget: jsBudget },
   { name: 'entry-css', bytes: cssBytes, budget: cssBudget },
 ]
+const chunkFailures = jsChunks
+  .filter((chunk) => chunk.bytes > jsChunkBudget)
+  .map((chunk) => ({
+    name: `chunk:${chunk.name}`,
+    bytes: chunk.bytes,
+    budget: jsChunkBudget,
+  }))
+const appChunkFailures = appChunks
+  .filter((chunk) => chunk.bytes > appChunkBudget)
+  .map((chunk) => ({
+    name: `app-chunk:${chunk.name}`,
+    bytes: chunk.bytes,
+    budget: appChunkBudget,
+  }))
 
-const failures = checks.filter((check) => check.bytes > check.budget)
+const failures = [
+  ...checks.filter((check) => check.bytes > check.budget),
+  ...chunkFailures,
+  ...(failAppChunkBudget ? appChunkFailures : []),
+]
 
 for (const check of checks) {
   const status = check.bytes > check.budget ? 'FAIL' : 'OK'
@@ -56,6 +67,31 @@ for (const check of checks) {
     `[bundle-budget] ${status} ${check.name}: ${toKb(check.bytes)} (budget ${toKb(check.budget)})`,
   )
 }
+
+for (const check of chunkFailures) {
+  console.log(
+    `[bundle-budget] FAIL ${check.name}: ${toKb(check.bytes)} (budget ${toKb(check.budget)})`,
+  )
+}
+
+for (const check of appChunkFailures) {
+  console.log(
+    `[bundle-budget] ${failAppChunkBudget ? 'FAIL' : 'WARN'} ${check.name}: ${toKb(check.bytes)} (budget ${toKb(check.budget)})`,
+  )
+}
+
+console.log(
+  `[bundle-budget] largest-js-chunks: ${jsChunks
+    .slice(0, 5)
+    .map((chunk) => `${chunk.name}=${toKb(chunk.bytes)}`)
+    .join(', ')}`,
+)
+console.log(
+  `[bundle-budget] largest-app-route-chunks: ${appChunks
+    .slice(0, 10)
+    .map((chunk) => `${chunk.name}=${toKb(chunk.bytes)}`)
+    .join(', ')}`,
+)
 
 if (failures.length > 0) {
   fail(

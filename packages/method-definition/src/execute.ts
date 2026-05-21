@@ -28,11 +28,17 @@ export function executeCompiledMethod(
     outputs[result.key] = result.value;
   }
 
-  for (const result of preview.measurementModelResults) {
+	  for (const result of preview.measurementModelResults) {
     const modelResult = result.result;
+    const value =
+      modelResult && typeof modelResult === "object" && !Array.isArray(modelResult)
+        ? Object.fromEntries(Object.entries(modelResult)).value
+        : null;
     outputs[result.key] = Array.isArray(modelResult)
       ? modelResult.map((item) => item.value)
-      : (modelResult as { value: string | number }).value;
+      : typeof value === "string" || typeof value === "number"
+        ? value
+        : 0;
   }
 
   const executionInput = {

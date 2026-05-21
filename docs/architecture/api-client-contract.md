@@ -15,6 +15,11 @@ bindings, or route handler dependencies into their type graph.
 - Frontend apps should call product-level SDK methods from `client-runtime`, not
   raw Hono RPC paths.
 
+`packages/client-runtime` is organized as a public facade plus domain modules.
+The public API should remain stable from `src/index.ts`, while domain
+implementation details live under `src/modules/*` and shared transport helpers
+live under `src/transport/*`.
+
 ## `AppType`
 
 `packages/contracts/src/api-app.ts` exports the Hono `AppType` consumed by
@@ -55,7 +60,11 @@ When changing API/client boundaries:
 1. Keep frontend imports pointed at `@calibra-facil/client-runtime` and
    `@calibra-facil/contracts`.
 2. Keep raw Hono RPC calls inside `packages/client-runtime`.
-3. Update `packages/contracts/src/api-app.ts` if the browser-facing raw route
+3. Add or update a domain module in `packages/client-runtime/src/modules/*`
+   instead of calling `api.api.*` from web routes or features.
+4. Reuse `readJson`, `readApiError`, `ensureOk`, and form-data helpers from
+   `packages/client-runtime/src/transport/*` for response/error handling.
+5. Update `packages/contracts/src/api-app.ts` if the browser-facing raw route
    surface changes.
-4. Run `pnpm --filter @calibra-facil/contracts check-types`.
-5. Run `pnpm check-types` before pushing.
+6. Run `pnpm --filter @calibra-facil/contracts check-types`.
+7. Run `pnpm check-types` before pushing.

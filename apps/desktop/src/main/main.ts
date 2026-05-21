@@ -488,10 +488,11 @@ async function getDesktopAuthCookieHeader(url: URL) {
 }
 
 function readSetCookieHeaders(headers: Headers) {
-  const getSetCookie = (headers as Headers & { getSetCookie?: () => string[] })
-    .getSetCookie;
-  if (getSetCookie) {
-    return getSetCookie.call(headers);
+  if ("getSetCookie" in headers && typeof headers.getSetCookie === "function") {
+    const cookies = headers.getSetCookie.call(headers);
+    if (Array.isArray(cookies)) {
+      return cookies.filter((cookie) => typeof cookie === "string");
+    }
   }
 
   return splitSetCookieHeader(headers.get("set-cookie"));
@@ -753,8 +754,12 @@ async function saveLocalCertificatePdf(
       `Local certificate draft failed with HTTP ${draftResponse.status}.`,
     );
   }
-  const draft = (await draftResponse.json()) as { id?: unknown };
-  if (typeof draft.id !== "string" || draft.id.length === 0) {
+  const draft: unknown = await draftResponse.json();
+  const draftId =
+    draft && typeof draft === "object" && !Array.isArray(draft)
+      ? Object.fromEntries(Object.entries(draft)).id
+      : null;
+  if (typeof draftId !== "string" || draftId.length === 0) {
     throw new Error("Local certificate draft response is missing an id.");
   }
 
@@ -778,7 +783,7 @@ async function saveLocalCertificatePdf(
       printBackground: true,
       pageSize: "A4",
     });
-    await persistLocalCertificatePdf(jobId, draft.id, pdf);
+    await persistLocalCertificatePdf(jobId, draftId, pdf);
     await writeFile(filePath, pdf);
   } finally {
     pdfWindow.destroy();

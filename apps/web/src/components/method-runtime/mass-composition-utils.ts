@@ -60,10 +60,9 @@ export interface MassCompositionOption extends Omit<
   optionLabel: string
 }
 
-const SUPPORTED_UNITS = new Set<MassUnit>(['mg', 'g', 'kg'])
-
 export function isMassUnit(unit: string): unit is MassUnit {
-  return SUPPORTED_UNITS.has(unit.trim().toLowerCase() as MassUnit)
+  const normalized = unit.trim().toLowerCase()
+  return normalized === 'mg' || normalized === 'g' || normalized === 'kg'
 }
 
 export function normalizeMassUnit(unit: string): MassUnit | null {
@@ -94,12 +93,21 @@ export function convertMassValue(
 export function isMassCompositionValue(
   value: unknown,
 ): value is MassCompositionValue {
+  const record = toRecord(value)
   return (
     typeof value === 'object' &&
     value !== null &&
-    (value as { kind?: unknown }).kind === 'mass_standard_composition' &&
-    Array.isArray((value as { items?: unknown }).items)
+    record.kind === 'mass_standard_composition' &&
+    Array.isArray(record.items)
   )
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+
+  return Object.fromEntries(Object.entries(value))
 }
 
 export function formatMassCompositionLabel(
@@ -237,7 +245,7 @@ export function collectMassCompositionStandardIds(
     }
 
     if (typeof value === 'object' && value !== null) {
-      for (const child of Object.values(value as Record<string, unknown>)) {
+      for (const child of Object.values(toRecord(value))) {
         visit(child)
       }
     }

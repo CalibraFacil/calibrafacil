@@ -47,9 +47,9 @@ export type BackgroundJobMessage =
 export function isBackgroundJobMessage(
   value: unknown,
 ): value is BackgroundJobMessage {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
 
-  const message = value as Record<string, unknown>;
+  const message = Object.fromEntries(Object.entries(value));
   const type = message.type;
 
   if (type === "SCHEDULED_NOTIFICATIONS") return true;

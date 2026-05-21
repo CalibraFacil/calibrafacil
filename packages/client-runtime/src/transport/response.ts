@@ -5,8 +5,7 @@ export async function readApiError(response: Response, fallback: string) {
   if (!body) return fallback;
 
   try {
-    const parsed = JSON.parse(body) as { error?: string; message?: string };
-    return parsed.error ?? parsed.message ?? fallback;
+    return apiErrorMessage(JSON.parse(body)) ?? fallback;
   } catch {
     return body;
   }
@@ -15,9 +14,10 @@ export async function readApiError(response: Response, fallback: string) {
 export async function readJsonResponse<TResponse>(
   response: Response,
   fallback: string,
+  options: { allowDiagnosticsResponse?: boolean } = {},
 ) {
   if (response.ok) {
-    return response.json() as Promise<TResponse>;
+    return assumeClientResponse<TResponse>(await response.json());
   }
 
   let payload: unknown = null;
@@ -25,6 +25,10 @@ export async function readJsonResponse<TResponse>(
     payload = await response.json();
   } catch {
     payload = null;
+  }
+
+  if (options.allowDiagnosticsResponse && hasDiagnosticsPayload(payload)) {
+    return assumeClientResponse<TResponse>(payload);
   }
 
   const message =
@@ -41,7 +45,7 @@ export async function readOptionalForbiddenResponse<TResponse>(
   fallback: string,
 ) {
   if (response.status === 403) {
-    return forbiddenValue as TResponse;
+    return assumeClientResponse<TResponse>(forbiddenValue);
   }
 
   return readJsonResponse<TResponse>(response, fallback);
@@ -61,11 +65,24 @@ export async function readMutationResponse<TResponse>(
     );
   }
 
-  return data as TResponse;
+  return assumeClientResponse<TResponse>(data);
 }
 
 function hasApiError(value: unknown): value is { error?: unknown } {
   return typeof value === "object" && value !== null && "error" in value;
+}
+
+function hasDiagnosticsPayload(value: unknown) {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray(Reflect.get(value, "diagnostics"))
+  );
+}
+
+function assumeClientResponse<TResponse>(payload: unknown): TResponse {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- generic client-runtime methods expose typed API surfaces after HTTP success/error handling; response schemas are not currently available for every endpoint.
+  return payload as TResponse;
 }
 
 function apiErrorMessage(value: unknown) {

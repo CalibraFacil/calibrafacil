@@ -83,7 +83,7 @@ export function listLocalServices(
 
   const whereClause = conditions.join(" AND ");
   const totalRow = database
-    .prepare(
+    .prepare<typeof params, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM services s
@@ -91,10 +91,11 @@ LEFT JOIN asset_types at ON at.id = s.asset_type_id
 WHERE ${whereClause}
 `,
     )
-    .get(params) as { total: number };
+    .get(params);
 
+  const pageParams = { ...params, limit, offset };
   const rows = database
-    .prepare(
+    .prepare<typeof pageParams, LocalServiceRow>(
       `
 SELECT
   s.id,
@@ -118,7 +119,7 @@ ORDER BY s.name ASC
 LIMIT @limit OFFSET @offset
 `,
     )
-    .all({ ...params, limit, offset }) as LocalServiceRow[];
+    .all(pageParams);
 
   return {
     data: rows.map((row) => ({
@@ -143,8 +144,8 @@ LIMIT @limit OFFSET @offset
     pagination: {
       page,
       limit,
-      total: totalRow.total,
-      totalPages: Math.ceil(totalRow.total / limit),
+      total: totalRow?.total ?? 0,
+      totalPages: Math.ceil((totalRow?.total ?? 0) / limit),
     },
   };
 }
@@ -171,7 +172,7 @@ function resolveLocalServiceRow(
   }
 
   const directMatch = database
-    .prepare(
+    .prepare<typeof params, LocalServiceRow>(
       `
 SELECT
   s.id,
@@ -194,12 +195,12 @@ WHERE ${directConditions.join(" OR ")}
 LIMIT 1
 `,
     )
-    .get(params) as LocalServiceRow | undefined;
+    .get(params);
 
   if (directMatch) return directMatch;
 
   const rows = database
-    .prepare(
+    .prepare<[], LocalServiceRow>(
       `
 SELECT
   s.id,
@@ -220,7 +221,7 @@ LEFT JOIN published_methods pm ON pm.id = s.method_id
 LEFT JOIN asset_types at ON at.id = s.asset_type_id
 `,
     )
-    .all() as LocalServiceRow[];
+    .all();
 
   if (Number.isInteger(numericIdentifier)) {
     const stableMatch = rows.find(

@@ -6,89 +6,59 @@ import type {
   StartSsoResponse,
   VerifySsoDomainResponse,
 } from "../types";
-import { readApiError } from "../transport/response";
+import { readJsonResponse, readMutationResponse } from "../transport/response";
 
 export function createSsoApi(rawCloudClient: any): SsoApi {
   return {
     async start(input) {
-      const response = await rawCloudClient.api.sso.start.$post({
-        json: input,
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao iniciar login via SSO"),
-        );
-      }
-
-      return response.json() as Promise<StartSsoResponse>;
+      return readJsonResponse<StartSsoResponse>(
+        await rawCloudClient.api.sso.start.$post({
+          json: input,
+        }),
+        "Falha ao iniciar login via SSO",
+      );
     },
     async getProviders() {
-      const response = await rawCloudClient.api.sso.providers.$get();
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao carregar configuração SSO"),
-        );
-      }
-
-      return response.json() as Promise<SsoSettingsResponse>;
+      return readJsonResponse<SsoSettingsResponse>(
+        await rawCloudClient.api.sso.providers.$get(),
+        "Falha ao carregar configuração SSO",
+      );
     },
     async createProvider(input) {
-      const response = await rawCloudClient.api.sso.providers.$post({
-        json: input,
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao registrar provedor SSO"),
-        );
-      }
-
-      return response.json() as Promise<CreateSsoProviderResponse>;
+      return readJsonResponse<CreateSsoProviderResponse>(
+        await rawCloudClient.api.sso.providers.$post({
+          json: input,
+        }),
+        "Falha ao registrar provedor SSO",
+      );
     },
     async requestDomainVerification(providerId) {
-      const response = await rawCloudClient.api.sso.providers[":providerId"][
-        "request-domain-verification"
-      ].$post({
-        param: { providerId },
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao gerar token DNS"),
-        );
-      }
-
-      return response.json() as Promise<RequestSsoDomainVerificationResponse>;
+      return readJsonResponse<RequestSsoDomainVerificationResponse>(
+        await rawCloudClient.api.sso.providers[":providerId"][
+          "request-domain-verification"
+        ].$post({
+          param: { providerId },
+        }),
+        "Falha ao gerar token DNS",
+      );
     },
     async verifyDomain(providerId) {
-      const response = await rawCloudClient.api.sso.providers[":providerId"][
-        "verify-domain"
-      ].$post({
-        param: { providerId },
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao verificar domínio"),
-        );
-      }
-
-      return response.json() as Promise<VerifySsoDomainResponse>;
+      return readJsonResponse<VerifySsoDomainResponse>(
+        await rawCloudClient.api.sso.providers[":providerId"][
+          "verify-domain"
+        ].$post({
+          param: { providerId },
+        }),
+        "Falha ao verificar domínio",
+      );
     },
     async deleteProvider(providerId) {
-      const response = await rawCloudClient.api.sso.providers[
-        ":providerId"
-      ].$delete({
-        param: { providerId },
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao remover provedor SSO"),
-        );
-      }
+      await readMutationResponse<unknown>(
+        await rawCloudClient.api.sso.providers[":providerId"].$delete({
+          param: { providerId },
+        }),
+        "Falha ao remover provedor SSO",
+      );
     },
   };
 }

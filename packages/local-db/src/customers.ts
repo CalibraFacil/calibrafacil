@@ -176,17 +176,18 @@ export function listLocalCustomers(
 
   const whereClause = conditions.join(" AND ");
   const totalRow = database
-    .prepare(
+    .prepare<typeof params, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM customers
 WHERE ${whereClause}
 `,
     )
-    .get(params) as { total: number };
+    .get(params);
 
+  const pageParams = { ...params, limit, offset };
   const rows = database
-    .prepare(
+    .prepare<typeof pageParams, LocalCustomerListRow>(
       `
 SELECT
   id,
@@ -205,15 +206,15 @@ ORDER BY name ASC
 LIMIT @limit OFFSET @offset
 `,
     )
-    .all({ ...params, limit, offset }) as LocalCustomerListRow[];
+    .all(pageParams);
 
   return {
     data: rows.map(toLocalCustomer),
     pagination: {
       page,
       limit,
-      total: totalRow.total,
-      totalPages: Math.ceil(totalRow.total / limit),
+      total: totalRow?.total ?? 0,
+      totalPages: Math.ceil((totalRow?.total ?? 0) / limit),
     },
   };
 }
@@ -243,7 +244,7 @@ export function updateLocalCustomer(
     phone: input.phone === undefined ? row.phone : input.phone || null,
     address:
       input.address === undefined
-        ? (parseJson(row.address_json) as Record<string, unknown> | null)
+        ? parseJsonRecordOrNull(row.address_json)
         : input.address,
   };
   const payload: Record<string, unknown> = {};
@@ -302,8 +303,7 @@ export function updateLocalCustomerCompliance(
     throw new Error("Cliente local nao encontrado");
   }
 
-  const currentCompliance =
-    (parseJson(row.compliance_json) as Record<string, unknown> | null) ?? {};
+  const currentCompliance = parseJsonRecordOrNull(row.compliance_json) ?? {};
   const compliance = {
     qualificationStatus: "pending",
     qualityRequirementsAcknowledged: false,
@@ -356,7 +356,7 @@ function getLocalCustomerById(
   id: string,
 ): LocalCustomer {
   const row = database
-    .prepare(
+    .prepare<{ id: string }, LocalCustomerListRow>(
       `
 SELECT
   id,
@@ -374,7 +374,7 @@ WHERE id = @id
 LIMIT 1
 `,
     )
-    .get({ id }) as LocalCustomerListRow | undefined;
+    .get({ id });
 
   if (!row) {
     throw new Error("Cliente local nao encontrado");
@@ -391,7 +391,14 @@ function resolveLocalCustomerRow(
   const hasNumericIdentifier =
     Number.isInteger(numericIdentifier) && numericIdentifier > 0;
   const directRow = database
-    .prepare(
+    .prepare<
+      {
+        identifier: string;
+        numericIdentifier: number | null;
+        hasNumericIdentifier: number;
+      },
+      LocalCustomerListRow
+    >(
       `
 SELECT
   id,
@@ -418,12 +425,12 @@ LIMIT 1
       identifier,
       numericIdentifier: hasNumericIdentifier ? numericIdentifier : null,
       hasNumericIdentifier: hasNumericIdentifier ? 1 : 0,
-    }) as LocalCustomerListRow | undefined;
+    });
 
   if (directRow) return directRow;
 
   const rows = database
-    .prepare(
+    .prepare<[], LocalCustomerListRow>(
       `
 SELECT
   id,
@@ -440,7 +447,7 @@ FROM customers
 WHERE deleted_at IS NULL
 `,
     )
-    .all() as LocalCustomerListRow[];
+    .all();
   const normalizedIdentifier = slugifyRouteIdentifier(identifier);
   const slugMatch = rows.find(
     (candidate) =>
@@ -466,11 +473,8 @@ function toLocalCustomer(row: LocalCustomerListRow): LocalCustomer {
     taxId: row.tax_id,
     email: row.email,
     phone: row.phone,
-    address: parseJson(row.address_json) as Record<string, unknown> | null,
-    compliance: parseJson(row.compliance_json) as Record<
-      string,
-      unknown
-    > | null,
+    address: parseJsonRecordOrNull(row.address_json),
+    compliance: parseJsonRecordOrNull(row.compliance_json),
     financialSummary: {
       openDocumentsCount: 0,
       overdueDocumentsCount: 0,
@@ -596,8 +600,22 @@ function parseJson(value: string | null) {
   if (!value) return null;
 
   try {
-    return JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
   } catch {
     return null;
   }
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function parseJsonRecordOrNull(value: string | null) {
+  const record = recordFromUnknown(parseJson(value));
+  return Object.keys(record).length > 0 ? record : null;
 }

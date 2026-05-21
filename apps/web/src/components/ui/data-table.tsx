@@ -38,7 +38,7 @@ interface DataTableProps<TData, TValue> {
   onPageChange?: (page: number) => void
   isLoading?: boolean
   onRowClick?: (row: TData) => void
-  meta?: unknown
+  meta?: TableMeta<TData>
 }
 
 export function DataTable<TData, TValue>({
@@ -67,7 +67,7 @@ export function DataTable<TData, TValue>({
       sorting,
       columnFilters,
     },
-    meta: meta as TableMeta<TData>,
+    meta,
   })
 
   if (isLoading) {
@@ -125,8 +125,27 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
-                  className={onRowClick ? 'cursor-pointer' : ''}
-                  onClick={() => onRowClick?.(row.original)}
+                  className={
+                    onRowClick
+                      ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+                      : ''
+                  }
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onClick={(event) => {
+                    if (isInteractiveEventTarget(event.target)) return
+
+                    onRowClick?.(row.original)
+                  }}
+                  onKeyDown={(event) => {
+                    if (!onRowClick || isInteractiveEventTarget(event.target)) {
+                      return
+                    }
+
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      onRowClick(row.original)
+                    }
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
@@ -162,5 +181,16 @@ export function DataTable<TData, TValue>({
         />
       )}
     </div>
+  )
+}
+
+function isInteractiveEventTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    Boolean(
+      target.closest(
+        'a,button,input,select,textarea,[role="button"],[role="link"]',
+      ),
+    )
   )
 }

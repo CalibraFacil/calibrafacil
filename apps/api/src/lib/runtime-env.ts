@@ -109,6 +109,7 @@ type LocalS3Client = S3Client & {
 
 function createR2Bucket(bucketName = requiredEnv("R2_BUCKET_NAME")) {
   const accountId = requiredEnv("R2_ACCOUNT_ID");
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client has command-specific send overloads that are narrower than the base client type exposes.
   const client = new S3Client({
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
@@ -165,13 +166,13 @@ export function createApiRuntimeEnv(): ApiRuntimeEnv {
   }
 
   const databaseUrl = process.env.DATABASE_URL;
-  const env = {
+  const env: ApiRuntimeEnv = {
     API_URL: process.env.API_URL,
     APP_URL: process.env.APP_URL,
     PORTAL_APP_URL: process.env.PORTAL_APP_URL,
     ...process.env,
     CACHE: apiRuntimeCache,
-  } as ApiRuntimeEnv;
+  };
 
   if (databaseUrl) {
     env.HYPERDRIVE = { connectionString: databaseUrl };

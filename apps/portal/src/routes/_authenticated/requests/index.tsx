@@ -96,6 +96,37 @@ function formatDate(date: string | null | undefined) {
   return new Date(date).toLocaleDateString("pt-BR");
 }
 
+function parseRequestStatusFilter(value: string | null): RequestStatus | "" {
+  switch (value) {
+    case "PENDING":
+    case "UNDER_REVIEW":
+    case "APPROVED":
+    case "REJECTED":
+    case "CONVERTED":
+      return value;
+    default:
+      return "";
+  }
+}
+
+function getPortalErrorMessage(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const errorBody = Object.fromEntries(Object.entries(payload));
+  if (typeof errorBody.error === "string") return errorBody.error;
+  if (!Array.isArray(errorBody.errors)) return null;
+
+  return errorBody.errors
+    .flatMap((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+      const message = Object.fromEntries(Object.entries(item)).message;
+      return typeof message === "string" ? [message] : [];
+    })
+    .join(", ");
+}
+
 function RequestsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -131,20 +162,10 @@ function RequestsPage() {
         const jsonResponse = response.clone();
 
         try {
-          const errorBody = (await jsonResponse.json()) as
-            | {
-                error?: string;
-                errors?: Array<{ message?: string }>;
-              }
-            | undefined;
+          const errorBody: unknown = await jsonResponse.json();
+          const parsedMessage = getPortalErrorMessage(errorBody);
 
-          errorMessage =
-            errorBody?.error ||
-            errorBody?.errors
-              ?.map((item) => item.message)
-              .filter(Boolean)
-              .join(", ") ||
-            errorMessage;
+          errorMessage = parsedMessage || errorMessage;
         } catch {
           try {
             const errorText = await response.text();
@@ -276,9 +297,7 @@ function RequestsPage() {
               <Select
                 value={statusFilter || "all"}
                 onValueChange={(value) => {
-                  setStatusFilter(
-                    value === "all" ? "" : (value as RequestStatus),
-                  );
+                  setStatusFilter(parseRequestStatusFilter(value));
                   setPage(1);
                 }}
               >

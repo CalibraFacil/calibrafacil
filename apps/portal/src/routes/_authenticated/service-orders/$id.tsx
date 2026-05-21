@@ -126,6 +126,7 @@ function ServiceOrderDetailPage() {
         throw new Error("Falha ao carregar ordem de serviço.");
       }
 
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- portal service-order endpoint returns the ServiceOrderDetail DTO.
       const result = (await response.json()) as { data: ServiceOrderDetail };
       return result.data;
     },

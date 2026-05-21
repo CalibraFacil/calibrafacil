@@ -31,7 +31,10 @@ export function parsePkcs12(
     const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, password);
 
     // Extract certificate bags
-    const certBagOid = forge.pki.oids.certBag as string;
+    const certBagOid = forge.pki.oids.certBag;
+    if (typeof certBagOid !== "string") {
+      throw new SigningError("Certificate bag OID not found", "INVALID_P12");
+    }
     const certBags = p12.getBags({ bagType: certBagOid });
     const certBagList = certBags[certBagOid];
     if (!certBagList || certBagList.length === 0) {
@@ -42,7 +45,10 @@ export function parsePkcs12(
     }
 
     // Extract key bags
-    const keyBagOid = forge.pki.oids.pkcs8ShroudedKeyBag as string;
+    const keyBagOid = forge.pki.oids.pkcs8ShroudedKeyBag;
+    if (typeof keyBagOid !== "string") {
+      throw new SigningError("Private key bag OID not found", "INVALID_P12");
+    }
     const keyBags = p12.getBags({ bagType: keyBagOid });
     const keyBagList = keyBags[keyBagOid];
     if (!keyBagList || keyBagList.length === 0) {

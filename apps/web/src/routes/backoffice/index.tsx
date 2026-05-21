@@ -1,6 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 
+import {
+  loadBackofficeIndexData,
+  useBackofficeOrganizationsData,
+  useBackofficeSupportQueueData,
+} from '@/features/backoffice/queries'
 import {
   Card,
   CardContent,
@@ -9,30 +13,15 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice/')({
+  loader: ({ context }) => loadBackofficeIndexData(context.queryClient),
   component: BackofficeIndexPage,
 })
 
 function BackofficeIndexPage() {
-  const organizationsQuery = useQuery({
-    queryKey: ['backoffice', 'organizations', 'summary'],
-    queryFn: async () =>
-      calibraApi.backoffice.listOrganizations<{
-        data: Array<{
-          id: string
-          openRequestsCount: number
-          integrationsCount: number
-        }>
-      }>(),
-  })
-
-  const supportQuery = useQuery({
-    queryKey: ['backoffice', 'support', 'queue', 'summary'],
-    queryFn: async () =>
-      calibraApi.backoffice.getSupportQueue<{ data: Array<unknown> }>(),
-  })
+  const organizationsQuery = useBackofficeOrganizationsData('summary')
+  const supportQuery = useBackofficeSupportQueueData('summary')
 
   const orgsCount = organizationsQuery.data?.data.length ?? 0
   const openRequests =

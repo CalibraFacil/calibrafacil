@@ -241,8 +241,21 @@ describe("createLocalSyncRuntime", () => {
           const body = JSON.parse(String(init?.body));
           pushedRequests.push(body);
 
-          for (const event of body.events as Array<{ eventId: string }>) {
-            pushedEventIds.add(event.eventId);
+          const events =
+            body && typeof body === "object" && !Array.isArray(body)
+              ? Object.fromEntries(Object.entries(body)).events
+              : [];
+          const syncEvents = Array.isArray(events) ? events : [];
+
+          for (const event of syncEvents) {
+            if (!event || typeof event !== "object" || Array.isArray(event)) {
+              continue;
+            }
+
+            const eventId = Object.fromEntries(Object.entries(event)).eventId;
+            if (typeof eventId === "string") {
+              pushedEventIds.add(eventId);
+            }
           }
 
           await delay(20);

@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
+import { setStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
 import { brazilPhoneMask, cnpjMask } from '@/lib/input-masks'
 
 type OnboardingSearch = {
@@ -124,7 +125,7 @@ function OrganizationOnboardingPage() {
 
       if (data?.id) {
         await organization.setActive({ organizationId: data.id })
-        localStorage.setItem('dashboard-active-org', data.id)
+        setStoredDashboardOrganizationId(data.id)
       }
 
       navigate({ to: redirectTo || '/dashboard' })

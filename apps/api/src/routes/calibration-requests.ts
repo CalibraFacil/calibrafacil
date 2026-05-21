@@ -25,6 +25,7 @@ import {
 import {
   getEffectivePlanLimits,
   getPlan,
+  isValidPlanId,
   isSubscriptionActive,
   type PlanId,
 } from "@calibra-facil/shared";
@@ -745,7 +746,9 @@ export const calibrationRequestsRouter = new Hono<{
             .limit(1);
 
           const planId: PlanId =
-            (activeSubscription?.planId as PlanId | undefined) ?? "FREE";
+            activeSubscription && isValidPlanId(activeSubscription.planId)
+              ? activeSubscription.planId
+              : "FREE";
           const subscriptionStatus = activeSubscription?.status ?? "TRIAL";
           const [currentOrganization] = await tx
             .select({ createdAt: organization.createdAt })

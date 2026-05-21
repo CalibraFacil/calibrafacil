@@ -72,14 +72,14 @@ export const signaturesRouter = new Hono<{
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const env = c.env as R2Env;
+      const env = c.env;
 
       try {
         // Parse multipart form data
         const formData = await c.req.formData();
-        const file = formData.get("signature") as File | null;
+        const file = formData.get("signature");
 
-        if (!file) {
+        if (!(file instanceof File)) {
           return c.json({ error: "Nenhum arquivo enviado" }, 400);
         }
 
@@ -203,7 +203,7 @@ export const signaturesRouter = new Hono<{
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const env = c.env as R2Env;
+      const env = c.env;
 
       try {
         const [signature] = await db
@@ -254,7 +254,7 @@ export const signaturesRouter = new Hono<{
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const env = c.env as R2Env;
+      const env = c.env;
 
       try {
         const [signature] = await db
@@ -302,7 +302,7 @@ export const signaturesRouter = new Hono<{
     async (c) => {
       const { memberId } = c.req.param();
       const memberData = c.get("member");
-      const env = c.env as R2Env;
+      const env = c.env;
 
       try {
         // Verify the requested member belongs to the same organization

@@ -17,36 +17,39 @@ export type PendingOutboxEvent = {
 
 export function countPendingOutbox(database: LocalDatabase) {
   const row = database
-    .prepare(
+    .prepare<[], { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM outbox
 WHERE status IN ('pending', 'failed')
 `,
     )
-    .get() as { total: number } | undefined;
+    .get();
 
   return row?.total ?? 0;
 }
 
 export function countOpenSyncConflicts(database: LocalDatabase) {
   const row = database
-    .prepare(
+    .prepare<[], { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM sync_conflicts
 WHERE status = 'open'
 `,
     )
-    .get() as { total: number } | undefined;
+    .get();
 
   return row?.total ?? 0;
 }
 
 export function getSyncCursor(database: LocalDatabase, scope = "default") {
   const row = database
-    .prepare("SELECT cursor FROM sync_cursors WHERE scope = ?")
-    .get(scope) as { cursor: string | null } | undefined;
+    .prepare<
+      [string],
+      { cursor: string | null }
+    >("SELECT cursor FROM sync_cursors WHERE scope = ?")
+    .get(scope);
 
   return row?.cursor ?? null;
 }
@@ -56,8 +59,11 @@ export function getSyncCursorUpdatedAt(
   scope = "default",
 ) {
   const row = database
-    .prepare("SELECT updated_at FROM sync_cursors WHERE scope = ?")
-    .get(scope) as { updated_at: string | null } | undefined;
+    .prepare<
+      [string],
+      { updated_at: string | null }
+    >("SELECT updated_at FROM sync_cursors WHERE scope = ?")
+    .get(scope);
 
   return row?.updated_at ?? null;
 }
@@ -91,7 +97,10 @@ export function listPendingOutboxEvents(
 ): PendingOutboxEvent[] {
   const now = new Date().toISOString();
   const rows = database
-    .prepare(
+    .prepare<
+      { now: string; limit: number; includeDeferred: number },
+      PendingOutboxEventRow
+    >(
       `
 SELECT
   domain_events.event_id,
@@ -120,7 +129,7 @@ LIMIT @limit
       now,
       limit,
       includeDeferred: options.includeDeferred ? 1 : 0,
-    }) as PendingOutboxEventRow[];
+    });
 
   return rows.map((row) => ({
     eventId: row.event_id,
@@ -144,17 +153,14 @@ export function markOutboxEventsFailedForRetry(
   if (eventIds.length === 0) return;
 
   const rows = database
-    .prepare(
+    .prepare<string[], { event_id: string; attempt_count: number }>(
       `
 SELECT event_id, attempt_count
 FROM outbox
 WHERE event_id IN (${eventIds.map(() => "?").join(",")})
 `,
     )
-    .all(...eventIds) as Array<{
-    event_id: string;
-    attempt_count: number;
-  }>;
+    .all(...eventIds);
 
   database.transaction(() => {
     for (const row of rows) {
@@ -356,14 +362,14 @@ function getEventsById(database: LocalDatabase, eventIds: string[]) {
   }
 
   const rows = database
-    .prepare(
+    .prepare<string[], DomainEventRow>(
       `
 SELECT event_id, aggregate_kind, aggregate_id, payload_json
 FROM domain_events
 WHERE event_id IN (${eventIds.map(() => "?").join(",")})
 `,
     )
-    .all(...eventIds) as DomainEventRow[];
+    .all(...eventIds);
 
   return new Map(rows.map((row) => [row.event_id, row]));
 }
@@ -604,7 +610,8 @@ WHERE id = @localId
 
 function parseJson(value: string) {
   try {
-    return JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
   } catch {
     return null;
   }
@@ -631,9 +638,11 @@ type DomainEventRow = {
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }
 
 function getString(row: Record<string, unknown>, key: string) {

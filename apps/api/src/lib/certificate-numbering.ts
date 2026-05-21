@@ -74,18 +74,23 @@ const MONTH_ABBREVIATIONS = [
 ];
 
 function normalizeConfig(config: unknown): CertificateNumberingConfig {
+  const configRecord =
+    typeof config === "object" && config !== null && !Array.isArray(config)
+      ? Object.fromEntries(Object.entries(config))
+      : {};
+  const sequence =
+    configRecord.sequence &&
+    typeof configRecord.sequence === "object" &&
+    !Array.isArray(configRecord.sequence)
+      ? Object.fromEntries(Object.entries(configRecord.sequence))
+      : {};
+
   return CertificateNumberingConfigSchema.parse({
     ...DEFAULT_CERTIFICATE_NUMBERING_CONFIG,
-    ...(typeof config === "object" && config !== null ? config : {}),
+    ...configRecord,
     sequence: {
       ...DEFAULT_CERTIFICATE_NUMBERING_CONFIG.sequence,
-      ...((typeof config === "object" &&
-      config !== null &&
-      "sequence" in config &&
-      typeof config.sequence === "object" &&
-      config.sequence !== null
-        ? config.sequence
-        : {}) as Record<string, unknown>),
+      ...sequence,
     },
   });
 }

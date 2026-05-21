@@ -93,7 +93,7 @@ export function listLocalMethods(
 
   const whereClause = conditions.join(" AND ");
   const totalRow = database
-    .prepare(
+    .prepare<typeof params, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM published_methods pm
@@ -101,10 +101,11 @@ LEFT JOIN asset_types at ON at.id = pm.asset_type_id
 WHERE ${whereClause}
 `,
     )
-    .get(params) as { total: number };
+    .get(params);
 
+  const pageParams = { ...params, limit, offset };
   const rows = database
-    .prepare(
+    .prepare<typeof pageParams, LocalMethodRow>(
       `
 SELECT
   pm.id,
@@ -128,15 +129,15 @@ ORDER BY pm.name ASC, pm.version DESC
 LIMIT @limit OFFSET @offset
 `,
     )
-    .all({ ...params, limit, offset }) as LocalMethodRow[];
+    .all(pageParams);
 
   return {
     data: rows.map(toLocalMethod),
     pagination: {
       page,
       limit,
-      total: totalRow.total,
-      totalPages: Math.ceil(totalRow.total / limit),
+      total: totalRow?.total ?? 0,
+      totalPages: Math.ceil((totalRow?.total ?? 0) / limit),
     },
   };
 }
@@ -163,7 +164,7 @@ function resolveLocalMethodRow(
   }
 
   const directMatch = database
-    .prepare(
+    .prepare<typeof params, LocalMethodRow>(
       `
 SELECT
   pm.id,
@@ -186,12 +187,12 @@ WHERE ${directConditions.join(" OR ")}
 LIMIT 1
 `,
     )
-    .get(params) as LocalMethodRow | undefined;
+    .get(params);
 
   if (directMatch) return directMatch;
 
   const rows = database
-    .prepare(
+    .prepare<[], LocalMethodRow>(
       `
 SELECT
   pm.id,
@@ -212,7 +213,7 @@ FROM published_methods pm
 LEFT JOIN asset_types at ON at.id = pm.asset_type_id
 `,
     )
-    .all() as LocalMethodRow[];
+    .all();
 
   if (Number.isInteger(numericIdentifier)) {
     const stableMatch = rows.find(
@@ -285,7 +286,8 @@ function emptyMethodsPage(page: number, limit: number): LocalMethodsListData {
 
 function safeParseUnknown(value: string): unknown {
   try {
-    return JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
   } catch {
     return null;
   }
@@ -293,9 +295,15 @@ function safeParseUnknown(value: string): unknown {
 
 function safeParseRecord(value: string): Record<string, unknown> {
   const parsed = safeParseUnknown(value);
-  return parsed && typeof parsed === "object"
-    ? (parsed as Record<string, unknown>)
-    : {};
+  return recordFromUnknown(parsed);
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }
 
 function getArray(record: Record<string, unknown>, key: string): unknown[] {

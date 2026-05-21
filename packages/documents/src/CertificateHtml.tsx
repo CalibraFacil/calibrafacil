@@ -1392,11 +1392,9 @@ function formatStandardUncertainty(
 }
 
 function isMassCompositionValue(value: unknown): value is MassCompositionValue {
+  const record = asRecord(value);
   return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as { kind?: unknown }).kind === "mass_standard_composition" &&
-    Array.isArray((value as { items?: unknown }).items)
+    record.kind === "mass_standard_composition" && Array.isArray(record.items)
   );
 }
 
@@ -1441,7 +1439,7 @@ function collectMassCompositions(
 
     tableData.forEach((rowValue, rowIndex) => {
       if (typeof rowValue !== "object" || rowValue === null) return;
-      const row = rowValue as Record<string, unknown>;
+      const row = asRecord(rowValue);
       const point = getCompositionPointLabel(field, row, rowIndex);
 
       for (const value of Object.values(row)) {
@@ -1498,11 +1496,11 @@ function getPointLabels(
   const tableField = dataFields.find((field) => field.type === "table");
   const rows = tableField && data ? data[tableField.key] : null;
   if (!Array.isArray(rows)) {
-    return [] as string[];
+    return [];
   }
 
   return rows.map((row, index) => {
-    const record = row as Record<string, unknown>;
+    const record = asRecord(row);
     const point =
       record.ponto ?? record.point ?? record.nominal ?? record.valor_nominal;
     return point != null && point !== "" ? String(point) : String(index + 1);
@@ -1533,7 +1531,7 @@ function getCircularEccentricityLoadPositions(
   for (const row of data) {
     if (!row || typeof row !== "object") continue;
 
-    const rawValue = (row as Record<string, unknown>)[positionColumn.key];
+    const rawValue = asRecord(row)[positionColumn.key];
     const value = formatValue(rawValue).trim().toUpperCase();
     if (
       value in CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES &&
@@ -1546,6 +1544,23 @@ function getCircularEccentricityLoadPositions(
   return positions.length > 0
     ? positions
     : Object.keys(CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES);
+}
+
+function circularEccentricityLoadPointClass(position: string) {
+  switch (position) {
+    case "A":
+      return CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES.A;
+    case "B":
+      return CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES.B;
+    case "C":
+      return CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES.C;
+    case "D":
+      return CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES.D;
+    case "E":
+      return CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES.E;
+    default:
+      return "";
+  }
 }
 
 function isInformationBulletSection(items: string[]) {
@@ -1762,11 +1777,9 @@ function CertificateEccentricityDiagram({
           {circularLoadPositions.map((position) => (
             <div
               key={position}
-              className={`eccentricity-point ${
-                CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES[
-                  position as keyof typeof CIRCULAR_ECCENTRICITY_LOAD_POINT_CLASSES
-                ]
-              }`}
+              className={`eccentricity-point ${circularEccentricityLoadPointClass(
+                position,
+              )}`}
             >
               {position}
             </div>
@@ -1844,7 +1857,7 @@ function DataTable({
                   {columns.map((col) => (
                     <td key={col.key}>
                       {formatCanonicalValueWithResolvedUnit(
-                        (row as Record<string, unknown>)[col.key],
+                        asRecord(row)[col.key],
                         col.unit,
                         assetBaseMeasurementUnit,
                       )}
@@ -1943,9 +1956,11 @@ function shouldRenderExemploFor51(job: JobData) {
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }
 
 function asNumber(value: unknown): number | null {
@@ -2148,8 +2163,11 @@ function getFor51RepeatabilityValues(
   const explicit = [1, 2, 3, 4, 5].map((index) =>
     asNumber(row[`${prefix}leitura_${index}`]),
   );
-  if (explicit.every((value) => value !== null)) {
-    return explicit as number[];
+  const explicitNumbers = explicit.filter(
+    (value): value is number => value !== null,
+  );
+  if (explicitNumbers.length === explicit.length) {
+    return explicitNumbers;
   }
 
   if (kind === "antes") {
@@ -2321,6 +2339,14 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
     "apos",
     pointRows,
   );
+  const repeatabilitySections: Array<{
+    label: string;
+    phase: "before" | "after";
+    values: number[];
+  }> = [
+    { label: "Antes do ajuste", phase: "before", values: repeatBefore },
+    { label: "Depois do ajuste", phase: "after", values: repeatAfter },
+  ];
   const observation = asString(job.data?.observacao);
   const renderBeforeIndication =
     pointRows.length > 0 && isFor51PhaseActive(job, "indication", "before");
@@ -2690,19 +2716,16 @@ function ExemploFor51CertificateHtml({ job }: { job: JobData }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    ["Antes do ajuste", "before", repeatBefore],
-                    ["Depois do ajuste", "after", repeatAfter],
-                  ].map(([label, phase, values]) => {
-                    const readings = values as number[];
+                  {repeatabilitySections.map(({ label, phase, values }) => {
+                    const readings = values;
                     const phaseActive = isFor51PhaseActive(
                       job,
                       "repeatability",
-                      phase as "before" | "after",
+                      phase,
                     );
                     return (
-                      <tr key={label as string}>
-                        <td className="row-label">{label as string}</td>
+                      <tr key={label}>
+                        <td className="row-label">{label}</td>
                         {Array.from({ length: 5 }).map((_, index) => (
                           <td key={index}>
                             {for51PhaseText(

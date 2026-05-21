@@ -134,14 +134,14 @@ function readStoredSecrets(value: unknown): StoredSecretsFile {
     return emptySecretsFile;
   }
 
-  const secrets = (value as { secrets?: unknown }).secrets;
+  const secrets = toRecord(value).secrets;
   if (!secrets || typeof secrets !== "object" || Array.isArray(secrets)) {
     return emptySecretsFile;
   }
 
   const parsedSecrets: StoredSecretsFile["secrets"] = {};
   for (const name of secretNames) {
-    const candidate = (secrets as Record<string, unknown>)[name];
+    const candidate = toRecord(secrets)[name];
     if (
       !candidate ||
       typeof candidate !== "object" ||
@@ -150,7 +150,7 @@ function readStoredSecrets(value: unknown): StoredSecretsFile {
       continue;
     }
 
-    const record = candidate as Record<string, unknown>;
+    const record = toRecord(candidate);
     if (
       typeof record.ciphertext === "string" &&
       typeof record.updatedAt === "string"
@@ -168,10 +168,18 @@ function readStoredSecrets(value: unknown): StoredSecretsFile {
   };
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
 function isMissingFileError(error: unknown): boolean {
   return (
     error instanceof Error &&
     "code" in error &&
-    (error as NodeJS.ErrnoException).code === "ENOENT"
+    toRecord(error).code === "ENOENT"
   );
 }

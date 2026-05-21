@@ -4,7 +4,7 @@ export function getPath(data: Record<string, unknown>, path: string): unknown {
       return undefined;
     }
 
-    return (current as Record<string, unknown>)[segment];
+    return Object.fromEntries(Object.entries(current))[segment];
   }, data);
 }
 

@@ -31,7 +31,20 @@ export function useRole(): RoleName {
 
   // Get the current user's member record from the active organization
   const currentMember = activeOrg?.members?.[0]
-  return currentMember?.role as RoleName
+  return parseRoleName(currentMember?.role)
+}
+
+function parseRoleName(role: string | null | undefined): RoleName {
+  switch (role) {
+    case 'owner':
+    case 'admin':
+    case 'technician':
+    case 'operator':
+    case 'client_user':
+      return role
+    default:
+      return 'member'
+  }
 }
 
 /**
@@ -331,6 +344,7 @@ interface CanProps {
  * </Can>
  */
 export function Can({ resource, action, children, fallback = null }: CanProps) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- computed permission resource/action pairs cannot be represented precisely from runtime props.
   const permissions = { [resource]: [action] } as PermissionCheck
   return (
     <PermissionGate permissions={permissions} fallback={fallback}>

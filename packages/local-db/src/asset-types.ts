@@ -21,7 +21,7 @@ export function listLocalAssetTypes(database: LocalDatabase): {
   data: LocalAssetType[];
 } {
   const rows = database
-    .prepare(
+    .prepare<[], LocalAssetTypeRow>(
       `
 SELECT
   id,
@@ -33,7 +33,7 @@ FROM asset_types
 ORDER BY name ASC
 `,
     )
-    .all() as LocalAssetTypeRow[];
+    .all();
 
   return {
     data: rows.map((row) => ({
@@ -50,7 +50,8 @@ function parseJson(value: string | null) {
   if (!value) return null;
 
   try {
-    return JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
+    return parsed;
   } catch {
     return null;
   }

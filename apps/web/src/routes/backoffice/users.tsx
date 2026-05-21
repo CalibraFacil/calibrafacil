@@ -2,7 +2,7 @@ import { useDeferredValue, useMemo, useState } from 'react'
 import { ArrowDown01Icon, ArrowUp01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { createFileRoute } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   type ColumnDef,
   type ExpandedState,
@@ -18,6 +18,16 @@ import { toast } from 'sonner'
 
 import { parsePlatformRoles } from '@calibra-facil/auth/access'
 import { useBackofficeSession } from '@calibra-facil/auth/client'
+import {
+  loadBackofficeUsersData,
+  useBackofficeOrganizationOptionsData,
+  useBackofficeUsersData,
+} from '@/features/backoffice/queries'
+import type {
+  AssignablePlatformRole,
+  BackofficeUser,
+  BackofficeUserFilters,
+} from '@/features/backoffice/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -50,53 +60,19 @@ export const Route = createFileRoute('/backoffice/users')({
         ? search.impersonationError
         : undefined,
   }),
+  loader: ({ context }) => loadBackofficeUsersData(context.queryClient),
   component: BackofficeUsersPage,
 })
-
-type BackofficeUserMembership = {
-  organizationId: string
-  organizationName: string
-  organizationSlug: string
-  memberRole: string
-}
-
-type BackofficeUser = {
-  id: string
-  name: string
-  email: string
-  role?: string | null
-  banned?: boolean | null
-  createdAt?: string | Date | null
-  memberships: BackofficeUserMembership[]
-}
-
-type OrganizationOption = {
-  id: string
-  name: string
-  slug: string
-}
-
-type UserFilters = {
-  search: string
-  organizationId: string
-  platformRole:
-    | 'all'
-    | 'user'
-    | 'platform_operator'
-    | 'platform_admin'
-    | 'platform_access'
-  membershipScope:
-    | 'all'
-    | 'lab_members'
-    | 'no_lab_membership'
-    | 'backoffice_only'
-}
-
-type AssignablePlatformRole = 'user' | 'platform_operator' | 'platform_admin'
 
 type EntityMutation<TVariables> = {
   isPending: boolean
   mutate: (variables: TVariables) => void
+}
+
+type NewPlatformUserDraft = {
+  name: string
+  email: string
+  role: Extract<AssignablePlatformRole, 'platform_operator' | 'platform_admin'>
 }
 
 const platformRoleOptions = [
@@ -159,6 +135,36 @@ function getMembershipSummary(user: BackofficeUser) {
   return `${user.memberships[0]?.organizationName ?? '1 laboratório'} +${user.memberships.length - 1}`
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+
+  return Object.fromEntries(Object.entries(value))
+}
+
+function getSessionRole(sessionUser: unknown) {
+  const role = toRecord(sessionUser).role
+  return typeof role === 'string' ? role : null
+}
+
+function toNewPlatformUserRole(
+  value: string,
+): NewPlatformUserDraft['role'] {
+  return value === 'platform_admin' ? 'platform_admin' : 'platform_operator'
+}
+
+function toAssignablePlatformRole(value: string): AssignablePlatformRole {
+  switch (value) {
+    case 'platform_admin':
+    case 'platform_operator':
+    case 'user':
+      return value
+    default:
+      return 'user'
+  }
+}
+
 function formatCreatedAt(value: BackofficeUser['createdAt']) {
   if (!value) {
     return 'Data indisponível'
@@ -179,12 +185,12 @@ function BackofficeUsersPage() {
   const queryClient = useQueryClient()
   const { data: session } = useBackofficeSession()
   const { impersonationError } = Route.useSearch()
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState<NewPlatformUserDraft>({
     name: '',
     email: '',
-    role: 'platform_operator' as 'platform_operator' | 'platform_admin',
+    role: 'platform_operator',
   })
-  const [filters, setFilters] = useState<UserFilters>({
+  const [filters, setFilters] = useState<BackofficeUserFilters>({
     search: '',
     organizationId: '',
     platformRole: 'all',
@@ -193,11 +199,7 @@ function BackofficeUsersPage() {
   const [sorting, setSorting] = useState<SortingState>([])
   const [expanded, setExpanded] = useState<ExpandedState>({})
   const deferredSearch = useDeferredValue(filters.search)
-  const sessionRole =
-    session?.user &&
-    typeof (session.user as { role?: unknown }).role === 'string'
-      ? ((session.user as { role?: string }).role ?? null)
-      : null
+  const sessionRole = getSessionRole(session?.user)
 
   const currentPlatformRoles = useMemo(
     () => parsePlatformRoles(sessionRole),
@@ -205,37 +207,12 @@ function BackofficeUsersPage() {
   )
   const canManageRoles = currentPlatformRoles.includes('platform_admin')
 
-  const organizationsQuery = useQuery({
-    queryKey: ['backoffice', 'organizations', 'options'],
-    queryFn: async () => {
-      const data = await calibraApi.backoffice.listOrganizations<{
-        data: OrganizationOption[]
-      }>()
-      return data.data
-    },
-  })
-
-  const usersQuery = useQuery({
-    queryKey: [
-      'backoffice',
-      'users',
-      {
-        search: deferredSearch,
-        organizationId: filters.organizationId,
-        platformRole: filters.platformRole,
-        membershipScope: filters.membershipScope,
-      },
-    ],
-    queryFn: async () =>
-      calibraApi.backoffice.listUsers<{
-        users: BackofficeUser[]
-        total: number
-      }>({
-        search: deferredSearch || undefined,
-        organizationId: filters.organizationId || undefined,
-        platformRole: filters.platformRole,
-        membershipScope: filters.membershipScope,
-      }),
+  const organizationsQuery = useBackofficeOrganizationOptionsData()
+  const usersQuery = useBackofficeUsersData({
+    search: deferredSearch,
+    organizationId: filters.organizationId,
+    platformRole: filters.platformRole,
+    membershipScope: filters.membershipScope,
   })
 
   const invalidateUsers = async () => {
@@ -568,14 +545,12 @@ function BackofficeUsersPage() {
                   <NativeSelect
                     id="platformUserRole"
                     value={draft.role}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        role: event.target.value as
-                          | 'platform_operator'
-                          | 'platform_admin',
-                      }))
-                    }
+	                    onChange={(event) =>
+	                      setDraft((current) => ({
+	                        ...current,
+	                        role: toNewPlatformUserRole(event.target.value),
+	                      }))
+	                    }
                   >
                     <NativeSelectOption value="platform_operator">
                       platform_operator
@@ -725,7 +700,7 @@ function BackofficeUsersPage() {
                   >
                     Todos os laboratórios
                   </Button>
-                  {(organizationsQuery.data ?? []).map((organization) => (
+                  {(organizationsQuery.data?.data ?? []).map((organization) => (
                     <Button
                       key={organization.id}
                       type="button"
@@ -986,10 +961,12 @@ function UserTableRow({
                       <NativeSelect
                         value={assignableRole}
                         onChange={(event) =>
-                          setRoleMutation.mutate({
-                            userId: user.id,
-                            role: event.target.value as AssignablePlatformRole,
-                          })
+	                          setRoleMutation.mutate({
+	                            userId: user.id,
+	                            role: toAssignablePlatformRole(
+	                              event.target.value,
+	                            ),
+	                          })
                         }
                         disabled={!canManageRoles}
                       >

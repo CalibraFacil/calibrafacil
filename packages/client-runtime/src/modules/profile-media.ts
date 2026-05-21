@@ -6,7 +6,7 @@ import type {
 import type { CreateCloudApiClientOptions } from "../transport/cloud";
 import { createCloudHeaders } from "../transport/cloud";
 import { appendNamedBlob } from "../transport/form-data";
-import { readApiError } from "../transport/response";
+import { readJsonResponse } from "../transport/response";
 
 export function createProfileMediaApi(
   options: CreateCloudApiClientOptions,
@@ -26,11 +26,10 @@ export function createProfileMediaApi(
         },
       );
 
-      if (!response.ok) {
-        throw new Error(await readApiError(response, "Falha ao enviar avatar"));
-      }
-
-      return response.json() as Promise<ProfileAvatarUploadResponse>;
+      return readJsonResponse<ProfileAvatarUploadResponse>(
+        response,
+        "Falha ao enviar avatar",
+      );
     },
     async deleteAvatar() {
       const response = await (options.fetch ?? fetch)(
@@ -42,13 +41,10 @@ export function createProfileMediaApi(
         },
       );
 
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao remover avatar"),
-        );
-      }
-
-      return response.json() as Promise<ProfileAvatarDeleteResponse>;
+      return readJsonResponse<ProfileAvatarDeleteResponse>(
+        response,
+        "Falha ao remover avatar",
+      );
     },
   };
 }

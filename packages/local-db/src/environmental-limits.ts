@@ -14,7 +14,7 @@ export function getLocalEffectiveEnvironmentalLimits(
   input: LocalEffectiveEnvironmentalLimitsInput,
 ) {
   const rows = database
-    .prepare(
+    .prepare<{ unitId: number | null }, EnvironmentalLimitRow>(
       `
 SELECT limits_json
 FROM environmental_limits
@@ -22,7 +22,7 @@ WHERE unit_id = @unitId OR unit_id IS NULL
 ORDER BY pulled_at DESC
 `,
     )
-    .all({ unitId: input.unitId }) as EnvironmentalLimitRow[];
+    .all({ unitId: input.unitId });
 
   const parsedRows = rows
     .map((row) => parseJsonRecord(row.limits_json))
@@ -39,9 +39,9 @@ function parseJsonRecord(value: string | null | undefined) {
   if (!value) return {};
 
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
+      ? Object.fromEntries(Object.entries(parsed))
       : {};
   } catch {
     return {};

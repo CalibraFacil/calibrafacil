@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   CheckmarkCircle02Icon,
@@ -17,6 +17,10 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Spinner } from '@/components/ui/spinner'
+import {
+  useRecentNotificationsData,
+  useUnreadNotificationsData,
+} from '@/features/notifications/queries'
 import { calibraApi } from '@/utils/api'
 import { cn } from '@/lib/utils'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
@@ -30,22 +34,14 @@ export function NotificationBell() {
   const canQueryNotifications =
     Boolean(activeOrganizationId) && !isContextSwitching
 
-  // Fetch unread count (polls every 30 seconds)
-  const { data: countData } = useQuery({
-    queryKey: ['notifications', organizationQueryKey, 'unread-count'],
+  const { data: countData } = useUnreadNotificationsData({
+    organizationKey: organizationQueryKey,
     enabled: canQueryNotifications,
-    queryFn: async () => calibraApi.notifications.getUnreadCount(),
-    refetchInterval: 30000, // Poll every 30 seconds
-    staleTime: 10000,
   })
 
-  // Fetch recent notifications when popover opens
-  const { data: notificationsData, isLoading } = useQuery({
-    queryKey: ['notifications', organizationQueryKey, 'recent'],
-    queryFn: async () =>
-      calibraApi.notifications.listRecent({ page: 1, limit: 5 }),
+  const { data: notificationsData, isLoading } = useRecentNotificationsData({
+    organizationKey: organizationQueryKey,
     enabled: canQueryNotifications && isOpen,
-    staleTime: 5000,
   })
 
   // Mark notification as read mutation

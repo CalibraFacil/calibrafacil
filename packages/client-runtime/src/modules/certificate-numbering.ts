@@ -3,33 +3,25 @@ import type {
   CertificateNumberingProfileResponse,
   UpdateCertificateNumberingProfileResponse,
 } from "../types";
-import { readApiError } from "../transport/response";
+import { readJsonResponse } from "../transport/response";
 
 export function createCertificateNumberingApi(
   rawCloudClient: any,
 ): CertificateNumberingApi {
   return {
     async getProfile() {
-      const response = await rawCloudClient.api["certificate-numbering"].$get();
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiError(response, "Falha ao carregar perfil de numeração"),
-        );
-      }
-
-      return response.json() as Promise<CertificateNumberingProfileResponse>;
+      return readJsonResponse<CertificateNumberingProfileResponse>(
+        await rawCloudClient.api["certificate-numbering"].$get(),
+        "Falha ao carregar perfil de numeração",
+      );
     },
     async updateProfile(input) {
-      const response = await rawCloudClient.api["certificate-numbering"].$put({
-        json: input,
-      });
-
-      if (!response.ok) {
-        throw new Error(await readApiError(response, "Falha ao salvar perfil"));
-      }
-
-      return response.json() as Promise<UpdateCertificateNumberingProfileResponse>;
+      return readJsonResponse<UpdateCertificateNumberingProfileResponse>(
+        await rawCloudClient.api["certificate-numbering"].$put({
+          json: input,
+        }),
+        "Falha ao salvar perfil",
+      );
     },
   };
 }

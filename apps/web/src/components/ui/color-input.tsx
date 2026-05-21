@@ -122,7 +122,7 @@ export function ColorInput({
               onValueChange={(nextValue) => {
                 onChange(
                   Color.hsv(
-                    nextValue as number,
+                    nextValue,
                     saturation ?? 100,
                     brightness ?? 100,
                   )

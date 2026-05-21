@@ -85,19 +85,54 @@ pnpm dev          # Development server
 pnpm build        # Production build
 pnpm preview      # Preview production build
 pnpm test         # Run tests
+pnpm test:e2e     # Run Playwright browser tests
 pnpm lint         # Lint with oxlint
 pnpm check-types  # TypeScript check
 ```
+
+Playwright tests live in `e2e/` and run against a local Vite server. By
+default, the config points browser-side API calls at `http://127.0.0.1:3000`
+and individual specs should route/mock the API calls they own. Set
+`PLAYWRIGHT_BASE_URL` to reuse an already running web server.
 
 ## Project Structure
 
 ```
 src/
-├── routes/           # TanStack Router file-based routes
-├── components/       # React components
-│   ├── ui/          # Base UI components
-│   └── ...          # Feature components
-├── lib/             # Utilities and API client
-├── hooks/           # Custom React hooks
-└── styles/          # Global styles
+├── app/              # App-level config, router metadata, providers
+├── routes/           # Thin TanStack Router file-based route adapters
+├── features/         # Domain-owned UI, queries, forms, models, types
+├── shared/           # Cross-domain API/form helpers
+├── components/       # Shared React components and UI primitives
+│   └── ui/           # Base UI components
+├── lib/              # Utilities and route helpers
+├── hooks/            # Custom React hooks
+└── styles.css        # Global styles and Tailwind tokens
 ```
+
+## Architecture Rules
+
+- Route files should stay thin: `createFileRoute`, metadata, loaders,
+  search validation, and param handoff only.
+- Renderable dashboard page routes must define `head` title metadata; layout
+  `route.tsx` files and redirect-only adapters are the explicit exceptions.
+- Domain UI and behavior belong in `src/features/<domain>`, not under
+  `src/routes`.
+- Feature modules should not call TanStack route registration or route hooks.
+  Route adapters pass params/search into features through props or loader input.
+- Raw Hono RPC calls stay inside `@calibra-facil/client-runtime`. Web code should
+  use `calibraApi`/`calibraClient` product-level methods.
+- Regulated workflows should validate payloads with Zod schemas from
+  `@calibra-facil/schemas` or a feature `forms.ts` parser before mutation.
+- Browser E2E specs belong in `e2e/`. Cover cross-route/auth/runtime workflows
+  there when a component or feature-level Vitest test is too narrow.
+- Dashboard organization/unit persistence uses
+  `features/dashboard/dashboard-scope-storage.ts`; do not read those storage
+  keys directly from new code.
+- Sidebar, cloud-only behavior, and route access metadata should be added to
+  `src/app/router/route-meta.ts` instead of duplicated in navigation components.
+- Sentry PII and replay are opt-in through `src/app/config/runtime.ts`.
+
+See
+[`../../docs/architecture/web-frontend-architecture.md`](../../docs/architecture/web-frontend-architecture.md)
+for the full frontend architecture contract.

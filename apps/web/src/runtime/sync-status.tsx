@@ -34,7 +34,7 @@ function subscribeToBridgeSyncStatus(onStoreChange: () => void) {
     return () => {}
   }
 
-  return window.calibraBridge.onSyncStatus((snapshot) => {
+  return window.calibraBridge.onSyncStatus((snapshot: SyncStatusSnapshot) => {
     latestBridgeSnapshot = snapshot
     onStoreChange()
   })

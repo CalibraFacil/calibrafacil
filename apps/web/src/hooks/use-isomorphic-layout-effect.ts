@@ -1,6 +1,5 @@
 import * as React from 'react'
 
-const useIsomorphicLayoutEffect =
-  typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect
+const useIsomorphicLayoutEffect = React.useLayoutEffect
 
 export { useIsomorphicLayoutEffect }

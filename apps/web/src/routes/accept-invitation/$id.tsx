@@ -1,5 +1,4 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { authClient, useSession } from '@calibra-facil/auth/client'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -12,6 +11,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { toast } from 'sonner'
+import { useInvitationData } from '@/features/public/queries'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/accept-invitation/$id')({
@@ -27,38 +27,13 @@ export const Route = createFileRoute('/accept-invitation/$id')({
   component: AcceptInvitationPage,
 })
 
-type InvitationData = {
-  id: string
-  email: string
-  role: string
-  status: string
-  expiresAt: Date
-  organizationId: string
-  organizationName: string
-  organizationSlug: string
-  inviterEmail: string
-}
-
 function AcceptInvitationPage() {
   const { id } = Route.useParams()
   const navigate = useNavigate()
   const { data: session, isPending: isSessionLoading } = useSession()
   const [isAccepting, setIsAccepting] = useState(false)
   const [isRejecting, setIsRejecting] = useState(false)
-  const invitationQuery = useQuery({
-    queryKey: ['accept-invitation', id],
-    queryFn: async (): Promise<InvitationData> => {
-      const { data, error } = await authClient.organization.getInvitation({
-        query: { id },
-      })
-
-      if (error) {
-        throw new Error(error.message || 'Não foi possível carregar o convite.')
-      }
-
-      return data as InvitationData
-    },
-  })
+  const invitationQuery = useInvitationData(id)
   const invitation = invitationQuery.data
   const error =
     invitationQuery.error instanceof Error

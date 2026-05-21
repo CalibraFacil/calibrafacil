@@ -162,21 +162,21 @@ function countJobsWhere(
   params: Array<string>,
 ) {
   const row = database
-    .prepare(
+    .prepare<Array<string>, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM calibration_jobs
 WHERE deleted_at IS NULL AND ${where}
 `,
     )
-    .get(...params) as { total: number } | undefined;
+    .get(...params);
 
   return row?.total ?? 0;
 }
 
 function getStatusBreakdown(database: LocalDatabase) {
   const rows = database
-    .prepare(
+    .prepare<[], { status: LocalJobStatus; count: number }>(
       `
 SELECT status, COUNT(*) AS count
 FROM calibration_jobs
@@ -184,7 +184,7 @@ WHERE deleted_at IS NULL
 GROUP BY status
 `,
     )
-    .all() as Array<{ status: LocalJobStatus; count: number }>;
+    .all();
   const countByStatus = new Map(rows.map((row) => [row.status, row.count]));
 
   return JOB_STATUSES.map((status) => ({
@@ -202,7 +202,11 @@ function getCalibrationTrend(database: LocalDatabase, now: Date) {
   );
   const start = `${days[0]}T00:00:00.000Z`;
   const rows = database
-    .prepare(
+    .prepare<{ start: string }, {
+      status: "APPROVED" | "REJECTED";
+      date: string;
+      count: number;
+    }>(
       `
 SELECT status, substr(COALESCE(approved_at, rejected_at, updated_at), 1, 10) AS date, COUNT(*) AS count
 FROM calibration_jobs
@@ -212,11 +216,7 @@ WHERE deleted_at IS NULL
 GROUP BY status, date
 `,
     )
-    .all({ start }) as Array<{
-    status: "APPROVED" | "REJECTED";
-    date: string;
-    count: number;
-  }>;
+    .all({ start });
 
   for (const row of rows) {
     const bucket = trend.get(row.date);

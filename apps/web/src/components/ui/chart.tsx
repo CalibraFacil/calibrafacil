@@ -5,6 +5,9 @@ import { cn } from '@/lib/utils'
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: '', dark: '.dark' } as const
+type ThemeName = keyof typeof THEMES
+type ChartIndicatorStyle = React.CSSProperties &
+  Record<'--color-bg' | '--color-border', string | undefined>
 
 export type ChartConfig = {
   [k in string]: {
@@ -85,9 +88,11 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
 ${prefix} [data-chart=${id}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
+    const themeName: ThemeName = theme === 'dark' ? 'dark' : 'light'
     const color =
-      itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
-      itemConfig.color
+      'theme' in itemConfig && itemConfig.theme
+        ? itemConfig.theme[themeName]
+        : itemConfig.color
     return color ? `  --color-${key}: ${color};` : null
   })
   .join('\n')}
@@ -136,7 +141,7 @@ function ChartTooltipContent({
     const itemConfig = getPayloadConfigFromPayload(config, item, key)
     const value =
       !labelKey && typeof label === 'string'
-        ? config[label as keyof typeof config]?.label || label
+        ? config[label]?.label || label
         : itemConfig?.label
 
     if (labelFormatter) {
@@ -183,6 +188,10 @@ function ChartTooltipContent({
             const key = `${nameKey || item.name || item.dataKey || 'value'}`
             const itemConfig = getPayloadConfigFromPayload(config, item, key)
             const indicatorColor = color || item.payload.fill || item.color
+            const indicatorStyle: ChartIndicatorStyle = {
+              '--color-bg': indicatorColor,
+              '--color-border': indicatorColor,
+            }
 
             return (
               <div
@@ -211,12 +220,7 @@ function ChartTooltipContent({
                               'my-0.5': nestLabel && indicator === 'dashed',
                             },
                           )}
-                          style={
-                            {
-                              '--color-bg': indicatorColor,
-                              '--color-border': indicatorColor,
-                            } as React.CSSProperties
-                          }
+                          style={indicatorStyle}
                         />
                       )
                     )}
@@ -315,6 +319,11 @@ function getPayloadConfigFromPayload(
     return undefined
   }
 
+  const stringValue = (value: object, property: string) => {
+    const result = Reflect.get(value, property)
+    return typeof result === 'string' ? result : undefined
+  }
+
   const payloadPayload =
     'payload' in payload &&
     typeof payload.payload === 'object' &&
@@ -324,24 +333,15 @@ function getPayloadConfigFromPayload(
 
   let configLabelKey: string = key
 
-  if (
-    key in payload &&
-    typeof payload[key as keyof typeof payload] === 'string'
-  ) {
-    configLabelKey = payload[key as keyof typeof payload] as string
-  } else if (
-    payloadPayload &&
-    key in payloadPayload &&
-    typeof payloadPayload[key as keyof typeof payloadPayload] === 'string'
-  ) {
-    configLabelKey = payloadPayload[
-      key as keyof typeof payloadPayload
-    ] as string
+  const directValue = stringValue(payload, key)
+  const nestedValue = payloadPayload ? stringValue(payloadPayload, key) : null
+  if (directValue) {
+    configLabelKey = directValue
+  } else if (nestedValue) {
+    configLabelKey = nestedValue
   }
 
-  return configLabelKey in config
-    ? config[configLabelKey]
-    : config[key as keyof typeof config]
+  return config[configLabelKey] ?? config[key]
 }
 
 export {

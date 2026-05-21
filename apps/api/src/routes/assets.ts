@@ -727,7 +727,9 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         // Build changes object for audit log
         for (const [key, value] of Object.entries(updateData)) {
           if (key === "updatedAt") continue;
-          const oldValue = existingAsset[key as keyof typeof existingAsset];
+          const oldValue = Object.fromEntries(Object.entries(existingAsset))[
+            key
+          ];
           if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
             changes[key] = { old: oldValue, new: value };
           }

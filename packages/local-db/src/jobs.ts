@@ -117,7 +117,7 @@ export function listLocalJobs(
 
   const whereClause = conditions.join(" AND ");
   const totalRow = database
-    .prepare(
+    .prepare<typeof params, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM calibration_jobs j
@@ -127,10 +127,11 @@ LEFT JOIN services s ON s.id = j.service_id
 WHERE ${whereClause}
 `,
     )
-    .get(params) as { total: number };
+    .get(params);
 
+  const pageParams = { ...params, limit, offset };
   const rows = database
-    .prepare(
+    .prepare<typeof pageParams, LocalJobListRow>(
       `
 SELECT
   j.remote_id,
@@ -153,7 +154,7 @@ ORDER BY j.created_at DESC
 LIMIT @limit OFFSET @offset
 `,
     )
-    .all({ ...params, limit, offset }) as LocalJobListRow[];
+    .all(pageParams);
 
   return {
     data: rows.map((row) => ({
@@ -172,21 +173,23 @@ LIMIT @limit OFFSET @offset
     pagination: {
       page,
       limit,
-      total: totalRow.total,
-      totalPages: Math.ceil(totalRow.total / limit),
+      total: totalRow?.total ?? 0,
+      totalPages: Math.ceil((totalRow?.total ?? 0) / limit),
     },
   };
 }
 
 function resolveLocalCustomerId(database: LocalDatabase, numericId: number) {
   const remoteRow = database
-    .prepare("SELECT id FROM customers WHERE remote_id = @remoteId LIMIT 1")
-    .get({ remoteId: numericId }) as { id: string } | undefined;
+    .prepare<{ remoteId: number }, { id: string }>(
+      "SELECT id FROM customers WHERE remote_id = @remoteId LIMIT 1",
+    )
+    .get({ remoteId: numericId });
   if (remoteRow) return remoteRow.id;
 
-  const rows = database.prepare("SELECT id FROM customers").all() as Array<{
-    id: string;
-  }>;
+  const rows = database
+    .prepare<[], { id: string }>("SELECT id FROM customers")
+    .all();
   return (
     rows.find((row) => stableLocalNumericId(row.id) === numericId)?.id ?? null
   );

@@ -63,17 +63,25 @@ const tempDirectories: string[] = [];
 const occupiedServers: Server[] = [];
 
 function createMockChildProcess(): MockChildProcess {
-  const child = new EventEmitter() as MockChildProcess;
-  child.killed = false;
-  child.stdin = {
-    end: vi.fn(),
-  };
-  child.stdout = new EventEmitter();
-  child.stderr = new EventEmitter();
-  child.kill = vi.fn(() => {
-    child.killed = true;
-    child.emit("exit", null, "SIGTERM");
-    return true;
+  let killed = false;
+  const emitter = new EventEmitter();
+  const child: MockChildProcess = Object.assign(emitter, {
+    get killed() {
+      return killed;
+    },
+    set killed(value: boolean) {
+      killed = value;
+    },
+    stdin: {
+      end: vi.fn(),
+    },
+    stdout: new EventEmitter(),
+    stderr: new EventEmitter(),
+    kill: vi.fn(() => {
+      killed = true;
+      emitter.emit("exit", null, "SIGTERM");
+      return true;
+    }),
   });
 
   return child;

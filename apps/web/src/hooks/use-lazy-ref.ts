@@ -1,13 +1,24 @@
 import * as React from 'react'
 
 function useLazyRef<T>(fn: () => T) {
-  const ref = React.useRef<T | null>(null)
+  const ref = React.useRef<React.RefObject<T> | null>(null)
 
   if (ref.current === null) {
-    ref.current = fn()
+    let value: T
+    let initialized = false
+    ref.current = {
+      get current() {
+        if (!initialized) {
+          value = fn()
+          initialized = true
+        }
+
+        return value
+      },
+    }
   }
 
-  return ref as React.RefObject<T>
+  return ref.current
 }
 
 export { useLazyRef }

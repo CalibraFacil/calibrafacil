@@ -235,9 +235,9 @@ export async function getServiceOrderSummaryReport(
     byStatus: Array.from(byStatus, ([status, total]) => ({
       status,
       statusLabel:
-        SERVICE_ORDER_STATUS_LABELS[
-          status as keyof typeof SERVICE_ORDER_STATUS_LABELS
-        ] ?? status,
+        Object.entries(SERVICE_ORDER_STATUS_LABELS).find(
+          ([statusKey]) => statusKey === status,
+        )?.[1] ?? status,
       total,
     })),
     byUnit: Array.from(byUnit.values()),

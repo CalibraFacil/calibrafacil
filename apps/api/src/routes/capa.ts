@@ -373,7 +373,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
       capa.verifiedBy,
       capa.closedBy,
       capa.createdBy,
-    ].filter(Boolean) as string[];
+    ].filter((userId): userId is string => Boolean(userId));
 
     if (userIds.length > 0) {
       const users = await db

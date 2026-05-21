@@ -16,7 +16,10 @@ import {
 import { requireFeature } from "../../middleware/tier-guard";
 import { buildUnitScopeCondition } from "../../lib/units";
 
-export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
+export const financeErpRouter = new Hono<{
+  Variables: AuthVariables;
+  Bindings: IntegrationsEnv;
+}>()
   .get(
     "/exports",
     ...withLabPermission({ financial: ["read"] }),
@@ -97,7 +100,7 @@ export const financeErpRouter = new Hono<{ Variables: AuthVariables }>()
         const exported = await exportBillingDocumentToPrimaryIntegration({
           organizationId: member.organizationId,
           documentId,
-          env: c.env as IntegrationsEnv,
+          env: c.env,
         });
 
         return c.json({ data: exported });

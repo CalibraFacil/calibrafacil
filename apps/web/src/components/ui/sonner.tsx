@@ -11,12 +11,36 @@ import {
 
 import type { ToasterProps } from 'sonner'
 
+type SonnerStyle = React.CSSProperties & {
+  '--normal-bg'?: string
+  '--normal-text'?: string
+  '--normal-border'?: string
+  '--border-radius'?: string
+}
+
+function getToasterTheme(theme: string): ToasterProps['theme'] {
+  switch (theme) {
+    case 'light':
+    case 'dark':
+    case 'system':
+      return theme
+    default:
+      return 'system'
+  }
+}
+
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = 'system' } = useTheme()
+  const style: SonnerStyle = {
+    '--normal-bg': 'var(--popover)',
+    '--normal-text': 'var(--popover-foreground)',
+    '--normal-border': 'var(--border)',
+    '--border-radius': 'var(--radius)',
+  }
 
   return (
     <Sonner
-      theme={theme as ToasterProps['theme']}
+      theme={getToasterTheme(theme)}
       className="toaster group"
       icons={{
         success: (
@@ -55,14 +79,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           />
         ),
       }}
-      style={
-        {
-          '--normal-bg': 'var(--popover)',
-          '--normal-text': 'var(--popover-foreground)',
-          '--normal-border': 'var(--border)',
-          '--border-radius': 'var(--radius)',
-        } as React.CSSProperties
-      }
+      style={style}
       toastOptions={{
         classNames: {
           toast: 'cn-toast',

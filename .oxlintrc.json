@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "react-hooks", "import", "unicorn"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "pedantic": "off",
+    "style": "off",
+    "restriction": "off",
+    "perf": "warn",
+    "nursery": "off"
+  },
+  "rules": {
+    "no-unused-vars": "warn",
+    "no-console": "off",
+    "react/react-in-jsx-scope": "off",
+    "typescript/consistent-type-assertions": [
+      "error",
+      {
+        "assertionStyle": "never"
+      }
+    ],
+    "unicorn/no-null": "off",
+    "unicorn/filename-case": "off"
+  },
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    ".next",
+    "out",
+    "build",
+    "coverage",
+    "apps/api/api/**/*.js",
+    "*.config.js",
+    "*.config.ts",
+    "*.config.mjs",
+    "routeTree.gen.ts"
+  ]
+}

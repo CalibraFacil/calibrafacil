@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "deploy": "pnpm dlx vercel deploy --prod",
     "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "lint": "oxlint",
     "format": "prettier",
     "check": "prettier --write . && oxlint --fix"
@@ -20,6 +22,7 @@
     "@base-ui/react": "^1.0.0",
     "@calibra-facil/auth": "workspace:^",
     "@calibra-facil/client-runtime": "workspace:^",
+    "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/db": "workspace:^",
     "@calibra-facil/documents": "workspace:^",
     "@calibra-facil/math-engine": "git+ssh://git@github.com/CalibraFacil/math-engine.git#v0.2.4",
@@ -71,6 +74,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.60.0",
     "@repo/typescript-config": "workspace:^",
     "@tanstack/devtools-vite": "0.3.12",
     "@testing-library/dom": "^10.4.0",

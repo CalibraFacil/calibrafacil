@@ -79,6 +79,7 @@ function PublicServiceOrderAccessPage() {
         throw new Error("Link expirado, revogado ou inválido.");
       }
 
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- token access endpoint returns the PublicOrder DTO.
       const result = (await response.json()) as { data: PublicOrder };
       return result.data;
     },

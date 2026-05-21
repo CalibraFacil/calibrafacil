@@ -30,6 +30,7 @@ export async function kvGet<T>(
   try {
     const raw = await kv.get(key, "text");
     if (raw === null) return null;
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- cache callers own the value type for their key; cache storage is untyped JSON.
     return JSON.parse(raw) as T;
   } catch {
     // KV failure should never break the request

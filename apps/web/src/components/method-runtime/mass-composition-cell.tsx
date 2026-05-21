@@ -5,11 +5,11 @@ import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import {
   buildMassCompositionValue,
   isMassCompositionValue,
+  normalizeMassUnit,
   type MassCompositionConfig,
   type MassCompositionItem,
   type MassCompositionOption,
   type MassCompositionValue,
-  type MassUnit,
 } from './mass-composition-utils'
 
 import { Badge } from '@/components/ui/badge'
@@ -128,9 +128,10 @@ export function MassCompositionCell({
     visibleOptions.length === 1 ? '1 opção' : `${visibleOptions.length} opções`
 
   const commitItems = (nextItems: MassCompositionItem[]) => {
+    const normalizedTargetUnit = normalizeMassUnit(targetUnit) ?? 'g'
     onChange(
       nextItems.length > 0
-        ? buildMassCompositionValue(nextItems, targetUnit as MassUnit, config)
+        ? buildMassCompositionValue(nextItems, normalizedTargetUnit, config)
         : null,
     )
   }

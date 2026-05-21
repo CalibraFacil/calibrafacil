@@ -205,15 +205,15 @@ function toCertificateJobData(
 ): JobData {
   const assetSnapshot = toRecord(job.assetSnapshot);
   const methodSnapshot = toCertificateMethodSnapshot(job.methodSnapshot);
-  const environmentalSnapshot = toRecordOrNull(
+  const environmentalSnapshot = toEnvironmentalSnapshot(
     job.environmentalSnapshot,
-  ) as JobData["environmentalSnapshot"];
-  const calibrationLocationSnapshot = toRecordOrNull(
+  );
+  const calibrationLocationSnapshot = toCalibrationLocationSnapshot(
     job.calibrationLocationSnapshot,
-  ) as JobData["calibrationLocationSnapshot"];
-  const calibrationPhaseSnapshot = toRecordOrNull(
+  );
+  const calibrationPhaseSnapshot = toCalibrationPhaseSnapshot(
     job.calibrationPhaseSnapshot,
-  ) as JobData["calibrationPhaseSnapshot"];
+  );
 
   return {
     jobId: job.jobId,
@@ -250,23 +250,17 @@ function toCertificateJobData(
       assetTypeName:
         getString(assetSnapshot, "assetTypeName") ?? job.assetName ?? "Ativo",
       assetTypeSlug: getString(assetSnapshot, "assetTypeSlug") ?? "local",
-      baseMeasurementUnit: getNullableString(
-        assetSnapshot,
-        "baseMeasurementUnit",
-      ) as NonNullable<JobData["assetSnapshot"]>["baseMeasurementUnit"],
+      baseMeasurementUnit: toMassUnit(assetSnapshot["baseMeasurementUnit"]),
       name: getString(assetSnapshot, "name") ?? job.assetName,
       tag: getString(assetSnapshot, "tag") ?? job.assetTag,
       serialNumber: getString(assetSnapshot, "serialNumber") ?? "",
       manufacturer: getNullableString(assetSnapshot, "manufacturer"),
       model: getNullableString(assetSnapshot, "model"),
       specifications:
-        toRecordOrNull(assetSnapshot["specifications"]) ??
-        ({} as Record<string, unknown>),
+        toRecordOrNull(assetSnapshot["specifications"]) ?? {},
       capturedAt: getString(assetSnapshot, "capturedAt") ?? job.createdAt,
     },
-    standardsSnapshot: Array.isArray(job.standardsSnapshot)
-      ? (job.standardsSnapshot as JobData["standardsSnapshot"])
-      : null,
+    standardsSnapshot: toStandardsSnapshot(job.standardsSnapshot),
     serviceOrder: null,
     data: toRecordOrNull(job.data),
     results: toRecordOrNull(job.results),
@@ -292,9 +286,11 @@ function getContentType(draft: LocalCertificateDraft) {
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
 }
 
 function toRecordOrNull(value: unknown): Record<string, unknown> | null {
@@ -302,15 +298,128 @@ function toRecordOrNull(value: unknown): Record<string, unknown> | null {
   return Object.keys(record).length > 0 ? record : null;
 }
 
+function toEnvironmentalSnapshot(
+  value: unknown,
+): JobData["environmentalSnapshot"] {
+  const snapshot = toRecord(value);
+  if (Object.keys(snapshot).length === 0) {
+    return null;
+  }
+
+  return {
+    temperature: getNullableNumber(snapshot, "temperature"),
+    humidity: getNullableNumber(snapshot, "humidity"),
+    pressure: getNullableNumber(snapshot, "pressure"),
+    recordedAt: getString(snapshot, "recordedAt") ?? new Date().toISOString(),
+    recordedBy: getString(snapshot, "recordedBy") ?? "local",
+    limits: toRecordOrNull(snapshot.limits),
+    withinLimits:
+      typeof snapshot.withinLimits === "boolean" ? snapshot.withinLimits : true,
+    outOfLimitsJustification: getNullableString(
+      snapshot,
+      "outOfLimitsJustification",
+    ),
+  };
+}
+
+function toCalibrationLocationSnapshot(
+  value: unknown,
+): JobData["calibrationLocationSnapshot"] {
+  const snapshot = toRecord(value);
+  if (
+    snapshot.type !== "customer_site" &&
+    snapshot.type !== "lab" &&
+    snapshot.type !== "other"
+  ) {
+    return null;
+  }
+
+  return {
+    type: snapshot.type,
+    addressText: getString(snapshot, "addressText") ?? "",
+    notes: getNullableString(snapshot, "notes"),
+    recordedAt: getNullableString(snapshot, "recordedAt") ?? undefined,
+    recordedBy: getNullableString(snapshot, "recordedBy") ?? undefined,
+  };
+}
+
+function toCalibrationPhaseSnapshot(
+  value: unknown,
+): JobData["calibrationPhaseSnapshot"] {
+  const snapshot = toRecord(value);
+  const blocks = toRecord(snapshot.blocks);
+  const parsedBlocks: NonNullable<
+    JobData["calibrationPhaseSnapshot"]
+  >["blocks"] = {};
+
+  for (const [key, block] of Object.entries(blocks)) {
+    const record = toRecord(block);
+    if (
+      record.mode !== "before_and_after" &&
+      record.mode !== "before_only" &&
+      record.mode !== "after_only" &&
+      record.mode !== "not_performed"
+    ) {
+      continue;
+    }
+
+    parsedBlocks[key] = {
+      mode: record.mode,
+      reason: getNullableString(record, "reason"),
+    };
+  }
+
+  return Object.keys(parsedBlocks).length > 0
+    ? {
+        blocks: parsedBlocks,
+        recordedAt: getNullableString(snapshot, "recordedAt") ?? undefined,
+        recordedBy: getNullableString(snapshot, "recordedBy") ?? undefined,
+      }
+    : null;
+}
+
+function toStandardsSnapshot(value: unknown): JobData["standardsSnapshot"] {
+  return Array.isArray(value)
+    ? value.map(toStandardSnapshot).filter((standard) => standard !== null)
+    : null;
+}
+
+function toStandardSnapshot(value: unknown): NonNullable<
+  JobData["standardsSnapshot"]
+>[number] | null {
+  const standard = toRecord(value);
+  const id = getNumber(standard, "id");
+  const name = getString(standard, "name");
+  const certificateNumber = getString(standard, "certificateNumber");
+  if (id === null || !name || !certificateNumber) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    type: getNullableString(standard, "type"),
+    certificateNumber,
+    calibratedBy: getNullableString(standard, "calibratedBy"),
+    calibrationDate:
+      getNullableString(standard, "calibrationDate") ?? new Date().toISOString(),
+    nextCalibrationDate: getNullableString(standard, "nextCalibrationDate"),
+    uncertainty: getNullableNumber(standard, "uncertainty"),
+    uncertaintyUnit: getNullableString(standard, "uncertaintyUnit"),
+    coverageFactor: getNumber(standard, "coverageFactor") ?? 2,
+    certifiedValues: null,
+  };
+}
+
 function toCertificateMethodSnapshot(
   value: unknown,
 ): JobData["methodSnapshot"] {
-  const methodSnapshot = toRecord(value) as JobData["methodSnapshot"] & {
-    formulas?: unknown[];
-  };
+  const methodSnapshot = toRecord(value);
 
   return {
-    ...methodSnapshot,
+    methodId: getNumber(methodSnapshot, "methodId") ?? 0,
+    methodName: getString(methodSnapshot, "methodName") ?? "Metodo local",
+    methodVersion: getNumber(methodSnapshot, "methodVersion") ?? 1,
     formulas: Array.isArray(methodSnapshot.formulas)
       ? methodSnapshot.formulas.map(toCertificateFormula)
       : [],
@@ -347,6 +456,15 @@ function getNullableString(row: Record<string, unknown>, key: string) {
 function getNumber(row: Record<string, unknown>, key: string) {
   const value = row[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function getNullableNumber(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function toMassUnit(value: unknown) {
+  return value === "mg" || value === "g" || value === "kg" ? value : null;
 }
 
 function parseDate(value: string | null | undefined) {

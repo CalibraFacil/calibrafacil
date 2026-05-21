@@ -101,6 +101,26 @@ type CalibrationPhaseInput = {
   >;
 };
 
+type LocalJobCreateInput = {
+  assetId?: number;
+  serviceId?: number;
+  technicianId?: string | null;
+  dueDate?: string | null;
+};
+
+type LocalJobExecutionInput = {
+  data: Record<string, unknown>;
+  results: Record<string, unknown> | null;
+  selectedStandardIds?: number[];
+  environment?: {
+    temperature: number | null;
+    humidity: number | null;
+    pressure: number | null;
+  };
+  calibrationLocation?: CalibrationLocationInput;
+  calibrationPhases?: CalibrationPhaseInput;
+};
+
 function buildCalibrationLocationSnapshot(
   input: CalibrationLocationInput | undefined,
   existing: Record<string, unknown> | null | undefined,
@@ -182,8 +202,9 @@ function validateCalibrationPhasesForSubmit(
     if (!block || typeof block !== "object" || Array.isArray(block)) {
       continue;
     }
-    const mode = (block as { mode?: unknown }).mode;
-    const reason = (block as { reason?: unknown }).reason;
+    const blockRecord = recordFromUnknown(block);
+    const mode = blockRecord.mode;
+    const reason = blockRecord.reason;
     if (
       mode === "not_performed" &&
       (typeof reason !== "string" || reason.trim() === "")
@@ -357,12 +378,7 @@ export function createLocalServer(
   });
 
   app.post("/api/jobs", async (c) => {
-    const input = (await c.req.json()) as {
-      assetId?: number;
-      serviceId?: number;
-      technicianId?: string | null;
-      dueDate?: string | null;
-    };
+    const input = parseLocalJobCreateInput(await c.req.json());
 
     if (!input.assetId || !input.serviceId) {
       return c.json({ error: "Ativo e servico sao obrigatorios" }, 400);
@@ -604,18 +620,7 @@ export function createLocalServer(
 
   app.post("/api/jobs/:id/execute", async (c) => {
     const routeId = c.req.param("id");
-    const input = (await c.req.json()) as {
-      data?: Record<string, unknown>;
-      results?: Record<string, unknown> | null;
-      selectedStandardIds?: number[];
-      environment?: {
-        temperature: number | null;
-        humidity: number | null;
-        pressure: number | null;
-      };
-      calibrationLocation?: CalibrationLocationInput;
-      calibrationPhases?: CalibrationPhaseInput;
-    };
+    const input = parseLocalJobExecutionInput(await c.req.json());
     const current = getLocalJobDetail(database, routeId);
 
     if (!current) {
@@ -625,38 +630,32 @@ export function createLocalServer(
     const context = getLocalRequestContext(config, database);
     const calibrationLocationSnapshot = buildCalibrationLocationSnapshot(
       input.calibrationLocation,
-      current.calibrationLocationSnapshot as Record<string, unknown> | null,
+      recordOrNull(current.calibrationLocationSnapshot),
       context.userId ?? "local",
     );
     const calibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
       input.calibrationPhases,
-      current.calibrationPhaseSnapshot as Record<string, unknown> | null,
+      recordOrNull(current.calibrationPhaseSnapshot),
       context.userId ?? "local",
     );
     try {
       const results = executeLocalCompiledMethod({
-        methodSnapshot: current.methodSnapshot as Record<string, unknown>,
-        assetSnapshot: (current.assetSnapshot ?? {}) as Record<string, unknown>,
-        data: input.data ?? {},
-        fallbackResults: input.results ?? null,
+        methodSnapshot: recordFromUnknown(current.methodSnapshot),
+        assetSnapshot: recordFromUnknown(current.assetSnapshot),
+        data: input.data,
+        fallbackResults: input.results,
         environmentalSnapshot: input.environment,
         calibrationPhaseSnapshot,
         requireSuccess: false,
       });
       const job = saveLocalJobExecution(database, {
         routeId,
-        data: input.data ?? {},
+        data: input.data,
         results,
         selectedStandardIds: input.selectedStandardIds,
         environment: input.environment,
-        calibrationLocationSnapshot: calibrationLocationSnapshot as Record<
-          string,
-          unknown
-        > | null,
-        calibrationPhaseSnapshot: calibrationPhaseSnapshot as Record<
-          string,
-          unknown
-        > | null,
+        calibrationLocationSnapshot,
+        calibrationPhaseSnapshot,
         actorUserId: context.userId,
         deviceId: config.deviceId,
       });
@@ -675,18 +674,7 @@ export function createLocalServer(
 
   app.post("/api/jobs/:id/submit", async (c) => {
     const routeId = c.req.param("id");
-    const input = (await c.req.json()) as {
-      data?: Record<string, unknown>;
-      results?: Record<string, unknown> | null;
-      selectedStandardIds?: number[];
-      environment?: {
-        temperature: number | null;
-        humidity: number | null;
-        pressure: number | null;
-      };
-      calibrationLocation?: CalibrationLocationInput;
-      calibrationPhases?: CalibrationPhaseInput;
-    };
+    const input = parseLocalJobExecutionInput(await c.req.json());
     const current = getLocalJobDetail(database, routeId);
 
     if (!current) {
@@ -696,12 +684,12 @@ export function createLocalServer(
     const context = getLocalRequestContext(config, database);
     const calibrationLocationSnapshot = buildCalibrationLocationSnapshot(
       input.calibrationLocation,
-      current.calibrationLocationSnapshot as Record<string, unknown> | null,
+      recordOrNull(current.calibrationLocationSnapshot),
       context.userId ?? "local",
     );
     const calibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
       input.calibrationPhases,
-      current.calibrationPhaseSnapshot as Record<string, unknown> | null,
+      recordOrNull(current.calibrationPhaseSnapshot),
       context.userId ?? "local",
     );
     const calibrationLocationError = validateCalibrationLocationForSubmit(
@@ -718,28 +706,22 @@ export function createLocalServer(
     }
     try {
       const results = executeLocalCompiledMethod({
-        methodSnapshot: current.methodSnapshot as Record<string, unknown>,
-        assetSnapshot: (current.assetSnapshot ?? {}) as Record<string, unknown>,
-        data: input.data ?? {},
-        fallbackResults: input.results ?? null,
+        methodSnapshot: recordFromUnknown(current.methodSnapshot),
+        assetSnapshot: recordFromUnknown(current.assetSnapshot),
+        data: input.data,
+        fallbackResults: input.results,
         environmentalSnapshot: input.environment,
         calibrationPhaseSnapshot,
         requireSuccess: true,
       });
       const job = saveLocalJobExecution(database, {
         routeId,
-        data: input.data ?? {},
+        data: input.data,
         results,
         selectedStandardIds: input.selectedStandardIds,
         environment: input.environment,
-        calibrationLocationSnapshot: calibrationLocationSnapshot as Record<
-          string,
-          unknown
-        >,
-        calibrationPhaseSnapshot: calibrationPhaseSnapshot as Record<
-          string,
-          unknown
-        >,
+        calibrationLocationSnapshot,
+        calibrationPhaseSnapshot,
         requireResults: true,
         actorUserId: context.userId,
         deviceId: config.deviceId,
@@ -1506,33 +1488,147 @@ function parseBoolean(value: string | undefined) {
 
 async function readJsonOrEmpty(request: Request) {
   const raw = await request.text();
-  return raw ? (JSON.parse(raw) as unknown) : {};
+  return raw ? JSON.parse(raw) : {};
 }
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Erro local";
 }
 
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function recordOrNull(value: unknown): Record<string, unknown> | null {
+  const record = recordFromUnknown(value);
+  return Object.keys(record).length > 0 ? record : null;
+}
+
+function parseLocalJobCreateInput(value: unknown): LocalJobCreateInput {
+  const input = recordFromUnknown(value);
+  return {
+    assetId: numberFromUnknown(input.assetId),
+    serviceId: numberFromUnknown(input.serviceId),
+    technicianId: nullableStringFromUnknown(input.technicianId),
+    dueDate: nullableStringFromUnknown(input.dueDate),
+  };
+}
+
+function parseLocalJobExecutionInput(value: unknown): LocalJobExecutionInput {
+  const input = recordFromUnknown(value);
+  return {
+    data: recordFromUnknown(input.data),
+    results: recordOrNull(input.results),
+    selectedStandardIds: numberArrayFromUnknown(input.selectedStandardIds),
+    environment: environmentFromUnknown(input.environment),
+    calibrationLocation: calibrationLocationFromUnknown(
+      input.calibrationLocation,
+    ),
+    calibrationPhases: calibrationPhasesFromUnknown(input.calibrationPhases),
+  };
+}
+
+function calibrationLocationFromUnknown(
+  value: unknown,
+): CalibrationLocationInput | undefined {
+  const input = recordFromUnknown(value);
+  if (
+    input.type !== "customer_site" &&
+    input.type !== "lab" &&
+    input.type !== "other"
+  ) {
+    return undefined;
+  }
+
+  const addressText =
+    typeof input.addressText === "string" ? input.addressText : "";
+  return {
+    type: input.type,
+    addressText,
+    notes: nullableStringFromUnknown(input.notes),
+  };
+}
+
+function calibrationPhasesFromUnknown(
+  value: unknown,
+): CalibrationPhaseInput | undefined {
+  const input = recordFromUnknown(value);
+  const blocks = recordFromUnknown(input.blocks);
+  if (Object.keys(blocks).length === 0) {
+    return undefined;
+  }
+
+  const parsedBlocks: CalibrationPhaseInput["blocks"] = {};
+  for (const [key, block] of Object.entries(blocks)) {
+    const blockRecord = recordFromUnknown(block);
+    if (!isCalibrationPhaseMode(blockRecord.mode)) {
+      continue;
+    }
+
+    parsedBlocks[key] = {
+      mode: blockRecord.mode,
+      reason: nullableStringFromUnknown(blockRecord.reason),
+    };
+  }
+
+  return { blocks: parsedBlocks };
+}
+
+function environmentFromUnknown(
+  value: unknown,
+): LocalJobExecutionInput["environment"] {
+  const input = recordFromUnknown(value);
+  if (Object.keys(input).length === 0) {
+    return undefined;
+  }
+
+  return {
+    temperature: nullableNumberFromUnknown(input.temperature),
+    humidity: nullableNumberFromUnknown(input.humidity),
+    pressure: nullableNumberFromUnknown(input.pressure),
+  };
+}
+
+function numberArrayFromUnknown(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is number => Number.isInteger(item))
+    : undefined;
+}
+
+function numberFromUnknown(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function nullableNumberFromUnknown(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function nullableStringFromUnknown(value: unknown) {
+  return typeof value === "string" ? value : null;
+}
+
 function getLocalRequestContext(
   config: LocalServerConfig,
   database: LocalDatabase,
 ) {
-  const snapshot = database
-    .prepare(
-      `
+  const snapshot = tenantSnapshotFromUnknown(
+    database
+      .prepare(
+        `
 SELECT organization_id, active_unit_id, user_id
 FROM tenant_snapshot
 ORDER BY pulled_at DESC
 LIMIT 1
 `,
-    )
-    .get() as
-    | {
-        organization_id: string;
-        active_unit_id: number | null;
-        user_id: string;
-      }
-    | undefined;
+      )
+      .get(),
+  );
 
   return {
     organizationId: config.organizationId ?? snapshot?.organization_id ?? null,
@@ -1541,9 +1637,29 @@ LIMIT 1
   };
 }
 
+function tenantSnapshotFromUnknown(value: unknown) {
+  const snapshot = recordFromUnknown(value);
+  const organizationId = snapshot.organization_id;
+  const activeUnitId = snapshot.active_unit_id;
+  const userId = snapshot.user_id;
+
+  if (typeof organizationId !== "string" || typeof userId !== "string") {
+    return undefined;
+  }
+
+  return {
+    organization_id: organizationId,
+    active_unit_id:
+      typeof activeUnitId === "number" && Number.isFinite(activeUnitId)
+        ? activeUnitId
+        : null,
+    user_id: userId,
+  };
+}
+
 function getDiagnostics(error: unknown) {
   if (error && typeof error === "object" && "diagnostics" in error) {
-    return (error as { diagnostics?: unknown }).diagnostics;
+    return Reflect.get(error, "diagnostics");
   }
 
   return undefined;

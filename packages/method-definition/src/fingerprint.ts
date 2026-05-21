@@ -1,7 +1,7 @@
 function normalizeJsonValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalizeJsonValue);
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = Object.fromEntries(Object.entries(value));
     const normalized: Record<string, unknown> = {};
     for (const key of Object.keys(record).sort()) {
       const item = record[key];

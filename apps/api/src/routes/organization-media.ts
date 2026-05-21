@@ -76,13 +76,13 @@ export const organizationMediaRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const env = c.env as R2Env;
+      const env = c.env;
 
       try {
         const formData = await c.req.formData();
-        const file = formData.get("logo") as File | null;
+        const file = formData.get("logo");
 
-        if (!file) {
+        if (!(file instanceof File)) {
           return c.json({ error: "Nenhum arquivo enviado" }, 400);
         }
 
@@ -158,7 +158,7 @@ export const organizationMediaRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const env = c.env as R2Env;
+      const env = c.env;
 
       try {
         const [currentOrg] = await db
@@ -202,7 +202,7 @@ export const organizationMediaRouter = new Hono<{
     },
   )
   .get("/logo/:key", async (c) => {
-    const env = c.env as R2Env;
+    const env = c.env;
     const decodedKey = decodeLogoAssetKey(c.req.param("key"));
 
     if (!decodedKey) {

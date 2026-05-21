@@ -155,6 +155,100 @@ function shouldUseLocalR2Download(env: R2Env): env is R2Env & {
   return env.NODE_ENV === "development" && Boolean(env.CERTIFICATES_BUCKET);
 }
 
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
+function stringFromUnknown(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function r2EnvFromUnknown(value: unknown): R2Env {
+  const env = recordFromUnknown(value);
+  const bucket = env.CERTIFICATES_BUCKET;
+  const bucketGet =
+    bucket && typeof bucket === "object" ? Reflect.get(bucket, "get") : null;
+
+  return {
+    R2_ACCOUNT_ID: stringFromUnknown(env.R2_ACCOUNT_ID),
+    R2_ACCESS_KEY_ID: stringFromUnknown(env.R2_ACCESS_KEY_ID),
+    R2_SECRET_ACCESS_KEY: stringFromUnknown(env.R2_SECRET_ACCESS_KEY),
+    R2_BUCKET_NAME: stringFromUnknown(env.R2_BUCKET_NAME),
+    CERTIFICATES_BUCKET:
+      bucket && typeof bucketGet === "function"
+        ? { get: (key) => bucketGet.call(bucket, key) }
+        : undefined,
+    NODE_ENV:
+      typeof env.NODE_ENV === "string" ? env.NODE_ENV : process.env.NODE_ENV,
+    API_URL: typeof env.API_URL === "string" ? env.API_URL : undefined,
+  };
+}
+
+function isMethodInputField(value: unknown): value is MethodInputField {
+  const field = recordFromUnknown(value);
+  return typeof field.key === "string" && typeof field.type === "string";
+}
+
+function methodInputFieldsFromSnapshot(
+  methodSnapshot: MethodSnapshot | null | undefined,
+) {
+  return Array.isArray(methodSnapshot?.dataFields)
+    ? methodSnapshot.dataFields.filter(isMethodInputField)
+    : [];
+}
+
+function methodSnapshotDisplay(value: unknown) {
+  const snapshot = recordFromUnknown(value);
+  return {
+    methodName:
+      typeof snapshot.methodName === "string" ? snapshot.methodName : undefined,
+    methodVersion:
+      typeof snapshot.methodVersion === "number"
+        ? snapshot.methodVersion
+        : undefined,
+  };
+}
+
+function isCompiledMethod(value: unknown): value is CompiledMethod {
+  const candidate = recordFromUnknown(value);
+  const engine = recordFromUnknown(candidate.engine);
+  return (
+    candidate.status === "compiled" &&
+    typeof candidate.methodFingerprint === "string" &&
+    typeof candidate.normalizedMethodJson === "string" &&
+    typeof engine.version === "string" &&
+    typeof engine.optionsFingerprint === "string" &&
+    Array.isArray(candidate.inputs) &&
+    Array.isArray(candidate.formulas) &&
+    Array.isArray(candidate.measurementModels) &&
+    Array.isArray(candidate.acceptanceCriteria)
+  );
+}
+
+function certificateTemplateSnapshotFromUnknown(
+  value: unknown,
+): CertificateTemplateSnapshot | null {
+  const snapshot = recordFromUnknown(value);
+  const id = snapshot.id;
+  const name = snapshot.name;
+  const slug = snapshot.slug;
+  const version = snapshot.version;
+  if (
+    (id !== null && typeof id !== "number") ||
+    typeof name !== "string" ||
+    typeof slug !== "string" ||
+    typeof version !== "number"
+  ) {
+    return null;
+  }
+
+  return { id, name, slug, version };
+}
+
 function buildLocalJobFileUrl(
   requestUrl: string,
   routeId: string,
@@ -220,7 +314,7 @@ function findMissingRequiredAssetSpecs(
   methodSnapshot: MethodSnapshot | null | undefined,
   assetSnapshot: AssetSnapshot | null | undefined,
 ) {
-  const fields = (methodSnapshot?.dataFields ?? []) as MethodInputField[];
+  const fields = methodInputFieldsFromSnapshot(methodSnapshot);
   return fields.filter(
     (field) =>
       field.source === "asset_spec" &&
@@ -238,7 +332,7 @@ function stripAssetSpecData(
   }
 
   const assetSpecKeys = new Set(
-    ((methodSnapshot?.dataFields ?? []) as MethodInputField[])
+    methodInputFieldsFromSnapshot(methodSnapshot)
       .filter((field) => field.source === "asset_spec")
       .map((field) => field.key),
   );
@@ -349,6 +443,7 @@ function validateCalibrationPhasesForSubmit(
 }
 
 function createMethodExecutionEngine(): CalculationEngineLike {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine exposes a narrower concrete type than the method-definition execution adapter.
   return createCalculationEngine(
     METHOD_ENGINE_OPTIONS,
   ) as unknown as CalculationEngineLike;
@@ -475,16 +570,7 @@ function getCompiledMethodSnapshot(
     };
   }
 
-  const candidate = compiledMethod as Partial<CompiledMethod>;
-  if (
-    candidate.status !== "compiled" ||
-    typeof candidate.methodFingerprint !== "string" ||
-    !candidate.engine ||
-    !Array.isArray(candidate.inputs) ||
-    !Array.isArray(candidate.formulas) ||
-    !Array.isArray(candidate.measurementModels) ||
-    !Array.isArray(candidate.acceptanceCriteria)
-  ) {
+  if (!isCompiledMethod(compiledMethod)) {
     const message = "Snapshot compilado do método possui formato inválido";
     return {
       ok: false,
@@ -499,6 +585,7 @@ function getCompiledMethodSnapshot(
     };
   }
 
+  const candidate = compiledMethod;
   const mismatches: MethodDiagnostic[] = [];
   if (candidate.methodFingerprint !== methodSnapshot.methodFingerprint) {
     mismatches.push(
@@ -547,7 +634,7 @@ function getCompiledMethodSnapshot(
     };
   }
 
-  return { ok: true, compiledMethod: compiledMethod as CompiledMethod };
+  return { ok: true, compiledMethod };
 }
 
 function buildOfficialExecutionInputs(params: {
@@ -1116,8 +1203,8 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
             )
           : null,
         // Extract method name from snapshot for display
-        methodName: (job.methodSnapshot as MethodSnapshot)?.methodName,
-        methodVersion: (job.methodSnapshot as MethodSnapshot)?.methodVersion,
+        methodName: methodSnapshotDisplay(job.methodSnapshot).methodName,
+        methodVersion: methodSnapshotDisplay(job.methodSnapshot).methodVersion,
         ...financialContexts.get(job.id),
       }));
 
@@ -1796,7 +1883,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const normalizedData = normalizeMethodDataForStorage(
         input.data,
-        (existing.methodSnapshot.dataFields ?? []) as MethodInputField[],
+        methodInputFieldsFromSnapshot(existing.methodSnapshot),
         assetSnapshotResult.snapshot.baseMeasurementUnit ?? null,
       );
 
@@ -2018,7 +2105,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const normalizedData = normalizeMethodDataForStorage(
         input.data,
-        (existing.methodSnapshot.dataFields ?? []) as MethodInputField[],
+        methodInputFieldsFromSnapshot(existing.methodSnapshot),
         assetSnapshotResult.snapshot.baseMeasurementUnit ?? null,
       );
 
@@ -2233,10 +2320,9 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const effectiveTemplateSnapshot =
-        (existing.certificateTemplateSnapshot as
-          | CertificateTemplateSnapshot
-          | null
-          | undefined) ??
+        certificateTemplateSnapshotFromUnknown(
+          existing.certificateTemplateSnapshot,
+        ) ??
         (await getEffectiveCertificateTemplateSnapshot(
           memberData.organizationId,
         ));
@@ -2516,10 +2602,9 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         performedBy: session.user.id,
       });
       const amendmentTemplateSnapshot =
-        (originalJob.certificateTemplateSnapshot as
-          | CertificateTemplateSnapshot
-          | null
-          | undefined) ??
+        certificateTemplateSnapshotFromUnknown(
+          originalJob.certificateTemplateSnapshot,
+        ) ??
         (await getEffectiveCertificateTemplateSnapshot(
           originalJob.organizationId,
         ));
@@ -2924,7 +3009,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Certificado ainda nao foi gerado" }, 400);
       }
 
-      const env = c.env as R2Env;
+      const env = r2EnvFromUnknown(c.env);
       if (shouldUseLocalR2Download(env)) {
         return c.json({
           url: buildLocalJobFileUrl(
@@ -2951,7 +3036,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/file",
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
-      const env = c.env as R2Env;
+      const env = r2EnvFromUnknown(c.env);
       if (!shouldUseLocalR2Download(env)) {
         return c.json(
           { error: "Disponivel apenas em desenvolvimento local" },
@@ -3088,7 +3173,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Etiqueta ainda nao foi gerada" }, 400);
       }
 
-      const env = c.env as R2Env;
+      const env = r2EnvFromUnknown(c.env);
       if (shouldUseLocalR2Download(env)) {
         return c.json({
           url: buildLocalJobFileUrl(
@@ -3115,7 +3200,7 @@ export const jobsRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/label-file",
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
-      const env = c.env as R2Env;
+      const env = r2EnvFromUnknown(c.env);
       if (!shouldUseLocalR2Download(env)) {
         return c.json(
           { error: "Disponivel apenas em desenvolvimento local" },

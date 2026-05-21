@@ -1,9 +1,13 @@
 import type {
   MethodAuditLogData,
+  MethodCompileDraftInput,
   MethodDetailData,
   MethodsApi,
   MethodsListData,
   MethodsListInput,
+  MethodPreviewDraftInput,
+  MethodPublishDraftInput,
+  MethodRequestApprovalInput,
   MethodWriteInput,
 } from "../types";
 import { readJsonResponse } from "../transport/response";
@@ -98,6 +102,44 @@ export function createMethodsApi(rawCloudClient: any): MethodsApi {
           json: { reason },
         }),
         "Erro ao retornar para rascunho",
+      );
+    },
+    async compileDraft<TResponse = unknown>(input: MethodCompileDraftInput) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.methods.compile.$post({ json: input }),
+        "Erro ao compilar rascunho do método",
+        { allowDiagnosticsResponse: true },
+      );
+    },
+    async previewDraft<TResponse = unknown>(input: MethodPreviewDraftInput) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.methods.preview.$post({ json: input }),
+        "Erro ao executar preview do método",
+        { allowDiagnosticsResponse: true },
+      );
+    },
+    async publishDraft<TResponse = unknown>(
+      id: string | number,
+      input: MethodPublishDraftInput,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.methods[":id"].publish.$post({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Erro ao publicar método",
+      );
+    },
+    async requestApproval<TResponse = unknown>(
+      id: string | number,
+      input: MethodRequestApprovalInput,
+    ) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.methods[":id"]["request-approval"].$post({
+          param: { id: String(id) },
+          json: input,
+        }),
+        "Erro ao solicitar aprovação",
       );
     },
   };

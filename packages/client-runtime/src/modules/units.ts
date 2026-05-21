@@ -7,17 +7,11 @@ import {
 export function createUnitsApi(rawCloudClient: any): UnitsApi {
   return {
     async getDashboardUnits() {
-      const response = await rawCloudClient.api.units.$get();
-
-      if (response.status === 403) {
-        return null;
-      }
-
-      if (!response.ok) {
-        throw new Error("Falha ao carregar unidades");
-      }
-
-      return response.json() as Promise<DashboardUnitsResponse>;
+      return readOptionalForbiddenResponse<DashboardUnitsResponse | null>(
+        await rawCloudClient.api.units.$get(),
+        null,
+        "Falha ao carregar unidades",
+      );
     },
     async listAdminUnits<TResponse = unknown>() {
       return readOptionalForbiddenResponse<TResponse>(

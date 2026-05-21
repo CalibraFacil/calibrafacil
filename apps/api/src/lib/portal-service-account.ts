@@ -130,7 +130,7 @@ async function sendPortalInvitationEmail(params: {
     params.invitationId,
   );
   const portalOrigin = new URL(invitationUrl).origin;
-  const portalAuth = createPortalAuth() as any;
+  const portalAuth = createPortalAuth();
 
   await portalAuth.api.signInMagicLink({
     body: {
@@ -185,7 +185,12 @@ export async function createClientOrganizationAsServiceOwner(params: {
     );
   }
 
-  if ((orgResult as { type?: string }).type !== "CLIENT") {
+  const orgType =
+    orgResult && typeof orgResult === "object" && !Array.isArray(orgResult)
+      ? Object.fromEntries(Object.entries(orgResult)).type
+      : null;
+
+  if (orgType !== "CLIENT") {
     await db
       .update(organization)
       .set({ type: "CLIENT" })

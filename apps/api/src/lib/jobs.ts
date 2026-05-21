@@ -10,7 +10,6 @@ import {
   memberUnitAssignment,
   personnelCompetence,
   service,
-  type CustomerCompliance,
   type AssetSnapshot,
   type MethodInputField,
   type MethodSnapshot,
@@ -72,6 +71,14 @@ function hasSpecificationValue(
   return value !== null && value !== undefined && value !== "";
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(Object.entries(value));
+}
+
 function validateRequiredAssetSpecs(
   dataFields: MethodInputField[] | null | undefined,
   specifications: Record<string, unknown> | null | undefined,
@@ -100,19 +107,19 @@ function validatePublishedMethodCompiledArtifact(methodData: {
     methodData.compiledMethod &&
     typeof methodData.compiledMethod === "object" &&
     !Array.isArray(methodData.compiledMethod)
-      ? (methodData.compiledMethod as Record<string, unknown>)
+      ? toRecord(methodData.compiledMethod)
       : null;
   const methodEngine =
     methodData.methodEngine &&
     typeof methodData.methodEngine === "object" &&
     !Array.isArray(methodData.methodEngine)
-      ? (methodData.methodEngine as Record<string, unknown>)
+      ? toRecord(methodData.methodEngine)
       : null;
   const compiledEngine =
     compiledMethod?.engine &&
     typeof compiledMethod.engine === "object" &&
     !Array.isArray(compiledMethod.engine)
-      ? (compiledMethod.engine as Record<string, unknown>)
+      ? toRecord(compiledMethod.engine)
       : null;
 
   if (
@@ -195,12 +202,9 @@ async function persistCalibrationJob(
     throw new Error("Ativo nao pertence a esta unidade");
   }
 
-  const customerCompliance = assetData.customerCompliance as
-    | CustomerCompliance
-    | null
-    | undefined;
+  const customerCompliance = toRecord(assetData.customerCompliance);
 
-  if (customerCompliance?.qualificationStatus === "suspended") {
+  if (customerCompliance.qualificationStatus === "suspended") {
     throw new Error(
       "Cliente suspenso. Reative a qualificação antes de criar novas ordens de serviço.",
     );

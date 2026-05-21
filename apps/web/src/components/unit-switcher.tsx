@@ -8,8 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-
-const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
+import { setStoredDashboardActiveUnitIdForOrganization } from '@/features/dashboard/dashboard-scope-storage'
 
 export function UnitSwitcher() {
   const queryClient = useQueryClient()
@@ -31,10 +30,7 @@ export function UnitSwitcher() {
   const handleChange = async (value: string | null) => {
     if (!value) return
 
-    window.localStorage.setItem(
-      `${DASHBOARD_UNIT_KEY_PREFIX}${activeOrg.id}`,
-      value,
-    )
+    setStoredDashboardActiveUnitIdForOrganization(activeOrg.id, value)
 
     await queryClient.invalidateQueries()
   }

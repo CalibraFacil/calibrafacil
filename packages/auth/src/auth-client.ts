@@ -1,3 +1,4 @@
+// oxlint-disable-next-line typescript/triple-slash-reference -- package-local Vite globals are provided by this declaration file.
 /// <reference path="./vite-env.d.ts" />
 import {
   adminClient,
@@ -36,9 +37,7 @@ function getApiBaseURL(): string {
 function isDesktopRuntime() {
   return (
     typeof window !== "undefined" &&
-    (("calibraBridge" in window &&
-      typeof (window as { calibraBridge?: unknown }).calibraBridge ===
-        "object") ||
+    ((typeof window.calibraBridge === "object" && window.calibraBridge != null) ||
       window.navigator.userAgent.includes("Electron"))
   );
 }

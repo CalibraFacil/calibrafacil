@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { useCustomerSuccessAccess } from './-customer-success/hooks'
+import { useCustomerSuccessAccess } from '@/features/backoffice/customer-success/hooks'
 
 export const Route = createFileRoute('/backoffice/customer-success')({
   head: () => ({

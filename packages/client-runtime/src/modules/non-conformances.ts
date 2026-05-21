@@ -1,5 +1,6 @@
 import type {
   CreateNonConformanceInput,
+  CreateNonConformanceResult,
   NonConformanceDispositionInput,
   NonConformanceEscalateInput,
   NonConformanceListInput,
@@ -51,8 +52,8 @@ export function createNonConformancesApi(
         "Falha ao carregar histórico",
       );
     },
-    async create<TResponse = unknown>(input: CreateNonConformanceInput) {
-      return readJsonResponse<TResponse>(
+    async create(input: CreateNonConformanceInput) {
+      return readJsonResponse<CreateNonConformanceResult>(
         await rawCloudClient.api.nc.$post({ json: input }),
         "Erro ao registrar NC",
       );

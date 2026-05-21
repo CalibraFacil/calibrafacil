@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { useBackofficeSession } from '@calibra-facil/auth/client'
-import { AccountWorkspace } from '../-customer-success/account-workspace'
+import { AccountWorkspace } from '@/features/backoffice/customer-success/account-workspace'
 
 export const Route = createFileRoute(
   '/backoffice/customer-success/accounts/$id',

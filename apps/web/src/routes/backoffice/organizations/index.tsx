@@ -1,6 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 
+import {
+  loadBackofficeOrganizationsData,
+  useBackofficeOrganizationsData,
+} from '@/features/backoffice/queries'
 import {
   Card,
   CardContent,
@@ -9,29 +12,14 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { calibraApi } from '@/utils/api'
 
 export const Route = createFileRoute('/backoffice/organizations/')({
+  loader: ({ context }) => loadBackofficeOrganizationsData(context.queryClient),
   component: BackofficeOrganizationsPage,
 })
 
-type OrganizationRow = {
-  id: string
-  name: string
-  slug: string
-  onboardingStatus: string | null
-  migrationStatus: string | null
-  unitsCount: number
-  integrationsCount: number
-  openRequestsCount: number
-}
-
 function BackofficeOrganizationsPage() {
-  const organizationsQuery = useQuery({
-    queryKey: ['backoffice', 'organizations'],
-    queryFn: async () =>
-      calibraApi.backoffice.listOrganizations<{ data: OrganizationRow[] }>(),
-  })
+  const organizationsQuery = useBackofficeOrganizationsData('list')
 
   return (
     <div className="space-y-4">

@@ -54,10 +54,7 @@ function createPostgresJsDatabase(connectionString: string) {
 }
 
 function createNeonServerlessDatabase(connectionString: string) {
-  const NeonPool = Pool as unknown as new (config: {
-    connectionString: string;
-  }) => Pool;
-  const pool = new NeonPool({ connectionString });
+  const pool = new Pool({ connectionString });
   return drizzleNeon(pool, { schema });
 }
 
@@ -107,8 +104,10 @@ export function getDb(): Database {
 }
 
 // For backwards compatibility - creates a fresh request-safe DB instance on access.
-export const db = new Proxy({} as Database, {
+const dbProxyTarget: Database = Object.create(null);
+
+export const db = new Proxy(dbProxyTarget, {
   get(_, prop) {
-    return getDb()[prop as keyof Database];
+    return Reflect.get(getDb(), prop);
   },
 });
