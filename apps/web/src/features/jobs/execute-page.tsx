@@ -78,9 +78,9 @@ import {
   buildCalibrationPhasesPayload,
   buildEnvironmentPayload,
   buildEnvironmentWarnings,
+  buildExecutionMutationPayload,
   buildExecutionFormulaContext,
   buildMassCompositionOptions,
-  buildSelectedStandardPayload as buildSelectedStandardPayloadModel,
   canSubmitExecution,
   defaultCalibrationPhases,
   evaluateExecutionFormulaResults,
@@ -579,12 +579,6 @@ function ExecuteJobForm({
     [calibrationPhases, phaseBlocks],
   )
 
-  const buildSelectedStandardPayload = useCallback(
-    (normalizedData: Record<string, unknown>) =>
-      buildSelectedStandardPayloadModel(selectedStandardIds, normalizedData),
-    [selectedStandardIds],
-  )
-
   const updateCalibrationPhase = useCallback(
     (
       blockKey: string,
@@ -614,18 +608,17 @@ function ExecuteJobForm({
   // Save draft mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
-      return calibraApi.jobs.saveExecution(apiRouteParam(jobId), {
-        selectedStandardIds: buildSelectedStandardPayload(parsedFormData),
-        data: parsedFormData,
-        results: Object.fromEntries(
-          Object.entries(formulaResults)
-            .filter(([, r]) => r.value !== undefined)
-            .map(([k, r]) => [k, r.value]),
-        ),
-        environment: environmentPayload,
-        calibrationLocation: calibrationLocationPayload,
-        calibrationPhases: calibrationPhasesPayload,
-      })
+      return calibraApi.jobs.saveExecution(
+        apiRouteParam(jobId),
+        buildExecutionMutationPayload({
+          selectedStandardIds,
+          normalizedData: parsedFormData,
+          formulaResults,
+          environment: environmentPayload,
+          calibrationLocation: calibrationLocationPayload,
+          calibrationPhases: calibrationPhasesPayload,
+        }),
+      )
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
@@ -647,18 +640,17 @@ function ExecuteJobForm({
           'Informe o motivo dos blocos marcados como não executados.',
         )
       }
-      return calibraApi.jobs.submitExecution(apiRouteParam(jobId), {
-        selectedStandardIds: buildSelectedStandardPayload(parsedFormData),
-        data: parsedFormData,
-        results: Object.fromEntries(
-          Object.entries(formulaResults)
-            .filter(([, r]) => r.value !== undefined)
-            .map(([k, r]) => [k, r.value]),
-        ),
-        environment: environmentPayload,
-        calibrationLocation: calibrationLocationPayload,
-        calibrationPhases: calibrationPhasesPayload,
-      })
+      return calibraApi.jobs.submitExecution(
+        apiRouteParam(jobId),
+        buildExecutionMutationPayload({
+          selectedStandardIds,
+          normalizedData: parsedFormData,
+          formulaResults,
+          environment: environmentPayload,
+          calibrationLocation: calibrationLocationPayload,
+          calibrationPhases: calibrationPhasesPayload,
+        }),
+      )
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })

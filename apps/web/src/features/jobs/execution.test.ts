@@ -30,6 +30,7 @@ import {
   buildCalibrationPhasesPayload,
   buildEnvironmentPayload,
   buildEnvironmentWarnings,
+  buildExecutionMutationPayload,
   buildExecutionFormulaContext,
   buildMassCompositionOptions,
   buildSelectedStandardPayload,
@@ -373,6 +374,81 @@ describe('job execution feature model', () => {
       'Temperatura fora da faixa (18 – 25 °C)',
       'Umidade fora da faixa (40 – 60 %RH)',
     ])
+  })
+
+  it('builds save and submit mutation payloads from normalized execution state', () => {
+    const normalizedData = {
+      load: 10,
+      composition: {
+        kind: 'mass_standard_composition',
+        targetUnit: 'g',
+        label: 'Composição',
+        items: [
+          {
+            standardId: 2,
+            standardIds: [3, 4],
+            standardName: 'Peso',
+            certificateNumber: 'CERT',
+            certifiedValueIndex: 0,
+            nominal: '1 g',
+            quantity: 1,
+            value: 1,
+            uncertainty: 0.1,
+            unit: 'g',
+            coverageFactor: 2,
+          },
+        ],
+        totals: {
+          certifiedValue: 1,
+          expandedUncertainty: 0.1,
+          maxError: null,
+          drift: null,
+          buoyancy: null,
+        },
+        warnings: [],
+      },
+    }
+
+    expect(
+      buildExecutionMutationPayload({
+        selectedStandardIds: [1, 3],
+        normalizedData,
+        formulaResults: {
+          error: { value: 0.05 },
+          pending: {},
+          margin: { value: [0.1, 0.2] },
+        },
+        environment: { temperature: 22, humidity: null, pressure: null },
+        calibrationLocation: {
+          type: 'lab',
+          addressText: 'Rua Lab',
+          notes: null,
+        },
+        calibrationPhases: {
+          blocks: {
+            load: { mode: 'before_only', reason: 'Ajuste dispensado' },
+          },
+        },
+      }),
+    ).toEqual({
+      selectedStandardIds: [1, 3, 4],
+      data: normalizedData,
+      results: {
+        error: 0.05,
+        margin: [0.1, 0.2],
+      },
+      environment: { temperature: 22, humidity: null, pressure: null },
+      calibrationLocation: {
+        type: 'lab',
+        addressText: 'Rua Lab',
+        notes: null,
+      },
+      calibrationPhases: {
+        blocks: {
+          load: { mode: 'before_only', reason: 'Ajuste dispensado' },
+        },
+      },
+    })
   })
 
   it('checks execution submit eligibility and editable statuses', () => {

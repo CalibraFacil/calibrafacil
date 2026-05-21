@@ -448,6 +448,38 @@ export function buildCalibrationPhasesPayload({
     : undefined
 }
 
+export function buildExecutionMutationPayload({
+  selectedStandardIds,
+  normalizedData,
+  formulaResults,
+  environment,
+  calibrationLocation,
+  calibrationPhases,
+}: {
+  selectedStandardIds: number[]
+  normalizedData: Record<string, unknown>
+  formulaResults: Record<string, FormulaResult>
+  environment: EnvironmentalFormData | undefined
+  calibrationLocation: ReturnType<typeof buildCalibrationLocationPayload>
+  calibrationPhases: ReturnType<typeof buildCalibrationPhasesPayload>
+}) {
+  return {
+    selectedStandardIds: buildSelectedStandardPayload(
+      selectedStandardIds,
+      normalizedData,
+    ),
+    data: normalizedData,
+    results: Object.fromEntries(
+      Object.entries(formulaResults)
+        .filter(([, result]) => result.value !== undefined)
+        .map(([key, result]) => [key, result.value]),
+    ),
+    environment,
+    calibrationLocation,
+    calibrationPhases,
+  }
+}
+
 export function findMissingNotPerformedPhaseReasons({
   phaseBlocks,
   calibrationPhases,
