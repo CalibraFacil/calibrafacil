@@ -6,6 +6,9 @@ import { loadStandardDetailData } from '@/features/standards/queries'
 export const Route = createFileRoute('/dashboard/standards/$id/')({
   loader: ({ context, params }) =>
     loadStandardDetailData(context.queryClient, params.id),
+  head: () => ({
+    meta: [{ title: 'Detalhes do Padrão | CalibraFácil' }],
+  }),
   component: StandardDetailRoute,
 })
 

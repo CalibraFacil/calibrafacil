@@ -6,6 +6,9 @@ import { loadCustomerUsersData } from '@/features/customers/queries'
 export const Route = createFileRoute('/dashboard/clients/$id/users')({
   loader: ({ context, params }) =>
     loadCustomerUsersData(context.queryClient, params.id),
+  head: () => ({
+    meta: [{ title: 'Cliente | Usuários | CalibraFácil' }],
+  }),
   component: ClientUsersRoute,
 })
 

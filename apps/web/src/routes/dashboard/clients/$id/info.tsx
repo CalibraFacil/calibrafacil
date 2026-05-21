@@ -8,6 +8,9 @@ export const Route = createFileRoute('/dashboard/clients/$id/info')({
   validateSearch: parseSyncConflictReturnSearch,
   loader: ({ context, params }) =>
     loadCustomerDetailData(context.queryClient, params.id),
+  head: () => ({
+    meta: [{ title: 'Cliente | Informações | CalibraFácil' }],
+  }),
   component: ClientInfoRoute,
 })
 

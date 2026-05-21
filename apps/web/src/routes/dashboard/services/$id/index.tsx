@@ -6,6 +6,9 @@ import { loadServiceDetailData } from '@/features/services/queries'
 export const Route = createFileRoute('/dashboard/services/$id/')({
   loader: ({ context, params }) =>
     loadServiceDetailData(context.queryClient, params.id),
+  head: () => ({
+    meta: [{ title: 'Detalhes do Serviço | CalibraFácil' }],
+  }),
   component: ServiceDetailRoute,
 })
 

@@ -50,6 +50,12 @@ move the implementation to `apps/web/src/features/<domain>`.
 Do not add new dashboard route-local `-components`, `-index.data.ts`, or
 `-index.db.ts` files. Use a feature module instead.
 
+Every renderable dashboard page route must define `head` metadata with a page
+title. Layout `route.tsx` files and redirect-only adapters are exempt. The
+guard in `apps/web/src/app/router/dashboard-route-heads.test.ts` enforces this,
+so update the route head or the explicit redirect-only exemption when dashboard
+routes are added, renamed, or converted between redirect and page behavior.
+
 ## Feature Modules
 
 Feature folders own domain behavior:
@@ -135,6 +141,7 @@ When adding or renaming a dashboard route, check whether it needs metadata for:
 - cloud-only blocking in desktop/offline mode
 - plan or role requirements
 - prewarm eligibility
+- page `head` title metadata
 
 ## Forms and Validation
 

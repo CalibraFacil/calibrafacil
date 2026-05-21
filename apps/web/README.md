@@ -108,6 +108,8 @@ src/
 
 - Route files should stay thin: `createFileRoute`, metadata, loaders,
   search validation, and param handoff only.
+- Renderable dashboard page routes must define `head` title metadata; layout
+  `route.tsx` files and redirect-only adapters are the explicit exceptions.
 - Domain UI and behavior belong in `src/features/<domain>`, not under
   `src/routes`.
 - Feature modules should not call TanStack route registration or route hooks.
