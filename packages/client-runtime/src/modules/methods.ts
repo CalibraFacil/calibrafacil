@@ -128,7 +128,6 @@ export function createMethodsApi(rawCloudClient: any): MethodsApi {
           json: input,
         }),
         "Erro ao publicar método",
-        { allowDiagnosticsResponse: true },
       );
     },
     async requestApproval<TResponse = unknown>(
@@ -141,7 +140,6 @@ export function createMethodsApi(rawCloudClient: any): MethodsApi {
           json: input,
         }),
         "Erro ao solicitar aprovação",
-        { allowDiagnosticsResponse: true },
       );
     },
   };

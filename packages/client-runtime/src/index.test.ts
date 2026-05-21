@@ -2074,6 +2074,33 @@ describe("methods runtime adapter", () => {
       diagnostics: [{ message: "Fórmula inválida" }],
     });
   });
+
+  it("rejects method status mutations with diagnostics failures", async () => {
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: async () =>
+        Response.json(
+          { diagnostics: [{ message: "Amostra inválida" }] },
+          { status: 422 },
+        ),
+    });
+
+    await expect(
+      client.methods.publishDraft(12, {
+        sampleData: { leitura: 10 },
+        reasonForChange: "Publicação inicial",
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      payload: { diagnostics: [{ message: "Amostra inválida" }] },
+    });
+    await expect(
+      client.methods.requestApproval(12, { sampleData: { leitura: 10 } }),
+    ).rejects.toMatchObject({
+      status: 422,
+      payload: { diagnostics: [{ message: "Amostra inválida" }] },
+    });
+  });
 });
 
 describe("non-conformances runtime adapter", () => {

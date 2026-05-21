@@ -209,7 +209,7 @@ export type ServiceDetailData = ServicesListData["data"][number] & {
 };
 
 export type CreateServiceInput = {
-  name?: string;
+  name: string;
   description?: string | null;
   methodId?: number | null;
   assetTypeId?: number | null;
