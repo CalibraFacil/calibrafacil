@@ -1,4 +1,4 @@
-import type { TailwindConfig } from "react-email";
+import type { TailwindConfig } from "@react-email/components";
 
 export const emailTheme = {
   colors: {

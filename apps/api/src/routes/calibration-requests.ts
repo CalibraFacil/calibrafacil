@@ -83,6 +83,7 @@ type ApprovalRequestResult =
 type ReviewRequestResult =
   | {
       success: true;
+      startedReview: boolean;
     }
   | {
       error: {
@@ -445,20 +446,25 @@ export const calibrationRequestsRouter = new Hono<{
           ipAddress: c.req.header("x-forwarded-for") ?? null,
         });
 
-        return { success: true };
+        return {
+          success: true,
+          startedReview: existing.status === "PENDING",
+        };
       });
 
       if ("error" in result) {
         return c.json({ error: result.error.body }, result.error.status);
       }
 
-      try {
-        await notifyCalibrationRequestUnderReview(id, session.user.id);
-      } catch (error) {
-        console.error(
-          "[Calibration Requests] Failed to send review notification:",
-          error,
-        );
+      if (result.startedReview) {
+        try {
+          await notifyCalibrationRequestUnderReview(id, session.user.id);
+        } catch (error) {
+          console.error(
+            "[Calibration Requests] Failed to send review notification:",
+            error,
+          );
+        }
       }
 
       return c.json({ success: true });

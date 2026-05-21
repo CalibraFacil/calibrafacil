@@ -367,10 +367,11 @@ function getWebBaseUrl(): string {
 }
 
 function getPortalBaseUrl(): string {
-  return (process.env.PORTAL_URL ?? "https://portal.calibrafacil.com").replace(
-    /\/$/,
-    "",
-  );
+  return (
+    process.env.PORTAL_APP_URL ??
+    process.env.PORTAL_URL ??
+    "https://portal.calibrafacil.com"
+  ).replace(/\/$/, "");
 }
 
 function resolveEmailActionUrl(

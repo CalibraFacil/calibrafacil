@@ -16,7 +16,7 @@ import {
   Section,
   Tailwind,
   Text,
-} from "react-email";
+} from "@react-email/components";
 import { emailTailwindConfig, emailTheme } from "./theme";
 
 export const theme = emailTheme;
@@ -164,7 +164,9 @@ interface StatusBoxProps {
 
 export function StatusBox({ variant, children }: StatusBoxProps) {
   return (
-    <Section className={`mb-6 rounded-[10px] px-4 py-4 ${toneClasses[variant]}`}>
+    <Section
+      className={`mb-6 rounded-[10px] px-4 py-4 ${toneClasses[variant]}`}
+    >
       <Text className="m-0 font-sans text-[14px] font-[420] leading-[1.55]">
         {children}
       </Text>
@@ -247,11 +249,7 @@ interface ActionButtonProps {
   secondary?: boolean;
 }
 
-export function ActionButton({
-  href,
-  children,
-  secondary,
-}: ActionButtonProps) {
+export function ActionButton({ href, children, secondary }: ActionButtonProps) {
   return (
     <Button
       href={href}
