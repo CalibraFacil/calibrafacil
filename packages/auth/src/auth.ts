@@ -179,7 +179,7 @@ const PROD_TRUSTED_ORIGINS = [
   "app://calibra-facil",
   "https://calibrafacil.com",
   "https://www.calibrafacil.com",
-  "https://calibrafacil.com/portal",
+  "https://portal.calibrafacil.com",
   "https://*.vercel.app",
 ];
 

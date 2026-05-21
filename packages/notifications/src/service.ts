@@ -358,6 +358,21 @@ function getEmailLogoSrc(): string {
   return "https://calibrafacil.com/logo192.png";
 }
 
+function getWebBaseUrl(): string {
+  return (
+    process.env.WEB_URL ??
+    process.env.APP_URL ??
+    "https://calibrafacil.com"
+  ).replace(/\/$/, "");
+}
+
+function getPortalBaseUrl(): string {
+  return (process.env.PORTAL_URL ?? "https://portal.calibrafacil.com").replace(
+    /\/$/,
+    "",
+  );
+}
+
 function resolveEmailActionUrl(
   actionUrl: string | undefined,
 ): string | undefined {
@@ -366,9 +381,12 @@ function resolveEmailActionUrl(
   try {
     return new URL(actionUrl).toString();
   } catch {
-    const webUrl = process.env.WEB_URL ?? process.env.APP_URL;
-    const baseUrl = webUrl?.replace(/\/$/, "") ?? "https://calibrafacil.com";
-    return `${baseUrl}${actionUrl.startsWith("/") ? actionUrl : `/${actionUrl}`}`;
+    if (actionUrl === "/portal" || actionUrl.startsWith("/portal/")) {
+      const portalPath = actionUrl.replace(/^\/portal(?=\/|$)/, "");
+      return `${getPortalBaseUrl()}${portalPath || "/"}`;
+    }
+
+    return `${getWebBaseUrl()}${actionUrl.startsWith("/") ? actionUrl : `/${actionUrl}`}`;
   }
 }
 
@@ -1197,9 +1215,7 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
     .from(member)
     .where(eq(member.organizationId, customerData.authOrganizationId));
 
-  // Determine the portal URL (could be configurable)
-  const portalUrl =
-    process.env.PORTAL_URL ?? "https://calibrafacil.com/portal/certificates";
+  const portalUrl = `${getPortalBaseUrl()}/certificates`;
 
   // Send email notifications to all portal users
   for (const portalUser of portalUsers) {
@@ -1262,9 +1278,7 @@ export async function notifyCertificateAmended(
     .from(member)
     .where(eq(member.organizationId, customerData.authOrganizationId));
 
-  // Determine the portal URL
-  const portalUrl =
-    process.env.PORTAL_URL ?? "https://calibrafacil.com/portal/certificates";
+  const portalUrl = `${getPortalBaseUrl()}/certificates`;
 
   // Send notifications to all portal users
   for (const portalUser of portalUsers) {

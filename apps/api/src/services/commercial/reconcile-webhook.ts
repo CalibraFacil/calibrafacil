@@ -336,10 +336,13 @@ export async function reconcileCommercialWebhook(
         await activateOfferFromConfirmedPayment(tx, offer.id, payment.status);
       }
 
-      if (
-        previousStatus !== payment.status &&
-        (payment.status === "CONFIRMED" || payment.status === "RECEIVED")
-      ) {
+      const paymentSuccessStatuses: PaymentStatus[] = ["CONFIRMED", "RECEIVED"];
+      const enteredSuccessfulPaymentState =
+        paymentSuccessStatuses.includes(payment.status) &&
+        (previousStatus === null ||
+          !paymentSuccessStatuses.includes(previousStatus));
+
+      if (enteredSuccessfulPaymentState) {
         paymentNotification = {
           type: "received",
           paymentId: payment.id,
