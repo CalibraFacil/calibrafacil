@@ -3,9 +3,14 @@ import type { BrowserWindowConstructorOptions } from "electron";
 
 export const desktopAppName = "CalibraFácil";
 
+type DesktopUserAgentVersions = {
+  chrome?: string;
+  electron?: string;
+};
+
 export function buildDesktopUserAgent(
   appVersion: string,
-  versions: NodeJS.ProcessVersions = process.versions,
+  versions: DesktopUserAgentVersions = process.versions,
 ) {
   return [
     "Mozilla/5.0",

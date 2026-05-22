@@ -48,7 +48,7 @@ describe("main window configuration", () => {
     const userAgent = buildDesktopUserAgent("0.0.1-Fácil", {
       chrome: "142.0.7444.234",
       electron: "39.8.10",
-    } as NodeJS.ProcessVersions);
+    });
 
     expect(userAgent).toBe(
       "Mozilla/5.0 CalibraFacilDesktop/0.0.1-F_cil Chrome/142.0.7444.234 Electron/39.8.10",
