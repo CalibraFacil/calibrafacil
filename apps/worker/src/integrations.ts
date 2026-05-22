@@ -36,7 +36,7 @@ type ScheduledIntegrationSyncOptions = {
 };
 
 interface IntegrationWorkerEnv {
-  HYPERDRIVE: { connectionString: string };
+  DATABASE_URL: string;
   INTEGRATIONS_MASTER_KEY?: string;
 }
 
@@ -129,7 +129,7 @@ async function withDbClient<T>(
   operation: (client: Client) => Promise<T>,
 ): Promise<T> {
   const client = new Client({
-    connectionString: env.HYPERDRIVE.connectionString,
+    connectionString: env.DATABASE_URL,
   });
   await client.connect();
   try {

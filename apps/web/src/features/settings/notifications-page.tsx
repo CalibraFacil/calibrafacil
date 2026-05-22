@@ -23,6 +23,7 @@ type NotificationType =
   | 'CERTIFICATE_AMENDED'
   | 'ASSET_DUE_FOR_RECALIBRATION'
   | 'STANDARD_EXPIRING'
+  | 'STANDARD_EXPIRED'
   | 'JOB_OVERDUE'
   | 'PAYMENT_RECEIVED'
   | 'PAYMENT_FAILED'
@@ -38,6 +39,11 @@ type NotificationType =
   | 'CUSTOMER_SUCCESS_SLA_DUE_SOON'
   | 'CUSTOMER_SUCCESS_SLA_BREACHED'
   | 'CUSTOMER_SUCCESS_ESCALATION_REQUIRED'
+  | 'CALIBRATION_REQUEST_SUBMITTED'
+  | 'CALIBRATION_REQUEST_UNDER_REVIEW'
+  | 'CALIBRATION_REQUEST_APPROVED'
+  | 'CALIBRATION_REQUEST_REJECTED'
+  | 'CALIBRATION_REQUEST_CONVERTED'
 
 type NotificationPreference = {
   inApp: boolean
@@ -94,6 +100,36 @@ const notificationSettings: NotificationSetting[] = [
     category: 'operational',
   },
   {
+    id: 'CALIBRATION_REQUEST_SUBMITTED',
+    title: 'Solicitação de calibração enviada',
+    description: 'Quando um cliente envia uma nova solicitação pelo portal',
+    category: 'operational',
+  },
+  {
+    id: 'CALIBRATION_REQUEST_UNDER_REVIEW',
+    title: 'Solicitação em análise',
+    description: 'Quando o laboratório começa a analisar uma solicitação',
+    category: 'operational',
+  },
+  {
+    id: 'CALIBRATION_REQUEST_APPROVED',
+    title: 'Solicitação aprovada',
+    description: 'Quando uma solicitação de calibração é aprovada',
+    category: 'operational',
+  },
+  {
+    id: 'CALIBRATION_REQUEST_REJECTED',
+    title: 'Solicitação recusada',
+    description: 'Quando uma solicitação de calibração é recusada',
+    category: 'operational',
+  },
+  {
+    id: 'CALIBRATION_REQUEST_CONVERTED',
+    title: 'Solicitação convertida em OS',
+    description: 'Quando uma solicitação vira ordem de serviço',
+    category: 'operational',
+  },
+  {
     id: 'CUSTOMER_SUCCESS_WORKFLOW_BLOCKED',
     title: 'Workflow bloqueado',
     description:
@@ -141,6 +177,12 @@ const notificationSettings: NotificationSetting[] = [
     id: 'STANDARD_EXPIRING',
     title: 'Padrão de referência vencendo',
     description: 'Quando um padrão de referência está próximo do vencimento',
+    category: 'compliance',
+  },
+  {
+    id: 'STANDARD_EXPIRED',
+    title: 'Padrão de referência vencido',
+    description: 'Quando um padrão de referência passa do vencimento',
     category: 'compliance',
   },
   {
@@ -208,8 +250,14 @@ const defaultPreferences: NotificationPreferencesMap = {
   JOB_ASSIGNED: { inApp: true, email: false },
   CERTIFICATE_READY: { inApp: true, email: true },
   CERTIFICATE_AMENDED: { inApp: true, email: true },
+  CALIBRATION_REQUEST_SUBMITTED: { inApp: true, email: true },
+  CALIBRATION_REQUEST_UNDER_REVIEW: { inApp: true, email: true },
+  CALIBRATION_REQUEST_APPROVED: { inApp: true, email: true },
+  CALIBRATION_REQUEST_REJECTED: { inApp: true, email: true },
+  CALIBRATION_REQUEST_CONVERTED: { inApp: true, email: true },
   ASSET_DUE_FOR_RECALIBRATION: { inApp: true, email: true },
   STANDARD_EXPIRING: { inApp: true, email: true },
+  STANDARD_EXPIRED: { inApp: true, email: true },
   JOB_OVERDUE: { inApp: true, email: true },
   NC_CREATED: { inApp: true, email: true },
   NC_ESCALATED_TO_CAPA: { inApp: true, email: true },

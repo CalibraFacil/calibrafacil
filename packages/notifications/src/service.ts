@@ -10,6 +10,9 @@ import {
   referenceStandard,
   paymentHistory,
   personnelCompetence,
+  calibrationRequest,
+  calibrationRequestItem,
+  organization,
   type NotificationType,
   type NotificationPriority,
   type NotificationChannel,
@@ -21,11 +24,15 @@ import { Resend } from "resend";
 import { render } from "@react-email/render";
 import {
   NotificationEmail,
+  CertificateAmendedEmail,
   JobNotificationEmail,
   CertificateReadyEmail,
   ComplianceAlertEmail,
   PaymentNotificationEmail,
   NCNotificationEmail,
+  CompetenceNotificationEmail,
+  CustomerSuccessEmail,
+  CalibrationRequestEmail,
 } from "@calibra-facil/email";
 
 // Track if email misconfiguration warning has been logged this session
@@ -46,8 +53,10 @@ export interface JobEmailContext {
 /** Context for certificate ready email templates */
 export interface CertificateEmailContext {
   jobId: string;
+  originalJobId?: string;
   assetName?: string;
   customerName?: string;
+  reason?: string;
   portalUrl: string;
 }
 
@@ -73,13 +82,37 @@ export interface NCEmailContext {
   actorName?: string;
 }
 
+/** Context for competence email templates */
+export interface CompetenceEmailContext {
+  subjectName: string;
+  scopeDescription: string;
+  dueDate?: string;
+  daysRemaining?: number;
+  actorName?: string;
+}
+
+/** Context for calibration request email templates */
+export interface CalibrationRequestEmailContext {
+  requestId: number;
+  customerName: string;
+  labName?: string;
+  itemCount: number;
+  requestedDueDate?: string;
+  actorName?: string;
+  reason?: string;
+  jobCodes?: string[];
+}
+
 /** Union type for all email contexts */
 export type EmailContext =
   | { type: "job"; data: JobEmailContext }
   | { type: "certificate"; data: CertificateEmailContext }
   | { type: "compliance"; data: ComplianceEmailContext }
   | { type: "payment"; data: PaymentEmailContext }
-  | { type: "nc"; data: NCEmailContext };
+  | { type: "nc"; data: NCEmailContext }
+  | { type: "competence"; data: CompetenceEmailContext }
+  | { type: "calibrationRequest"; data: CalibrationRequestEmailContext }
+  | { type: "customerSuccess"; data: Record<string, never> };
 
 export interface SendNotificationOptions {
   recipientUserId: string;
@@ -107,24 +140,30 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   JOB_REJECTED: { inApp: true, email: true },
   JOB_ASSIGNED: { inApp: true, email: false },
   CERTIFICATE_READY: { inApp: true, email: true },
-  CERTIFICATE_AMENDED: { inApp: true, email: true }, // ISO 17025 Clause 7.8.4.1
+  CERTIFICATE_AMENDED: { inApp: true, email: true },
   ASSET_DUE_FOR_RECALIBRATION: { inApp: true, email: true },
   STANDARD_EXPIRING: { inApp: true, email: true },
+  STANDARD_EXPIRED: { inApp: true, email: true },
   JOB_OVERDUE: { inApp: true, email: true },
   PAYMENT_RECEIVED: { inApp: true, email: true },
   PAYMENT_FAILED: { inApp: true, email: true },
-  NC_CREATED: { inApp: true, email: true }, // ISO 17025 Clause 8.7
-  NC_ESCALATED_TO_CAPA: { inApp: true, email: true }, // ISO 17025 Clause 8.7
-  COMPETENCE_EXPIRING: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
-  COMPETENCE_EXPIRED: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
-  COMPETENCE_REQUESTED: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
-  COMPETENCE_APPROVED: { inApp: true, email: true }, // ISO 17025 Clause 6.2.3
+  NC_CREATED: { inApp: true, email: true },
+  NC_ESCALATED_TO_CAPA: { inApp: true, email: true },
+  COMPETENCE_EXPIRING: { inApp: true, email: true },
+  COMPETENCE_EXPIRED: { inApp: true, email: true },
+  COMPETENCE_REQUESTED: { inApp: true, email: true },
+  COMPETENCE_APPROVED: { inApp: true, email: true },
   CUSTOMER_SUCCESS_WORKFLOW_BLOCKED: { inApp: true, email: true },
   CUSTOMER_SUCCESS_GO_LIVE_AT_RISK: { inApp: true, email: true },
   CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE: { inApp: true, email: true },
   CUSTOMER_SUCCESS_SLA_DUE_SOON: { inApp: true, email: true },
   CUSTOMER_SUCCESS_SLA_BREACHED: { inApp: true, email: true },
   CUSTOMER_SUCCESS_ESCALATION_REQUIRED: { inApp: true, email: true },
+  CALIBRATION_REQUEST_SUBMITTED: { inApp: true, email: true },
+  CALIBRATION_REQUEST_UNDER_REVIEW: { inApp: true, email: true },
+  CALIBRATION_REQUEST_APPROVED: { inApp: true, email: true },
+  CALIBRATION_REQUEST_REJECTED: { inApp: true, email: true },
+  CALIBRATION_REQUEST_CONVERTED: { inApp: true, email: true },
 };
 
 // =============================================================================
@@ -261,6 +300,97 @@ function getJobEmailType(
   }
 }
 
+function getCompetenceEmailType(
+  type: NotificationType,
+): "expiring" | "expired" | "requested" | "approved" {
+  switch (type) {
+    case "COMPETENCE_EXPIRING":
+      return "expiring";
+    case "COMPETENCE_EXPIRED":
+      return "expired";
+    case "COMPETENCE_REQUESTED":
+      return "requested";
+    case "COMPETENCE_APPROVED":
+      return "approved";
+    default:
+      return "expiring";
+  }
+}
+
+function getCalibrationRequestEmailType(
+  type: NotificationType,
+): "submitted" | "underReview" | "approved" | "rejected" | "converted" {
+  switch (type) {
+    case "CALIBRATION_REQUEST_SUBMITTED":
+      return "submitted";
+    case "CALIBRATION_REQUEST_UNDER_REVIEW":
+      return "underReview";
+    case "CALIBRATION_REQUEST_APPROVED":
+      return "approved";
+    case "CALIBRATION_REQUEST_REJECTED":
+      return "rejected";
+    case "CALIBRATION_REQUEST_CONVERTED":
+      return "converted";
+    default:
+      return "submitted";
+  }
+}
+
+function isCustomerSuccessType(
+  type: NotificationType,
+): type is
+  | "CUSTOMER_SUCCESS_WORKFLOW_BLOCKED"
+  | "CUSTOMER_SUCCESS_GO_LIVE_AT_RISK"
+  | "CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE"
+  | "CUSTOMER_SUCCESS_SLA_DUE_SOON"
+  | "CUSTOMER_SUCCESS_SLA_BREACHED"
+  | "CUSTOMER_SUCCESS_ESCALATION_REQUIRED" {
+  return type.startsWith("CUSTOMER_SUCCESS_");
+}
+
+function getEmailLogoSrc(): string {
+  const explicitLogoUrl = process.env.EMAIL_LOGO_URL;
+  if (explicitLogoUrl) return explicitLogoUrl;
+
+  const appUrl = process.env.WEB_URL ?? process.env.APP_URL;
+  if (appUrl) return `${appUrl.replace(/\/$/, "")}/logo192.png`;
+
+  return "https://calibrafacil.com/logo192.png";
+}
+
+function getWebBaseUrl(): string {
+  return (
+    process.env.WEB_URL ??
+    process.env.APP_URL ??
+    "https://calibrafacil.com"
+  ).replace(/\/$/, "");
+}
+
+function getPortalBaseUrl(): string {
+  return (
+    process.env.PORTAL_APP_URL ??
+    process.env.PORTAL_URL ??
+    "https://portal.calibrafacil.com"
+  ).replace(/\/$/, "");
+}
+
+function resolveEmailActionUrl(
+  actionUrl: string | undefined,
+): string | undefined {
+  if (!actionUrl) return undefined;
+
+  try {
+    return new URL(actionUrl).toString();
+  } catch {
+    if (actionUrl === "/portal" || actionUrl.startsWith("/portal/")) {
+      const portalPath = actionUrl.replace(/^\/portal(?=\/|$)/, "");
+      return `${getPortalBaseUrl()}${portalPath || "/"}`;
+    }
+
+    return `${getWebBaseUrl()}${actionUrl.startsWith("/") ? actionUrl : `/${actionUrl}`}`;
+  }
+}
+
 /**
  * Render the appropriate email template based on notification type
  */
@@ -271,6 +401,7 @@ function renderEmailTemplate(
   message: string,
   actionUrl: string | undefined,
   emailContext: EmailContext | undefined,
+  logoSrc: string,
 ): React.ReactElement {
   // Job notifications
   if (
@@ -292,6 +423,7 @@ function renderEmailTemplate(
       actorName,
       reason,
       actionUrl: actionUrl ?? "#",
+      logoSrc,
     });
   }
 
@@ -304,22 +436,48 @@ function renderEmailTemplate(
       assetName,
       customerName,
       portalUrl,
+      logoSrc,
+    });
+  }
+
+  if (emailContext?.type === "certificate" && type === "CERTIFICATE_AMENDED") {
+    const { jobId, originalJobId, assetName, customerName, reason, portalUrl } =
+      emailContext.data;
+    return CertificateAmendedEmail({
+      recipientName,
+      originalJobId: originalJobId ?? jobId,
+      amendedJobId: jobId,
+      assetName,
+      customerName,
+      reason: reason ?? message,
+      actionUrl: actionUrl ?? portalUrl,
+      logoSrc,
     });
   }
 
   // Compliance alerts
   if (
     emailContext?.type === "compliance" &&
-    ["ASSET_DUE_FOR_RECALIBRATION", "STANDARD_EXPIRING"].includes(type)
+    [
+      "ASSET_DUE_FOR_RECALIBRATION",
+      "STANDARD_EXPIRING",
+      "STANDARD_EXPIRED",
+    ].includes(type)
   ) {
     const { itemName, dueDate, daysRemaining } = emailContext.data;
     return ComplianceAlertEmail({
       recipientName,
-      type: type === "ASSET_DUE_FOR_RECALIBRATION" ? "asset" : "standard",
+      type:
+        type === "ASSET_DUE_FOR_RECALIBRATION"
+          ? "asset"
+          : type === "STANDARD_EXPIRED"
+            ? "standardExpired"
+            : "standard",
       itemName,
       dueDate,
       daysRemaining,
       actionUrl: actionUrl ?? "#",
+      logoSrc,
     });
   }
 
@@ -335,6 +493,7 @@ function renderEmailTemplate(
       amount,
       description,
       actionUrl,
+      logoSrc,
     });
   }
 
@@ -354,6 +513,79 @@ function renderEmailTemplate(
       capaNumber,
       actorName,
       actionUrl: actionUrl ?? "#",
+      logoSrc,
+    });
+  }
+
+  if (
+    emailContext?.type === "competence" &&
+    [
+      "COMPETENCE_EXPIRING",
+      "COMPETENCE_EXPIRED",
+      "COMPETENCE_REQUESTED",
+      "COMPETENCE_APPROVED",
+    ].includes(type)
+  ) {
+    const { subjectName, scopeDescription, dueDate, daysRemaining, actorName } =
+      emailContext.data;
+    return CompetenceNotificationEmail({
+      recipientName,
+      type: getCompetenceEmailType(type),
+      subjectName,
+      scopeDescription,
+      dueDate,
+      daysRemaining,
+      actorName,
+      actionUrl: actionUrl ?? "#",
+      logoSrc,
+    });
+  }
+
+  if (
+    emailContext?.type === "calibrationRequest" &&
+    [
+      "CALIBRATION_REQUEST_SUBMITTED",
+      "CALIBRATION_REQUEST_UNDER_REVIEW",
+      "CALIBRATION_REQUEST_APPROVED",
+      "CALIBRATION_REQUEST_REJECTED",
+      "CALIBRATION_REQUEST_CONVERTED",
+    ].includes(type)
+  ) {
+    const {
+      requestId,
+      customerName,
+      labName,
+      itemCount,
+      requestedDueDate,
+      actorName,
+      reason,
+      jobCodes,
+    } = emailContext.data;
+
+    return CalibrationRequestEmail({
+      recipientName,
+      type: getCalibrationRequestEmailType(type),
+      requestId,
+      customerName,
+      labName,
+      itemCount,
+      requestedDueDate,
+      actorName,
+      reason,
+      jobCodes,
+      actionUrl: actionUrl ?? "#",
+      logoSrc,
+    });
+  }
+
+  if (isCustomerSuccessType(type)) {
+    return CustomerSuccessEmail({
+      recipientName,
+      type,
+      title,
+      message,
+      actionUrl,
+      logoSrc,
     });
   }
 
@@ -364,6 +596,7 @@ function renderEmailTemplate(
     message,
     actionUrl,
     actionLabel: "Ver Detalhes",
+    logoSrc,
   });
 }
 
@@ -410,7 +643,9 @@ async function sendNotificationEmail(options: {
 
   try {
     const resend = new Resend(resendApiKey);
-    const recipientName = userData.name ?? "Usuario";
+    const recipientName = userData.name ?? "Usuário";
+    const logoSrc = getEmailLogoSrc();
+    const emailActionUrl = resolveEmailActionUrl(actionUrl);
 
     // Render the appropriate email template
     const emailElement = renderEmailTemplate(
@@ -418,8 +653,9 @@ async function sendNotificationEmail(options: {
       recipientName,
       title,
       message,
-      actionUrl,
+      emailActionUrl,
       emailContext,
+      logoSrc,
     );
 
     const html = await render(emailElement);
@@ -510,6 +746,233 @@ async function getAssetDetails(assetId: number): Promise<{
   return assetData ?? null;
 }
 
+async function getActorName(userId: string): Promise<string> {
+  const [actor] = await db
+    .select({ name: user.name })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+
+  return actor?.name ?? "Um usuário";
+}
+
+async function getCalibrationRequestDetails(requestId: number): Promise<{
+  id: number;
+  organizationId: string;
+  authOrganizationId: string;
+  submittedBy: string;
+  customerName: string;
+  labName: string;
+  itemCount: number;
+  requestedDueDate: Date | null;
+} | null> {
+  const [request] = await db
+    .select({
+      id: calibrationRequest.id,
+      organizationId: calibrationRequest.organizationId,
+      authOrganizationId: calibrationRequest.authOrganizationId,
+      submittedBy: calibrationRequest.submittedBy,
+      requestedDueDate: calibrationRequest.requestedDueDate,
+      customerName: customer.name,
+      labName: organization.name,
+    })
+    .from(calibrationRequest)
+    .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
+    .innerJoin(
+      organization,
+      eq(calibrationRequest.organizationId, organization.id),
+    )
+    .where(eq(calibrationRequest.id, requestId))
+    .limit(1);
+
+  if (!request) return null;
+
+  const items = await db
+    .select({ id: calibrationRequestItem.id })
+    .from(calibrationRequestItem)
+    .where(eq(calibrationRequestItem.requestId, requestId));
+
+  return {
+    ...request,
+    itemCount: items.length,
+  };
+}
+
+function createCalibrationRequestEmailContext(
+  details: NonNullable<
+    Awaited<ReturnType<typeof getCalibrationRequestDetails>>
+  >,
+  extras: {
+    actorName?: string;
+    reason?: string;
+    jobCodes?: string[];
+  } = {},
+): CalibrationRequestEmailContext {
+  return {
+    requestId: details.id,
+    customerName: details.customerName,
+    labName: details.labName,
+    itemCount: details.itemCount,
+    requestedDueDate: details.requestedDueDate
+      ? formatDateBR(details.requestedDueDate)
+      : undefined,
+    ...extras,
+  };
+}
+
+export async function notifyCalibrationRequestSubmitted(
+  requestId: number,
+): Promise<void> {
+  const details = await getCalibrationRequestDetails(requestId);
+  if (!details) return;
+
+  const recipients = await getRecipientsByRole(details.organizationId, [
+    "owner",
+    "admin",
+    "operator",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId: details.organizationId,
+      type: "CALIBRATION_REQUEST_SUBMITTED",
+      priority: "HIGH",
+      title: "Nova solicitação de calibração",
+      message: `${details.customerName} enviou a solicitação #${requestId} com ${details.itemCount} ${details.itemCount === 1 ? "item" : "itens"}.`,
+      relatedEntity: {
+        entityType: "request",
+        entityId: requestId,
+      },
+      actionUrl: `/dashboard/requests/${requestId}`,
+      emailContext: {
+        type: "calibrationRequest",
+        data: createCalibrationRequestEmailContext(details),
+      },
+    });
+  }
+}
+
+export async function notifyCalibrationRequestUnderReview(
+  requestId: number,
+  actorUserId: string,
+): Promise<void> {
+  const details = await getCalibrationRequestDetails(requestId);
+  if (!details || details.submittedBy === actorUserId) return;
+
+  const actorName = await getActorName(actorUserId);
+
+  await sendNotification({
+    recipientUserId: details.submittedBy,
+    organizationId: details.authOrganizationId,
+    type: "CALIBRATION_REQUEST_UNDER_REVIEW",
+    priority: "MEDIUM",
+    title: "Solicitação em análise",
+    message: `${details.labName} começou a analisar a solicitação #${requestId}.`,
+    relatedEntity: {
+      entityType: "request",
+      entityId: requestId,
+    },
+    actionUrl: `/portal/requests/${requestId}`,
+    emailContext: {
+      type: "calibrationRequest",
+      data: createCalibrationRequestEmailContext(details, { actorName }),
+    },
+  });
+}
+
+export async function notifyCalibrationRequestApproved(
+  requestId: number,
+  actorUserId: string,
+): Promise<void> {
+  const details = await getCalibrationRequestDetails(requestId);
+  if (!details || details.submittedBy === actorUserId) return;
+
+  const actorName = await getActorName(actorUserId);
+
+  await sendNotification({
+    recipientUserId: details.submittedBy,
+    organizationId: details.authOrganizationId,
+    type: "CALIBRATION_REQUEST_APPROVED",
+    priority: "HIGH",
+    title: "Solicitação de calibração aprovada",
+    message: `${details.labName} aprovou a solicitação #${requestId}.`,
+    relatedEntity: {
+      entityType: "request",
+      entityId: requestId,
+    },
+    actionUrl: `/portal/requests/${requestId}`,
+    emailContext: {
+      type: "calibrationRequest",
+      data: createCalibrationRequestEmailContext(details, { actorName }),
+    },
+  });
+}
+
+export async function notifyCalibrationRequestRejected(
+  requestId: number,
+  actorUserId: string,
+  reason: string,
+): Promise<void> {
+  const details = await getCalibrationRequestDetails(requestId);
+  if (!details || details.submittedBy === actorUserId) return;
+
+  const actorName = await getActorName(actorUserId);
+
+  await sendNotification({
+    recipientUserId: details.submittedBy,
+    organizationId: details.authOrganizationId,
+    type: "CALIBRATION_REQUEST_REJECTED",
+    priority: "HIGH",
+    title: "Solicitação de calibração recusada",
+    message: `${details.labName} recusou a solicitação #${requestId}. Motivo: ${reason}`,
+    relatedEntity: {
+      entityType: "request",
+      entityId: requestId,
+    },
+    actionUrl: `/portal/requests/${requestId}`,
+    emailContext: {
+      type: "calibrationRequest",
+      data: createCalibrationRequestEmailContext(details, {
+        actorName,
+        reason,
+      }),
+    },
+  });
+}
+
+export async function notifyCalibrationRequestConverted(
+  requestId: number,
+  actorUserId: string,
+  jobCodes: string[],
+): Promise<void> {
+  const details = await getCalibrationRequestDetails(requestId);
+  if (!details || details.submittedBy === actorUserId) return;
+
+  const actorName = await getActorName(actorUserId);
+
+  await sendNotification({
+    recipientUserId: details.submittedBy,
+    organizationId: details.authOrganizationId,
+    type: "CALIBRATION_REQUEST_CONVERTED",
+    priority: "HIGH",
+    title: "Solicitação convertida em ordem de serviço",
+    message: `${details.labName} converteu a solicitação #${requestId} em ${jobCodes.length} ${jobCodes.length === 1 ? "ordem de serviço" : "ordens de serviço"}.`,
+    relatedEntity: {
+      entityType: "request",
+      entityId: requestId,
+    },
+    actionUrl: `/portal/requests/${requestId}`,
+    emailContext: {
+      type: "calibrationRequest",
+      data: createCalibrationRequestEmailContext(details, {
+        actorName,
+        jobCodes,
+      }),
+    },
+  });
+}
+
 // =============================================================================
 // NOTIFICATION TRIGGERS - Called from job routes
 // =============================================================================
@@ -548,8 +1011,8 @@ export async function notifyJobSubmittedForReview(
       organizationId: job.organizationId,
       type: "JOB_SUBMITTED_FOR_REVIEW",
       priority: "HIGH",
-      title: "Calibracao aguardando revisao",
-      message: `${submitterName} submeteu a OS ${job.jobIdentifier} para revisao.`,
+      title: "Calibração aguardando revisão",
+      message: `${submitterName} submeteu a OS ${job.jobIdentifier} para revisão.`,
       relatedEntity: {
         entityType: "job",
         entityId: jobId,
@@ -598,8 +1061,8 @@ export async function notifyJobApproved(
     organizationId: job.organizationId,
     type: "JOB_APPROVED",
     priority: "HIGH",
-    title: "Calibracao aprovada",
-    message: `${approverName} aprovou a OS ${job.jobIdentifier}. O certificado esta sendo gerado.`,
+    title: "Calibração aprovada",
+    message: `${approverName} aprovou a OS ${job.jobIdentifier}. O certificado está sendo gerado.`,
     relatedEntity: {
       entityType: "job",
       entityId: jobId,
@@ -648,7 +1111,7 @@ export async function notifyJobRejected(
     organizationId: job.organizationId,
     type: "JOB_REJECTED",
     priority: "HIGH",
-    title: "Calibracao rejeitada",
+    title: "Calibração rejeitada",
     message: `${rejectorName} rejeitou a OS ${job.jobIdentifier}. Motivo: ${reason}`,
     relatedEntity: {
       entityType: "job",
@@ -696,7 +1159,7 @@ export async function notifyJobAssigned(
     .limit(1);
 
   const assignerName = isSelfAssignment
-    ? "Voce"
+    ? "Você"
     : (assigner?.name ?? "Um gestor");
 
   await sendNotification({
@@ -704,10 +1167,10 @@ export async function notifyJobAssigned(
     organizationId: job.organizationId,
     type: "JOB_ASSIGNED",
     priority: "MEDIUM",
-    title: "Nova calibracao atribuida",
+    title: "Nova calibração atribuída",
     message: isSelfAssignment
-      ? `Voce atribuiu a OS ${job.jobIdentifier} para si mesmo.`
-      : `${assignerName} atribuiu a OS ${job.jobIdentifier} para voce.`,
+      ? `Você atribuiu a OS ${job.jobIdentifier} para si mesmo.`
+      : `${assignerName} atribuiu a OS ${job.jobIdentifier} para você.`,
     relatedEntity: {
       entityType: "job",
       entityId: jobId,
@@ -753,10 +1216,7 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
     .from(member)
     .where(eq(member.organizationId, customerData.authOrganizationId));
 
-  // Determine the portal URL (could be configurable)
-  const portalUrl =
-    process.env.PORTAL_URL ??
-    "https://app.calibrafacil.com/portal/certificates";
+  const portalUrl = `${getPortalBaseUrl()}/certificates`;
 
   // Send email notifications to all portal users
   for (const portalUser of portalUsers) {
@@ -765,8 +1225,8 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
       organizationId: customerData.authOrganizationId,
       type: "CERTIFICATE_READY",
       priority: "HIGH",
-      title: "Certificado de calibracao disponivel",
-      message: `O certificado da OS ${job.jobIdentifier} esta pronto para download no portal.`,
+      title: "Certificado de calibração disponível",
+      message: `O certificado da OS ${job.jobIdentifier} está pronto para download no portal.`,
       relatedEntity: {
         entityType: "job",
         entityId: jobId,
@@ -787,7 +1247,7 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
 }
 
 /**
- * Notify client portal users when a certificate is amended (ISO 17025 Clause 7.8.4.1)
+ * Notify client portal users when a certificate is amended
  */
 export async function notifyCertificateAmended(
   originalJobId: number,
@@ -819,10 +1279,7 @@ export async function notifyCertificateAmended(
     .from(member)
     .where(eq(member.organizationId, customerData.authOrganizationId));
 
-  // Determine the portal URL
-  const portalUrl =
-    process.env.PORTAL_URL ??
-    "https://app.calibrafacil.com/portal/certificates";
+  const portalUrl = `${getPortalBaseUrl()}/certificates`;
 
   // Send notifications to all portal users
   for (const portalUser of portalUsers) {
@@ -831,7 +1288,7 @@ export async function notifyCertificateAmended(
       organizationId: customerData.authOrganizationId,
       type: "CERTIFICATE_AMENDED",
       priority: "HIGH",
-      title: "Certificado de calibracao retificado",
+      title: "Certificado de calibração retificado",
       message: `O certificado ${originalJob.jobIdentifier} foi retificado. Novo certificado: ${amendedJob.jobIdentifier}. Motivo: ${reason}`,
       relatedEntity: {
         entityType: "job",
@@ -843,8 +1300,10 @@ export async function notifyCertificateAmended(
         type: "certificate",
         data: {
           jobId: amendedJob.jobIdentifier,
+          originalJobId: originalJob.jobIdentifier,
           assetName: assetData?.name,
           customerName: customerData.name,
+          reason,
           portalUrl,
         },
       },
@@ -872,11 +1331,14 @@ export async function notifyCertificateAmended(
       },
       actionUrl: `/dashboard/jobs/${amendedJobId}`,
       emailContext: {
-        type: "job",
+        type: "certificate",
         data: {
           jobId: amendedJob.jobIdentifier,
-          jobInternalId: amendedJobId,
+          originalJobId: originalJob.jobIdentifier,
+          assetName: assetData?.name,
+          customerName: customerData.name,
           reason,
+          portalUrl: `/dashboard/jobs/${amendedJobId}`,
         },
       },
     });
@@ -957,8 +1419,8 @@ export async function notifyAssetDueForRecalibration(
       organizationId,
       type: "ASSET_DUE_FOR_RECALIBRATION",
       priority: daysRemaining <= 3 ? "HIGH" : "MEDIUM",
-      title: "Ativo vencendo calibracao",
-      message: `O instrumento ${assetIdentifier} esta com calibracao vencendo em ${daysRemaining} dias (${dueDate}).`,
+      title: "Ativo vencendo calibração",
+      message: `O instrumento ${assetIdentifier} está com calibração vencendo em ${daysRemaining} dias (${dueDate}).`,
       relatedEntity: {
         entityType: "asset",
         entityId: assetId,
@@ -1018,8 +1480,67 @@ export async function notifyStandardExpiring(
       organizationId,
       type: "STANDARD_EXPIRING",
       priority: daysRemaining <= 3 ? "HIGH" : "MEDIUM",
-      title: "Padrao de referencia vencendo",
-      message: `O padrao ${standardIdentifier} esta com calibracao vencendo em ${daysRemaining} dias (${dueDate}).`,
+      title: "Padrão de referência vencendo",
+      message: `O padrão ${standardIdentifier} está com calibração vencendo em ${daysRemaining} dias (${dueDate}).`,
+      relatedEntity: {
+        entityType: "standard",
+        entityId: standardId,
+      },
+      actionUrl: `/dashboard/standards/${standardId}`,
+      emailContext: {
+        type: "compliance",
+        data: {
+          itemName,
+          dueDate,
+          daysRemaining,
+        },
+      },
+    });
+  }
+}
+
+/**
+ * Notify lab members when a reference standard is expired.
+ * Called by scheduled jobs or manual checks that inspect referenceStandard.nextCalibrationDate.
+ */
+export async function notifyStandardExpired(
+  standardId: number,
+  organizationId: string,
+): Promise<void> {
+  const [standardData] = await db
+    .select({
+      name: referenceStandard.name,
+      serialNumber: referenceStandard.serialNumber,
+      certificateNumber: referenceStandard.certificateNumber,
+      nextCalibrationDate: referenceStandard.nextCalibrationDate,
+    })
+    .from(referenceStandard)
+    .where(eq(referenceStandard.id, standardId))
+    .limit(1);
+
+  if (!standardData?.nextCalibrationDate) return;
+
+  const daysRemaining = getDaysRemaining(standardData.nextCalibrationDate);
+  const dueDate = formatDateBR(standardData.nextCalibrationDate);
+  const standardIdentifier =
+    standardData.certificateNumber ||
+    standardData.serialNumber ||
+    standardData.name;
+  const itemName = `${standardData.name} (${standardIdentifier})`;
+
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "STANDARD_EXPIRED",
+      priority: "HIGH",
+      title: "Padrão de referência vencido",
+      message: `O padrão ${standardIdentifier} venceu em ${dueDate}. Atualize ou substitua antes de novas calibrações.`,
       relatedEntity: {
         entityType: "standard",
         entityId: standardId,
@@ -1086,8 +1607,8 @@ export async function notifyJobOverdue(jobId: number): Promise<void> {
       organizationId: jobData.organizationId,
       type: "JOB_OVERDUE",
       priority: "HIGH",
-      title: "Calibracao atrasada",
-      message: `A OS ${jobData.jobIdentifier} esta atrasada ha ${daysOverdue} ${daysOverdue === 1 ? "dia" : "dias"} (vencimento: ${dueDate}).`,
+      title: "Calibração atrasada",
+      message: `A OS ${jobData.jobIdentifier} está atrasada há ${daysOverdue} ${daysOverdue === 1 ? "dia" : "dias"} (vencimento: ${dueDate}).`,
       relatedEntity: {
         entityType: "job",
         entityId: jobId,
@@ -1200,11 +1721,11 @@ export async function notifyPaymentFailed(
   const amount = payment.amount ? formatCurrencyBRL(payment.amount) : undefined;
   const dueDate = payment.dueDate ? formatDateBR(payment.dueDate) : undefined;
 
-  let message = "Nao foi possivel processar seu pagamento.";
+  let message = "Não foi possível processar seu pagamento.";
   if (amount && dueDate) {
-    message = `O pagamento de ${amount} com vencimento em ${dueDate} nao foi processado.`;
+    message = `O pagamento de ${amount} com vencimento em ${dueDate} não foi processado.`;
   } else if (amount) {
-    message = `O pagamento de ${amount} nao foi processado.`;
+    message = `O pagamento de ${amount} não foi processado.`;
   }
 
   if (failureReason) {
@@ -1223,7 +1744,7 @@ export async function notifyPaymentFailed(
       organizationId,
       type: "PAYMENT_FAILED",
       priority: "HIGH",
-      title: "Pagamento nao processado",
+      title: "Pagamento não processado",
       message,
       relatedEntity: {
         entityType: "payment",
@@ -1242,7 +1763,7 @@ export async function notifyPaymentFailed(
 }
 
 // =============================================================================
-// NON-CONFORMANCE NOTIFICATION TRIGGERS - ISO 17025 Clause 8.7
+// NON-CONFORMANCE NOTIFICATION TRIGGERS
 // =============================================================================
 
 /**
@@ -1264,13 +1785,13 @@ export async function notifyNCCreated(
     .where(eq(user.id, createdByUserId))
     .limit(1);
 
-  const creatorName = creator?.name ?? "Um usuario";
+  const creatorName = creator?.name ?? "Um usuário";
   const typeLabel =
     ncType === "work"
       ? "trabalho"
       : ncType === "equipment"
         ? "equipamento"
-        : "documentacao";
+        : "documentação";
 
   // Notify admins and owners
   const recipients = await getRecipientsByRole(organizationId, [
@@ -1287,7 +1808,7 @@ export async function notifyNCCreated(
       organizationId,
       type: "NC_CREATED",
       priority: "HIGH",
-      title: "Nova nao conformidade registrada",
+      title: "Nova não conformidade registrada",
       message: `${creatorName} registrou a ${ncNumber} (${typeLabel}).`,
       relatedEntity: {
         entityType: "nc",
@@ -1327,7 +1848,7 @@ export async function notifyNCEscalatedToCapa(
     .where(eq(user.id, escalatedByUserId))
     .limit(1);
 
-  const escalatorName = escalator?.name ?? "Um usuario";
+  const escalatorName = escalator?.name ?? "Um usuário";
 
   // Notify admins and owners
   const recipients = await getRecipientsByRole(organizationId, [
@@ -1365,7 +1886,7 @@ export async function notifyNCEscalatedToCapa(
 }
 
 // =============================================================================
-// COMPETENCE NOTIFICATION TRIGGERS - ISO 17025 Clause 6.2.3
+// COMPETENCE NOTIFICATION TRIGGERS
 // =============================================================================
 
 /**
@@ -1422,6 +1943,15 @@ export async function notifyCompetenceExpiring(
         entityId: competenceId,
       },
       actionUrl: `/dashboard/personnel/${competenceId}`,
+      emailContext: {
+        type: "competence",
+        data: {
+          subjectName: techName,
+          scopeDescription: comp.scopeDescription,
+          dueDate,
+          daysRemaining,
+        },
+      },
     });
   }
 }
@@ -1458,6 +1988,7 @@ export async function notifyCompetenceExpired(
     .limit(1);
 
   const techName = userData?.name ?? "Um técnico";
+  const dueDate = comp.expiresAt ? formatDateBR(comp.expiresAt) : undefined;
 
   const recipients = await getRecipientsByRole(organizationId, [
     "admin",
@@ -1477,6 +2008,14 @@ export async function notifyCompetenceExpired(
         entityId: competenceId,
       },
       actionUrl: `/dashboard/personnel/${competenceId}`,
+      emailContext: {
+        type: "competence",
+        data: {
+          subjectName: techName,
+          scopeDescription: comp.scopeDescription,
+          dueDate,
+        },
+      },
     });
   }
 }
@@ -1541,6 +2080,14 @@ export async function notifyCompetenceRequested(
         entityId: competenceId,
       },
       actionUrl: `/dashboard/personnel/${competenceId}`,
+      emailContext: {
+        type: "competence",
+        data: {
+          subjectName: techName,
+          scopeDescription: comp.scopeDescription,
+          actorName: requesterName,
+        },
+      },
     });
   }
 }
@@ -1577,6 +2124,12 @@ export async function notifyCompetenceApproved(
     .limit(1);
 
   const approverName = approver?.name ?? "Um gestor";
+  const [technician] = await db
+    .select({ name: user.name })
+    .from(user)
+    .where(eq(user.id, comp.userId))
+    .limit(1);
+  const techName = technician?.name ?? "Você";
 
   if (comp.userId === approvedByUserId) return;
 
@@ -1592,5 +2145,13 @@ export async function notifyCompetenceApproved(
       entityId: competenceId,
     },
     actionUrl: `/dashboard/personnel/${competenceId}`,
+    emailContext: {
+      type: "competence",
+      data: {
+        subjectName: techName,
+        scopeDescription: comp.scopeDescription,
+        actorName: approverName,
+      },
+    },
   });
 }

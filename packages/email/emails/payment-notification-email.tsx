@@ -1,6 +1,18 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { EmailLayout, styles, theme } from "./components/email-layout";
+import {
+  ActionButton,
+  DetailBox,
+  DetailRow,
+  EmailCard,
+  EmailLayout,
+  Eyebrow,
+  HighlightValue,
+  LinkFallback,
+  Paragraph,
+  StatusBox,
+  Title,
+} from "./components/email-layout";
 
 type PaymentNotificationType = "received" | "failed";
 
@@ -10,185 +22,85 @@ export interface PaymentNotificationEmailProps {
   amount?: string;
   description?: string;
   actionUrl?: string;
+  logoSrc?: string;
 }
 
 const getTypeConfig = (type: PaymentNotificationType) => {
   switch (type) {
     case "received":
       return {
-        title: "Pagamento Confirmado",
+        title: "Pagamento confirmado",
         previewText: "Seu pagamento foi recebido com sucesso",
-        statusIcon: "checkmark" as const,
-        statusColor: theme.colors.successText,
-        statusBg: theme.colors.successBg,
-        statusBorder: theme.colors.successBorder,
         message: "Recebemos e confirmamos seu pagamento.",
-        actionLabel: "Ver Detalhes",
+        actionLabel: "Ver detalhes",
+        statusVariant: "success" as const,
       };
     case "failed":
       return {
-        title: "Pagamento Nao Processado",
+        title: "Pagamento não processado",
         previewText: "Houve um problema com seu pagamento",
-        statusIcon: "error" as const,
-        statusColor: theme.colors.errorText,
-        statusBg: theme.colors.errorBg,
-        statusBorder: theme.colors.errorBorder,
         message:
-          "Infelizmente nao foi possivel processar seu pagamento. Por favor, verifique os dados ou tente novamente.",
-        actionLabel: "Tentar Novamente",
+          "Não foi possível processar seu pagamento. Verifique os dados ou tente novamente.",
+        actionLabel: "Tentar novamente",
+        statusVariant: "error" as const,
       };
   }
 };
 
 export function PaymentNotificationEmail({
-  recipientName = "Usuario",
+  recipientName = "Usuário",
   type = "received",
   amount,
   description,
   actionUrl,
+  logoSrc,
 }: PaymentNotificationEmailProps) {
   const config = getTypeConfig(type);
 
   return (
-    <EmailLayout previewText={config.previewText}>
-      <div style={styles.body}>
-        {/* Status Icon Circle */}
-        <div
-          style={{
-            width: "64px",
-            height: "64px",
-            backgroundColor: config.statusBg,
-            borderRadius: "50%",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: "24px",
-          }}
-        >
-          <span style={{ fontSize: "32px" }}>
-            {config.statusIcon === "checkmark" ? "\u2713" : "\u2717"}
-          </span>
-        </div>
+    <EmailLayout previewText={config.previewText} logoSrc={logoSrc}>
+      <EmailCard logoSrc={logoSrc}>
+        <Eyebrow>Financeiro</Eyebrow>
+        <Title>{config.title}</Title>
 
-        <h1 style={styles.title}>{config.title}</h1>
+        <Paragraph>Olá, {recipientName},</Paragraph>
+        <Paragraph>{config.message}</Paragraph>
 
-        <p style={styles.paragraph}>Ola {recipientName},</p>
-
-        <p style={styles.paragraph}>{config.message}</p>
-
-        {/* Payment Details Box (if amount provided) */}
         {amount && (
-          <div
-            style={{
-              backgroundColor: theme.colors.codeBg,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: "8px",
-              padding: "24px",
-              marginBottom: "24px",
-            }}
-          >
-            <span
-              style={{
-                display: "block",
-                fontSize: "12px",
-                color: theme.colors.secondaryText,
-                fontWeight: "600",
-                textTransform: "uppercase" as const,
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Valor
-            </span>
-            <span
-              style={{
-                fontSize: "28px",
-                color:
-                  type === "received"
-                    ? theme.colors.successText
-                    : theme.colors.primaryText,
-                fontWeight: "700",
-              }}
-            >
-              {amount}
-            </span>
-            {description && (
-              <p
-                style={{
-                  fontSize: "14px",
-                  color: theme.colors.secondaryText,
-                  margin: "12px 0 0",
-                }}
-              >
-                {description}
-              </p>
-            )}
-          </div>
+          <DetailBox>
+            <DetailRow
+              label="Valor"
+              value={
+                <HighlightValue tone={type === "received" ? "success" : "info"}>
+                  {amount}
+                </HighlightValue>
+              }
+            />
+            {description && <DetailRow label="Descrição" value={description} />}
+          </DetailBox>
         )}
 
-        {/* Status Box */}
-        <div
-          style={{
-            backgroundColor: config.statusBg,
-            border: `1px solid ${config.statusBorder}`,
-            borderRadius: "8px",
-            padding: "16px",
-            marginBottom: "32px",
-          }}
-        >
-          <p
-            style={{
-              fontSize: "14px",
-              color: config.statusColor,
-              margin: "0",
-              lineHeight: "1.5",
-            }}
-          >
-            {type === "received" ? (
-              <>
-                <strong>Confirmado!</strong> O pagamento foi registrado em nosso
-                sistema.
-              </>
-            ) : (
-              <>
-                <strong>Atencao:</strong> Se o problema persistir, entre em
-                contato com nosso suporte.
-              </>
-            )}
-          </p>
-        </div>
+        <StatusBox variant={config.statusVariant}>
+          {type === "received" ? (
+            <>
+              <strong>Confirmado:</strong> o pagamento foi registrado em nosso
+              sistema.
+            </>
+          ) : (
+            <>
+              <strong>Atenção:</strong> se o problema persistir, entre em
+              contato com nosso suporte.
+            </>
+          )}
+        </StatusBox>
 
-        {/* Action Button */}
         {actionUrl && (
           <>
-            <a href={actionUrl} style={styles.button}>
-              {config.actionLabel}
-            </a>
-
-            <p
-              style={{
-                ...styles.paragraph,
-                marginTop: "24px",
-                marginBottom: "0",
-                fontSize: "13px",
-              }}
-            >
-              Caso o botao nao funcione, copie e cole o link abaixo no
-              navegador:
-            </p>
-            <p
-              style={{
-                fontSize: "11px",
-                color: "#94a3b8",
-                wordBreak: "break-all" as const,
-                margin: "8px 0 0",
-              }}
-            >
-              {actionUrl}
-            </p>
+            <ActionButton href={actionUrl}>{config.actionLabel}</ActionButton>
+            <LinkFallback url={actionUrl} />
           </>
         )}
-      </div>
+      </EmailCard>
     </EmailLayout>
   );
 }

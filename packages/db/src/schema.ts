@@ -5589,7 +5589,12 @@ export type NotificationType =
   | "CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE"
   | "CUSTOMER_SUCCESS_SLA_DUE_SOON"
   | "CUSTOMER_SUCCESS_SLA_BREACHED"
-  | "CUSTOMER_SUCCESS_ESCALATION_REQUIRED";
+  | "CUSTOMER_SUCCESS_ESCALATION_REQUIRED"
+  | "CALIBRATION_REQUEST_SUBMITTED"
+  | "CALIBRATION_REQUEST_UNDER_REVIEW"
+  | "CALIBRATION_REQUEST_APPROVED"
+  | "CALIBRATION_REQUEST_REJECTED"
+  | "CALIBRATION_REQUEST_CONVERTED";
 
 /**
  * Notification priority levels
@@ -5616,6 +5621,7 @@ export type NotificationRelatedEntity = {
     | "standard"
     | "payment"
     | "customer"
+    | "request"
     | "nc"
     | "capa"
     | "competence";

@@ -1,6 +1,18 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource react */
-import { EmailLayout, styles, theme } from "./components/email-layout";
+import {
+  ActionButton,
+  DetailBox,
+  DetailRow,
+  EmailCard,
+  EmailLayout,
+  Eyebrow,
+  LinkFallback,
+  Paragraph,
+  StatusBox,
+  TextLink,
+  Title,
+} from "./components/email-layout";
 
 interface OrganizationInvitationEmailProps {
   invitedByUsername: string;
@@ -8,126 +20,59 @@ interface OrganizationInvitationEmailProps {
   organizationName: string;
   inviteLink: string;
   role: string;
+  logoSrc?: string;
 }
 
 const getRoleLabel = (role: string): string => {
   const roleLabels: Record<string, string> = {
-    owner: "Proprietario",
+    owner: "Proprietário",
     admin: "Administrador",
     member: "Membro",
     operator: "Operador",
-    technician: "Tecnico",
+    technician: "Técnico",
   };
   return roleLabels[role] || role;
 };
 
 export function OrganizationInvitationEmail({
-  invitedByUsername = "Joao",
+  invitedByUsername = "João",
   invitedByEmail = "joao@example.com",
   organizationName = "Acme Inc.",
   inviteLink = "https://example.com/accept-invitation/123",
   role = "member",
+  logoSrc,
 }: OrganizationInvitationEmailProps) {
-  const previewText = `Voce foi convidado para ${organizationName}`;
+  const previewText = `Você foi convidado para ${organizationName}`;
 
   return (
-    <EmailLayout previewText={previewText}>
-      <div style={styles.body}>
-        <h1 style={styles.title}>Convite para Organizacao</h1>
+    <EmailLayout previewText={previewText} logoSrc={logoSrc}>
+      <EmailCard logoSrc={logoSrc}>
+        <Eyebrow>Acesso ao workspace</Eyebrow>
+        <Title>Convite para organização</Title>
 
-        <p style={styles.paragraph}>Ola,</p>
-
-        <p style={styles.paragraph}>
+        <Paragraph>Olá,</Paragraph>
+        <Paragraph>
           <strong>{invitedByUsername}</strong> (
-          <a href={`mailto:${invitedByEmail}`} style={styles.link}>
+          <TextLink href={`mailto:${invitedByEmail}`}>
             {invitedByEmail}
-          </a>
-          ) convidou voce para fazer parte da organizacao{" "}
+          </TextLink>
+          ) convidou você para fazer parte da organização{" "}
           <strong>{organizationName}</strong>.
-        </p>
+        </Paragraph>
 
-        {/* Role Details Box */}
-        <div
-          style={{
-            backgroundColor: theme.colors.codeBg,
-            border: `1px solid ${theme.colors.border}`,
-            borderRadius: "8px",
-            padding: "24px",
-            marginBottom: "32px",
-          }}
-        >
-          <span
-            style={{
-              display: "block",
-              fontSize: "12px",
-              color: theme.colors.secondaryText,
-              fontWeight: "600",
-              textTransform: "uppercase" as const,
-              letterSpacing: "0.05em",
-              marginBottom: "8px",
-            }}
-          >
-            Seu Perfil
-          </span>
-          <span
-            style={{
-              fontSize: "20px",
-              color: theme.colors.codeText,
-              fontWeight: "700",
-            }}
-          >
-            {getRoleLabel(role)}
-          </span>
-        </div>
+        <DetailBox>
+          <DetailRow label="Organização" value={organizationName} />
+          <DetailRow label="Perfil" value={getRoleLabel(role)} />
+        </DetailBox>
 
-        {/* Action Button */}
-        <a href={inviteLink} style={styles.button}>
-          Aceitar Convite
-        </a>
+        <ActionButton href={inviteLink}>Aceitar convite</ActionButton>
+        <LinkFallback url={inviteLink} />
 
-        <p
-          style={{
-            ...styles.paragraph,
-            marginTop: "24px",
-            marginBottom: "0",
-            fontSize: "13px",
-          }}
-        >
-          Caso o botao nao funcione, copie e cole o link abaixo no navegador:
-        </p>
-        <p
-          style={{
-            fontSize: "11px",
-            color: "#94a3b8",
-            wordBreak: "break-all" as const,
-            margin: "8px 0 0",
-          }}
-        >
-          {inviteLink}
-        </p>
-      </div>
-
-      {/* Security Notice */}
-      <div
-        style={{
-          backgroundColor: theme.colors.warningBg,
-          borderTop: `1px solid ${theme.colors.warningBorder}`,
-          padding: "16px 32px",
-          textAlign: "center" as const,
-        }}
-      >
-        <p
-          style={{
-            fontSize: "12px",
-            color: theme.colors.warningText,
-            margin: "0",
-            lineHeight: "1.5",
-          }}
-        >
-          <strong>Aviso de seguranca:</strong> Se voce nao esperava receber este
+        <StatusBox variant="warning">
+          <strong>Aviso de segurança:</strong> se você não esperava receber este
           convite, pode ignorar este email.
-        </p>
-      </div>
+        </StatusBox>
+      </EmailCard>
     </EmailLayout>
   );
 }

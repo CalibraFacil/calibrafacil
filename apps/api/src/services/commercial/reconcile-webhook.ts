@@ -10,6 +10,10 @@ import { and, eq, or } from "drizzle-orm";
 import type { AsaasPayment, AsaasWebhookPayload } from "../../services/asaas";
 import { activateOfferFromConfirmedPayment } from "./activation";
 import {
+  notifyPaymentFailed,
+  notifyPaymentReceived,
+} from "@calibra-facil/notifications";
+import {
   createCommercialExternalReference,
   invalidateCommercialPublicToken,
   insertOfferHistory,
@@ -56,6 +60,13 @@ function paymentMethodFromBillingType(
 
   return "BOLETO";
 }
+
+type PaymentNotificationToSend = {
+  type: "received" | "failed";
+  paymentId: number;
+  organizationId: string;
+  reason?: string;
+};
 
 function getExistingPixSnapshot(
   existing: typeof paymentRecord.$inferSelect | null,
@@ -215,7 +226,7 @@ async function upsertPaymentFromWebhook(
       payload: asRecord(payment),
     });
 
-    return updated ?? existing;
+    return { payment: updated ?? existing, previousStatus: existing.status };
   }
 
   const [created] = await tx.insert(paymentRecord).values(values).returning();
@@ -231,7 +242,7 @@ async function upsertPaymentFromWebhook(
     payload: asRecord(payment),
   });
 
-  return created;
+  return { payment: created, previousStatus: null };
 }
 
 export async function reconcileCommercialWebhook(
@@ -267,6 +278,8 @@ export async function reconcileCommercialWebhook(
     return { duplicate: false, organizationId: null };
   }
 
+  let paymentNotification: PaymentNotificationToSend | null = null;
+
   await db.transaction(async (tx) => {
     const providerSubscriptionId = resolveProviderSubscriptionId(
       payload,
@@ -274,7 +287,7 @@ export async function reconcileCommercialWebhook(
     );
 
     if (payload.payment) {
-      const payment = await upsertPaymentFromWebhook(
+      const { payment, previousStatus } = await upsertPaymentFromWebhook(
         tx,
         offer,
         payload.payment,
@@ -321,6 +334,46 @@ export async function reconcileCommercialWebhook(
 
       if (payment.status === "CONFIRMED" || payment.status === "RECEIVED") {
         await activateOfferFromConfirmedPayment(tx, offer.id, payment.status);
+      }
+
+      const paymentSuccessStatuses: PaymentStatus[] = ["CONFIRMED", "RECEIVED"];
+      const enteredSuccessfulPaymentState =
+        paymentSuccessStatuses.includes(payment.status) &&
+        (previousStatus === null ||
+          !paymentSuccessStatuses.includes(previousStatus));
+
+      if (enteredSuccessfulPaymentState) {
+        paymentNotification = {
+          type: "received",
+          paymentId: payment.id,
+          organizationId: offer.organizationId,
+        };
+      } else if (
+        previousStatus !== payment.status &&
+        [
+          "OVERDUE",
+          "REFUNDED",
+          "REFUND_REQUESTED",
+          "CHARGEBACK_REQUESTED",
+          "CHARGEBACK_DISPUTE",
+          "AWAITING_CHARGEBACK_REVERSAL",
+          "DELETED",
+        ].includes(payment.status)
+      ) {
+        paymentNotification = {
+          type: "failed",
+          paymentId: payment.id,
+          organizationId: offer.organizationId,
+          reason:
+            payment.status === "OVERDUE"
+              ? "Pagamento vencido"
+              : payment.status === "REFUNDED" ||
+                  payment.status === "REFUND_REQUESTED"
+                ? "Pagamento estornado"
+                : payment.status.includes("CHARGEBACK")
+                  ? "Pagamento em contestação"
+                  : "Pagamento cancelado",
+        };
       }
 
       if (payment.status === "OVERDUE" && offer.kind !== "SETUP_FEE") {
@@ -402,6 +455,31 @@ export async function reconcileCommercialWebhook(
         ),
       );
   });
+
+  const notificationToSend =
+    paymentNotification as PaymentNotificationToSend | null;
+
+  if (notificationToSend) {
+    try {
+      if (notificationToSend.type === "received") {
+        await notifyPaymentReceived(
+          notificationToSend.paymentId,
+          notificationToSend.organizationId,
+        );
+      } else {
+        await notifyPaymentFailed(
+          notificationToSend.paymentId,
+          notificationToSend.organizationId,
+          notificationToSend.reason,
+        );
+      }
+    } catch (error) {
+      console.error(
+        "[Commercial Webhook] Failed to send payment notification:",
+        error,
+      );
+    }
+  }
 
   return { duplicate: false, organizationId: offer.organizationId };
 }
