@@ -16,6 +16,7 @@ import {
   PasswordResetEmail,
   PortalInvitationEmail,
   PortalMagicLinkEmail,
+  type EmailBrand,
 } from "@calibra-facil/email";
 import { hasEntitlement } from "@calibra-facil/shared";
 import {
@@ -358,6 +359,23 @@ function sanitizeMailHeader(value: string): string {
   return value.replace(/[\r\n]+/g, " ").trim();
 }
 
+function getEmailAddress(value: string): string {
+  const match = value.match(/<([^>]+)>/);
+  return match?.[1]?.trim() ?? value.trim();
+}
+
+function formatFromEmail(fromEmail: string, brand: EmailBrand | undefined) {
+  if (!brand?.isWhiteLabel) return fromEmail;
+
+  return `${sanitizeMailHeader(brand.name)} via CalibraFácil <${getEmailAddress(fromEmail)}>`;
+}
+
+function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
+  const email = brand?.supportEmail?.trim();
+  if (!email || !email.includes("@")) return undefined;
+  return sanitizeMailHeader(email);
+}
+
 function readCallbackUrlFromMagicLinkContext(ctx: unknown): string | null {
   if (!ctx || typeof ctx !== "object" || !("body" in ctx)) return null;
 
@@ -428,24 +446,101 @@ async function findPendingPortalInvitation(
   return pendingInvitation ?? null;
 }
 
-async function findLabNameForClientOrganization(
+function formatLabAddress(lab: {
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  neighbourhood: string | null;
+  city: string | null;
+  state: string | null;
+  cep: string | null;
+}): string | undefined {
+  const streetLine = [lab.street, lab.number, lab.complement]
+    .filter(Boolean)
+    .join(", ");
+  const cityLine = [
+    lab.neighbourhood,
+    [lab.city, lab.state].filter(Boolean).join(" - "),
+    lab.cep ? `CEP ${lab.cep}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const address = [streetLine, cityLine].filter(Boolean).join(" · ");
+
+  return address || undefined;
+}
+
+function createLabEmailBrand(lab: {
+  name: string;
+  logo: string | null;
+  cnpj: string | null;
+  accreditationNumber: string | null;
+  accreditationBody: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  neighbourhood: string | null;
+  city: string | null;
+  state: string | null;
+  cep: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+}): EmailBrand {
+  const accreditation = [lab.accreditationBody, lab.accreditationNumber]
+    .filter(Boolean)
+    .join(" ");
+  const legalLines = [
+    lab.cnpj ? `CNPJ ${lab.cnpj}` : undefined,
+    accreditation ? `Acreditação ${accreditation}` : undefined,
+    formatLabAddress(lab),
+    lab.phone ? `Telefone: ${lab.phone}` : undefined,
+  ].filter((line): line is string => Boolean(line));
+
+  return {
+    name: lab.name,
+    logoSrc: lab.logo ?? getEmailLogoSrc(),
+    footerLegalLines: legalLines,
+    supportEmail: lab.email ?? undefined,
+    website: lab.website ?? undefined,
+    isWhiteLabel: true,
+  };
+}
+
+async function findLabBrandForClientOrganization(
   clientOrganizationId: string,
-): Promise<string | null> {
+): Promise<EmailBrand | undefined> {
   const [customerData] = await getDb()
     .select({ labOrganizationId: schema.customer.labOrganizationId })
     .from(schema.customer)
     .where(eq(schema.customer.authOrganizationId, clientOrganizationId))
     .limit(1);
 
-  if (!customerData?.labOrganizationId) return null;
+  if (!customerData?.labOrganizationId) return undefined;
 
   const [labOrganization] = await getDb()
-    .select({ name: schema.organization.name })
+    .select({
+      name: schema.organization.name,
+      logo: schema.organization.logo,
+      cnpj: schema.organization.cnpj,
+      accreditationNumber: schema.organization.accreditationNumber,
+      accreditationBody: schema.organization.accreditationBody,
+      street: schema.organization.street,
+      number: schema.organization.number,
+      complement: schema.organization.complement,
+      neighbourhood: schema.organization.neighbourhood,
+      city: schema.organization.city,
+      state: schema.organization.state,
+      cep: schema.organization.cep,
+      phone: schema.organization.phone,
+      email: schema.organization.email,
+      website: schema.organization.website,
+    })
     .from(schema.organization)
     .where(eq(schema.organization.id, customerData.labOrganizationId))
     .limit(1);
 
-  return labOrganization?.name ?? null;
+  return labOrganization ? createLabEmailBrand(labOrganization) : undefined;
 }
 
 async function hasExistingPortalAccess(email: string): Promise<boolean> {
@@ -509,9 +604,10 @@ async function sendPortalMagicLink(
       magicLinkUrl = data.url;
     }
   }
-  const labName = pendingInvitation
-    ? await findLabNameForClientOrganization(pendingInvitation.organizationId)
-    : null;
+  const labBrand = pendingInvitation
+    ? await findLabBrandForClientOrganization(pendingInvitation.organizationId)
+    : undefined;
+  const labName = labBrand?.name ?? null;
 
   if (!apiKey) {
     if (isProductionRuntime()) {
@@ -531,9 +627,10 @@ async function sendPortalMagicLink(
     "Calibra Fácil <noreply@calibrafacil.com>";
 
   await resend.emails.send({
-    from: fromEmail,
+    from: formatFromEmail(fromEmail, labBrand),
     to: normalizedEmail,
     subject,
+    replyTo: getReplyToEmail(labBrand),
     react: pendingInvitation
       ? PortalInvitationEmail({
           recipientName: normalizedEmail,
@@ -542,6 +639,7 @@ async function sendPortalMagicLink(
           role: pendingInvitation.role ?? undefined,
           inviteUrl: magicLinkUrl,
           logoSrc: getEmailLogoSrc(),
+          brand: labBrand,
         })
       : PortalMagicLinkEmail({
           recipientName: normalizedEmail,

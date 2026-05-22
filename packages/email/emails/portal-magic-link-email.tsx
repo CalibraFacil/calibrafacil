@@ -8,26 +8,35 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 interface PortalMagicLinkEmailProps {
   recipientName?: string;
   magicLinkUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 export function PortalMagicLinkEmail({
   recipientName = "usuário",
   magicLinkUrl = "https://calibrafacil.com/portal/sign-in",
   logoSrc,
+  brand,
 }: PortalMagicLinkEmailProps) {
   return (
-    <EmailLayout previewText="Acesse o Portal CalibraFácil" logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout
+      previewText="Acesse o Portal CalibraFácil"
+      logoSrc={logoSrc}
+      brand={brand}
+    >
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Title>Acesse o Portal CalibraFácil</Title>
 
         <Paragraph>Olá, {recipientName},</Paragraph>
-        <Paragraph>Use o link abaixo para entrar no portal do cliente.</Paragraph>
+        <Paragraph>
+          Use o link abaixo para entrar no portal do cliente.
+        </Paragraph>
 
         <ActionButton href={magicLinkUrl}>Entrar no portal</ActionButton>
         <LinkFallback url={magicLinkUrl} />

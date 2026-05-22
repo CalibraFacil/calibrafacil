@@ -9,6 +9,7 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 export type CustomerSuccessEmailType =
@@ -26,6 +27,7 @@ interface CustomerSuccessEmailProps {
   message: string;
   actionUrl?: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 const getTypeConfig = (type: CustomerSuccessEmailType) => {
@@ -52,12 +54,13 @@ export function CustomerSuccessEmail({
   message = "O go-live do laboratório entrou em estado de risco e exige acompanhamento prioritário.",
   actionUrl,
   logoSrc,
+  brand,
 }: CustomerSuccessEmailProps) {
   const config = getTypeConfig(type);
 
   return (
-    <EmailLayout previewText={title} logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout previewText={title} logoSrc={logoSrc} brand={brand}>
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Badge variant={config.variant}>{config.label}</Badge>
         <Title>{title}</Title>
 

@@ -12,6 +12,7 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 type NCNotificationType = "created" | "escalated";
@@ -26,6 +27,7 @@ export interface NCNotificationEmailProps {
   actorName?: string;
   actionUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 const getTypeConfig = (type: NCNotificationType) => {
@@ -72,13 +74,18 @@ export function NCNotificationEmail({
   actorName,
   actionUrl = "#",
   logoSrc,
+  brand,
 }: NCNotificationEmailProps) {
   const config = getTypeConfig(type);
   const ncTypeLabel = getNCTypeLabel(ncType);
 
   return (
-    <EmailLayout previewText={`${config.previewText} - ${ncNumber}`} logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout
+      previewText={`${config.previewText} - ${ncNumber}`}
+      logoSrc={logoSrc}
+      brand={brand}
+    >
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Badge variant={config.statusVariant}>Qualidade</Badge>
         <Title>{config.title}</Title>
 
@@ -92,7 +99,11 @@ export function NCNotificationEmail({
         <DetailBox tone={type === "created" ? "warning" : "info"}>
           <DetailRow
             label="Não conformidade"
-            value={<HighlightValue tone={config.statusVariant}>{ncNumber}</HighlightValue>}
+            value={
+              <HighlightValue tone={config.statusVariant}>
+                {ncNumber}
+              </HighlightValue>
+            }
           />
           {ncTypeLabel && <DetailRow label="Tipo" value={ncTypeLabel} />}
         </DetailBox>

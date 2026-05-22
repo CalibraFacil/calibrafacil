@@ -33,6 +33,7 @@ import {
   CompetenceNotificationEmail,
   CustomerSuccessEmail,
   CalibrationRequestEmail,
+  type EmailBrand,
 } from "@calibra-facil/email";
 
 // Track if email misconfiguration warning has been logged this session
@@ -125,6 +126,8 @@ export interface SendNotificationOptions {
   actionUrl?: string;
   /** Optional context for specialized email templates */
   emailContext?: EmailContext;
+  /** Lab/customer-facing visual identity. Omit for internal CalibraFácil emails. */
+  emailBrand?: EmailBrand;
 }
 
 export interface NotificationResult {
@@ -215,6 +218,7 @@ export async function sendNotification(
     relatedEntity,
     actionUrl,
     emailContext,
+    emailBrand,
   } = options;
 
   // Get user preferences
@@ -259,6 +263,7 @@ export async function sendNotification(
       message,
       actionUrl,
       emailContext,
+      emailBrand,
     });
 
     if (emailResult) {
@@ -358,6 +363,27 @@ function getEmailLogoSrc(): string {
   return "https://calibrafacil.com/logo192.png";
 }
 
+function sanitizeMailHeader(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function getEmailAddress(value: string): string {
+  const match = value.match(/<([^>]+)>/);
+  return match?.[1]?.trim() ?? value.trim();
+}
+
+function formatFromEmail(fromEmail: string, brand: EmailBrand | undefined) {
+  if (!brand?.isWhiteLabel) return fromEmail;
+
+  return `${sanitizeMailHeader(brand.name)} via CalibraFácil <${getEmailAddress(fromEmail)}>`;
+}
+
+function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
+  const email = brand?.supportEmail?.trim();
+  if (!email || !email.includes("@")) return undefined;
+  return sanitizeMailHeader(email);
+}
+
 function getWebBaseUrl(): string {
   return (
     process.env.WEB_URL ??
@@ -372,6 +398,101 @@ function getPortalBaseUrl(): string {
     process.env.PORTAL_URL ??
     "https://portal.calibrafacil.com"
   ).replace(/\/$/, "");
+}
+
+function formatLabAddress(
+  lab: Pick<
+    typeof organization.$inferSelect,
+    | "street"
+    | "number"
+    | "complement"
+    | "neighbourhood"
+    | "city"
+    | "state"
+    | "cep"
+  >,
+): string | undefined {
+  const streetLine = [lab.street, lab.number, lab.complement]
+    .filter(Boolean)
+    .join(", ");
+  const cityLine = [
+    lab.neighbourhood,
+    [lab.city, lab.state].filter(Boolean).join(" - "),
+    lab.cep ? `CEP ${lab.cep}` : undefined,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const address = [streetLine, cityLine].filter(Boolean).join(" · ");
+
+  return address || undefined;
+}
+
+function createLabEmailBrand(
+  lab: Pick<
+    typeof organization.$inferSelect,
+    | "name"
+    | "logo"
+    | "cnpj"
+    | "accreditationNumber"
+    | "accreditationBody"
+    | "street"
+    | "number"
+    | "complement"
+    | "neighbourhood"
+    | "city"
+    | "state"
+    | "cep"
+    | "phone"
+    | "email"
+    | "website"
+  >,
+): EmailBrand {
+  const accreditation = [lab.accreditationBody, lab.accreditationNumber]
+    .filter(Boolean)
+    .join(" ");
+  const legalLines = [
+    lab.cnpj ? `CNPJ ${lab.cnpj}` : undefined,
+    accreditation ? `Acreditação ${accreditation}` : undefined,
+    formatLabAddress(lab),
+    lab.phone ? `Telefone: ${lab.phone}` : undefined,
+  ].filter((line): line is string => Boolean(line));
+
+  return {
+    name: lab.name,
+    logoSrc: lab.logo ?? getEmailLogoSrc(),
+    footerLegalLines: legalLines,
+    supportEmail: lab.email ?? undefined,
+    website: lab.website ?? undefined,
+    isWhiteLabel: true,
+  };
+}
+
+async function getLabEmailBrand(
+  organizationId: string,
+): Promise<EmailBrand | undefined> {
+  const [lab] = await db
+    .select({
+      name: organization.name,
+      logo: organization.logo,
+      cnpj: organization.cnpj,
+      accreditationNumber: organization.accreditationNumber,
+      accreditationBody: organization.accreditationBody,
+      street: organization.street,
+      number: organization.number,
+      complement: organization.complement,
+      neighbourhood: organization.neighbourhood,
+      city: organization.city,
+      state: organization.state,
+      cep: organization.cep,
+      phone: organization.phone,
+      email: organization.email,
+      website: organization.website,
+    })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1);
+
+  return lab ? createLabEmailBrand(lab) : undefined;
 }
 
 function resolveEmailActionUrl(
@@ -402,6 +523,7 @@ function renderEmailTemplate(
   actionUrl: string | undefined,
   emailContext: EmailContext | undefined,
   logoSrc: string,
+  emailBrand: EmailBrand | undefined,
 ): React.ReactElement {
   // Job notifications
   if (
@@ -424,6 +546,7 @@ function renderEmailTemplate(
       reason,
       actionUrl: actionUrl ?? "#",
       logoSrc,
+      brand: emailBrand,
     });
   }
 
@@ -437,6 +560,7 @@ function renderEmailTemplate(
       customerName,
       portalUrl,
       logoSrc,
+      brand: emailBrand,
     });
   }
 
@@ -452,6 +576,7 @@ function renderEmailTemplate(
       reason: reason ?? message,
       actionUrl: actionUrl ?? portalUrl,
       logoSrc,
+      brand: emailBrand,
     });
   }
 
@@ -478,6 +603,7 @@ function renderEmailTemplate(
       daysRemaining,
       actionUrl: actionUrl ?? "#",
       logoSrc,
+      brand: emailBrand,
     });
   }
 
@@ -494,6 +620,7 @@ function renderEmailTemplate(
       description,
       actionUrl,
       logoSrc,
+      brand: emailBrand,
     });
   }
 
@@ -514,6 +641,7 @@ function renderEmailTemplate(
       actorName,
       actionUrl: actionUrl ?? "#",
       logoSrc,
+      brand: emailBrand,
     });
   }
 
@@ -538,6 +666,7 @@ function renderEmailTemplate(
       actorName,
       actionUrl: actionUrl ?? "#",
       logoSrc,
+      brand: emailBrand,
     });
   }
 
@@ -575,6 +704,7 @@ function renderEmailTemplate(
       jobCodes,
       actionUrl: actionUrl ?? "#",
       logoSrc,
+      brand: emailBrand,
     });
   }
 
@@ -586,6 +716,7 @@ function renderEmailTemplate(
       message,
       actionUrl,
       logoSrc,
+      brand: emailBrand,
     });
   }
 
@@ -597,6 +728,7 @@ function renderEmailTemplate(
     actionUrl,
     actionLabel: "Ver Detalhes",
     logoSrc,
+    brand: emailBrand,
   });
 }
 
@@ -610,9 +742,17 @@ async function sendNotificationEmail(options: {
   message: string;
   actionUrl?: string;
   emailContext?: EmailContext;
+  emailBrand?: EmailBrand;
 }): Promise<boolean> {
-  const { recipientUserId, type, title, message, actionUrl, emailContext } =
-    options;
+  const {
+    recipientUserId,
+    type,
+    title,
+    message,
+    actionUrl,
+    emailContext,
+    emailBrand,
+  } = options;
 
   // Check if Resend is configured - log warning once per session
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -656,15 +796,17 @@ async function sendNotificationEmail(options: {
       emailActionUrl,
       emailContext,
       logoSrc,
+      emailBrand,
     );
 
     const html = await render(emailElement);
 
     await resend.emails.send({
-      from: fromEmail,
+      from: formatFromEmail(fromEmail, emailBrand),
       to: userData.email,
       subject: title,
       html,
+      replyTo: getReplyToEmail(emailBrand),
     });
 
     return true;
@@ -861,6 +1003,7 @@ export async function notifyCalibrationRequestUnderReview(
   if (!details || details.submittedBy === actorUserId) return;
 
   const actorName = await getActorName(actorUserId);
+  const emailBrand = await getLabEmailBrand(details.organizationId);
 
   await sendNotification({
     recipientUserId: details.submittedBy,
@@ -878,6 +1021,7 @@ export async function notifyCalibrationRequestUnderReview(
       type: "calibrationRequest",
       data: createCalibrationRequestEmailContext(details, { actorName }),
     },
+    emailBrand,
   });
 }
 
@@ -889,6 +1033,7 @@ export async function notifyCalibrationRequestApproved(
   if (!details || details.submittedBy === actorUserId) return;
 
   const actorName = await getActorName(actorUserId);
+  const emailBrand = await getLabEmailBrand(details.organizationId);
 
   await sendNotification({
     recipientUserId: details.submittedBy,
@@ -906,6 +1051,7 @@ export async function notifyCalibrationRequestApproved(
       type: "calibrationRequest",
       data: createCalibrationRequestEmailContext(details, { actorName }),
     },
+    emailBrand,
   });
 }
 
@@ -918,6 +1064,7 @@ export async function notifyCalibrationRequestRejected(
   if (!details || details.submittedBy === actorUserId) return;
 
   const actorName = await getActorName(actorUserId);
+  const emailBrand = await getLabEmailBrand(details.organizationId);
 
   await sendNotification({
     recipientUserId: details.submittedBy,
@@ -938,6 +1085,7 @@ export async function notifyCalibrationRequestRejected(
         reason,
       }),
     },
+    emailBrand,
   });
 }
 
@@ -950,6 +1098,7 @@ export async function notifyCalibrationRequestConverted(
   if (!details || details.submittedBy === actorUserId) return;
 
   const actorName = await getActorName(actorUserId);
+  const emailBrand = await getLabEmailBrand(details.organizationId);
 
   await sendNotification({
     recipientUserId: details.submittedBy,
@@ -970,6 +1119,7 @@ export async function notifyCalibrationRequestConverted(
         jobCodes,
       }),
     },
+    emailBrand,
   });
 }
 
@@ -1217,6 +1367,7 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
     .where(eq(member.organizationId, customerData.authOrganizationId));
 
   const portalUrl = `${getPortalBaseUrl()}/certificates`;
+  const emailBrand = await getLabEmailBrand(job.organizationId);
 
   // Send email notifications to all portal users
   for (const portalUser of portalUsers) {
@@ -1242,6 +1393,7 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
           portalUrl,
         },
       },
+      emailBrand,
     });
   }
 }
@@ -1280,6 +1432,7 @@ export async function notifyCertificateAmended(
     .where(eq(member.organizationId, customerData.authOrganizationId));
 
   const portalUrl = `${getPortalBaseUrl()}/certificates`;
+  const emailBrand = await getLabEmailBrand(originalJob.organizationId);
 
   // Send notifications to all portal users
   for (const portalUser of portalUsers) {
@@ -1307,6 +1460,7 @@ export async function notifyCertificateAmended(
           portalUrl,
         },
       },
+      emailBrand,
     });
   }
 
