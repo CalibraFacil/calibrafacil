@@ -3,6 +3,18 @@ import type { BrowserWindowConstructorOptions } from "electron";
 
 export const desktopAppName = "CalibraFácil";
 
+export function buildDesktopUserAgent(
+  appVersion: string,
+  versions: NodeJS.ProcessVersions = process.versions,
+) {
+  return [
+    "Mozilla/5.0",
+    `CalibraFacilDesktop/${sanitizeUserAgentToken(appVersion)}`,
+    `Chrome/${sanitizeUserAgentToken(versions.chrome ?? "0.0.0")}`,
+    `Electron/${sanitizeUserAgentToken(versions.electron ?? "0.0.0")}`,
+  ].join(" ");
+}
+
 export type MainWindowMenuTarget = {
   setMenu(menu: null): void;
 };
@@ -41,4 +53,11 @@ export function desktopWindowIconPath(
 
 export function hideMainWindowMenu(window: MainWindowMenuTarget) {
   window.setMenu(null);
+}
+
+function sanitizeUserAgentToken(value: string) {
+  const sanitized = value
+    .replace(/[^\x21-\x7e]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return sanitized || "0.0.0";
 }

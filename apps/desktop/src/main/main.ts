@@ -42,6 +42,7 @@ import {
 } from "./support-bundle";
 import { DesktopUpdater } from "./updater";
 import {
+  buildDesktopUserAgent,
   buildMainWindowOptions,
   desktopAppName,
   desktopWindowIconPath,
@@ -60,6 +61,7 @@ let mainWindow: BrowserWindow | null = null;
 let cloudAuthProxy: DesktopCloudAuthProxy | null = null;
 
 app.setName(desktopAppName);
+app.userAgentFallback = buildDesktopUserAgent(app.getVersion());
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -186,12 +188,14 @@ function formatErrorMessage(error: unknown) {
 }
 
 function createWindow() {
+  const desktopUserAgent = buildDesktopUserAgent(app.getVersion());
   mainWindow = new BrowserWindow(
     buildMainWindowOptions(
       path.join(currentDir, "../preload/preload.cjs"),
       desktopIconPath(),
     ),
   );
+  mainWindow.webContents.setUserAgent(desktopUserAgent);
   installRendererDiagnostics(mainWindow);
   hideMainWindowMenu(mainWindow);
 
@@ -208,12 +212,16 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  mainWindow.loadURL(rendererUrl()).catch((error) => {
-    console.error("[desktop-renderer] loadURL failed", {
-      url: rendererUrl(),
-      error: formatErrorMessage(error),
+  mainWindow
+    .loadURL(rendererUrl(), {
+      userAgent: desktopUserAgent,
+    })
+    .catch((error) => {
+      console.error("[desktop-renderer] loadURL failed", {
+        url: rendererUrl(),
+        error: formatErrorMessage(error),
+      });
     });
-  });
 }
 
 function desktopIconPath() {
