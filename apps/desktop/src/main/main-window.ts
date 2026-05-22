@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { BrowserWindowConstructorOptions } from "electron";
 
 export const desktopAppName = "CalibraFácil";
@@ -25,6 +26,17 @@ export function buildMainWindowOptions(
       sandbox: true,
     },
   };
+}
+
+export function desktopWindowIconPath(
+  assetsDir: string,
+  platform: NodeJS.Platform = process.platform,
+) {
+  if (platform === "win32") {
+    return path.join(assetsDir, "icon.ico");
+  }
+
+  return path.join(assetsDir, "icon.png");
 }
 
 export function hideMainWindowMenu(window: MainWindowMenuTarget) {

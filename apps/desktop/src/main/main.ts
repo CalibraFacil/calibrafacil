@@ -44,6 +44,7 @@ import { DesktopUpdater } from "./updater";
 import {
   buildMainWindowOptions,
   desktopAppName,
+  desktopWindowIconPath,
   hideMainWindowMenu,
 } from "./main-window";
 import { getDesktopLogFilePath, installDesktopLogger } from "./desktop-log";
@@ -52,7 +53,7 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const desktopAppScheme = "app";
 const desktopAppHost = "calibra-facil";
 const defaultCloudApiUrl = "https://api.calibrafacil.com";
-const packagedRendererUrl = `${desktopAppScheme}://${desktopAppHost}/index.html`;
+const packagedRendererUrl = `${desktopAppScheme}://${desktopAppHost}/`;
 const localServer = new LocalServerManager();
 
 let mainWindow: BrowserWindow | null = null;
@@ -216,7 +217,7 @@ function createWindow() {
 }
 
 function desktopIconPath() {
-  return path.resolve(currentDir, "../../assets/icon.png");
+  return desktopWindowIconPath(path.resolve(currentDir, "../../assets"));
 }
 
 function installRendererDiagnostics(window: BrowserWindow) {

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildMainWindowOptions, hideMainWindowMenu } from "./main-window";
+import {
+  buildMainWindowOptions,
+  desktopWindowIconPath,
+  hideMainWindowMenu,
+} from "./main-window";
 
 describe("main window configuration", () => {
   it("hides the native application menu bar", () => {
@@ -25,6 +29,18 @@ describe("main window configuration", () => {
     );
 
     expect(options.icon).toBe("/tmp/calibra-icon.png");
+  });
+
+  it("uses the multi-size ico for the Windows title bar icon", () => {
+    expect(desktopWindowIconPath("/tmp/assets", "win32")).toBe(
+      "/tmp/assets/icon.ico",
+    );
+  });
+
+  it("uses the png window icon outside Windows", () => {
+    expect(desktopWindowIconPath("/tmp/assets", "linux")).toBe(
+      "/tmp/assets/icon.png",
+    );
   });
 
   it("removes the native menu from the created window", () => {
