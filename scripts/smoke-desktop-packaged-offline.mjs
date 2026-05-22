@@ -8,10 +8,7 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const appPath = path.join(
-  root,
-  "apps/desktop/out/linux-unpacked/@calibra-facildesktop",
-);
+const appPath = path.join(root, "apps/desktop/out/linux-unpacked/calibrafacil");
 const apiBase = normalizeBaseUrl(
   process.env.CALIBRA_PARITY_API_URL ?? "https://api.calibrafacil.com",
 );
@@ -860,11 +857,11 @@ async function waitForSyncSettled(page, timeoutMs = 30_000) {
   let latestStatus = null;
 
   while (Date.now() - startedAt < timeoutMs) {
-    latestStatus = await evaluate(
-      page,
-      "window.calibraBridge.getSyncStatus()",
-    );
-    if (latestStatus?.activeRunId === null && latestStatus.state !== "syncing") {
+    latestStatus = await evaluate(page, "window.calibraBridge.getSyncStatus()");
+    if (
+      latestStatus?.activeRunId === null &&
+      latestStatus.state !== "syncing"
+    ) {
       return latestStatus;
     }
 

@@ -16,6 +16,7 @@ export type LocalStandardsListInput = {
 
 export type LocalCertifiedValue = {
   nominal: string;
+  authentication?: string | null;
   value: number;
   uncertainty: number;
   unit: string;
@@ -23,11 +24,16 @@ export type LocalCertifiedValue = {
   drift?: number | null;
   buoyancy?: number | null;
   coverageFactor?: number | null;
+  compositionProfile?: boolean;
+  profileKey?: string | null;
+  profileClass?: string | null;
+  profileQuantityAvailable?: number | null;
 };
 
 export type LocalStandard = {
   id: number;
   name: string;
+  kind: string;
   type: string | null;
   serialNumber: string;
   manufacturer: string | null;
@@ -43,6 +49,8 @@ export type LocalStandard = {
   distribution: "normal" | "rectangular";
   drift: number | null;
   certifiedValues: LocalCertifiedValue[] | null;
+  metrologyData: unknown;
+  certificateDocument?: unknown;
   status: LocalStandardStatus;
   isExpired: boolean;
   daysUntilExpiry: number;
@@ -255,6 +263,7 @@ function toLocalStandard(row: LocalStandardRow): LocalStandard {
   return {
     id: row.remote_id ?? stableLocalNumericId(row.id),
     name: getString(snapshot, "name") ?? row.name,
+    kind: getString(snapshot, "kind") ?? "generic_scalar",
     type: getNullableString(snapshot, "type"),
     serialNumber:
       getString(snapshot, "serialNumber") ?? row.serial_number ?? "",
@@ -275,6 +284,8 @@ function toLocalStandard(row: LocalStandardRow): LocalStandard {
         : "normal",
     drift: getNullableNumber(snapshot, "drift"),
     certifiedValues: parseCertifiedValues(snapshot.certifiedValues),
+    metrologyData: snapshot.metrologyData ?? null,
+    certificateDocument: snapshot.certificateDocument ?? null,
     status: parseStatus(row.status),
     isExpired: expiry.isExpired,
     daysUntilExpiry: expiry.daysUntilExpiry,
@@ -314,6 +325,7 @@ function parseCertifiedValues(value: unknown): LocalCertifiedValue[] | null {
 
     values.push({
       nominal,
+      authentication: getNullableString(record, "authentication"),
       value: certifiedValue,
       uncertainty,
       unit,
@@ -321,6 +333,16 @@ function parseCertifiedValues(value: unknown): LocalCertifiedValue[] | null {
       drift: getNullableNumber(record, "drift"),
       buoyancy: getNullableNumber(record, "buoyancy"),
       coverageFactor: getNullableNumber(record, "coverageFactor"),
+      compositionProfile:
+        typeof record.compositionProfile === "boolean"
+          ? record.compositionProfile
+          : undefined,
+      profileKey: getNullableString(record, "profileKey"),
+      profileClass: getNullableString(record, "profileClass"),
+      profileQuantityAvailable: getNullableNumber(
+        record,
+        "profileQuantityAvailable",
+      ),
     });
   }
 

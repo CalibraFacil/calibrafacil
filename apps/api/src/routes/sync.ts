@@ -33,6 +33,7 @@ import {
   jobAuditLog,
   organizationEventLog,
   referenceStandard,
+  referenceStandardCertificateDocument,
   service,
   serviceOrder,
   serviceOrderDeliveryDocument,
@@ -40,6 +41,7 @@ import {
   serviceOrderQuote,
   type MethodSnapshot,
   type StandardSnapshot,
+  type ReferenceStandardCertificateDocumentSnapshot,
 } from "@calibra-facil/db/schema";
 import {
   executeCompiledMethod,
@@ -59,12 +61,13 @@ import {
   CreateServiceOrderQuoteSchema,
   CreateServiceOrderSchema,
   IssueServiceOrderDeliveryDocumentSchema,
+  StandardSnapshotSchema,
   UpdateAssetSchema,
   UpdateComplianceSchema,
   UpdateCustomerSchema,
   UpdateServiceOrderExecutionSchema,
 } from "@calibra-facil/schemas";
-import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, like, not } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import {
   createR2Client,
@@ -230,10 +233,25 @@ export const syncRouter = new Hono<{
             organizationId: referenceStandard.organizationId,
             unitId: referenceStandard.unitId,
             name: referenceStandard.name,
+            kind: referenceStandard.kind,
+            type: referenceStandard.type,
             serialNumber: referenceStandard.serialNumber,
+            manufacturer: referenceStandard.manufacturer,
+            model: referenceStandard.model,
             certificateNumber: referenceStandard.certificateNumber,
+            calibratedBy: referenceStandard.calibratedBy,
+            calibrationDate: referenceStandard.calibrationDate,
             nextCalibrationDate: referenceStandard.nextCalibrationDate,
+            referenceValue: referenceStandard.referenceValue,
+            uncertainty: referenceStandard.uncertainty,
+            uncertaintyUnit: referenceStandard.uncertaintyUnit,
+            coverageFactor: referenceStandard.coverageFactor,
+            distribution: referenceStandard.distribution,
+            drift: referenceStandard.drift,
+            certifiedValues: referenceStandard.certifiedValues,
+            metrologyData: referenceStandard.metrologyData,
             status: referenceStandard.status,
+            createdAt: referenceStandard.createdAt,
             updatedAt: referenceStandard.updatedAt,
           })
           .from(referenceStandard)
@@ -331,6 +349,8 @@ export const syncRouter = new Hono<{
             ),
           ),
       ]);
+      const standardsWithDocuments =
+        await attachReferenceStandardCertificateDocuments(standards);
 
       return c.json(
         syncBootstrapResponseSchema.parse({
@@ -366,7 +386,7 @@ export const syncRouter = new Hono<{
           customers,
           assets,
           services,
-          standards,
+          standards: standardsWithDocuments,
           environmentalLimits: environmentalLimitRows,
           jobs,
           serviceOrders,
@@ -794,10 +814,25 @@ async function loadCloudSyncEventsSince(
         organizationId: referenceStandard.organizationId,
         unitId: referenceStandard.unitId,
         name: referenceStandard.name,
+        kind: referenceStandard.kind,
+        type: referenceStandard.type,
         serialNumber: referenceStandard.serialNumber,
+        manufacturer: referenceStandard.manufacturer,
+        model: referenceStandard.model,
         certificateNumber: referenceStandard.certificateNumber,
+        calibratedBy: referenceStandard.calibratedBy,
+        calibrationDate: referenceStandard.calibrationDate,
         nextCalibrationDate: referenceStandard.nextCalibrationDate,
+        referenceValue: referenceStandard.referenceValue,
+        uncertainty: referenceStandard.uncertainty,
+        uncertaintyUnit: referenceStandard.uncertaintyUnit,
+        coverageFactor: referenceStandard.coverageFactor,
+        distribution: referenceStandard.distribution,
+        drift: referenceStandard.drift,
+        certifiedValues: referenceStandard.certifiedValues,
+        metrologyData: referenceStandard.metrologyData,
         status: referenceStandard.status,
+        createdAt: referenceStandard.createdAt,
         updatedAt: referenceStandard.updatedAt,
       })
       .from(referenceStandard)
@@ -936,6 +971,8 @@ async function loadCloudSyncEventsSince(
       .orderBy(calibrationMethod.publishedAt)
       .limit(limit + 1),
   ]);
+  const changedStandardsWithDocuments =
+    await attachReferenceStandardCertificateDocuments(changedStandards);
 
   const events = [
     ...toCloudEvents("asset_type", changedAssetTypes, "updatedAt", limit),
@@ -944,7 +981,7 @@ async function loadCloudSyncEventsSince(
     ...toCloudEvents("service", changedServices, "updatedAt", limit),
     ...toCloudEvents(
       "reference_standard",
-      changedStandards,
+      changedStandardsWithDocuments,
       "updatedAt",
       limit,
     ),
@@ -1020,6 +1057,71 @@ function toCloudEvents(
       payload: row,
     };
   });
+}
+
+type ReferenceStandardSyncRow = {
+  id: number;
+  certificateNumber: string;
+};
+
+async function attachReferenceStandardCertificateDocuments<
+  TStandard extends ReferenceStandardSyncRow,
+>(standards: TStandard[]) {
+  if (standards.length === 0) {
+    return standards.map((standard) => ({
+      ...standard,
+      certificateDocument: null,
+    }));
+  }
+
+  const currentDocuments = await db
+    .select()
+    .from(referenceStandardCertificateDocument)
+    .where(
+      and(
+        inArray(
+          referenceStandardCertificateDocument.standardId,
+          standards.map((standard) => standard.id),
+        ),
+        eq(referenceStandardCertificateDocument.isCurrent, true),
+        not(like(referenceStandardCertificateDocument.r2Key, "pending/%")),
+      ),
+    );
+  const standardsById = new Map(
+    standards.map((standard) => [standard.id, standard]),
+  );
+  const documentsByStandardId = new Map(
+    currentDocuments
+      .filter((document) => {
+        const standard = standardsById.get(document.standardId);
+        return standard?.certificateNumber === document.certificateNumber;
+      })
+      .map((document) => [
+        document.standardId,
+        standardCertificateDocumentSnapshot(document),
+      ]),
+  );
+
+  return standards.map((standard) => ({
+    ...standard,
+    certificateDocument: documentsByStandardId.get(standard.id) ?? null,
+  }));
+}
+
+function standardCertificateDocumentSnapshot(
+  document: typeof referenceStandardCertificateDocument.$inferSelect,
+): ReferenceStandardCertificateDocumentSnapshot {
+  return {
+    documentId: document.id,
+    r2Key: document.r2Key,
+    fileName: document.fileName,
+    fileSize: document.fileSize,
+    sha256: document.sha256,
+    uploadedAt: document.uploadedAt,
+    certificateNumber: document.certificateNumber,
+    calibrationDate: document.calibrationDate,
+    nextCalibrationDate: document.nextCalibrationDate,
+  };
 }
 
 function toSyncTimestamp(value: unknown) {
@@ -2212,9 +2314,17 @@ async function applyLocalJobExecution(
       ? "REVIEW"
       : (getJobStatus(payload, "status") ?? "IN_PROGRESS");
   const nextData = getRecordOrNull(payload, "data") ?? {};
-  const nextStandardsSnapshot = hasOwn(payload, "standardsSnapshot")
-    ? getStandardSnapshotsOrNull(payload, "standardsSnapshot")
-    : existing.standardsSnapshot;
+  const standardsSnapshotResult = hasOwn(payload, "standardsSnapshot")
+    ? getStandardSnapshotsResult(payload, "standardsSnapshot")
+    : { ok: true as const, value: existing.standardsSnapshot };
+  if (!standardsSnapshotResult.ok) {
+    return {
+      ok: false,
+      code: "INVALID_STANDARD_SNAPSHOT",
+      reason: standardsSnapshotResult.reason,
+    };
+  }
+  const nextStandardsSnapshot = standardsSnapshotResult.value;
   const nextEnvironmentalSnapshot = hasOwn(payload, "environmentalSnapshot")
     ? getEnvironmentalSnapshotOrNull(payload, "environmentalSnapshot")
     : existing.environmentalSnapshot;
@@ -2235,6 +2345,7 @@ async function applyLocalJobExecution(
     : existing.calibrationPhaseSnapshot;
   const standardsValidation = await validateDesktopExecutionStandardsSnapshot(
     nextStandardsSnapshot,
+    nextData,
     input.memberData,
   );
 
@@ -2339,6 +2450,7 @@ async function applyLocalJobExecution(
 
 async function validateDesktopExecutionStandardsSnapshot(
   standardsSnapshot: StandardSnapshot[] | null,
+  data: Record<string, unknown>,
   memberData: MemberData,
 ): Promise<
   | { ok: true }
@@ -2348,7 +2460,16 @@ async function validateDesktopExecutionStandardsSnapshot(
       reason: string;
     }
 > {
+  const compositionStandardIds = collectCompositionStandardIds(data);
+
   if (!standardsSnapshot || standardsSnapshot.length === 0) {
+    if (compositionStandardIds.length > 0) {
+      return {
+        ok: false,
+        code: "INVALID_STANDARD_SNAPSHOT",
+        reason: `Desktop execution mass composition references standards missing from standardsSnapshot: ${compositionStandardIds.join(", ")}.`,
+      };
+    }
     return { ok: true };
   }
 
@@ -2364,6 +2485,34 @@ async function validateDesktopExecutionStandardsSnapshot(
   }
 
   const uniqueIds = [...new Set(selectedStandardIds.filter(isIntegerNumber))];
+  const snapshotsById = new Map(
+    standardsSnapshot
+      .filter((standard) => isIntegerNumber(standard.id))
+      .map((standard) => [standard.id, standard]),
+  );
+  const compositionIdsMissingSnapshot = compositionStandardIds.filter(
+    (standardId) => !snapshotsById.has(standardId),
+  );
+  if (compositionIdsMissingSnapshot.length > 0) {
+    return {
+      ok: false,
+      code: "INVALID_STANDARD_SNAPSHOT",
+      reason: `Desktop execution mass composition references standards missing from standardsSnapshot: ${compositionIdsMissingSnapshot.join(", ")}.`,
+    };
+  }
+
+  const compositionIdsMissingCertifiedValues = compositionStandardIds.filter(
+    (standardId) =>
+      !((snapshotsById.get(standardId)?.certifiedValues?.length ?? 0) > 0),
+  );
+  if (compositionIdsMissingCertifiedValues.length > 0) {
+    return {
+      ok: false,
+      code: "STANDARD_CERTIFIED_VALUES_MISSING",
+      reason: `Desktop execution mass composition references standards without certified values: ${compositionIdsMissingCertifiedValues.join(", ")}.`,
+    };
+  }
+
   const standards = await db
     .select({
       id: referenceStandard.id,
@@ -3596,6 +3745,49 @@ function isIntegerNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value);
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return isIntegerNumber(value) && value > 0;
+}
+
+function collectCompositionStandardIds(data: Record<string, unknown>) {
+  const ids = new Set<number>();
+
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+
+    const record = asRecord(value);
+    if (Object.keys(record).length === 0) return;
+
+    if (
+      record.kind === "mass_standard_composition" &&
+      Array.isArray(record.items)
+    ) {
+      for (const item of record.items) {
+        const compositionItem = asRecord(item);
+        const standardIds = Array.isArray(compositionItem.standardIds)
+          ? compositionItem.standardIds
+          : [];
+        if (standardIds.length > 0) {
+          for (const standardId of standardIds) {
+            if (isPositiveInteger(standardId)) ids.add(standardId);
+          }
+        } else if (isPositiveInteger(compositionItem.standardId)) {
+          ids.add(compositionItem.standardId);
+        }
+      }
+      return;
+    }
+
+    for (const child of Object.values(record)) visit(child);
+  };
+
+  visit(data);
+  return Array.from(ids);
+}
+
 function isCompiledMethodCandidate(value: unknown): value is CompiledMethod {
   const candidate = asRecord(value);
   const engine = asRecord(candidate.engine);
@@ -3629,12 +3821,52 @@ function getRecordOrNull(row: Record<string, unknown>, key: string) {
     : null;
 }
 
-function getStandardSnapshotsOrNull(
+function getStandardSnapshotsResult(
   row: Record<string, unknown>,
   key: string,
-): StandardSnapshot[] | null {
+):
+  | { ok: true; value: StandardSnapshot[] | null }
+  | { ok: false; reason: string } {
   const value = row[key];
-  return isStandardSnapshotArray(value) ? value : null;
+  if (value === null) return { ok: true, value: null };
+  const parseResult = StandardSnapshotSchema.array().safeParse(value);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      reason:
+        parseResult.error.issues[0]?.message ??
+        "Desktop execution standardsSnapshot is invalid.",
+    };
+  }
+  const normalized: StandardSnapshot[] = [];
+  for (const standard of parseResult.data) {
+    const calibrationDate = parseSnapshotDate(standard.calibrationDate);
+    const nextCalibrationDate =
+      standard.nextCalibrationDate == null
+        ? null
+        : parseSnapshotDate(standard.nextCalibrationDate);
+    if (
+      !calibrationDate ||
+      (standard.nextCalibrationDate && !nextCalibrationDate)
+    ) {
+      return {
+        ok: false,
+        reason: "Desktop execution standardsSnapshot contains invalid dates.",
+      };
+    }
+
+    normalized.push({
+      ...standard,
+      calibrationDate,
+      nextCalibrationDate,
+    });
+  }
+  return { ok: true, value: normalized };
+}
+
+function parseSnapshotDate(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
 }
 
 function getEnvironmentalSnapshotOrNull(
@@ -3659,19 +3891,6 @@ function getCalibrationPhaseSnapshotOrNull(
 ): CalibrationPhaseSnapshot | null {
   const value = row[key];
   return isCalibrationPhaseSnapshot(value) ? value : null;
-}
-
-function isStandardSnapshotArray(value: unknown): value is StandardSnapshot[] {
-  return Array.isArray(value) && value.every(isStandardSnapshot);
-}
-
-function isStandardSnapshot(value: unknown): value is StandardSnapshot {
-  const row = asRecord(value);
-  return (
-    typeof row.id === "number" &&
-    typeof row.name === "string" &&
-    typeof row.certificateNumber === "string"
-  );
 }
 
 function isEnvironmentalSnapshot(

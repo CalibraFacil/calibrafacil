@@ -1,28 +1,34 @@
 appId: com.calibrafacil.desktop
-productName: CalibraFacil
+productName: CalibraFácil
+executableName: calibrafacil
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 asar: true
 asarUnpack:
   - node_modules/better-sqlite3/**
 directories:
   output: out
+  buildResources: assets
 files:
   - dist/**
   - package.json
+  - assets/icon.png
 extraMetadata:
   main: dist/main/main.cjs
 publish:
   provider: generic
   url: https://updates.calibrafacil.com/desktop
 linux:
+  icon: assets/icon.png
   target:
     - AppImage
     - deb
   category: Office
-  maintainer: CalibraFacil <contato@calibrafacil.com>
+  maintainer: CalibraFácil <contato@calibrafacil.com>
 win:
+  icon: assets/icon.ico
   target:
     - nsis
 mac:
+  icon: assets/icon.icns
   target:
     - dmg

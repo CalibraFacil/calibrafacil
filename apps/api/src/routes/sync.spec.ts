@@ -332,6 +332,104 @@ describe("syncRouter", () => {
     });
   });
 
+  it("includes full reference standard snapshots in desktop bootstrap", async () => {
+    const certifiedValues = [
+      {
+        nominal: "1 kg",
+        authentication: "A",
+        value: 1000,
+        uncertainty: 0.005,
+        unit: "g",
+        maxError: 0.01,
+        drift: 0.001,
+        buoyancy: 0.0002,
+        coverageFactor: 2,
+        compositionProfile: true,
+        profileKey: "1 kg stack",
+        profileClass: "M1",
+        profileQuantityAvailable: 1,
+      },
+    ];
+    mocks.selectResults.push(
+      [],
+      [],
+      [],
+      [],
+      [],
+      [
+        {
+          id: 100,
+          organizationId: "org-1",
+          unitId: 10,
+          name: "Mass set",
+          kind: "mass_set",
+          type: "Massa",
+          serialNumber: "STD-100",
+          manufacturer: "Mass Co",
+          model: "M1",
+          certificateNumber: "CERT-100",
+          calibratedBy: "Trace Lab",
+          calibrationDate: new Date("2026-01-01T00:00:00.000Z"),
+          nextCalibrationDate: new Date("2027-01-01T00:00:00.000Z"),
+          referenceValue: null,
+          uncertainty: 0.001,
+          uncertaintyUnit: "g",
+          coverageFactor: 2,
+          distribution: "normal",
+          drift: 0.0001,
+          certifiedValues,
+          metrologyData: {
+            version: 1,
+            channels: [],
+            massValues: [],
+            compositionProfiles: [],
+          },
+          status: "ACTIVE",
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+        },
+      ],
+      [],
+      [],
+      [],
+      [
+        {
+          id: 12,
+          standardId: 100,
+          r2Key: "standards/cert-100.pdf",
+          fileName: "cert-100.pdf",
+          fileSize: 1024,
+          sha256:
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          uploadedAt: new Date("2026-01-02T00:00:00.000Z"),
+          certificateNumber: "CERT-100",
+          calibrationDate: new Date("2026-01-01T00:00:00.000Z"),
+          nextCalibrationDate: new Date("2027-01-01T00:00:00.000Z"),
+        },
+      ],
+    );
+
+    const response = await createApp().request("/api/sync/bootstrap", {
+      method: "POST",
+    });
+    const body = syncBootstrapResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(body.standards).toEqual([
+      expect.objectContaining({
+        id: 100,
+        kind: "mass_set",
+        calibratedBy: "Trace Lab",
+        uncertainty: 0.001,
+        certifiedValues,
+        certificateDocument: expect.objectContaining({
+          documentId: 12,
+          fileName: "cert-100.pdf",
+        }),
+      }),
+    ]);
+  });
+
   it("rejects pushed events outside the active organization or accessible units", async () => {
     const response = await createApp().request("/api/sync/push", {
       method: "POST",
@@ -540,7 +638,14 @@ describe("syncRouter", () => {
                   id: 100,
                   name: "M1 1 kg",
                   certificateNumber: "CERT-100",
+                  calibrationDate: "2026-01-01T00:00:00.000Z",
                   nextCalibrationDate: "2027-01-01T00:00:00.000Z",
+                  uncertainty: 0.001,
+                  uncertaintyUnit: "g",
+                  coverageFactor: 2,
+                  distribution: "normal",
+                  drift: null,
+                  certifiedValues: null,
                 },
               ],
             },
@@ -558,6 +663,162 @@ describe("syncRouter", () => {
         eventId: "evt-standard-inactive",
         code: "STANDARD_NOT_ACTIVE",
         reason: "Desktop execution references inactive standards: M1 1 kg.",
+      },
+    ]);
+    expect(mocks.db.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects offline mass composition execution without certified standard values", async () => {
+    mocks.selectResults.push(
+      [],
+      [
+        {
+          details: {
+            remoteEntityId: 42,
+          },
+        },
+      ],
+      [
+        {
+          id: 42,
+          jobId: "CAL-2026-0042",
+          status: "IN_PROGRESS",
+          updatedAt: new Date("2026-05-09T12:30:00.000Z"),
+          standardsSnapshot: null,
+          environmentalSnapshot: null,
+        },
+      ],
+    );
+
+    const response = await createApp().request("/api/sync/push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        deviceId: "desktop-1",
+        clientBatchId: "batch-composition-standards",
+        baseCursor: "cursor-before",
+        events: [
+          syncEvent({
+            eventId: "evt-composition-missing-certified-values",
+            entityType: "calibration_job",
+            entityId: "local-job-1",
+            operation: "submit_local_execution",
+            payload: {
+              status: "REVIEW",
+              data: {
+                composition: {
+                  kind: "mass_standard_composition",
+                  items: [
+                    {
+                      standardId: 100,
+                      standardIds: [],
+                      quantity: 1,
+                    },
+                  ],
+                },
+              },
+              standardsSnapshot: [
+                {
+                  id: 100,
+                  name: "M1 1 kg",
+                  certificateNumber: "CERT-100",
+                  calibrationDate: "2026-01-01T00:00:00.000Z",
+                  nextCalibrationDate: "2027-01-01T00:00:00.000Z",
+                  uncertainty: 0.001,
+                  uncertaintyUnit: "g",
+                  coverageFactor: 2,
+                  distribution: "normal",
+                  drift: null,
+                  certifiedValues: null,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    });
+    const body = syncPushResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(body.accepted).toEqual([]);
+    expect(body.conflicts).toEqual([]);
+    expect(body.rejected).toEqual([
+      {
+        eventId: "evt-composition-missing-certified-values",
+        code: "STANDARD_CERTIFIED_VALUES_MISSING",
+        reason:
+          "Desktop execution mass composition references standards without certified values: 100.",
+      },
+    ]);
+    expect(mocks.db.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed desktop standard snapshots instead of clearing history", async () => {
+    mocks.selectResults.push(
+      [],
+      [
+        {
+          details: {
+            remoteEntityId: 42,
+          },
+        },
+      ],
+      [
+        {
+          id: 42,
+          jobId: "CAL-2026-0042",
+          status: "IN_PROGRESS",
+          updatedAt: new Date("2026-05-09T12:30:00.000Z"),
+          standardsSnapshot: [
+            {
+              id: 100,
+              name: "Previous snapshot",
+              certificateNumber: "CERT-OLD",
+            },
+          ],
+          environmentalSnapshot: null,
+        },
+      ],
+    );
+
+    const response = await createApp().request("/api/sync/push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        deviceId: "desktop-1",
+        clientBatchId: "batch-invalid-standards",
+        baseCursor: "cursor-before",
+        events: [
+          syncEvent({
+            eventId: "evt-invalid-standard-snapshot",
+            entityType: "calibration_job",
+            entityId: "local-job-1",
+            operation: "submit_local_execution",
+            payload: {
+              status: "REVIEW",
+              data: { readings: [] },
+              standardsSnapshot: [
+                {
+                  id: 100,
+                  name: "M1 1 kg",
+                  certificateNumber: "CERT-100",
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    });
+    const body = syncPushResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(body.accepted).toEqual([]);
+    expect(body.conflicts).toEqual([]);
+    expect(body.rejected).toEqual([
+      {
+        eventId: "evt-invalid-standard-snapshot",
+        code: "INVALID_STANDARD_SNAPSHOT",
+        reason: expect.any(String),
       },
     ]);
     expect(mocks.db.update).not.toHaveBeenCalled();

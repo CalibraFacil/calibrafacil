@@ -41,10 +41,14 @@ import {
   exportSupportBundle,
 } from "./support-bundle";
 import { DesktopUpdater } from "./updater";
-import { buildMainWindowOptions, hideMainWindowMenu } from "./main-window";
+import {
+  buildMainWindowOptions,
+  desktopAppName,
+  hideMainWindowMenu,
+} from "./main-window";
 import { getDesktopLogFilePath, installDesktopLogger } from "./desktop-log";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const desktopAppScheme = "app";
 const desktopAppHost = "calibra-facil";
 const defaultCloudApiUrl = "https://api.calibrafacil.com";
@@ -53,6 +57,8 @@ const localServer = new LocalServerManager();
 
 let mainWindow: BrowserWindow | null = null;
 let cloudAuthProxy: DesktopCloudAuthProxy | null = null;
+
+app.setName(desktopAppName);
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -87,7 +93,7 @@ function registerPackagedRendererProtocol() {
       return new Response("Not found", { status: 404 });
     }
 
-    const rendererRoot = path.join(__dirname, "../renderer");
+    const rendererRoot = path.join(currentDir, "../renderer");
     const requestedPath =
       url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
     const filePath = path.resolve(rendererRoot, `.${requestedPath}`);
@@ -144,9 +150,17 @@ function contentTypeForPath(filePath: string) {
 
 function createWindow() {
   mainWindow = new BrowserWindow(
-    buildMainWindowOptions(path.join(__dirname, "../preload/preload.cjs")),
+    buildMainWindowOptions(
+      path.join(currentDir, "../preload/preload.cjs"),
+      desktopIconPath(),
+    ),
   );
   hideMainWindowMenu(mainWindow);
+
+  mainWindow.on("page-title-updated", (event) => {
+    event.preventDefault();
+    mainWindow?.setTitle(desktopAppName);
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://") || url.startsWith("http://")) {
@@ -157,6 +171,10 @@ function createWindow() {
   });
 
   void mainWindow.loadURL(rendererUrl());
+}
+
+function desktopIconPath() {
+  return path.resolve(currentDir, "../../assets/icon.png");
 }
 
 function assertTrustedSender(event: IpcMainInvokeEvent) {
@@ -332,7 +350,7 @@ function registerIpc(
       filePath: result.filePath,
       desktopLogFilePath: getDesktopLogFilePath(),
       rendererBuildManifestPath: path.join(
-        __dirname,
+        currentDir,
         "../renderer/calibra-renderer-build.json",
       ),
       localEnvironment: localServer.bootstrap,
@@ -489,7 +507,7 @@ async function getDesktopAuthCookieHeader(url: URL) {
 
 function readSetCookieHeaders(headers: Headers) {
   if ("getSetCookie" in headers && typeof headers.getSetCookie === "function") {
-    const cookies = headers.getSetCookie.call(headers);
+    const cookies = headers.getSetCookie();
     if (Array.isArray(cookies)) {
       return cookies.filter((cookie) => typeof cookie === "string");
     }

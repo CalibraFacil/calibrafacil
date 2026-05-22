@@ -24,6 +24,7 @@ import {
   getLocalServiceDetail,
   getLocalServiceOrderDetail,
   getLocalStandardDetail,
+  buildLocalStandardsSnapshot,
   listLocalAssetTypes,
   listLocalAssets,
   listLocalAttachments,
@@ -639,9 +640,18 @@ export function createLocalServer(
       context.userId ?? "local",
     );
     try {
+      const standardsSnapshot = buildLocalStandardsSnapshot(
+        database,
+        input.selectedStandardIds,
+        input.data,
+      );
       const results = executeLocalCompiledMethod({
         methodSnapshot: recordFromUnknown(current.methodSnapshot),
         assetSnapshot: recordFromUnknown(current.assetSnapshot),
+        standardsSnapshot:
+          standardsSnapshot === undefined
+            ? current.standardsSnapshot
+            : standardsSnapshot,
         data: input.data,
         fallbackResults: input.results,
         environmentalSnapshot: input.environment,
@@ -705,9 +715,18 @@ export function createLocalServer(
       return c.json({ error: calibrationPhaseError }, 400);
     }
     try {
+      const standardsSnapshot = buildLocalStandardsSnapshot(
+        database,
+        input.selectedStandardIds,
+        input.data,
+      );
       const results = executeLocalCompiledMethod({
         methodSnapshot: recordFromUnknown(current.methodSnapshot),
         assetSnapshot: recordFromUnknown(current.assetSnapshot),
+        standardsSnapshot:
+          standardsSnapshot === undefined
+            ? current.standardsSnapshot
+            : standardsSnapshot,
         data: input.data,
         fallbackResults: input.results,
         environmentalSnapshot: input.environment,

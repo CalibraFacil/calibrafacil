@@ -1549,6 +1549,7 @@ export const StandardSnapshotSchema = z.object({
   kind: ReferenceStandardKindSchema.optional(),
   type: z.string().nullable().optional(),
   certificateNumber: z.string(),
+  calibratedBy: z.string().nullable().optional(),
   calibrationDate: z.string(),
   nextCalibrationDate: z.string().nullable().optional(),
   uncertainty: z.number().nullable(),
@@ -1558,6 +1559,8 @@ export const StandardSnapshotSchema = z.object({
   drift: z.number().nullable(),
   certifiedValues: z.array(CertifiedValueSchema).nullable(),
   metrologyData: ReferenceStandardMetrologyDataSchema.nullable().optional(),
+  certificateDocument:
+    ReferenceStandardCertificateDocumentSchema.nullable().optional(),
 });
 
 export type StandardSnapshot = z.infer<typeof StandardSnapshotSchema>;

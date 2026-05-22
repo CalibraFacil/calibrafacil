@@ -243,9 +243,10 @@ export function saveLocalJobExecution(
       : existing.status === "DRAFT"
         ? "IN_PROGRESS"
         : existing.status;
-  const standardsSnapshot = buildStandardsSnapshot(
+  const standardsSnapshot = buildLocalStandardsSnapshot(
     database,
     input.selectedStandardIds,
+    input.data,
   );
   const environmentalSnapshot = input.environment
     ? buildEnvironmentalSnapshot(database, existing, input.environment, {
@@ -771,36 +772,156 @@ function getPublishedMethod(database: LocalDatabase, localMethodId: string) {
     .get({ id: localMethodId });
 }
 
-function buildStandardsSnapshot(
+export function buildLocalStandardsSnapshot(
   database: LocalDatabase,
   selectedStandardIds: number[] | undefined,
+  data: JsonRecord = {},
 ) {
-  if (selectedStandardIds === undefined) return undefined;
-  if (selectedStandardIds.length === 0) return [];
+  const compositionStandardIds = collectCompositionStandardIds(data);
+  if (
+    selectedStandardIds === undefined &&
+    compositionStandardIds.length === 0
+  ) {
+    return undefined;
+  }
+
+  const standardIds = Array.from(
+    new Set([...(selectedStandardIds ?? []), ...compositionStandardIds]),
+  );
+  if (standardIds.length === 0) return [];
 
   const rows = database
     .prepare<number[], LocalReferenceStandardRow>(
       `
 SELECT *
 FROM reference_standards
-WHERE remote_id IN (${selectedStandardIds.map(() => "?").join(",")})
+WHERE remote_id IN (${standardIds.map(() => "?").join(",")})
 `,
     )
-    .all(...selectedStandardIds);
+    .all(...standardIds);
+  const rowsByRemoteId = new Map(rows.map((row) => [row.remote_id, row]));
+  const compositionStandardIdSet = new Set(compositionStandardIds);
+  const now = Date.now();
 
-  return rows.map((row) => ({
-    id: row.remote_id ?? stableLocalNumericId(row.id),
-    name: row.name,
-    certificateNumber: row.certificate_number ?? "",
-    calibrationDate: "",
-    nextCalibrationDate: row.next_calibration_date,
-    uncertainty: null,
-    uncertaintyUnit: null,
-    coverageFactor: 2,
-    distribution: "normal",
-    drift: null,
-    certifiedValues: null,
-  }));
+  return standardIds.map((standardId) => {
+    const row = rowsByRemoteId.get(standardId);
+    if (!row || row.sync_state === "deleted") {
+      throw new Error(`Padrao ${standardId} nao encontrado no cache local`);
+    }
+
+    if (row.status !== "ACTIVE") {
+      throw new Error(`Padrao ${row.name} nao esta ativo`);
+    }
+
+    const snapshot = parseJsonRecord(row.snapshot_json);
+    const nextCalibrationDate =
+      getString(snapshot, "nextCalibrationDate") ?? row.next_calibration_date;
+    const nextCalibrationTime = nextCalibrationDate
+      ? new Date(nextCalibrationDate).getTime()
+      : Number.NaN;
+
+    if (!Number.isFinite(nextCalibrationTime) || nextCalibrationTime < now) {
+      throw new Error(`Padrao ${row.name} esta com certificado vencido`);
+    }
+
+    const certifiedValues = parseSnapshotCertifiedValues(
+      snapshot.certifiedValues,
+    );
+    if (compositionStandardIdSet.has(standardId) && !certifiedValues?.length) {
+      throw new Error(
+        `Padrao ${row.name} nao possui valores certificados completos no cache local`,
+      );
+    }
+
+    return {
+      id: standardId,
+      name: getString(snapshot, "name") ?? row.name,
+      kind: getString(snapshot, "kind") ?? undefined,
+      type: getNullableString(snapshot, "type"),
+      certificateNumber:
+        getString(snapshot, "certificateNumber") ??
+        row.certificate_number ??
+        "",
+      calibratedBy: getNullableString(snapshot, "calibratedBy"),
+      calibrationDate: getString(snapshot, "calibrationDate") ?? "",
+      nextCalibrationDate,
+      uncertainty: getNullableNumber(snapshot, "uncertainty"),
+      uncertaintyUnit: getNullableString(snapshot, "uncertaintyUnit"),
+      coverageFactor: getNumber(snapshot, "coverageFactor") ?? 2,
+      distribution:
+        getString(snapshot, "distribution") === "rectangular"
+          ? "rectangular"
+          : "normal",
+      drift: getNullableNumber(snapshot, "drift"),
+      certifiedValues,
+      metrologyData: isJsonObject(snapshot.metrologyData)
+        ? snapshot.metrologyData
+        : null,
+      certificateDocument: isJsonObject(snapshot.certificateDocument)
+        ? snapshot.certificateDocument
+        : null,
+    };
+  });
+}
+
+function collectCompositionStandardIds(data: JsonRecord) {
+  const ids = new Set<number>();
+
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+
+    if (!isJsonObject(value)) return;
+
+    if (
+      value.kind === "mass_standard_composition" &&
+      Array.isArray(value.items)
+    ) {
+      for (const item of value.items) {
+        if (!isJsonObject(item)) continue;
+        const standardIds = Array.isArray(item.standardIds)
+          ? item.standardIds
+          : [];
+        if (standardIds.length > 0) {
+          for (const standardId of standardIds) {
+            if (isPositiveInteger(standardId)) ids.add(standardId);
+          }
+        } else if (isPositiveInteger(item.standardId)) {
+          ids.add(item.standardId);
+        }
+      }
+      return;
+    }
+
+    for (const child of Object.values(value)) visit(child);
+  };
+
+  visit(data);
+  return Array.from(ids);
+}
+
+function parseSnapshotCertifiedValues(value: unknown): JsonRecord[] | null {
+  if (!Array.isArray(value)) return null;
+  const values: JsonRecord[] = [];
+
+  for (const item of value) {
+    if (!isJsonObject(item)) continue;
+    if (
+      typeof item.nominal !== "string" ||
+      typeof item.value !== "number" ||
+      !Number.isFinite(item.value) ||
+      typeof item.uncertainty !== "number" ||
+      !Number.isFinite(item.uncertainty) ||
+      typeof item.unit !== "string"
+    ) {
+      continue;
+    }
+    values.push({ ...item });
+  }
+
+  return values.length > 0 ? values : null;
 }
 
 function buildEnvironmentalSnapshot(
@@ -1042,6 +1163,24 @@ function recordFromUnknown(value: unknown): JsonRecord {
   return Object.fromEntries(Object.entries(value));
 }
 
+function isJsonObject(value: unknown): value is JsonRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function getString(row: JsonRecord, key: string) {
+  const value = row[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function getNullableString(row: JsonRecord, key: string) {
+  const value = row[key];
+  return typeof value === "string" ? value : null;
+}
+
 function parseJson(value: string | null | undefined) {
   if (!value) return null;
   try {
@@ -1071,6 +1210,10 @@ function getCompiledNormalizedMethodJson(value: string | null | undefined) {
 function getNumber(row: JsonRecord, key: string) {
   const value = row[key];
   return typeof value === "number" ? value : null;
+}
+
+function getNullableNumber(row: JsonRecord, key: string) {
+  return getNumber(row, key);
 }
 
 function toSafePathSegment(value: string) {
@@ -1138,6 +1281,9 @@ type LocalReferenceStandardRow = {
   name: string;
   certificate_number: string | null;
   next_calibration_date: string | null;
+  status: string;
+  snapshot_json: string;
+  sync_state: string;
 };
 
 type LocalCertificateDraftRow = {

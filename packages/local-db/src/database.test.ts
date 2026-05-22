@@ -914,6 +914,170 @@ INSERT INTO services (
     database.close();
   });
 
+  it("freezes full cached reference standard snapshots for local executions", () => {
+    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
+    const now = new Date("2026-01-15T10:00:00.000Z").toISOString();
+    const standardSnapshot = {
+      id: 999,
+      name: "Reference Mass Set",
+      kind: "mass_set",
+      type: "Massa",
+      serialNumber: "STD-999",
+      certificateNumber: "CERT-999",
+      calibratedBy: "Trace Lab",
+      calibrationDate: "2026-01-01T00:00:00.000Z",
+      nextCalibrationDate: "2027-01-01T00:00:00.000Z",
+      uncertainty: 0.001,
+      uncertaintyUnit: "g",
+      coverageFactor: 2,
+      distribution: "normal",
+      drift: 0.0001,
+      certifiedValues: [
+        {
+          nominal: "1 kg",
+          authentication: "A",
+          value: 1000,
+          uncertainty: 0.005,
+          unit: "g",
+          maxError: 0.01,
+          drift: 0.001,
+          buoyancy: 0.0002,
+          coverageFactor: 2,
+          compositionProfile: true,
+          profileKey: "1 kg stack",
+          profileClass: "M1",
+          profileQuantityAvailable: 1,
+        },
+      ],
+      metrologyData: {
+        version: 1,
+        channels: [],
+        massValues: [],
+        compositionProfiles: [],
+      },
+      certificateDocument: {
+        documentId: 12,
+        r2Key: "standards/cert-999.pdf",
+        fileName: "cert-999.pdf",
+        fileSize: 1024,
+        sha256:
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        uploadedAt: "2026-01-02T00:00:00.000Z",
+        certificateNumber: "CERT-999",
+        calibrationDate: "2026-01-01T00:00:00.000Z",
+        nextCalibrationDate: "2027-01-01T00:00:00.000Z",
+      },
+    };
+
+    database
+      .prepare(
+        `
+INSERT INTO reference_standards (
+  id,
+  remote_id,
+  organization_id,
+  unit_id,
+  name,
+  serial_number,
+  certificate_number,
+  next_calibration_date,
+  status,
+  snapshot_json,
+  pulled_at,
+  sync_state
+) VALUES (
+  'standard:999',
+  999,
+  'org-1',
+  1,
+  'Reference Mass Set',
+  'STD-999',
+  'CERT-999',
+  '2027-01-01T00:00:00.000Z',
+  'ACTIVE',
+  @snapshotJson,
+  @now,
+  'synced'
+)
+`,
+      )
+      .run({ snapshotJson: JSON.stringify(standardSnapshot), now });
+
+    upsertLocalJobProjection(database, {
+      id: "job-local",
+      remoteId: 123,
+      jobId: "CAL-2026-0001",
+      organizationId: "org-1",
+      unitId: 1,
+      customerId: "customer-local",
+      assetId: "asset-local",
+      serviceId: "service-local",
+      methodSnapshotJson: "{}",
+      assetSnapshotJson: "{}",
+      status: "DRAFT",
+      createdAt: now,
+      updatedAt: now,
+      syncState: "synced",
+    });
+
+    const data = {
+      composition: {
+        kind: "mass_standard_composition",
+        items: [
+          {
+            standardId: 999,
+            standardIds: [],
+            standardName: "Reference Mass Set",
+            certificateNumber: "CERT-999",
+            certifiedValueIndex: 0,
+            nominal: "1 kg",
+            quantity: 1,
+            value: 1000,
+            uncertainty: 0.005,
+            unit: "g",
+            coverageFactor: 2,
+          },
+        ],
+      },
+    };
+    const job = saveLocalJobExecution(database, {
+      routeId: "123",
+      data,
+      results: null,
+      selectedStandardIds: [],
+      actorUserId: "user-1",
+      deviceId: "device-1",
+    });
+    if (!job) throw new Error("Expected local job execution to be saved");
+
+    expect(job.standardsSnapshot).toEqual([
+      expect.objectContaining({
+        id: 999,
+        name: "Reference Mass Set",
+        calibratedBy: "Trace Lab",
+        uncertainty: 0.001,
+        drift: 0.0001,
+        metrologyData: standardSnapshot.metrologyData,
+        certificateDocument: standardSnapshot.certificateDocument,
+        certifiedValues: [
+          expect.objectContaining({
+            authentication: "A",
+            compositionProfile: true,
+            profileKey: "1 kg stack",
+            profileClass: "M1",
+            profileQuantityAvailable: 1,
+          }),
+        ],
+      }),
+    ]);
+    const [event] = listPendingOutboxEvents(database);
+    expect(event?.payload).toMatchObject({
+      standardsSnapshot: job.standardsSnapshot,
+    });
+
+    database.close();
+  });
+
   it("writes accepted remote entity IDs back to local job projections", () => {
     const database = openLocalDatabase({ filePath: createTempDatabasePath() });
     const now = new Date("2026-01-15T10:00:00.000Z").toISOString();

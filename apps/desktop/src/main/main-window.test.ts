@@ -7,6 +7,7 @@ describe("main window configuration", () => {
     const options = buildMainWindowOptions("/tmp/preload.cjs");
 
     expect(options).toMatchObject({
+      title: "CalibraFácil",
       autoHideMenuBar: true,
       webPreferences: {
         preload: "/tmp/preload.cjs",
@@ -15,6 +16,15 @@ describe("main window configuration", () => {
         sandbox: true,
       },
     });
+  });
+
+  it("uses the branded desktop icon when provided", () => {
+    const options = buildMainWindowOptions(
+      "/tmp/preload.cjs",
+      "/tmp/calibra-icon.png",
+    );
+
+    expect(options.icon).toBe("/tmp/calibra-icon.png");
   });
 
   it("removes the native menu from the created window", () => {
