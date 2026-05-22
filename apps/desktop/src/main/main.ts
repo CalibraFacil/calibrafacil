@@ -93,12 +93,12 @@ function registerPackagedRendererProtocol() {
       return new Response("Not found", { status: 404 });
     }
 
-    const rendererRoot = path.join(currentDir, "../renderer");
+    const rendererRoot = path.resolve(currentDir, "../renderer");
     const requestedPath =
       url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
     const filePath = path.resolve(rendererRoot, `.${requestedPath}`);
 
-    if (!filePath.startsWith(rendererRoot)) {
+    if (!isPathInside(rendererRoot, filePath)) {
       return new Response("Not found", { status: 404 });
     }
 
@@ -109,15 +109,47 @@ function registerPackagedRendererProtocol() {
           "Content-Type": contentTypeForPath(filePath),
         },
       });
-    } catch {
-      const indexHtml = await readFile(path.join(rendererRoot, "index.html"));
-      return new Response(indexHtml, {
-        headers: {
-          "Content-Type": "text/html; charset=utf-8",
-        },
-      });
+    } catch (error) {
+      if (!isRendererNavigationRequest(request, requestedPath)) {
+        console.error("[desktop-renderer] packaged asset not found", {
+          requestedPath,
+          filePath,
+          error: formatErrorMessage(error),
+        });
+        return new Response("Not found", { status: 404 });
+      }
+
+      try {
+        const indexHtml = await readFile(path.join(rendererRoot, "index.html"));
+        return new Response(indexHtml, {
+          headers: {
+            "Content-Type": "text/html; charset=utf-8",
+          },
+        });
+      } catch (indexError) {
+        console.error("[desktop-renderer] packaged index not found", {
+          rendererRoot,
+          error: formatErrorMessage(indexError),
+        });
+        return new Response("Renderer not found", { status: 500 });
+      }
     }
   });
+}
+
+function isPathInside(parentPath: string, childPath: string) {
+  const relativePath = path.relative(parentPath, childPath);
+  return (
+    relativePath.length === 0 ||
+    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+  );
+}
+
+function isRendererNavigationRequest(request: Request, requestedPath: string) {
+  if (requestedPath === "/index.html") return true;
+
+  const acceptHeader = request.headers.get("accept") ?? "";
+  return acceptHeader.includes("text/html");
 }
 
 function contentTypeForPath(filePath: string) {
@@ -148,6 +180,10 @@ function contentTypeForPath(filePath: string) {
   }
 }
 
+function formatErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow(
     buildMainWindowOptions(
@@ -155,6 +191,7 @@ function createWindow() {
       desktopIconPath(),
     ),
   );
+  installRendererDiagnostics(mainWindow);
   hideMainWindowMenu(mainWindow);
 
   mainWindow.on("page-title-updated", (event) => {
@@ -170,11 +207,66 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  void mainWindow.loadURL(rendererUrl());
+  mainWindow.loadURL(rendererUrl()).catch((error) => {
+    console.error("[desktop-renderer] loadURL failed", {
+      url: rendererUrl(),
+      error: formatErrorMessage(error),
+    });
+  });
 }
 
 function desktopIconPath() {
   return path.resolve(currentDir, "../../assets/icon.png");
+}
+
+function installRendererDiagnostics(window: BrowserWindow) {
+  window.webContents.on("did-fail-load", (_event, ...details) => {
+    const [errorCode, errorDescription, validatedURL, isMainFrame] = details;
+    console.error("[desktop-renderer] did-fail-load", {
+      errorCode,
+      errorDescription,
+      validatedURL,
+      isMainFrame,
+    });
+  });
+
+  window.webContents.on("did-finish-load", () => {
+    console.log("[desktop-renderer] did-finish-load", {
+      url: window.webContents.getURL(),
+    });
+  });
+
+  window.webContents.on("preload-error", (_event, preloadPath, error) => {
+    console.error("[desktop-renderer] preload-error", {
+      preloadPath,
+      error: formatErrorMessage(error),
+    });
+  });
+
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[desktop-renderer] render-process-gone", details);
+  });
+
+  window.webContents.on(
+    "console-message",
+    (_event, level, message, line, sourceId) => {
+      if (!message) return;
+
+      const payload = {
+        level,
+        message,
+        line,
+        sourceId,
+      };
+      if (level >= 3) {
+        console.error("[desktop-renderer] console", payload);
+      } else if (level >= 2) {
+        console.warn("[desktop-renderer] console", payload);
+      } else {
+        console.log("[desktop-renderer] console", payload);
+      }
+    },
+  );
 }
 
 function assertTrustedSender(event: IpcMainInvokeEvent) {
@@ -870,12 +962,31 @@ app.whenReady().then(async () => {
     targetBaseUrl: cloudApiUrl(),
     authFetch: desktopAuthFetch,
   });
-  const cloudProxyUrl = await cloudAuthProxy.start();
-  await localServer.start({
-    cloudApiUrl: cloudProxyUrl,
-    cloudProxyToken: cloudAuthProxy.token,
-  });
-  await broadcastSyncStatus();
+  let cloudProxyUrl = cloudApiUrl();
+  let cloudProxyToken: string | null = null;
+
+  try {
+    cloudProxyUrl = await cloudAuthProxy.start();
+    cloudProxyToken = cloudAuthProxy.token;
+  } catch (error) {
+    console.error("[desktop-startup] cloud auth proxy failed to start", {
+      error: formatErrorMessage(error),
+    });
+  }
+
+  try {
+    await localServer.start({
+      cloudApiUrl: cloudProxyUrl,
+      cloudProxyToken,
+    });
+    await broadcastSyncStatus();
+  } catch (error) {
+    console.error("[desktop-startup] local server failed to start", {
+      error: formatErrorMessage(error),
+    });
+    await broadcastSyncStatus();
+  }
+
   createWindow();
 });
 
