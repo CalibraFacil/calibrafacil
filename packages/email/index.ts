@@ -4,6 +4,7 @@ export {
   StatusBox,
   theme,
   styles,
+  type EmailBrand,
 } from "./emails/components/email-layout";
 
 // Email templates

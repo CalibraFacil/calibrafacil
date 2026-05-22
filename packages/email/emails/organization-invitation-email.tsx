@@ -12,6 +12,7 @@ import {
   StatusBox,
   TextLink,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 interface OrganizationInvitationEmailProps {
@@ -21,6 +22,7 @@ interface OrganizationInvitationEmailProps {
   inviteLink: string;
   role: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 const getRoleLabel = (role: string): string => {
@@ -41,12 +43,13 @@ export function OrganizationInvitationEmail({
   inviteLink = "https://example.com/accept-invitation/123",
   role = "member",
   logoSrc,
+  brand,
 }: OrganizationInvitationEmailProps) {
   const previewText = `Você foi convidado para ${organizationName}`;
 
   return (
-    <EmailLayout previewText={previewText} logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout previewText={previewText} logoSrc={logoSrc} brand={brand}>
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Eyebrow>Acesso ao workspace</Eyebrow>
         <Title>Convite para organização</Title>
 

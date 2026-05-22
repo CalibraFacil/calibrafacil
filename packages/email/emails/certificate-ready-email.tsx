@@ -12,6 +12,7 @@ import {
   StatusBox,
   Title,
   Eyebrow,
+  type EmailBrand,
 } from "./components/email-layout";
 
 interface CertificateReadyEmailProps {
@@ -21,6 +22,7 @@ interface CertificateReadyEmailProps {
   customerName?: string;
   portalUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 export function CertificateReadyEmail({
@@ -30,12 +32,13 @@ export function CertificateReadyEmail({
   customerName,
   portalUrl = "https://calibrafacil.com/portal/certificates",
   logoSrc,
+  brand,
 }: CertificateReadyEmailProps) {
   const previewText = `Certificado de calibração ${jobId} disponível para download`;
 
   return (
-    <EmailLayout previewText={previewText} logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout previewText={previewText} logoSrc={logoSrc} brand={brand}>
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Eyebrow>Certificado emitido</Eyebrow>
         <Title>Certificado disponível</Title>
 

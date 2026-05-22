@@ -9,6 +9,7 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 type NotificationVariant = "default" | "success" | "warning" | "error" | "info";
@@ -22,6 +23,7 @@ interface NotificationEmailProps {
   footer?: string;
   variant?: NotificationVariant;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 export function NotificationEmail({
@@ -33,10 +35,16 @@ export function NotificationEmail({
   footer,
   variant = "default",
   logoSrc,
+  brand,
 }: NotificationEmailProps) {
   return (
-    <EmailLayout previewText={title} footerNote={footer} logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout
+      previewText={title}
+      footerNote={footer}
+      logoSrc={logoSrc}
+      brand={brand}
+    >
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Eyebrow>Atualização</Eyebrow>
         <Title>{title}</Title>
 

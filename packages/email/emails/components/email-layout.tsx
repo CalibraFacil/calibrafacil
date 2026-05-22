@@ -36,11 +36,21 @@ export const styles = {
     "m-0 font-mono text-[21px] font-bold leading-[1.2] tracking-[0.02em] text-brand tabular-nums",
 } as const;
 
+export interface EmailBrand {
+  name: string;
+  logoSrc?: string;
+  footerLegalLines?: string[];
+  supportEmail?: string;
+  website?: string;
+  isWhiteLabel?: boolean;
+}
+
 interface EmailLayoutProps {
   previewText: string;
   children: ReactNode;
   footerNote?: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 export function EmailLayout({
@@ -48,7 +58,20 @@ export function EmailLayout({
   children,
   footerNote,
   logoSrc = "/static/calibrafacil-logo.png",
+  brand,
 }: EmailLayoutProps) {
+  const brandName = brand?.name ?? "CalibraFácil";
+  const brandLogoSrc = brand?.logoSrc ?? logoSrc;
+  const isWordmarkLogo = Boolean(brand?.isWhiteLabel);
+  const headerLogoWidth = isWordmarkLogo ? 112 : 24;
+  const headerLabel = brand?.isWhiteLabel ? "via CalibraFácil" : brandName;
+  const legalLines = brand?.footerLegalLines?.filter(Boolean) ?? [];
+  const contactLines = [
+    brand?.supportEmail ? `E-mail: ${brand.supportEmail}` : undefined,
+    brand?.website ? `Site: ${brand.website}` : undefined,
+  ].filter(Boolean);
+  const footerLines = [...legalLines, ...contactLines];
+
   return (
     <Tailwind config={emailTailwindConfig}>
       <Html lang="pt-BR">
@@ -61,16 +84,20 @@ export function EmailLayout({
                 <Row>
                   <Column className="w-1/2 py-[7px] align-middle">
                     <Img
-                      src={logoSrc}
-                      alt="CalibraFácil"
-                      width={24}
-                      height={24}
-                      className="block rounded-[7px] outline outline-1 outline-[rgba(0,0,0,0.1)]"
+                      src={brandLogoSrc}
+                      alt={brandName}
+                      width={headerLogoWidth}
+                      height={isWordmarkLogo ? undefined : 24}
+                      className={
+                        isWordmarkLogo
+                          ? "block max-w-[112px]"
+                          : "block rounded-[7px] outline outline-1 outline-[rgba(0,0,0,0.1)]"
+                      }
                     />
                   </Column>
                   <Column align="right" className="w-1/2 py-[7px] align-middle">
                     <Text className="m-0 text-right font-sans text-[13px] font-[420] leading-[1.5] tracking-[-0.039px] text-fg-3">
-                      CalibraFácil
+                      {headerLabel}
                     </Text>
                   </Column>
                 </Row>
@@ -80,12 +107,19 @@ export function EmailLayout({
 
               <Section className="bg-bg px-6 py-10 text-center">
                 <Text className="mx-auto mt-0 mb-8 max-w-[320px] font-sans text-[13px] font-[420] leading-[1.5] tracking-[-0.039px] text-fg-3">
-                  CalibraFácil organiza calibrações, documentos e atendimento em
-                  um único ambiente operacional.
+                  {brand?.isWhiteLabel
+                    ? `Esta mensagem foi enviada por ${brandName}.`
+                    : "CalibraFácil organiza calibrações, documentos e atendimento em um único ambiente operacional."}
                 </Text>
+                {footerLines.length > 0 && (
+                  <Text className="mx-auto mt-0 mb-5 max-w-[420px] text-center font-sans text-[11px] font-[420] leading-[1.55] tracking-[-0.033px] text-fg-3">
+                    {footerLines.join(" · ")}
+                  </Text>
+                )}
                 <Text className="m-0 text-center font-sans text-[11px] font-[420] leading-[1.5] tracking-[-0.033px] text-fg-3">
-                  © {new Date().getFullYear()} CalibraFácil. Todos os direitos
+                  © {new Date().getFullYear()} {brandName}. Todos os direitos
                   reservados.
+                  {brand?.isWhiteLabel ? " Enviado via CalibraFácil." : ""}
                 </Text>
               </Section>
             </Section>
@@ -105,21 +139,32 @@ export function EmailLayout({
 interface EmailCardProps {
   children: ReactNode;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 export function EmailCard({
   children,
   logoSrc = "/static/calibrafacil-logo.png",
+  brand,
 }: EmailCardProps) {
+  const brandName = brand?.name ?? "CalibraFácil";
+  const brandLogoSrc = brand?.logoSrc ?? logoSrc;
+  const isWordmarkLogo = Boolean(brand?.isWhiteLabel);
+  const cardLogoWidth = isWordmarkLogo ? 132 : 48;
+
   return (
     <Section className={styles.body}>
-      {logoSrc && (
+      {brandLogoSrc && !brand?.isWhiteLabel && (
         <Img
-          src={logoSrc}
-          alt="CalibraFácil"
-          width={48}
-          height={48}
-          className="mx-auto mb-5 block rounded-[12px] outline outline-1 outline-[rgba(0,0,0,0.1)]"
+          src={brandLogoSrc}
+          alt={brandName}
+          width={cardLogoWidth}
+          height={isWordmarkLogo ? undefined : 48}
+          className={
+            isWordmarkLogo
+              ? "mx-auto mb-6 block max-w-[132px]"
+              : "mx-auto mb-5 block rounded-[12px] outline outline-1 outline-[rgba(0,0,0,0.1)]"
+          }
         />
       )}
       {children}

@@ -8,25 +8,29 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 interface EmailConfirmationEmailProps {
   recipientName?: string;
   confirmationUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 export function EmailConfirmationEmail({
   recipientName = "usuário",
   confirmationUrl = "https://calibrafacil.com/confirm-email",
   logoSrc,
+  brand,
 }: EmailConfirmationEmailProps) {
   return (
     <EmailLayout
       previewText="Confirme seu e-mail no CalibraFácil"
       logoSrc={logoSrc}
+      brand={brand}
     >
-      <EmailCard logoSrc={logoSrc}>
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Title>Confirme seu e-mail</Title>
 
         <Paragraph>Olá, {recipientName},</Paragraph>

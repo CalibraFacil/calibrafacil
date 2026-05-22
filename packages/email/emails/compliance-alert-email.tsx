@@ -12,6 +12,7 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 type ComplianceAlertType = "asset" | "standard" | "standardExpired";
@@ -24,6 +25,7 @@ export interface ComplianceAlertEmailProps {
   daysRemaining: number;
   actionUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 const getTypeConfig = (type: ComplianceAlertType) => {
@@ -72,6 +74,7 @@ export function ComplianceAlertEmail({
   daysRemaining = 7,
   actionUrl = "#",
   logoSrc,
+  brand,
 }: ComplianceAlertEmailProps) {
   const config = getTypeConfig(type);
   const urgency = getUrgency(daysRemaining);
@@ -82,8 +85,9 @@ export function ComplianceAlertEmail({
     <EmailLayout
       previewText={`${config.previewText} - ${itemName}`}
       logoSrc={logoSrc}
+      brand={brand}
     >
-      <EmailCard logoSrc={logoSrc}>
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Badge variant={isExpired ? "error" : urgency.variant}>
           {isExpired ? "Vencido" : urgency.label}
         </Badge>

@@ -12,6 +12,7 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 type PaymentNotificationType = "received" | "failed";
@@ -23,6 +24,7 @@ export interface PaymentNotificationEmailProps {
   description?: string;
   actionUrl?: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 const getTypeConfig = (type: PaymentNotificationType) => {
@@ -54,12 +56,17 @@ export function PaymentNotificationEmail({
   description,
   actionUrl,
   logoSrc,
+  brand,
 }: PaymentNotificationEmailProps) {
   const config = getTypeConfig(type);
 
   return (
-    <EmailLayout previewText={config.previewText} logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout
+      previewText={config.previewText}
+      logoSrc={logoSrc}
+      brand={brand}
+    >
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Eyebrow>Financeiro</Eyebrow>
         <Title>{config.title}</Title>
 

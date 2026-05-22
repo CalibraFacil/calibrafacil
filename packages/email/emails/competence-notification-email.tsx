@@ -12,6 +12,7 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 type CompetenceNotificationType =
@@ -30,6 +31,7 @@ export interface CompetenceNotificationEmailProps {
   actorName?: string;
   actionUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 const getTypeConfig = (type: CompetenceNotificationType) => {
@@ -79,12 +81,17 @@ export function CompetenceNotificationEmail({
   actorName,
   actionUrl = "#",
   logoSrc,
+  brand,
 }: CompetenceNotificationEmailProps) {
   const config = getTypeConfig(type);
 
   return (
-    <EmailLayout previewText={config.previewText} logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout
+      previewText={config.previewText}
+      logoSrc={logoSrc}
+      brand={brand}
+    >
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Badge variant={config.variant}>{config.badge}</Badge>
         <Title>{config.title}</Title>
 

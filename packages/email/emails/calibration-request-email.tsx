@@ -12,6 +12,7 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 type CalibrationRequestEmailType =
@@ -34,6 +35,7 @@ interface CalibrationRequestEmailProps {
   jobCodes?: string[];
   actionUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 const getTypeConfig = (type: CalibrationRequestEmailType) => {
@@ -94,12 +96,17 @@ export function CalibrationRequestEmail({
   jobCodes,
   actionUrl = "https://calibrafacil.com/dashboard/requests/123",
   logoSrc,
+  brand,
 }: CalibrationRequestEmailProps) {
   const config = getTypeConfig(type);
 
   return (
-    <EmailLayout previewText={config.previewText} logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout
+      previewText={config.previewText}
+      logoSrc={logoSrc}
+      brand={brand}
+    >
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Badge variant={config.variant}>{config.label}</Badge>
         <Title>{config.title}</Title>
 

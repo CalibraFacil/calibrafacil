@@ -10,6 +10,7 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 interface PortalInvitationEmailProps {
@@ -19,6 +20,7 @@ interface PortalInvitationEmailProps {
   role?: string;
   inviteUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 export function PortalInvitationEmail({
@@ -28,20 +30,26 @@ export function PortalInvitationEmail({
   role = "viewer",
   inviteUrl = "https://calibrafacil.com/portal/accept-invite",
   logoSrc,
+  brand,
 }: PortalInvitationEmailProps) {
   return (
-    <EmailLayout previewText={`Convite para ${organizationName}`} logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout
+      previewText={`Convite para ${organizationName}`}
+      logoSrc={logoSrc}
+      brand={brand}
+    >
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Title>Acesse o portal do cliente</Title>
 
         <Paragraph>Olá, {recipientName},</Paragraph>
         <Paragraph>
-          Você recebeu um convite para acessar <strong>{organizationName}</strong>{" "}
-          no Portal CalibraFácil.
+          Você recebeu um convite para acessar{" "}
+          <strong>{organizationName}</strong> no Portal CalibraFácil.
         </Paragraph>
         {labName && (
           <Paragraph>
-            Este convite foi enviado pelo laboratório <strong>{labName}</strong>.
+            Este convite foi enviado pelo laboratório <strong>{labName}</strong>
+            .
           </Paragraph>
         )}
 

@@ -11,6 +11,7 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 type JobNotificationType =
@@ -29,6 +30,7 @@ export interface JobNotificationEmailProps {
   reason?: string;
   actionUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 const getTypeConfig = (type: JobNotificationType) => {
@@ -80,12 +82,17 @@ export function JobNotificationEmail({
   reason,
   actionUrl = "#",
   logoSrc,
+  brand,
 }: JobNotificationEmailProps) {
   const config = getTypeConfig(type);
 
   return (
-    <EmailLayout previewText={`${config.previewText} - ${jobId}`} logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout
+      previewText={`${config.previewText} - ${jobId}`}
+      logoSrc={logoSrc}
+      brand={brand}
+    >
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Eyebrow>Fluxo operacional</Eyebrow>
         <Title>{config.title}</Title>
 

@@ -8,22 +8,29 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 interface PasswordResetEmailProps {
   recipientName?: string;
   resetUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 export function PasswordResetEmail({
   recipientName = "usuário",
   resetUrl = "https://calibrafacil.com/reset-password",
   logoSrc,
+  brand,
 }: PasswordResetEmailProps) {
   return (
-    <EmailLayout previewText="Defina sua senha no CalibraFácil" logoSrc={logoSrc}>
-      <EmailCard logoSrc={logoSrc}>
+    <EmailLayout
+      previewText="Defina sua senha no CalibraFácil"
+      logoSrc={logoSrc}
+      brand={brand}
+    >
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Title>Defina sua senha</Title>
 
         <Paragraph>Olá, {recipientName},</Paragraph>

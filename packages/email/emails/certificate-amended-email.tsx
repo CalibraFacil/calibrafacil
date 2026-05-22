@@ -12,6 +12,7 @@ import {
   Paragraph,
   StatusBox,
   Title,
+  type EmailBrand,
 } from "./components/email-layout";
 
 interface CertificateAmendedEmailProps {
@@ -23,6 +24,7 @@ interface CertificateAmendedEmailProps {
   reason: string;
   actionUrl: string;
   logoSrc?: string;
+  brand?: EmailBrand;
 }
 
 export function CertificateAmendedEmail({
@@ -34,13 +36,15 @@ export function CertificateAmendedEmail({
   reason = "Correção de dados do certificado",
   actionUrl = "https://calibrafacil.com/portal/certificates",
   logoSrc,
+  brand,
 }: CertificateAmendedEmailProps) {
   return (
     <EmailLayout
       previewText={`Certificado ${originalJobId} retificado`}
       logoSrc={logoSrc}
+      brand={brand}
     >
-      <EmailCard logoSrc={logoSrc}>
+      <EmailCard logoSrc={logoSrc} brand={brand}>
         <Badge variant="warning">Retificado</Badge>
         <Title>Certificado retificado</Title>
 
