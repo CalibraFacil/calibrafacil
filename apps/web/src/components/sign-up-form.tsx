@@ -16,6 +16,19 @@ interface SignUpFormProps extends React.ComponentProps<'form'> {
   redirect?: string
 }
 
+function getEmailVerificationCallbackURL(redirect?: string) {
+  const callbackURL = new URL(
+    '/onboarding/organization',
+    window.location.origin,
+  )
+
+  if (redirect) {
+    callbackURL.searchParams.set('redirect', redirect)
+  }
+
+  return callbackURL.toString()
+}
+
 export function SignUpForm({ className, redirect, ...props }: SignUpFormProps) {
   const navigate = useNavigate()
   const [name, setName] = useState('')
@@ -34,6 +47,7 @@ export function SignUpForm({ className, redirect, ...props }: SignUpFormProps) {
         name,
         email,
         password,
+        callbackURL: getEmailVerificationCallbackURL(redirect),
       })
 
       if (error) {

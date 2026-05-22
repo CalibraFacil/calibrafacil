@@ -56,6 +56,38 @@ function resolveApiBaseUrl(fallback: string): string {
   return readEnv("API_URL") ?? fallback;
 }
 
+function resolveWebBaseUrl(isProduction: boolean): string {
+  return (
+    readEnv("APP_URL") ??
+    readEnv("WEB_URL") ??
+    (isProduction ? "https://calibrafacil.com" : "http://localhost:5173")
+  );
+}
+
+function resolveEmailVerificationUrl(url: string, webBaseUrl: string): string {
+  try {
+    const verificationUrl = new URL(url);
+    const callbackURL = verificationUrl.searchParams.get("callbackURL");
+
+    if (
+      !callbackURL ||
+      !callbackURL.startsWith("/") ||
+      callbackURL.startsWith("//")
+    ) {
+      return url;
+    }
+
+    verificationUrl.searchParams.set(
+      "callbackURL",
+      new URL(callbackURL, webBaseUrl).toString(),
+    );
+
+    return verificationUrl.toString();
+  } catch {
+    return url;
+  }
+}
+
 function isLocalDevelopmentUrl(value: string | undefined): boolean {
   if (!value) return false;
 
@@ -840,6 +872,10 @@ function createSharedConfig() {
         url: string;
         token: string;
       }) => {
+        const verificationUrl = resolveEmailVerificationUrl(
+          url,
+          resolveWebBaseUrl(isProduction),
+        );
         const apiKey = process.env.RESEND_API_KEY;
 
         if (!apiKey) {
@@ -850,7 +886,7 @@ function createSharedConfig() {
           }
 
           console.info(
-            `[Better Auth] Email verification link for ${user.email}: ${url}`,
+            `[Better Auth] Email verification link for ${user.email}: ${verificationUrl}`,
           );
           return;
         }
@@ -867,14 +903,14 @@ function createSharedConfig() {
           subject: "Confirme seu e-mail no CalibraFácil",
           react: EmailConfirmationEmail({
             recipientName: user.name ?? user.email,
-            confirmationUrl: url,
+            confirmationUrl: verificationUrl,
             logoSrc: getEmailLogoSrc(),
           }),
           text: [
             "Confirme seu e-mail no CalibraFácil",
             "",
             "Use o link abaixo para confirmar seu endereço de e-mail:",
-            url,
+            verificationUrl,
             "",
             "Se você não criou uma conta, ignore esta mensagem.",
           ].join("\n"),
