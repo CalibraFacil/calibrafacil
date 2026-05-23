@@ -23,4 +23,5 @@ export { EmailConfirmationEmail } from "./emails/email-confirmation-email";
 export { PortalInvitationEmail } from "./emails/portal-invitation-email";
 export { PortalMagicLinkEmail } from "./emails/portal-magic-link-email";
 export { LabAccessLinkEmail } from "./emails/lab-access-link-email";
+export { LabOtpEmail } from "./emails/lab-otp-email";
 export { CalibrationRequestEmail } from "./emails/calibration-request-email";

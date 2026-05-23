@@ -20,6 +20,7 @@ import type {
 import {
   EmailConfirmationEmail,
   LabAccessLinkEmail,
+  LabOtpEmail,
   OrganizationInvitationEmail,
   PasswordResetEmail,
   PortalInvitationEmail,
@@ -830,6 +831,11 @@ async function sendLabVerificationOtp(data: {
     from: fromEmail,
     to: normalizedEmail,
     subject: "Código de acesso ao CalibraFácil",
+    react: LabOtpEmail({
+      recipientName: normalizedEmail,
+      otp: data.otp,
+      logoSrc: getEmailLogoSrc(),
+    }),
     text: [
       "Código de acesso ao CalibraFácil",
       "",
