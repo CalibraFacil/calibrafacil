@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMountEffect } from "@/hooks/use-mount-effect";
+import { sanitizePortalRedirect } from "@/lib/auth-redirect";
 import { getApiBaseUrl } from "@/lib/utils";
 
 const PORTAL_ORG_KEY = "portal-active-org";
@@ -63,6 +64,12 @@ type PortalOrganization = {
 
 function PortalLayout() {
   const navigate = useNavigate();
+  const signInRedirect =
+    typeof window === "undefined"
+      ? "/"
+      : sanitizePortalRedirect(
+          `${window.location.pathname}${window.location.search}${window.location.hash}`,
+        );
   const { data: session, isPending: sessionPending } = usePortalSession();
   const { data: activeOrg, isPending: activeOrgLoading } =
     usePortalActiveOrganization();
@@ -111,7 +118,7 @@ function PortalLayout() {
   }
 
   if (!session) {
-    return <Navigate to="/sign-in" />;
+    return <Navigate to="/sign-in" search={{ redirect: signInRedirect }} />;
   }
 
   if (orgsLoading || activeOrgLoading || needsPortalOrgSwitch) {

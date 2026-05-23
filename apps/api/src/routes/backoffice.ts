@@ -33,6 +33,7 @@ import {
   organizationSupportRequest,
   organizationUnit,
   platformEventLog,
+  session as authSession,
   subscription,
   user as userTable,
 } from "@calibra-facil/db/schema";
@@ -1608,6 +1609,8 @@ export const backofficeRouter = new Hono<{
         },
         headers: c.req.raw.headers,
       });
+
+      await db.delete(authSession).where(eq(authSession.userId, userId));
 
       await logPlatformEvent({
         actorUserId: session.user.id,

@@ -13,6 +13,10 @@ import { calibraApi } from '@/utils/api'
 import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
 import { cn } from '@/lib/utils'
 import {
+  sanitizeBackofficeRedirect,
+  sanitizeLabRedirect,
+} from '@/lib/auth-redirect'
+import {
   AuthStatusMessage,
   type AuthStatus,
 } from '@/components/auth-status-message'
@@ -55,6 +59,9 @@ export function SignInForm({
   const [otpRequested, setOtpRequested] = useState(false)
 
   const isLabMode = mode === 'lab'
+  const safeRedirect = isLabMode
+    ? sanitizeLabRedirect(redirect)
+    : sanitizeBackofficeRedirect(redirect)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -88,7 +95,7 @@ export function SignInForm({
       const access = await getBackofficeAccess()
 
       if (access.allowed) {
-        navigate({ to: redirect || '/backoffice' })
+        navigate({ to: safeRedirect })
         return
       }
 
@@ -133,7 +140,7 @@ export function SignInForm({
 
       clearDesktopSignedOut()
       startDesktopInitialSync()
-      navigate({ to: redirect || '/dashboard' })
+      navigate({ to: safeRedirect })
     } catch {
       setAuthStatus({
         tone: 'error',
@@ -149,7 +156,7 @@ export function SignInForm({
     setIsMagicLinkLoading(true)
 
     try {
-      const callbackURL = `${window.location.origin}${redirect || '/dashboard'}`
+      const callbackURL = `${window.location.origin}${safeRedirect}`
       const { error: magicLinkError } = await signIn.magicLink({
         email,
         callbackURL,
@@ -245,7 +252,7 @@ export function SignInForm({
 
       clearDesktopSignedOut()
       startDesktopInitialSync()
-      navigate({ to: redirect || '/dashboard' })
+      navigate({ to: safeRedirect })
     } catch {
       setAuthStatus({
         tone: 'error',
@@ -265,7 +272,7 @@ export function SignInForm({
       const data = await calibraApi.sso.start({
         organizationSlug,
         ...(ssoEmail ? { email: ssoEmail } : {}),
-        redirectPath: redirect || '/dashboard',
+        redirectPath: sanitizeLabRedirect(redirect),
       })
       if (!data.url) {
         setAuthStatus({

@@ -24,6 +24,7 @@ import {
   canPerformCalibrationAction,
   hasPlatformRole,
   parsePlatformRoles,
+  PORTAL_ACCESS_ROLES,
   roles,
 } from "@calibra-facil/auth/access";
 import {
@@ -878,14 +879,32 @@ export const requireLabProtected = [
   requireOrganization,
 ] as const;
 
+export const requirePortalAccess = createMiddleware<{
+  Variables: AuthVariables;
+}>(async (c, next) => {
+  const member = c.get("member");
+  const hasPortalRole = PORTAL_ACCESS_ROLES.some(
+    (allowedRole) => allowedRole === member.role,
+  );
+
+  if (member.organizationType !== "CLIENT" || !hasPortalRole) {
+    throw new HTTPException(403, {
+      message: "Portal client access required",
+    });
+  }
+
+  await next();
+});
+
 /**
  * Combined middleware for Portal-protected routes.
  * Only accepts portal_session cookies.
- * Requires authentication and active organization.
+ * Requires authentication, active CLIENT organization, and portal member role.
  */
 export const requirePortalProtected = [
   requirePortalAuth,
   requireOrganization,
+  requirePortalAccess,
 ] as const;
 
 export const requireInternalOperator = createMiddleware<{

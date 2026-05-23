@@ -9,6 +9,7 @@ import { useBackofficeAccessData } from '@/features/backoffice/queries'
 import { BrandLockup } from '@/components/brand'
 import { SignInForm } from '@/components/sign-in-form'
 import { Button } from '@/components/ui/button'
+import { sanitizeBackofficeRedirect } from '@/lib/auth-redirect'
 import {
   Card,
   CardContent,
@@ -49,6 +50,7 @@ export const Route = createFileRoute('/backoffice/sign-in')({
 function BackofficeSignInPage() {
   const navigate = useNavigate()
   const { redirect: redirectTo } = Route.useSearch()
+  const safeRedirect = sanitizeBackofficeRedirect(redirectTo)
   const { data: session } = useBackofficeSession()
   const accessQuery = useBackofficeAccessData({
     scope: 'sign-in',
@@ -56,7 +58,7 @@ function BackofficeSignInPage() {
   })
 
   if (session?.user && accessQuery.data?.allowed) {
-    return <Navigate to={redirectTo || '/backoffice'} />
+    return <Navigate to={safeRedirect} />
   }
 
   if (session?.user && accessQuery.data?.bootstrapAvailable) {
@@ -77,10 +79,7 @@ function BackofficeSignInPage() {
         </div>
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-sm space-y-4">
-            <SignInForm
-              redirect={redirectTo || '/backoffice'}
-              mode="backoffice"
-            />
+            <SignInForm redirect={safeRedirect} mode="backoffice" />
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Acesso separado</CardTitle>

@@ -176,6 +176,13 @@
       "when": 1779465600000,
       "tag": "0024_lab_passwordless_access",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1779552000000,
+      "tag": "0025_auth_uniqueness",
+      "breakpoints": true
     }
   ]
 }
