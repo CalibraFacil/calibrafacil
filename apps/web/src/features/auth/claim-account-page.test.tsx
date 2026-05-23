@@ -153,7 +153,7 @@ describe('ClaimAccountPage', () => {
     renderClaimPage('setup-token')
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Usar código por email' }),
+      await screen.findByRole('button', { name: 'Receber código' }),
     )
 
     await waitFor(() => {

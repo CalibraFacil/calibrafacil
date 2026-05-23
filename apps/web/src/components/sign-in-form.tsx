@@ -169,7 +169,7 @@ export function SignInForm({
 
       setAuthStatus({
         tone: 'success',
-        title: 'Link mágico solicitado',
+        title: 'Link de acesso solicitado',
         description:
           'Se o email tiver acesso LAB, enviaremos o link em instantes.',
       })
@@ -314,7 +314,7 @@ export function SignInForm({
             id="email"
             type="email"
             autoComplete={isLabMode ? 'username webauthn' : 'username'}
-            placeholder="m@example.com"
+            placeholder="seu@email.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required={!isLabMode || isMagicLinkLoading || isOtpRequesting}
@@ -341,7 +341,14 @@ export function SignInForm({
                 disabled={isMagicLinkLoading || !email.trim()}
                 onClick={handleMagicLinkSignIn}
               >
-                {isMagicLinkLoading ? 'Enviando...' : 'Link mágico'}
+                {isMagicLinkLoading ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Receber link de acesso'
+                )}
               </Button>
               <Button
                 type="button"
@@ -349,7 +356,14 @@ export function SignInForm({
                 disabled={isOtpRequesting || !email.trim()}
                 onClick={handleRequestOtp}
               >
-                {isOtpRequesting ? 'Enviando...' : 'Código por email'}
+                {isOtpRequesting ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Receber código'
+                )}
               </Button>
             </div>
             {otpRequested ? (

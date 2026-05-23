@@ -193,7 +193,7 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
       await calibraApi.labSetup.requestMagicLink(token)
       setAuthStatus({
         tone: 'success',
-        title: 'Link mágico enviado',
+        title: 'Link de acesso enviado',
         description: 'Enviamos um link de acesso para o email provisionado.',
       })
     } catch (err) {
@@ -358,7 +358,14 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
                 onClick={handleMagicLink}
                 disabled={isMagicLinkLoading}
               >
-                {isMagicLinkLoading ? 'Enviando...' : 'Receber link mágico'}
+                {isMagicLinkLoading ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Receber link de acesso'
+                )}
               </Button>
               <Button
                 type="button"
@@ -366,7 +373,14 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
                 onClick={handleRequestOtp}
                 disabled={isOtpRequesting}
               >
-                {isOtpRequesting ? 'Enviando...' : 'Usar código por email'}
+                {isOtpRequesting ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Receber código'
+                )}
               </Button>
             </div>
 

@@ -162,10 +162,10 @@ describe('SignInForm workflow', () => {
     expect(
       screen.getByRole('button', { name: 'Entrar com passkey' }),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Link mágico' })).toBeTruthy()
     expect(
-      screen.getByRole('button', { name: 'Código por email' }),
+      screen.getByRole('button', { name: 'Receber link de acesso' }),
     ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Receber código' })).toBeTruthy()
   })
 
   it('requests restricted lab magic links with neutral UI copy', async () => {
@@ -176,7 +176,9 @@ describe('SignInForm workflow', () => {
     fireEvent.change(screen.getByLabelText('Email'), {
       target: { value: 'tecnico@lab.test' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Link mágico' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Receber link de acesso' }),
+    )
 
     await waitFor(() => {
       expect(authMocks.signInMagicLink).toHaveBeenCalledWith({
@@ -201,7 +203,7 @@ describe('SignInForm workflow', () => {
     fireEvent.change(screen.getByLabelText('Email'), {
       target: { value: 'tecnico@lab.test' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Código por email' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Receber código' }))
 
     await waitFor(() => {
       expect(authMocks.sendVerificationOtp).toHaveBeenCalledWith({
