@@ -14,6 +14,10 @@ import { SignInForm, startDesktopInitialSync } from './sign-in-form'
 
 const authMocks = vi.hoisted(() => ({
   signInEmail: vi.fn(),
+  signInMagicLink: vi.fn(),
+  signInPasskey: vi.fn(),
+  sendVerificationOtp: vi.fn(),
+  signInEmailOtp: vi.fn(),
   backofficeSignInEmail: vi.fn(),
   backofficeSignOut: vi.fn(),
   clearDesktopSignedOut: vi.fn(),
@@ -32,6 +36,16 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@calibra-facil/auth/client', () => ({
   signIn: {
     email: authMocks.signInEmail,
+    magicLink: authMocks.signInMagicLink,
+  },
+  labAuthClient: {
+    signIn: {
+      passkey: authMocks.signInPasskey,
+      emailOtp: authMocks.signInEmailOtp,
+    },
+    emailOtp: {
+      sendVerificationOtp: authMocks.sendVerificationOtp,
+    },
   },
   backofficeSignIn: {
     email: authMocks.backofficeSignInEmail,
@@ -100,26 +114,20 @@ describe('SignInForm workflow', () => {
     Reflect.deleteProperty(window, 'calibraBridge')
   })
 
-  it('signs lab users in, clears desktop signed-out state, starts sync, and navigates to the redirect', async () => {
+  it('signs lab users in with passkey, clears desktop signed-out state, starts sync, and navigates to the redirect', async () => {
     const startSync = vi.fn(async () => undefined)
     installBridge({ startSync })
-    authMocks.signInEmail.mockResolvedValue({ error: null })
+    authMocks.signInPasskey.mockResolvedValue({ error: null })
 
     render(<SignInForm redirect="/dashboard/jobs" />)
 
     fireEvent.change(screen.getByLabelText('Email'), {
       target: { value: 'tecnico@lab.test' },
     })
-    fireEvent.change(screen.getByLabelText('Senha'), {
-      target: { value: 'senha-segura' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar com passkey' }))
 
     await waitFor(() => {
-      expect(authMocks.signInEmail).toHaveBeenCalledWith({
-        email: 'tecnico@lab.test',
-        password: 'senha-segura',
-      })
+      expect(authMocks.signInPasskey).toHaveBeenCalledTimes(1)
     })
     expect(authMocks.clearDesktopSignedOut).toHaveBeenCalledTimes(1)
     expect(startSync).toHaveBeenCalledTimes(1)
@@ -129,16 +137,108 @@ describe('SignInForm workflow', () => {
   })
 
   it('shows lab sign-in errors without clearing desktop signed-out state or navigating', async () => {
-    authMocks.signInEmail.mockResolvedValue({
-      error: { message: 'Credenciais inválidas' },
+    authMocks.signInPasskey.mockResolvedValue({
+      error: { message: 'AUTHENTICATION_FAILED' },
     })
 
     render(<SignInForm redirect="/dashboard/jobs" />)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar com passkey' }))
+
+    expect(
+      await screen.findByText('Não foi possível autenticar com a passkey.'),
+    ).toBeTruthy()
+    expect(authMocks.clearDesktopSignedOut).not.toHaveBeenCalled()
+    expect(authMocks.navigate).not.toHaveBeenCalled()
+  })
+
+  it('keeps lab sign-in passwordless and hides password recovery', () => {
+    render(<SignInForm />)
+
+    expect(screen.queryByLabelText('Senha')).toBeNull()
+    expect(screen.queryByText('Esqueceu sua senha?')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Entrar com passkey' }),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Link mágico' })).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Código por email' }),
+    ).toBeTruthy()
+  })
+
+  it('requests restricted lab magic links with neutral UI copy', async () => {
+    authMocks.signInMagicLink.mockResolvedValue({ error: null })
+
+    render(<SignInForm redirect="/dashboard/jobs" />)
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'tecnico@lab.test' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Link mágico' }))
+
+    await waitFor(() => {
+      expect(authMocks.signInMagicLink).toHaveBeenCalledWith({
+        email: 'tecnico@lab.test',
+        callbackURL: `${window.location.origin}/dashboard/jobs`,
+        errorCallbackURL: `${window.location.origin}/sign-in`,
+      })
+    })
+    expect(
+      await screen.findByText(
+        'Se o email tiver acesso LAB, enviaremos um link mágico.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('requests and completes lab email OTP sign-in', async () => {
+    authMocks.sendVerificationOtp.mockResolvedValue({ error: null })
+    authMocks.signInEmailOtp.mockResolvedValue({ error: null })
+
+    render(<SignInForm redirect="/dashboard/jobs" />)
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'tecnico@lab.test' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Código por email' }))
+
+    await waitFor(() => {
+      expect(authMocks.sendVerificationOtp).toHaveBeenCalledWith({
+        email: 'tecnico@lab.test',
+        type: 'sign-in',
+      })
+    })
+
+    fireEvent.change(await screen.findByLabelText('Código recebido'), {
+      target: { value: '123456' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar com código' }))
+
+    await waitFor(() => {
+      expect(authMocks.signInEmailOtp).toHaveBeenCalledWith({
+        email: 'tecnico@lab.test',
+        otp: '123456',
+      })
+    })
+    expect(authMocks.navigate).toHaveBeenCalledWith({
+      to: '/dashboard/jobs',
+    })
+  })
+
+  it('translates invalid credential errors from the auth provider', async () => {
+    authMocks.backofficeSignInEmail.mockResolvedValue({
+      error: { message: 'Invalid email or password' },
+    })
+
+    render(<SignInForm mode="backoffice" redirect="/backoffice" />)
+
     fillCredentials('tecnico@lab.test', 'senha-incorreta')
     fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
 
-    expect(await screen.findByText('Credenciais inválidas')).toBeTruthy()
+    expect(
+      await screen.findByText(
+        'Email ou senha inválidos. Verifique os dados e tente novamente.',
+      ),
+    ).toBeTruthy()
     expect(authMocks.clearDesktopSignedOut).not.toHaveBeenCalled()
     expect(authMocks.navigate).not.toHaveBeenCalled()
   })

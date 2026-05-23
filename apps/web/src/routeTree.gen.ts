@@ -11,10 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermosDeUsoRouteImport } from './routes/termos-de-uso'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
+import { Route as ClaimAccountRouteImport } from './routes/claim-account'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as BackofficeRouteRouteImport } from './routes/backoffice/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SignUpIndexRouteImport } from './routes/sign-up/index'
 import { Route as SignInIndexRouteImport } from './routes/sign-in/index'
 import { Route as ResetPasswordIndexRouteImport } from './routes/reset-password/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
@@ -138,6 +138,11 @@ const PrivacidadeRoute = PrivacidadeRouteImport.update({
   path: '/privacidade',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClaimAccountRoute = ClaimAccountRouteImport.update({
+  id: '/claim-account',
+  path: '/claim-account',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRouteRoute = DashboardRouteRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -151,11 +156,6 @@ const BackofficeRouteRoute = BackofficeRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignUpIndexRoute = SignUpIndexRouteImport.update({
-  id: '/sign-up/',
-  path: '/sign-up/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInIndexRoute = SignInIndexRouteImport.update({
@@ -773,6 +773,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/backoffice': typeof BackofficeRouteRouteWithChildren
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/claim-account': typeof ClaimAccountRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos-de-uso': typeof TermosDeUsoRoute
   '/backoffice/customer-success': typeof BackofficeCustomerSuccessRouteRouteWithChildren
@@ -806,7 +807,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof DashboardIndexRoute
   '/reset-password': typeof ResetPasswordIndexRoute
   '/sign-in': typeof SignInIndexRoute
-  '/sign-up': typeof SignUpIndexRoute
   '/dashboard/assets/$id': typeof DashboardAssetsIdRouteRouteWithChildren
   '/dashboard/clients/$id': typeof DashboardClientsIdRouteRouteWithChildren
   '/dashboard/finance/contracts': typeof DashboardFinanceContractsRouteRouteWithChildren
@@ -891,6 +891,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/claim-account': typeof ClaimAccountRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/internal': typeof DashboardInternalRouteRouteWithChildren
@@ -910,7 +911,6 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardIndexRoute
   '/reset-password': typeof ResetPasswordIndexRoute
   '/sign-in': typeof SignInIndexRoute
-  '/sign-up': typeof SignUpIndexRoute
   '/backoffice/customer-success/tickets': typeof BackofficeCustomerSuccessTicketsRoute
   '/backoffice/organizations/$id': typeof BackofficeOrganizationsIdRoute
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
@@ -993,6 +993,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/backoffice': typeof BackofficeRouteRouteWithChildren
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/claim-account': typeof ClaimAccountRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos-de-uso': typeof TermosDeUsoRoute
   '/backoffice/customer-success': typeof BackofficeCustomerSuccessRouteRouteWithChildren
@@ -1026,7 +1027,6 @@ export interface FileRoutesById {
   '/dashboard/': typeof DashboardIndexRoute
   '/reset-password/': typeof ResetPasswordIndexRoute
   '/sign-in/': typeof SignInIndexRoute
-  '/sign-up/': typeof SignUpIndexRoute
   '/dashboard/assets/$id': typeof DashboardAssetsIdRouteRouteWithChildren
   '/dashboard/clients/$id': typeof DashboardClientsIdRouteRouteWithChildren
   '/dashboard/finance/contracts': typeof DashboardFinanceContractsRouteRouteWithChildren
@@ -1115,6 +1115,7 @@ export interface FileRouteTypes {
     | '/'
     | '/backoffice'
     | '/dashboard'
+    | '/claim-account'
     | '/privacidade'
     | '/termos-de-uso'
     | '/backoffice/customer-success'
@@ -1148,7 +1149,6 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/reset-password'
     | '/sign-in'
-    | '/sign-up'
     | '/dashboard/assets/$id'
     | '/dashboard/clients/$id'
     | '/dashboard/finance/contracts'
@@ -1233,6 +1233,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/claim-account'
     | '/privacidade'
     | '/termos-de-uso'
     | '/dashboard/internal'
@@ -1252,7 +1253,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/reset-password'
     | '/sign-in'
-    | '/sign-up'
     | '/backoffice/customer-success/tickets'
     | '/backoffice/organizations/$id'
     | '/dashboard/assets/new'
@@ -1334,6 +1334,7 @@ export interface FileRouteTypes {
     | '/'
     | '/backoffice'
     | '/dashboard'
+    | '/claim-account'
     | '/privacidade'
     | '/termos-de-uso'
     | '/backoffice/customer-success'
@@ -1367,7 +1368,6 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/reset-password/'
     | '/sign-in/'
-    | '/sign-up/'
     | '/dashboard/assets/$id'
     | '/dashboard/clients/$id'
     | '/dashboard/finance/contracts'
@@ -1455,6 +1455,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BackofficeRouteRoute: typeof BackofficeRouteRouteWithChildren
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
+  ClaimAccountRoute: typeof ClaimAccountRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosDeUsoRoute: typeof TermosDeUsoRoute
   AcceptInvitationIdRoute: typeof AcceptInvitationIdRoute
@@ -1462,7 +1463,6 @@ export interface RootRouteChildren {
   OnboardingOrganizationRoute: typeof OnboardingOrganizationRoute
   ResetPasswordIndexRoute: typeof ResetPasswordIndexRoute
   SignInIndexRoute: typeof SignInIndexRoute
-  SignUpIndexRoute: typeof SignUpIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1479,6 +1479,13 @@ declare module '@tanstack/react-router' {
       path: '/privacidade'
       fullPath: '/privacidade'
       preLoaderRoute: typeof PrivacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/claim-account': {
+      id: '/claim-account'
+      path: '/claim-account'
+      fullPath: '/claim-account'
+      preLoaderRoute: typeof ClaimAccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -1500,13 +1507,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-up/': {
-      id: '/sign-up/'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof SignUpIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in/': {
@@ -2780,6 +2780,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BackofficeRouteRoute: BackofficeRouteRouteWithChildren,
   DashboardRouteRoute: DashboardRouteRouteWithChildren,
+  ClaimAccountRoute: ClaimAccountRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   TermosDeUsoRoute: TermosDeUsoRoute,
   AcceptInvitationIdRoute: AcceptInvitationIdRoute,
@@ -2787,7 +2788,6 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingOrganizationRoute: OnboardingOrganizationRoute,
   ResetPasswordIndexRoute: ResetPasswordIndexRoute,
   SignInIndexRoute: SignInIndexRoute,
-  SignUpIndexRoute: SignUpIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

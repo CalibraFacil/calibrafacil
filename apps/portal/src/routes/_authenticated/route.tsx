@@ -14,6 +14,7 @@ import {
   usePortalActiveOrganization,
   usePortalSession,
 } from "@calibra-facil/auth/client";
+import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { toast } from "sonner";
 import { PortalSidebar } from "@/components/portal-sidebar";
 import { PortalHeader } from "@/components/portal-header";
@@ -223,7 +224,12 @@ function CompleteProfilePrompt() {
       const result = await portalAuthClient.updateUser({ name: trimmedName });
 
       if (result.error) {
-        throw new Error(result.error.message ?? "Falha ao atualizar perfil");
+        throw new Error(
+          translateAuthErrorMessage(
+            result.error.message,
+            "Falha ao atualizar perfil",
+          ),
+        );
       }
 
       toast.success("Perfil atualizado");

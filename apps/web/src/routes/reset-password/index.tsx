@@ -14,16 +14,20 @@ import {
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { requestPasswordReset, resetPassword } from '@calibra-facil/auth/client'
+import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 
 type ResetPasswordSearch = {
   token?: string
   error?: string
+  invitationId?: string
 }
 
 export const Route = createFileRoute('/reset-password/')({
   validateSearch: (search: Record<string, unknown>): ResetPasswordSearch => ({
     token: typeof search.token === 'string' ? search.token : undefined,
     error: typeof search.error === 'string' ? search.error : undefined,
+    invitationId:
+      typeof search.invitationId === 'string' ? search.invitationId : undefined,
   }),
   head: () => ({
     meta: [{ title: 'Redefinir senha | CalibraFácil' }],
@@ -33,7 +37,7 @@ export const Route = createFileRoute('/reset-password/')({
 
 function ResetPasswordPage() {
   const navigate = useNavigate()
-  const { token, error: tokenError } = Route.useSearch()
+  const { token, error: tokenError, invitationId } = Route.useSearch()
   const [email, setEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [message, setMessage] = useState<string | null>(
@@ -57,7 +61,12 @@ function ResetPasswordPage() {
       })
 
       if (error) {
-        setMessage(error.message ?? 'Falha ao solicitar redefinição de senha')
+        setMessage(
+          translateAuthErrorMessage(
+            error.message,
+            'Falha ao solicitar redefinição de senha',
+          ),
+        )
         return
       }
 
@@ -83,11 +92,21 @@ function ResetPasswordPage() {
       })
 
       if (error) {
-        setMessage(error.message ?? 'Falha ao redefinir senha')
+        setMessage(
+          translateAuthErrorMessage(error.message, 'Falha ao redefinir senha'),
+        )
         return
       }
 
       toast.success('Senha definida com sucesso')
+      if (invitationId) {
+        navigate({
+          to: '/accept-invitation/$id',
+          params: { id: invitationId },
+        })
+        return
+      }
+
       navigate({ to: '/sign-in' })
     } finally {
       setIsLoading(false)

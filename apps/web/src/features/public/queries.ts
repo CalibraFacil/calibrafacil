@@ -1,6 +1,7 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { authClient } from '@calibra-facil/auth/client'
+import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import { prewarmRouteQueries } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
 import type {
@@ -24,7 +25,12 @@ export function invitationQueryOptions(id: string) {
       })
 
       if (error) {
-        throw new Error(error.message || 'Não foi possível carregar o convite.')
+        throw new Error(
+          translateAuthErrorMessage(
+            error.message,
+            'Não foi possível carregar o convite.',
+          ),
+        )
       }
 
       if (!data) {

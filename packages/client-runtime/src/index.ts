@@ -63,6 +63,7 @@ import { createEnvironmentalLimitsApi } from "./modules/environmental-limits";
 import { createFinanceApi } from "./modules/finance";
 import { createIntegrationsApi } from "./modules/integrations";
 import { createJobsApi } from "./modules/jobs";
+import { createLabSetupApi } from "./modules/lab-setup";
 import { createMethodsApi } from "./modules/methods";
 import { createNotificationsApi } from "./modules/notifications";
 import { createNonConformancesApi } from "./modules/non-conformances";
@@ -70,6 +71,7 @@ import { createOrganizationMediaApi } from "./modules/organization-media";
 import { createPortalDomainsApi } from "./modules/portal-domains";
 import { createProfileMediaApi } from "./modules/profile-media";
 import { createPublicCheckoutApi } from "./modules/public-checkout";
+import { createPublicInvitationsApi } from "./modules/public-invitations";
 import { createReportsApi } from "./modules/reports";
 import { createSessionsApi } from "./modules/sessions";
 import { createServiceOrdersApi } from "./modules/service-orders";
@@ -132,6 +134,20 @@ export function createCloudApiClient(
       sessions: {
         revoke: {
           $post(input: { json: { sessionId: string } }): Promise<Response>;
+        };
+      };
+      "lab-setup": {
+        ":token": {
+          $get(input: { param: { token: string } }): Promise<Response>;
+          complete: {
+            $post(input: { param: { token: string } }): Promise<Response>;
+          };
+          "request-magic-link": {
+            $post(input: { param: { token: string } }): Promise<Response>;
+          };
+          "request-otp": {
+            $post(input: { param: { token: string } }): Promise<Response>;
+          };
         };
       };
       backoffice: {
@@ -745,6 +761,8 @@ export function createCloudApiClient(
     attachments: createCloudAttachmentsApi(),
     reports: createReportsApi(rawCloudClient),
     publicCheckout: createPublicCheckoutApi(rawCloudClient),
+    publicInvitations: createPublicInvitationsApi(rawCloudClient),
+    labSetup: createLabSetupApi(rawCloudClient),
     nonConformances: createNonConformancesApi(rawCloudClient),
     capas: createCapasApi(rawCloudClient),
     certificateTemplates: createCertificateTemplatesApi(

@@ -270,6 +270,9 @@ export function createDesktopApiClient(
       async createUser() {
         throw desktopUnsupportedBackofficeAction("Usuários backoffice");
       },
+      async provisionLab() {
+        throw desktopUnsupportedBackofficeAction("Laboratórios backoffice");
+      },
       async requestUserPasswordReset() {
         throw desktopUnsupportedBackofficeAction("Usuários backoffice");
       },
@@ -923,6 +926,25 @@ export function createDesktopApiClient(
       },
       async start() {
         throw desktopUnsupportedAuthAction("Checkout comercial");
+      },
+    },
+    publicInvitations: {
+      async requestSetupLink() {
+        throw desktopUnsupportedAuthAction("Convites");
+      },
+    },
+    labSetup: {
+      async get() {
+        throw desktopUnsupportedAuthAction("Configuração de acesso");
+      },
+      async requestMagicLink() {
+        throw desktopUnsupportedAuthAction("Configuração de acesso");
+      },
+      async requestOtp() {
+        throw desktopUnsupportedAuthAction("Configuração de acesso");
+      },
+      async complete() {
+        throw desktopUnsupportedAuthAction("Configuração de acesso");
       },
     },
     nonConformances: {

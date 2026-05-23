@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { portalAuthClient } from "@calibra-facil/auth/client";
+import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { z } from "zod";
 
 import { BrandLockup, BrandMark } from "@/components/brand";
@@ -51,7 +52,12 @@ function SignInPage() {
     setIsLoading(false);
 
     if (error) {
-      setError(error.message ?? "Falha ao enviar link de acesso");
+      setError(
+        translateAuthErrorMessage(
+          error.message,
+          "Falha ao enviar link de acesso",
+        ),
+      );
       return;
     }
 

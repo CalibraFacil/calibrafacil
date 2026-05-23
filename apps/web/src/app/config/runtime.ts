@@ -11,7 +11,6 @@ const SENTRY_DSN =
 const SENTRY_REPLAY_ENABLED_PREFIXES = [
   '/dashboard',
   '/sign-in',
-  '/sign-up',
   '/accept-invitation',
 ] as const
 

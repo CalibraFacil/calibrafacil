@@ -2,9 +2,11 @@
 /// <reference path="./vite-env.d.ts" />
 import {
   adminClient,
+  emailOTPClient,
   magicLinkClient,
   organizationClient,
 } from "better-auth/client/plugins";
+import { passkeyClient } from "@better-auth/passkey/client";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
 import { ssoClient } from "@better-auth/sso/client";
 import { ac, platformAc, platformRoles, roles } from "./access";
@@ -37,7 +39,8 @@ function getApiBaseURL(): string {
 function isDesktopRuntime() {
   return (
     typeof window !== "undefined" &&
-    ((typeof window.calibraBridge === "object" && window.calibraBridge != null) ||
+    ((typeof window.calibraBridge === "object" &&
+      window.calibraBridge != null) ||
       window.navigator.userAgent.includes("Electron"))
   );
 }
@@ -114,6 +117,9 @@ export const labAuthClient = createBetterAuthClient({
     refetchOnWindowFocus: false,
   },
   plugins: [
+    passkeyClient(),
+    magicLinkClient(),
+    emailOTPClient(),
     adminClient({
       ac: platformAc,
       roles: platformRoles,
@@ -193,6 +199,8 @@ export const usePortalActiveOrganization =
   portalAuthClient.useActiveOrganization;
 export const portalOrganization = portalAuthClient.organization;
 export const labAdmin = labAuthClient.admin;
+export const labPasskey = labAuthClient.passkey;
+export const labEmailOtp = labAuthClient.emailOtp;
 
 // Backoffice-specific exports (for apps/web /backoffice)
 export const backofficeSignIn = backofficeAuthClient.signIn;

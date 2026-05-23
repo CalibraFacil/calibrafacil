@@ -11,6 +11,7 @@ import type { Env } from "./env";
 export function applyRateLimits(app: Hono<{ Bindings: Env }>) {
   app.use("/api/auth/*", rateLimitAuth);
   app.use("/api/sso/start", rateLimitAuth);
+  app.use("/api/lab-setup/*", rateLimitAuth);
   app.use("/api/invitations/*", rateLimitInvitations);
   app.use("/api/verify/*", rateLimitVerify);
   app.use("/api/webhooks/asaas", rateLimitWebhooks);

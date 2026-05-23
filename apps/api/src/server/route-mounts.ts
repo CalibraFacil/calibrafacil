@@ -17,6 +17,7 @@ import { financeRouter } from "../routes/finance";
 import { integrationsRouter } from "../routes/integrations";
 import { internalCustomerSuccessRouter } from "../routes/internal-customer-success";
 import { invitationsRouter } from "../routes/invitations";
+import { labSetupRouter } from "../routes/lab-setup";
 import { jobsRouter } from "../routes/jobs";
 import { methodsRouter } from "../routes/methods";
 import { notificationsRouter } from "../routes/notifications";
@@ -68,6 +69,7 @@ export function mountApiRoutes(app: Hono<{ Bindings: Env }>) {
     .get("/hello", (c) => c.json({ message: "Hello!" }))
     .route("/api/customers", customersRouter)
     .route("/api/invitations", invitationsRouter)
+    .route("/api/lab-setup", labSetupRouter)
     .route("/api/portal", portalRouter)
     .route("/api/portal/requests", portalRequestsRouter)
     .route("/api/portal/service-orders", portalServiceOrdersRouter)

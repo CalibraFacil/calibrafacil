@@ -1524,6 +1524,7 @@ export interface BackofficeApi {
   unbanUser<TResponse = unknown>(id: string): Promise<TResponse>;
   impersonateUser<TResponse = unknown>(id: string): Promise<TResponse>;
   createUser<TResponse = unknown>(input: unknown): Promise<TResponse>;
+  provisionLab<TResponse = unknown>(input: unknown): Promise<TResponse>;
   requestUserPasswordReset<TResponse = unknown>(id: string): Promise<TResponse>;
   commercial: {
     listOrganizations<TResponse = unknown>(search?: string): Promise<TResponse>;
@@ -2013,6 +2014,36 @@ export interface SigningCertificatesApi {
   ): Promise<SigningCertificateActionResponse>;
 }
 
+export interface PublicInvitationsApi {
+  requestSetupLink<TResponse = unknown>(id: string): Promise<TResponse>;
+}
+
+export type LabSetupMetadata = {
+  status:
+    | "ready"
+    | "invalid"
+    | "expired"
+    | "consumed"
+    | "user_invalid"
+    | "email_mismatch"
+    | "organization_invalid"
+    | "membership_missing"
+    | "invitation_invalid";
+  email?: string;
+  organizationName?: string;
+  organizationSlug?: string;
+  expiresAt?: string | Date;
+  passkeyPreferred: boolean;
+  fallbackMethods: Array<"magic_link" | "email_otp">;
+};
+
+export interface LabSetupApi {
+  get(token: string): Promise<LabSetupMetadata>;
+  requestMagicLink<TResponse = unknown>(token: string): Promise<TResponse>;
+  requestOtp<TResponse = unknown>(token: string): Promise<TResponse>;
+  complete<TResponse = unknown>(token: string): Promise<TResponse>;
+}
+
 export interface CalibraApi {
   dashboard: DashboardApi;
   units: UnitsApi;
@@ -2044,6 +2075,8 @@ export interface CalibraApi {
   environmentalLimits: EnvironmentalLimitsApi;
   reports: ReportsApi;
   publicCheckout: PublicCheckoutApi;
+  publicInvitations: PublicInvitationsApi;
+  labSetup: LabSetupApi;
   nonConformances: NonConformancesApi;
   capas: CapasApi;
   certificateTemplates: CertificateTemplatesApi;

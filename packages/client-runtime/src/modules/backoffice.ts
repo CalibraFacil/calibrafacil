@@ -85,6 +85,12 @@ export function createBackofficeApi(rawCloudClient: any): BackofficeApi {
         "Falha ao criar usuário interno",
       );
     },
+    async provisionLab<TResponse = unknown>(input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.backoffice.labs.$post({ json: input }),
+        "Falha ao provisionar laboratório",
+      );
+    },
     async requestUserPasswordReset<TResponse = unknown>(id: string) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.backoffice.users[":id"][

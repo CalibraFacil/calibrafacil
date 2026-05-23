@@ -289,6 +289,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "provisionLab",
+          "namespace": "backoffice",
+          "policy": "cloud-only",
+        },
+        {
           "method": "requestUserPasswordReset",
           "namespace": "backoffice",
           "policy": "cloud-only",
@@ -946,6 +951,31 @@ describe("client runtime data policy registry", () => {
         {
           "method": "start",
           "namespace": "publicCheckout",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "requestSetupLink",
+          "namespace": "publicInvitations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "get",
+          "namespace": "labSetup",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "requestMagicLink",
+          "namespace": "labSetup",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "requestOtp",
+          "namespace": "labSetup",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "complete",
+          "namespace": "labSetup",
           "policy": "cloud-only",
         },
         {
@@ -1732,11 +1762,19 @@ describe("backoffice runtime adapter", () => {
     await expect(client.backoffice.stopImpersonation()).resolves.toEqual({
       ok: true,
     });
+    await expect(
+      client.backoffice.provisionLab({
+        lab: { name: "Lab A" },
+        owner: { name: "Owner A", email: "owner@example.test" },
+      }),
+    ).resolves.toEqual({ ok: true });
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "https://api.example.test/api/backoffice/access",
       "https://api.example.test/api/backoffice/impersonation/stop",
+      "https://api.example.test/api/backoffice/labs",
     ]);
     expect(fetchCalls[1]?.[1]?.method).toBe("POST");
+    expect(fetchCalls[2]?.[1]?.method).toBe("POST");
   });
 
   it("keeps backoffice impersonation cloud-only in the desktop adapter", async () => {
@@ -1755,6 +1793,86 @@ describe("backoffice runtime adapter", () => {
     await expect(client.backoffice.stopImpersonation()).rejects.toThrow(
       "Impersonação backoffice requer a API web/nuvem",
     );
+  });
+});
+
+describe("public invitations runtime adapter", () => {
+  it("requests invitation setup links through the cloud API", async () => {
+    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const fetchMock: typeof fetch = async (input, init) => {
+      fetchCalls.push([input, init]);
+      return Response.json({ setupLinkRequested: true });
+    };
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    await expect(
+      client.publicInvitations.requestSetupLink("invite-1"),
+    ).resolves.toEqual({ setupLinkRequested: true });
+    expect(fetchCalls.map(([input]) => String(input))).toEqual([
+      "https://api.example.test/api/invitations/invite-1/request-setup-link",
+    ]);
+    expect(fetchCalls[0]?.[1]?.method).toBe("POST");
+  });
+});
+
+describe("lab setup runtime adapter", () => {
+  it("loads ready setup metadata through the cloud API", async () => {
+    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const fetchMock: typeof fetch = async (input, init) => {
+      fetchCalls.push([input, init]);
+      return Response.json({
+        status: "ready",
+        email: "owner@lab.test",
+        organizationName: "Lab Acreditado",
+        organizationSlug: "lab-acreditado",
+        expiresAt: "2030-01-01T00:00:00.000Z",
+        passkeyPreferred: true,
+        fallbackMethods: ["magic_link", "email_otp"],
+      });
+    };
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    await expect(client.labSetup.get("setup-token")).resolves.toEqual({
+      status: "ready",
+      email: "owner@lab.test",
+      organizationName: "Lab Acreditado",
+      organizationSlug: "lab-acreditado",
+      expiresAt: "2030-01-01T00:00:00.000Z",
+      passkeyPreferred: true,
+      fallbackMethods: ["magic_link", "email_otp"],
+    });
+    expect(fetchCalls.map(([input]) => String(input))).toEqual([
+      "https://api.example.test/api/lab-setup/setup-token",
+    ]);
+    expect(fetchCalls[0]?.[1]?.method).toBe("GET");
+  });
+
+  it("preserves rejected setup-token status payloads for the claim UI", async () => {
+    const fetchMock: typeof fetch = async () =>
+      Response.json(
+        {
+          status: "expired",
+          passkeyPreferred: true,
+          fallbackMethods: ["magic_link", "email_otp"],
+        },
+        { status: 410 },
+      );
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    await expect(client.labSetup.get("expired-token")).resolves.toEqual({
+      status: "expired",
+      passkeyPreferred: true,
+      fallbackMethods: ["magic_link", "email_otp"],
+    });
   });
 });
 

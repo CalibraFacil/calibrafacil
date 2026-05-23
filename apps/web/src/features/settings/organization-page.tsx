@@ -13,6 +13,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { authClient, useActiveOrganization } from '@calibra-facil/auth/client'
+import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import { usePlanAccess } from '@/hooks/use-plan-access'
 import { calibraApi } from '@/utils/api'
 import {
@@ -442,7 +443,10 @@ function OrganizationSettingsPage({
       })
       if (result.error) {
         throw new Error(
-          result.error.message ?? 'Falha ao atualizar organização',
+          translateAuthErrorMessage(
+            result.error.message,
+            'Falha ao atualizar organização',
+          ),
         )
       }
       toast.success('Organização atualizada com sucesso!')
@@ -481,7 +485,10 @@ function OrganizationSettingsPage({
       })
       if (result.error) {
         throw new Error(
-          result.error.message ?? 'Falha ao atualizar informações',
+          translateAuthErrorMessage(
+            result.error.message,
+            'Falha ao atualizar informações',
+          ),
         )
       }
       toast.success('Informações ISO 17025 atualizadas com sucesso!')
@@ -519,7 +526,12 @@ function OrganizationSettingsPage({
         organizationId: activeOrg.id,
       })
       if (result.error) {
-        throw new Error(result.error.message ?? 'Falha ao enviar convite')
+        throw new Error(
+          translateAuthErrorMessage(
+            result.error.message,
+            'Falha ao enviar convite',
+          ),
+        )
       }
       toast.success(`Convite enviado para ${inviteEmail}`)
       setInviteEmail('')
@@ -546,7 +558,12 @@ function OrganizationSettingsPage({
         organizationId: activeOrg.id,
       })
       if (result.error) {
-        throw new Error(result.error.message ?? 'Falha ao remover membro')
+        throw new Error(
+          translateAuthErrorMessage(
+            result.error.message,
+            'Falha ao remover membro',
+          ),
+        )
       }
       toast.success('Membro removido com sucesso')
       setMemberToRemove(null)
@@ -589,7 +606,12 @@ function OrganizationSettingsPage({
         invitationId,
       })
       if (result.error) {
-        throw new Error(result.error.message ?? 'Falha ao cancelar convite')
+        throw new Error(
+          translateAuthErrorMessage(
+            result.error.message,
+            'Falha ao cancelar convite',
+          ),
+        )
       }
       toast.success('Convite cancelado com sucesso')
       await queryClient.invalidateQueries({
@@ -616,7 +638,12 @@ function OrganizationSettingsPage({
         organizationId: activeOrg.id,
       })
       if (result.error) {
-        throw new Error(result.error.message ?? 'Falha ao excluir organização')
+        throw new Error(
+          translateAuthErrorMessage(
+            result.error.message,
+            'Falha ao excluir organização',
+          ),
+        )
       }
       toast.success('Organização excluída com sucesso')
       // Redirect to dashboard after deletion
@@ -1645,7 +1672,10 @@ function OrganizationSettingsPage({
                       <Select
                         value={inviteRole}
                         onValueChange={(value) => {
-                          if (typeof value === 'string' && isGlobalMemberRole(value)) {
+                          if (
+                            typeof value === 'string' &&
+                            isGlobalMemberRole(value)
+                          ) {
                             setInviteRole(value)
                           }
                         }}

@@ -23,7 +23,6 @@ The app runs at `https://localhost:5173` (HTTPS required for auth cookies).
 ```
 /                          # Landing page
 /sign-in                   # Authentication
-/sign-up                   # Registration
 /accept-invitation         # Team invitation acceptance
 
 /dashboard

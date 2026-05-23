@@ -102,6 +102,7 @@ export const calibraApiPolicyRegistry = {
     unbanUser: "cloud-only",
     impersonateUser: "cloud-only",
     createUser: "cloud-only",
+    provisionLab: "cloud-only",
     requestUserPasswordReset: "cloud-only",
     stopImpersonation: "cloud-only",
   },
@@ -280,6 +281,15 @@ export const calibraApiPolicyRegistry = {
     getSnapshot: "cloud-only",
     getStatus: "cloud-only",
     start: "cloud-only",
+  },
+  publicInvitations: {
+    requestSetupLink: "cloud-only",
+  },
+  labSetup: {
+    get: "cloud-only",
+    requestMagicLink: "cloud-only",
+    requestOtp: "cloud-only",
+    complete: "cloud-only",
   },
   nonConformances: {
     list: "cloud-only",

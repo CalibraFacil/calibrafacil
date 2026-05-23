@@ -6,12 +6,20 @@ import { getDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
 import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import { admin as adminPlugin, organization } from "better-auth/plugins";
+import { emailOTP } from "better-auth/plugins/email-otp";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { oneTimeToken } from "better-auth/plugins/one-time-token";
+import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
+import type {
+  AuthenticationResponseJSON,
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+} from "@simplewebauthn/server";
 import {
   EmailConfirmationEmail,
+  LabAccessLinkEmail,
   OrganizationInvitationEmail,
   PasswordResetEmail,
   PortalInvitationEmail,
@@ -26,6 +34,18 @@ import {
   platformRoles,
   roles,
 } from "./access";
+import {
+  hasActiveLabMembership,
+  hasPendingLabInvitation,
+  hasValidLabSetupTokenForEmail,
+  normalizeLabAccessEmail,
+  validateLabAccountSetupToken,
+} from "./lab-access";
+
+export type BetterAuthPasskeyPortableTypes =
+  | AuthenticationResponseJSON
+  | PublicKeyCredentialCreationOptionsJSON
+  | PublicKeyCredentialRequestOptionsJSON;
 
 let devFallbackAuthSecret: string | null = null;
 
@@ -647,7 +667,7 @@ async function sendPortalMagicLink(
     }
 
     console.info(
-      `[Better Auth] Portal magic link for ${normalizedEmail}: ${magicLinkUrl}`,
+      `[Better Auth] Portal magic link suppressed in development email delivery for ${normalizedEmail}`,
     );
     return;
   }
@@ -695,6 +715,175 @@ async function sendPortalMagicLink(
           "",
           "Se você não solicitou acesso, ignore esta mensagem.",
         ].join("\n"),
+  });
+}
+
+function readSetupTokenFromMagicLinkContext(ctx: unknown): string | undefined {
+  if (!ctx || typeof ctx !== "object" || !("body" in ctx)) return undefined;
+
+  const metadata = toRecord(toRecord(toRecord(ctx).body).metadata);
+  const setupToken = metadata.setupToken;
+
+  return typeof setupToken === "string" && setupToken.trim()
+    ? setupToken.trim()
+    : undefined;
+}
+
+async function canSendLabPasswordlessEmail(email: string, setupToken?: string) {
+  return (
+    (await hasValidLabSetupTokenForEmail(setupToken, email)) ||
+    (await hasActiveLabMembership(email)) ||
+    (await hasPendingLabInvitation(email))
+  );
+}
+
+async function sendLabMagicLink(
+  data: { email: string; url: string; token?: string },
+  ctx?: unknown,
+) {
+  const normalizedEmail = normalizeLabAccessEmail(data.email);
+  const setupToken = readSetupTokenFromMagicLinkContext(ctx);
+
+  if (!(await canSendLabPasswordlessEmail(normalizedEmail, setupToken))) {
+    console.warn(
+      `[Lab Auth] Suppressed magic link for non-LAB email: ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    if (isProductionRuntime()) {
+      throw new Error("RESEND_API_KEY is required to send LAB magic links");
+    }
+
+    console.info(
+      `[Better Auth] LAB magic link suppressed in development email delivery for ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.EMAIL_FROM ||
+    "Calibra Fácil <noreply@calibrafacil.com>";
+
+  await resend.emails.send({
+    from: fromEmail,
+    to: normalizedEmail,
+    subject: "Acesse o CalibraFácil",
+    react: LabAccessLinkEmail({
+      recipientName: normalizedEmail,
+      accessUrl: data.url,
+      logoSrc: getEmailLogoSrc(),
+    }),
+    text: [
+      "Acesse o CalibraFácil",
+      "",
+      "Use o link abaixo para entrar no dashboard:",
+      data.url,
+      "",
+      "Se você não solicitou acesso, ignore esta mensagem.",
+    ].join("\n"),
+  });
+}
+
+async function sendLabVerificationOtp(data: {
+  email: string;
+  otp: string;
+  type: "sign-in" | "email-verification" | "forget-password" | "change-email";
+}) {
+  const normalizedEmail = normalizeLabAccessEmail(data.email);
+
+  if (
+    data.type !== "sign-in" ||
+    !(await canSendLabPasswordlessEmail(normalizedEmail))
+  ) {
+    console.warn(
+      `[Lab Auth] Suppressed ${data.type} OTP for non-LAB email: ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    if (isProductionRuntime()) {
+      throw new Error("RESEND_API_KEY is required to send LAB OTP emails");
+    }
+
+    console.info(
+      `[Better Auth] LAB OTP suppressed in development email delivery for ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.EMAIL_FROM ||
+    "Calibra Fácil <noreply@calibrafacil.com>";
+
+  await resend.emails.send({
+    from: fromEmail,
+    to: normalizedEmail,
+    subject: "Código de acesso ao CalibraFácil",
+    text: [
+      "Código de acesso ao CalibraFácil",
+      "",
+      `Seu código de acesso é: ${data.otp}`,
+      "",
+      "Este código expira em poucos minutos. Se você não solicitou acesso, ignore esta mensagem.",
+    ].join("\n"),
+  });
+}
+
+export async function sendLabAccountSetupEmail(input: {
+  email: string;
+  recipientName?: string | null;
+  organizationName: string;
+  claimUrl: string;
+}) {
+  const normalizedEmail = normalizeLabAccessEmail(input.email);
+  const apiKey = process.env.RESEND_API_KEY;
+
+  if (!apiKey) {
+    if (isProductionRuntime()) {
+      throw new Error("RESEND_API_KEY is required to send LAB setup links");
+    }
+
+    console.info(
+      `[Better Auth] LAB account setup link suppressed in development email delivery for ${normalizedEmail}`,
+    );
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL ||
+    process.env.EMAIL_FROM ||
+    "Calibra Fácil <noreply@calibrafacil.com>";
+
+  await resend.emails.send({
+    from: fromEmail,
+    to: normalizedEmail,
+    subject: `Configure seu acesso a ${sanitizeMailHeader(input.organizationName)}`,
+    react: LabAccessLinkEmail({
+      recipientName: input.recipientName ?? normalizedEmail,
+      organizationName: input.organizationName,
+      accessUrl: input.claimUrl,
+      logoSrc: getEmailLogoSrc(),
+    }),
+    text: [
+      `Configure seu acesso a ${input.organizationName}`,
+      "",
+      "Use o link abaixo para reivindicar seu acesso ao CalibraFácil:",
+      input.claimUrl,
+      "",
+      "Se você não esperava este convite, ignore esta mensagem.",
+    ].join("\n"),
   });
 }
 
@@ -827,7 +1016,7 @@ function createSharedConfig() {
           }
 
           console.info(
-            `[Better Auth] Reset password link for ${user.email}: ${url}`,
+            `[Better Auth] Reset password link suppressed in development email delivery for ${user.email}`,
           );
           return;
         }
@@ -971,6 +1160,93 @@ async function findDefaultActiveOrganizationId(
   return membership?.organizationId ?? null;
 }
 
+function createLabPasskeyPluginOptions(isProduction: boolean) {
+  const webBaseUrl = resolveWebBaseUrl(isProduction);
+
+  try {
+    const url = new URL(webBaseUrl);
+
+    return {
+      rpName: "CalibraFácil",
+      rpID: url.hostname,
+      origin: url.origin,
+      advanced: {
+        webAuthnChallengeCookie: "lab-passkey-challenge",
+      },
+      registration: {
+        requireSession: false,
+        resolveUser: async ({ context }: { context?: string | null }) => {
+          const token = context?.trim();
+
+          if (!token) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Token de configuração obrigatório",
+            });
+          }
+
+          const validation = await validateLabAccountSetupToken(token);
+
+          if (!validation.ok) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Link de configuração inválido ou expirado",
+            });
+          }
+
+          return {
+            id: validation.token.userId,
+            name: validation.token.email,
+            displayName: validation.token.email,
+          };
+        },
+        afterVerification: async ({
+          user,
+          context,
+        }: {
+          user: { id: string };
+          context?: string | null;
+        }) => {
+          const token = context?.trim();
+          const validation = token
+            ? await validateLabAccountSetupToken(token)
+            : null;
+
+          await getDb()
+            .insert(schema.platformEventLog)
+            .values({
+              actorUserId: user.id,
+              targetUserId: user.id,
+              action: "lab_account.passkey_registered",
+              entityType: "lab_account_setup_token",
+              entityId: validation?.ok ? validation.token.id : null,
+              details: validation?.ok
+                ? {
+                    organizationId: validation.token.organizationId,
+                    invitationId: validation.token.invitationId,
+                    purpose: validation.token.purpose,
+                  }
+                : null,
+            });
+        },
+      },
+    } satisfies Parameters<typeof passkey>[0];
+  } catch {
+    return {
+      rpName: "CalibraFácil",
+      advanced: {
+        webAuthnChallengeCookie: "lab-passkey-challenge",
+      },
+      registration: {
+        requireSession: false,
+        resolveUser: async () => {
+          throw new APIError("BAD_REQUEST", {
+            message: "Origem WebAuthn não configurada",
+          });
+        },
+      },
+    } satisfies Parameters<typeof passkey>[0];
+  }
+}
+
 /**
  * Factory function to create Lab Auth instance
  * Call this inside request handlers to ensure env vars are available
@@ -984,6 +1260,10 @@ export function createLabAuth() {
     ...sharedConfig,
     basePath: "/api/auth/lab",
     baseURL,
+    emailAndPassword: {
+      ...sharedConfig.emailAndPassword,
+      disableSignUp: true,
+    },
     databaseHooks: {
       session: {
         create: {
@@ -1018,6 +1298,27 @@ export function createLabAuth() {
       cookiePrefix: "lab",
     },
     plugins: [
+      passkey(createLabPasskeyPluginOptions(isProduction)),
+      magicLink({
+        expiresIn: 60 * 10,
+        sendMagicLink: sendLabMagicLink,
+        disableSignUp: true,
+        storeToken: "hashed",
+        rateLimit: {
+          window: 60,
+          max: 5,
+        },
+      }),
+      emailOTP({
+        expiresIn: 60 * 10,
+        disableSignUp: true,
+        storeOTP: "hashed",
+        rateLimit: {
+          window: 60,
+          max: 5,
+        },
+        sendVerificationOTP: sendLabVerificationOtp,
+      }),
       adminPlugin({
         ac: platformAc,
         roles: platformRoles,

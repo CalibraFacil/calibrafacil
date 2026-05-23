@@ -169,6 +169,13 @@
       "when": 1779379200000,
       "tag": "0023_reference_standard_certificate_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1779465600000,
+      "tag": "0024_lab_passwordless_access",
+      "breakpoints": true
     }
   ]
 }

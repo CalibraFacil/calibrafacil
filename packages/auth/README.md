@@ -6,6 +6,18 @@ Authentication and authorization system using Better-Auth with organization supp
 
 This package provides authentication, session management, and role-based access control for the Calibra Fácil platform. It integrates with Better-Auth and includes ISO 17025 compliant permission management.
 
+## Auth Surfaces
+
+Calibra Facil uses separate Better Auth instances for each product surface:
+
+- LAB dashboard: mounted under `/api/auth/lab`
+- Backoffice: mounted under `/api/auth/backoffice`
+- Client portal: mounted under `/api/auth/portal`
+
+LAB access is invite/provisioning-only. Backoffice admins provision LAB owners or resend member setup links, and those emails point to `/claim-account?token=...`. The claim flow is passkey-first and only offers magic-link or email OTP fallback after the setup token proves the user is allowed to claim a LAB account. Raw setup tokens are never stored; only hashed token secrets are persisted.
+
+Self-service LAB registration is intentionally not exposed. New LAB users must enter through a provisioned owner link or a pending LAB invitation, while client portal users continue to use the portal-specific auth flow.
+
 ## Installation
 
 ```bash

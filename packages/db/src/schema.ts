@@ -168,6 +168,29 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+export const passkey = pgTable(
+  "passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    aaguid: text("aaguid"),
+  },
+  (table) => [
+    index("passkey_user_id_idx").on(table.userId),
+    uniqueIndex("passkey_credential_id_uidx").on(table.credentialID),
+  ],
+);
+
 export const organization = pgTable(
   "organization",
   {
@@ -636,6 +659,45 @@ export const invitation = pgTable(
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
+  ],
+);
+
+export type LabAccountSetupTokenPurpose = "owner_claim" | "member_invite_claim";
+
+export const labAccountSetupToken = pgTable(
+  "lab_account_setup_token",
+  {
+    id: text("id").primaryKey(),
+    secretHash: text("secret_hash").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    invitationId: text("invitation_id").references(() => invitation.id, {
+      onDelete: "cascade",
+    }),
+    email: text("email").notNull(),
+    purpose: text("purpose").$type<LabAccountSetupTokenPurpose>().notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    source: text("source").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("lab_account_setup_token_user_idx").on(table.userId),
+    index("lab_account_setup_token_org_idx").on(table.organizationId),
+    index("lab_account_setup_token_invitation_idx").on(table.invitationId),
+    index("lab_account_setup_token_expires_idx").on(table.expiresAt),
+    index("lab_account_setup_token_consumed_idx").on(table.consumedAt),
   ],
 );
 
@@ -1521,8 +1583,10 @@ export const customerAuditLog = pgTable(
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  passkeys: many(passkey),
   members: many(member),
   invitations: many(invitation),
+  labAccountSetupTokens: many(labAccountSetupToken),
   ssoProviders: many(ssoProvider),
   customDomains: many(organizationCustomDomain),
   certificateTemplates: many(certificateTemplate),
@@ -1555,6 +1619,13 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
+export const passkeyRelations = relations(passkey, ({ one }) => ({
+  user: one(user, {
+    fields: [passkey.userId],
+    references: [user.id],
+  }),
+}));
+
 export const organizationRelations = relations(
   organization,
   ({ one, many }) => ({
@@ -1562,6 +1633,7 @@ export const organizationRelations = relations(
     units: many(organizationUnit),
     unitAssignments: many(memberUnitAssignment),
     invitations: many(invitation),
+    labAccountSetupTokens: many(labAccountSetupToken),
     eventLogs: many(organizationEventLog),
     subscription: one(subscription),
     ssoProviders: many(ssoProvider),
@@ -1696,7 +1768,7 @@ export const organizationSupportRequestEventRelations = relations(
   }),
 );
 
-export const invitationRelations = relations(invitation, ({ one }) => ({
+export const invitationRelations = relations(invitation, ({ one, many }) => ({
   organization: one(organization, {
     fields: [invitation.organizationId],
     references: [organization.id],
@@ -1705,7 +1777,30 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
     fields: [invitation.inviterId],
     references: [user.id],
   }),
+  labAccountSetupTokens: many(labAccountSetupToken),
 }));
+
+export const labAccountSetupTokenRelations = relations(
+  labAccountSetupToken,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [labAccountSetupToken.userId],
+      references: [user.id],
+    }),
+    organization: one(organization, {
+      fields: [labAccountSetupToken.organizationId],
+      references: [organization.id],
+    }),
+    invitation: one(invitation, {
+      fields: [labAccountSetupToken.invitationId],
+      references: [invitation.id],
+    }),
+    createdByUser: one(user, {
+      fields: [labAccountSetupToken.createdByUserId],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const ssoProviderRelations = relations(ssoProvider, ({ one }) => ({
   organization: one(organization, {
