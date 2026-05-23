@@ -33,6 +33,7 @@
     "@calibra-facil/worker": "workspace:^",
     "@hono/standard-validator": "^0.2.2",
     "@hono/zod-validator": "^0.7.6",
+    "@resvg/resvg-js": "2.6.2",
     "@scalar/hono-api-reference": "^0.10.5",
     "@vercel/queue": "^0.1.6",
     "drizzle-orm": "^0.45.2",

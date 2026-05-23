@@ -111,6 +111,9 @@ importers:
       '@hono/zod-validator':
         specifier: ^0.7.6
         version: 0.7.6(hono@4.12.5)(zod@4.2.1)
+      '@resvg/resvg-js':
+        specifier: 2.6.2
+        version: 2.6.2
       '@scalar/hono-api-reference':
         specifier: ^0.10.5
         version: 0.10.5(hono@4.12.5)
