@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { REGEXP_ONLY_DIGITS } from 'input-otp'
 import {
   backofficeSignIn,
   backofficeSignOut,
@@ -11,11 +12,21 @@ import { getBackofficeAccess } from '@/features/backoffice/queries'
 import { calibraApi } from '@/utils/api'
 import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
 import { cn } from '@/lib/utils'
+import {
+  AuthStatusMessage,
+  type AuthStatus,
+} from '@/components/auth-status-message'
 import { BrandMark } from '@/components/brand'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from '@/components/ui/input-otp'
 import { Separator } from '@/components/ui/separator'
 
 interface SignInFormProps extends React.ComponentProps<'form'> {
@@ -34,7 +45,7 @@ export function SignInForm({
   const [password, setPassword] = useState('')
   const [organizationSlug, setOrganizationSlug] = useState('')
   const [ssoEmail, setSsoEmail] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSsoLoading, setIsSsoLoading] = useState(false)
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false)
@@ -52,7 +63,7 @@ export function SignInForm({
       return
     }
 
-    setError(null)
+    setAuthStatus(null)
     setIsLoading(true)
 
     try {
@@ -62,12 +73,13 @@ export function SignInForm({
       })
 
       if (signInError) {
-        setError(
-          translateAuthErrorMessage(
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
             signInError.message,
             'Não foi possível entrar. Verifique os dados e tente novamente.',
           ),
-        )
+        })
         return
       }
 
@@ -86,30 +98,36 @@ export function SignInForm({
       }
 
       await backofficeSignOut()
-      setError('Sua conta não possui acesso ao backoffice')
+      setAuthStatus({
+        tone: 'error',
+        title: 'Sua conta não possui acesso ao backoffice',
+      })
     } catch {
-      setError(
-        'Não foi possível conectar ao servidor de autenticação. Verifique sua conexão e tente novamente.',
-      )
+      setAuthStatus({
+        tone: 'error',
+        title:
+          'Não foi possível conectar ao servidor de autenticação. Verifique sua conexão e tente novamente.',
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
   async function handlePasskeySignIn() {
-    setError(null)
+    setAuthStatus(null)
     setIsLoading(true)
 
     try {
       const result = await labAuthClient.signIn.passkey()
 
       if (result.error) {
-        setError(
-          translateAuthErrorMessage(
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
             result.error.message,
             'Não foi possível entrar com passkey.',
           ),
-        )
+        })
         return
       }
 
@@ -117,14 +135,17 @@ export function SignInForm({
       startDesktopInitialSync()
       navigate({ to: redirect || '/dashboard' })
     } catch {
-      setError('Não foi possível entrar com passkey.')
+      setAuthStatus({
+        tone: 'error',
+        title: 'Não foi possível entrar com passkey.',
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
   async function handleMagicLinkSignIn() {
-    setError(null)
+    setAuthStatus(null)
     setIsMagicLinkLoading(true)
 
     try {
@@ -136,25 +157,34 @@ export function SignInForm({
       })
 
       if (magicLinkError) {
-        setError(
-          translateAuthErrorMessage(
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
             magicLinkError.message,
             'Não foi possível enviar o link mágico.',
           ),
-        )
+        })
         return
       }
 
-      setError('Se o email tiver acesso LAB, enviaremos um link mágico.')
+      setAuthStatus({
+        tone: 'success',
+        title: 'Link mágico solicitado',
+        description:
+          'Se o email tiver acesso LAB, enviaremos o link em instantes.',
+      })
     } catch {
-      setError('Falha ao solicitar link mágico.')
+      setAuthStatus({
+        tone: 'error',
+        title: 'Falha ao solicitar link mágico.',
+      })
     } finally {
       setIsMagicLinkLoading(false)
     }
   }
 
   async function handleRequestOtp() {
-    setError(null)
+    setAuthStatus(null)
     setIsOtpRequesting(true)
 
     try {
@@ -165,26 +195,35 @@ export function SignInForm({
         })
 
       if (otpRequestError) {
-        setError(
-          translateAuthErrorMessage(
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
             otpRequestError.message,
             'Falha ao enviar código.',
           ),
-        )
+        })
         return
       }
 
       setOtpRequested(true)
-      setError('Se o email tiver acesso LAB, enviaremos um código de acesso.')
+      setAuthStatus({
+        tone: 'success',
+        title: 'Código solicitado',
+        description:
+          'Se o email tiver acesso LAB, enviaremos um código de 6 dígitos.',
+      })
     } catch {
-      setError('Falha ao solicitar código.')
+      setAuthStatus({
+        tone: 'error',
+        title: 'Falha ao solicitar código.',
+      })
     } finally {
       setIsOtpRequesting(false)
     }
   }
 
   async function handleOtpSignIn() {
-    setError(null)
+    setAuthStatus(null)
     setIsOtpSigningIn(true)
 
     try {
@@ -194,9 +233,13 @@ export function SignInForm({
       })
 
       if (otpSignInError) {
-        setError(
-          translateAuthErrorMessage(otpSignInError.message, 'Código inválido.'),
-        )
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
+            otpSignInError.message,
+            'Código inválido.',
+          ),
+        })
         return
       }
 
@@ -204,7 +247,10 @@ export function SignInForm({
       startDesktopInitialSync()
       navigate({ to: redirect || '/dashboard' })
     } catch {
-      setError('Falha ao validar código.')
+      setAuthStatus({
+        tone: 'error',
+        title: 'Falha ao validar código.',
+      })
     } finally {
       setIsOtpSigningIn(false)
     }
@@ -212,7 +258,7 @@ export function SignInForm({
 
   async function handleSsoSubmit(e: React.SyntheticEvent) {
     e.preventDefault()
-    setError(null)
+    setAuthStatus(null)
     setIsSsoLoading(true)
 
     try {
@@ -222,14 +268,20 @@ export function SignInForm({
         redirectPath: redirect || '/dashboard',
       })
       if (!data.url) {
-        setError('Falha ao iniciar login via SSO')
+        setAuthStatus({
+          tone: 'error',
+          title: 'Falha ao iniciar login via SSO',
+        })
         return
       }
 
       clearDesktopSignedOut()
       window.location.assign(data.url)
     } catch {
-      setError('Falha ao iniciar login via SSO')
+      setAuthStatus({
+        tone: 'error',
+        title: 'Falha ao iniciar login via SSO',
+      })
     } finally {
       setIsSsoLoading(false)
     }
@@ -255,11 +307,7 @@ export function SignInForm({
               : 'Use sua passkey ou um método seguro por email'}
           </p>
         </div>
-        {error && (
-          <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
-            {error}
-          </div>
-        )}
+        {authStatus ? <AuthStatusMessage status={authStatus} /> : null}
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input
@@ -308,18 +356,34 @@ export function SignInForm({
               <div className="space-y-3">
                 <Field>
                   <FieldLabel htmlFor="sign-in-otp">Código recebido</FieldLabel>
-                  <Input
+                  <InputOTP
                     id="sign-in-otp"
+                    maxLength={6}
+                    pattern={REGEXP_ONLY_DIGITS}
                     value={otp}
-                    onChange={(event) => setOtp(event.target.value)}
+                    onChange={setOtp}
                     inputMode="numeric"
                     autoComplete="one-time-code"
+                    aria-label="Código recebido"
+                    containerClassName="justify-center"
                     required
-                  />
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                    </InputOTPGroup>
+                    <InputOTPSeparator />
+                    <InputOTPGroup>
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
                 </Field>
                 <Button
                   type="button"
-                  disabled={isOtpSigningIn || !otp.trim()}
+                  disabled={isOtpSigningIn || otp.length < 6}
                   onClick={handleOtpSignIn}
                 >
                   {isOtpSigningIn ? 'Validando...' : 'Entrar com código'}

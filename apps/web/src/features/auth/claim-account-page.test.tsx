@@ -23,7 +23,6 @@ const claimMocks = vi.hoisted(() => ({
   signInEmailOtp: vi.fn(),
   useSession: vi.fn(),
   startDesktopInitialSync: vi.fn(),
-  toastSuccess: vi.fn(),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -61,12 +60,6 @@ vi.mock('@/utils/api', () => ({
   },
 }))
 
-vi.mock('sonner', () => ({
-  toast: {
-    success: claimMocks.toastSuccess,
-  },
-}))
-
 const readySetup = {
   status: 'ready',
   email: 'owner@lab.test',
@@ -80,6 +73,7 @@ const readySetup = {
 describe('ClaimAccountPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    installResizeObserver()
     claimMocks.getSetup.mockResolvedValue(readySetup)
     claimMocks.completeSetup.mockResolvedValue({
       claimed: true,
@@ -97,6 +91,7 @@ describe('ClaimAccountPage', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    Reflect.deleteProperty(globalThis, 'ResizeObserver')
     Reflect.deleteProperty(window, 'PublicKeyCredential')
   })
 
@@ -241,3 +236,16 @@ function installWebAuthnSupport() {
 }
 
 function PublicKeyCredentialStub() {}
+
+function installResizeObserver() {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    configurable: true,
+    value: ResizeObserverStub,
+  })
+}

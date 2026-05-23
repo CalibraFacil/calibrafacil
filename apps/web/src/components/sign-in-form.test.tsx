@@ -106,11 +106,13 @@ describe('startDesktopInitialSync', () => {
 describe('SignInForm workflow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    installResizeObserver()
   })
 
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    Reflect.deleteProperty(globalThis, 'ResizeObserver')
     Reflect.deleteProperty(window, 'calibraBridge')
   })
 
@@ -185,7 +187,7 @@ describe('SignInForm workflow', () => {
     })
     expect(
       await screen.findByText(
-        'Se o email tiver acesso LAB, enviaremos um link mágico.',
+        'Se o email tiver acesso LAB, enviaremos o link em instantes.',
       ),
     ).toBeTruthy()
   })
@@ -344,5 +346,18 @@ function installBridge(bridge: { startSync: () => Promise<unknown> }) {
   Object.defineProperty(window, 'calibraBridge', {
     configurable: true,
     value: bridge,
+  })
+}
+
+function installResizeObserver() {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    configurable: true,
+    value: ResizeObserverStub,
   })
 }

@@ -3,7 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { labAuthClient, useSession } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
+import { REGEXP_ONLY_DIGITS } from 'input-otp'
 import { BrandLockup } from '@/components/brand'
+import {
+  AuthStatusMessage,
+  type AuthStatus,
+} from '@/components/auth-status-message'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Card,
@@ -14,12 +19,16 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from '@/components/ui/input-otp'
 import { Spinner } from '@/components/ui/spinner'
 import { calibraApi } from '@/utils/api'
 import { startDesktopInitialSync } from '@/components/sign-in-form'
 import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
 type ClaimCompleteResponse = {
@@ -72,9 +81,15 @@ function statusMessage(status: string | undefined) {
 export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
   const navigate = useNavigate()
   const sessionQuery = useSession()
-  const [message, setMessage] = useState<string | null>(
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(
     error
-      ? translateAuthErrorMessage(error, 'Falha ao configurar acesso.')
+      ? {
+          tone: 'error',
+          title: translateAuthErrorMessage(
+            error,
+            'Falha ao configurar acesso.',
+          ),
+        }
       : null,
   )
   const [otp, setOtp] = useState('')
@@ -112,13 +127,16 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
   async function handleCreatePasskey() {
     if (!token) return
     if (!webAuthnSupported) {
-      setMessage(
-        'Seu navegador não está pronto para passkeys. Use link mágico ou código por email.',
-      )
+      setAuthStatus({
+        tone: 'info',
+        title: 'Passkey indisponível neste navegador',
+        description:
+          'Use link mágico ou código por email para concluir o acesso.',
+      })
       return
     }
 
-    setMessage(null)
+    setAuthStatus(null)
     setIsPasskeyLoading(true)
 
     try {
@@ -129,34 +147,38 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
       })
 
       if (registration.error) {
-        setMessage(
-          translateAuthErrorMessage(
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
             registration.error.message,
             'Não foi possível criar a passkey.',
           ),
-        )
+        })
         return
       }
 
       const signIn = await labAuthClient.signIn.passkey()
 
       if (signIn.error) {
-        setMessage(
-          translateAuthErrorMessage(
+        setAuthStatus({
+          tone: 'info',
+          title: translateAuthErrorMessage(
             signIn.error.message,
             'Passkey criada. Entre com a passkey para concluir o acesso.',
           ),
-        )
+        })
         return
       }
 
       await finishClaim()
     } catch (err) {
-      setMessage(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível criar a passkey.',
-      )
+      setAuthStatus({
+        tone: 'error',
+        title:
+          err instanceof Error
+            ? err.message
+            : 'Não foi possível criar a passkey.',
+      })
     } finally {
       setIsPasskeyLoading(false)
     }
@@ -164,16 +186,22 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
 
   async function handleMagicLink() {
     if (!token) return
-    setMessage(null)
+    setAuthStatus(null)
     setIsMagicLinkLoading(true)
 
     try {
       await calibraApi.labSetup.requestMagicLink(token)
-      toast.success('Enviamos um link mágico para o email provisionado.')
+      setAuthStatus({
+        tone: 'success',
+        title: 'Link mágico enviado',
+        description: 'Enviamos um link de acesso para o email provisionado.',
+      })
     } catch (err) {
-      setMessage(
-        err instanceof Error ? err.message : 'Falha ao enviar link mágico.',
-      )
+      setAuthStatus({
+        tone: 'error',
+        title:
+          err instanceof Error ? err.message : 'Falha ao enviar link mágico.',
+      })
     } finally {
       setIsMagicLinkLoading(false)
     }
@@ -181,15 +209,23 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
 
   async function handleRequestOtp() {
     if (!token) return
-    setMessage(null)
+    setAuthStatus(null)
     setIsOtpRequesting(true)
 
     try {
       await calibraApi.labSetup.requestOtp(token)
       setOtpRequested(true)
-      toast.success('Enviamos um código para o email provisionado.')
+      setAuthStatus({
+        tone: 'success',
+        title: 'Código enviado',
+        description:
+          'Digite o código de 6 dígitos recebido no email provisionado.',
+      })
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Falha ao enviar código.')
+      setAuthStatus({
+        tone: 'error',
+        title: err instanceof Error ? err.message : 'Falha ao enviar código.',
+      })
     } finally {
       setIsOtpRequesting(false)
     }
@@ -198,7 +234,7 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
   async function handleOtpSignIn(event: React.FormEvent) {
     event.preventDefault()
     if (!metadata?.email) return
-    setMessage(null)
+    setAuthStatus(null)
     setIsOtpSigningIn(true)
 
     try {
@@ -208,17 +244,22 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
       })
 
       if (result.error) {
-        setMessage(
-          translateAuthErrorMessage(result.error.message, 'Código inválido.'),
-        )
+        setAuthStatus({
+          tone: 'error',
+          title: translateAuthErrorMessage(
+            result.error.message,
+            'Código inválido.',
+          ),
+        })
         return
       }
 
       await finishClaim()
     } catch (err) {
-      setMessage(
-        err instanceof Error ? err.message : 'Falha ao validar código.',
-      )
+      setAuthStatus({
+        tone: 'error',
+        title: err instanceof Error ? err.message : 'Falha ao validar código.',
+      })
     } finally {
       setIsOtpSigningIn(false)
     }
@@ -268,21 +309,19 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {message ? (
-            <div className="bg-destructive/10 text-destructive rounded-md p-3 text-sm">
-              {message}
-            </div>
-          ) : null}
+          {authStatus ? <AuthStatusMessage status={authStatus} /> : null}
 
           {shouldCompleteAuthenticatedClaim ? (
             <AuthenticatedClaimCompletion
               onComplete={finishClaim}
               onError={(err) =>
-                setMessage(
-                  err instanceof Error
-                    ? err.message
-                    : 'Não foi possível concluir o acesso.',
-                )
+                setAuthStatus({
+                  tone: 'error',
+                  title:
+                    err instanceof Error
+                      ? err.message
+                      : 'Não foi possível concluir o acesso.',
+                })
               }
             />
           ) : null}
@@ -335,16 +374,35 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
               <form className="space-y-3" onSubmit={handleOtpSignIn}>
                 <Field>
                   <FieldLabel htmlFor="claim-otp">Código recebido</FieldLabel>
-                  <Input
+                  <InputOTP
                     id="claim-otp"
+                    maxLength={6}
+                    pattern={REGEXP_ONLY_DIGITS}
                     value={otp}
-                    onChange={(event) => setOtp(event.target.value)}
+                    onChange={setOtp}
                     inputMode="numeric"
                     autoComplete="one-time-code"
+                    aria-label="Código recebido"
+                    containerClassName="justify-center"
                     required
-                  />
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                    </InputOTPGroup>
+                    <InputOTPSeparator />
+                    <InputOTPGroup>
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
                 </Field>
-                <Button type="submit" disabled={isOtpSigningIn || !otp.trim()}>
+                <Button
+                  type="submit"
+                  disabled={isOtpSigningIn || otp.length < 6}
+                >
                   {isOtpSigningIn ? 'Validando...' : 'Entrar com código'}
                 </Button>
               </form>
