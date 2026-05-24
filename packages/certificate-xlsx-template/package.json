@@ -12,8 +12,8 @@
     "./manifest": "./src/manifest.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit",
-    "check-types": "tsc -p tsconfig.json --noEmit",
+    "build": "tsgo -p tsconfig.json --noEmit",
+    "check-types": "tsgo -p tsconfig.json --noEmit",
     "test": "vitest run",
     "generate:fixtures": "tsx scripts/create-sanitized-exemplo-fixture.ts",
     "analyze:exemplo": "tsx scripts/analyze-exemplo.ts",

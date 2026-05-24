@@ -31,5 +31,11 @@
     "types": ["@cloudflare/workers-types"]
   },
   "include": ["src/**/*", "api/**/*.ts", "vercel-src/**/*"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "test",
+    "src/**/__tests__",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
+  ]
 }
