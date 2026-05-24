@@ -209,6 +209,26 @@ function buildAuthHeaders(requestHeaders: Headers, issuerOrigin?: string) {
   return headers;
 }
 
+function normalizeDashboardRedirectPath(value: string | undefined) {
+  if (!value || value.startsWith("//")) return "/dashboard";
+
+  try {
+    const url = new URL(value, "https://calibra.local");
+    const path = `${url.pathname}${url.search}${url.hash}`;
+    const isDashboardPath =
+      path === "/dashboard" ||
+      path.startsWith("/dashboard/") ||
+      path.startsWith("/dashboard?") ||
+      path.startsWith("/dashboard#");
+
+    return url.origin === "https://calibra.local" && isDashboardPath
+      ? path
+      : "/dashboard";
+  } catch {
+    return "/dashboard";
+  }
+}
+
 async function forwardBetterAuthError(
   c: {
     json: (body: unknown, status?: number) => Response;
@@ -590,10 +610,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
   )
   .post("/start", zValidator("json", startSsoSchema), async (c) => {
     const input = c.req.valid("json");
-    const redirectPath =
-      input.redirectPath && input.redirectPath.startsWith("/")
-        ? input.redirectPath
-        : "/dashboard";
+    const redirectPath = normalizeDashboardRedirectPath(input.redirectPath);
 
     const org = await db.query.organization.findFirst({
       where: and(

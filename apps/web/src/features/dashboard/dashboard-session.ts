@@ -5,16 +5,8 @@ import { authClient } from '@calibra-facil/auth/client'
 import { hasDesktopSession } from '@/runtime/desktop-auth'
 import { isDesktopRuntime } from '@/runtime/desktop'
 
-const DASHBOARD_SESSION_CACHE_MS = 30_000
-
-type DashboardSessionResult = Awaited<ReturnType<typeof authClient.getSession>>
-
 let dashboardSessionPromise: ReturnType<typeof authClient.getSession> | null =
   null
-let dashboardSessionCache: {
-  expiresAt: number
-  result: DashboardSessionResult
-} | null = null
 
 export async function dashboardBeforeLoad({
   location,
@@ -52,22 +44,9 @@ export async function dashboardBeforeLoad({
 }
 
 async function getDashboardSession() {
-  if (dashboardSessionCache && dashboardSessionCache.expiresAt > Date.now()) {
-    return dashboardSessionCache.result
-  }
-
-  dashboardSessionPromise ??= authClient
-    .getSession()
-    .then((result) => {
-      dashboardSessionCache = {
-        expiresAt: Date.now() + DASHBOARD_SESSION_CACHE_MS,
-        result,
-      }
-      return result
-    })
-    .finally(() => {
-      dashboardSessionPromise = null
-    })
+  dashboardSessionPromise ??= authClient.getSession().finally(() => {
+    dashboardSessionPromise = null
+  })
 
   return dashboardSessionPromise
 }

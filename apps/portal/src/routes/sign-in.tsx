@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { sanitizePortalRedirect } from "@/lib/auth-redirect";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -27,11 +28,12 @@ function SignInPage() {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const safeRedirect = sanitizePortalRedirect(redirect);
 
   function getCallbackURL() {
-    if (typeof window === "undefined") return redirect || "/";
+    if (typeof window === "undefined") return safeRedirect;
 
-    return new URL(redirect || "/", window.location.origin).toString();
+    return new URL(safeRedirect, window.location.origin).toString();
   }
 
   async function handleSubmit(e: React.FormEvent) {

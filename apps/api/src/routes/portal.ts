@@ -241,17 +241,46 @@ function getPortalHostOrigin(c: {
   return c.req.header("origin") ?? c.req.header("referer") ?? null;
 }
 
+function isDefaultPortalHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+
+  return (
+    normalized === "portal.calibrafacil.com" ||
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "[::1]" ||
+    normalized.startsWith("10.") ||
+    normalized.startsWith("192.168.")
+  );
+}
+
+type PortalLabScope = {
+  labOrganizationId: string | null;
+  blocked: boolean;
+};
+
 async function getPortalLabScope(c: {
   req: { header: (name: string) => string | undefined };
-}) {
+}): Promise<PortalLabScope> {
   const origin = getPortalHostOrigin(c);
-  if (!origin) return null;
+  if (!origin) return { labOrganizationId: null, blocked: true };
 
   try {
     const url = new URL(origin);
-    return resolveLabOrganizationIdByPortalHostname(url.hostname);
+    const hostname = url.hostname.toLowerCase();
+    const labOrganizationId =
+      await resolveLabOrganizationIdByPortalHostname(hostname);
+
+    if (labOrganizationId) {
+      return { labOrganizationId, blocked: false };
+    }
+
+    return {
+      labOrganizationId: null,
+      blocked: !isDefaultPortalHostname(hostname),
+    };
   } catch {
-    return null;
+    return { labOrganizationId: null, blocked: true };
   }
 }
 
@@ -277,6 +306,9 @@ export const portalRouter = new Hono<{
   .get("/organizations", requirePortalAuth, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
 
     try {
       // Query member table joined with organization
@@ -299,8 +331,8 @@ export const portalRouter = new Hono<{
             eq(member.userId, session.user.id),
             eq(organization.type, "CLIENT"),
             inArray(member.role, PORTAL_ACCESS_ROLES),
-            portalLabScope
-              ? eq(customer.labOrganizationId, portalLabScope)
+            portalLabScope.labOrganizationId
+              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
               : undefined,
           ),
         );
@@ -323,6 +355,9 @@ export const portalRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
 
       try {
         const { page, limit, query } = c.req.valid("query");
@@ -345,8 +380,8 @@ export const portalRouter = new Hono<{
         }
 
         if (
-          portalLabScope &&
-          linkedCustomer.labOrganizationId !== portalLabScope
+          portalLabScope.labOrganizationId &&
+          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId
         ) {
           return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
         }
@@ -436,6 +471,9 @@ export const portalRouter = new Hono<{
     async (c) => {
       const portalMember = c.get("member");
       const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
       const id = Number.parseInt(c.req.param("id"), 10);
 
       if (Number.isNaN(id)) {
@@ -457,8 +495,8 @@ export const portalRouter = new Hono<{
         }
 
         if (
-          portalLabScope &&
-          linkedCustomer.labOrganizationId !== portalLabScope
+          portalLabScope.labOrganizationId &&
+          linkedCustomer.labOrganizationId !== portalLabScope.labOrganizationId
         ) {
           return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
         }
@@ -559,6 +597,9 @@ export const portalRouter = new Hono<{
   .get("/certificates", requirePortalAuth, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
 
     try {
       // Parse pagination params
@@ -601,8 +642,8 @@ export const portalRouter = new Hono<{
         .where(
           and(
             inArray(customer.authOrganizationId, orgIds),
-            portalLabScope
-              ? eq(customer.labOrganizationId, portalLabScope)
+            portalLabScope.labOrganizationId
+              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
               : undefined,
           ),
         );
@@ -698,6 +739,9 @@ export const portalRouter = new Hono<{
   .get("/certificates/:id", requirePortalAuth, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
     const id = parseInt(c.req.param("id"));
 
     if (isNaN(id)) {
@@ -731,8 +775,8 @@ export const portalRouter = new Hono<{
         .where(
           and(
             inArray(customer.authOrganizationId, orgIds),
-            portalLabScope
-              ? eq(customer.labOrganizationId, portalLabScope)
+            portalLabScope.labOrganizationId
+              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
               : undefined,
           ),
         );
@@ -807,6 +851,9 @@ export const portalRouter = new Hono<{
   .get("/certificates/:id/download", requirePortalAuth, async (c) => {
     const session = c.get("session");
     const portalLabScope = await getPortalLabScope(c);
+    if (portalLabScope.blocked) {
+      return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+    }
     const id = parseInt(c.req.param("id"));
 
     if (isNaN(id)) {
@@ -840,8 +887,8 @@ export const portalRouter = new Hono<{
         .where(
           and(
             inArray(customer.authOrganizationId, orgIds),
-            portalLabScope
-              ? eq(customer.labOrganizationId, portalLabScope)
+            portalLabScope.labOrganizationId
+              ? eq(customer.labOrganizationId, portalLabScope.labOrganizationId)
               : undefined,
           ),
         );
@@ -901,6 +948,9 @@ export const portalRouter = new Hono<{
     async (c) => {
       const session = c.get("session");
       const portalLabScope = await getPortalLabScope(c);
+      if (portalLabScope.blocked) {
+        return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
+      }
       const id = parseInt(c.req.param("id"));
       const standardId = parseInt(c.req.param("standardId"));
 
@@ -934,8 +984,11 @@ export const portalRouter = new Hono<{
                 customer.authOrganizationId,
                 userOrgs.map((org) => org.orgId),
               ),
-              portalLabScope
-                ? eq(customer.labOrganizationId, portalLabScope)
+              portalLabScope.labOrganizationId
+                ? eq(
+                    customer.labOrganizationId,
+                    portalLabScope.labOrganizationId,
+                  )
                 : undefined,
             ),
           );

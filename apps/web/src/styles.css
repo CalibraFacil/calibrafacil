@@ -140,3 +140,9 @@
     @apply font-sans scroll-smooth;
   }
 }
+
+@keyframes landing-auth-glow-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}

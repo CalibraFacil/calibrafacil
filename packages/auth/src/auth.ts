@@ -134,11 +134,6 @@ function isProductionLikeUrl(value: string | undefined): boolean {
 }
 
 function isProductionRuntime(): boolean {
-  const vercelEnv = readEnv("VERCEL_ENV");
-  if (vercelEnv) {
-    return vercelEnv === "production";
-  }
-
   const runtimeEnv = readEnv("NODE_ENV") ?? readEnv("APP_ENV");
   if (runtimeEnv) {
     return runtimeEnv === "production";
@@ -159,13 +154,6 @@ function isProductionRuntime(): boolean {
 function createBaseUrlConfig(isProduction: boolean): string {
   if (isProduction) {
     return getRequiredEnv("API_URL");
-  }
-
-  const vercelPreviewUrl = readEnv("VERCEL_URL");
-  if (vercelPreviewUrl) {
-    // Vercel preview deployments use dynamic *.vercel.app hostnames.
-    // Resolve Better Auth base URL from VERCEL_URL so preview builds don't require a fixed BETTER_AUTH_URL.
-    return `https://${vercelPreviewUrl}`;
   }
 
   return resolveApiBaseUrl("http://localhost:3000");
@@ -228,14 +216,14 @@ const DEV_TRUSTED_ORIGINS = [
   "https://192.168.0.10:5174",
 ];
 
-// Include wildcard preview hosts because Vercel preview domains are intentionally dynamic.
 const PROD_TRUSTED_ORIGINS = [
   "app://calibra-facil",
   "https://calibrafacil.com",
   "https://www.calibrafacil.com",
   "https://portal.calibrafacil.com",
-  "https://*.vercel.app",
 ];
+
+type AuthSurface = "lab" | "backoffice" | "portal";
 
 function isIpv4Address(hostname: string): boolean {
   const parts = hostname.split(".");
@@ -304,17 +292,9 @@ function normalizeDynamicTrustedOrigin(
   }
 }
 
-function isVercelPreviewOrigin(origin: string): boolean {
-  try {
-    const { protocol, hostname } = new URL(origin);
-    return protocol === "https:" && hostname.endsWith(".vercel.app");
-  } catch {
-    return false;
-  }
-}
-
 function createTrustedOrigins(
   isProduction: boolean,
+  surface: AuthSurface,
 ): string[] | ((request?: Request) => Promise<string[]>) {
   const baseOrigins = isProduction ? PROD_TRUSTED_ORIGINS : DEV_TRUSTED_ORIGINS;
 
@@ -337,9 +317,9 @@ function createTrustedOrigins(
 
     if (
       requestOrigin &&
-      (isVercelPreviewOrigin(requestOrigin) ||
-        (!isProduction && isPrivateDevWebOrigin(requestOrigin)) ||
-        (await isActivePortalCustomOrigin(requestOrigin)))
+      ((!isProduction && isPrivateDevWebOrigin(requestOrigin)) ||
+        (surface === "portal" &&
+          (await isActivePortalCustomOrigin(requestOrigin))))
     ) {
       origins.add(requestOrigin);
     }
@@ -356,8 +336,8 @@ function createTrustedOrigins(
 
       if (
         callbackOrigin &&
-        (isVercelPreviewOrigin(callbackOrigin) ||
-          (await isActivePortalCustomOrigin(callbackOrigin)))
+        surface === "portal" &&
+        (await isActivePortalCustomOrigin(callbackOrigin))
       ) {
         origins.add(callbackOrigin);
       }
@@ -983,7 +963,7 @@ function createOrganizationPlugin() {
 }
 
 // Shared configuration factory - reads env at call time, not module load time
-function createSharedConfig() {
+function createSharedConfig(surface: AuthSurface) {
   const isProduction = isProductionRuntime();
   const configuredApiUrl = readEnv("API_URL");
   const crossSubDomainCookieDomain =
@@ -996,7 +976,6 @@ function createSharedConfig() {
   const defaultSameSite: "lax" | "none" = useCrossSubDomainCookies
     ? "none"
     : "lax";
-  const sessionCookieStrategy = "jwe" as const;
 
   return {
     secret: authSecret,
@@ -1117,13 +1096,10 @@ function createSharedConfig() {
         enabled: true,
       },
     },
-    trustedOrigins: createTrustedOrigins(isProduction),
+    trustedOrigins: createTrustedOrigins(isProduction, surface),
     session: {
       cookieCache: {
-        enabled: true,
-        maxAge: 60 * 5,
-        strategy: sessionCookieStrategy,
-        refreshCache: false,
+        enabled: false,
       },
     },
     advanced: {
@@ -1216,6 +1192,20 @@ function createLabPasskeyPluginOptions(isProduction: boolean) {
             ? await validateLabAccountSetupToken(token)
             : null;
 
+          if (token && !validation?.ok) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Link de configuração inválido ou expirado",
+            });
+          }
+
+          if (validation?.ok) {
+            if (validation.token.userId !== user.id) {
+              throw new APIError("FORBIDDEN", {
+                message: "Link de configuração não pertence a este usuário",
+              });
+            }
+          }
+
           await getDb()
             .insert(schema.platformEventLog)
             .values({
@@ -1258,7 +1248,7 @@ function createLabPasskeyPluginOptions(isProduction: boolean) {
  * Call this inside request handlers to ensure env vars are available
  */
 export function createLabAuth() {
-  const sharedConfig = createSharedConfig();
+  const sharedConfig = createSharedConfig("lab");
   const isProduction = isProductionRuntime();
   const baseURL = createBaseUrlConfig(isProduction);
 
@@ -1355,7 +1345,7 @@ export function createLabAuth() {
  * Call this inside request handlers to ensure env vars are available
  */
 export function createBackofficeAuth() {
-  const sharedConfig = createSharedConfig();
+  const sharedConfig = createSharedConfig("backoffice");
   const isProduction = isProductionRuntime();
   const baseURL = createBaseUrlConfig(isProduction);
 
@@ -1363,6 +1353,10 @@ export function createBackofficeAuth() {
     ...sharedConfig,
     basePath: "/api/auth/backoffice",
     baseURL,
+    emailAndPassword: {
+      ...sharedConfig.emailAndPassword,
+      disableSignUp: true,
+    },
     advanced: {
       ...sharedConfig.advanced,
       cookiePrefix: "backoffice",
@@ -1387,7 +1381,7 @@ export function createBackofficeAuth() {
  * Call this inside request handlers to ensure env vars are available
  */
 export function createPortalAuth() {
-  const sharedConfig = createSharedConfig();
+  const sharedConfig = createSharedConfig("portal");
   const isProduction = isProductionRuntime();
   const baseURL = createBaseUrlConfig(isProduction);
 
