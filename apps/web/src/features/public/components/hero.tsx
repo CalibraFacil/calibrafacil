@@ -40,10 +40,10 @@ export function Hero() {
             </h1>
 
             <p className="mt-5 max-w-[56ch] text-lg leading-relaxed text-pretty text-muted-foreground">
-              Para parar de perder dias montando documentação antes da
-              auditoria. Para padronizar o cálculo de incerteza entre todos os
-              técnicos. Para o cliente baixar o certificado sem precisar te
-              ligar. Tudo em um único sistema.
+              Cada calibração já sai rastreável — memorial de incerteza, padrões
+              usados e signatário ligados ao certificado. Na aprovação, tudo
+              congela numa versão que não muda mais: a evidência que o avaliador
+              pede já está pronta.
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
