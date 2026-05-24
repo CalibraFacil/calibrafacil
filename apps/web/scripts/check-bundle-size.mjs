@@ -9,7 +9,12 @@ const appDir = path.resolve(scriptDir, '..')
 const distDir = path.join(appDir, 'dist')
 
 const jsBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS ?? 650_000)
-const cssBudget = Number(process.env.WEB_BUNDLE_BUDGET_CSS ?? 230_000)
+// Bumped from 230_000 for the landing-page redesign (feat/conta-azul-native):
+// the new marketing page introduces its own Tailwind utility vocabulary
+// (blueprint grids, spreadsheet/agenda mocks, image-hero). Arbitrary classes
+// were normalized to the standard scale and the old landing's dead components
+// were removed first; the remainder is the page's real styling cost.
+const cssBudget = Number(process.env.WEB_BUNDLE_BUDGET_CSS ?? 236_000)
 const jsChunkBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS_CHUNK ?? 850_000)
 const appChunkBudget = Number(
   process.env.WEB_BUNDLE_BUDGET_APP_CHUNK ?? 180_000,
