@@ -1,9 +1,11 @@
 apps/api/test
 apps/api/vercel-functions
 apps/api/src/**/__tests__
+apps/api/src/**/__tests__/**
 apps/api/src/**/*.spec.ts
 apps/api/src/**/*.test.ts
 **/__tests__
+**/__tests__/**
 **/*.spec.ts
 **/*.test.ts
 **/vitest.config.ts
