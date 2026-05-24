@@ -2,7 +2,9 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   CloudIcon,
   DashboardSquare01Icon,
+  Mail01Icon,
   SecurityCheckIcon,
+  WhatsappIcon,
 } from '@hugeicons/core-free-icons'
 
 const footerColumns = [
@@ -34,16 +36,6 @@ const footerColumns = [
     ],
   },
 ]
-
-// Placeholder markers stay obvious (amber "preencher" chips) so they are never
-// mistaken for real legal data — Pedro fills in the real CNPJ/address/phone.
-function Placeholder() {
-  return (
-    <span className="ml-1.5 inline-block rounded bg-amber-500/15 px-1.5 py-px align-middle font-mono text-xs tracking-wider text-amber-600">
-      preencher
-    </span>
-  )
-}
 
 export function LandingFooter() {
   return (
@@ -106,57 +98,26 @@ export function LandingFooter() {
           ))}
         </div>
 
-        <div className="grid gap-3.5 border-t border-dashed border-zinc-200/80 py-5 text-xs leading-normal text-zinc-500 md:grid-cols-[1.4fr_1fr_1fr] md:gap-8">
-          <div className="grid gap-1">
-            <span className="font-mono text-xs tracking-wider text-zinc-950/45 uppercase">
-              Razão social
-            </span>
-            <span className="text-zinc-950/85">
-              CalibraFácil Tecnologia Ltda.
-              <Placeholder />
-            </span>
-            <span className="font-mono text-zinc-950/85">
-              CNPJ XX.XXX.XXX/0001-XX
-              <Placeholder />
-            </span>
-          </div>
-          <div className="grid gap-1">
-            <span className="font-mono text-xs tracking-wider text-zinc-950/45 uppercase">
-              Endereço
-            </span>
-            <span className="text-zinc-950/85">
-              Rua, número, sala
-              <br />
-              Bairro, Cidade/UF — CEP XXXXX-XXX
-              <Placeholder />
-            </span>
-          </div>
-          <div className="grid gap-1">
-            <span className="font-mono text-xs tracking-wider text-zinc-950/45 uppercase">
-              Contato
-            </span>
-            <span className="text-zinc-950/85">
-              <a
-                href="mailto:contato@calibrafacil.com.br"
-                className="font-mono hover:text-zinc-950 hover:underline hover:underline-offset-2"
-              >
-                contato@calibrafacil.com.br
-              </a>
-            </span>
-            <span className="font-mono text-zinc-950/85">
-              +55 (XX) XXXX-XXXX
-              <Placeholder />
-            </span>
-            <span className="text-zinc-950/85">
-              <a
-                href="https://wa.me/55XXXXXXXXXXX"
-                className="hover:text-zinc-950 hover:underline hover:underline-offset-2"
-              >
-                WhatsApp comercial
-              </a>
-              <Placeholder />
-            </span>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-dashed border-zinc-200/80 py-5 text-sm text-zinc-500">
+          <a
+            href="mailto:contato@calibrafacil.com"
+            className="inline-flex items-center gap-2 font-mono text-zinc-950/85 transition-colors hover:text-zinc-950"
+          >
+            <HugeiconsIcon icon={Mail01Icon} className="size-4 text-zinc-500" />
+            contato@calibrafacil.com
+          </a>
+          <a
+            href="https://wa.me/5551900000000"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 font-mono text-zinc-950/85 transition-colors hover:text-zinc-950"
+          >
+            <HugeiconsIcon
+              icon={WhatsappIcon}
+              className="size-4 text-emerald-500"
+            />
+            (51) 90000-0000
+          </a>
         </div>
 
         <div className="mt-7 flex flex-wrap items-center justify-between gap-4 font-mono text-xs text-zinc-500">
