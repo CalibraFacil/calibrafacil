@@ -43,10 +43,10 @@ function Feature({
   reverse?: boolean
 }) {
   return (
-    <div className="grid items-center gap-10 py-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-20">
-      <div className={cn(reverse && 'lg:order-2')}>
+    <div className="grid min-w-0 items-center gap-10 py-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-20">
+      <div className={cn('min-w-0', reverse && 'lg:order-2')}>
         <Reveal>
-          <div className="max-w-[480px]">
+          <div className="min-w-0 max-w-[480px]">
             <h3 className="mb-3.5 max-w-[22ch] text-[clamp(24px,2.6vw,34px)] leading-[1.1] font-semibold tracking-tight text-balance">
               {title}
             </h3>
@@ -67,9 +67,9 @@ function Feature({
           </div>
         </Reveal>
       </div>
-      <div className={cn(reverse && 'lg:order-1')}>
+      <div className={cn('min-w-0', reverse && 'lg:order-1')}>
         <Reveal delay={0.1}>
-          <div className="rounded-lg border border-border bg-card p-6 shadow-xl">
+          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-3 shadow-xl sm:p-6">
             {visual}
           </div>
         </Reveal>
@@ -153,9 +153,9 @@ function FeatureExpirations() {
 /* ------------------------------------------------------------------ */
 
 const xlsxCell =
-  'flex min-h-8 items-center border-r border-b border-border/40 px-2.5 py-2 text-xs'
+  'flex min-h-8 min-w-0 items-center overflow-hidden border-r border-b border-border/40 px-2 py-2 text-xs sm:px-2.5'
 const xlsxHead =
-  'flex min-h-6 items-center justify-center border-r border-b border-border/40 bg-muted/50 px-2 py-1.5 text-xs tracking-wider text-muted-foreground'
+  'flex min-h-6 min-w-0 items-center justify-center border-r border-b border-border/40 bg-muted/50 px-2 py-1.5 text-xs tracking-wider text-muted-foreground'
 
 function Var({ children }: { children: React.ReactNode }) {
   return <span className="text-primary">{children}</span>
@@ -163,16 +163,18 @@ function Var({ children }: { children: React.ReactNode }) {
 
 function XlsxTemplate() {
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-card font-mono text-xs">
+    <div className="min-w-0 overflow-hidden rounded-md border border-border bg-card font-mono text-xs">
       <div className="flex items-center gap-2.5 border-b border-border/80 bg-background/50 px-3.5 py-2.5">
         <HugeiconsIcon
           icon={Table01Icon}
           className="size-3.5 text-emerald-500"
         />
-        <span className="text-xs text-muted-foreground">
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
           modelo-balanca-analitica.xlsx
         </span>
-        <span className="ml-auto text-xs text-primary">Certificado</span>
+        <span className="ml-auto hidden text-xs text-primary sm:inline">
+          Certificado
+        </span>
       </div>
 
       <div className="grid grid-cols-[60px_1fr] border-b border-border/60 text-xs">
@@ -184,7 +186,7 @@ function XlsxTemplate() {
         </div>
       </div>
 
-      <div className="grid grid-cols-[32px_repeat(5,1fr)]">
+      <div className="grid grid-cols-[28px_repeat(5,minmax(0,1fr))] sm:grid-cols-[32px_repeat(5,minmax(0,1fr))]">
         <div className={xlsxHead} />
         <div className={xlsxHead}>A</div>
         <div className={xlsxHead}>B</div>
@@ -196,7 +198,7 @@ function XlsxTemplate() {
         <div
           className={cn(
             xlsxCell,
-            'col-span-5 justify-center font-semibold text-foreground',
+            'col-span-5 justify-center text-center font-semibold whitespace-nowrap text-foreground',
           )}
         >
           CERTIFICADO DE CALIBRAÇÃO
@@ -282,7 +284,7 @@ function XlsxTemplate() {
       </div>
 
       <div className="grid grid-cols-1 items-center gap-4 px-3.5 py-3.5 sm:grid-cols-[1fr_auto_1fr]">
-        <div className="text-xs text-muted-foreground">
+        <div className="min-w-0 text-xs text-muted-foreground">
           modelo.xlsx
           <br />
           <span className="text-xs opacity-70">
@@ -293,7 +295,7 @@ function XlsxTemplate() {
           preenche
           <HugeiconsIcon icon={ArrowRight01Icon} className="size-3.5" />
         </div>
-        <div className="text-right text-xs text-foreground">
+        <div className="min-w-0 text-xs text-foreground sm:text-right">
           <span className="text-primary">CC-2026-0231.pdf</span>
           <br />
           <span className="text-xs text-muted-foreground opacity-70">
@@ -334,18 +336,18 @@ const portalRows = [
 
 function PortalPreview() {
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-background">
+    <div className="min-w-0 overflow-hidden rounded-md border border-border bg-background">
       <div className="flex items-center gap-2 border-b border-border/80 bg-card/60 px-3.5 py-2.5">
         <span className="size-2 rounded-full bg-foreground/20" />
         <span className="size-2 rounded-full bg-foreground/20" />
         <span className="size-2 rounded-full bg-foreground/20" />
-        <span className="flex-1 text-center font-mono text-xs text-muted-foreground">
+        <span className="min-w-0 flex-1 text-center font-mono text-xs text-muted-foreground">
           portal · cliente: Indústria São José Ltda.
         </span>
       </div>
-      <div className="flex items-center justify-between border-b border-border/60 px-5 py-4.5">
+      <div className="flex min-w-0 items-center justify-between gap-3 border-b border-border/60 px-3 py-4.5 sm:px-5">
         <div className="text-sm font-semibold">Certificados ativos</div>
-        <div className="font-mono text-xs text-muted-foreground">
+        <div className="min-w-0 text-right font-mono text-xs text-muted-foreground">
           Mariana, Qualidade
         </div>
       </div>
@@ -354,17 +356,17 @@ function PortalPreview() {
           <div
             key={row.id}
             className={cn(
-              'grid grid-cols-[110px_1fr_auto_16px] items-center gap-3.5 px-5 py-3 text-sm',
+              'grid grid-cols-[88px_minmax(0,1fr)_auto_12px] items-center gap-2 px-3 py-3 text-sm sm:grid-cols-[110px_minmax(0,1fr)_auto_16px] sm:gap-3.5 sm:px-5',
               index < portalRows.length - 1 && 'border-b border-border/40',
             )}
           >
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
               {row.id}
             </span>
-            <span className="text-foreground">{row.inst}</span>
+            <span className="min-w-0 text-foreground">{row.inst}</span>
             <span
               className={cn(
-                'rounded px-2 py-1 font-mono text-xs tracking-wider uppercase',
+                'shrink-0 rounded px-2 py-1 font-mono text-xs tracking-wider uppercase',
                 row.ok
                   ? 'bg-emerald-500/15 text-emerald-500'
                   : 'bg-amber-500/15 text-amber-500',
@@ -458,16 +460,16 @@ const severityWhen: Record<Severity, string> = {
 
 function ExpirationsAgenda() {
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-card">
-      <div className="flex items-center gap-2.5 border-b border-border/80 bg-background/50 px-4 py-3">
+    <div className="min-w-0 overflow-hidden rounded-md border border-border bg-card">
+      <div className="flex min-w-0 items-center gap-2.5 border-b border-border/80 bg-background/50 px-3 py-3 sm:px-4">
         <HugeiconsIcon
           icon={Calendar03Icon}
           className="size-3.5 text-muted-foreground"
         />
-        <span className="flex-1 text-sm font-medium">
+        <span className="min-w-0 flex-1 text-sm font-medium">
           Próximos vencimentos · 90 dias
         </span>
-        <span className="rounded bg-destructive/15 px-2.5 py-1 font-mono text-xs tracking-wider text-destructive uppercase">
+        <span className="shrink-0 rounded bg-destructive/15 px-2.5 py-1 font-mono text-xs tracking-wider text-destructive uppercase">
           2 críticos
         </span>
       </div>
@@ -477,7 +479,7 @@ function ExpirationsAgenda() {
           <div
             key={row.id}
             className={cn(
-              'relative grid grid-cols-[76px_110px_1fr_auto] items-center gap-3.5 px-4 py-3 text-sm',
+              'relative grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-3 py-3 text-sm sm:grid-cols-[76px_110px_minmax(0,1fr)_auto] sm:gap-3.5 sm:px-4',
               index < agendaRows.length - 1 && 'border-b border-border/40',
             )}
           >
@@ -497,13 +499,15 @@ function ExpirationsAgenda() {
             >
               {row.type}
             </span>
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
               {row.id}
             </span>
-            <span className="text-foreground">{row.label}</span>
+            <span className="col-span-2 min-w-0 text-foreground sm:col-span-1">
+              {row.label}
+            </span>
             <span
               className={cn(
-                'text-right font-mono text-xs tabular-nums',
+                'col-start-3 row-start-1 text-right font-mono text-xs tabular-nums sm:col-start-auto sm:row-start-auto',
                 severityWhen[row.severity],
               )}
             >
@@ -513,7 +517,7 @@ function ExpirationsAgenda() {
         ))}
       </div>
 
-      <div className="flex gap-4.5 border-t border-border/60 px-4 py-3 font-mono text-xs text-muted-foreground">
+      <div className="flex flex-wrap gap-4.5 border-t border-border/60 px-4 py-3 font-mono text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <HugeiconsIcon
             icon={AlertCircleIcon}
