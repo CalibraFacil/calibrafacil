@@ -1,7 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "node ../../scripts/setup-private-git-ssh.mjs --required && pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm build:vercel-functions",
+  "bunVersion": "1.x",
+  "installCommand": "bun ../../scripts/setup-private-git-ssh.mjs --required && pnpm install --frozen-lockfile --filter \"@calibra-facil/api...\"",
+  "buildCommand": "bun scripts/build-vercel-functions.mjs",
+  "ignoreCommand": "node ../../scripts/vercel-ignore-build.mjs api",
   "regions": ["gru1"],
   "functions": {
     "api/[...route].js": {
