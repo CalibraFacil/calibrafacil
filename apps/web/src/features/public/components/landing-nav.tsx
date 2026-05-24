@@ -62,12 +62,17 @@ export function LandingNav() {
           className="md:hidden"
           onClick={() => setMobileOpen((open) => !open)}
           aria-label={mobileOpen ? 'Fechar menu' : 'Abrir menu'}
+          aria-expanded={mobileOpen}
+          aria-controls="landing-mobile-menu"
         >
           <HugeiconsIcon icon={mobileOpen ? Cancel01Icon : Menu01Icon} />
         </Button>
       </div>
 
       <div
+        id="landing-mobile-menu"
+        aria-hidden={!mobileOpen}
+        inert={mobileOpen ? undefined : true}
         className={cn(
           'overflow-hidden border-t border-border/60 transition-[max-height,opacity] duration-200 ease-in-out md:hidden',
           mobileOpen ? 'max-h-[420px] opacity-100' : 'max-h-0 opacity-0',
