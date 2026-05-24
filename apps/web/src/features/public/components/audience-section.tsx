@@ -119,6 +119,7 @@ export function AudienceSection() {
                 key={audience.key}
                 src={audience.image}
                 alt={audience.alt}
+                aria-hidden={active !== audience.key}
                 loading="lazy"
                 className={cn(
                   'absolute inset-0 z-[0] size-full object-cover transition-opacity duration-500',
@@ -135,7 +136,6 @@ export function AudienceSection() {
             {/* Floating segmented control */}
             <div className="absolute inset-x-0 top-7 z-[3] flex justify-center">
               <div
-                role="tablist"
                 aria-label="Audiência"
                 className="relative grid grid-cols-2 rounded-full border border-white/10 bg-[rgba(15,18,25,0.55)] p-1 backdrop-blur-xl"
               >
@@ -152,8 +152,7 @@ export function AudienceSection() {
                   <button
                     key={audience.key}
                     type="button"
-                    role="tab"
-                    aria-selected={active === audience.key}
+                    aria-pressed={active === audience.key}
                     onClick={() => setActive(audience.key)}
                     className={cn(
                       'relative z-[1] rounded-full px-5 py-2.5 text-center text-sm font-medium whitespace-nowrap transition-colors',

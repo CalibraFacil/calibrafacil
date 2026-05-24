@@ -31,7 +31,7 @@ export function LandingNav() {
           <BrandLockup markClassName="size-[22px]" textClassName="text-sm" />
         </Link>
 
-        <nav className="hidden items-center gap-1 lg:flex">
+        <nav className="hidden items-center gap-1 md:flex">
           {navLinks.map((link) => (
             <a
               key={link.href}

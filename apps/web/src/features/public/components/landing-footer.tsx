@@ -20,17 +20,17 @@ const footerColumns = [
   {
     heading: 'Conformidade',
     links: [
-      { label: 'ISO/IEC 17025:2017', href: '#' },
-      { label: 'Portaria Inmetro nº 157', href: '#' },
-      { label: 'JCGM 100:2008 (GUM)', href: '#' },
-      { label: 'LGPD', href: '#' },
+      { label: 'ISO/IEC 17025:2017' },
+      { label: 'Portaria Inmetro nº 157' },
+      { label: 'JCGM 100:2008 (GUM)' },
+      { label: 'LGPD' },
     ],
   },
   {
     heading: 'Empresa',
     links: [
       { label: 'Documentação', href: 'https://docs.calibrafacil.com' },
-      { label: 'Status do sistema', href: '#' },
+      { label: 'Status do sistema' },
       { label: 'Política de privacidade', href: '/privacidade' },
       { label: 'Termos de uso', href: '/termos-de-uso' },
     ],
@@ -85,12 +85,18 @@ export function LandingFooter() {
               <ul className="grid gap-2.5">
                 {column.links.map((link) => (
                   <li key={link.label}>
-                    <a
-                      href={link.href}
-                      className="text-sm text-zinc-950/80 transition-colors hover:text-zinc-950"
-                    >
-                      {link.label}
-                    </a>
+                    {link.href ? (
+                      <a
+                        href={link.href}
+                        className="text-sm text-zinc-950/80 transition-colors hover:text-zinc-950"
+                      >
+                        {link.label}
+                      </a>
+                    ) : (
+                      <span className="text-sm text-zinc-950/80">
+                        {link.label}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -122,10 +128,10 @@ export function LandingFooter() {
 
         <div className="mt-7 flex flex-wrap items-center justify-between gap-4 font-mono text-xs text-zinc-500">
           <span>© 2026 CalibraFácil Tecnologia Ltda.</span>
-          <a href="#" className="flex items-center gap-1.5 hover:text-zinc-950">
+          <span className="flex items-center gap-1.5">
             <HugeiconsIcon icon={DashboardSquare01Icon} className="size-3" />
             Status do sistema
-          </a>
+          </span>
         </div>
       </div>
     </footer>
