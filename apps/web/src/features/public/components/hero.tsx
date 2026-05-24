@@ -2,9 +2,8 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowRight01Icon,
   BookOpen01Icon,
-  CloudIcon,
-  CustomerSupportIcon,
   DocumentValidationIcon,
+  Link01Icon,
   SecurityCheckIcon,
   UserIcon,
 } from '@hugeicons/core-free-icons'
@@ -16,9 +15,12 @@ const DEMO_URL = 'https://cal.com/calibrafacil/30min?user=calibrafacil'
 const DOCS_URL = 'https://docs.calibrafacil.com'
 
 const heroMeta = [
+  {
+    icon: DocumentValidationIcon,
+    label: 'Cálculo de incerteza conforme o GUM',
+  },
   { icon: SecurityCheckIcon, label: 'Trilha de auditoria nativa' },
-  { icon: CloudIcon, label: 'Dados no Brasil, em conformidade com a LGPD' },
-  { icon: CustomerSupportIcon, label: 'Suporte em português' },
+  { icon: Link01Icon, label: 'Rastreabilidade ponta a ponta' },
 ]
 
 export function Hero() {
@@ -40,10 +42,10 @@ export function Hero() {
             </h1>
 
             <p className="mt-5 max-w-[56ch] text-lg leading-relaxed text-pretty text-muted-foreground">
-              Cada calibração já sai rastreável — memorial de incerteza, padrões
-              usados e signatário ligados ao certificado. Na aprovação, tudo
-              congela numa versão que não muda mais: a evidência que o avaliador
-              pede já está pronta.
+              Cada calibração já sai rastreável — orçamento de incerteza,
+              padrões usados e signatário ligados ao certificado. Na aprovação,
+              tudo congela numa versão que não muda mais: a evidência que o
+              avaliador pede já está pronta.
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
@@ -95,7 +97,7 @@ export function Hero() {
           </div>
 
           <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 motion-safe:duration-700 motion-safe:[animation-delay:120ms] motion-safe:fill-mode-backwards">
-            <GumMemorialCard />
+            <UncertaintyBudgetCard />
           </div>
         </div>
       </div>
@@ -104,11 +106,11 @@ export function Hero() {
 }
 
 /**
- * Static preview of the "memorial de incerteza" screen. Math is correct
+ * Static preview of the "orçamento de incerteza" screen. Math is correct
  * (u_c = sqrt(sum(u_i^2)), U = k·u_c, k=2); values are illustrative. No live
  * sliders — it's a preview of the screen, not a working calculator.
  */
-function GumMemorialCard() {
+function UncertaintyBudgetCard() {
   const components = [
     { id: 'rep', label: 'Repetibilidade', type: 'A · Normal', uMg: 1.2 },
     { id: 'res', label: 'Resolução', type: 'B · Retangular', uMg: 0.3 },
@@ -128,7 +130,7 @@ function GumMemorialCard() {
         <span className="size-2 rounded-full bg-foreground/20" />
         <span className="size-2 rounded-full bg-foreground/20" />
         <span className="flex-1 text-center font-mono text-xs text-muted-foreground">
-          /calibracao/CAL-2026-0231 · memorial de incerteza
+          /calibracao/CAL-2026-0231 · orçamento de incerteza
         </span>
       </div>
 
@@ -137,7 +139,9 @@ function GumMemorialCard() {
           <div className="flex items-center gap-3">
             <BrandMark alt="" aria-hidden className="size-5" />
             <div>
-              <div className="text-sm font-semibold">Memorial de incerteza</div>
+              <div className="text-sm font-semibold">
+                Orçamento de incerteza
+              </div>
               <div className="mt-0.5 font-mono text-xs text-muted-foreground">
                 CAL-2026-0231 · Balança analítica AS-220 · ponto 100,000 g
               </div>

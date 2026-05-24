@@ -34,8 +34,8 @@ const audiences: Record<AudienceKey, Audience> = {
     items: [
       [
         '01',
-        'Padronização entre técnicos',
-        'Cada técnico calcula incerteza do mesmo jeito, com os mesmos componentes registrados no memorial GUM. Acaba a divergência entre planilhas pessoais.',
+        'Cálculo de incerteza no sistema',
+        'O orçamento de incerteza fica ligado ao método e ao certificado, não em planilha à parte. Cada contribuição é rastreável até a sua origem.',
       ],
       [
         '02',

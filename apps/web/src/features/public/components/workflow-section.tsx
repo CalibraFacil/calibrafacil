@@ -9,17 +9,17 @@ const steps: readonly NumberedPoint[] = [
   [
     '01',
     'Rascunho',
-    'Técnico registra leituras, anexa padrões usados e monta o memorial GUM. Toda edição fica registrada com autor e data/hora, sem ação manual.',
+    'Técnico registra leituras, anexa padrões usados e monta o orçamento de incerteza. Toda edição fica registrada com autor e data/hora, sem ação manual.',
   ],
   [
     '02',
     'Revisão',
-    'Revisor confere memorial, padrões usados e condições ambientais. Pode pedir correção ou aprovar. O autor não consegue aprovar o próprio trabalho.',
+    'Revisor confere o orçamento de incerteza, padrões usados e condições ambientais. Pode pedir correção ou aprovar. O autor não consegue aprovar o próprio trabalho.',
   ],
   [
     '03',
     'Aprovado',
-    'A aprovação congela tudo: certificado, memorial GUM, padrões usados e identidade do signatário viram um pacote imutável. Reedição gera uma nova revisão; a versão aprovada continua exatamente como foi assinada.',
+    'A aprovação congela tudo: certificado, orçamento de incerteza, padrões usados e identidade do signatário viram um pacote imutável. Reedição gera uma nova revisão; a versão aprovada continua exatamente como foi assinada.',
   ],
 ]
 

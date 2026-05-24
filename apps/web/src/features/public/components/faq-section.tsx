@@ -7,7 +7,7 @@ import { SectionHeading } from './landing-primitives'
 const faqItems = [
   {
     q: 'O cálculo de incerteza segue o JCGM 100:2008 (GUM)?',
-    a: 'Sim. O motor implementa contribuições Tipo A e Tipo B, composição quadrática e fator de abrangência. Cada componente fica registrado no memorial, com referência ao item que o originou (certificado do padrão, resolução do instrumento, repetibilidade medida).',
+    a: 'Sim. O motor implementa contribuições Tipo A e Tipo B, composição quadrática e fator de abrangência. Cada componente fica registrado no orçamento de incerteza, com referência ao item que o originou (certificado do padrão, resolução do instrumento, repetibilidade medida).',
   },
   {
     q: 'Como funciona o modelo do certificado?',
@@ -15,7 +15,7 @@ const faqItems = [
   },
   {
     q: 'O que muda quando uma calibração é aprovada?',
-    a: 'A aprovação congela o certificado e todas as evidências referenciadas (memorial GUM, certificados dos padrões usados, condições ambientais, identidade do signatário). A partir desse momento, a versão aprovada não pode mais ser editada. Se for preciso corrigir, o sistema gera uma nova revisão; a versão original permanece exatamente como foi assinada.',
+    a: 'A aprovação congela o certificado e todas as evidências referenciadas (orçamento de incerteza, certificados dos padrões usados, condições ambientais, identidade do signatário). A partir desse momento, a versão aprovada não pode mais ser editada. Se for preciso corrigir, o sistema gera uma nova revisão; a versão original permanece exatamente como foi assinada.',
   },
   {
     q: 'Como funciona o controle de acesso?',
