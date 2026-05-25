@@ -19,9 +19,12 @@ export function getBackofficeAccess() {
   return calibraApi.backoffice.getAccess()
 }
 
-export function backofficeAccessQueryOptions(scope: string) {
+export function backofficeAccessQueryOptions(
+  scope: string,
+  sessionKey = 'route',
+) {
   return queryOptions({
-    queryKey: ['backoffice', 'access', scope],
+    queryKey: ['backoffice', 'access', scope, sessionKey],
     queryFn: getBackofficeAccess,
     staleTime: BACKOFFICE_ACCESS_STALE_TIME_MS,
     retry: false,
@@ -216,13 +219,15 @@ export async function prewarmBackofficeCommercialCheckouts(
 
 export function useBackofficeAccessData({
   enabled,
+  sessionKey,
   scope,
 }: {
   enabled: boolean
+  sessionKey?: string | null
   scope: string
 }) {
   return useQuery({
-    ...backofficeAccessQueryOptions(scope),
+    ...backofficeAccessQueryOptions(scope, sessionKey ?? 'anonymous'),
     enabled,
   })
 }

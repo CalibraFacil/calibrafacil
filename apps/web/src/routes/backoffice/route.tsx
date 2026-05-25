@@ -14,6 +14,7 @@ import { useBackofficeAccessData } from '@/features/backoffice/queries'
 import { BackofficeHeader } from '@/components/backoffice-header'
 import { BackofficeSidebar } from '@/components/backoffice-sidebar'
 import { Button } from '@/components/ui/button'
+import { readSessionWithRetry } from '@/lib/auth-session'
 import {
   Card,
   CardContent,
@@ -32,7 +33,7 @@ export const Route = createFileRoute('/backoffice')({
       return
     }
 
-    const { data: session } = await getBackofficeSession()
+    const { data: session } = await readSessionWithRetry(getBackofficeSession)
 
     if (!session) {
       throw redirect({
@@ -54,6 +55,7 @@ function BackofficeLayout() {
 
   const accessQuery = useBackofficeAccessData({
     scope: 'layout',
+    sessionKey: session?.session?.id,
     enabled: Boolean(session?.user) && !isAuthPage,
   })
 

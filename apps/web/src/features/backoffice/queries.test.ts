@@ -17,7 +17,11 @@ describe('backoffice feature queries', () => {
       'backoffice',
       'access',
       'layout',
+      'route',
     ])
+    expect(
+      backofficeAccessQueryOptions('layout', 'session-1').queryKey,
+    ).toEqual(['backoffice', 'access', 'layout', 'session-1'])
   })
 
   it('keys organization queries by use case', () => {

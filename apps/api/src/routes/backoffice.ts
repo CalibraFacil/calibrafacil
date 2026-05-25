@@ -244,15 +244,23 @@ function redirectToAppWithError(
   return Response.redirect(url.toString(), 302);
 }
 
-function getSetCookieHeaders(headers: Headers) {
+function splitCombinedSetCookieHeader(value: string) {
+  return value
+    .split(/,(?=\s*[^;,\s]+=)/)
+    .map((cookie) => cookie.trim())
+    .filter(Boolean);
+}
+
+function getSetCookieHeaders(headers: Headers): string[] {
   const getSetCookie = Reflect.get(headers, "getSetCookie");
 
   if (typeof getSetCookie === "function") {
-    return getSetCookie.call(headers);
+    const values = getSetCookie.call(headers);
+    return Array.isArray(values) ? values : [];
   }
 
   const value = headers.get("set-cookie");
-  return value ? [value] : [];
+  return value ? splitCombinedSetCookieHeader(value) : [];
 }
 
 function extractCookieHeaderFromResponseHeaders(headers: Headers) {
@@ -261,6 +269,37 @@ function extractCookieHeaderFromResponseHeaders(headers: Headers) {
     .filter(Boolean);
 
   return cookies.join("; ");
+}
+
+function createRedirectWithResponseCookies(params: {
+  response: Response;
+  location: string;
+}) {
+  const headers = new Headers();
+
+  for (const [name, value] of params.response.headers.entries()) {
+    const normalizedName = name.toLowerCase();
+
+    if (
+      normalizedName === "set-cookie" ||
+      normalizedName === "content-length"
+    ) {
+      continue;
+    }
+
+    headers.set(name, value);
+  }
+
+  headers.set("Location", params.location);
+
+  for (const cookie of getSetCookieHeaders(params.response.headers)) {
+    headers.append("Set-Cookie", cookie);
+  }
+
+  return new Response(null, {
+    status: 302,
+    headers,
+  });
 }
 
 async function forwardLabAuthResponse(params: {
@@ -883,12 +922,9 @@ export const backofficeRouter = new Hono<{
           },
         });
 
-        const headers = new Headers(impersonateResponse.headers);
-        headers.set("Location", `${resolveAppUrl(c)}/dashboard`);
-
-        return new Response(null, {
-          status: 302,
-          headers,
+        return createRedirectWithResponseCookies({
+          response: impersonateResponse,
+          location: `${resolveAppUrl(c)}/dashboard`,
         });
       } catch (error) {
         await logPlatformEvent({

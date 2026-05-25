@@ -22,7 +22,6 @@ import {
   getBackofficeSession,
   useBackofficeSession,
 } from '@calibra-facil/auth/client'
-import { useMountEffect } from '@/hooks/use-mount-effect'
 
 type BackofficeSignInSearch = {
   redirect?: string
@@ -54,6 +53,7 @@ function BackofficeSignInPage() {
   const { data: session } = useBackofficeSession()
   const accessQuery = useBackofficeAccessData({
     scope: 'sign-in',
+    sessionKey: session?.session?.id,
     enabled: Boolean(session?.user),
   })
 
@@ -66,7 +66,7 @@ function BackofficeSignInPage() {
   }
 
   if (session?.user && accessQuery.isSuccess) {
-    return <BackofficeSignOutOnMount />
+    return <BackofficeAccessRestricted />
   }
 
   return (
@@ -127,20 +127,26 @@ function BackofficeSignInPage() {
   )
 }
 
-function BackofficeSignOutOnMount() {
-  useMountEffect(() => {
-    void backofficeSignOut()
-  })
+function BackofficeAccessRestricted() {
+  const navigate = useNavigate()
 
   return (
     <div className="grid min-h-svh place-items-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Saindo...</CardTitle>
+          <CardTitle>Backoffice restrito</CardTitle>
           <CardDescription>
             Esta conta não possui acesso ao backoffice.
           </CardDescription>
         </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <Button onClick={() => navigate({ to: '/dashboard' })}>
+            Voltar ao dashboard
+          </Button>
+          <Button variant="outline" onClick={() => void backofficeSignOut()}>
+            Entrar com outra conta
+          </Button>
+        </CardContent>
       </Card>
     </div>
   )

@@ -9,11 +9,15 @@ async function loadDashboardSession(options: {
   isDesktop?: boolean
   hasDesktopSession?: boolean
   session?: SessionData | null
+  sessions?: Array<SessionData | null>
 }) {
   vi.resetModules()
 
   const redirect = vi.fn((input: unknown) => ({ redirect: input }))
-  const getSession = vi.fn(async () => ({ data: options.session ?? null }))
+  const sessions = [...(options.sessions ?? [])]
+  const getSession = vi.fn(async () => ({
+    data: sessions.length > 0 ? sessions.shift() : (options.session ?? null),
+  }))
   const hasDesktopSession = vi.fn(async () => options.hasDesktopSession ?? true)
 
   vi.doMock('@tanstack/react-router', () => ({ redirect }))
@@ -81,6 +85,17 @@ describe('dashboard session guard', () => {
         search: { redirect: '/dashboard/assets' },
       },
     })
+  })
+
+  it('allows web users after one transient missing session', async () => {
+    const { dashboardBeforeLoad, getSession } = await loadDashboardSession({
+      sessions: [null, labSession()],
+    })
+
+    await expect(
+      dashboardBeforeLoad({ location: { pathname: '/dashboard/assets' } }),
+    ).resolves.toBeUndefined()
+    expect(getSession).toHaveBeenCalledTimes(2)
   })
 
   it('redirects non-impersonated backoffice users away from the dashboard', async () => {

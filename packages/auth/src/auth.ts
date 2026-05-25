@@ -49,6 +49,7 @@ export type BetterAuthPasskeyPortableTypes =
   | PublicKeyCredentialRequestOptionsJSON;
 
 let devFallbackAuthSecret: string | null = null;
+const IMPERSONATION_HANDOFF_TOKEN_EXPIRES_IN_SECONDS = 60;
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
@@ -135,17 +136,18 @@ function isProductionLikeUrl(value: string | undefined): boolean {
 
 function isProductionRuntime(): boolean {
   const runtimeEnv = readEnv("NODE_ENV") ?? readEnv("APP_ENV");
-  if (runtimeEnv) {
-    return runtimeEnv === "production";
-  }
-
   const configuredUrls = [readEnv("API_URL"), readEnv("APP_URL")];
+
   if (configuredUrls.some(isLocalDevelopmentUrl)) {
     return false;
   }
 
   if (configuredUrls.some(isProductionLikeUrl)) {
     return true;
+  }
+
+  if (runtimeEnv) {
+    return runtimeEnv !== "development" && runtimeEnv !== "test";
   }
 
   return false;
@@ -179,6 +181,24 @@ function getDevFallbackAuthSecret(): string {
   return devFallbackAuthSecret;
 }
 
+function allowsDevFallbackAuthSecret(isProduction: boolean): boolean {
+  if (isProduction) {
+    return false;
+  }
+
+  const runtimeEnv = readEnv("NODE_ENV") ?? readEnv("APP_ENV");
+  const configuredUrls = [readEnv("API_URL"), readEnv("APP_URL")].filter(
+    Boolean,
+  );
+
+  return (
+    runtimeEnv === "development" ||
+    runtimeEnv === "test" ||
+    configuredUrls.length === 0 ||
+    configuredUrls.some(isLocalDevelopmentUrl)
+  );
+}
+
 function resolveAuthSecret(isProduction: boolean): string {
   const configuredSecret = readEnv("BETTER_AUTH_SECRET");
 
@@ -186,12 +206,12 @@ function resolveAuthSecret(isProduction: boolean): string {
     return configuredSecret;
   }
 
-  if (isProduction) {
+  if (!allowsDevFallbackAuthSecret(isProduction)) {
     if (!configuredSecret) {
       throw new Error("BETTER_AUTH_SECRET environment variable is required");
     }
     throw new Error(
-      "BETTER_AUTH_SECRET must be at least 32 characters long in production",
+      "BETTER_AUTH_SECRET must be at least 32 characters long outside local development",
     );
   }
 
@@ -1322,7 +1342,7 @@ export function createLabAuth() {
       }),
       oneTimeToken({
         disableClientRequest: true,
-        expiresIn: 3,
+        expiresIn: IMPERSONATION_HANDOFF_TOKEN_EXPIRES_IN_SECONDS,
         storeToken: "hashed",
       }),
       createOrganizationPlugin(),
@@ -1369,7 +1389,7 @@ export function createBackofficeAuth() {
       }),
       oneTimeToken({
         disableClientRequest: true,
-        expiresIn: 3,
+        expiresIn: IMPERSONATION_HANDOFF_TOKEN_EXPIRES_IN_SECONDS,
         storeToken: "hashed",
       }),
     ],

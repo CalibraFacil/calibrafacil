@@ -4,6 +4,7 @@ import { authClient } from '@calibra-facil/auth/client'
 
 import { hasDesktopSession } from '@/runtime/desktop-auth'
 import { isDesktopRuntime } from '@/runtime/desktop'
+import { readSessionWithRetry } from '@/lib/auth-session'
 
 let dashboardSessionPromise: ReturnType<typeof authClient.getSession> | null =
   null
@@ -26,7 +27,7 @@ export async function dashboardBeforeLoad({
     })
   }
 
-  const { data: session } = await getDashboardSession()
+  const { data: session } = await readSessionWithRetry(getDashboardSession)
 
   if (!session) {
     throw redirect({

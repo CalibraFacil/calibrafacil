@@ -33,6 +33,7 @@ function BackofficeBootstrapPage() {
 
   const accessQuery = useBackofficeAccessData({
     scope: 'bootstrap',
+    sessionKey: session?.session?.id,
     enabled: Boolean(session?.user),
   })
 
