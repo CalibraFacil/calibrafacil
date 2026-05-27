@@ -1,5 +1,7 @@
 try {
-  const stored = localStorage.getItem('theme')
+  // Landing follows OS preference; other routes honor the saved dashboard theme.
+  const useSystem = window.location.pathname === '/'
+  const stored = useSystem ? null : localStorage.getItem('theme')
   const theme =
     stored === 'dark' || stored === 'light'
       ? stored

@@ -21,9 +21,7 @@ export function HeroPreview() {
 
       <div className="relative mx-auto max-w-[1200px] px-6 md:px-8">
         <Reveal delay={0.16}>
-          <div
-            className="group/preview mx-auto w-full transition-transform duration-[600ms] ease-[ease] [transform:perspective(2000px)_rotateX(-2deg)] hover:[transform:perspective(2000px)_rotateX(0deg)] motion-reduce:transform-none motion-reduce:transition-none"
-          >
+          <div className="group/preview mx-auto w-full transition-transform duration-[600ms] ease-[ease] [transform:perspective(2000px)_rotateX(-2deg)] hover:[transform:perspective(2000px)_rotateX(0deg)] motion-reduce:transform-none motion-reduce:transition-none">
             <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/10 ring-1 ring-black/[0.04] dark:shadow-black/40 dark:ring-white/[0.04]">
               <div className="flex items-center gap-3 border-b border-border/80 bg-background/60 px-4 py-3 backdrop-blur-sm">
                 <div className="flex shrink-0 gap-1.5" aria-hidden>
@@ -38,18 +36,31 @@ export function HeroPreview() {
                   </span>
                 </div>
 
-                <span aria-hidden className="hidden shrink-0 sm:block sm:w-[54px]" />
+                <span
+                  aria-hidden
+                  className="hidden shrink-0 sm:block sm:w-[54px]"
+                />
               </div>
 
               <img
                 src="/hero-preview.png"
                 alt="Painel do CalibraFácil com indicadores de calibração, fila de ordens de serviço e tendência de aprovações."
-                width={3394}
+                width={3420}
                 height={2146}
                 loading="eager"
                 decoding="async"
                 draggable={false}
-                className="block w-full select-none"
+                className="block w-full select-none dark:hidden"
+              />
+              <img
+                src="/hero-preview-dark.png"
+                alt="Painel do CalibraFácil com indicadores de calibração, fila de ordens de serviço e tendência de aprovações."
+                width={3420}
+                height={2146}
+                loading="eager"
+                decoding="async"
+                draggable={false}
+                className="hidden w-full select-none dark:block"
               />
             </div>
           </div>
