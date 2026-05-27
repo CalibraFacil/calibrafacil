@@ -39,35 +39,42 @@ const footerColumns = [
 
 export function LandingFooter() {
   return (
-    <footer className="border-t border-zinc-200 bg-zinc-50 pt-20 pb-9 text-zinc-950">
+    <footer className="border-t border-border bg-muted/40 pt-20 pb-9 text-foreground">
       <div className="mx-auto max-w-[1200px] px-6 md:px-8">
-        <div className="grid gap-10 border-b border-zinc-200/70 pb-14 md:grid-cols-[1.6fr_1fr_1fr_1fr] md:gap-14">
+        <div className="grid gap-10 border-b border-border/70 pb-14 md:grid-cols-[1.6fr_1fr_1fr_1fr] md:gap-14">
           <div className="flex max-w-[360px] flex-col gap-4">
             <div className="flex items-center gap-2.5">
               <img
                 src="/logo-mark-light.svg"
                 alt=""
                 aria-hidden
-                className="size-[22px]"
+                className="size-[22px] dark:hidden"
+                draggable={false}
+              />
+              <img
+                src="/logo-mark-dark.svg"
+                alt=""
+                aria-hidden
+                className="hidden size-[22px] dark:block"
                 draggable={false}
               />
               <span className="text-sm font-semibold tracking-tight">
                 CalibraFácil
               </span>
             </div>
-            <p className="text-sm leading-normal text-zinc-500">
+            <p className="text-sm leading-normal text-muted-foreground">
               Sistema de gestão metrológica para laboratórios acreditados e
               oficinas permissionárias do Inmetro.
             </p>
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-500">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
                 <HugeiconsIcon
                   icon={SecurityCheckIcon}
                   className="size-3 text-emerald-500"
                 />
                 LGPD
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-500">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
                 <HugeiconsIcon
                   icon={CloudIcon}
                   className="size-3 text-emerald-500"
@@ -79,7 +86,7 @@ export function LandingFooter() {
 
           {footerColumns.map((column) => (
             <div key={column.heading}>
-              <h4 className="mb-3.5 font-mono text-xs font-medium tracking-widest text-zinc-500 uppercase">
+              <h4 className="mb-3.5 font-mono text-xs font-medium tracking-widest text-muted-foreground uppercase">
                 {column.heading}
               </h4>
               <ul className="grid gap-2.5">
@@ -88,12 +95,12 @@ export function LandingFooter() {
                     {link.href ? (
                       <a
                         href={link.href}
-                        className="text-sm text-zinc-950/80 transition-colors hover:text-zinc-950"
+                        className="text-sm text-foreground/80 transition-colors hover:text-foreground"
                       >
                         {link.label}
                       </a>
                     ) : (
-                      <span className="text-sm text-zinc-950/80">
+                      <span className="text-sm text-foreground/80">
                         {link.label}
                       </span>
                     )}
@@ -104,19 +111,22 @@ export function LandingFooter() {
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-dashed border-zinc-200/80 py-5 text-sm text-zinc-500">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-dashed border-border/80 py-5 text-sm text-muted-foreground">
           <a
             href="mailto:contato@calibrafacil.com"
-            className="inline-flex items-center gap-2 font-mono text-zinc-950/85 transition-colors hover:text-zinc-950"
+            className="inline-flex items-center gap-2 font-mono text-foreground/85 transition-colors hover:text-foreground"
           >
-            <HugeiconsIcon icon={Mail01Icon} className="size-4 text-zinc-500" />
+            <HugeiconsIcon
+              icon={Mail01Icon}
+              className="size-4 text-muted-foreground"
+            />
             contato@calibrafacil.com
           </a>
           <a
             href="https://wa.me/5551900000000"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 font-mono text-zinc-950/85 transition-colors hover:text-zinc-950"
+            className="inline-flex items-center gap-2 font-mono text-foreground/85 transition-colors hover:text-foreground"
           >
             <HugeiconsIcon
               icon={WhatsappIcon}
@@ -126,8 +136,8 @@ export function LandingFooter() {
           </a>
         </div>
 
-        <div className="mt-7 flex flex-wrap items-center justify-between gap-4 font-mono text-xs text-zinc-500">
-          <span>© 2026 CalibraFácil Tecnologia Ltda.</span>
+        <div className="mt-7 flex flex-wrap items-center justify-between gap-4 font-mono text-xs text-muted-foreground">
+          <span>© 2026 CalibraFácil</span>
           <span className="flex items-center gap-1.5">
             <HugeiconsIcon icon={DashboardSquare01Icon} className="size-3" />
             Status do sistema
