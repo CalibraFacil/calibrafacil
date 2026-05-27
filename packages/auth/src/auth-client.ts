@@ -29,6 +29,10 @@ function getApiBaseURL(): string {
       return `http://${host}:3000`;
     }
 
+    if (/^dev-(portal|web|api)\.calibrafacil\.com$/.test(host)) {
+      return window.location.origin;
+    }
+
     return "https://api.calibrafacil.com";
   }
 

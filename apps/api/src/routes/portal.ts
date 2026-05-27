@@ -244,6 +244,13 @@ function getPortalHostOrigin(c: {
 function isDefaultPortalHostname(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
 
+  if (
+    process.env.NODE_ENV !== "production" &&
+    normalized === "dev-portal.calibrafacil.com"
+  ) {
+    return true;
+  }
+
   return (
     normalized === "portal.calibrafacil.com" ||
     normalized === "localhost" ||

@@ -19,7 +19,14 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    allowedHosts: ['dev-web.calibrafacil.com'],
     https: httpsConfig,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        secure: false,
+      },
+    },
   },
   optimizeDeps: {
     exclude: ['better-auth'],

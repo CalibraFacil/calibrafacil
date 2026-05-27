@@ -126,6 +126,12 @@ function isProductionLikeUrl(value: string | undefined): boolean {
 
   try {
     const { protocol, hostname } = new URL(value);
+    // dev-*.calibrafacil.com is a reserved prefix for dev tunnels (e.g.
+    // dev-portal, dev-web). Never treat those as production-like, even
+    // though they are https:.
+    if (/^dev-[\w-]+\.calibrafacil\.com$/.test(hostname.toLowerCase())) {
+      return false;
+    }
     return protocol === "https:" && !isLocalDevelopmentUrl(value)
       ? !hostname.endsWith(".local")
       : false;
@@ -153,12 +159,28 @@ function isProductionRuntime(): boolean {
   return false;
 }
 
-function createBaseUrlConfig(isProduction: boolean): string {
+function createBaseUrlConfig(
+  isProduction: boolean,
+):
+  | string
+  | { allowedHosts: string[]; protocol?: "http" | "https" | "auto" } {
   if (isProduction) {
     return getRequiredEnv("API_URL");
   }
 
-  return resolveApiBaseUrl("http://localhost:3000");
+  // Dev: dynamic per-request resolution from the incoming Host header.
+  // The same list is automatically added to trustedOrigins by better-auth,
+  // so magic-link URLs and origin trust both derive from the tunnel hostname
+  // the user actually hit (dev-portal vs dev-web), with no extra rewriting.
+  return {
+    allowedHosts: [
+      "localhost:3000",
+      "localhost:5173",
+      "localhost:5174",
+      "*.calibrafacil.com",
+    ],
+    protocol: "auto",
+  };
 }
 
 function getCookieDomainFromApiUrl(apiUrl: string | undefined): string | null {
@@ -234,6 +256,8 @@ const DEV_TRUSTED_ORIGINS = [
   "http://192.168.0.10:5174",
   "https://192.168.0.10:5173",
   "https://192.168.0.10:5174",
+  "https://dev-portal.calibrafacil.com",
+  "https://dev-web.calibrafacil.com",
 ];
 
 const PROD_TRUSTED_ORIGINS = [
@@ -988,8 +1012,12 @@ function createSharedConfig(surface: AuthSurface) {
   const configuredApiUrl = readEnv("API_URL");
   const crossSubDomainCookieDomain =
     getCookieDomainFromApiUrl(configuredApiUrl);
-  const useCrossSubDomainCookies =
-    isProduction && Boolean(crossSubDomainCookieDomain);
+  // Enable whenever the configured API host is a .calibrafacil.com subdomain,
+  // regardless of production/dev. In dev, this lets the lab_session /
+  // portal_session cookies be shared across dev-web and dev-portal tunnels;
+  // in prod, it preserves the existing api.calibrafacil.com → frontends
+  // behavior.
+  const useCrossSubDomainCookies = Boolean(crossSubDomainCookieDomain);
   const useSecureCookies =
     isProduction || configuredApiUrl?.startsWith("https://") === true;
   const authSecret = resolveAuthSecret(isProduction);
