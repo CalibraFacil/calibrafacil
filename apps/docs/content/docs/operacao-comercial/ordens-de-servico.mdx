@@ -1,0 +1,89 @@
+---
+title: Ordens de Serviço
+description: O envelope comercial que organiza orçamento, aprovação, prazo, mão de obra e logística — distinto das ordens de calibração técnicas.
+---
+
+A **ordem de serviço** é o registro comercial do trabalho. Ela organiza orçamento, prazo, aprovação do cliente, eventuais reparos e logística de entrega. Não contém medições — essas vivem nas [ordens de calibração](/calibracao/ordens-de-calibracao/visao-geral) associadas.
+
+A distinção entre ordem de serviço e ordem de calibração é fundamental — leia [Calibração vs. Ordem de Serviço](/conceitos/calibracao-vs-ordem-de-servico) antes de prosseguir.
+
+Acesse em **Painel → Ordens de Serviço** (`/dashboard/service-orders`).
+
+## De onde vem uma ordem de serviço
+
+Uma ordem pode ser criada:
+
+- automaticamente, a partir de uma [solicitação](/operacao-comercial/solicitacoes) aprovada;
+- manualmente, pelo atendimento do laboratório.
+
+## Ciclo de vida
+
+A ordem de serviço atravessa uma máquina de estados de 16 etapas que cobre orçamento, reparo, calibração e entrega. As principais transições:
+
+```
+Aberta
+   ↓
+Aguardando avaliação técnica
+   ↓
+Em avaliação
+   ↓
+Aguardando aprovação do orçamento  ────→ Orçamento rejeitado → Cancelada
+   ↓
+Orçamento aprovado
+   ↓
+(Reparo, se aplicável)
+   ↓
+Aguardando calibração
+   ↓
+Calibração em andamento  ────→ uma ou mais [ordens de calibração](/calibracao/ordens-de-calibracao/visao-geral)
+   ↓
+Aguardando revisão final
+   ↓
+Pronta para retirada
+   ↓
+Entregue
+   ↓
+Fechada
+```
+
+As transições permitidas são fixas e auditadas. Não é possível avançar uma ordem para um estado fora da sequência declarada.
+
+## O que a ordem de serviço contém
+
+- **Cliente** — vinculado ao cadastro em [Clientes](/operacao-comercial/clientes).
+- **Itens** — instrumentos a calibrar; podem incluir avaliação para reparo.
+- **Serviços** — referenciados ao [catálogo](/operacao-comercial/servicos).
+- **Orçamento** — valores de mão de obra, peças, calibração; aprovado pelo cliente antes da execução.
+- **Reparos** — registro de intervenções técnicas externas à calibração propriamente dita.
+- **Prazo (TAT)** — sugerido pelo catálogo de serviços; ajustável.
+- **Logística** — recebimento, devolução, observações sobre embalagem.
+
+## Conexão com ordens de calibração
+
+Uma ordem de serviço pode disparar uma ou mais ordens de calibração — uma por instrumento ou por serviço, dependendo do contrato. As ordens de calibração:
+
+- são criadas automaticamente quando a ordem de serviço entra em **Calibração em andamento**;
+- têm seu próprio ciclo de vida técnico (rascunho, execução, revisão, aprovação);
+- emitem certificados independentes, que ficam disponíveis no portal do cliente.
+
+O fechamento da ordem de serviço **só** é permitido quando todas as ordens de calibração associadas estão aprovadas (ou explicitamente canceladas).
+
+## Visibilidade para o cliente
+
+Pelo portal, o cliente acompanha:
+
+- o status da ordem;
+- o orçamento (aprovação eletrônica);
+- o prazo previsto e efetivo;
+- os certificados emitidos.
+
+Quando o cliente aprova o orçamento via portal, o evento é registrado com carimbo de tempo e identidade do usuário do cliente.
+
+## Notificações
+
+| Evento | Destino |
+| :--- | :--- |
+| Orçamento publicado | Cliente |
+| Orçamento aprovado/rejeitado pelo cliente | Atendimento do laboratório |
+| Pronto para retirada | Cliente |
+| Entregue | Cliente |

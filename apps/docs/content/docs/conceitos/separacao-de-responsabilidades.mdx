@@ -1,0 +1,54 @@
+---
+title: Separação de Responsabilidades
+description: Como a plataforma aplica a separação entre execução e aprovação exigida pela ISO/IEC 17025, e onde ela aparece nos fluxos de calibração, métodos e qualidade.
+---
+
+A **ISO/IEC 17025:2017** exige que decisões críticas tenham mais de um agente. Quem executa uma calibração não pode aprovar a própria calibração; quem desenvolve um método não pode ser o único a publicá-lo; disposições críticas em não conformidades precisam de validação independente.
+
+No CalibraFácil, essas regras não são apenas convenções operacionais — estão aplicadas no nível da plataforma. O sistema bloqueia transições que violariam a separação.
+
+## Calibração: executor ≠ aprovador
+
+Em uma ordem de calibração:
+
+- O **técnico** que executou a calibração não pode aprovar a própria ordem.
+- A **aprovação** exige um usuário com permissão de aprovação distinta de quem realizou a execução.
+- O sistema bloqueia o botão de aprovação para o próprio executor.
+
+Essa regra atende, em conjunto, a **ISO/IEC 17025:2017, cláusula 4.1** (Imparcialidade) e **cláusula 6.2.6** (autorização do pessoal para atividades específicas, incluindo "relato, revisão e autorização de resultados").
+
+## Métodos: revisor técnico ≠ aprovador da qualidade
+
+O ciclo de vida do método tem dois pontos de validação independentes:
+
+- **Revisão técnica** — feita por um responsável técnico que valida a coerência metrológica do método.
+- **Aprovação da qualidade** — feita pelo responsável da qualidade que autoriza a publicação.
+
+As duas atuações são registradas em campos separados (revisor técnico e aprovador da qualidade). Detalhes em [Ciclo de Vida dos Métodos](/metodos/ciclo-de-vida).
+
+## Não conformidades: disposição com aprovação obrigatória
+
+Em [não conformidades](/qualidade/nao-conformidades), as disposições têm escopos distintos:
+
+| Disposição | Aprovação independente exigida |
+| :--- | :--- |
+| Retrabalho | Não |
+| Sucata | Não |
+| Aceitar como está | **Sim** — responsável técnico |
+| Concessão | **Sim** — responsável técnico |
+
+Disposições que mantêm o item em uso (aceitar como está, concessão) exigem aprovação separada da pessoa que registrou a NC.
+
+## Competências: pré-condição operacional
+
+A separação de responsabilidades pressupõe que a pessoa atribuída a uma calibração esteja qualificada. Quando há [competências](/qualidade/competencias) definidas para o tipo de instrumento, o sistema bloqueia a atribuição de um técnico sem competência ativa e não expirada. Não há exceção via interface.
+
+## O que isso significa na prática
+
+- A organização precisa ter, no mínimo, **duas pessoas com perfis distintos** para operar calibrações em conformidade: uma para executar, outra para aprovar.
+- Tentativas de fluxo single-user (operador único) são bloqueadas no momento da aprovação, não silenciosamente permitidas.
+- A trilha de auditoria registra os dois agentes (executor e aprovador) — auditores verificam que são distintos.
+
+<Aside type="caution">
+  A separação de responsabilidades é a regra ISO mais frequentemente questionada em auditorias. O CalibraFácil aplica-a no schema do banco de dados, não apenas na interface — não é possível contorná-la via API ou via importação direta.
+</Aside>

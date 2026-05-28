@@ -1,0 +1,95 @@
+---
+title: Conectores ERP
+description: Conector HTTP genérico com mapeamento de campos para sincronizar clientes, ordens de serviço e documentos financeiros com sistemas externos.
+---
+
+Os conectores ERP permitem sincronizar dados operacionais com sistemas externos sem código personalizado — usando um conector HTTP genérico, com mapeamento de campos configurável pelo painel.
+
+São voltados a cenários com rollout assistido: ERP financeiro, sistemas de faturamento, automações entre o LIMS e sistemas legados.
+
+Acesse em **Configurações → Integrações** (`/dashboard/settings/integrations`).
+
+## Alvos suportados
+
+| Alvo | Direção | Dependências |
+| :--- | :--- | :--- |
+| **Clientes** | bidirecional | base mínima — libera todos os outros |
+| **Ordens de serviço** | saída | depende de clientes já reconciliados |
+| **Documentos financeiros** | saída | depende de clientes e ordens já reconciliados |
+
+A ordem de configuração reflete as dependências: ative clientes primeiro, depois ordens de serviço, depois documentos financeiros.
+
+## Configuração da conexão
+
+Cada conector é configurado em quatro passos:
+
+1. **Endpoint HTTP** — URL base do sistema remoto.
+2. **Autenticação** — bearer token, header customizado ou autenticação básica.
+3. **Validação técnica** — o painel faz uma chamada de ping para confirmar conectividade.
+4. **Mapeamento de campos** — definição de quais campos do CalibraFácil correspondem a quais campos do sistema remoto.
+
+## Mapeamento de campos
+
+Cada alvo expõe um conjunto canônico de campos. Por exemplo, o alvo **Clientes**:
+
+| Campo canônico | Tipo |
+| :--- | :--- |
+| `externalId` | string |
+| `name` | string |
+| `taxId` | string (CNPJ/CPF) |
+| `email` | string |
+| `phone` | string |
+| `address` | objeto |
+| `createdAt`, `updatedAt` | ISO 8601 |
+
+O mapeamento permite:
+
+- vincular cada campo canônico a um campo do payload remoto;
+- aplicar **formatadores** durante a sincronização: `none`, `upper_case`, `lower_case`, `digits_only`, `date_only`, `iso_datetime`, `currency_major`;
+- injetar **valores constantes** em campos exigidos pelo sistema remoto que não têm equivalente direto;
+- marcar campos como **obrigatórios** no destino — a sincronização falha cedo se faltar dado.
+
+A interface oferece um **preview** do payload antes de qualquer execução real, evitando surpresas.
+
+## Gatilhos
+
+Cada sincronização pode ser disparada por:
+
+| Gatilho | Quando usar |
+| :--- | :--- |
+| **Manual** | Botão na interface; útil para sync inicial ou retroativo. |
+| **Por evento** | Cada criação/atualização no CalibraFácil sincroniza imediatamente. |
+| **Agendado** | Sincronização periódica (diária, semanal). |
+
+Combine livremente — por exemplo, sincronização por evento para casos normais e agendada como rede de segurança.
+
+## Execução e retry
+
+Cada execução é registrada como um **run** com status:
+
+| Status | Significado |
+| :--- | :--- |
+| `PENDING` | Enfileirado |
+| `RUNNING` | Em execução |
+| `COMPLETED` | Concluído com sucesso |
+| `FAILED` | Erro impede a conclusão |
+| `PARTIAL` | Alguns itens sincronizaram, outros falharam |
+
+Runs falhos podem ser retentados manualmente. A trilha de auditoria mantém histórico completo, incluindo o payload enviado e a resposta do sistema remoto.
+
+## Limitações
+
+- **Sem transformações complexas.** Os formatadores são suficientes para casos comuns; transformações maiores devem ser feitas pelo sistema remoto.
+- **Sem ETL bidirecional para todos os alvos.** Clientes podem ser puxados; ordens e documentos são saída a partir do CalibraFácil.
+- **Sem garantia de ordem global.** Eventos podem chegar fora de ordem ao sistema remoto sob falhas e retries — use `externalId` e timestamps para reconciliar.
+
+<Aside type="caution">
+  Conectores ERP não são *plug and play*. Eles exigem validação de prontidão do lado remoto, dependências entre alvos, e — em muitos casos — coordenação de deploy entre API e workers. Planeje rollouts em etapas.
+</Aside>
+
+## Boas práticas
+
+- **Comece em ambiente de homologação.** O sistema remoto deve oferecer um endpoint isolado para validação antes do go-live.
+- **Mapeie `externalId` em todos os alvos.** É a chave de reconciliação confiável; sem ela, sync repetido pode gerar duplicação.
+- **Monitore runs.** Configure [notificações](/plataforma/notificacoes) para runs com status `FAILED` ou `PARTIAL` recorrentes.
+- **Documente o contrato com o sistema remoto.** O CalibraFácil registra o payload enviado, mas a interpretação no destino é responsabilidade do parceiro.

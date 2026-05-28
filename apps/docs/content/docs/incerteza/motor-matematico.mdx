@@ -1,0 +1,177 @@
+---
+title: Cálculos de Incerteza
+description: Como o CalibraFácil calcula a incerteza de medição conforme o GUM (JCGM 100:2008) — Tipo A, Tipo B, combinação, graus de liberdade efetivos e fator de abrangência.
+---
+
+O CalibraFácil realiza os cálculos de incerteza de medição seguindo o **GUM (JCGM 100:2008)** — o guia internacional para expressão de incerteza de medição. Esta página descreve a metodologia aplicada nos cálculos, permitindo que responsáveis técnicos e gerentes da qualidade compreendam e validem os resultados apresentados nos certificados.
+
+<Aside type="note">
+  A validação formal do motor matemático está publicada em [Validação do Motor Matemático](/incerteza/validacao), com método, escopo, evidências e referências normativas. O pacote em produção é `@calibra-facil/math-engine` versão `0.2.4`.
+</Aside>
+
+---
+
+## Metodologia GUM
+
+O motor implementa **propagação de incertezas de primeira ordem** conforme o GUM, combinando avaliações Tipo A e Tipo B para obter a incerteza expandida do resultado de medição.
+
+### Incerteza Tipo A (avaliação estatística)
+
+Para calibrações com séries de leituras repetidas, o motor calcula:
+
+**Média aritmética:**
+
+$$
+\bar{x} = \frac{1}{n} \sum_{i=1}^{n} x_i
+$$
+
+**Desvio padrão experimental:**
+
+$$
+s = \sqrt{\frac{1}{n-1} \sum_{i=1}^{n} (x_i - \bar{x})^2}
+$$
+
+**Incerteza padrão da média:**
+
+$$
+u_A = \frac{s}{\sqrt{n}}
+$$
+
+Com graus de liberdade $\nu_A = n - 1$.
+
+<Aside type="caution">
+  São necessárias no mínimo **2 leituras** para a avaliação Tipo A.
+</Aside>
+
+### Incerteza Tipo B (avaliação não estatística)
+
+Para contribuições de incerteza provenientes de certificados de calibração, especificações do fabricante ou resolução do instrumento, o valor informado é convertido em incerteza padrão usando o divisor da distribuição correspondente:
+
+$$
+u_B = \frac{a}{d}
+$$
+
+Onde $a$ é o meio-intervalo informado e $d$ é o divisor da distribuição.
+
+| Distribuição | Divisor ($d$) | Quando usar |
+| :--- | :--- | :--- |
+| **Normal** | $k$ informado no certificado | Certificados que informam incerteza expandida $U$ com fator $k$ |
+| **Retangular** / **Uniforme** | $\sqrt{3} \approx 1{,}732$ | Resolução, especificações do fabricante, tolerâncias |
+| **Triangular** | $\sqrt{6} \approx 2{,}449$ | Quando valores centrais são mais prováveis que os extremos |
+| **Em U** (U-shaped) | $\sqrt{2} \approx 1{,}414$ | Histerese, variações cíclicas |
+| **Arcsen** | $\sqrt{2} \approx 1{,}414$ | Oscilações harmônicas amostradas em fase aleatória |
+| **Customizada** | divisor explícito | Casos não cobertos pelas distribuições padrão, com justificativa documentada |
+
+Quando o certificado do padrão informa incerteza expandida $U$ com fator $k$, o motor converte automaticamente: $u_B = U / k$.
+
+Os componentes Tipo B são configurados no [Construtor de Métodos](/metodos/criterios-de-aceitacao#componentes-de-incerteza-tipo-b).
+
+### Incerteza combinada
+
+Todas as contribuições são combinadas pela soma em quadratura, conforme a Equação 10 do GUM, incluindo termos de correlação quando aplicáveis:
+
+$$
+u_c^2(y) = \sum_{i=1}^{N} c_i^2\, u^2(x_i) + 2 \sum_{i=1}^{N-1} \sum_{j=i+1}^{N} c_i\, c_j\, u(x_i, x_j)
+$$
+
+Onde $c_i = \partial f / \partial x_i$ é o coeficiente de sensibilidade — calculado **simbolicamente** pelo motor a partir da fórmula do método, ou fornecido explicitamente pelo autor do método quando necessário.
+
+O motor aceita relações de **correlação** $r(x_i, x_j) \in [-1, 1]$ e **covariância** $u(x_i, x_j)$ entre grandezas de entrada, com validação de matriz positiva semidefinida (PSD). Quando todas as grandezas são declaradas independentes, os termos cruzados se anulam e a expressão reduz-se à soma em quadratura simples.
+
+### Graus de liberdade efetivos
+
+Para garantir cobertura correta — especialmente com amostras pequenas — o motor calcula os graus de liberdade efetivos pela fórmula de **Welch-Satterthwaite**:
+
+$$
+\nu_{\text{eff}} = \frac{u_c^4(y)}{\displaystyle\sum_{i=1}^{N} \frac{\left[ c_i \cdot u_i(y) \right]^4}{\nu_i}}
+$$
+
+O resultado fracionário é **truncado para o inteiro inferior**. Essa escolha é conservadora: para um $u_c$ fixo, um $\nu_{\text{eff}}$ menor produz um $k$ maior pela tabela t-Student e, portanto, uma incerteza expandida $U$ maior. Truncar (em vez de arredondar) garante que $k$ não seja subestimado. A regra é a do **GUM JCGM 100:2008, §G.4.1**.
+
+### Incerteza expandida e fator de abrangência
+
+A incerteza expandida é:
+
+$$
+U = k \cdot u_c
+$$
+
+O fator $k$ **não é fixo em 2,0**. O motor calcula $k$ a partir do **quantil da distribuição Student-t** com base nos graus de liberdade efetivos e na probabilidade de cobertura informada.
+
+A probabilidade de cobertura é **arbitrária** — qualquer valor em $(0, 1)$ é aceito. As escolhas mais usadas em laboratórios de calibração:
+
+| Probabilidade | $k$ para $\nu \to \infty$ | Notas |
+| :--- | :--- | :--- |
+| 95,00% | $1{,}96$ | Convenção em algumas áreas |
+| **95,45%** | $2{,}00$ | Convenção em calibração; convergência exata para $k = 2$ com $\nu$ grande, alinhada à EA-4/02 |
+| 99,00% | $2{,}576$ | Alta confiança |
+| 99,73% | $3{,}000$ | "Três sigma" |
+
+<Aside type="tip" title="Exemplo prático">
+  Para $\nu_{\text{eff}} = 4$ e probabilidade de cobertura 95,45%, o motor usa $k = 2{,}87$ (não $2{,}00$). Isso impede que a incerteza expandida seja subestimada em amostras pequenas.
+</Aside>
+
+**Extrato da tabela t-Student (95,45%):**
+
+| $\nu_{\text{eff}}$ | $k$ |
+| :--- | :--- |
+| 1 | 13,97 |
+| 2 | 4,53 |
+| 3 | 3,31 |
+| 5 | 2,65 |
+| 10 | 2,28 |
+| 20 | 2,13 |
+| 50 | 2,05 |
+| $\geq 500$ | 2,00 |
+
+---
+
+## Funções não-suaves no modelo de medição
+
+A propagação GUM de primeira ordem assume que a função do mensurando $Y = f(X_1, \ldots, X_n)$ é diferenciável em torno do ponto de operação. Funções **não-suaves** — `abs`, `floor`, `ceil`, `round`, `min`, `max` — quebram essa hipótese.
+
+O motor **rejeita** modelos que usem essas funções na propagação GUM, a menos que o autor do método:
+
+1. forneça **coeficientes de sensibilidade explícitos** para todas as grandezas de entrada (substituindo a diferenciação simbólica), e
+2. declare expressamente a aceitação dessa configuração ao compilar o método.
+
+Modelos fortemente não-lineares ou com descontinuidades exigem avaliação por método independente (por exemplo, Monte Carlo, conforme GUM Supplement 1 — não implementado pelo motor).
+
+---
+
+## Determinismo e auditabilidade
+
+O motor opera em **modo decimal/racional determinístico** para literais decimais e aritmética básica (soma, subtração, multiplicação, divisão, potência inteira). Funções transcendentais (`sin`, `cos`, `exp`, `log`) e quantis Student-t usam IEEE-754 double-precision do JavaScript.
+
+Cada cálculo emite, além do valor numérico:
+
+- **JSON canônico** com a fórmula normalizada, AST, entradas, parâmetros e resultado;
+- **Fingerprint FNV-1a 64-bit** sobre o JSON canônico — identificador estável da execução, embutido no snapshot da calibração;
+- a versão do motor (`ENGINE_VERSION`) em uso.
+
+Esses três artefatos permitem reconstrução determinística e correlação de resultados entre execuções e em auditorias. Detalhes em [Rastreabilidade](/conceitos/rastreabilidade).
+
+---
+
+## Unidades
+
+Unidades são tratadas como **metadados textuais**. O motor **não realiza álgebra dimensional** nem conversões automáticas — a coerência dimensional do modelo é responsabilidade do autor do método. Em campos do construtor de métodos, as unidades aparecem como rótulos e devem ser consistentes na configuração do método e nas leituras coletadas.
+
+---
+
+## Limitações declaradas
+
+1. **Propagação de primeira ordem.** Modelos fortemente não-lineares na vizinhança do ponto de operação podem exigir Monte Carlo (não implementado).
+2. **Funções não-suaves** (`abs`, `floor`, `ceil`, `round`, `min`, `max`) só são aceitas na propagação se acompanhadas de coeficientes de sensibilidade explícitos.
+3. **Sem álgebra dimensional.** Unidades são metadados; a coerência é responsabilidade do projeto do método.
+4. **Quantil Student-t para $\nu \geq 500$** é tratado como assintótico à distribuição normal ($k = 2{,}00$ para 95,45%).
+5. **Funções transcendentais e quantis** usam IEEE-754 double-precision; os limites de precisão correspondentes valem.
+
+---
+
+## Referências
+
+1. **JCGM 100:2008 (GUM)** — *Evaluation of measurement data — Guide to the expression of uncertainty in measurement.* Em particular, §G.4 (graus de liberdade efetivos) e §6 (incerteza expandida).
+2. **JCGM 200:2012 (VIM)** — *International vocabulary of metrology — Basic and general concepts and associated terms.*
+3. **ISO/IEC 17025:2017** — cláusula 7.2.2 (validação de métodos), incluindo 7.2.2.1 (técnicas) e 7.2.2.4 (registros de validação).
+4. **EA-4/02 M:2022** — *Evaluation of the Uncertainty of Measurement in Calibration.*

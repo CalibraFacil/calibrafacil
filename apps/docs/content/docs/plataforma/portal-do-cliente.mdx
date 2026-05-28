@@ -1,0 +1,95 @@
+---
+title: Portal do Cliente
+description: Portal de acesso para clientes do laboratório acompanharem ativos, calibrações e certificados de forma autônoma.
+---
+
+## O Que é o Portal
+
+O **Portal do Cliente** é uma aplicação dedicada, em `portal.calibrafacil.com`, que permite aos clientes do laboratório acompanhar suas calibrações de forma autônoma — sem necessidade de contato direto com a equipe.
+
+O portal pode operar no domínio padrão gerenciado pela CalibraFácil ou em um domínio próprio do laboratório.
+
+## Acesso ao Portal
+
+O acesso é gerenciado pelo laboratório:
+
+1. O administrador do laboratório acessa o cadastro do cliente em `/dashboard/clients/:id`.
+2. Na aba **Usuários**, clica em **Convidar Usuário**.
+3. Informa o email do colaborador do cliente.
+4. O colaborador recebe um convite por email.
+5. Ao aceitar, cria uma conta e acessa o portal.
+
+O portal utiliza autenticação independente do painel do laboratório.
+
+## Domínio Personalizado
+
+Laboratórios podem operar o portal em domínio próprio (`portal.seu-laboratorio.com.br`) configurando-o em **Configurações → Portal Domain** (`/dashboard/settings/portal-domain`).
+
+O ciclo de vida do domínio segue estas etapas:
+
+1. cadastrar o hostname desejado;
+2. publicar o registro TXT de verificação;
+3. validar o domínio no painel;
+4. ativar o domínio para uso em produção.
+
+## Funcionalidades
+
+<CardGrid>
+  <Card title="Dashboard" icon="open-book">
+    Visão geral com indicadores do cliente: calibrações recentes, instrumentos ativos, certificados disponíveis.
+  </Card>
+  <Card title="Ativos" icon="setting">
+    Lista completa dos instrumentos do cliente, com tag, número de série, tipo, status e datas de calibração.
+  </Card>
+  <Card title="Solicitações de Calibração" icon="add-document">
+    Submissão de novas solicitações pelo próprio cliente, com acompanhamento de status até aprovação pelo laboratório.
+  </Card>
+  <Card title="Ordens de Serviço" icon="document">
+    Acompanhamento das ordens de serviço derivadas das solicitações, com aprovação eletrônica de orçamento e visibilidade do prazo.
+  </Card>
+  <Card title="Certificados" icon="document">
+    Acesso direto aos certificados de calibração aprovados. Download do PDF com um clique.
+  </Card>
+  <Card title="Configurações" icon="pencil">
+    Preferências de aparência (tema claro/escuro).
+  </Card>
+</CardGrid>
+
+## O Que o Cliente Pode Fazer
+
+| Ação | Disponível |
+| :--- | :--- |
+| Visualizar seus ativos/instrumentos | Sim |
+| **Submeter solicitações de calibração** | **Sim** — veja [Solicitações](/operacao-comercial/solicitacoes) |
+| **Acompanhar ordens de serviço derivadas** | **Sim** — veja [Ordens de Serviço](/operacao-comercial/ordens-de-servico) |
+| **Aprovar ou rejeitar orçamentos** | **Sim** — eletronicamente, com carimbo de tempo e identidade |
+| Visualizar status de calibrações | Sim |
+| Fazer download de certificados | Sim |
+| Editar dados de ativos | Não — o cadastro de ativos é mantido pelo laboratório |
+| Criar ordens de serviço diretamente | Não — passam pela solicitação, que o atendimento converte em OS |
+| Acessar dados de outros clientes | Não — isolamento total por organização |
+
+O portal **não é somente leitura**: o cliente participa ativamente do ciclo comercial (submeter solicitações, aprovar orçamentos) sem tocar nos registros técnicos (ativos, calibrações, certificados) — esses ficam sob controle do laboratório.
+
+## Notificações
+
+Usuários do portal recebem notificações por email nos seguintes eventos:
+
+| Evento | Descrição |
+| :--- | :--- |
+| **Certificado disponível** | Certificado de calibração pronto para download |
+| **Certificado retificado** | Uma nova versão do certificado foi emitida em substituição |
+
+## Verificação Pública de Certificados
+
+Cada certificado emitido pelo CalibraFácil possui um **token de verificação** único. Qualquer pessoa (cliente, auditor, terceiros) pode verificar a autenticidade de um certificado:
+
+1. Acessar o link de verificação impresso no certificado (ou escanear o QR code).
+2. A página pública exibe os dados do certificado e confirma sua autenticidade.
+3. Não é necessário login para verificação.
+
+A verificação confirma:
+
+- que o certificado foi emitido pelo laboratório;
+- a data de emissão e o status (válido ou retificado);
+- os metadados da assinatura digital (quando assinado).

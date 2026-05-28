@@ -1,0 +1,49 @@
+---
+title: Calibração vs. Ordem de Serviço
+description: A distinção entre o registro técnico da calibração e o envelope comercial que organiza orçamento, aprovação e entrega.
+---
+
+O CalibraFácil opera dois registros distintos para o mesmo trabalho. Eles caminham juntos, mas são entidades separadas com responsáveis, ciclos de vida e regras de acesso diferentes. Entender essa separação é o primeiro passo para usar a plataforma com clareza.
+
+## Ordem de Calibração
+
+A **ordem de calibração** é o registro técnico, regulado pela **ISO/IEC 17025**. Ela é onde as medições acontecem, os resultados são calculados e o certificado é emitido. Operacionalmente, é o que o técnico vê quando entra no laboratório.
+
+- **Quem usa:** técnicos, responsáveis técnicos, gerente da qualidade.
+- **Ciclo de vida:** `Rascunho → Em execução → Em revisão → Gerando PDF → Aprovada → (Substituída)`.
+- **Imutabilidade:** uma vez aprovada, é congelada. Correções exigem [retificação](/certificados/retificacao) — emissão de uma nova ordem que substitui a anterior, mantendo a trilha de auditoria.
+- **Saída:** um [certificado de calibração](/certificados/visao-geral) com assinatura digital ICP-Brasil.
+
+Detalhes em [Ordens de Calibração](/calibracao/ordens-de-calibracao/visao-geral).
+
+## Ordem de Serviço
+
+A **ordem de serviço** é o envelope comercial — o registro que o cliente reconhece e que organiza orçamento, aprovação, prazo de entrega, mão de obra adicional, peças e logística. É onde a operação fala com o cliente.
+
+- **Quem usa:** atendimento comercial, gerente operacional, administrador.
+- **Ciclo de vida:** máquina de estados de 16 etapas, do recebimento ao fechamento (`Aberta → Aguardando avaliação técnica → Em avaliação → Aguardando aprovação do orçamento → ... → Entregue → Fechada`).
+- **Saída:** orçamento aprovado, prazo cumprido, eventuais reparos contabilizados.
+
+Detalhes em [Ordens de Serviço](/operacao-comercial/ordens-de-servico).
+
+## Como elas se conectam
+
+Uma ordem de serviço pode disparar uma ou mais ordens de calibração. As ordens de calibração agregadas ao envelope comercial preservam a separação entre os dois domínios:
+
+- A ordem de serviço **não** contém medições nem aplica assinatura digital.
+- A ordem de calibração **não** trata de orçamento, aprovação comercial nem entrega.
+
+Essa separação reflete uma decisão deliberada de governança: o que é regulado pela ISO/IEC 17025 fica isolado do que é comercial. Auditorias inspecionam ordens de calibração; clientes acompanham ordens de serviço.
+
+## Glossário rápido
+
+| Termo | O que é | Onde aparece |
+| :--- | :--- | :--- |
+| **Solicitação** | Pedido de calibração feito pelo cliente no portal | [Solicitações](/operacao-comercial/solicitacoes) |
+| **Ordem de serviço** | Envelope comercial (orçamento, prazo, entrega) | [Ordens de Serviço](/operacao-comercial/ordens-de-servico) |
+| **Ordem de calibração** | Registro técnico (medições, incerteza, certificado) | [Ordens de Calibração](/calibracao/ordens-de-calibracao/visao-geral) |
+| **Certificado** | Documento emitido pela ordem de calibração aprovada | [Certificados](/certificados/visao-geral) |
+
+<Aside type="tip">
+  Quando estiver lendo o resto da documentação, sempre verifique se o texto está falando de "ordem de serviço" (comercial) ou "ordem de calibração" (técnica). A confusão entre as duas é a fonte mais comum de mal-entendido na plataforma.
+</Aside>

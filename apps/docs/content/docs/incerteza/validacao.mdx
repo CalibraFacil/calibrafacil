@@ -1,0 +1,62 @@
+---
+title: Validação do Motor Matemático
+description: Como a CalibraFácil valida o motor de cálculo de incerteza distribuído na plataforma — método, escopo, evidências e referências normativas.
+---
+
+O motor matemático que calcula a incerteza nas calibrações é **validado pela CalibraFácil para distribuição em produção na plataforma**. A validação é desenhada para servir de evidência reutilizável por laboratórios usuários na composição da própria validação de método sob **ISO/IEC 17025:2017, cláusula 7.2.2** (validação de métodos).
+
+**Pacote validado:** `@calibra-facil/math-engine` versão `0.2.4`.
+
+## Método de validação
+
+A CalibraFácil valida o motor por **comparação direta com planilhas Excel usadas como referência por laboratórios acreditados pelo Inmetro/RBC**. Para cada função coberta, o motor é executado contra entradas equivalentes às das planilhas de referência; o resultado produzido pelo motor coincide com o da planilha dentro da tolerância numérica declarada no dossiê de validação.
+
+A comparação de resultados com outros métodos validados é uma técnica reconhecida pela **ISO/IEC 17025:2017, cláusula 7.2.2.1, item d)** (técnicas usadas para validação de métodos). Desvios além da tolerância declarada bloqueiam a publicação de nova versão do pacote.
+
+## Escopo
+
+| Função do motor | API | O que é validado |
+| :--- | :--- | :--- |
+| Incerteza Tipo A | `typeAFromRepeatedObservations` | Média, desvio padrão experimental, incerteza padrão da média, graus de liberdade `ν = n − 1` |
+| Incerteza Tipo B | `typeBStandardUncertainty` | Conversão de meio-intervalo em incerteza padrão para cada distribuição suportada: normal, retangular/uniforme, triangular, em U, arcsen e customizada |
+| Combinação de incertezas | `evaluateMeasurementModel` | Soma em quadratura conforme Equação 10 do GUM, incluindo termos de correlação e covariância entre grandezas de entrada |
+| Graus de liberdade efetivos | `welchSatterthwaiteDegreesOfFreedom` | Fórmula de Welch-Satterthwaite com truncamento para o inteiro inferior, conforme GUM §G.4.1 |
+| Fator de abrangência | `coverageFactorForProbability`, `studentTQuantile` | Quantil da distribuição Student-t para qualquer probabilidade de cobertura informada |
+| Avaliador de fórmulas | `engine.compileFormula`, `formula.evaluate` | Parser com gramática de lista branca, validação sintática e diferenciação simbólica para coeficientes de sensibilidade |
+
+## Dossiê de validação
+
+A evidência de validação de cada versão do `@calibra-facil/math-engine` é organizada em um **dossiê de validação** mantido pela CalibraFácil, ancorado à versão do pacote (`0.2.4` no momento desta publicação). O dossiê é o documento citável em auditorias do laboratório usuário.
+
+Conteúdo do dossiê para cada versão liberada:
+
+- relação das planilhas de referência utilizadas, com origem e escopo metrológico declarado;
+- faixas numéricas e cenários cobertos por função (Tipo A, Tipo B por distribuição, combinação com correlação, Welch-Satterthwaite, fator de abrangência);
+- tolerância numérica aplicada na comparação;
+- resultado por função, com o desvio máximo observado contra a planilha de referência;
+- aprovação formal pelo responsável da qualidade da CalibraFácil, com data e identificação da versão do pacote.
+
+O dossiê é fornecido ao laboratório usuário ou ao seu auditor mediante solicitação, no formato PDF assinado eletronicamente.
+
+## Trilha de auditoria
+
+Cada calibração executada no CalibraFácil carrega, em seu *snapshot* imutável:
+
+- a versão do pacote `@calibra-facil/math-engine` em uso, exposta como `ENGINE_VERSION`;
+- o *fingerprint* canônico da fórmula compilada e do resultado, calculado como FNV-1a 64-bit sobre JSON canônico (ver [Rastreabilidade](/conceitos/rastreabilidade));
+- a referência ao método de calibração aplicado, também em snapshot.
+
+Esses elementos permitem reconstruir, em auditoria, o cálculo exato realizado em uma calibração específica e correlacioná-lo com o dossiê de validação da versão do motor em uso.
+
+## Fora do escopo
+
+- **Método de Monte Carlo (GUM Supplement 1)** não é implementado pelo motor. Modelos fortemente não-lineares — em que a propagação de primeira ordem é insuficiente — exigem avaliação por método independente conforme a política metrológica do laboratório usuário. O motor rejeita o uso de funções não-suaves (`abs`, `floor`, `ceil`, `round`, `min`, `max`) em propagação GUM, a menos que o autor do método forneça coeficientes de sensibilidade explícitos.
+- **Álgebra dimensional de unidades** não é implementada. Unidades são metadados textuais; a coerência dimensional é responsabilidade do projeto do método.
+- **Certificação metrológica por terceiro independente** não foi conduzida. A validação atual cobre o motor conforme distribuído na plataforma. O laboratório usuário utiliza essa evidência como entrada da sua própria validação de método sob ISO/IEC 17025.
+
+## Referências normativas
+
+- **JCGM 100:2008 (GUM)** — *Evaluation of measurement data — Guide to the expression of uncertainty in measurement.*
+- **JCGM 200:2012 (VIM)** — vocabulário internacional de metrologia.
+- **ISO/IEC 17025:2017** — cláusula 7.2.2 (validação de métodos), incluindo 7.2.2.1 (técnicas) e 7.2.2.4 (registros de validação).
+- **EA-4/02 M:2022** — *Evaluation of the Uncertainty of Measurement in Calibration.*

@@ -1,0 +1,92 @@
+---
+title: Ordens de Serviço
+description: Fluxo completo das ordens de serviço — criação, atribuição, execução, aprovação e emissão de certificados de calibração.
+---
+
+
+## Visão Geral
+
+A **Ordem de Serviço (OS)** é o elemento central do CalibraFácil. Ela representa uma calibração individual — desde o recebimento do instrumento até a emissão do certificado. Cada OS vincula um cliente, um ativo (instrumento), um serviço e um técnico responsável.
+
+Acesse as ordens de serviço em **Painel → Ordens de Serviço** (`/dashboard/jobs`).
+
+## Fluxo de Status
+
+Toda OS segue este fluxo:
+
+```
+RASCUNHO → EM EXECUÇÃO → EM REVISÃO → GERANDO PDF → APROVADO
+                                ↓
+                           REJEITADO → (correção) → EM REVISÃO
+```
+
+| Status | Descrição | Quem atua |
+| :--- | :--- | :--- |
+| **Rascunho** | OS criada, aguardando início | Operador, Técnico, Administrador |
+| **Em Execução** | Técnico executando a calibração | Técnico (ou Operador, transcrevendo) |
+| **Em Revisão** | Submetida para aprovação do responsável | Administrador, Proprietário |
+| **Gerando PDF** | Certificado sendo gerado automaticamente | Sistema |
+| **Aprovado** | Certificado pronto para download e assinatura | — |
+| **Rejeitado** | Devolvida para correção com motivo obrigatório | Técnico, Operador |
+| **Cancelado** | OS cancelada (com motivo) | Administrador, Proprietário |
+| **Retificado** | Substituída por uma emenda/retificação | Sistema |
+
+<Aside type="caution">
+  **Separação de responsabilidades (ISO 17025):** O técnico que executa a calibração **não pode** aprovar a própria OS. Somente administradores ou proprietários podem aprovar ou rejeitar.
+</Aside>
+
+## Criação de uma Ordem de Serviço
+
+<Steps>
+
+1. **Selecionar o cliente**
+
+   Escolha o cliente que enviou o instrumento para calibração. O campo possui busca por nome e CNPJ.
+
+2. **Selecionar o ativo (instrumento)**
+
+   A lista é filtrada automaticamente para exibir apenas os ativos do cliente selecionado. Mostra nome, tag, número de série e tipo.
+
+3. **Selecionar o serviço**
+
+   A lista é filtrada pelo tipo de ativo. Mostra o nome do serviço, método vinculado, preço e prazo (TAT).
+
+4. **Detalhes (opcional)**
+
+   - **Técnico:** Atribuir o responsável pela execução (pode ser feito depois)
+   - **Data de vencimento:** Sugerida automaticamente com base no TAT do serviço
+
+</Steps>
+
+<Aside type="note">
+  Ao criar a OS, o sistema faz um **snapshot (congelamento)** do método de calibração. Alterações futuras no método não afetam ordens já criadas — garantindo reprodutibilidade conforme ISO/IEC 17025.
+</Aside>
+
+## Atribuição de Técnico
+
+O técnico pode ser atribuído na criação da OS ou depois, via o botão **Atribuir Técnico** na página de detalhes. O técnico recebe uma notificação ao ser atribuído.
+
+## Emendas e Retificações
+
+Se um certificado aprovado precisar de correção (erro de digitação, dados incorretos), o sistema permite criar uma **emenda** conforme **ISO/IEC 17025:2017, cláusula 7.8.8** (Emendas a relatórios):
+
+1. Na página da OS aprovada, clique em **Criar Retificação**
+2. Informe o **motivo da retificação** (obrigatório)
+3. Uma nova OS é criada como cópia, vinculada à original
+4. A OS original recebe o status **Retificado**
+5. A nova OS segue o fluxo normal (execução → revisão → aprovação)
+
+O certificado retificado exibe claramente o número da retificação e referência ao original.
+
+## Subpáginas
+
+<CardGrid>
+  <Card title="Execução e Medição" icon="pencil">
+    Como executar a calibração: selecionar padrões, preencher dados e validar resultados.
+    [Ir para Execução →](/calibracao/ordens-de-calibracao/execucao)
+  </Card>
+  <Card title="Aprovação e Certificados" icon="approve-check">
+    Revisão, aprovação/rejeição, geração de PDF e assinatura digital.
+    [Ir para Aprovação →](/calibracao/ordens-de-calibracao/aprovacao-e-certificado)
+  </Card>
+</CardGrid>

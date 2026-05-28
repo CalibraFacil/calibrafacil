@@ -1,0 +1,70 @@
+---
+title: Emissão do Certificado
+description: O que acontece entre a aprovação da ordem de calibração e o certificado disponível para download — incluindo a geração assíncrona do PDF e a aplicação da assinatura digital.
+---
+
+A emissão do certificado começa quando o responsável técnico aprova a ordem de calibração. A partir desse ponto, o sistema executa um pipeline determinístico, em segundo plano, até produzir o PDF final assinado e disponível para o cliente.
+
+## O pipeline de emissão
+
+```
+Aprovação da ordem
+   ↓
+Status: Gerando PDF  (background job enfileirado)
+   ↓
+Renderização do template com o snapshot da calibração
+   ↓
+Assinatura digital (se ICP-Brasil configurado)
+   ↓
+Upload para o armazenamento (R2)
+   ↓
+Status: Aprovada (certificateUrl populado)
+   ↓
+Notificação ao cliente: certificado disponível
+```
+
+A transição entre **Gerando PDF** e **Aprovada** é assíncrona. Para a operação, o efeito visível é:
+
+- a ordem aparece como aprovada na lista;
+- o certificado fica disponível alguns segundos depois;
+- o cliente recebe notificação automática.
+
+## O que vai para o PDF
+
+O template do certificado é renderizado contra o **snapshot da calibração**: a versão imutável do método, ativo, padrões e condições ambientais capturada durante o trabalho. Mais sobre snapshots em [Conceitos](/conceitos/snapshots-e-imutabilidade).
+
+Os campos preenchidos no PDF:
+
+- Identidade do laboratório (logo, dados de acreditação, responsável técnico) — vem da configuração da organização.
+- Cliente, instrumento, padrões — vêm do snapshot da ordem.
+- Resultados, incerteza, critério — calculados pelo motor matemático ao final da execução.
+- Numeração sequencial — definida em [Templates](/certificados/templates).
+
+## A assinatura digital
+
+Se um certificado **ICP-Brasil A1** estiver configurado (veja [Assinatura Digital](/certificados/assinatura-digital)), o PDF é assinado automaticamente durante a emissão. Os metadados da assinatura (titular, autoridade certificadora, política aplicada) ficam embutidos no PDF e são exibidos na [página pública de verificação](/certificados/verificacao-publica).
+
+Se nenhum certificado ICP estiver configurado, o PDF é emitido sem assinatura digital — apenas a assinatura manuscrita digitalizada (quando carregada). A operação segue, mas a defesa de auditoria fica mais fraca.
+
+## Falhas no pipeline
+
+Se a geração do PDF falhar:
+
+- a ordem permanece em **Gerando PDF** até o próximo retry;
+- a tentativa é registrada na trilha de auditoria;
+- o responsável técnico é notificado.
+
+Causas mais comuns: certificado ICP-Brasil expirado, template com campo obrigatório vazio, indisponibilidade temporária do armazenamento. Veja [Templates](/certificados/templates) para a checklist de campos obrigatórios.
+
+<Aside type="note">
+  A geração é desacoplada da aprovação propositadamente. O fluxo síncrono — aprovar e gerar PDF no mesmo request — sofreria latência irregular e travaria o aprovador. O pipeline assíncrono garante UX consistente e oferece retry transparente.
+</Aside>
+
+## Quando o certificado fica disponível
+
+| Onde | Quando |
+| :--- | :--- |
+| Painel da ordem de calibração | Imediatamente após o upload concluir (alguns segundos) |
+| Portal do Cliente | Imediatamente após o upload concluir |
+| Notificação por email ao cliente | Após o upload concluir, conforme [Notificações](/plataforma/notificacoes) |
+| API pública | Endpoint `certificate.available` emite webhook |

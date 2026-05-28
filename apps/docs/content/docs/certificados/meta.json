@@ -1,0 +1,11 @@
+{
+  "title": "Certificados",
+  "pages": [
+    "visao-geral",
+    "emissao",
+    "assinatura-digital",
+    "retificacao",
+    "verificacao-publica",
+    "templates"
+  ]
+}

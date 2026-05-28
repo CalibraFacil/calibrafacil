@@ -1,0 +1,51 @@
+---
+title: Certificados e Assinatura Digital
+description: Configuração de templates de certificado, assinatura digital ICP-Brasil e assinatura manuscrita.
+---
+
+A aparência e a assinatura dos certificados de calibração são configuradas em **Configurações → Certificados** (`/dashboard/settings/certificates`).
+
+## Identidade Visual do Certificado
+
+Configure os elementos que aparecem no certificado emitido:
+
+- **Logo do laboratório** — imagem exibida no cabeçalho do certificado.
+- **Dados de acreditação** — número de acreditação e organismo acreditador.
+- **Responsável técnico** — nome que aparece junto à assinatura.
+
+## Assinatura Digital ICP-Brasil
+
+A assinatura digital com certificado ICP-Brasil A1 garante validade jurídica do PDF de calibração no Brasil.
+
+<Steps>
+
+1. **Importação do certificado**
+
+   Faça upload do arquivo `.p12` (certificado ICP-Brasil A1).
+
+2. **Senha**
+
+   Informe a senha do certificado. Ela é armazenada com criptografia **AES-256-GCM** e nunca é exibida novamente.
+
+3. **Certificado padrão**
+
+   Defina o certificado como padrão para assinatura automática dos PDFs aprovados.
+
+</Steps>
+
+<Aside type="note">
+  A senha é criptografada e nunca exibida em texto claro. Para alterá-la, faça um novo upload do certificado.
+</Aside>
+
+O certificado digital é aplicado automaticamente no fluxo de [aprovação de ordens de serviço](/calibracao/ordens-de-calibracao/aprovacao-e-certificado).
+
+## Assinatura Manuscrita
+
+Na aba **Assinatura**, é possível anexar a imagem da assinatura manuscrita do responsável técnico:
+
+- formato recomendado: PNG com fundo transparente;
+- a imagem aparece no PDF do certificado junto à assinatura digital.
+
+## Condições Ambientais
+
+Os limites de temperatura, umidade e pressão aplicados durante a calibração são configurados em **Configurações → Condições Ambientais**. Para detalhes operacionais (snapshot imutável, fluxo de aprovação, limites por tipo de equipamento), consulte [Monitoramento Ambiental](/calibracao/monitoramento-ambiental).

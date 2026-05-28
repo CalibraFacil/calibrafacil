@@ -1,0 +1,93 @@
+---
+title: Permissões
+description: Papéis hierárquicos, matriz de permissões e separação de responsabilidades exigida pela ISO/IEC 17025.
+---
+
+As configurações administrativas do laboratório ficam em **Painel → Configurações** (`/dashboard/settings`). Esta página descreve o modelo de papéis, a matriz de permissões e a separação de responsabilidades imposta pela plataforma.
+
+## Mapa das Abas de Configuração
+
+| Aba | Descrição | Quem acessa |
+| :--- | :--- | :--- |
+| **Perfil** | Nome, email, foto do usuário | Todos |
+| **Segurança** | Senha, autenticação de dois fatores, sessões | Todos |
+| **Autenticação** | SSO corporativo e chaves de API | Administrador, Proprietário |
+| **Aparência** | Tema (claro, escuro, sistema) | Todos |
+| **Organização** | Nome, CNPJ, endereço, dados de acreditação | Administrador, Proprietário |
+| **Certificados** | Templates de certificado, logo, marca, assinatura digital | Administrador, Proprietário |
+| **Condições Ambientais** | Limites de temperatura, umidade e pressão | Administrador, Proprietário |
+| **Portal Domain** | Domínio personalizado do portal do cliente | Administrador, Proprietário |
+| **Integrações** | Conectores corporativos e mapeamento operacional | Administrador, Proprietário |
+| **Notificações** | Preferências de email e notificações in-app | Todos |
+| **Zona de Perigo** | Exportação de dados, exclusão da conta/organização | Proprietário |
+
+## Papéis Hierárquicos
+
+O sistema possui **6 papéis** organizados em duas categorias: papéis internos (equipe do laboratório) e papel externo (usuário do portal do cliente). A hierarquia é cumulativa — cada papel herda as permissões do nível inferior.
+
+```
+Equipe interna:   Proprietário > Administrador > Técnico > Operador > Membro
+Acesso externo:   Cliente   (usuário do portal; isolado do painel do laboratório)
+```
+
+## Matriz de Permissões (papéis internos)
+
+| Recurso | Membro | Operador | Técnico | Administrador | Proprietário |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Painel** | Visualizar | Visualizar | Visualizar | Visualizar | Visualizar |
+| **Clientes** | Visualizar | Criar, editar, excluir, convidar para portal | Criar, editar, excluir | Tudo | Tudo |
+| **Ativos** | Visualizar | Criar, editar, excluir | Criar, editar, excluir | Tudo | Tudo |
+| **Padrões** | Visualizar | Visualizar | Visualizar | Criar, editar, renovar | Tudo |
+| **Métodos** | Visualizar | Visualizar | Visualizar | Criar, editar, publicar | Tudo |
+| **Serviços** | Visualizar | Visualizar | Visualizar | Criar, editar | Tudo |
+| **Competências do Pessoal** | — | Visualizar | Solicitar, visualizar | Tudo + aprovar | Tudo |
+| **Solicitações de Calibração** | — | Visualizar, atualizar, **converter em OS** | Visualizar, atualizar, converter | Tudo | Tudo |
+| **Ordens de Serviço** | Visualizar | **Criar, atualizar, avaliar, executar, imprimir comprovante de entrada, imprimir etiqueta** | Avaliar, executar, imprimir | Tudo | Tudo |
+| **Ordens de Calibração** | Visualizar | Criar, atribuir técnico, executar, submeter para revisão | Criar, executar, submeter | Tudo + **aprovar/rejeitar** | Tudo |
+| **Certificados** | Visualizar, baixar | Visualizar, baixar, verificar | Visualizar, baixar, verificar | Tudo | Tudo |
+| **Não Conformidades** | Visualizar | Visualizar | Criar, atualizar | Tudo + aprovar disposição | Tudo |
+| **CAPA** | Visualizar | Visualizar | Criar, atualizar, implementar | Tudo + verificar, encerrar | Tudo |
+| **Financeiro** (documentos, recebimentos, contratos, ERP) | — | — | — | Tudo | Tudo |
+| **Configurações** | Perfil próprio | Perfil próprio | Perfil próprio | Organização, certificados, templates | Tudo |
+| **Membros** | — | — | — | Convidar, remover | Tudo |
+
+<Aside type="caution">
+  **Separação de responsabilidades (ISO 17025):** operadores e técnicos podem executar e submeter calibrações, mas **não podem** aprovar ou rejeitar. Apenas administradores e proprietários têm permissão de aprovação, conforme cláusula 6.2.6 da norma. Veja [Separação de Responsabilidades](/conceitos/separacao-de-responsabilidades).
+</Aside>
+
+### Diferença entre Membro, Operador e Técnico
+
+- **Membro** — acesso de leitura à operação do laboratório. Útil para auditores internos, observadores e funções administrativas sem participação no fluxo operacional.
+- **Operador** — papel de **recepção e expedição**. Cadastra clientes e ativos no recebimento, abre ordens de serviço, imprime comprovante de entrada e etiqueta do equipamento, atualiza o orçamento, acompanha a OS até a entrega ao cliente, e cria ordens de calibração transcrevendo dados das medições para submissão à revisão. Não aprova calibrações nem modifica dados-mestres técnicos (métodos, padrões, templates).
+- **Técnico** — execução técnica em laboratório: realiza medições, opera padrões de referência, executa calibrações em si. Tem permissões equivalentes ao Operador no que diz respeito a clientes/ativos/ordens, e também participa do fluxo de qualidade (NC e CAPA).
+
+<Aside type="tip" title="Fluxo típico de Operador (recepção/expedição)">
+  1. **Recebimento** — equipamento chega; o Operador cadastra o cliente (se novo) e o ativo, abre a OS, imprime comprovante de entrada e etiqueta do equipamento.
+  2. **Avaliação técnica** — o equipamento vai ao laboratório; o Técnico avalia.
+  3. **Orçamento** — Operador atualiza a OS com o orçamento; cliente aprova pelo Portal.
+  4. **Reparo** (se aplicável) — registrado na OS.
+  5. **Calibração** — Operador abre a ordem de calibração e atribui o Técnico; Técnico realiza as medições; Operador (ou Técnico) submete para revisão.
+  6. **Aprovação** — Administrador aprova; o certificado é emitido automaticamente e fica disponível no Portal do Cliente.
+  7. **Entrega e fechamento** — equipamento volta à expedição; Operador entrega ao cliente e fecha a OS.
+</Aside>
+
+## Papéis ao Nível de Unidade
+
+Quando a organização opera com mais de uma unidade (veja [Multiunidade](/plataforma/multiunidade)), há um conjunto adicional de **papéis ao nível de unidade**:
+
+| Papel de unidade | Escopo |
+| :--- | :--- |
+| **Membro** | Membro associado à unidade sem responsabilidade administrativa local. |
+| **Técnico** | Atuação técnica restrita ao escopo da unidade. |
+| **Administrador da Unidade** | Administração local: gestão da equipe e dos recursos operacionais da unidade. |
+
+Os papéis de unidade são ortogonais aos papéis organizacionais e restringem o escopo de atuação ao recorte da unidade atribuída.
+
+## Cliente (Usuário do Portal)
+
+O papel **Cliente** é externo à equipe do laboratório e exclusivo do [Portal do Cliente](/plataforma/portal-do-cliente):
+
+- visualiza apenas dados do próprio cliente (ativos, calibrações, certificados);
+- submete solicitações de calibração e aprova orçamentos de ordens de serviço;
+- não tem acesso ao painel do laboratório;
+- não vê dados de outros clientes — isolamento por organização.

@@ -1,0 +1,54 @@
+---
+title: Certificados de Calibração
+description: O que é um certificado de calibração no CalibraFácil — conteúdo, validade, assinatura e ciclo de vida pós-emissão.
+---
+
+O **certificado de calibração** é a saída regulada da [ordem de calibração](/calibracao/ordens-de-calibracao/visao-geral). É o documento que o cliente recebe e que sustenta a rastreabilidade metrológica em auditorias.
+
+Cada certificado emitido no CalibraFácil é:
+
+- **Único** — possui número sequencial e identificador imutável dentro da organização.
+- **Imutável** — uma vez emitido, não pode ser editado. Correções legítimas usam a [retificação](/certificados/retificacao).
+- **Verificável publicamente** — qualquer pessoa pode confirmar a autenticidade via [link público com token](/certificados/verificacao-publica).
+- **Assinado digitalmente** com certificado ICP-Brasil quando configurado — veja [Assinatura Digital](/certificados/assinatura-digital).
+
+## O que o certificado contém
+
+| Seção | Conteúdo |
+| :--- | :--- |
+| Cabeçalho | Identificação do laboratório, dados de acreditação, responsável técnico |
+| Cliente | Nome, CNPJ, endereço |
+| Instrumento | Identificação, tipo, faixa, resolução, número de série |
+| Método aplicado | Versão do método com snapshot completo (campos, fórmulas, critérios) |
+| Padrões utilizados | Identificação, certificado e validade dos padrões de referência |
+| Condições ambientais | Temperatura, umidade, pressão durante a calibração |
+| Resultados | Tabela de medições, incerteza expandida com fator de abrangência *k* |
+| Critério de aceitação | Conformidade do instrumento com a especificação aplicável |
+| Assinatura | Nome do responsável técnico, assinatura manuscrita digitalizada, assinatura digital ICP-Brasil |
+| Verificação | Token e link/QR code para conferência pública |
+
+## Ciclo de vida do certificado
+
+```
+Emitido (Issued)
+   ↓
+Substituído (Superseded)   — outra ordem de calibração foi emitida em retificação
+   ↓
+Anulado (Voided)           — exceção operacional registrada com justificativa
+```
+
+A maioria dos certificados permanece em **Emitido**. Os outros dois estados são exceções formais, ambos com trilha de auditoria.
+
+## Onde os certificados aparecem
+
+- No painel do laboratório, anexados à ordem de calibração correspondente.
+- No [Portal do Cliente](/plataforma/portal-do-cliente), disponíveis para download.
+- Em qualquer pessoa com o token de verificação, via página pública.
+
+## Próximas seções
+
+- [Emissão](/certificados/emissao) — como um certificado é gerado e assinado após a aprovação.
+- [Assinatura Digital](/certificados/assinatura-digital) — configuração da assinatura ICP-Brasil.
+- [Retificação](/certificados/retificacao) — emissão de uma nova versão substituindo uma anterior.
+- [Verificação Pública](/certificados/verificacao-publica) — como auditores e clientes conferem autenticidade.
+- [Templates](/certificados/templates) — personalização do layout e da numeração.

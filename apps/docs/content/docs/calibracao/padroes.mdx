@@ -1,0 +1,120 @@
+---
+title: Padrões de Referência
+description: Gestão de padrões de referência — cadastro, dados de certificado, incerteza, renovação e controle de vencimento.
+---
+
+
+## O Que São Padrões de Referência
+
+**Padrões de referência** são os instrumentos mestres do próprio laboratório, utilizados como "verdade" durante as calibrações. Eles fornecem os valores de referência e contribuem para o cálculo da incerteza expandida.
+
+Exemplos: jogos de pesos certificados, blocos padrão, termômetros de referência, multímetros padrão.
+
+<Aside type="note">
+  Padrões de referência são **diferentes dos ativos dos clientes**. Ativos pertencem aos clientes e são calibrados pelo laboratório. Padrões pertencem ao laboratório e são calibrados por laboratórios de referência (rastreabilidade metrológica).
+</Aside>
+
+Acesse em **Painel → Laboratório → Padrões de Referência** (`/dashboard/standards`).
+
+## Cadastro de Padrão
+
+<Steps>
+
+1. **Identificação**
+
+   - **Nome:** Descrição do padrão (ex: "Jogo de Pesos F1 1mg-200g")
+   - **Tipo:** Categoria (ex: "Jogo de Pesos", "Bloco Padrão")
+   - **Número de série:** Serial do fabricante
+   - **Fabricante e modelo**
+
+2. **Dados do certificado**
+
+   - **Número do certificado:** Referência do certificado de calibração
+   - **Calibrado por:** Nome do laboratório que calibrou o padrão
+   - **Data de calibração:** Data da última calibração
+   - **Próxima calibração:** Data de vencimento
+
+3. **Dados de incerteza** (valor único ou múltiplos valores)
+
+   Ver seções abaixo.
+
+4. **Salvar**
+
+</Steps>
+
+## Valor Único vs. Múltiplos Valores
+
+O sistema suporta dois modos de configuração:
+
+### Valor Único
+
+Para padrões com um único ponto de calibração (ex: termômetro de referência a 20°C):
+
+| Campo | Descrição | Exemplo |
+| :--- | :--- | :--- |
+| **Valor de referência** | Valor certificado | 20,005 °C |
+| **Incerteza** | Incerteza expandida ($U$) | 0,05 °C |
+| **Unidade da incerteza** | Unidade de medida | °C |
+| **Fator de abrangência** | Fator $k$ do certificado | 2 |
+| **Distribuição** | Normal ou retangular | Normal |
+| **Drift** | Deriva estimada | 0,01 °C |
+
+### Múltiplos Valores Certificados
+
+Para padrões com vários pontos (ex: jogo de pesos, blocos padrão):
+
+Cada ponto possui:
+
+| Campo | Descrição | Exemplo |
+| :--- | :--- | :--- |
+| **Nominal** | Valor nominal | 100 g |
+| **Valor medido** | Valor certificado | 100,00052 g |
+| **Incerteza** | Incerteza expandida | 0,00015 g |
+| **Unidade** | Unidade de medida | g |
+
+<Aside type="tip">
+  Padrões com múltiplos valores permitem o **preenchimento rápido** durante a execução de calibrações. Ao selecionar um ponto nominal, o valor certificado é sugerido automaticamente.
+</Aside>
+
+## Status do Padrão
+
+| Status | Descrição | Impacto |
+| :--- | :--- | :--- |
+| **Ativo** | Em uso, certificado válido | Disponível para calibrações |
+| **Inativo** | Fora de uso temporariamente | Não disponível |
+| **Fora de Tolerância** | Fora de tolerância | **Não disponível** — requer recalibração |
+| **Em Calibração** | Enviado para calibração externa | Temporariamente indisponível |
+
+<Aside type="caution">
+  Padrões com status **Fora de Tolerância** ou **vencidos** são sinalizados na tela de execução de calibrações. O uso de padrões nessas condições compromete a validade da calibração conforme **ISO/IEC 17025:2017, Cláusula 6.4**.
+</Aside>
+
+## Renovação de Certificado
+
+Quando o padrão retorna da calibração externa com um novo certificado:
+
+<Steps>
+
+1. Na página do padrão, clique em **Renovar**
+2. Atualize os dados do certificado (número, laboratório, datas)
+3. Atualize os valores de incerteza conforme o novo certificado
+4. O status volta para **Ativo**
+
+</Steps>
+
+A renovação é registrada na trilha de auditoria como uma ação de **renovação**.
+
+## Controle de Vencimento
+
+O sistema monitora automaticamente as datas de validade dos padrões:
+
+- **7 dias antes do vencimento:** notificação de **padrão próximo do vencimento** enviada aos administradores.
+- **No dia do vencimento:** notificação de **padrão vencido** — o padrão é sinalizado como vencido na interface.
+- O sistema calcula automaticamente, para cada padrão, se está vencido e quantos dias restam até a próxima calibração.
+
+## Filtros e Busca
+
+| Filtro | Descrição |
+| :--- | :--- |
+| **Busca** | Por nome, número de série ou certificado |
+| **Status** | Ativo, Inativo, Fora de Tolerância, Em Calibração |

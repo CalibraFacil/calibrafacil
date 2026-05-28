@@ -1,1 +1,7 @@
-.wrangler
+node_modules
+.next
+.source
+.turbo
+.vercel
+next-env.d.ts
+tsconfig.tsbuildinfo

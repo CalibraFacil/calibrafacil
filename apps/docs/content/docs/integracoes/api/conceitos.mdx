@@ -1,0 +1,102 @@
+---
+title: Conceitos da API
+description: Convenções compartilhadas pelos endpoints — versionamento, paginação, idempotência, externalId e tratamento de erros.
+---
+
+A API do CalibraFácil segue um conjunto pequeno e estável de convenções. Conhecê-las elimina a maior parte das dúvidas em integrações.
+
+## Versionamento
+
+A API está em **v2** (`/api/public/v2/...`). A versão 1 (`/api/public/v1/...`) permanece disponível para compatibilidade, mas não recebe novos recursos. Novas integrações devem usar v2.
+
+Quebras semânticas só acontecem entre versões maiores. Mudanças aditivas (campos novos, valores enumerados adicionais) acontecem dentro da mesma versão e devem ser tratadas com tolerância pelos clientes — não assuma que o conjunto de campos é fechado.
+
+## Paginação
+
+Listagens paginadas usam query string:
+
+```
+GET /api/public/v2/jobs?page=1&limit=20
+```
+
+- `page` começa em 1.
+- `limit` máximo é **100**.
+- Resposta inclui metadados: `total`, `page`, `limit`, `hasMore`.
+
+Para listagens grandes, prefira filtros (`?customerId=...`) em vez de incrementar `limit`.
+
+## Idempotência
+
+Mutações (`POST`, `PUT`, `DELETE`) aceitam o header:
+
+```
+Idempotency-Key: <chave-única>
+```
+
+Se a mesma chave for usada novamente em até 24 horas com o mesmo payload, o servidor retorna a resposta original sem reexecutar. Use para retries seguros em integrações de rede instável.
+
+Geração recomendada: UUIDv4 por operação lógica do lado cliente. Reutilize a mesma chave em todas as tentativas da mesma operação.
+
+## `externalId` para reconciliação
+
+Recursos sincronizados a partir de sistemas externos podem carregar um `externalId` — uma chave estrangeira opaca para o sistema de origem. O CalibraFácil:
+
+- aceita `externalId` na criação;
+- garante unicidade dentro da organização;
+- expõe o campo em todas as listagens e detalhes;
+- permite consulta direta por `externalId` (ex.: `GET /customers?externalId=ERP-12345`).
+
+Use para evitar duplicação quando o mesmo cliente, ativo ou ordem existe nos dois sistemas.
+
+## Filtros e busca
+
+Endpoints de listagem aceitam filtros como query string. Convenções comuns:
+
+| Parâmetro | Uso |
+| :--- | :--- |
+| `q` | Busca textual livre (nome, CNPJ, tag) |
+| `<recurso>Id` | Filtro por relação (ex.: `customerId`) |
+| `status` | Filtro por status enumerado |
+| `createdAfter`, `createdBefore` | Janela temporal ISO 8601 |
+| `externalId` | Busca exata pela chave externa |
+
+Combine livremente. Filtros não suportados são ignorados silenciosamente — verifique a documentação do endpoint específico se um filtro parecer não fazer efeito.
+
+## Formatos
+
+- **Datas**: ISO 8601 com timezone (`2026-05-27T18:00:00-03:00`). Sempre que possível, envie e receba em UTC.
+- **Identificadores**: UUID v4 ou ULID — não dependa do formato exato; trate como strings opacas.
+- **Valores monetários**: inteiros em centavos quando aplicável.
+
+## Erros
+
+Respostas de erro seguem o padrão:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Mensagem legível em pt-BR",
+    "details": [
+      { "path": "customer.taxId", "message": "CNPJ inválido" }
+    ]
+  }
+}
+```
+
+Códigos comuns:
+
+| HTTP | Código | Significado |
+| :--- | :--- | :--- |
+| 400 | `VALIDATION_ERROR` | Payload mal formado ou inválido |
+| 401 | `UNAUTHENTICATED` | Chave ausente ou inválida |
+| 403 | `FORBIDDEN` | Chave sem escopo para a ação |
+| 404 | `NOT_FOUND` | Recurso inexistente ou fora da organização |
+| 409 | `CONFLICT` | Conflito de estado (ex.: aprovar ordem já aprovada) |
+| 422 | `BUSINESS_RULE` | Regra de domínio violada (ex.: técnico sem competência ativa) |
+| 429 | `RATE_LIMITED` | Limite de requisições excedido |
+| 500 | `INTERNAL_ERROR` | Erro inesperado — abra um chamado |
+
+## Limites
+
+Limites de requisições por chave existem para proteger a plataforma. Em condições normais não são alcançados por integrações bem comportadas. Em caso de `429`, aplique backoff exponencial com jitter.
