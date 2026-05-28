@@ -51,6 +51,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check release exists
         env:
