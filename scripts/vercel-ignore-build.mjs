@@ -32,11 +32,6 @@ if (!projects.has(projectName)) {
   process.exit(1);
 }
 
-if (process.env.VERCEL_ENV === "production") {
-  console.log("Production deployment: build required.");
-  process.exit(1);
-}
-
 const currentSha =
   process.env.VERCEL_GIT_COMMIT_SHA || git(["rev-parse", "HEAD"]);
 const previousSha = process.env.VERCEL_GIT_PREVIOUS_SHA;
